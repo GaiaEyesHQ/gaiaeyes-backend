@@ -1,102 +1,63 @@
-from fastapi import FastAPI, HTTPException, Request, Depends
-from fastapi.responses import JSONResponse
+import json
 import os
-import requests
-import time
+from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.responses import JSONResponse
 
-app = FastAPI(title="GaiaEyes Backend", description="Space Weather & News API", version="1.1")
+app = FastAPI()
 
-# =========================
-# CONFIG
-# =========================
-API_KEYS = os.getenv("GAIAEYES_API_KEYS", "testkey123").split(",")  
+# JSON file for storing user keys
+USER_FILE = "users.json"
 
-# Example: {"user_api_key": {"role": "free" or "vip", "requests": 0, "last_reset": timestamp}}
-USER_DB = {
-    "freeuser123": {"role": "free", "requests": 0, "last_reset": time.time()},
-    "vipuser456": {"role": "vip", "requests": 0, "last_reset": time.time()},
-}
+# Load users from JSON
+def load_users():
+    if os.path.exists(USER_FILE):
+        with open(USER_FILE, "r") as f:
+            return {user["key"]: user for user in json.load(f)}
+    return {}
 
-FREE_USER_DAILY_LIMIT = 50  # e.g., 50 requests/day
+# Save users to JSON
+def save_users(users):
+    with open(USER_FILE, "w") as f:
+        json.dump(list(users.values()), f, indent=2)
 
-NASA_KEY = os.getenv("NASA_API_KEY", "aGYhKBDmeDfGFM2JkWg2lnCimJn5XgUmwM5UkB3d")
-WEATHER_KEY = os.getenv("OPENWEATHER_KEY", "0ab5dc524a2d5dc7f726017a2b98c687")
-NEWS_KEY = os.getenv("NEWS_API_KEY", "c77748626e024b9b985f07e97826e4db")
+# Initialize users
+USER_DB = load_users()
 
-# =========================
-# Auth & Rate-Limit Logic
-# =========================
-def verify_api_key(request: Request):
-    client_key = request.headers.get("x-api-key")
-    if not client_key or client_key not in USER_DB:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+# Middleware to check API key
+async def verify_api_key(request: Request):
+    api_key = request.headers.get("x-api-key")
+    if not api_key or api_key not in USER_DB:
+        return JSONResponse(status_code=403, content={"error": "Invalid or missing API key"})
+    request.state.user_role = USER_DB[api_key]["role"]
 
-    user = USER_DB[client_key]
-    now = time.time()
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    # Skip auth for root
+    if request.url.path != "/":
+        response = await verify_api_key(request)
+        if isinstance(response, JSONResponse):
+            return response
+    return await call_next(request)
 
-    # Reset daily count every 24h for free users
-    if now - user["last_reset"] > 86400:
-        user["requests"] = 0
-        user["last_reset"] = now
-
-    if user["role"] == "free":
-        if user["requests"] >= FREE_USER_DAILY_LIMIT:
-            raise HTTPException(status_code=429, detail="Free user daily limit reached")
-        user["requests"] += 1
-
-    return user
-
-# =========================
-# Public Endpoint
-# =========================
 @app.get("/")
 async def root():
     return {"message": "GaiaEyes Backend is running!"}
 
-# =========================
-# Protected Endpoints
-# =========================
-
 @app.get("/news")
-async def get_news(user=Depends(verify_api_key)):
-    url = f"https://newsapi.org/v2/top-headlines?category=science&apiKey={NEWS_KEY}"
-    resp = requests.get(url)
-    if resp.status_code != 200:
-        raise HTTPException(status_code=500, detail="Failed to fetch news")
-    return resp.json()
+async def get_news():
+    return {"data": "Here will be your space news"}
 
 @app.get("/space-weather")
-async def get_space_weather(user=Depends(verify_api_key)):
-    url = f"https://api.nasa.gov/DONKI/notifications?api_key={NASA_KEY}"
-    resp = requests.get(url)
-    if resp.status_code != 200:
-        raise HTTPException(status_code=500, detail="Failed to fetch space weather")
-    return resp.json()
+async def get_space_weather():
+    return {"data": "Here will be your space weather"}
 
-@app.get("/weather/{location}")
-async def get_weather(location: str, user=Depends(verify_api_key)):
-    url = f"https://api.openweathermap.org/data/2.5/weather?q={location}&appid={WEATHER_KEY}&units=metric"
-    resp = requests.get(url)
-    if resp.status_code != 200:
-        raise HTTPException(status_code=500, detail="Failed to fetch weather")
-    return resp.json()
-
-# =========================
-# Admin: Add/Update Users (Optional)
-# =========================
+# Admin endpoint to add a user
 @app.post("/admin/add-user")
-async def add_user(request: Request):
-    data = await request.json()
-    key = data.get("key")
-    role = data.get("role", "free")
+async def add_user(user: dict):
+    key = user.get("key")
+    role = user.get("role", "free")
     if not key:
         raise HTTPException(status_code=400, detail="Key is required")
-    USER_DB[key] = {"role": role, "requests": 0, "last_reset": time.time()}
-    return {"message": f"User {key} added with role {role}"}
-
-# =========================
-# Custom Error Handler
-# =========================
-@app.exception_handler(HTTPException)
-async def custom_http_exception_handler(request: Request, exc: HTTPException):
-    return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
+    USER_DB[key] = {"key": key, "role": role}
+    save_users(USER_DB)
+    return {"message": "User added", "key": key, "role": role}
