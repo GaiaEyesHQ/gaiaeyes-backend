@@ -1,17 +1,10 @@
 import os
 import json
-from fastapi import FastAPI, Request, Form, HTTPException, Body
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from starlette.middleware.sessions import SessionMiddleware
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 app = FastAPI()
 
-# --- SESSION SECRET ---
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "supersecret"))
-
-# --- USERS STORAGE ---
 USERS_FILE = "users.json"
 
 def load_users():
@@ -26,87 +19,51 @@ def save_users(users):
 
 users = load_users()
 
-# --- PUBLIC API ENDPOINTS ---
+# -----------------------------
+# Public Endpoints
+# -----------------------------
+
 @app.get("/news")
-def get_news(api_key: str):
+async def get_news(api_key: str):
     if api_key not in users:
-        return {"error": "Invalid or missing API key"}
+        raise HTTPException(status_code=403, detail="Invalid or missing API key")
     return {"news": ["Solar storm detected", "Aurora visible tonight"]}
 
 @app.get("/space-weather")
-def get_space_weather(api_key: str):
+async def get_space_weather(api_key: str):
     if api_key not in users:
-        return {"error": "Invalid or missing API key"}
-    return {"space_weather": {"kp_index": 6, "solar_flare": "M-class detected"}}
+        raise HTTPException(status_code=403, detail="Invalid or missing API key")
+    return {"space_weather": ["KP Index 5", "High solar wind speed"]}
 
 @app.get("/vip")
-def get_vip(api_key: str):
+async def get_vip_content(api_key: str):
     if api_key not in users or users[api_key] != "vip":
-        return {"error": "VIP access only"}
-    return {"vip_data": ["Exclusive aurora forecasts", "Early warning alerts"]}
+        raise HTTPException(status_code=403, detail="VIP access required")
+    return {"vip_content": ["Exclusive satellite images", "Deep space reports"]}
 
-# --- ADMIN PANEL (HTML) ---
-templates = Jinja2Templates(directory="templates")
+# -----------------------------
+# Admin Endpoints (JSON-based)
+# -----------------------------
 
-@app.get("/admin", response_class=HTMLResponse)
-def admin_dashboard(request: Request):
-    if request.session.get("logged_in"):
-        return templates.TemplateResponse("dashboard.html", {"request": request, "users": users})
-    return templates.TemplateResponse("login.html", {"request": request})
+class AdminAction(BaseModel):
+    key: str
+    role: str = "vip"
+    admin_password: str
 
-@app.post("/admin/login")
-async def admin_login(request: Request, password: str = Form(...)):
-    if password == os.getenv("ADMIN_PASSWORD", "admin123"):
-        request.session["logged_in"] = True
-        return RedirectResponse(url="/admin", status_code=303)
-    return HTMLResponse("<h3>Wrong password. <a href='/admin'>Try again</a></h3>")
-
-@app.post("/admin/add-user")
-async def add_user(request: Request, key: str = Form(...), role: str = Form(...)):
-    if not request.session.get("logged_in"):
-        raise HTTPException(status_code=403, detail="Not authorized")
-    users[key] = role
+@app.post("/add-vip")
+async def add_vip(action: AdminAction):
+    if action.admin_password != os.getenv("ADMIN_PASSWORD", "admin123"):
+        raise HTTPException(status_code=403, detail="Invalid admin password")
+    users[action.key] = action.role
     save_users(users)
-    return RedirectResponse(url="/admin", status_code=303)
+    return {"message": f"VIP user '{action.key}' added successfully."}
 
-@app.post("/admin/delete-user")
-async def delete_user(request: Request, key: str = Form(...)):
-    if not request.session.get("logged_in"):
-        raise HTTPException(status_code=403, detail="Not authorized")
-    if key in users:
-        del users[key]
+@app.post("/delete-vip")
+async def delete_vip(action: AdminAction):
+    if action.admin_password != os.getenv("ADMIN_PASSWORD", "admin123"):
+        raise HTTPException(status_code=403, detail="Invalid admin password")
+    if action.key in users:
+        del users[action.key]
         save_users(users)
-    return RedirectResponse(url="/admin", status_code=303)
-
-# --- JSON-BASED ADMIN ENDPOINTS (FOR POSTMAN) ---
-@app.post("/admin/add-user-json")
-async def add_user_json(data: dict = Body(...)):
-    admin_key = data.get("admin_key")
-    key = data.get("key")
-    role = data.get("role")
-
-    if admin_key != os.getenv("ADMIN_PASSWORD", "admin123"):
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-    if not key or not role:
-        raise HTTPException(status_code=422, detail="Key and role are required")
-
-    users[key] = role
-    save_users(users)
-    return {"status": "success", "message": f"User {key} added with role {role}"}
-
-@app.post("/admin/delete-user-json")
-async def delete_user_json(data: dict = Body(...)):
-    admin_key = data.get("admin_key")
-    key = data.get("key")
-
-    if admin_key != os.getenv("ADMIN_PASSWORD", "admin123"):
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-    if not key:
-        raise HTTPException(status_code=422, detail="Key is required")
-
-    if key in users:
-        del users[key]
-        save_users(users)
-        return {"status": "success", "message": f"User {key} deleted"}
-    else:
-        return {"status": "not_found", "message": f"User {key} does not exist"}
+        return {"message": f"VIP user '{action.key}' deleted successfully."}
+    raise HTTPException(status_code=404, detail="User not found")
