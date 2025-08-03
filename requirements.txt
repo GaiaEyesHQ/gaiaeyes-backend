@@ -3,6 +3,7 @@ uvicorn[standard]
 requests
 itsdangerous
 python-dotenv
+python-multipart
 newsapi-python
 pydantic
 aiohttp
