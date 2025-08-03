@@ -1,10 +1,4 @@
-[
-  {
-    "key": "freeuser123",
-    "role": "free"
-  },
-  {
-    "key": "vipuser456",
-    "role": "vip"
-  }
-]
+{
+  "influencer001": "vip",
+  "freeuser001": "free"
+}
