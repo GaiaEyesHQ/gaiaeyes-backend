@@ -1,23 +1,17 @@
 import os
 import json
 from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-import logging
 
-# --- Logging Setup ---
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# --- FastAPI App ---
 app = FastAPI()
 
-# Secret for sessions
-SESSION_SECRET = os.getenv("SESSION_SECRET", "supersecret")
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+# Secret key for session handling
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "supersecret"))
 
-# File for user storage
+# --- Load Users ---
 USERS_FILE = "users.json"
 
 def load_users():
@@ -32,31 +26,30 @@ def save_users(users):
 
 users = load_users()
 
-# --- Templates ---
-templates = Jinja2Templates(directory="templates")
-
-# --- Public API Endpoints ---
+# --- Public Endpoints ---
 @app.get("/news")
 def get_news(api_key: str):
     if api_key not in users:
-        raise HTTPException(status_code=403, detail="Invalid or missing API key")
+        return {"error": "Invalid or missing API key"}
     return {"news": ["Solar storm detected", "Aurora visible tonight"]}
 
 @app.get("/space-weather")
 def get_space_weather(api_key: str):
     if api_key not in users:
-        raise HTTPException(status_code=403, detail="Invalid or missing API key")
-    return {"space_weather": ["KP Index: 5", "Geomagnetic storm watch"]}
+        return {"error": "Invalid or missing API key"}
+    return {"space_weather": ["KP Index: 5", "High auroral activity"]}
 
 @app.get("/vip")
 def get_vip(api_key: str):
     if api_key not in users:
-        raise HTTPException(status_code=403, detail="Invalid or missing API key")
+        return {"error": "Invalid or missing API key"}
     if users[api_key] != "vip":
-        raise HTTPException(status_code=403, detail="Access denied: VIP only")
-    return {"vip_data": ["Exclusive aurora tracking", "Premium space alerts"]}
+        return {"error": "Access denied. VIPs only."}
+    return {"vip_data": ["Secret aurora spot info", "Private solar alerts"]}
 
-# --- Admin Pages ---
+# --- Admin Dashboard ---
+templates = Jinja2Templates(directory="templates")
+
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(request: Request):
     if request.session.get("logged_in"):
@@ -65,8 +58,7 @@ def admin_dashboard(request: Request):
 
 @app.post("/admin/login")
 async def admin_login(request: Request, password: str = Form(...)):
-    expected_password = os.getenv("ADMIN_PASSWORD", "admin123")
-    if password == expected_password:
+    if password == os.getenv("ADMIN_PASSWORD", "admin123"):
         request.session["logged_in"] = True
         return RedirectResponse(url="/admin", status_code=303)
     return HTMLResponse("<h3>Wrong password. <a href='/admin'>Try again</a></h3>")
@@ -88,7 +80,32 @@ async def delete_user(request: Request, key: str = Form(...)):
         save_users(users)
     return RedirectResponse(url="/admin", status_code=303)
 
-# --- Root Route ---
-@app.get("/")
-def home():
-    return {"message": "GaiaEyes API is running!"}
+# --- JSON-based VIP Management Endpoints ---
+@app.post("/admin/add-vip")
+async def add_vip(request: Request):
+    data = await request.json()
+    key = data.get("key")
+    admin_password = data.get("admin_password")
+
+    if admin_password != os.getenv("ADMIN_PASSWORD", "admin123"):
+        raise HTTPException(status_code=403, detail="Invalid admin password")
+
+    users[key] = "vip"
+    save_users(users)
+    return JSONResponse({"status": "VIP added", "key": key})
+
+@app.post("/admin/delete-vip")
+async def delete_vip(request: Request):
+    data = await request.json()
+    key = data.get("key")
+    admin_password = data.get("admin_password")
+
+    if admin_password != os.getenv("ADMIN_PASSWORD", "admin123"):
+        raise HTTPException(status_code=403, detail="Invalid admin password")
+
+    if key in users:
+        del users[key]
+        save_users(users)
+        return JSONResponse({"status": "VIP deleted", "key": key})
+    else:
+        raise HTTPException(status_code=404, detail="Key not found")
