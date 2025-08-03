@@ -1,54 +1,83 @@
 import os
 import requests
 from flask import Flask, jsonify
-from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Allow cross-origin requests (frontend/mobile)
 
-# Load environment variables
-NASA_API_KEY = os.environ.get("NASA_API_KEY")
-OPENWEATHER_API_KEY = os.environ.get("OPENWEATHER_API_KEY")
-NEWS_API_KEY = os.environ.get("NEWS_API_KEY")
+# Load API keys from environment or use defaults
+NASA_API_KEY = os.getenv("NASA_API_KEY", "aGYhKBDmeDfGFM2JkWg2lnCimJn5XgUmwM5UkB3d")
+OWM_API_KEY = os.getenv("OWM_API_KEY", "0ab5dc524a2d5dc7f726017a2b98c687")
+NEWS_API_KEY = os.getenv("NEWS_API_KEY", "c77748626e024b9b985f07e97826e4db")
 
-# ✅ Root endpoint
 @app.route("/")
 def home():
-    return jsonify({"message": "GaiaEyes Backend is running!"})
+    return jsonify({"message": "Gaia Eyes Backend is running!"})
 
-# ✅ Space Weather Endpoint (example: NASA DONKI API)
+
+# ------------------------
+# SPACE WEATHER ENDPOINT
+# ------------------------
 @app.route("/space-weather")
-def space_weather():
-    url = f"https://api.nasa.gov/DONKI/notifications?type=all&api_key={NASA_API_KEY}"
+def get_space_weather():
     try:
-        response = requests.get(url, timeout=10)
-        data = response.json()
-        return jsonify(data)
+        # Example: NASA DONKI API for space weather alerts
+        nasa_url = f"https://api.nasa.gov/DONKI/notifications?type=all&api_key={NASA_API_KEY}"
+        nasa_response = requests.get(nasa_url)
+        nasa_data = nasa_response.json()
+
+        # Example: OpenWeatherMap current weather for a sample location (e.g., Boulder, CO)
+        weather_url = f"https://api.openweathermap.org/data/2.5/weather?q=Boulder&appid={OWM_API_KEY}&units=metric"
+        weather_response = requests.get(weather_url)
+        weather_data = weather_response.json()
+
+        return jsonify({
+            "nasa_alerts": nasa_data,
+            "sample_weather": weather_data
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ✅ Earth Weather Endpoint (example: OpenWeather current global weather)
-@app.route("/earth-weather/<city>")
-def earth_weather(city):
-    url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHER_API_KEY}&units=metric"
-    try:
-        response = requests.get(url, timeout=10)
-        data = response.json()
-        return jsonify(data)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
-# ✅ News Endpoint (example: Space & Science News)
+# ------------------------
+# NEWS ENDPOINT
+# ------------------------
 @app.route("/news")
-def news():
-    url = f"https://newsapi.org/v2/everything?q=space OR astronomy OR solar&language=en&apiKey={NEWS_API_KEY}"
+def get_news():
+    print("DEBUG: /news endpoint hit!")  # Logs in Render console
+
     try:
-        response = requests.get(url, timeout=10)
+        url = (
+            f"https://newsapi.org/v2/everything?"
+            f"q=(space%20weather%20OR%20solar%20flare%20OR%20geomagnetic%20storm%20OR%20extreme%20weather)&"
+            f"language=en&sortBy=publishedAt&apiKey={NEWS_API_KEY}"
+        )
+        response = requests.get(url)
         data = response.json()
+
+        # Fallback if API fails or no articles
+        if "articles" not in data:
+            data = {
+                "status": "error",
+                "message": "NewsAPI returned no articles",
+                "debug": data
+            }
+
         return jsonify(data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ✅ For Render deployment
+
+# ------------------------
+# HEALTH CHECK (Optional)
+# ------------------------
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
+
+
+# ------------------------
+# RENDER ENTRYPOINT
+# ------------------------
 if __name__ == "__main__":
+    # Flask dev server for local testing
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
