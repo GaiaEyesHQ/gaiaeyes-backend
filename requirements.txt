@@ -2,3 +2,6 @@ fastapi
 uvicorn[standard]
 requests
 python-dotenv
+jinja2
+python-multipart
+starlette
