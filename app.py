@@ -1,22 +1,23 @@
 import os
 import json
-from fastapi import FastAPI, Request, Form, HTTPException
+import logging
+from fastapi import FastAPI, Request, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-from pydantic import BaseModel
 
-app = FastAPI(
-    title="GaiaEyes Backend API",
-    description="API for space weather, news, and VIP access management",
-    version="1.0.0",
-)
+# -------------------- SETUP --------------------
+app = FastAPI(title="GaiaEyes Backend", description="Provides space weather and VIP access")
 
-# Session middleware
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "supersecret"))
+# Logging to Render logs
+logging.basicConfig(level=logging.INFO)
 
-# Load users from JSON
+# Secret key for session handling
+SESSION_SECRET = os.getenv("SESSION_SECRET", "supersecret")
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+
+# Users JSON file
 USERS_FILE = "users.json"
 
 def load_users():
@@ -31,74 +32,79 @@ def save_users(users):
 
 users = load_users()
 
-# Pydantic model for admin requests
-class AdminAction(BaseModel):
-    key: str
-    admin_password: str
+# -------------------- HELPER FUNCTIONS --------------------
+def validate_api_key(api_key: str, required_role: str = None):
+    if not api_key:
+        raise HTTPException(status_code=401, detail="Missing API key")
 
-# --- Public Endpoints ---
-@app.get("/news", tags=["Public Endpoints"])
-def get_news(api_key: str):
-    """Returns the latest space-related news for authorized users."""
     if api_key not in users:
-        return {"error": "Invalid or missing API key"}
+        raise HTTPException(status_code=403, detail="Invalid API key")
+
+    if required_role and users[api_key] != required_role:
+        raise HTTPException(status_code=403, detail=f"Not authorized for {required_role} access")
+
+# -------------------- PUBLIC ENDPOINTS --------------------
+@app.get("/news")
+def get_news(api_key: str = Query(None)):
+    logging.info(f"/news accessed with key: {api_key}")
+    validate_api_key(api_key)  # Free or VIP can access
     return {"news": ["Solar storm detected", "Aurora visible tonight"]}
 
+@app.get("/space-weather")
+def get_space_weather(api_key: str = Query(None)):
+    logging.info(f"/space-weather accessed with key: {api_key}")
+    validate_api_key(api_key)  # Free or VIP can access
+    return {"space_weather": ["Kp-index: 5", "Solar wind speed: 450 km/s"]}
 
-@app.get("/space-weather", tags=["Public Endpoints"])
-def get_space_weather(api_key: str):
-    """Returns space weather updates for authorized users."""
-    if api_key not in users:
-        return {"error": "Invalid or missing API key"}
-    return {"space_weather": ["Solar wind speed: 450 km/s", "Kp Index: 5 (G1 storm)"]}
+@app.get("/vip")
+def get_vip(api_key: str = Query(None)):
+    logging.info(f"/vip accessed with key: {api_key}")
+    validate_api_key(api_key, required_role="vip")
+    return {"vip_content": ["Exclusive aurora forecast", "Private satellite data"]}
 
+# -------------------- ADMIN DASHBOARD --------------------
+templates = Jinja2Templates(directory="templates")
 
-@app.get("/vip", tags=["Public Endpoints"])
-def get_vip_content(api_key: str):
-    """Returns VIP content if the user's role is 'vip'."""
-    role = users.get(api_key)
-    if not role:
-        return {"error": "Invalid or missing API key"}
-    if role != "vip":
-        return {"error": "Not authorized for VIP content"}
-    return {"vip_content": ["Exclusive Aurora Forecast", "Premium Space Data"]}
+@app.get("/admin", response_class=HTMLResponse)
+def admin_dashboard(request: Request):
+    if request.session.get("logged_in"):
+        return templates.TemplateResponse("dashboard.html", {"request": request, "users": users})
+    return templates.TemplateResponse("login.html", {"request": request})
 
+@app.post("/admin/login")
+async def admin_login(request: Request, password: str = Form(...)):
+    expected_password = os.getenv("ADMIN_PASSWORD", "admin123")
+    if password == expected_password:
+        request.session["logged_in"] = True
+        logging.info("Admin logged in successfully")
+        return RedirectResponse(url="/admin", status_code=303)
+    logging.warning("Failed admin login attempt")
+    return HTMLResponse("<h3>Wrong password. <a href='/admin'>Try again</a></h3>")
 
-# --- Admin Endpoints ---
-@app.post("/admin/add-vip", tags=["VIP Admin"])
-def add_vip_user(data: AdminAction):
-    """
-    Adds a new VIP user.
-    - Requires `admin_password`
-    - Provide a `key` for the new VIP user
-    """
-    admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
-    print(f"=== ADD VIP ATTEMPT ===\nReceived: key={data.key}, admin_password={data.admin_password}\nExpected ADMIN_PASSWORD={admin_password}")
+@app.post("/admin/add-vip")
+async def add_vip_user(key: str = Form(...), admin_password: str = Form(...)):
+    expected_password = os.getenv("ADMIN_PASSWORD", "admin123")
+    logging.info(f"=== ADD VIP ATTEMPT === Received: key={key}, admin_password={admin_password}")
+    logging.info(f"Expected ADMIN_PASSWORD={expected_password}")
 
-    if data.admin_password != admin_password:
-        raise HTTPException(status_code=403, detail="Not authorized")
+    if admin_password != expected_password:
+        raise HTTPException(status_code=403, detail="Invalid admin password")
 
-    users[data.key] = "vip"
+    users[key] = "vip"
     save_users(users)
-    return {"status": "success", "message": f"User {data.key} added as VIP"}
+    logging.info(f"VIP user {key} added")
+    return {"message": f"VIP user '{key}' added successfully"}
 
+@app.post("/admin/delete-vip")
+async def delete_vip_user(key: str = Form(...), admin_password: str = Form(...)):
+    expected_password = os.getenv("ADMIN_PASSWORD", "admin123")
+    logging.info(f"=== DELETE VIP ATTEMPT === Received: key={key}, admin_password={admin_password}")
 
-@app.post("/admin/delete-vip", tags=["VIP Admin"])
-def delete_vip_user(data: AdminAction):
-    """
-    Deletes a VIP user.
-    - Requires `admin_password`
-    - Provide the VIP `key` to delete
-    """
-    admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
-    print(f"=== DELETE VIP ATTEMPT ===\nReceived: key={data.key}, admin_password={data.admin_password}\nExpected ADMIN_PASSWORD={admin_password}")
+    if admin_password != expected_password:
+        raise HTTPException(status_code=403, detail="Invalid admin password")
 
-    if data.admin_password != admin_password:
-        raise HTTPException(status_code=403, detail="Not authorized")
-
-    if data.key in users:
-        del users[data.key]
+    if key in users:
+        del users[key]
         save_users(users)
-        return {"status": "success", "message": f"User {data.key} deleted"}
-    else:
-        raise HTTPException(status_code=404, detail="User not found")
+        logging.info(f"VIP user {key} deleted")
+        return {"message": f"VIP user '{key}' deleted successfully"
