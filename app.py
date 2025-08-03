@@ -66,3 +66,4 @@ async def get_news():
         return resp.json()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+ 
