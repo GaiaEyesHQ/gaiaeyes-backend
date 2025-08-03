@@ -1,0 +1,10 @@
+[
+  {
+    "key": "freeuser123",
+    "role": "free"
+  },
+  {
+    "key": "vipuser456",
+    "role": "vip"
+  }
+]
