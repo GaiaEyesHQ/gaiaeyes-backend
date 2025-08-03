@@ -1,7 +1,8 @@
 fastapi
 uvicorn[standard]
 requests
+itsdangerous
 python-dotenv
-jinja2
-python-multipart
-starlette
+newsapi-python
+pydantic
+aiohttp
