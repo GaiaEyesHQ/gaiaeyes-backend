@@ -1,63 +1,70 @@
-import json
 import os
-from fastapi import FastAPI, Request, HTTPException, Depends
-from fastapi.responses import JSONResponse
+import json
+from fastapi import FastAPI, Request, Form, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
 app = FastAPI()
 
-# JSON file for storing user keys
-USER_FILE = "users.json"
+# Secret key for session handling (set your own in Render)
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "supersecret"))
 
 # Load users from JSON
+USERS_FILE = "users.json"
+
 def load_users():
-    if os.path.exists(USER_FILE):
-        with open(USER_FILE, "r") as f:
-            return {user["key"]: user for user in json.load(f)}
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, "r") as f:
+            return json.load(f)
     return {}
 
-# Save users to JSON
 def save_users(users):
-    with open(USER_FILE, "w") as f:
-        json.dump(list(users.values()), f, indent=2)
+    with open(USERS_FILE, "w") as f:
+        json.dump(users, f)
 
-# Initialize users
-USER_DB = load_users()
+users = load_users()
 
-# Middleware to check API key
-async def verify_api_key(request: Request):
-    api_key = request.headers.get("x-api-key")
-    if not api_key or api_key not in USER_DB:
-        return JSONResponse(status_code=403, content={"error": "Invalid or missing API key"})
-    request.state.user_role = USER_DB[api_key]["role"]
-
-@app.middleware("http")
-async def auth_middleware(request: Request, call_next):
-    # Skip auth for root
-    if request.url.path != "/":
-        response = await verify_api_key(request)
-        if isinstance(response, JSONResponse):
-            return response
-    return await call_next(request)
-
-@app.get("/")
-async def root():
-    return {"message": "GaiaEyes Backend is running!"}
-
+# --- Public endpoints example ---
 @app.get("/news")
-async def get_news():
-    return {"data": "Here will be your space news"}
+def get_news(api_key: str):
+    # Check user role
+    if api_key not in users:
+        return {"error": "Invalid or missing API key"}
+    # Example response
+    return {"news": ["Solar storm detected", "Aurora visible tonight"]}
 
-@app.get("/space-weather")
-async def get_space_weather():
-    return {"data": "Here will be your space weather"}
 
-# Admin endpoint to add a user
+# --- Admin Dashboard ---
+templates = Jinja2Templates(directory="templates")
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_dashboard(request: Request):
+    if request.session.get("logged_in"):
+        return templates.TemplateResponse("dashboard.html", {"request": request, "users": users})
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.post("/admin/login")
+async def admin_login(request: Request, password: str = Form(...)):
+    if password == os.getenv("ADMIN_PASSWORD", "admin123"):
+        request.session["logged_in"] = True
+        return RedirectResponse(url="/admin", status_code=303)
+    return HTMLResponse("<h3>Wrong password. <a href='/admin'>Try again</a></h3>")
+
 @app.post("/admin/add-user")
-async def add_user(user: dict):
-    key = user.get("key")
-    role = user.get("role", "free")
-    if not key:
-        raise HTTPException(status_code=400, detail="Key is required")
-    USER_DB[key] = {"key": key, "role": role}
-    save_users(USER_DB)
-    return {"message": "User added", "key": key, "role": role}
+async def add_user(request: Request, key: str = Form(...), role: str = Form(...)):
+    if not request.session.get("logged_in"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    users[key] = role
+    save_users(users)
+    return RedirectResponse(url="/admin", status_code=303)
+
+@app.post("/admin/delete-user")
+async def delete_user(request: Request, key: str = Form(...)):
+    if not request.session.get("logged_in"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if key in users:
+        del users[key]
+        save_users(users)
+    return RedirectResponse(url="/admin", status_code=303)
