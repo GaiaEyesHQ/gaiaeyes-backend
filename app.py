@@ -107,4 +107,7 @@ async def delete_vip_user(key: str = Form(...), admin_password: str = Form(...))
         del users[key]
         save_users(users)
         logging.info(f"VIP user {key} deleted")
-        return {"message": f"VIP user '{key}' deleted successfully"
+        return {"message": f"VIP user '{key}' deleted successfully"}
+    else:
+        logging.warning(f"Tried to delete non-existent user {key}")
+        return {"message": f"User '{key}' not found"}
