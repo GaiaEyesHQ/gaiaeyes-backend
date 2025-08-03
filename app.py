@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
+from fastapi import Header
 
 app = FastAPI()
 
@@ -67,19 +68,36 @@ async def admin_login(request: Request, password: str = Form(...)):
         return RedirectResponse(url="/admin", status_code=303)
     return HTMLResponse("<h3>Wrong password. <a href='/admin'>Try again</a></h3>")
 
+
 @app.post("/admin/add-user")
-async def add_user(request: Request, key: str = Form(...), role: str = Form(...)):
-    if not request.session.get("logged_in"):
+async def add_user(
+    request: Request,
+    key: str = Form(...),
+    role: str = Form(...),
+    x_admin_password: str = Header(None)
+):
+    # Allow API key header OR session login
+    if x_admin_password != os.getenv("ADMIN_PASSWORD", "admin123") and not request.session.get("logged_in"):
         raise HTTPException(status_code=403, detail="Not authorized")
+
     users[key] = role
     save_users(users)
-    return RedirectResponse(url="/admin", status_code=303)
+    return {"status": "success", "message": f"User {key} added with role {role}"}
+
 
 @app.post("/admin/delete-user")
-async def delete_user(request: Request, key: str = Form(...)):
-    if not request.session.get("logged_in"):
+async def delete_user(
+    request: Request,
+    key: str = Form(...),
+    x_admin_password: str = Header(None)
+):
+    # Allow API key header OR session login
+    if x_admin_password != os.getenv("ADMIN_PASSWORD", "admin123") and not request.session.get("logged_in"):
         raise HTTPException(status_code=403, detail="Not authorized")
+
     if key in users:
         del users[key]
         save_users(users)
-    return RedirectResponse(url="/admin", status_code=303)
+        return {"status": "success", "message": f"User {key} deleted"}
+    else:
+        raise HTTPException(status_code=404, detail="User not found")
