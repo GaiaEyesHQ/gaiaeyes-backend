@@ -67,4 +67,4 @@ async def delete_user(request: Request, key: str = Form(...)):
     if key in users:
         del users[key]
         save_users(users)
-    return RedirectResponse(url="/admin", status_code=303)
+    return RedirectResponse(url="/admin", status_code=303) 
