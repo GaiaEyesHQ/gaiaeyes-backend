@@ -9,5 +9,3 @@ pydantic
 aiohttp
 jinja2
 slowapi==0.1.8
-request
-websocket
