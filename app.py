@@ -5,47 +5,27 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-# --- App Setup ---
-app = FastAPI(title="GaiaEyes API", version="2.0")
+# -----------------------
+# App Initialization
+# -----------------------
+app = FastAPI(title="GaiaEyes API", description="FastAPI backend with VIP and admin functionality")
 
 # Rate Limiter
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, lambda request, exc: HTMLResponse("Rate limit exceeded", status_code=429))
-app.add_middleware(SlowAPIMiddleware)
+app.add_exception_handler(RateLimitExceeded, lambda request, exc: (HTMLResponse("Too Many Requests", status_code=429)))
 
-# Session Middleware
+# Secret key for sessions
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "supersecret"))
 
-# CORS Middleware
-origins = [
-    "http://localhost:3000",  # Local development
-    "https://your-frontend-domain.com"  # Replace with real domain
-]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Security Headers Middleware
-@app.middleware("http")
-async def add_security_headers(request: Request, call_next):
-    response = await call_next(request)
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
-    return response
-
-# --- Users JSON Handling ---
+# -----------------------
+# User Data
+# -----------------------
 USERS_FILE = "users.json"
 
 def load_users():
@@ -60,30 +40,41 @@ def save_users(users):
 
 users = load_users()
 
-# --- Public Endpoints ---
+# -----------------------
+# Templates
+# -----------------------
+templates = Jinja2Templates(directory="templates")
+
+# -----------------------
+# Public Endpoints
+# -----------------------
+
 @app.get("/news")
-@limiter.limit("10/minute")
-def get_news(api_key: str):
+@limiter.limit("5/minute")
+def get_news(request: Request, api_key: str):
     if api_key not in users:
         return {"error": "Invalid or missing API key"}
     return {"news": ["Solar storm detected", "Aurora visible tonight"]}
 
+
 @app.get("/space-weather")
-@limiter.limit("10/minute")
-def get_space_weather(api_key: str):
+@limiter.limit("5/minute")
+def get_space_weather(request: Request, api_key: str):
     if api_key not in users:
         return {"error": "Invalid or missing API key"}
-    return {"space_weather": ["Kp Index: 5", "Geomagnetic storm watch in effect"]}
+    return {"space_weather": {"solar_activity": "Moderate", "aurora_index": 5}}
+
 
 @app.get("/vip")
 @limiter.limit("5/minute")
-def get_vip(api_key: str):
+def get_vip_content(request: Request, api_key: str):
     if api_key not in users or users[api_key] != "vip":
-        return {"error": "Invalid or missing VIP API key"}
-    return {"vip_content": ["Exclusive aurora forecast", "Advanced space weather insights"]}
+        return {"error": "VIP access required or invalid API key"}
+    return {"vip_content": ["Secret aurora forecasts", "Advanced space weather predictions"]}
 
-# --- Admin Dashboard ---
-templates = Jinja2Templates(directory="templates")
+# -----------------------
+# Admin Dashboard (HTML)
+# -----------------------
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(request: Request):
@@ -98,20 +89,37 @@ async def admin_login(request: Request, password: str = Form(...)):
         return RedirectResponse(url="/admin", status_code=303)
     return HTMLResponse("<h3>Wrong password. <a href='/admin'>Try again</a></h3>")
 
+# -----------------------
+# Admin API Endpoints
+# -----------------------
+
 @app.post("/admin/add-vip")
-async def add_vip(key: str = Form(...), admin_password: str = Form(...)):
+async def add_vip_user(request: Request):
+    data = await request.json()
+    key = data.get("key")
+    admin_password = data.get("admin_password")
+
     if admin_password != os.getenv("ADMIN_PASSWORD", "admin123"):
-        raise HTTPException(status_code=403, detail="Invalid admin password")
+        raise HTTPException(status_code=403, detail="Forbidden: wrong admin password")
+
     users[key] = "vip"
     save_users(users)
     return {"message": f"VIP user {key} added successfully."}
 
+
 @app.post("/admin/delete-vip")
-async def delete_vip(key: str = Form(...), admin_password: str = Form(...)):
+async def delete_vip_user(request: Request):
+    data = await request.json()
+    key = data.get("key")
+    admin_password = data.get("admin_password")
+
     if admin_password != os.getenv("ADMIN_PASSWORD", "admin123"):
-        raise HTTPException(status_code=403, detail="Invalid admin password")
+        raise HTTPException(status_code=403, detail="Forbidden: wrong admin password")
+
     if key in users:
         del users[key]
         save_users(users)
         return {"message": f"VIP user {key} deleted successfully."}
-    raise HTTPException(status_code=404, detail="User not found")
+    else:
+        raise HTTPException(status_code=404, detail="User not found")
+
