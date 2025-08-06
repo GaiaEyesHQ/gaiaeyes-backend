@@ -68,7 +68,6 @@ def fetch_schumann():
 
 def fetch_ionosphere():
     try:
-        # Default station: Sydney
         html_url = "https://www.sws.bom.gov.au/HF_Systems/1/1"
         html_req = requests.get(html_url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
         soup = BeautifulSoup(html_req.text, "html.parser")
@@ -161,8 +160,13 @@ def ionosphere_chart(api_key: str, station: str = "sydney"):
     if api_key not in users:
         return {"error": "Invalid or missing API key"}
     url = f"https://www.sws.bom.gov.au/Images/HF/WorldIono/{station}.gif"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Referer": "https://www.sws.bom.gov.au/"
+    }
     r = requests.get(url, headers=headers, timeout=10)
+    if r.status_code != 200:
+        raise HTTPException(status_code=502, detail="Failed to fetch ionosphere chart")
     return StreamingResponse(io.BytesIO(r.content), media_type="image/gif")
 
 # --- VIP Combined Endpoint ---
