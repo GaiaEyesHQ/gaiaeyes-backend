@@ -1,165 +1,209 @@
-import os, json, requests, asyncio
-from datetime import datetime
-from fastapi import FastAPI, HTTPException, Request, Form, Response, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+import os
+import json
+import re
+import requests
+from datetime import datetime, timedelta
+from fastapi import FastAPI, Request, Form, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
+from bs4 import BeautifulSoup
+import io
 
-app = FastAPI(title="GaiaEyes Backend", version="2.0")
-
+app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "supersecret"))
-templates = Jinja2Templates(directory="templates")
 
 USERS_FILE = "users.json"
-users = {}
 
-# -------------------------
-# USER MANAGEMENT
-# -------------------------
 def load_users():
-    global users
     if os.path.exists(USERS_FILE):
         with open(USERS_FILE, "r") as f:
-            users = json.load(f)
-    else:
-        users = {}
-    return users
+            return json.load(f)
+    return {}
 
-def save_users():
+def save_users(users):
     with open(USERS_FILE, "w") as f:
         json.dump(users, f)
 
 users = load_users()
 
-# -------------------------
-# CACHED DATA
-# -------------------------
+templates = Jinja2Templates(directory="templates")
+
+# --- Cache for live data ---
 cache = {
-    "schumann": {},
-    "ionosphere": {},
-    "space_weather": {}
+    "schumann": None,
+    "ionosphere": None,
+    "space_weather": None,
+    "last_update": None
 }
 
-SCHUMANN_CHART = "http://sosrff.tsu.ru/new/shm.jpg"
-IONO_BASE = "https://www.sws.bom.gov.au/Images/HFSystems/obs/ionogram/{}.gif"
-
-# -------------------------
-# DATA FETCH FUNCTIONS
-# -------------------------
 def fetch_schumann():
-    # Example: mock values; replace with real scraping/parsing
-    return {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "frequency": 7.83,
-        "amplitude": 32.1,
-        "status": "Moderate activity"
-    }
+    try:
+        img_url = "http://sosrff.tsu.ru/new/shm.jpg"
+        html_url = "http://sosrff.tsu.ru/?page_id=7"
+
+        html_req = requests.get(html_url, timeout=10)
+        soup = BeautifulSoup(html_req.text, "html.parser")
+        text = soup.get_text(" ", strip=True)
+
+        freq_match = re.search(r"(\d+\.\d+)\s*Hz", text)
+        amp_match = re.search(r"(\d+\.\d+)\s*dB", text)
+
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "frequency_Hz": float(freq_match.group(1)) if freq_match else 7.83,
+            "amplitude_dB": float(amp_match.group(1)) if amp_match else None,
+            "image_url": img_url,
+            "status": "OK"
+        }
+    except:
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "frequency_Hz": None,
+            "amplitude_dB": None,
+            "image_url": None,
+            "status": "Offline"
+        }
 
 def fetch_ionosphere():
-    # Example static station
-    return {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "station": "Sydney",
-        "foF2_MHz": 8.2,
-        "status": "Quiet"
-    }
+    try:
+        # Default station: Sydney
+        html_url = "https://www.sws.bom.gov.au/HF_Systems/1/1"
+        html_req = requests.get(html_url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+        soup = BeautifulSoup(html_req.text, "html.parser")
+        text = soup.get_text(" ", strip=True)
+        fof2_match = re.search(r"foF2\s*=?\s*(\d+\.\d+)", text)
+
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "station": "Sydney",
+            "foF2_MHz": float(fof2_match.group(1)) if fof2_match else None,
+            "image_url": "https://www.sws.bom.gov.au/Images/HF/WorldIono/sydney.gif",
+            "status": "OK"
+        }
+    except:
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "station": "Sydney",
+            "foF2_MHz": None,
+            "image_url": None,
+            "status": "Offline"
+        }
 
 def fetch_space_weather():
     try:
-        swpc = requests.get("https://services.swpc.noaa.gov/products/summary.json", timeout=10)
-        data = swpc.json() if swpc.status_code == 200 else {}
+        # Kp Index
+        kp_data = requests.get(
+            "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json", timeout=10
+        ).json()
+        kp_index = kp_data[-1]["kp_index"] if kp_data else None
+
+        # Solar wind
+        sw_data = requests.get(
+            "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json", timeout=10
+        ).json()
+        sw_speed = sw_data[-1][1] if len(sw_data) > 1 else None
+
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "kp_index": kp_index,
+            "solar_wind_speed_kms": sw_speed,
+            "status": "OK"
+        }
     except:
-        data = {}
-    return {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "kp_index": data.get("kp_index", "N/A"),
-        "solar_wind": data.get("solar_wind_speed", "N/A"),
-        "status": "OK" if data else "Offline"
-    }
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "kp_index": None,
+            "solar_wind_speed_kms": None,
+            "status": "Offline"
+        }
 
-# -------------------------
-# BACKGROUND REFRESH
-# -------------------------
-async def refresh_cache():
-    while True:
-        cache["schumann"] = fetch_schumann()
-        cache["ionosphere"] = fetch_ionosphere()
-        cache["space_weather"] = fetch_space_weather()
-        await asyncio.sleep(600)  # refresh every 10 min
+def update_cache():
+    cache["schumann"] = fetch_schumann()
+    cache["ionosphere"] = fetch_ionosphere()
+    cache["space_weather"] = fetch_space_weather()
+    cache["last_update"] = datetime.utcnow()
 
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(refresh_cache())
+def get_cached_data():
+    if not cache["last_update"] or (datetime.utcnow() - cache["last_update"]) > timedelta(minutes=10):
+        update_cache()
+    return cache
 
-# -------------------------
-# ENDPOINTS
-# -------------------------
+# --- Public Endpoints ---
+
 @app.get("/news")
 def get_news(api_key: str):
     if api_key not in users:
-        raise HTTPException(status_code=403, detail="Invalid or missing API key")
+        return {"error": "Invalid or missing API key"}
     return {"news": ["Solar storm detected", "Aurora visible tonight"]}
 
 @app.get("/space-weather")
 def get_space_weather(api_key: str):
     if api_key not in users:
-        raise HTTPException(status_code=403, detail="Invalid or missing API key")
-    return cache["space_weather"]
-
-@app.get("/vip")
-def get_vip(api_key: str):
-    if api_key not in users or users[api_key] != "vip":
-        raise HTTPException(status_code=403, detail="Invalid or missing API key")
-    return {
-        "schumann": cache["schumann"],
-        "ionosphere": cache["ionosphere"],
-        "space_weather": cache["space_weather"]
-    }
+        return {"error": "Invalid or missing API key"}
+    return get_cached_data()["space_weather"]
 
 @app.get("/schumann-resonance")
-def get_schumann_resonance(api_key: str):
+def get_schumann(api_key: str):
     if api_key not in users:
-        raise HTTPException(status_code=403, detail="Invalid or missing API key")
-    return cache["schumann"]
-
-@app.get("/schumann-chart")
-def schumann_chart(api_key: str):
-    if api_key not in users:
-        raise HTTPException(status_code=403, detail="Invalid or missing API key")
-    r = requests.get(SCHUMANN_CHART)
-    return Response(content=r.content, media_type="image/jpeg")
+        return {"error": "Invalid or missing API key"}
+    return get_cached_data()["schumann"]
 
 @app.get("/ionosphere")
 def get_ionosphere(api_key: str):
     if api_key not in users:
-        raise HTTPException(status_code=403, detail="Invalid or missing API key")
-    return cache["ionosphere"]
+        return {"error": "Invalid or missing API key"}
+    return get_cached_data()["ionosphere"]
 
 @app.get("/ionosphere-chart")
-def ionosphere_chart(api_key: str, station: str = Query("sydney")):
+def ionosphere_chart(api_key: str, station: str = "sydney"):
     if api_key not in users:
-        raise HTTPException(status_code=403, detail="Invalid or missing API key")
-    url = IONO_BASE.format(station.lower())
-    r = requests.get(url)
-    return Response(content=r.content, media_type="image/gif")
+        return {"error": "Invalid or missing API key"}
+    url = f"https://www.sws.bom.gov.au/Images/HF/WorldIono/{station}.gif"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    r = requests.get(url, headers=headers, timeout=10)
+    return StreamingResponse(io.BytesIO(r.content), media_type="image/gif")
 
-# -------------------------
-# ADMIN ENDPOINTS
-# -------------------------
+# --- VIP Combined Endpoint ---
+@app.get("/vip")
+def vip_data(api_key: str):
+    if api_key not in users or users[api_key] != "vip":
+        return {"error": "Invalid or missing API key"}
+    data = get_cached_data()
+    return {
+        "schumann": data["schumann"],
+        "ionosphere": data["ionosphere"],
+        "space_weather": data["space_weather"]
+    }
+
+# --- Admin Endpoints ---
+@app.get("/admin", response_class=HTMLResponse)
+def admin_dashboard(request: Request):
+    if request.session.get("logged_in"):
+        return templates.TemplateResponse("dashboard.html", {"request": request, "users": users})
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.post("/admin/login")
+async def admin_login(request: Request, password: str = Form(...)):
+    if password == os.getenv("ADMIN_PASSWORD", "admin123"):
+        request.session["logged_in"] = True
+        return RedirectResponse(url="/admin", status_code=303)
+    return HTMLResponse("<h3>Wrong password. <a href='/admin'>Try again</a></h3>")
+
 @app.post("/admin/add-vip")
-async def add_vip(key: str = Form(...), admin_password: str = Form(...)):
+async def add_vip_user(key: str = Form(...), admin_password: str = Form(...)):
     if admin_password != os.getenv("ADMIN_PASSWORD", "admin123"):
         raise HTTPException(status_code=403, detail="Not authorized")
     users[key] = "vip"
-    save_users()
-    return {"message": f"{key} added as VIP"}
+    save_users(users)
+    return {"message": f"VIP user {key} added"}
 
 @app.post("/admin/delete-vip")
-async def delete_vip(key: str = Form(...), admin_password: str = Form(...)):
+async def delete_vip_user(key: str = Form(...), admin_password: str = Form(...)):
     if admin_password != os.getenv("ADMIN_PASSWORD", "admin123"):
         raise HTTPException(status_code=403, detail="Not authorized")
     if key in users:
         del users[key]
-        save_users()
-        return {"message": f"{key} deleted"}
-    raise HTTPException(status_code=404, detail="User not found")
+        save_users(users)
+    return {"message": f"VIP user {key} deleted"}
