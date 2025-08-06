@@ -1,4 +1,5 @@
 import os
+import io
 import json
 import re
 import requests
@@ -9,13 +10,18 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from bs4 import BeautifulSoup
-import io
+import threading
+import time
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "supersecret"))
 
 USERS_FILE = "users.json"
+CACHE_DIR = "cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+IONO_CACHE_PATH = os.path.join(CACHE_DIR, "ionosphere.gif")
 
+# ---------- User Management ----------
 def load_users():
     if os.path.exists(USERS_FILE):
         with open(USERS_FILE, "r") as f:
@@ -30,7 +36,7 @@ users = load_users()
 
 templates = Jinja2Templates(directory="templates")
 
-# --- Cache for live data ---
+# ---------- Cache for Live Data ----------
 cache = {
     "schumann": None,
     "ionosphere": None,
@@ -38,6 +44,7 @@ cache = {
     "last_update": None
 }
 
+# ---------- Fetch Functions ----------
 def fetch_schumann():
     try:
         img_url = "http://sosrff.tsu.ru/new/shm.jpg"
@@ -74,11 +81,14 @@ def fetch_ionosphere():
         text = soup.get_text(" ", strip=True)
         fof2_match = re.search(r"foF2\s*=?\s*(\d+\.\d+)", text)
 
+        # Cache the ionosphere chart image
+        fetch_ionosphere_chart()
+
         return {
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "station": "Sydney",
             "foF2_MHz": float(fof2_match.group(1)) if fof2_match else None,
-            "image_url": "https://www.sws.bom.gov.au/Images/HF/WorldIono/sydney.gif",
+            "image_url": "/ionosphere-chart",
             "status": "OK"
         }
     except:
@@ -90,15 +100,29 @@ def fetch_ionosphere():
             "status": "Offline"
         }
 
+def fetch_ionosphere_chart():
+    url = "https://www.sws.bom.gov.au/Images/HF/WorldIono/sydney.gif"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Referer": "https://www.sws.bom.gov.au/"
+    }
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+        if r.status_code == 200:
+            with open(IONO_CACHE_PATH, "wb") as f:
+                f.write(r.content)
+            return True
+    except:
+        pass
+    return False
+
 def fetch_space_weather():
     try:
-        # Kp Index
         kp_data = requests.get(
             "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json", timeout=10
         ).json()
         kp_index = kp_data[-1]["kp_index"] if kp_data else None
 
-        # Solar wind
         sw_data = requests.get(
             "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json", timeout=10
         ).json()
@@ -129,8 +153,15 @@ def get_cached_data():
         update_cache()
     return cache
 
-# --- Public Endpoints ---
+# ---------- Background Cache Refresh ----------
+def background_cache_refresh():
+    while True:
+        update_cache()
+        time.sleep(600)  # 10 minutes
 
+threading.Thread(target=background_cache_refresh, daemon=True).start()
+
+# ---------- Public Endpoints ----------
 @app.get("/news")
 def get_news(api_key: str):
     if api_key not in users:
@@ -156,20 +187,23 @@ def get_ionosphere(api_key: str):
     return get_cached_data()["ionosphere"]
 
 @app.get("/ionosphere-chart")
-def ionosphere_chart(api_key: str, station: str = "sydney"):
+def ionosphere_chart(api_key: str):
     if api_key not in users:
         return {"error": "Invalid or missing API key"}
-    url = f"https://www.sws.bom.gov.au/Images/HF/WorldIono/{station}.gif"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-        "Referer": "https://www.sws.bom.gov.au/"
-    }
-    r = requests.get(url, headers=headers, timeout=10)
-    if r.status_code != 200:
-        raise HTTPException(status_code=502, detail="Failed to fetch ionosphere chart")
-    return StreamingResponse(io.BytesIO(r.content), media_type="image/gif")
 
-# --- VIP Combined Endpoint ---
+    # Serve cached file if it exists
+    if os.path.exists(IONO_CACHE_PATH):
+        with open(IONO_CACHE_PATH, "rb") as f:
+            return StreamingResponse(io.BytesIO(f.read()), media_type="image/gif")
+
+    # Try fetching live if cache missing
+    if fetch_ionosphere_chart():
+        with open(IONO_CACHE_PATH, "rb") as f:
+            return StreamingResponse(io.BytesIO(f.read()), media_type="image/gif")
+
+    raise HTTPException(status_code=502, detail="Failed to fetch ionosphere chart")
+
+# ---------- VIP Endpoint ----------
 @app.get("/vip")
 def vip_data(api_key: str):
     if api_key not in users or users[api_key] != "vip":
@@ -181,7 +215,7 @@ def vip_data(api_key: str):
         "space_weather": data["space_weather"]
     }
 
-# --- Admin Endpoints ---
+# ---------- Admin Endpoints ----------
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(request: Request):
     if request.session.get("logged_in"):
