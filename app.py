@@ -72,6 +72,25 @@ def get_vip_content(request: Request, api_key: str):
         return {"error": "VIP access required or invalid API key"}
     return {"vip_content": ["Secret aurora forecasts", "Advanced space weather predictions"]}
 
+from datetime import datetime
+
+@app.get("/schumann-resonance")
+def get_schumann_resonance(api_key: str):
+    # Validate API key
+    if api_key not in users:
+        return {"error": "Invalid or missing API key"}
+
+    # Mock response for now (replace with live data later)
+    response = {
+        "amplitude": 35,  # Example amplitude
+        "frequency": 7.83,  # Fundamental Schumann frequency in Hz
+        "status": "Elevated activity detected",
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+    return response
+
+
 # -----------------------
 # Admin Dashboard (HTML)
 # -----------------------
