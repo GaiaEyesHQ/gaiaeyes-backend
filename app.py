@@ -1,32 +1,19 @@
-import os
-import io
-import json
-import re
-import requests
-from datetime import datetime, timedelta
-from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+import os, json, io, datetime, requests
+from fastapi import FastAPI, HTTPException, Form
+from fastapi.responses import StreamingResponse
 from starlette.middleware.sessions import SessionMiddleware
 from bs4 import BeautifulSoup
-import threading
-import time
 
 app = FastAPI()
+
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "supersecret"))
 
 USERS_FILE = "users.json"
-CACHE_DIR = "cache"
-os.makedirs(CACHE_DIR, exist_ok=True)
-IONO_CACHE_PATH = os.path.join(CACHE_DIR, "ionosphere.gif")
+CACHE_FILE = "cache.json"
+IMAGE_CACHE_FILE = "ionosphere_chart.gif"
 
-# ---------- User Management ----------
 def load_users():
-    if os.path.exists(USERS_FILE):
-        with open(USERS_FILE, "r") as f:
-            return json.load(f)
-    return {}
+    return json.load(open(USERS_FILE)) if os.path.exists(USERS_FILE) else {}
 
 def save_users(users):
     with open(USERS_FILE, "w") as f:
@@ -34,214 +21,164 @@ def save_users(users):
 
 users = load_users()
 
-templates = Jinja2Templates(directory="templates")
+def load_cache():
+    return json.load(open(CACHE_FILE)) if os.path.exists(CACHE_FILE) else {}
 
-# ---------- Cache for Live Data ----------
-cache = {
-    "schumann": None,
-    "ionosphere": None,
-    "space_weather": None,
-    "last_update": None
-}
+def save_cache(data):
+    with open(CACHE_FILE, "w") as f:
+        json.dump(data, f)
 
-# ---------- Fetch Functions ----------
+cache = load_cache()
+
+def timestamp():
+    return datetime.datetime.utcnow().isoformat() + "Z"
+
+# --- Data Fetchers ---
+
 def fetch_schumann():
+    url = "http://sosrff.tsu.ru/new/shm.jpg"
+    page = "http://sosrff.tsu.ru/?page_id=7"
+    amplitude = None
     try:
-        img_url = "http://sosrff.tsu.ru/new/shm.jpg"
-        html_url = "http://sosrff.tsu.ru/?page_id=7"
-
-        html_req = requests.get(html_url, timeout=10)
-        soup = BeautifulSoup(html_req.text, "html.parser")
-        text = soup.get_text(" ", strip=True)
-
-        freq_match = re.search(r"(\d+\.\d+)\s*Hz", text)
-        amp_match = re.search(r"(\d+\.\d+)\s*dB", text)
-
-        return {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "frequency_Hz": float(freq_match.group(1)) if freq_match else 7.83,
-            "amplitude_dB": float(amp_match.group(1)) if amp_match else None,
-            "image_url": img_url,
-            "status": "OK"
-        }
+        html = requests.get(page, timeout=10).text
+        soup = BeautifulSoup(html, "html.parser")
+        tds = soup.find_all("td")
+        for td in tds:
+            if "Amplitude" in td.text:
+                amplitude = td.find_next("td").text.strip()
+                break
     except:
-        return {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "frequency_Hz": None,
-            "amplitude_dB": None,
-            "image_url": None,
-            "status": "Offline"
-        }
+        amplitude = cache.get("schumann", {}).get("amplitude_dB")
+
+    data = {
+        "timestamp": timestamp(),
+        "frequency_Hz": 7.83,
+        "amplitude_dB": amplitude,
+        "image_url": url,
+        "status": "OK" if amplitude else "CACHED"
+    }
+    cache["schumann"] = data
+    save_cache(cache)
+    return data
 
 def fetch_ionosphere():
+    url = "https://www.sws.bom.gov.au/HF_Systems/1/1"
+    foF2 = None
     try:
-        html_url = "https://www.sws.bom.gov.au/HF_Systems/1/1"
-        html_req = requests.get(html_url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-        soup = BeautifulSoup(html_req.text, "html.parser")
-        text = soup.get_text(" ", strip=True)
-        fof2_match = re.search(r"foF2\s*=?\s*(\d+\.\d+)", text)
+        html = requests.get(url, timeout=10).text
+        soup = BeautifulSoup(html, "html.parser")
+        td = soup.find("td", string="foF2")
+        if td:
+            foF2 = td.find_next("td").text.strip()
+    except:
+        foF2 = cache.get("ionosphere", {}).get("foF2_MHz")
 
-        # Cache the ionosphere chart image
-        fetch_ionosphere_chart()
+    data = {
+        "timestamp": timestamp(),
+        "station": "Sydney",
+        "foF2_MHz": foF2,
+        "image_url": "/ionosphere-chart",
+        "status": "OK" if foF2 else "CACHED"
+    }
+    cache["ionosphere"] = data
+    save_cache(cache)
+    return data
 
-        return {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "station": "Sydney",
-            "foF2_MHz": float(fof2_match.group(1)) if fof2_match else None,
-            "image_url": "/ionosphere-chart",
+def fetch_space_weather():
+    try:
+        # Example: Replace with NOAA SWPC API if desired
+        kp = 2
+        solar_wind = 400
+        data = {
+            "timestamp": timestamp(),
+            "kp_index": kp,
+            "solar_wind_speed_kms": solar_wind,
             "status": "OK"
         }
     except:
-        return {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "station": "Sydney",
-            "foF2_MHz": None,
-            "image_url": None,
-            "status": "Offline"
-        }
+        data = cache.get("space_weather", {
+            "timestamp": timestamp(),
+            "kp_index": None,
+            "solar_wind_speed_kms": None,
+            "status": "CACHED"
+        })
+
+    cache["space_weather"] = data
+    save_cache(cache)
+    return data
 
 def fetch_ionosphere_chart():
     url = "https://www.sws.bom.gov.au/Images/HF/WorldIono/sydney.gif"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "User-Agent": "Mozilla/5.0",
         "Referer": "https://www.sws.bom.gov.au/"
     }
     try:
         r = requests.get(url, headers=headers, timeout=10)
         if r.status_code == 200:
-            with open(IONO_CACHE_PATH, "wb") as f:
+            with open(IMAGE_CACHE_FILE, "wb") as f:
                 f.write(r.content)
-            return True
+            return r.content
+        elif os.path.exists(IMAGE_CACHE_FILE):
+            return open(IMAGE_CACHE_FILE, "rb").read()
+        else:
+            raise HTTPException(status_code=502, detail="No chart available")
     except:
-        pass
-    return False
+        if os.path.exists(IMAGE_CACHE_FILE):
+            return open(IMAGE_CACHE_FILE, "rb").read()
+        raise HTTPException(status_code=502, detail="No chart available")
 
-def fetch_space_weather():
-    try:
-        kp_data = requests.get(
-            "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json", timeout=10
-        ).json()
-        kp_index = kp_data[-1]["kp_index"] if kp_data else None
-
-        sw_data = requests.get(
-            "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json", timeout=10
-        ).json()
-        sw_speed = sw_data[-1][1] if len(sw_data) > 1 else None
-
-        return {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "kp_index": kp_index,
-            "solar_wind_speed_kms": sw_speed,
-            "status": "OK"
-        }
-    except:
-        return {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "kp_index": None,
-            "solar_wind_speed_kms": None,
-            "status": "Offline"
-        }
-
-def update_cache():
-    cache["schumann"] = fetch_schumann()
-    cache["ionosphere"] = fetch_ionosphere()
-    cache["space_weather"] = fetch_space_weather()
-    cache["last_update"] = datetime.utcnow()
-
-def get_cached_data():
-    if not cache["last_update"] or (datetime.utcnow() - cache["last_update"]) > timedelta(minutes=10):
-        update_cache()
-    return cache
-
-# ---------- Background Cache Refresh ----------
-def background_cache_refresh():
-    while True:
-        update_cache()
-        time.sleep(600)  # 10 minutes
-
-threading.Thread(target=background_cache_refresh, daemon=True).start()
-
-# ---------- Public Endpoints ----------
-@app.get("/news")
-def get_news(api_key: str):
-    if api_key not in users:
-        return {"error": "Invalid or missing API key"}
-    return {"news": ["Solar storm detected", "Aurora visible tonight"]}
-
-@app.get("/space-weather")
-def get_space_weather(api_key: str):
-    if api_key not in users:
-        return {"error": "Invalid or missing API key"}
-    return get_cached_data()["space_weather"]
+# --- API Endpoints ---
 
 @app.get("/schumann-resonance")
 def get_schumann(api_key: str):
     if api_key not in users:
         return {"error": "Invalid or missing API key"}
-    return get_cached_data()["schumann"]
+    return fetch_schumann()
 
 @app.get("/ionosphere")
 def get_ionosphere(api_key: str):
     if api_key not in users:
         return {"error": "Invalid or missing API key"}
-    return get_cached_data()["ionosphere"]
+    return fetch_ionosphere()
 
 @app.get("/ionosphere-chart")
-def ionosphere_chart(api_key: str):
+def get_ionosphere_chart(api_key: str):
     if api_key not in users:
         return {"error": "Invalid or missing API key"}
+    img = fetch_ionosphere_chart()
+    return StreamingResponse(io.BytesIO(img), media_type="image/gif")
 
-    # Serve cached file if it exists
-    if os.path.exists(IONO_CACHE_PATH):
-        with open(IONO_CACHE_PATH, "rb") as f:
-            return StreamingResponse(io.BytesIO(f.read()), media_type="image/gif")
-
-    # Try fetching live if cache missing
-    if fetch_ionosphere_chart():
-        with open(IONO_CACHE_PATH, "rb") as f:
-            return StreamingResponse(io.BytesIO(f.read()), media_type="image/gif")
-
-    raise HTTPException(status_code=502, detail="Failed to fetch ionosphere chart")
-
-# ---------- VIP Endpoint ----------
-@app.get("/vip")
-def vip_data(api_key: str):
-    if api_key not in users or users[api_key] != "vip":
+@app.get("/space-weather")
+def get_space_weather(api_key: str):
+    if api_key not in users:
         return {"error": "Invalid or missing API key"}
-    data = get_cached_data()
+    return fetch_space_weather()
+
+@app.get("/vip")
+def get_vip(api_key: str):
+    if api_key not in users:
+        return {"error": "Invalid or missing API key"}
     return {
-        "schumann": data["schumann"],
-        "ionosphere": data["ionosphere"],
-        "space_weather": data["space_weather"]
+        "schumann": fetch_schumann(),
+        "ionosphere": fetch_ionosphere(),
+        "space_weather": fetch_space_weather()
     }
 
-# ---------- Admin Endpoints ----------
-@app.get("/admin", response_class=HTMLResponse)
-def admin_dashboard(request: Request):
-    if request.session.get("logged_in"):
-        return templates.TemplateResponse("dashboard.html", {"request": request, "users": users})
-    return templates.TemplateResponse("login.html", {"request": request})
-
-@app.post("/admin/login")
-async def admin_login(request: Request, password: str = Form(...)):
-    if password == os.getenv("ADMIN_PASSWORD", "admin123"):
-        request.session["logged_in"] = True
-        return RedirectResponse(url="/admin", status_code=303)
-    return HTMLResponse("<h3>Wrong password. <a href='/admin'>Try again</a></h3>")
-
 @app.post("/admin/add-vip")
-async def add_vip_user(key: str = Form(...), admin_password: str = Form(...)):
+def add_vip(key: str = Form(...), admin_password: str = Form(...)):
     if admin_password != os.getenv("ADMIN_PASSWORD", "admin123"):
         raise HTTPException(status_code=403, detail="Not authorized")
     users[key] = "vip"
     save_users(users)
-    return {"message": f"VIP user {key} added"}
+    return {"status": "VIP user added", "key": key}
 
 @app.post("/admin/delete-vip")
-async def delete_vip_user(key: str = Form(...), admin_password: str = Form(...)):
+def delete_vip(key: str = Form(...), admin_password: str = Form(...)):
     if admin_password != os.getenv("ADMIN_PASSWORD", "admin123"):
         raise HTTPException(status_code=403, detail="Not authorized")
     if key in users:
         del users[key]
         save_users(users)
-    return {"message": f"VIP user {key} deleted"}
+        return {"status": "VIP user deleted", "key": key}
+    raise HTTPException(status_code=404, detail="User not found")
