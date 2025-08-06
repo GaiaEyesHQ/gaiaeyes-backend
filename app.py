@@ -1,31 +1,23 @@
 import os
 import json
+from datetime import datetime
 from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
+from pydantic import BaseModel
 
-# -----------------------
-# App Initialization
-# -----------------------
-app = FastAPI(title="GaiaEyes API", description="FastAPI backend with VIP and admin functionality")
+app = FastAPI(
+    title="GaiaEyes Backend API",
+    description="API for GaiaEyes MVP: Space Weather, News, VIP Access, and Schumann Resonance",
+    version="1.0.0"
+)
 
-# Rate Limiter
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, lambda request, exc: (HTMLResponse("Too Many Requests", status_code=429)))
-
-# Secret key for sessions
+# Secret key for session handling (set your own in Render)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "supersecret"))
 
-# -----------------------
-# User Data
-# -----------------------
+# Load users from JSON
 USERS_FILE = "users.json"
 
 def load_users():
@@ -41,59 +33,63 @@ def save_users(users):
 users = load_users()
 
 # -----------------------
-# Templates
+# Response Models
 # -----------------------
-templates = Jinja2Templates(directory="templates")
+
+class SchumannResponse(BaseModel):
+    amplitude: float
+    frequency: float
+    status: str
+    timestamp: str
 
 # -----------------------
 # Public Endpoints
 # -----------------------
 
-@app.get("/news")
-@limiter.limit("5/minute")
-def get_news(request: Request, api_key: str):
+@app.get("/news", summary="Get Latest News")
+def get_news(api_key: str):
     if api_key not in users:
         return {"error": "Invalid or missing API key"}
     return {"news": ["Solar storm detected", "Aurora visible tonight"]}
 
-
-@app.get("/space-weather")
-@limiter.limit("5/minute")
-def get_space_weather(request: Request, api_key: str):
+@app.get("/space-weather", summary="Get Space Weather Data")
+def get_space_weather(api_key: str):
     if api_key not in users:
         return {"error": "Invalid or missing API key"}
-    return {"space_weather": {"solar_activity": "Moderate", "aurora_index": 5}}
+    return {"solar_wind": 500, "kp_index": 5, "geomagnetic_storm": "Moderate"}
 
+@app.get("/vip", summary="Check VIP Status")
+def get_vip(api_key: str):
+    if api_key not in users:
+        return {"error": "Invalid or missing API key"}
+    return {"status": f"API key {api_key} is valid for role: {users[api_key]}"}
 
-@app.get("/vip")
-@limiter.limit("5/minute")
-def get_vip_content(request: Request, api_key: str):
-    if api_key not in users or users[api_key] != "vip":
-        return {"error": "VIP access required or invalid API key"}
-    return {"vip_content": ["Secret aurora forecasts", "Advanced space weather predictions"]}
-
-from datetime import datetime
-
-@app.get("/schumann-resonance")
+@app.get(
+    "/schumann-resonance",
+    response_model=SchumannResponse,
+    summary="Get Schumann Resonance Data",
+    description="Returns the latest Schumann resonance amplitude and frequency data. Currently mock data for MVP."
+)
 def get_schumann_resonance(api_key: str):
-    # Validate API key
+    """
+    Fetch Schumann Resonance mock data for MVP.
+    Requires a valid API key.
+    """
     if api_key not in users:
         return {"error": "Invalid or missing API key"}
 
-    # Mock response for now (replace with live data later)
-    response = {
-        "amplitude": 35,  # Example amplitude
-        "frequency": 7.83,  # Fundamental Schumann frequency in Hz
+    return {
+        "amplitude": 35,
+        "frequency": 7.83,
         "status": "Elevated activity detected",
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
 
-    return response
-
-
 # -----------------------
-# Admin Dashboard (HTML)
+# Admin Dashboard
 # -----------------------
+
+templates = Jinja2Templates(directory="templates")
 
 @app.get("/admin", response_class=HTMLResponse)
 def admin_dashboard(request: Request):
@@ -108,37 +104,20 @@ async def admin_login(request: Request, password: str = Form(...)):
         return RedirectResponse(url="/admin", status_code=303)
     return HTMLResponse("<h3>Wrong password. <a href='/admin'>Try again</a></h3>")
 
-# -----------------------
-# Admin API Endpoints
-# -----------------------
-
 @app.post("/admin/add-vip")
-async def add_vip_user(request: Request):
-    data = await request.json()
-    key = data.get("key")
-    admin_password = data.get("admin_password")
-
+async def add_vip_user(key: str = Form(...), admin_password: str = Form(...)):
     if admin_password != os.getenv("ADMIN_PASSWORD", "admin123"):
-        raise HTTPException(status_code=403, detail="Forbidden: wrong admin password")
-
+        raise HTTPException(status_code=403, detail="Not authorized")
     users[key] = "vip"
     save_users(users)
     return {"message": f"VIP user {key} added successfully."}
 
-
 @app.post("/admin/delete-vip")
-async def delete_vip_user(request: Request):
-    data = await request.json()
-    key = data.get("key")
-    admin_password = data.get("admin_password")
-
+async def delete_vip_user(key: str = Form(...), admin_password: str = Form(...)):
     if admin_password != os.getenv("ADMIN_PASSWORD", "admin123"):
-        raise HTTPException(status_code=403, detail="Forbidden: wrong admin password")
-
+        raise HTTPException(status_code=403, detail="Not authorized")
     if key in users:
         del users[key]
         save_users(users)
         return {"message": f"VIP user {key} deleted successfully."}
-    else:
-        raise HTTPException(status_code=404, detail="User not found")
-
+    return {"error": f"VIP user {key} not found."}
