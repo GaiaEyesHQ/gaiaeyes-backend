@@ -1,98 +1,159 @@
 #!/usr/bin/env python3
 """
-Ingest Kp(1m) + DSCOVR Solar Wind (+ optional MAG for Bz) into ext.space_weather.
+Ingest Kp (1-minute) + SWPC Solar Wind (plasma + mag) into ext.space_weather.
 
-Sources (defaults point to your picks):
-- Kp 1m:        https://services.swpc.noaa.gov/json/planetary_k_index_1m.json
-- Solar wind:   https://services.swpc.noaa.gov/json/dscovr/solar_wind.json
-- Mag (Bz):     https://services.swpc.noaa.gov/json/dscovr/mag.json   (optional but recommended)
+Sources (defaults):
+- Kp 1m:   https://services.swpc.noaa.gov/json/planetary_k_index_1m.json  (list of dicts)
+- Plasma:  https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json  (array-of-arrays)
+- Mag:     https://services.swpc.noaa.gov/products/solar-wind/mag-7-day.json     (array-of-arrays; includes Bz)
+
+Upserts into ext.space_weather:
+  ts_utc (PK), kp_index, bz_nt, sw_speed_kms, src='noaa-swpc', meta jsonb
 
 ENV:
   SUPABASE_DB_URL  (required)   -- pooler DSN with ?pgbouncer=true&sslmode=require
   KP_URL           (optional)   -- override Kp JSON URL
-  SW_URL           (optional)   -- override solar wind JSON URL
+  SW_URL           (optional)   -- override plasma JSON URL
   MAG_URL          (optional)   -- override mag JSON URL for Bz
-  HTTP_USER_AGENT  (optional)
-  SINCE_HOURS      (default 72)
+  HTTP_USER_AGENT  (optional)   -- polite UA for api.weather.gov-style services
+  SINCE_HOURS      (default 72) -- only keep rows newer than now()-N hours
 """
 
-import os, sys, asyncio, math, json
+import os
+import sys
+import json
+import math
+import asyncio
 from datetime import datetime, timezone, timedelta
-import httpx, asyncpg
 
-def env(k, default=None, required=False):
-    v = os.getenv(k, default)
-    if required and (v is None or v == ""):
-        print(f"Missing env: {k}", file=sys.stderr); sys.exit(2)
-    return v
+import httpx
+import asyncpg
+
+
+# ---------------------- env helpers ----------------------
+
+def env(name: str, default=None, required: bool = False):
+    val = os.getenv(name, default)
+    if required and (val is None or val == ""):
+        print(f"Missing required env: {name}", file=sys.stderr)
+        sys.exit(2)
+    return val
+
 
 DB  = env("SUPABASE_DB_URL", required=True)
+
+# Recommended SWPC product endpoints:
 KP  = env("KP_URL",  "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json")
-SW  = env("SW_URL",  "https://services.swpc.noaa.gov/json/dscovr/solar_wind.json")
-MAG = env("MAG_URL", "https://services.swpc.noaa.gov/json/dscovr/mag.json")  # set to "" to disable
+SW  = env("SW_URL",  "https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json")
+MAG = env("MAG_URL", "https://services.swpc.noaa.gov/products/solar-wind/mag-7-day.json")
+
 UA  = env("HTTP_USER_AGENT", "(gaiaeyes.com, gaiaeyes7.83@gmail.com)")
 SINCE_HOURS = int(env("SINCE_HOURS", "72"))
 
 SRC = "noaa-swpc"
 
+
+# ---------------------- parsing helpers ----------------------
+
 def parse_ts(x):
-    if x is None: return None
+    """Robust timestamp parser supporting ISO strings (with/without Z) and epoch seconds."""
+    if x is None:
+        return None
     if isinstance(x, (int, float)):
-        return datetime.fromtimestamp(float(x), tz=timezone.utc)
+        try:
+            return datetime.fromtimestamp(float(x), tz=timezone.utc)
+        except Exception:
+            return None
     if isinstance(x, str):
         s = x.strip()
-        if s.endswith("Z"):
-            return datetime.fromisoformat(s.replace("Z","+00:00"))
         try:
+            if s.endswith("Z"):
+                return datetime.fromisoformat(s.replace("Z", "+00:00"))
             return datetime.fromisoformat(s)
         except Exception:
-            # trim fractional
+            # last resort: trim fractional
             try:
                 base = s.split(".")[0]
                 if not base.endswith("Z") and "+" not in base and "-" not in base[10:]:
                     base += "Z"
-                return datetime.fromisoformat(base.replace("Z","+00:00"))
+                return datetime.fromisoformat(base.replace("Z", "+00:00"))
             except Exception:
                 return None
     return None
 
+
 def f(x):
-    if x in (None, "", "null", "NaN"): return None
+    """Coerce to float; filter NaN/inf/empties → None."""
+    if x in (None, "", "null", "NaN"):
+        return None
     try:
         v = float(x)
-        if math.isnan(v) or math.isinf(v): return None
+        if math.isnan(v) or math.isinf(v):
+            return None
         return v
     except Exception:
         return None
 
-async def get_json(client, url):
-    r = await client.get(url)
-    r.raise_for_status()
-    return r.json()
 
-def cutoff():
+def cutoff_dt():
     return datetime.now(timezone.utc) - timedelta(hours=SINCE_HOURS)
 
-def idx_by_ts(objs, ts_keys=("time_tag","time","timestamp","date","datetime","TimeTag")):
+
+def normalize_array_of_arrays(data):
+    """
+    Convert SWPC 'products' JSON (array-of-arrays: [header, row1, ...])
+    into list-of-dicts to match the rest of the pipeline.
+    If data already looks like list-of-dicts, return as-is.
+    """
+    if not isinstance(data, list) or not data:
+        return data
+    header = data[0]
+    if not (isinstance(header, list) and all(isinstance(h, str) for h in header)):
+        return data  # not AoA; likely list of dicts already
+    out = []
+    keys = [h.strip() for h in header]
+    for row in data[1:]:
+        if not isinstance(row, list):
+            continue
+        d = {}
+        for i, k in enumerate(keys):
+            if i < len(row):
+                d[k] = row[i]
+        out.append(d)
+    return out
+
+
+def idx_by_ts(objs, ts_keys=("time_tag", "time", "timestamp", "date", "datetime", "TimeTag")):
+    """
+    Build dict keyed by parsed ts for rows newer than cutoff.
+    Accepts list-of-dicts; caller should normalize AoA → dicts first.
+    """
     out = {}
-    co = cutoff()
-    for d in objs:
-        # try a few timestamp keys
+    co = cutoff_dt()
+    for d in objs if isinstance(objs, list) else []:
         ts_raw = None
         for k in ts_keys:
             if k in d and d[k] not in ("", None):
-                ts_raw = d[k]; break
-        if ts_raw is None: 
-            # some DSCOVR arrays use 'time_tag' nested name 'time_tag': 'YYYY...'
-            # already handled, else skip
+                ts_raw = d[k]
+                break
+        if ts_raw is None:
             continue
         ts = parse_ts(ts_raw)
-        if not ts or ts < co: 
+        if not ts or ts < co:
             continue
         out[ts] = d
     return out
 
-UPSERT = """
+
+# ---------------------- HTTP + DB ----------------------
+
+async def get_json(client: httpx.AsyncClient, url: str):
+    r = await client.get(url)
+    r.raise_for_status()
+    return r.json()
+
+
+UPSERT_SQL = """
 insert into ext.space_weather (ts_utc, kp_index, bz_nt, sw_speed_kms, src, meta)
 values ($1, $2, $3, $4, $5, $6::jsonb)
 on conflict (ts_utc) do update
@@ -103,32 +164,30 @@ set kp_index     = excluded.kp_index,
     meta         = excluded.meta;
 """
 
+
+# ---------------------- main ----------------------
+
 async def main():
     headers = {"User-Agent": UA, "Accept": "application/json"}
     timeout = httpx.Timeout(45.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout, headers=headers) as c:
-        kp_json  = await get_json(c, KP)
-        sw_json  = await get_json(c, SW)
-        mag_json = None
-        if MAG:
-            try:
-                mag_json = await get_json(c, MAG)
-            except Exception:
-                mag_json = None
+        kp_json  = await get_json(c, KP)     # list-of-dicts
+        sw_json  = await get_json(c, SW)     # array-of-arrays → normalize
+        mag_json = await get_json(c, MAG)    # array-of-arrays → normalize
 
-    # Expect lists of dicts from these endpoints.
-    if not isinstance(kp_json, list):  kp_json = []
-    if not isinstance(sw_json, list):  sw_json = []
-    if mag_json is not None and not isinstance(mag_json, list):
-        mag_json = []
+    # Normalize product feeds (AoA → list-of-dicts)
+    kp_json  = normalize_array_of_arrays(kp_json)   # no-op if already dicts
+    sw_json  = normalize_array_of_arrays(sw_json)
+    mag_json = normalize_array_of_arrays(mag_json)
 
-    kp_by_ts  = idx_by_ts(kp_json, ts_keys=("time_tag","time","timestamp","date","datetime"))
-    sw_by_ts  = idx_by_ts(sw_json, ts_keys=("time_tag","time","timestamp"))
-    mag_by_ts = idx_by_ts(mag_json or [], ts_keys=("time_tag","time","timestamp"))
+    # Index by timestamp within SINCE_HOURS window
+    kp_by_ts  = idx_by_ts(kp_json, ts_keys=("time_tag", "time", "timestamp", "date", "datetime"))
+    sw_by_ts  = idx_by_ts(sw_json, ts_keys=("time_tag", "time", "timestamp"))
+    mag_by_ts = idx_by_ts(mag_json, ts_keys=("time_tag", "time", "timestamp"))
 
     ts_all = sorted(set(kp_by_ts.keys()) | set(sw_by_ts.keys()) | set(mag_by_ts.keys()))
     if not ts_all:
-        print("No recent records in the last hours window.")
+        print("No recent records in the selected time window.")
         return
 
     rows = []
@@ -137,29 +196,41 @@ async def main():
         swd = sw_by_ts.get(ts, {})
         mgd = mag_by_ts.get(ts, {})
 
-        # Field name guesses:
-        # Kp(1m): "kp_index" or "kp"
-        kp_val = f(kpd.get("kp_index") or kpd.get("kp") or kpd.get("Kp"))
+        # Kp (1m) candidate keys
+        kp_val = f(
+            kpd.get("kp_index") or kpd.get("kp") or kpd.get("Kp")
+            or kpd.get("estimated_kp") or kpd.get("kp_value")
+        )
 
-        # Solar wind speed: "speed" or "solar_wind_speed"
-        sw_speed = f(swd.get("speed") or swd.get("solar_wind_speed") or swd.get("velocity"))
+        # Solar wind speed (km/s) candidate keys seen in plasma products
+        # Common columns include: 'speed', 'plasma_speed', 'proton_speed', 'flow_speed', 'velocity'
+        sw_speed = f(
+            swd.get("speed") or swd.get("plasma_speed") or swd.get("proton_speed")
+            or swd.get("flow_speed") or swd.get("velocity")
+        )
 
-        # Bz from MAG: "bz" or "bz_gsm" or "Bz"
-        bz_val = f(mgd.get("bz") or mgd.get("bz_gsm") or mgd.get("Bz"))
+        # Bz (nT) from MAG products (prefer GSM if available)
+        bz_val = f(
+            mgd.get("bz_gsm") or mgd.get("bz_gse") or mgd.get("bz") or mgd.get("Bz")
+        )
 
         meta = {
             "sources": {
-                "kp": KP, "solar_wind": SW, "mag": (MAG or None)
+                "kp": KP,
+                "plasma": SW,
+                "mag": MAG
             }
         }
+
         rows.append((ts, kp_val, bz_val, sw_speed, SRC, json.dumps(meta)))
 
-    conn = await asyncpg.connect(dsn=DB, statement_cache_size=0)
+    conn = await asyncpg.connect(dsn=DB, statement_cache_size=0)  # PgBouncer-friendly
     try:
-        await conn.executemany(UPSERT, rows)
+        await conn.executemany(UPSERT_SQL, rows)
         print(f"Upserted {len(rows)} rows into ext.space_weather from {SRC}")
     finally:
         await conn.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
