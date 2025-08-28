@@ -1,0 +1,47 @@
+name: space-weather
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 minutes (GitHub runners use UTC)
+  workflow_dispatch: {}       # lets you run it manually from the Actions tab
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    env:
+      # required
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      # optional, but nice to have
+      HTTP_USER_AGENT: "(gaiaeyes.com, gaiaeyes7.83@gmail.com)"
+      SINCE_HOURS: "72"
+      # leave these unset to use script defaults (recommended)
+      # KP_URL: "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json"
+      # SW_URL: "https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json"
+      # MAG_URL: "https://services.swpc.noaa.gov/products/solar-wind/mag-7-day.json"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install httpx asyncpg
+
+      - name: Run ingester
+        run: |
+          python backend/scripts/ingest_space_weather_custom.py
