@@ -2,7 +2,7 @@ name: space-weather
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # every 15 minutes (GitHub runners use UTC)
+    - cron: "*/30 * * * *"   # every 30 minutes (GitHub runners use UTC)
   workflow_dispatch: {}       # lets you run it manually from the Actions tab
 
 jobs:
