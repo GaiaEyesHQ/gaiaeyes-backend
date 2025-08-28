@@ -139,7 +139,12 @@ def idx_by_ts(objs, ts_keys=("time_tag", "time", "timestamp", "date", "datetime"
         if ts_raw is None:
             continue
         ts = parse_ts(ts_raw)
-        if not ts or ts < co:
+        if not ts:
+            continue
+        # >>> FIX: ensure timezone-aware (UTC) before comparing <<<
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        if ts < co:
             continue
         out[ts] = d
     return out
