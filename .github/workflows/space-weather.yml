@@ -44,4 +44,4 @@ jobs:
 
       - name: Run ingester
         run: |
-          python /scripts/ingest_space_weather_custom.py
+          python scripts/ingest_space_weather_custom.py
