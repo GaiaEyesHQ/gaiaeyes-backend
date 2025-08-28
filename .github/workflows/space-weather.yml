@@ -2,40 +2,36 @@ name: space-weather
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes (GitHub runners use UTC)
-  workflow_dispatch: {}       # lets you run it manually from the Actions tab
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
 
 jobs:
   run:
     runs-on: ubuntu-latest
-
     env:
-      # required
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      # optional, but nice to have
       HTTP_USER_AGENT: "(gaiaeyes.com, gaiaeyes7.83@gmail.com)"
       SINCE_HOURS: "72"
-      # leave these unset to use script defaults (recommended)
-      # KP_URL: "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json"
-      # SW_URL: "https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json"
-      # MAG_URL: "https://services.swpc.noaa.gov/products/solar-wind/mag-7-day.json"
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            pip-${{ runner.os }}-
+      - name: Verify required envs
+        run: |
+          if [ -z "${SUPABASE_DB_URL}" ]; then
+            echo "❌ SUPABASE_DB_URL is not set. Check repo Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          python - <<'PY'
+import os, re
+u = os.environ.get("SUPABASE_DB_URL")
+print("✅ SUPABASE_DB_URL present. Length:", len(u))
+print("   Scheme:", u.split(":",1)[0] if u else "missing")
+print("   Has '@' host section:", "@" in u)
+print("   Looks like pooler:", "pooler.supabase.com" in u)
+PY
 
       - name: Install deps
         run: |
@@ -43,5 +39,4 @@ jobs:
           pip install httpx asyncpg
 
       - name: Run ingester
-        run: |
-          python scripts/ingest_space_weather_custom.py
+        run: python backend/scripts/ingest_space_weather_custom.py
