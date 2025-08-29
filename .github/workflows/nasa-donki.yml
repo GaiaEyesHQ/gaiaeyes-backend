@@ -1,0 +1,20 @@
+name: nasa-donki
+
+on:
+  schedule:
+    - cron: "30 2 * * *"   # daily at 02:30 UTC
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      NASA_API_KEY: ${{ secrets.NASA_API_KEY }}
+      START_DAYS_AGO: "14"         # pull last 14 days each run (idempotent upsert)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install httpx asyncpg
+      - run: python backend/scripts/ingest_nasa_donki.py
