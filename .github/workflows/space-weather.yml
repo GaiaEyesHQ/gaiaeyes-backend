@@ -45,3 +45,12 @@ jobs:
       - name: Run ingester
         run: |
           python scripts/ingest_space_weather_custom.py
+
+      - name: Create issue on failure
+        if: failure()
+        uses: dacbd/create-issue-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: "Space-weather ingestion failed"
+          body: "Check the latest run logs in Actions."
+
