@@ -1,0 +1,19 @@
+name: daily-features-rollup
+
+on:
+  schedule:
+    - cron: "0 4 * * *"   # daily at 04:00 UTC (after your other jobs)
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      DAYS_BACK: "14"      # recompute last 14 days each run
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install asyncpg
+      - run: python scripts/rollup_daily_features.py
