@@ -17,4 +17,4 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - run: pip install httpx asyncpg
-      - run: python backend/scripts/ingest_nasa_donki.py
+      - run: python scripts/ingest_nasa_donki.py
