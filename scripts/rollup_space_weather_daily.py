@@ -4,7 +4,7 @@ Daily rollup from ext.space_weather (+ DONKI counts) into marts.space_weather_da
 
 ENV:
   SUPABASE_DB_URL (required)
-  DAYS_BACK       (default 7)    -- recompute last N days (idempotent)
+  DAYS_BACK       (default 30)   -- recompute last N days (idempotent)
 """
 
 import os, sys, asyncio, asyncpg
@@ -16,16 +16,16 @@ def env(k, default=None, required=False):
     return v
 
 DB = env("SUPABASE_DB_URL", required=True)
-DAYS_BACK = int(env("DAYS_BACK", "7"))
+DAYS_BACK = int(env("DAYS_BACK", "30"))
 
 UPSERT_SQL = f"""
 with sw as (
   select
     date(ts_utc) as day,
-    max(kp_index)      as kp_max,
-    min(bz_nt)         as bz_min,
-    avg(sw_speed_kms)  as sw_speed_avg,
-    count(*)           as row_count
+    max(kp_index)              as kp_max,
+    min(bz_nt)                 as bz_min,
+    avg(sw_speed_kms)          as sw_speed_avg,
+    count(*)                   as row_count
   from ext.space_weather
   where ts_utc >= date_trunc('day', now() - interval '{DAYS_BACK} days')
   group by 1
