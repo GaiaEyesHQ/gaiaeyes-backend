@@ -44,8 +44,8 @@ jobs:
       - name: Copy outputs into media repo
         run: |
           mkdir -p media/images media/data
-          cp backend/bots/schumann/*overlay.png media/images/ || true
-          cp backend/bots/schumann/*now.json media/data/ || true
+          cp gaiaeyes-backend/bots/schumann/*overlay.png media/images/ || true
+          cp gaiaeyes-backend/bots/schumann/*now.json media/data/ || true
 
       - name: Commit and push to media repo
         run: |
