@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gaiaeyes-schumann"
+version = "0.1.0"
+description = "Schumann resonance extractors (Tomsk + Cumiana) for GaiaEyes backend"
+authors = [
+  { name = "Jennifer Randall" }
+]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.9"
+
+dependencies = [
+  "numpy>=1.25",
+  "opencv-python>=4.8",
+  "pillow>=10.0",
+  "requests>=2.31",
+  "urllib3>=2.0",
+  "pytz>=2023.3",
+  "python-dateutil>=2.8"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",
+  "black>=23.0"
+]
+
+[tool.setuptools]
+package-dir = {"" = "."}
