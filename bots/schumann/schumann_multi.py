@@ -1,135 +1,109 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Multi-source Schumann orchestrator.
-- Tries sources in the given order (env PREFER or --prefer).
-- Records ALL usable sources in the output JSON under "sources".
-- Picks PRIMARY = first OK source in the preference order.
-- Uses the PRIMARY's overlay as the top-level overlay_path.
-
-Args:
-  --out OUT.json
-  --overlay OVERLAY.png
-  --prefer "tomsk,cumiana"   (or set env PREFER=tomsk,cumiana)
-  --insecure --verbose --no-cache
-  --cumiana-img URL          (override cumiana image)
-
-Env passthrough:
-  TOMSK_TIME_BIAS_MINUTES   (e.g., -65)
-"""
-
-import os, sys, json, shlex, subprocess, argparse, tempfile, shutil
+import argparse, json, os, subprocess, sys
 from datetime import datetime, timezone
 
-def run(cmd, verbose=False):
-    if verbose:
-        print("[exec]", " ".join(cmd), flush=True)
-    p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    return p.returncode, p.stdout.strip(), p.stderr.strip()
+HERE = os.path.dirname(os.path.abspath(__file__))
 
-def build_cmd(source, out_path, overlay_path, insecure, verbose, extras):
-    base = [sys.executable, f"{source}_extractor.py", "--out", out_path, "--overlay", overlay_path]
-    if insecure: base.append("--insecure")
-    if verbose:  base.append("--verbose")
-    if extras:   base += extras
-    return base
+def run(cmd):
+    p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    return p.returncode, p.stdout, p.stderr
+
+def load_json(path):
+    try:
+        with open(path,"r",encoding="utf-8") as f: return json.load(f)
+    except Exception:
+        return None
+
+def status_ok(j):
+    return isinstance(j, dict) and j.get("status") == "ok"
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--overlay", default=None)
-    ap.add_argument("--prefer", default=os.getenv("PREFER", "tomsk,cumiana"))
+    ap.add_argument("--prefer", default="tomsk,cumiana",
+                    help="Comma list of primary preference, e.g. 'tomsk,cumiana'")
+    ap.add_argument("--out", required=True, help="Combined feed JSON path")
+    ap.add_argument("--overlay", required=False, help="(optional) not used; each source writes its own overlay")
     ap.add_argument("--insecure", action="store_true")
     ap.add_argument("--verbose", action="store_true")
-    ap.add_argument("--no-cache", action="store_true")
-    # Note: argparse transforms "--cumiana-img" -> attribute "cumiana_img"
-    ap.add_argument("--cumiana-img", dest="cumiana_img", default=None)
     args = ap.parse_args()
 
-    prefer = [s.strip() for s in args.prefer.split(",") if s.strip()]
-    if not prefer:
-        prefer = ["tomsk","cumiana"]
+    # Paths for per-source artifacts
+    tomsk_json   = os.path.join(HERE, "tomsk_now.json")
+    tomsk_png    = os.path.join(HERE, "tomsk_overlay.png")
+    cumiana_json = os.path.join(HERE, "cumiana_now.json")
+    cumiana_png  = os.path.join(HERE, "cumiana_overlay.png")
 
-    tmpdir = tempfile.mkdtemp(prefix="schumann_multi_")
-    collected = {}
-    primary_key = None
-    primary_overlay = None
+    # 1) Run Tomsk
+    rc_t, out_t, err_t = run([
+        sys.executable, os.path.join(HERE, "tomsk_extractor.py"),
+        "--out", tomsk_json, "--overlay", tomsk_png
+    ] + (["--insecure"] if args.insecure else []) + (["--verbose"] if args.verbose else []))
 
-    try:
-        for src in prefer:
-            ojson = os.path.join(tmpdir, f"{src}.json")
-            oimg  = os.path.join(tmpdir, f"{src}.png")
-            extras = []
-            if src == "cumiana" and args.cumiana_img:
-                extras += ["--img-url", args.cumiana_img]
+    if args.verbose:
+        print("[tomsk] rc=", rc_t); print(out_t); print(err_t, file=sys.stderr)
 
-            cmd = build_cmd(src, ojson, oimg, args.insecure, args.verbose, extras)
-            rc, out, err = run(cmd, verbose=args.verbose)
+    # 2) Run Cumiana
+    rc_c, out_c, err_c = run([
+        sys.executable, os.path.join(HERE, "cumiana_extractor.py"),
+        "--out", cumiana_json, "--overlay", cumiana_png
+    ] + (["--insecure"] if args.insecure else []) + (["--verbose"] if args.verbose else []))
 
-            if args.verbose and err:
-                print(f"[{src}] stderr:\n{err}", flush=True)
+    if args.verbose:
+        print("[cumiana] rc=", rc_c); print(out_c); print(err_c, file=sys.stderr)
 
-            # Load the extractor's JSON from disk; fall back to stdout if needed
-            payload = None
-            try:
-                with open(ojson, "r", encoding="utf-8") as f:
-                    payload = json.load(f)
-            except Exception:
-                try:
-                    payload = json.loads(out)
-                except Exception:
-                    payload = {
-                        "status":"down",
-                        "source":src,
-                        "message": f"{src} extractor failed (rc={rc})"
-                    }
+    tj = load_json(tomsk_json)
+    cj = load_json(cumiana_json)
 
-            collected[src] = payload
+    # Decide primary by preference
+    prefer = [s.strip().lower() for s in args.prefer.split(",") if s.strip()]
+    sources = {
+        "tomsk": tj if isinstance(tj, dict) else None,
+        "cumiana": cj if isinstance(cj, dict) else None,
+    }
+    primary = None
+    for name in prefer:
+        j = sources.get(name)
+        if status_ok(j):
+            primary = name
+            break
+    if primary is None:
+        # if neither ok, still emit a combined status
+        out = {
+            "status": "no_fresh_source",
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "message": "Neither Tomsk nor Cumiana produced OK status.",
+            "sources": sources,
+        }
+        with open(args.out,"w",encoding="utf-8") as f: json.dump(out,f,ensure_ascii=False,indent=2)
+        if args.verbose: print(json.dumps(out, indent=2))
+        return 0
 
-            # Choose primary = first OK in preference order
-            if primary_key is None and payload.get("status") == "ok":
-                primary_key = src
-                if args.overlay:
-                    try:
-                        shutil.copyfile(oimg, args.overlay)
-                        primary_overlay = args.overlay
-                    except Exception:
-                        primary_overlay = None
-
-        # Compose final
-        if primary_key is None:
-            final = {
-                "status": "no_fresh_source",
-                "message": f"No fresh Schumann spectrogram available. Tried: {', '.join(prefer)}.",
-                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-                "overlay_path": primary_overlay,
-                "sources": collected
+    pj = sources[primary]
+    out = {
+        "status": "ok",
+        "primary": primary,
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "overlay_path": f"{primary}_overlay.png",
+        "fundamental_hz": pj.get("fundamental_hz"),
+        "harmonics_hz": pj.get("harmonics_hz", {}),
+        "confidence": pj.get("confidence"),
+        "sources": {
+            "tomsk": {
+                "json": "tomsk_now.json",
+                "overlay": "tomsk_overlay.png",
+                "status": sources["tomsk"].get("status") if sources["tomsk"] else None,
+            },
+            "cumiana": {
+                "json": "cumiana_now.json",
+                "overlay": "cumiana_overlay.png",
+                "status": sources["cumiana"].get("status") if sources["cumiana"] else None,
             }
-        else:
-            primary = collected[primary_key]
-            final = {
-                "status": "ok",
-                "primary": primary_key,
-                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-                "overlay_path": primary_overlay or primary.get("overlay_path"),
-                "fundamental_hz": primary.get("fundamental_hz"),
-                "harmonics_hz": primary.get("harmonics_hz", {}),
-                "amplitude_idx": primary.get("amplitude_idx", {}),
-                "confidence": primary.get("confidence"),
-                "sources": collected
-            }
-
-        with open(args.out, "w", encoding="utf-8") as f:
-            json.dump(final, f, ensure_ascii=False, indent=2)
-        print(json.dumps(final, ensure_ascii=False, indent=2))
-
-        return 0 if final["status"] == "ok" else 3
-
-    finally:
-        try:
-            shutil.rmtree(tmpdir)
-        except Exception:
-            pass
+        }
+    }
+    with open(args.out,"w",encoding="utf-8") as f:
+        json.dump(out,f,ensure_ascii=False,indent=2)
+    if args.verbose: print(json.dumps(out, indent=2))
+    return 0
 
 if __name__ == "__main__":
     sys.exit(main())
