@@ -1,0 +1,162 @@
+name: Schumann Fetch (Tomsk + Cumiana)
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 minutes (UTC)
+  workflow_dispatch:         # allow manual runs
+
+concurrency:
+  group: schumann-fetch
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.11"
+  # Optional: tweak this if you still want a static bias for Tomsk.
+  # Leave blank to let your extractor auto-bias.
+  TOMSK_TIME_BIAS_MINUTES: ""
+  # Cumiana fixed offset (you found 22px works best)
+  CUMIANA_FIXED_OFFSET_PX: "22"
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout backend (gaiaeyes-backend)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: System deps (OpenCV, Tesseract)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            tesseract-ocr \
+            libgl1 \
+            libglib2.0-0
+          tesseract --version
+
+      - name: Install Python deps
+        working-directory: bots/schumann
+        run: |
+          # If you have a requirements.txt, prefer it:
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install requests pillow opencv-python numpy pytesseract beautifulsoup4
+          fi
+
+      - name: Run extractors (Tomsk + Cumiana)
+        id: run_extractors
+        working-directory: bots/schumann
+        env:
+          TOMSK_TIME_BIAS_MINUTES: ${{ env.TOMSK_TIME_BIAS_MINUTES }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p out tmp
+
+          # 1) Tomsk
+          echo ">>> Running Tomsk"
+          TOMSK_ARGS="--out out/tomsk_now.json --overlay out/tomsk_overlay.png --insecure --verbose"
+          if [ -n "${TOMSK_TIME_BIAS_MINUTES}" ]; then
+            TOMSK_ARGS="${TOMSK_ARGS} --time-bias-minutes ${TOMSK_TIME_BIAS_MINUTES}"
+          fi
+          python tomsk_extractor.py ${TOMSK_ARGS} || true
+
+          # 2) Cumiana (SR-only, fixed offset = 22px by default)
+          echo ">>> Running Cumiana"
+          python cumiana_extractor.py \
+            --out out/cumiana_now.json \
+            --overlay out/cumiana_overlay.png \
+            --anchor fixed --fixed-offset-px ${CUMIANA_FIXED_OFFSET_PX} \
+            --prefer auto \
+            --show-f2-band --draw-debug \
+            --insecure --verbose || true
+
+          # 3) Optional merge (keep both sources). You already have schumann_multi.py,
+          # but here we just run it to produce a merged "primary" view if you want it.
+          echo ">>> Merging (multi) for reference"
+          python schumann_multi.py \
+            --prefer tomsk,cumiana \
+            --out out/schumann_now.json \
+            --overlay out/schumann_overlay.png \
+            --insecure --verbose || true
+
+          echo "RUN_TS=$(date -u +'%Y%m%d_%H%M%SZ')" | tee tmp/env.txt
+
+      - name: Print summaries
+        working-directory: bots/schumann/out
+        run: |
+          echo "Tomsk now:"
+          test -f tomsk_now.json && cat tomsk_now.json || echo "(missing)"
+          echo
+          echo "Cumiana now:"
+          test -f cumiana_now.json && cat cumiana_now.json || echo "(missing)"
+
+      - name: Checkout media repo (gaiaeyes-media)
+        uses: actions/checkout@v4
+        with:
+          repository: gennwu/gaiaeyes-media
+          path: media
+          token: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}  # <-- create this PAT secret with repo write access
+
+      - name: Stage artifacts into media repo
+        working-directory: bots/schumann
+        run: |
+          set -euo pipefail
+          source tmp/env.txt    # provides RUN_TS
+
+          mkdir -p ../media/images ../media/data
+
+          # Copy timestamped + latest for Tomsk
+          if [ -f out/tomsk_overlay.png ]; then
+            cp out/tomsk_overlay.png ../media/images/tomsk_${RUN_TS}.png
+            cp out/tomsk_overlay.png ../media/images/tomsk_latest.png
+          fi
+          if [ -f out/tomsk_now.json ]; then
+            cp out/tomsk_now.json ../media/data/tomsk_${RUN_TS}.json
+            cp out/tomsk_now.json ../media/data/tomsk_latest.json
+          fi
+
+          # Copy timestamped + latest for Cumiana
+          if [ -f out/cumiana_overlay.png ]; then
+            cp out/cumiana_overlay.png ../media/images/cumiana_${RUN_TS}.png
+            cp out/cumiana_overlay.png ../media/images/cumiana_latest.png
+          fi
+          if [ -f out/cumiana_now.json ]; then
+            cp out/cumiana_now.json ../media/data/cumiana_${RUN_TS}.json
+            cp out/cumiana_now.json ../media/data/cumiana_latest.json
+          fi
+
+          # Optionally also export the merged "primary" view (not required)
+          if [ -f out/schumann_overlay.png ]; then
+            cp out/schumann_overlay.png ../media/images/schumann_${RUN_TS}.png
+            cp out/schumann_overlay.png ../media/images/schumann_latest.png
+          fi
+          if [ -f out/schumann_now.json ]; then
+            cp out/schumann_now.json ../media/data/schumann_${RUN_TS}.json
+            cp out/schumann_now.json ../media/data/schumann_latest.json
+          fi
+
+      - name: Commit & push media artifacts
+        working-directory: media
+        run: |
+          set -euo pipefail
+          git config user.name  "gaiaeyes-bot"
+          git config user.email "gaiaeyes-bot@users.noreply.github.com"
+
+          git add images/*.png data/*.json || true
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Schumann update: $(date -u +'%Y-%m-%d %H:%M:%SZ')"
+            git push origin HEAD
+          fi
