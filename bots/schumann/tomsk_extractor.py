@@ -8,7 +8,7 @@ Tomsk Schumann extractor
 - Accepts up to ±90 min auto-bias (configurable) and always logs measured/applied
 - Dynamic day boundaries for overlays only; timing is day3 (48–72 h)
 - Overlay: horizontal band guides + labels; vertical red 'now' line
-- Banded harmonic picker: choose F1..F5 inside canonical Hz windows
+- Banded harmonic picker with ridge/heuristic fallbacks
 """
 
 import os, sys, json, argparse
@@ -61,14 +61,12 @@ def fetch_image(url, insecure=False):
 
 def parse_last_modified(h):
     if not h: return None
-    try:
-        return datetime.strptime(h, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
-    except Exception:
+    for fmt in ("%a, %d %b %Y %H:%M:%S %Z", "%a, %d %b %Y %H:%M:%S"):
         try:
-            # some servers omit TZ token but are still GMT
-            return datetime.strptime(h, "%a, %d %b %Y %H:%M:%S").replace(tzinfo=timezone.utc)
+            return datetime.strptime(h, fmt).replace(tzinfo=timezone.utc)
         except Exception:
-            return None
+            pass
+    return None
 
 def tsst_now():
     return datetime.now(timezone.utc) + timedelta(hours=UTC_TO_TSST_HOURS)
@@ -195,17 +193,13 @@ def draw_overlay(img_bgr, roi, x_now, peaks=None, debug_lines=None, pph=None, pp
             cv2.circle(out, (x_now, y), 3, colors[i%len(colors)], -1)
     return out
 
-def estimate_peaks_banded(img_bgr, roi, x_now):
-    """
-    Sample a thin vertical slice at x_now, build brightness profile vs y,
-    and for each canonical harmonic window pick the brightest local max.
-    """
+# ----- banded picker with fallbacks -----
+def estimate_peaks_banded(img_bgr, roi, x_now, verbose=False):
     x0,y0,x1,y1 = roi
     x = int(np.clip(x_now, x0+1, x1-2))
     slice_w = img_bgr[y0:y1, x-2:x+3]  # 5 px wide
     gry = cv2.cvtColor(slice_w, cv2.COLOR_BGR2GRAY).astype(np.float32)
-    prof = gry.mean(axis=1)  # brightness vs y
-    # invert: brighter (yellow/white) -> higher response
+    prof = gry.mean(axis=1)
     sig = prof.max() - prof
     sig = (sig - sig.min()) / (np.ptp(sig) + 1e-6)
 
@@ -214,22 +208,58 @@ def estimate_peaks_banded(img_bgr, roi, x_now):
         lo = max(0, min(y_lo - y0, y1 - y0 - 1))
         hi = max(0, min(y_hi - y0, y1 - y0))
         if hi <= lo + 2:
-            return None
+            return None, 0.0
         seg = sig[lo:hi].copy()
-        # light smooth to reduce jitter
-        k = 3
-        seg = cv2.blur(seg.reshape(-1,1), (1, 2*k+1)).ravel()
+        seg = cv2.blur(seg.reshape(-1,1), (1, 7)).ravel()  # gentle smooth
         idx = int(np.argmax(seg))
         val = float(seg[idx])
-        if val < 0.25:   # weak/noisy
-            return None
+        if val < 0.12:   # lowered floor (was 0.25)
+            return None, val
         y_pick = y0 + lo + idx
-        return y_to_hz(y_pick, roi)
+        return y_to_hz(y_pick, roi), val
 
-    out = {}
+    picks = {}
+    strength = {}
     for name,(lo,hi) in HARMONIC_WINDOWS.items():
-        out[name] = pick_in_window(lo, hi)
-    return out
+        hz, val = pick_in_window(lo, hi)
+        picks[name] = hz
+        strength[name] = val
+
+    # F1 ridge fallback if missing/weak
+    if picks.get("F1") is None or strength.get("F1",0.0) < 0.12:
+        lo, hi = HARMONIC_WINDOWS["F1"]
+        y_lo = hz_to_y(lo, roi); y_hi = hz_to_y(hi, roi)
+        loi = max(0, min(y_lo - y0, y1 - y0 - 1))
+        hii = max(0, min(y_hi - y0, y1 - y0))
+        seg = sig[loi:hii]
+        if len(seg) > 0:
+            idx = int(np.argmax(seg))
+            y_pick = y0 + loi + idx
+            picks["F1"] = y_to_hz(y_pick, roi)
+            strength["F1"] = float(seg[idx])
+
+    return picks
+
+def clamp(v, lo, hi):
+    return None if v is None else float(max(lo, min(hi, v)))
+
+def repair_harmonics(peaks):
+    """Back-fill missing bands using simple harmonic relations (guarded)."""
+    p = dict(peaks)  # copy
+    # back-derive F1 from F2 if needed
+    if p.get("F1") is None and p.get("F2") is not None:
+        p["F1"] = clamp(p["F2"]/2.0, *HARMONIC_WINDOWS["F1"])
+    # fill any missing Fk as multiples of F1 (only if we have F1)
+    if p.get("F1") is not None:
+        f1 = p["F1"]
+        for k in [2,3,4,5]:
+            name = f"F{k}"
+            if p.get(name) is None:
+                candidate = f1 * k
+                lo, hi = HARMONIC_WINDOWS[name]
+                if lo <= candidate <= hi:
+                    p[name] = candidate
+    return p
 
 # --------------------------
 # Main
@@ -338,10 +368,10 @@ def main():
         x_now_pre = x_ideal
 
     x_now = int(np.clip(x_now_pre, left_guard, right_guard))
-    guard_applied = (x_now != x_ideal)
 
-    # ---- banded harmonic picking (fixes your ~36 Hz F1 issue) ----
-    peaks = estimate_peaks_banded(img, ROI, x_now)
+    # ---- banded harmonic picking with fallbacks ----
+    peaks_banded = estimate_peaks_banded(img, ROI, x_now, verbose=args.verbose)
+    peaks = repair_harmonics(peaks_banded)
 
     # Overlay
     dbg = None
@@ -383,21 +413,18 @@ def main():
                 "x1_exclude_right_px": RIGHT_EXCLUDE_PX,
                 "guard_px": guard_px,
                 "x_time": x_time,
-                "x_now_pre_guard": x_now_pre,
                 "x_ideal": x_ideal,
                 "right_guard": right_guard,
                 "delta_min_to_guard": float(delta_min),
-                "snap_threshold_minutes": float(args.snap_threshold_minutes),
                 "pph": pph,
                 "pph_source": pph_source,
                 "tick_count": tick_count if pph_source=="ticks" else 0,
                 "tick_quality": tick_quality if pph_source=="ticks" else 0.0,
-                "bias_minutes_applied": bias_minutes_applied,
-                "measured_bias_minutes": measured_bias_minutes,
-                "bias_accepted": bias_accepted,
-                "guard_applied": guard_applied,
+                "bias_minutes_applied": float(bias_minutes_applied),
+                "measured_bias_minutes": (None if measured_bias_minutes is None else float(measured_bias_minutes)),
+                "guard_applied": bool(x_now != x_ideal),
             },
-            "method": "tick-ruler px/h + adaptive frontier guard; day3(48–72h) time-anchor; banded harmonic picker",
+            "method": "tick-ruler px/h + adaptive frontier guard; day3(48–72h) time-anchor; banded picker + fallbacks",
         }
     }
 
