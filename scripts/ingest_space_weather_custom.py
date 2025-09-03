@@ -3,7 +3,7 @@
 Ingest Kp (1-minute) + SWPC Solar Wind (plasma + mag) into ext.space_weather.
 
 Sources (defaults):
-- Kp 1m:   https://services.swpc.noaa.gov/json/planetary_k_index_1m.json  (list of dicts)
+- Kp 1m:   https://services.swpc.noaa.gov/json/planetary_k_index_1m.json  (list of dicts; Kp may be "3-", "4+", etc.)
 - Plasma:  https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json  (array-of-arrays)
 - Mag:     https://services.swpc.noaa.gov/products/solar-wind/mag-7-day.json     (array-of-arrays; includes Bz)
 
@@ -15,7 +15,7 @@ ENV:
   KP_URL           (optional)   -- override Kp JSON URL
   SW_URL           (optional)   -- override plasma JSON URL
   MAG_URL          (optional)   -- override mag JSON URL for Bz
-  HTTP_USER_AGENT  (optional)   -- polite UA for api.weather.gov-style services
+  HTTP_USER_AGENT  (optional)   -- polite UA
   SINCE_HOURS      (default 72) -- only keep rows newer than now()-N hours
 """
 
@@ -83,7 +83,7 @@ def parse_ts(x):
 
 
 def f(x):
-    """Coerce to float; filter NaN/inf/empties → None."""
+    """Coerce to float; filter NaN/inf/empties → None (generic)."""
     if x in (None, "", "null", "NaN"):
         return None
     try:
@@ -93,6 +93,71 @@ def f(x):
         return v
     except Exception:
         return None
+
+
+def kp_to_float(x):
+    """
+    Convert Kp strings like '3-', '4+', '2o' to numeric:
+      '+' → +0.33, '-' → -0.33, 'o' or '0' suffix → +0.00
+    Accepts already-numeric strings ('3.33') or numbers too.
+    """
+    if x in (None, "", "null", "NaN"):
+        return None
+    # Already numeric?
+    try:
+        v = float(x)
+        if math.isnan(v) or math.isinf(v):
+            return None
+        return v
+    except Exception:
+        pass
+
+    s = str(x).strip()
+    if not s:
+        return None
+
+    # Normalize lowercase
+    s = s.lower()
+
+    # If it's like '3.33' (string float) try again
+    try:
+        return float(s)
+    except Exception:
+        pass
+
+    # Match forms like '3+', '4-', '2o'
+    base = None
+    suffix = None
+    if len(s) >= 2 and s[-1] in ['+', '-', 'o', '0']:
+        suffix = s[-1]
+        base_part = s[:-1]
+        try:
+            base = float(base_part)
+        except Exception:
+            # Sometimes base might be single digit char
+            try:
+                base = float(int(base_part))
+            except Exception:
+                base = None
+    else:
+        # Maybe it's '3' as string
+        try:
+            base = float(s)
+        except Exception:
+            base = None
+
+    if base is None:
+        return None
+
+    delta = 0.0
+    if suffix == '+':
+        delta = 0.33
+    elif suffix == '-':
+        delta = -0.33
+    else:
+        # 'o' or '0' or None → 0.0
+        delta = 0.0
+    return base + delta
 
 
 def cutoff_dt():
@@ -141,7 +206,7 @@ def idx_by_ts(objs, ts_keys=("time_tag", "time", "timestamp", "date", "datetime"
         ts = parse_ts(ts_raw)
         if not ts:
             continue
-        # >>> FIX: ensure timezone-aware (UTC) before comparing <<<
+        # Ensure timezone-aware (UTC) before comparing
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         if ts < co:
@@ -176,7 +241,7 @@ async def main():
     headers = {"User-Agent": UA, "Accept": "application/json"}
     timeout = httpx.Timeout(45.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout, headers=headers) as c:
-        kp_json  = await get_json(c, KP)     # list-of-dicts
+        kp_json  = await get_json(c, KP)     # list-of-dicts (Kp 1m)
         sw_json  = await get_json(c, SW)     # array-of-arrays → normalize
         mag_json = await get_json(c, MAG)    # array-of-arrays → normalize
 
@@ -201,11 +266,12 @@ async def main():
         swd = sw_by_ts.get(ts, {})
         mgd = mag_by_ts.get(ts, {})
 
-        # Kp (1m) candidate keys
-        kp_val = f(
+        # Kp (1m) candidate keys — now with robust string parsing
+        kp_raw = (
             kpd.get("kp_index") or kpd.get("kp") or kpd.get("Kp")
             or kpd.get("estimated_kp") or kpd.get("kp_value")
         )
+        kp_val = kp_to_float(kp_raw)
 
         # Solar wind speed (km/s) candidate keys seen in plasma products
         # Common columns include: 'speed', 'plasma_speed', 'proton_speed', 'flow_speed', 'velocity'
