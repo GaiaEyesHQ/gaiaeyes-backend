@@ -1,9 +1,6 @@
-# python
+# Python
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-*.egg-info/
 .venv/
 env/
 venv/
@@ -11,6 +8,6 @@ venv/
 # macOS
 .DS_Store
 
-# editor
+# Editors
 .vscode/
 .idea/
