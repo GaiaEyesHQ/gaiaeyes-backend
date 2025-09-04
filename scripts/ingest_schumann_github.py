@@ -19,8 +19,8 @@ import os, sys, json, asyncio
 from datetime import datetime, timezone
 import asyncpg, httpx
 
-RAW_JSON = "https://raw.githubusercontent.com/gennwu/gaiaeyes-media/data/schumann_now.json"
-RAW_IMG_BASE = "https://raw.githubusercontent.com/gennwu/gaiaeyes-media/images/"
+RAW_JSON = "https://raw.githubusercontent.com/gennwu/gaiaeyes-media/main/data/schumann_now.json"
+RAW_IMG_BASE = "https://raw.githubusercontent.com/gennwu/gaiaeyes-media/main/images/"
 
 DB = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
 if not DB:
