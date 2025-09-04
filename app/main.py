@@ -6,7 +6,6 @@ from .routers import ingest, summary
 
 app = FastAPI(title="Gaia Backend", version="0.1.0")
 
-# CORS (optional)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,9 +14,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount routers with *one* /v1 prefix
-app.include_router(ingest.router, dependencies=[Depends(require_auth)], prefix="/v1")
-app.include_router(summary.router, dependencies=[Depends(require_auth)], prefix="/v1")
+# No auth dependency for now
+app.include_router(ingest.router, prefix="/v1")
+app.include_router(summary.router, prefix="/v1")
 
 @app.get("/health")
 async def health():
