@@ -15,6 +15,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount routers with *one* /v1 prefix
+app.include_router(ingest.router, dependencies=[Depends(require_auth)], prefix="/v1")
+app.include_router(summary.router, dependencies=[Depends(require_auth)], prefix="/v1")
+
 @app.get("/health")
 async def health():
     return {"ok": True}
