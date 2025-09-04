@@ -106,8 +106,9 @@ def fetch_trending_articles(max_items: int = 3) -> List[Dict[str, str]]:
 # ---------------- Main run ----------------
 
 async def run():
-    platform = os.environ.get("PLATFORM", "instagram")
-    user_id  = os.environ.get("USER_ID") or None
+    platform = os.environ.get("PLATFORM", "instagram").strip()
+    user_id_env  = os.environ.get("USER_ID", "").strip()
+    user_id  = user_id_env or None   # empty => None (global)
     dry_run  = os.environ.get("DRY_RUN", "false").lower() == "true"
 
     conn = await asyncpg.connect(SUPABASE_DB_URL)
@@ -115,7 +116,7 @@ async def run():
     # Best day (as date)
     day: Date = await get_best_day(conn)
 
-    # Space weather for that day
+    # Space weather for that date
     sw = await fetch_one(conn, "select * from marts.space_weather_daily where day=$1", day)
     if not sw:
         await conn.close()
@@ -193,7 +194,7 @@ async def run():
     # Upsert row (bind day as DATE)
     row = {
         "day": day,                              # DATE → DB
-        "user_id": user_id,                      # null for global
+        "user_id": user_id,                      # null for global, UUID for user-specific
         "platform": platform,
         "title": title,
         "caption": caption,
@@ -209,14 +210,19 @@ async def run():
         await conn.close()
         return
 
-    # ---- Upsert using your named unique constraint ----
-    await conn.execute("""
+    # ---- Choose conflict target based on whether user_id is NULL or not ----
+    if user_id is None:
+        conflict_clause = "on conflict on constraint ux_daily_posts_global"
+    else:
+        conflict_clause = "on conflict on constraint ux_daily_posts_per_user"
+
+    sql = f"""
 insert into content.daily_posts (
   day, user_id, platform, title, caption, body_markdown, hashtags, metrics_json, sources_json
 ) values (
   $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb
 )
-on conflict on constraint ux_daily_posts_per_user
+{conflict_clause}
 do update set
   title         = excluded.title,
   caption       = excluded.caption,
@@ -225,13 +231,15 @@ do update set
   metrics_json  = excluded.metrics_json,
   sources_json  = excluded.sources_json,
   updated_at    = now();
-""",
-    row["day"], row["user_id"], row["platform"], row["title"],
-    row["caption"], row["body_markdown"], row["hashtags"],
-    row["metrics_json"], row["sources_json"])
+"""
+
+    await conn.execute(sql,
+        row["day"], row["user_id"], row["platform"], row["title"],
+        row["caption"], row["body_markdown"], row["hashtags"],
+        row["metrics_json"], row["sources_json"])
 
     await conn.close()
-    print(f"Upserted Daily Earthscope for {day_iso} → platform={platform}")
+    print(f"Upserted Daily Earthscope for {day_iso} → platform={platform} (user_id={'null' if user_id is None else user_id})")
 
 if __name__ == "__main__":
     asyncio.run(run())
