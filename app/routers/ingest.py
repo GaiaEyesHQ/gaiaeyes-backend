@@ -92,6 +92,7 @@ async def samples_batch(
 
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
-            await cur.executemany(sql, values, prepare=False)
+            for v in values:
+            await cur.execute(sql, v)   # no prepare kw; DSN forces simple protocol
 
     return {"ok": True, "received": len(items)}
