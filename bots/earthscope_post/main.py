@@ -1,6 +1,7 @@
 import os, asyncio, json
 from datetime import datetime, timedelta, timezone, date as Date
 from typing import Any, Dict, List, Optional
+from decimal import Decimal
 
 import asyncpg
 import requests
@@ -10,6 +11,24 @@ from llm import generate_daily_earthscope, LLMFailure
 
 ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 SUPABASE_DB_URL = os.environ["SUPABASE_DB_URL"]
+
+# ---------------- JSON helpers ----------------
+
+def _to_jsonable(obj: Any) -> Any:
+    """Recursively convert Decimal/Date/Datetime to JSON-safe types."""
+    if obj is None:
+        return None
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, (datetime, )):
+        return obj.isoformat()
+    if isinstance(obj, (Date, )):
+        return obj.isoformat()
+    if isinstance(obj, list):
+        return [_to_jsonable(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _to_jsonable(v) for k, v in obj.items()}
+    return obj
 
 # ---------------- DB helpers ----------------
 
@@ -116,7 +135,10 @@ async def run():
             "cmes_count": sw.get("cmes_count"),
         }
     }
-    # (Optional) Add "health" section later if you join daily_features.
+    # JSON-safe (Decimal → float, etc.)
+    metrics_json = _to_jsonable(metrics_json)
+
+    # (Optional) Add "health" later if you join daily_features.
 
     trending = fetch_trending_articles(max_items=3)
 
@@ -173,15 +195,14 @@ async def run():
         "caption": caption,
         "body_markdown": body_md,
         "hashtags": hashtags,
-        "metrics_json": json.dumps(metrics_json),
-        "sources_json": json.dumps(sources_json),
+        "metrics_json": json.dumps(metrics_json, ensure_ascii=False),  # already jsonable
+        "sources_json": json.dumps(_to_jsonable(sources_json), ensure_ascii=False),
     }
 
     if dry_run:
-        print(json.dumps(
-            {**row, "day": day_iso},            # print day as string for logs
-            indent=2, ensure_ascii=False
-        ))
+        # Pretty log with day as string
+        preview = {**row, "day": day_iso}
+        print(json.dumps(preview, indent=2, ensure_ascii=False))
         await conn.close()
         return
 
