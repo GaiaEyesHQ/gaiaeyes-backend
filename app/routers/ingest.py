@@ -74,7 +74,7 @@ async def samples_batch(
     x_uid = request.headers.get("X-Dev-UserId", "").strip() or None
     dev_uid = x_uid  # assume already a proper UUID string; your earlier code validated
 
-        pool = await get_pool()
+    pool = await get_pool()
     values = [
         (
             dev_uid or s.user_id,
