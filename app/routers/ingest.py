@@ -74,14 +74,14 @@ async def samples_batch(
     x_uid = request.headers.get("X-Dev-UserId", "").strip() or None
     dev_uid = x_uid  # assume already a proper UUID string; your earlier code validated
 
-    pool = await get_pool()
+        pool = await get_pool()
     values = [
         (
             dev_uid or s.user_id,
             s.device_os,
             s.source,
             s.type,
-            s.start_time,    # psycopg accepts ISO8601 str or datetime
+            s.start_time,    # datetime is fine
             s.end_time,
             s.value,
             s.unit,
@@ -93,6 +93,7 @@ async def samples_batch(
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             for v in values:
-            await cur.execute(sql, v)   # no prepare kw; DSN forces simple protocol
+                await cur.execute(sql, v)   # no prepare kw in async psycopg
+        await conn.commit()
 
     return {"ok": True, "received": len(items)}
