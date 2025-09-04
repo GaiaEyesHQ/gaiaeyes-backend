@@ -15,4 +15,4 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install httpx asyncpg
-      - run: python backend/scripts/ingest_schumann_github.py
+      - run: python scripts/ingest_schumann_github.py
