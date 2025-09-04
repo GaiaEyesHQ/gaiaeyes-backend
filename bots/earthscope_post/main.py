@@ -19,10 +19,13 @@ def _to_jsonable(obj: Any) -> Any:
     if obj is None:
         return None
     if isinstance(obj, Decimal):
-        return float(obj)
-    if isinstance(obj, (datetime, )):
+        try:
+            return float(obj)
+        except Exception:
+            return str(obj)
+    if isinstance(obj, datetime):
         return obj.isoformat()
-    if isinstance(obj, (Date, )):
+    if isinstance(obj, Date):
         return obj.isoformat()
     if isinstance(obj, list):
         return [_to_jsonable(x) for x in obj]
@@ -41,14 +44,17 @@ async def fetch_one(conn, q: str, *args):
     return dict(row) if row else None
 
 async def get_best_day(conn) -> Date:
-    """UTC fallback: today; if missing/sparse (row_count < 50) then yesterday; else abort."""
+    """
+    UTC fallback: today; if missing/sparse (row_count < 50) then yesterday; else abort.
+    Returns a Python date object (not string).
+    """
     today = datetime.now(timezone.utc).date()
     yday  = today - timedelta(days=1)
     q = """select day, row_count
            from marts.space_weather_daily
            where day in ($1, $2)"""
-    rows = await fetch_all(conn, q, today, yday)         # bind as date objects
-    by_day = {r["day"]: (r.get("row_count") or 0) for r in rows}  # r["day"] is a date
+    rows = await fetch_all(conn, q, today, yday)  # bind as dates
+    by_day = {r["day"]: (r.get("row_count") or 0) for r in rows}  # r["day"] is date
     if by_day.get(today, 0) >= 50:
         return today
     if by_day.get(yday, 0) >= 50:
@@ -80,7 +86,7 @@ def _scrape_title_desc(url: str, timeout: int = 15) -> Optional[Dict[str, str]]:
 def fetch_trending_articles(max_items: int = 3) -> List[Dict[str, str]]:
     """
     Fetch 2–3 current references (title+summary+link) from canonical sources.
-    You can override with env vars.
+    Override with env vars if desired.
     """
     candidate_urls = [
         os.environ.get("TREND_SOLARHAM", "https://www.solarham.com/"),
@@ -106,16 +112,16 @@ async def run():
 
     conn = await asyncpg.connect(SUPABASE_DB_URL)
 
-    # day is a Python date (not string)
+    # Best day (as date)
     day: Date = await get_best_day(conn)
 
-    # fetch space weather for that date
+    # Space weather for that day
     sw = await fetch_one(conn, "select * from marts.space_weather_daily where day=$1", day)
     if not sw:
         await conn.close()
         raise SystemExit("no space weather row")
 
-    # optional DONKI events for that day (bind $1 as date)
+    # DONKI events for the day
     events = await fetch_all(conn, """
         select event_type, start_time, class
         from ext.donki_event
@@ -123,7 +129,7 @@ async def run():
         order by start_time asc
     """, day)
 
-    # Build metrics_json exactly per contract; stringify date only for JSON fields
+    # metrics_json exactly as contract (day stringified only for JSON)
     day_iso = day.isoformat()
     metrics_json: Dict[str, Any] = {
         "day": day_iso,
@@ -135,14 +141,12 @@ async def run():
             "cmes_count": sw.get("cmes_count"),
         }
     }
-    # JSON-safe (Decimal → float, etc.)
-    metrics_json = _to_jsonable(metrics_json)
+    metrics_json = _to_jsonable(metrics_json)  # Decimal → float etc.
 
-    # (Optional) Add "health" later if you join daily_features.
-
+    # Trending references (2–3)
     trending = fetch_trending_articles(max_items=3)
 
-    # LLM render
+    # LLM render (rich sections + hashtags + sources)
     try:
         llm = generate_daily_earthscope(metrics_json, events, trending)
         title        = llm["title"].strip()
@@ -186,39 +190,45 @@ async def run():
             "note": f"LLM fallback used due to error: {type(e).__name__}"
         }
 
-    # Build upsert row; bind day as DATE, everything else as before
+    # Upsert row (bind day as DATE)
     row = {
-        "day": day,                              # ← DATE to DB
+        "day": day,                              # DATE → DB
         "user_id": user_id,                      # null for global
         "platform": platform,
         "title": title,
         "caption": caption,
         "body_markdown": body_md,
         "hashtags": hashtags,
-        "metrics_json": json.dumps(metrics_json, ensure_ascii=False),  # already jsonable
+        "metrics_json": json.dumps(metrics_json, ensure_ascii=False),
         "sources_json": json.dumps(_to_jsonable(sources_json), ensure_ascii=False),
     }
 
     if dry_run:
-        # Pretty log with day as string
-        preview = {**row, "day": day_iso}
+        preview = {**row, "day": day_iso}  # show string date in logs
         print(json.dumps(preview, indent=2, ensure_ascii=False))
         await conn.close()
         return
 
-    # Idempotent upsert using your unique index (day, coalesce(user_id, ZERO), platform)
+    # ---- Upsert using your named unique constraint ----
     await conn.execute("""
-    insert into content.daily_posts
-      (day,user_id,platform,title,caption,body_markdown,hashtags,metrics_json,sources_json)
-    values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb)
-    on conflict (day, coalesce(user_id, $10::uuid), platform)
-    do update set
-      title=$4, caption=$5, body_markdown=$6, hashtags=$7,
-      metrics_json=$8::jsonb, sources_json=$9::jsonb, updated_at=now();
-    """,
+insert into content.daily_posts (
+  day, user_id, platform, title, caption, body_markdown, hashtags, metrics_json, sources_json
+) values (
+  $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb
+)
+on conflict on constraint ux_daily_posts_per_user
+do update set
+  title         = excluded.title,
+  caption       = excluded.caption,
+  body_markdown = excluded.body_markdown,
+  hashtags      = excluded.hashtags,
+  metrics_json  = excluded.metrics_json,
+  sources_json  = excluded.sources_json,
+  updated_at    = now();
+""",
     row["day"], row["user_id"], row["platform"], row["title"],
     row["caption"], row["body_markdown"], row["hashtags"],
-    row["metrics_json"], row["sources_json"], ZERO_UUID)
+    row["metrics_json"], row["sources_json"])
 
     await conn.close()
     print(f"Upserted Daily Earthscope for {day_iso} → platform={platform}")
