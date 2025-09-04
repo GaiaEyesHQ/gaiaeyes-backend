@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from openai import OpenAI
 
+# Model can be overridden via env
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
