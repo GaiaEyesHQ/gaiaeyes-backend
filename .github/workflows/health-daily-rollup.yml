@@ -34,4 +34,4 @@ jobs:
           pip install asyncpg
 
       - name: Run health daily rollup
-        run: python backend/scripts/rollup_health_daily.py
+        run: python scripts/rollup_health_daily.py
