@@ -212,17 +212,32 @@ async def run():
 
     # ---- Choose conflict target based on whether user_id is NULL or not ----
     if user_id is None:
-        conflict_clause = "on conflict on constraint ux_daily_posts_global"
-    else:
-        conflict_clause = "on conflict on constraint ux_daily_posts_per_user"
-
-    sql = f"""
+        # Match your partial unique index: (day, platform) WHERE user_id IS NULL
+        sql = """
 insert into content.daily_posts (
   day, user_id, platform, title, caption, body_markdown, hashtags, metrics_json, sources_json
 ) values (
   $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb
 )
-{conflict_clause}
+on conflict (day, platform) where (user_id is null)
+do update set
+  title         = excluded.title,
+  caption       = excluded.caption,
+  body_markdown = excluded.body_markdown,
+  hashtags      = excluded.hashtags,
+  metrics_json  = excluded.metrics_json,
+  sources_json  = excluded.sources_json,
+  updated_at    = now();
+"""
+    else:
+        # Match your partial unique index: (day, platform, user_id) WHERE user_id IS NOT NULL
+        sql = """
+insert into content.daily_posts (
+  day, user_id, platform, title, caption, body_markdown, hashtags, metrics_json, sources_json
+) values (
+  $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb
+)
+on conflict (day, platform, user_id) where (user_id is not null)
 do update set
   title         = excluded.title,
   caption       = excluded.caption,
