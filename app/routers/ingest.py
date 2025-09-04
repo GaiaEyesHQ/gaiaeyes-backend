@@ -92,6 +92,6 @@ async def samples_batch(
 
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
-            await cur.executemany(sql, values)
+            await cur.executemany(sql, values, prepare=False)
 
     return {"ok": True, "received": len(items)}
