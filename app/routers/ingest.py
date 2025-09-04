@@ -82,7 +82,9 @@ async def samples_batch(
     on conflict (user_id, type, start_time, end_time) do nothing
     """
 
-    async with (await get_pool()).acquire() as conn:
-        await conn.executemany(sql, values)
+    pool = await get_pool()
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.executemany(sql, values)
 
     return {"ok": True, "received": len(items)}
