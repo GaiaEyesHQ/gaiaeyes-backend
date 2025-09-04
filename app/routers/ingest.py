@@ -93,7 +93,7 @@ async def samples_batch(
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             for v in values:
-                await cur.execute(sql, v)   # no prepare kw in async psycopg
+                await cur.execute(sql, v, prepare=False)   # no prepare kw in async psycopg
         await conn.commit()
 
     return {"ok": True, "received": len(items)}
