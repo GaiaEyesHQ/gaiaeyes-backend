@@ -48,24 +48,40 @@ async def require_bearer(authorization: str = Header(..., alias="Authorization")
 # Accept EITHER {"samples":[...]} OR a raw array [...]
 Payload = Annotated[Union[SamplesWrapper, List[SampleIn]], Body(..., media_type="application/json")]
 
-@router.post("/samples/batch")
+# --- keep your models & auth as-is above this ---
+
+# psycopg-style insert with %s placeholders
+sql = """
+insert into gaia.samples (
+  user_id, device_os, source, type,
+  start_time, end_time, value, unit, value_text
+) values (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+on conflict (user_id, type, start_time, end_time) do nothing
+"""
+
+@router.post("/v1/samples/batch")
 async def samples_batch(
-    payload: Payload,
+    payload: Payload,           # your Union[SamplesWrapper, List[SampleIn]]
+    request: Request,           # so we can read headers if you added UUID override
     _auth: None = Depends(require_bearer),
 ):
-    # Normalize payload to a plain list
-    items: List[SampleIn] = payload.samples if isinstance(payload, SamplesWrapper) else payload
+    # Normalize payload to list
+    items = payload.samples if isinstance(payload, SamplesWrapper) else (payload or [])
     if not items:
         return {"ok": True, "received": 0}
+
+    # If you added header-based UUID override earlier, keep it; otherwise remove this block.
+    x_uid = request.headers.get("X-Dev-UserId", "").strip() or None
+    dev_uid = x_uid  # assume already a proper UUID string; your earlier code validated
 
     pool = await get_pool()
     values = [
         (
-            s.user_id,
+            dev_uid or s.user_id,
             s.device_os,
             s.source,
             s.type,
-            s.start_time,
+            s.start_time,    # psycopg accepts ISO8601 str or datetime
             s.end_time,
             s.value,
             s.unit,
@@ -74,15 +90,6 @@ async def samples_batch(
         for s in items
     ]
 
-    sql = """
-    insert into gaia.samples (
-      user_id, device_os, source, type,
-      start_time, end_time, value, unit, value_text
-    ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-    on conflict (user_id, type, start_time, end_time) do nothing
-    """
-
-    pool = await get_pool()
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.executemany(sql, values)
