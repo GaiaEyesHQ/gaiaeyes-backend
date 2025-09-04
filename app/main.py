@@ -4,7 +4,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from .db import settings
 from .routers import ingest, summary
 
-app = FastAPI(title="Gaia Backend", version="0.1.0")
+def custom_generate_unique_id(route):
+    # method + path is always unique
+    return f"{list(route.methods)[0].lower()}_{route.path.replace('/', '_').strip('_')}"
+
+app = FastAPI(
+    title="Gaia Backend",
+    version="0.1.0",
+    generate_unique_id_function=custom_generate_unique_id
+)
 
 app.add_middleware(
     CORSMiddleware,
