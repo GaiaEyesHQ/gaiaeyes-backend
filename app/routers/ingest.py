@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional, Union, Annotated
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Body, Depends, Request, Header, HTTPException, status
 from pydantic import BaseModel
 
 from ..db import get_pool, settings  # settings.DEV_BEARER, async pg pool
