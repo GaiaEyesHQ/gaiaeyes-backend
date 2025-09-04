@@ -1,0 +1,37 @@
+name: health-daily-rollup
+
+on:
+  schedule:
+    - cron: "15 * * * *"   # run hourly at :15
+  workflow_dispatch: {}     # allow manual run from Actions tab
+
+jobs:
+  rollup:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}   # Pooler DSN (host ...pooler.supabase.com:6543, sslmode=require)
+      DAYS_BACK: "7"                                    # recompute last 7 days
+      USER_TZ: "America/Chicago"                        # bucket days in your local TZ
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: pip-${{ runner.os }}-
+
+      - name: Install deps for rollup
+        run: |
+          python -m pip install --upgrade pip
+          pip install asyncpg
+
+      - name: Run health daily rollup
+        run: python backend/scripts/rollup_health_daily.py
