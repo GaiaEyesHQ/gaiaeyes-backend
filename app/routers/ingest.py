@@ -59,7 +59,7 @@ insert into gaia.samples (
 on conflict (user_id, type, start_time, end_time) do nothing
 """
 
-@router.post("/v1/samples/batch")
+@router.post("/samples/batch")
 async def samples_batch(
     payload: Payload,           # your Union[SamplesWrapper, List[SampleIn]]
     request: Request,           # so we can read headers if you added UUID override
