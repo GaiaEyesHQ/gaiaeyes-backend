@@ -1,21 +1,20 @@
 # app/db.py
 from __future__ import annotations
 
-import asyncpg
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+import psycopg
+from psycopg_pool import AsyncConnectionPool
+
 
 class Settings(BaseSettings):
-    # Required
     DATABASE_URL: str
 
-    # Optional/extras (ignore if present)
     DIRECT_URL: Optional[str] = None
     DEV_BEARER: Optional[str] = None
     CORS_ORIGINS: Optional[str] = "*"
 
-    # Allow unknown env vars (e.g., SUPABASE_DB_URL used by scripts)
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
@@ -24,16 +23,24 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+# Lazy global pool
+_pool: AsyncConnectionPool | None = None
 
-async def get_pool() -> asyncpg.Pool:
+async def get_pool() -> AsyncConnectionPool:
     """
-    Lazily create a global connection pool using DATABASE_URL.
-    PgBouncer-friendly: disable prepared stmt cache.
+    Async connection pool using psycopg v3.
+    - Uses DATABASE_URL (your Supabase Pooler DSN is fine here).
+    - Good with PgBouncer by default.
     """
-    if not hasattr(get_pool, "pool"):
-        get_pool.pool = await asyncpg.create_pool(
-            dsn=settings.DATABASE_URL,
-            statement_cache_size=0,
-            max_inactive_connection_lifetime=300.0,
+    global _pool
+    if _pool is None:
+        # psycopg_pool reads connection args from the conninfo string (sslmode, etc)
+        _pool = AsyncConnectionPool(
+            conninfo=settings.DATABASE_URL,
+            min_size=1,
+            max_size=10,
+            timeout=30,              # seconds to wait for a connection
+            open=False,              # lazy open
         )
-    return get_pool.pool  # type: ignore[attr-defined]
+        await _pool.open()           # open lazily on first call
+    return _pool
