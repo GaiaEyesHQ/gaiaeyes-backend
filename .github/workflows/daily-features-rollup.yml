@@ -2,7 +2,7 @@ name: daily-features-rollup
 
 on:
   schedule:
-    - cron: "0 4 * * *"   # daily at 04:00 UTC (after your other jobs)
+    - cron: "20 * * * *"   # daily at 04:00 UTC (after your other jobs)
   workflow_dispatch: {}
 
 jobs:
