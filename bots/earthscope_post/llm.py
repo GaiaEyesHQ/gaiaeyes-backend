@@ -1,5 +1,6 @@
-import os, json, math, traceback
-from typing import Any, Dict, List, Tuple, Optional
+import os, json, traceback
+from typing import Any, Dict, List, Optional, Tuple
+from decimal import Decimal
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from openai import OpenAI
 
@@ -39,8 +40,7 @@ def _dedupe_hashtags(h: str, min_ct=6, max_ct=10) -> str:
             seen.add(tl)
             out.append(t)
     if len(out) < min_ct:
-        # pad with sane defaults
-        pads = ["#GaiaEyes","#DailyEarthscope","#SpaceWeather","#KpIndex","#HeartCoherence","#Grounding"]
+        pads = ["#GaiaEyes", "#DailyEarthscope", "#SpaceWeather", "#KpIndex", "#HeartCoherence", "#Grounding"]
         for p in pads:
             if p.lower() not in seen:
                 out.append(p)
@@ -59,18 +59,18 @@ def _clean_trending(trending: List[Dict[str, str]]) -> List[Dict[str, str]]:
             continue
         if not title:
             title = url
-        # keep summaries short
         if len(summary) > 280:
             summary = summary[:277].rstrip() + "…"
         items.append({"title": title, "url": url, "summary": summary})
     return items[:3]
 
-def _metrics_from_payload(metrics_json: Dict[str, Any]) -> Tuple[Optional[float],Optional[float],Optional[float]]:
+def _metrics_from_payload(metrics_json: Dict[str, Any]) -> Tuple[Optional[float], Optional[float], Optional[float], str]:
     sw = (metrics_json or {}).get("space_weather") or {}
     kp = _round1(sw.get("kp_max"))
     bz = _round1(sw.get("bz_min"))
     wind = _round1(sw.get("sw_speed_avg"))
-    return kp, bz, wind
+    day_iso = (metrics_json or {}).get("day") or ""
+    return kp, bz, wind, day_iso
 
 def _deterministic_markdown(day_iso: str,
                             kp: Optional[float],
@@ -78,11 +78,6 @@ def _deterministic_markdown(day_iso: str,
                             wind: Optional[float],
                             donki: List[Dict[str, Any]],
                             trending: List[Dict[str, str]]) -> Tuple[str, str, str, str, Dict[str, Any]]:
-    """
-    Build a rich, human post without the LLM (used on error).
-    Returns (title, caption, body_md, hashtags, sources_json)
-    """
-    # Compose headline
     if kp is not None and kp >= 5:
         headline = "Storm Energy with Pockets of Clarity"
     elif kp is not None and kp >= 3:
@@ -91,15 +86,10 @@ def _deterministic_markdown(day_iso: str,
         headline = "Calm Field • Clear Focus"
 
     title = f"Daily Earthscope — {headline} ({day_iso})"
-
-    # Compose caption (220–600 chars)
     parts = []
-    if kp is not None:
-        parts.append(f"Kp {kp:.1f}")
-    if bz is not None:
-        parts.append(f"Bz {bz:.1f} nT")
-    if wind is not None:
-        parts.append(f"solar wind {wind:.1f} km/s")
+    if kp is not None: parts.append(f"Kp {kp:.1f}")
+    if bz is not None: parts.append(f"Bz {bz:.1f} nT")
+    if wind is not None: parts.append(f"solar wind {wind:.1f} km/s")
     metrics_line = ", ".join(parts) if parts else "quiet field"
 
     caption = (
@@ -109,16 +99,13 @@ def _deterministic_markdown(day_iso: str,
     )
     caption = _clip(caption, 600)
 
-    # Trending bullets
-    tr_items = _clean_trending(trending)
     tr_lines = []
-    for it in tr_items:
+    for it in (trending or [])[:3]:
         t = it["title"]
         u = it["url"]
         s = it["summary"] or "Key update for today’s space weather."
         tr_lines.append(f"- **[{t}]({u})** — {s}")
 
-    # Include up to 3 DONKI events if present
     if donki:
         for e in donki[:3]:
             et = (e.get("event_type") or "EVENT").upper()
@@ -128,13 +115,11 @@ def _deterministic_markdown(day_iso: str,
 
     trending_md = "\n".join(tr_lines) if tr_lines else "- See SolarHam, SpaceWeather, NASA, and HeartMath for today’s live context."
 
-    # Effects section
     mood = "Calmer baseline with occasional ripples." if (kp is None or kp < 4) else "Heightened sensitivity; balance stimulation with recovery."
     energy = "Smooth focus window; good for structured tasks." if (kp is None or kp < 4) else "Surges and dips; plan buffers and short breaks."
     heart = "Favorable for HRV coherence; use slow, even breathing." if (kp is None or kp < 4) else "HRV may fluctuate; double down on heart-focused breath."
     neuro = "Nervous system steady—pair with nature contact." if (kp is None or kp < 4) else "Extra grounding helps counter restlessness."
 
-    # Tips
     tips = [
         "4–6 breathing (inhale 4s, exhale 6s) for 5–10 minutes.",
         "Ground outdoors briefly (barefoot if safe) to settle your system.",
@@ -167,7 +152,6 @@ def _deterministic_markdown(day_iso: str,
 """
 
     hashtags = _dedupe_hashtags("#GaiaEyes #DailyEarthscope #SpaceWeather #AuroraWatch #KpIndex #HeartCoherence #Grounding #Breathwork #Wellness")
-
     sources_json = {
         "datasets": ["marts.space_weather_daily", "ext.donki_event"],
         "references": [
@@ -176,7 +160,7 @@ def _deterministic_markdown(day_iso: str,
             "https://www.nasa.gov/",
             "https://www.heartmath.org/gci/gcms/live-data/"
         ],
-        "trending": tr_items
+        "trending": (trending or [])[:3]
     }
     return title, caption, body_md, hashtags, sources_json
 
@@ -200,7 +184,8 @@ def _call_llm(prompt: Dict[str, Any]) -> Dict[str, Any]:
                     "You are Gaia Eyes’ Daily Earthscope writer. "
                     "Write credible, readable, human-sounding daily forecasts that blend space weather with wellness. "
                     "Never invent numbers or events. If a numeric field is missing, omit it. "
-                    "Round numbers to 1 decimal. Avoid placeholders like 'latest update'; always summarize concrete info."
+                    "Round numbers to 1 decimal. Avoid placeholders (e.g., 'latest update'); summarize concrete info. "
+                    "Do not include unrelated politics/medicine/culture articles in 'Trending'."
                 ),
             },
             {"role": "user", "content": json.dumps(prompt)},
@@ -211,13 +196,15 @@ def _call_llm(prompt: Dict[str, Any]) -> Dict[str, Any]:
 def generate_daily_earthscope(
     metrics_json: Dict[str, Any],
     donki_events: List[Dict[str, Any]],
-    trending: List[Dict[str, str]],
+    trending: List[Dict[str, str]] = None,          # backward compatible
+    news_candidates: List[Dict[str, str]] = None,   # preferred: basket of news for LLM to choose
 ) -> Dict[str, Any]:
-    # Pre-round the metrics so the model sees reasonable values
-    kp, bz, wind = _metrics_from_payload(metrics_json)
-    if kp is not None: metrics_json["space_weather"]["kp_max"] = kp
-    if bz is not None: metrics_json["space_weather"]["bz_min"] = bz
-    if wind is not None: metrics_json["space_weather"]["sw_speed_avg"] = wind
+    # Round metrics before sending to the model
+    kp, bz, wind, day_iso = _metrics_from_payload(metrics_json)
+    if "space_weather" in (metrics_json or {}):
+        if kp is not None:   metrics_json["space_weather"]["kp_max"] = kp
+        if bz is not None:   metrics_json["space_weather"]["bz_min"] = bz
+        if wind is not None: metrics_json["space_weather"]["sw_speed_avg"] = wind
 
     default_sources = {
         "datasets": ["marts.space_weather_daily", "ext.donki_event"],
@@ -229,13 +216,13 @@ def generate_daily_earthscope(
         ],
     }
 
-    clean_trend = _clean_trending(trending)
+    clean_trend = _clean_trending(trending or [])
+    candidates = news_candidates or []
 
     prompt = {
         "task": "Render a Gaia Eyes 'Daily Earthscope' post with sections and linked trending articles.",
         "format": "Return strict JSON with keys: title, caption, body_markdown, hashtags, sources_json.",
         "voice": "calm, clear, credible, lightly poetic, never alarmist",
-        "audience": "general public",
         "length_hints": {"caption_min_chars": 220, "caption_max_chars": 600, "hashtags_min": 6, "hashtags_max": 10},
         "sections_required": [
             "Trending Space Weather Highlights (linked bullets with 1–2 sentence summaries)",
@@ -246,17 +233,21 @@ def generate_daily_earthscope(
         "data": {
             "metrics_json": metrics_json,
             "donki_events": donki_events or [],
-            "trending": clean_trend
+            "news_candidates": candidates,          # let the LLM pick 2–3
+            "fallback_trending": clean_trend        # use if candidates are empty
         },
+        "selection_rules": [
+            "From news_candidates, pick the 2–3 most relevant space-weather items for today (geomagnetic storms, auroras, solar wind/CME/flare, sunspots, NASA/NOAA heliophysics missions).",
+            "Discard any items about medicine, politics, culture, or generic site copy.",
+            "If candidates are empty or weak, generate concise, metrics-aware context bullets using metrics_json (Kp/Bz/solar wind) and DONKI events."
+        ],
         "output_rules": [
             "Title must be informative and human.",
             "Caption must be 220–600 characters with 6–10 distinct hashtags.",
             "Body must be Markdown with H2 headings.",
-            "In 'Trending' use [Title](url) + 1–2 sentence summary (no placeholders).",
+            "In 'Trending' use [Title](url) + a concrete 1–2 sentence summary (no generic site descriptions).",
             "Include inline metrics when available: Kp (kp_max), Bz (bz_min) nT, solar wind (sw_speed_avg) km/s; 1 decimal.",
             "If DONKI events exist, include up to 3 with type/class/time.",
-            "Do not include fundraisers, sign-ups, or generic site descriptions in 'Trending'. Each bullet must be a concrete news update or a concise, metrics-aware context sentence derived from the provided link.",
-            "Do not describe a site in general terms; each 'Trending' bullet must summarize a concrete update from the given link or (if none visible) give a concise, metrics-aware context sentence for today.",
             "Tie Self-Care tips to today's conditions."
         ],
         "sources_json": default_sources,
@@ -269,26 +260,38 @@ def generate_daily_earthscope(
             if k not in obj or not isinstance(obj[k], str) or not obj[k].strip():
                 raise LLMFailure(f"Missing/invalid field: {k}")
 
-        # Post-process
-        obj["caption"] = _clip(obj["caption"], 600)
+        obj["caption"]  = _clip(obj["caption"], 600)
         obj["hashtags"] = _dedupe_hashtags(obj["hashtags"])
 
         sj = obj.get("sources_json") or {}
         if "datasets" not in sj or "references" not in sj:
             sj = default_sources
-        if clean_trend:
-            sj = {**sj, "trending": clean_trend}
+        # Surface chosen articles (or fallback_trending) for dashboards
+        chosen = obj.get("trending") or []
+        if not chosen and clean_trend:
+            chosen = clean_trend
+        if chosen:
+            # Normalize shape: title/url/summary only
+            norm = []
+            for it in chosen:
+                title = (it.get("title") or "").strip()
+                url   = (it.get("url") or "").strip()
+                summ  = (it.get("summary") or "").strip()
+                if url:
+                    if len(summ) > 280: summ = summ[:277].rstrip() + "…"
+                    norm.append({"title": title or url, "url": url, "summary": summ})
+            if norm:
+                sj = {**sj, "trending": norm[:3]}
+
         obj["sources_json"] = sj
         return obj
 
-    except Exception as e:
-        # 2) Rich deterministic fallback (not the super-basic one)
-        day_iso = (metrics_json or {}).get("day") or ""
+    except Exception:
+        # 2) Rich deterministic fallback (never the super-basic one)
         title, caption, body_md, hashtags, sources_json = _deterministic_markdown(
-            day_iso=day_iso,
-            kp=kp, bz=bz, wind=wind,
+            day_iso=day_iso, kp=kp, bz=bz, wind=wind,
             donki=donki_events or [],
-            trending=clean_trend,
+            trending=(candidates[:3] or clean_trend)
         )
         return {
             "title": title,
