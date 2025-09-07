@@ -61,48 +61,129 @@ async def get_best_day(conn) -> Date:
         return yday
     raise SystemExit("no data for today/yesterday")
 
-# --------------- Trending fetcher ---------------
+# --------------- Trending fetcher (improved) ---------------
+import re
 
-def _scrape_title_desc(url: str, timeout: int = 15) -> Optional[Dict[str, str]]:
+GENERIC_PATTERNS = [
+    re.compile(r"latest update from this source", re.I),
+    re.compile(r"news and information", re.I),
+    re.compile(r"studies (the )?sun", re.I),
+    re.compile(r"dynamic influence across our .+ solar system", re.I),
+]
+
+def _first_text(nodes, max_len=420):
+    """Pick the first meaningful text from a list of nodes; trim nicely."""
+    for n in nodes or []:
+        txt = (n.get_text(" ", strip=True) or "").strip()
+        if txt and len(txt) > 40:  # avoid tiny labels
+            return txt[: max_len - 1].rstrip() + ("…" if len(txt) >= max_len else "")
+    return ""
+
+def _summarize_from_dom(url: str, html: str) -> Dict[str, str]:
+    soup = BeautifulSoup(html, "html.parser")
+    title = (soup.title.string.strip() if soup.title and soup.title.string else url)
+
+    # Prefer page H1, then first meaningful paragraph; many sites structure this way
+    h1 = soup.find("h1")
+    h1_text = (h1.get_text(" ", strip=True) if h1 else "").strip()
+
+    # Prefer news-like containers if present (site-specific tweaks)
+    # SpaceWeather.com: grab the center column first paragraph(s)
+    p_candidates = []
+    if "spaceweather.com" in url:
+        # grab first few <p> elements on page
+        p_candidates = soup.select("p")
+    elif "solarham.com" in url:
+        # SolarHam often has <td> text; fallback to paragraphs anyway
+        p_candidates = soup.select("p, td")
+    else:
+        p_candidates = soup.select("article p, main p, .content p, p")
+
+    lead = _first_text(p_candidates)
+
+    # Fallback to meta descriptions if needed
+    if not lead:
+        og = soup.find("meta", attrs={"property": "og:description"})
+        if og and og.get("content"):
+            lead = og["content"].strip()
+    if not lead:
+        md = soup.find("meta", attrs={"name": "description"})
+        if md and md.get("content"):
+            lead = md["content"].strip()
+
+    if not lead:
+        lead = "Key update from this source."
+
+    return {"title": (h1_text or title), "summary": lead}
+
+def _summarize_url(url: str, timeout: int = 20) -> Optional[Dict[str, str]]:
     try:
         r = requests.get(url, timeout=timeout, headers={"User-Agent": "gaia-ops/earthscope-bot"})
         r.raise_for_status()
-        soup = BeautifulSoup(r.text, "html.parser")
-        title = (soup.title.string.strip() if soup.title and soup.title.string else url)
-        desc = ""
-        og = soup.find("meta", attrs={"property": "og:description"})
-        if og and og.get("content"):
-            desc = og["content"].strip()
-        if not desc:
-            md = soup.find("meta", attrs={"name": "description"})
-            if md and md.get("content"):
-                desc = md["content"].strip()
-        if desc and len(desc) > 240:
-            desc = desc[:237].rstrip() + "…"
-        return {"title": title, "url": url, "summary": desc or "Latest update from this source."}
+        info = _summarize_from_dom(url, r.text)
+        return {"title": info["title"] or url, "url": url, "summary": info["summary"]}
     except Exception:
         return None
 
-def fetch_trending_articles(max_items: int = 3) -> List[Dict[str, str]]:
+def _looks_generic(text: str) -> bool:
+    if not text: return True
+    for pat in GENERIC_PATTERNS:
+        if pat.search(text):
+            return True
+    return False
+
+def _enrich_if_generic(item: Dict[str, str], metrics_json: Dict[str, Any]) -> Dict[str, str]:
     """
-    Fetch 2–3 current references (title+summary+link) from canonical sources.
-    Override with env vars if desired.
+    If the scraped summary is generic, rewrite a concise summary using current Kp/Bz/wind.
+    This guarantees we never pass fluff into the LLM.
     """
-    candidate_urls = [
-        os.environ.get("TREND_SOLARHAM", "https://www.solarham.com/"),
-        os.environ.get("TREND_SPACEWEATHER", "https://www.spaceweather.com/"),
-        os.environ.get("TREND_NASA", "https://science.nasa.gov/heliophysics/"),
-        os.environ.get("TREND_HEARTMATH", "https://www.heartmath.org/gci/gcms/live-data/"),
-    ]
+    s = (item.get("summary") or "").strip()
+    if s and not _looks_generic(s):
+        return item
+
+    sw = (metrics_json or {}).get("space_weather") or {}
+    kp = sw.get("kp_max")
+    bz = sw.get("bz_min")
+    wind = sw.get("sw_speed_avg")
+
+    parts = []
+    if kp is not None: parts.append(f"Kp {kp:.1f}")
+    if bz is not None: parts.append(f"Bz {bz:.1f} nT")
+    if wind is not None: parts.append(f"solar wind {wind:.1f} km/s")
+    metrics_line = ", ".join(parts) if parts else "quiet geomagnetic background"
+
+    item["summary"] = f"Today’s context: {metrics_line}. See this source for current charts and expert commentary."
+    return item
+
+def fetch_trending_articles(max_items: int = 3, metrics_json: Dict[str, Any] = None) -> List[Dict[str, str]]:
+    """
+    Strategy:
+      1) If TREND_URLS env is set (comma-separated), fetch those.
+      2) Else try a curated set (SpaceWeather.com, NASA Heliophysics blog hub, SolarHam, HeartMath live).
+      3) Summarize via DOM (h1 + first paragraph). If generic, enrich summary with Kp/Bz/wind.
+    """
+    env_list = os.environ.get("TREND_URLS", "").strip()
+    if env_list:
+        candidate_urls = [u.strip() for u in env_list.split(",") if u.strip()]
+    else:
+        candidate_urls = [
+            "https://www.spaceweather.com/",
+            "https://science.nasa.gov/heliophysics/solar-activity/",  # NASA heliophysics activity hub
+            "https://www.solarham.com/",                               # may be on hiatus; keep as context
+            "https://www.heartmath.org/gci/gcms/live-data/",
+        ]
+
     items: List[Dict[str, str]] = []
     for url in candidate_urls:
-        item = _scrape_title_desc(url)
-        if item:
-            items.append(item)
+        it = _summarize_url(url)
+        if it:
+            it = _enrich_if_generic(it, metrics_json or {})
+            items.append(it)
         if len(items) >= max_items:
             break
-    return items
 
+    # Always return 2–3 items max for brevity
+    return items[:max_items]
 # ---------------- Main run ----------------
 
 async def run():
