@@ -226,7 +226,7 @@ async def run():
     metrics_json = _to_jsonable(metrics_json)  # Decimal → float etc.
 
     # Trending references (2–3)
-    trending = fetch_trending_articles(max_items=3)
+    trending = fetch_trending_articles(max_items=3, metrics_json=metrics_json)
 
     # LLM render (rich sections + hashtags + sources)
     try:
