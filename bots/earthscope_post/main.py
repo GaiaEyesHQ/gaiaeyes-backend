@@ -62,128 +62,176 @@ async def get_best_day(conn) -> Date:
     raise SystemExit("no data for today/yesterday")
 
 # --------------- Trending fetcher (improved) ---------------
+# --------------- Trending fetcher (news-first, de-genericized) ---------------
 import re
+import feedparser
+from urllib.parse import urlparse
 
+NON_NEWS_PATTERNS = [
+    re.compile(r"fundraiser", re.I),
+    re.compile(r"donate", re.I),
+    re.compile(r"sign[\s-]?up", re.I),
+    re.compile(r"newsletter", re.I),
+    re.compile(r"privacy\s*policy", re.I),
+    re.compile(r"cookie", re.I),
+    re.compile(r"terms\s*of\s*use", re.I),
+    re.compile(r"about\s+us", re.I),
+]
 GENERIC_PATTERNS = [
-    re.compile(r"latest update from this source", re.I),
     re.compile(r"news and information", re.I),
-    re.compile(r"studies (the )?sun", re.I),
-    re.compile(r"dynamic influence across our .+ solar system", re.I),
+    re.compile(r"latest update", re.I),
+    re.compile(r"studies the sun", re.I),
+    re.compile(r"dynamic influence", re.I),
 ]
 
-def _first_text(nodes, max_len=420):
-    """Pick the first meaningful text from a list of nodes; trim nicely."""
-    for n in nodes or []:
-        txt = (n.get_text(" ", strip=True) or "").strip()
-        if txt and len(txt) > 40:  # avoid tiny labels
-            return txt[: max_len - 1].rstrip() + ("…" if len(txt) >= max_len else "")
-    return ""
-
-def _summarize_from_dom(url: str, html: str) -> Dict[str, str]:
-    soup = BeautifulSoup(html, "html.parser")
-    title = (soup.title.string.strip() if soup.title and soup.title.string else url)
-
-    # Prefer page H1, then first meaningful paragraph; many sites structure this way
-    h1 = soup.find("h1")
-    h1_text = (h1.get_text(" ", strip=True) if h1 else "").strip()
-
-    # Prefer news-like containers if present (site-specific tweaks)
-    # SpaceWeather.com: grab the center column first paragraph(s)
-    p_candidates = []
-    if "spaceweather.com" in url:
-        # grab first few <p> elements on page
-        p_candidates = soup.select("p")
-    elif "solarham.com" in url:
-        # SolarHam often has <td> text; fallback to paragraphs anyway
-        p_candidates = soup.select("p, td")
-    else:
-        p_candidates = soup.select("article p, main p, .content p, p")
-
-    lead = _first_text(p_candidates)
-
-    # Fallback to meta descriptions if needed
-    if not lead:
-        og = soup.find("meta", attrs={"property": "og:description"})
-        if og and og.get("content"):
-            lead = og["content"].strip()
-    if not lead:
-        md = soup.find("meta", attrs={"name": "description"})
-        if md and md.get("content"):
-            lead = md["content"].strip()
-
-    if not lead:
-        lead = "Key update from this source."
-
-    return {"title": (h1_text or title), "summary": lead}
-
-def _summarize_url(url: str, timeout: int = 20) -> Optional[Dict[str, str]]:
-    try:
-        r = requests.get(url, timeout=timeout, headers={"User-Agent": "gaia-ops/earthscope-bot"})
-        r.raise_for_status()
-        info = _summarize_from_dom(url, r.text)
-        return {"title": info["title"] or url, "url": url, "summary": info["summary"]}
-    except Exception:
-        return None
-
-def _looks_generic(text: str) -> bool:
+def _is_non_news(text: str) -> bool:
     if not text: return True
-    for pat in GENERIC_PATTERNS:
+    for pat in NON_NEWS_PATTERNS:
         if pat.search(text):
             return True
     return False
 
-def _enrich_if_generic(item: Dict[str, str], metrics_json: Dict[str, Any]) -> Dict[str, str]:
-    """
-    If the scraped summary is generic, rewrite a concise summary using current Kp/Bz/wind.
-    This guarantees we never pass fluff into the LLM.
-    """
-    s = (item.get("summary") or "").strip()
-    if s and not _looks_generic(s):
-        return item
+def _is_generic(text: str) -> bool:
+    if not text: return True
+    for pat in GENERIC_PATTERNS:
+        if pat.search(text):
+            return True
+    # Toss very short blurbs
+    if len(text.strip()) < 40:
+        return True
+    return False
 
+def _mk_summary_from_metrics(metrics_json: Dict[str, Any]) -> str:
     sw = (metrics_json or {}).get("space_weather") or {}
-    kp = sw.get("kp_max")
-    bz = sw.get("bz_min")
-    wind = sw.get("sw_speed_avg")
-
     parts = []
-    if kp is not None: parts.append(f"Kp {kp:.1f}")
-    if bz is not None: parts.append(f"Bz {bz:.1f} nT")
-    if wind is not None: parts.append(f"solar wind {wind:.1f} km/s")
-    metrics_line = ", ".join(parts) if parts else "quiet geomagnetic background"
+    if sw.get("kp_max") is not None: parts.append(f"Kp {float(sw['kp_max']):.1f}")
+    if sw.get("bz_min") is not None: parts.append(f"Bz {float(sw['bz_min']):.1f} nT")
+    if sw.get("sw_speed_avg") is not None: parts.append(f"solar wind {float(sw['sw_speed_avg']):.1f} km/s")
+    if parts:
+        return f"Today’s context: {', '.join(parts)}. See this article for details and expert charts."
+    return "Today’s context: quiet to unsettled field. See this article for updates."
 
-    item["summary"] = f"Today’s context: {metrics_line}. See this source for current charts and expert commentary."
-    return item
+def _clean_feed_item(title: str, link: str, summary: str, metrics_json: Dict[str, Any]) -> Optional[Dict[str,str]]:
+    # Basic noise filters
+    if not link or _is_non_news(title or "") or _is_non_news(summary or ""):
+        return None
+    # Tidy up whitespace
+    title = (title or "").strip()
+    summary = (summary or "").strip()
+    # Strip HTML tags that sometimes appear in RSS summaries
+    summary = re.sub(r"<[^>]+>", "", summary)
+    # Force a concrete summary if generic
+    if _is_generic(summary):
+        summary = _mk_summary_from_metrics(metrics_json)
+    # Clip long blurbs
+    if len(summary) > 280:
+        summary = summary[:277].rstrip() + "…"
+    return {"title": title or link, "url": link, "summary": summary}
+
+def _fetch_rss(url: str, metrics_json: Dict[str, Any], cap: int = 2) -> List[Dict[str,str]]:
+    items = []
+    try:
+        feed = feedparser.parse(url)
+        for e in feed.entries[:5]:  # look at a few, filter below
+            title = getattr(e, "title", "") or ""
+            link = getattr(e, "link", "") or ""
+            # prefer content/summary detail
+            summary = getattr(e, "summary", "") or ""
+            if hasattr(e, "content") and e.content:
+                # sometimes content[0].value has the body
+                body = e.content[0].value or ""
+                if len(body) > len(summary):
+                    summary = body
+            cleaned = _clean_feed_item(title, link, summary, metrics_json)
+            if cleaned:
+                items.append(cleaned)
+            if len(items) >= cap:
+                break
+    except Exception:
+        pass
+    return items
+
+def _scrape_html_summary(url: str, metrics_json: Dict[str, Any], timeout: int = 15) -> Optional[Dict[str,str]]:
+    """Fallback: scrape a page and try to pull the first real paragraph, filtering junk."""
+    try:
+        r = requests.get(url, timeout=timeout, headers={"User-Agent": "gaia-ops/earthscope-bot"})
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        # Skip very generic pages entirely
+        if _is_non_news(soup.get_text(" ", strip=True)[:400]):
+            return None
+        # Aim for news-ish content blocks
+        p = soup.select("article p, main p, .content p, p")
+        text = ""
+        for node in p[:10]:
+            txt = node.get_text(" ", strip=True)
+            if txt and not _is_non_news(txt) and len(txt) > 60:
+                text = txt
+                break
+        if not text:
+            # fallback to meta desc
+            og = soup.find("meta", attrs={"property": "og:description"})
+            if og and og.get("content"): text = og["content"].strip()
+        if not text:
+            md = soup.find("meta", attrs={"name": "description"})
+            if md and md.get("content"): text = md["content"].strip()
+        if not text:
+            text = _mk_summary_from_metrics(metrics_json)
+
+        title = (soup.title.string.strip() if soup.title and soup.title.string else url)
+        if len(text) > 280: text = text[:277].rstrip() + "…"
+        # Final generic check
+        if _is_generic(text):
+            text = _mk_summary_from_metrics(metrics_json)
+        return {"title": title, "url": url, "summary": text}
+    except Exception:
+        return None
 
 def fetch_trending_articles(max_items: int = 3, metrics_json: Dict[str, Any] = None) -> List[Dict[str, str]]:
     """
-    Strategy:
-      1) If TREND_URLS env is set (comma-separated), fetch those.
-      2) Else try a curated set (SpaceWeather.com, NASA Heliophysics blog hub, SolarHam, HeartMath live).
-      3) Summarize via DOM (h1 + first paragraph). If generic, enrich summary with Kp/Bz/wind.
+    Strategy order:
+      1) If TREND_URLS is set (comma-separated articles), fetch exactly those (HTML summarize) in order.
+      2) Otherwise, use curated RSS feeds to get actual stories, then (if needed) fill from HTML.
     """
+    metrics_json = metrics_json or {}
+    chosen: List[Dict[str,str]] = []
+
+    # 1) Exact article override (high priority)
     env_list = os.environ.get("TREND_URLS", "").strip()
     if env_list:
-        candidate_urls = [u.strip() for u in env_list.split(",") if u.strip()]
-    else:
-        candidate_urls = [
-            "https://www.spaceweather.com/",
-            "https://science.nasa.gov/heliophysics/solar-activity/",  # NASA heliophysics activity hub
-            "https://www.solarham.com/",                               # may be on hiatus; keep as context
-            "https://www.heartmath.org/gci/gcms/live-data/",
-        ]
+        for raw in [u.strip() for u in env_list.split(",") if u.strip()]:
+            it = _scrape_html_summary(raw, metrics_json)
+            if it: chosen.append(it)
+            if len(chosen) >= max_items: return chosen
 
-    items: List[Dict[str, str]] = []
-    for url in candidate_urls:
-        it = _summarize_url(url)
+    # 2) Curated feeds (news-first)
+    # SpaceWeatherLive (news); NASA Heliophysics blog; LiveScience space tag
+    feeds = [
+        os.environ.get("TREND_FEED_1", "https://www.spaceweatherlive.com/en/news.rss"),
+        os.environ.get("TREND_FEED_2", "https://science.nasa.gov/heliophysics/feed/"),
+        os.environ.get("TREND_FEED_3", "https://www.livescience.com/space/rss.xml"),
+    ]
+    for f in feeds:
+        for item in _fetch_rss(f, metrics_json, cap=2):
+            chosen.append(item)
+            if len(chosen) >= max_items:
+                return chosen
+
+    # 3) Fallback HTML summaries of home pages (filtered)
+    fallbacks = [
+        "https://www.spaceweather.com/",
+        "https://www.solarham.com/",
+        "https://science.nasa.gov/heliophysics/",
+        "https://www.heartmath.org/gci/gcms/live-data/",
+    ]
+    for url in fallbacks:
+        it = _scrape_html_summary(url, metrics_json)
         if it:
-            it = _enrich_if_generic(it, metrics_json or {})
-            items.append(it)
-        if len(items) >= max_items:
+            chosen.append(it)
+        if len(chosen) >= max_items:
             break
 
-    # Always return 2–3 items max for brevity
-    return items[:max_items]
+    return chosen[:max_items]
 # ---------------- Main run ----------------
 
 async def run():
