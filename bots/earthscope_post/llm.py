@@ -255,6 +255,7 @@ def generate_daily_earthscope(
             "In 'Trending' use [Title](url) + 1–2 sentence summary (no placeholders).",
             "Include inline metrics when available: Kp (kp_max), Bz (bz_min) nT, solar wind (sw_speed_avg) km/s; 1 decimal.",
             "If DONKI events exist, include up to 3 with type/class/time.",
+            "Do not describe a site in general terms; each 'Trending' bullet must summarize a concrete update from the given link or (if none visible) give a concise, metrics-aware context sentence for today.",
             "Tie Self-Care tips to today's conditions."
         ],
         "sources_json": default_sources,
