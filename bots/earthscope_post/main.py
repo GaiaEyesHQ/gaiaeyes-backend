@@ -1,14 +1,11 @@
-import os, asyncio, json, re
+import os, asyncio, json
 from datetime import datetime, timedelta, timezone, date as Date
 from typing import Any, Dict, List, Optional
 from decimal import Decimal
 
 import asyncpg
-import requests
-import feedparser
-from bs4 import BeautifulSoup
 
-from llm import generate_daily_earthscope, LLMFailure
+from llm import generate_daily_earthscope
 
 ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 SUPABASE_DB_URL = os.environ["SUPABASE_DB_URL"]
@@ -57,62 +54,6 @@ async def get_best_day(conn) -> Date:
         return yday
     raise SystemExit("no data for today/yesterday")
 
-# ---------------- News candidate fetcher (LLM will pick) ----------------
-
-SPACE_KEYWORDS = [
-    "aurora","geomagnetic","kp "," kp","solar wind","cme","coronal","flare","sunspot",
-    "noaa","swpc","helio","imf","magnetosphere","schumann","resonance","storm"
-]
-KW_RE = re.compile("|".join(SPACE_KEYWORDS), re.I)
-
-def _is_space_related(title: str, summary: str) -> bool:
-    text = f"{title} {summary}".lower()
-    return bool(KW_RE.search(text))
-
-def _clip(s: str, n: int = 280) -> str:
-    s = (s or "").strip()
-    if len(s) <= n: return s
-    return s[:n-1].rstrip() + "…"
-
-def fetch_news_candidates(max_total: int = 20) -> List[Dict[str, str]]:
-    feeds = [
-        os.environ.get("TREND_FEED_1", "https://www.spaceweatherlive.com/en/news.rss"),
-        os.environ.get("TREND_FEED_2", "https://science.nasa.gov/heliophysics/feed/"),
-        os.environ.get("TREND_FEED_3", "https://www.swpc.noaa.gov/content/news-and-events"),
-        os.environ.get("TREND_FEED_4", "https://science.nasa.gov/feed/"),
-    ]
-    out: List[Dict[str, str]] = []
-    seen = set()
-
-    # Manual pins take precedence
-    pins = [u.strip() for u in os.environ.get("TREND_URLS", "").split(",") if u.strip()]
-    for u in pins:
-        if u not in seen:
-            out.append({"source": "manual", "title": "", "url": u, "summary": ""})
-            seen.add(u)
-            if len(out) >= max_total:
-                return out
-
-    for url in feeds:
-        try:
-            f = feedparser.parse(url)
-            for e in f.entries[:10]:
-                title = getattr(e, "title", "") or ""
-                link  = getattr(e, "link", "") or ""
-                summary = getattr(e, "summary", "") or ""
-                if not link or link in seen:
-                    continue
-                seen.add(link)
-                summary = _clip(re.sub(r"<[^>]+>", "", summary))
-                # keep broader NASA feed items, LLM will filter; still keep few
-                if "nasa.gov" in url or "spaceweatherlive" in url or _is_space_related(title, summary):
-                    out.append({"source": url, "title": title.strip(), "url": link.strip(), "summary": summary})
-                if len(out) >= max_total:
-                    return out
-        except Exception:
-            continue
-    return out[:max_total]
-
 # ---------------- Main run ----------------
 
 async def run():
@@ -130,12 +71,8 @@ async def run():
         await conn.close()
         raise SystemExit("no space weather row")
 
-    events = await fetch_all(conn, """
-        select event_type, start_time, class
-        from ext.donki_event
-        where date(start_time) = $1
-        order by start_time asc
-    """, day)
+    # If you keep DONKI later, you can still fetch here; it's unused now.
+    events: List[Dict[str, Any]] = []
 
     day_iso = day.isoformat()
     metrics_json: Dict[str, Any] = {
@@ -150,24 +87,16 @@ async def run():
     }
     metrics_json = _to_jsonable(metrics_json)
 
-    # NEW: get a basket of 10–20 news items and let the LLM choose
-    news_candidates = fetch_news_candidates(max_total=20)
-
-    # LLM render (rich sections + hashtags + sources)
-    try:
-        llm = generate_daily_earthscope(
-            metrics_json=metrics_json,
-            donki_events=events,
-            news_candidates=news_candidates  # << key change
-        )
-        title        = llm["title"].strip()
-        caption      = llm["caption"].strip()
-        body_md      = llm["body_markdown"].strip()
-        hashtags     = llm["hashtags"].strip()
-        sources_json = llm["sources_json"]
-    except Exception as e:
-        # Deterministic fallback (from llm.py handles rich structure now)
-        raise
+    # LLM render (effects + self-care only; no trending, no sources section)
+    llm = generate_daily_earthscope(
+        metrics_json=metrics_json,
+        donki_events=events
+    )
+    title        = llm["title"].strip()
+    caption      = llm["caption"].strip()
+    body_md      = llm["body_markdown"].strip()
+    hashtags     = llm["hashtags"].strip()
+    sources_json = llm.get("sources_json") or {}  # remains empty by design
 
     row = {
         "day": day,
@@ -178,7 +107,7 @@ async def run():
         "body_markdown": body_md,
         "hashtags": hashtags,
         "metrics_json": json.dumps(metrics_json, ensure_ascii=False),
-        "sources_json": json.dumps(_to_jsonable(sources_json), ensure_ascii=False),
+        "sources_json": json.dumps(sources_json, ensure_ascii=False),  # '{}'::jsonb
     }
 
     if dry_run:
@@ -187,7 +116,7 @@ async def run():
         await conn.close()
         return
 
-    # Choose conflict target based on user_id NULL/not NULL (partial unique indexes)
+    # Upsert based on your partial unique indexes (global vs per-user)
     if user_id is None:
         sql = """
 insert into content.daily_posts
