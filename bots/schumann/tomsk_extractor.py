@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Tomsk Schumann extractor
+Tomsk Schumann extractor updated 9/10
 - 0–72h continuous time anchor
 - Tick-ruler from bottom hour ticks for robust px-per-hour (primary)
 - Auto-bias computed from Last-Modified vs freshly painted frontier (guarded)
