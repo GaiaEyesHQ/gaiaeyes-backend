@@ -687,7 +687,7 @@ def render_stats_card_from_features(day: dt.date, feats: dict, energy: Optional[
         ("Flares", f"{int(feats.get('flares_count') or 0)}", (240,120,120,220), "Fl"),
         ("CMEs", f"{int(feats.get('cmes_count') or 0)}", (240,160,120,220), "CM"),
     ]
-    font_val = _load_font(["Menlo.ttf", "Courier New.ttf", "Oswald-Bold.ttf"], 40)
+    font_val = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 48)
     chip_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 26)
 
     def _chip(draw: ImageDraw.ImageDraw, x:int, y:int, color:tuple, txt:str):
@@ -699,7 +699,7 @@ def render_stats_card_from_features(day: dt.date, feats: dict, energy: Optional[
         draw.text((tx+1,ty+1), txt, font=chip_font, fill=(0,0,0,160))
         draw.text((tx,ty), txt, font=chip_font, fill=(255,255,255,235))
 
-    x_label, x_val = 160, W//2 + 40
+    x_label, x_val = 160, W//2 + 80
     draw.text((x_label+2, y+2), "Metric", fill=(0,0,0,160), font=font_h2)
     draw.text((x_val+2, y+2), "Value",  fill=(0,0,0,160), font=font_h2)
     draw.text((x_label, y), "Metric", fill=dim, font=font_h2)
@@ -934,6 +934,17 @@ def main():
     energy, mood, tip = generate_daily_forecast(sch, kp)
 
     post = fetch_post_for(day, "default") if SUPABASE_REST_URL else None
+    if not post and SUPABASE_REST_URL:
+        latest = fetch_latest_day_from_supabase()
+        if latest and latest != day:
+            logging.warning("No post for %s; falling back to latest %s", day.isoformat(), latest.isoformat())
+            post = fetch_post_for(latest, "default")
+    # Align day with the post we actually used (for header date on tall cards)
+    if post and isinstance(post.get("day"), str):
+        try:
+            day = dt.date.fromisoformat(post["day"])  # adjust header date to post's day
+        except Exception:
+            pass
     caption_text = (post or {}).get("caption") or "Daily Earthscope"
     body_md = (post or {}).get("body_markdown") or ""
 
