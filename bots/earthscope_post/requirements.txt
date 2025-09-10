@@ -1,4 +1,4 @@
 requests==2.32.3
 python-dotenv==1.0.1
 Pillow==10.4.0
-openai==10.4.0
+openai==1.37.0
