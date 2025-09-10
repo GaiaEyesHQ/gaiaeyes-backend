@@ -39,7 +39,7 @@ import datetime as dt
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Optional, List, Dict
-
+import time
 import requests
 from requests.adapters import HTTPAdapter, Retry
 from dotenv import load_dotenv
@@ -186,13 +186,14 @@ def build_square_caption(post: dict) -> str:
     return caption
 
 def default_image_urls() -> Dict[str,str]:
+    # Cache-buster to force CDN + IG to fetch fresh content
+    cb = int(time.time())
     return {
-        "square": f"{MEDIA_CDN_BASE}/daily_caption.jpg",
-        "stats":  f"{MEDIA_CDN_BASE}/daily_stats.jpg",
-        "affects":f"{MEDIA_CDN_BASE}/daily_affects.jpg",
-        "play":   f"{MEDIA_CDN_BASE}/daily_playbook.jpg",
+        "square": f"{MEDIA_CDN_BASE}/daily_caption.jpg?cb={cb}",
+        "stats":  f"{MEDIA_CDN_BASE}/daily_stats.jpg?cb={cb}",
+        "affects":f"{MEDIA_CDN_BASE}/daily_affects.jpg?cb={cb}",
+        "play":   f"{MEDIA_CDN_BASE}/daily_playbook.jpg?cb={cb}",
     }
-
 # --------------- CLI -----------------
 
 def main():
