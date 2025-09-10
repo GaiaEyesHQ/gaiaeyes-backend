@@ -427,6 +427,26 @@ def extract_section(md: str, header: str) -> Optional[str]:
     out = "\n".join(lines).strip()
     return out or None
 
+def extract_any_section(md: str, headers: List[str]) -> Optional[str]:
+    # Normalize common hyphen/dash variants to ASCII hyphen for matching
+    if md:
+        md_norm = (md.replace("\u2010", "-")  # hyphen
+                     .replace("\u2011", "-")  # non-breaking hyphen
+                     .replace("\u2012", "-")
+                     .replace("\u2013", "-")  # en dash
+                     .replace("\u2014", "-")) # em dash
+    else:
+        md_norm = md
+    for h in headers:
+        h_norm = (h.replace("\u2010", "-")
+                    .replace("\u2011", "-")
+                    .replace("\u2012", "-")
+                    .replace("\u2013", "-")
+                    .replace("\u2014", "-"))
+        out = extract_section(md_norm, h_norm)
+        if out:
+            return out
+    return None
 # -------------------------
 # IMAGE RENDER UTIL
 # -------------------------
@@ -644,7 +664,7 @@ def render_stats_card_from_features(day: dt.date, feats: dict, energy: Optional[
     draw = ImageDraw.Draw(im)
     font_h1   = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"], 68)
     font_h2   = _load_font(["Oswald-Bold.ttf", "AbrilFatface-Regular.ttf"], 44)
-    font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 40)
+    font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 44)
     fg = (235,245,255,255); dim=(190,205,230,255)
 
     label = "avg"
@@ -687,7 +707,7 @@ def render_stats_card_from_features(day: dt.date, feats: dict, energy: Optional[
         ("Flares", f"{int(feats.get('flares_count') or 0)}", (240,120,120,220), "Fl"),
         ("CMEs", f"{int(feats.get('cmes_count') or 0)}", (240,160,120,220), "CM"),
     ]
-    font_val = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 48)
+    font_val = _load_font(["Oswald-Bold.ttf", "Oswald-Regular.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 64)
     chip_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 26)
 
     def _chip(draw: ImageDraw.ImageDraw, x:int, y:int, color:tuple, txt:str):
@@ -714,7 +734,7 @@ def render_stats_card_from_features(day: dt.date, feats: dict, energy: Optional[
         draw.text((x_label, y), lab, fill=fg, font=font_body)
         draw.text((x_val+2, y+2), val, fill=(0,0,0,160), font=font_val)
         draw.text((x_val, y), val, fill=fg, font=font_val)
-        y += 52
+        y += 58
 
     # Stats card Did you know:
     y += 40
@@ -726,7 +746,7 @@ def render_stats_card_from_features(day: dt.date, feats: dict, energy: Optional[
     ]
     fact = random.choice(facts)
     y = _draw_wrapped_multilines(draw, fact, did_font, x_label, y, W - x_label - 120, line_gap=56)
-
+    y = min(y, H - 160)
     _overlay_logo_and_tagline(im, "Decode the unseen.")
     return im.convert("RGB")
 
@@ -950,7 +970,13 @@ def main():
 
     # Extract sections
     affects_txt  = extract_section(body_md, "How This Affects You") or ""
-    playbook_txt = extract_section(body_md, "Self-Care Playbook") or ""
+    playbook_txt = extract_any_section(body_md, [
+        "Self-Care Playbook",
+        "Self-Care Playbook",
+        "Self–Care Playbook",
+        "Self – Care Playbook",
+        "Self Care Playbook"
+    ]) or ""
     if not affects_txt or not playbook_txt:
         fa, fp = generate_daily_forecast(sch, kp)[1], " - " + generate_daily_forecast(sch, kp)[2]
         affects_txt = affects_txt or fa
