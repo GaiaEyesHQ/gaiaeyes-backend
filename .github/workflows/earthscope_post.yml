@@ -1,7 +1,7 @@
 name: Earthscope Daily Post
 on:
   schedule:
-    - cron: "5 14 * * *"   # 09:15 UTC
+    - cron: "5 15 * * *"   # 09:15 UTC
   workflow_dispatch:
 
 jobs:
