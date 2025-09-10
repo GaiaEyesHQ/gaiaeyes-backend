@@ -121,6 +121,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Wait for CDN propagation
+        run: sleep 90
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
