@@ -1,0 +1,943 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Gaia Eyes – Daily Image + Data Mirror (Supabase + Media repo)
+-------------------------------------------------------------------
+- Reads post & feature data from Supabase REST
+- Renders four branded 1080×1080 JPGs:
+  1) Stats / snapshot (EarthScope • Today’s Metrics)
+  2) Caption card (short)
+  3) How This Affects You
+  4) Self-Care Playbook
+- Avoids background reuse across days (bg_history.json)
+- Writes data/latest.json + data/latest.csv
+- Git add/commit/push with auto-stash on conflicts
+
+Requirements:
+  pip install requests python-dotenv pillow
+
+Environment (.env) on desktop:
+  MEDIA_REPO_PATH=/Users/jenniferobrien/Documents/gaiaeyes-media
+  LOGO_PATH=/Users/jenniferobrien/Desktop/GaiaEyes/GaiaEyesLogo.png
+  SUPABASE_REST_URL=https://<project>.supabase.co/rest/v1
+  SUPABASE_ANON_KEY=<anon-or-empty>
+  SUPABASE_SERVICE_KEY=<service-role-key>   # recommended for server-side
+  SUPABASE_USER_ID=e20a3e9e-1fc2-41ad-b6f7-656668310d13
+  TARGET_DAY=YYYY-MM-DD (optional; defaults to today UTC)
+"""
+
+import os
+import sys
+import csv
+import json
+import math
+import time
+import random
+import logging
+import argparse
+import re
+import subprocess
+import datetime as dt
+from pathlib import Path
+from typing import Optional, Tuple, List, Dict, Union
+
+from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageFilter
+
+HERE = Path(__file__).resolve().parent
+FONTS_DIR = HERE / "fonts"
+
+def _load_font(primary: Union[str, List[str]], size: int, fallback: Optional[ImageFont.ImageFont] = None) -> ImageFont.ImageFont:
+    candidates: List[str] = []
+    candidates.extend(primary if isinstance(primary, list) else [primary])
+    candidates += ["Arial Bold.ttf", "Arial.ttf", "Helvetica.ttf"]
+    expanded: List[Path] = []
+    for name in candidates:
+        p = Path(name)
+        if p.suffix.lower() in {".ttf", ".otf"}:
+            expanded.append(p)
+            if not p.is_absolute():
+                expanded.append(FONTS_DIR / p.name)
+        else:
+            expanded.append(FONTS_DIR / name)
+            expanded.append(Path(name))
+    for path in expanded:
+        try:
+            return ImageFont.truetype(str(path), size)
+        except Exception:
+            continue
+    return fallback or ImageFont.load_default()
+
+def _overlay_logo_and_tagline(im: Image.Image, tagline: str = "Decode the unseen.") -> None:
+    W, H = im.size
+    draw = ImageDraw.Draw(im)
+    try:
+        font_small = _load_font(["Satisfy-Regular.ttf", "Oswald-Regular.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 32)
+    except Exception:
+        font_small = ImageFont.load_default()
+    dim = (190, 205, 230, 255)
+    if LOGO_PATH.exists():
+        try:
+            logo = Image.open(LOGO_PATH)
+            if logo.mode != "RGBA":
+                logo = logo.convert("RGBA")
+            lw = 200
+            ratio = lw / float(logo.width)
+            logo = logo.resize((lw, int(logo.height * ratio)))
+            im.alpha_composite(logo, (W - lw - 50, H - logo.height - 70))
+        except Exception as e:
+            logging.warning(f"Logo overlay failed: {e}")
+    x0, y0 = 60, H - 90
+    draw.text((x0+2, y0+2), tagline, fill=(0,0,0,160), font=font_small)
+    draw.text((x0, y0), tagline, fill=dim, font=font_small)
+
+import requests
+from requests.adapters import HTTPAdapter, Retry
+from dotenv import load_dotenv
+
+# -------------------------
+# CONFIG / PATHS
+# -------------------------
+OUTPUT_DIR = HERE / "Output"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+load_dotenv(HERE / ".env")
+MEDIA_REPO_PATH = Path(os.getenv("MEDIA_REPO_PATH", "/Users/jenniferobrien/Documents/gaiaeyes-media")).expanduser()
+LOGO_PATH = Path(os.getenv("LOGO_PATH", "/Users/jenniferobrien/Desktop/GaiaEyes/GaiaEyesLogo.png")).expanduser()
+
+IMG_PATH_REPO = MEDIA_REPO_PATH / "images" / "dailypost.jpg"
+JSON_PATH_REPO = MEDIA_REPO_PATH / "data" / "latest.json"
+CSV_PATH_REPO  = MEDIA_REPO_PATH / "data" / "latest.csv"
+SCHUMANN_CSV_REPO = MEDIA_REPO_PATH / "data" / "schumann.csv"
+
+# Backgrounds (square posts)
+BG_DIR_SQUARE = MEDIA_REPO_PATH / "backgrounds" / "square"
+BG_DIR_TALL   = MEDIA_REPO_PATH / "backgrounds" / "tall"
+RUN_BG_USED: set = set()
+
+# Background history (avoid reuse across days)
+BG_HISTORY_PATH = MEDIA_REPO_PATH / "data" / "bg_history.json"
+BG_HISTORY_SIZE = 30
+def _load_bg_history() -> list[str]:
+    try:
+        with open(BG_HISTORY_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return [str(x) for x in data]
+    except Exception:
+        pass
+    return []
+def _save_bg_history(name: str) -> None:
+    (MEDIA_REPO_PATH / "data").mkdir(parents=True, exist_ok=True)
+    hist = _load_bg_history()
+    hist = [h for h in hist if h != name]
+    hist.append(name)
+    if len(hist) > BG_HISTORY_SIZE:
+        hist = hist[-BG_HISTORY_SIZE:]
+    try:
+        with open(BG_HISTORY_PATH, "w", encoding="utf-8") as f:
+            json.dump(hist, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logging.warning(f"bg_history write failed: {e}")
+
+# NOAA 1-minute planetary K index JSON
+K_INDEX_URL = "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json"
+
+# Supabase REST
+SUPABASE_REST_URL = os.getenv("SUPABASE_REST_URL", "").rstrip("/")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "").strip()
+SUPABASE_USER_ID  = os.getenv("SUPABASE_USER_ID", "e20a3e9e-1fc2-41ad-b6f7-656668310d13")
+
+# Which day to render (UTC). Default: today.
+TARGET_DAY = os.getenv("TARGET_DAY")  # YYYY-MM-DD; if None → today
+
+# -------------------------
+# LOGGING
+# -------------------------
+LOG_PATH = OUTPUT_DIR / "gaia_eyes.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    handlers=[logging.FileHandler(LOG_PATH), logging.StreamHandler(sys.stdout)],
+)
+
+# HTTP session with retries
+session = requests.Session()
+retries = Retry(total=3, backoff_factor=0.8, status_forcelist=[429, 500, 502, 503, 504])
+session.mount("https://", HTTPAdapter(max_retries=retries))
+session.mount("http://", HTTPAdapter(max_retries=retries))
+
+# -------------------------
+# UTIL
+# -------------------------
+def utcnow_iso() -> str:
+    return dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+def ensure_repo_paths():
+    (MEDIA_REPO_PATH / "images").mkdir(parents=True, exist_ok=True)
+    (MEDIA_REPO_PATH / "data").mkdir(parents=True, exist_ok=True)
+
+# -------------------------
+# TARGET DAY
+# -------------------------
+def target_day_utc() -> dt.date:
+    if TARGET_DAY:
+        try:
+            return dt.date.fromisoformat(TARGET_DAY)
+        except Exception:
+            logging.warning(f"Invalid TARGET_DAY={TARGET_DAY}, falling back to today")
+    return dt.datetime.utcnow().date()
+
+# -------------------------
+# DATA FETCHERS
+# -------------------------
+def fetch_schumann_from_repo_csv(repo_root: Path) -> Optional[float]:
+    path = repo_root / "data" / "schumann.csv"
+    if not path.exists():
+        return None
+    try:
+        last = None
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("timestamp"):
+                    continue
+                last = line
+        if last:
+            parts = last.split(",")
+            if len(parts) >= 2:
+                val = float(parts[1])
+                return val
+    except Exception as e:
+        logging.warning(f"Failed reading schumann.csv: {e}")
+    return None
+
+def fetch_kp_index() -> float:
+    try:
+        r = session.get(K_INDEX_URL, timeout=15)
+        r.raise_for_status()
+        arr = r.json()
+        if not isinstance(arr, list) or not arr:
+            raise RuntimeError("No Kp data array")
+        latest = arr[-1]
+        raw = latest.get("estimated_kp", latest.get("kp_index"))
+        kp = float(raw)
+        return kp
+    except Exception as e:
+        logging.warning(f"Kp fetch failed, using fallback 3.0: {e}")
+        return 3.0
+
+# -------------------------
+# SUPABASE REST HELPERS
+# -------------------------
+def _sb_headers(schema: str = "public") -> dict:
+    key = SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY
+    h = {"apikey": key, "Authorization": f"Bearer {key}", "Accept": "application/json"}
+    if schema and schema != "public":
+        h["Accept-Profile"] = schema
+    return h
+
+def supabase_select(table: str, params: dict, schema: Optional[str] = None) -> List[Dict]:
+    if not SUPABASE_REST_URL or not (SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY):
+        logging.warning("Supabase REST not configured; skipping %s", table)
+        return []
+    tbl = table
+    sch = schema or "public"
+    if "." in table and schema is None:
+        parts = table.split(".", 1)
+        sch, tbl = parts[0], parts[1]
+    url = f"{SUPABASE_REST_URL}/{tbl}"
+    r = session.get(url, headers=_sb_headers(sch), params=params, timeout=20)
+    if r.status_code != 200:
+        logging.warning(f"Supabase select {sch}.{tbl} failed {r.status_code}: {r.text[:200]}")
+        return []
+    try:
+        return r.json()
+    except Exception as e:
+        logging.warning(f"Supabase parse error for {sch}.{tbl}: {e}")
+        return []
+
+def fetch_latest_day_from_supabase() -> Optional[dt.date]:
+    if not SUPABASE_REST_URL or not (SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY):
+        return None
+    rows = supabase_select("daily_posts", {"select":"day","order":"day.desc","limit":"1"}, schema="content")
+    if rows and isinstance(rows, list) and rows[0].get("day"):
+        try: return dt.date.fromisoformat(rows[0]["day"])
+        except Exception: pass
+    params = {"select":"day","order":"day.desc","limit":"1"}
+    if SUPABASE_USER_ID:
+        params["user_id"] = f"eq.{SUPABASE_USER_ID}"
+    rows2 = supabase_select("daily_features", params, schema="marts")
+    if rows2 and isinstance(rows2, list) and rows2[0].get("day"):
+        try: return dt.date.fromisoformat(rows2[0]["day"])
+        except Exception: pass
+    return None
+
+def fetch_daily_features_for(day: dt.date) -> Optional[dict]:
+    if not SUPABASE_REST_URL:
+        return None
+    params = {
+        "user_id": f"eq.{SUPABASE_USER_ID}",
+        "day": f"eq.{day.isoformat()}",
+        "select": ",".join([
+            "day","steps_total","hr_min","hr_max","hrv_avg","spo2_avg",
+            "sleep_total_minutes","kp_max","bz_min","sw_speed_avg","flares_count","cmes_count",
+            "sch_fundamental_avg_hz","sch_cumiana_fundamental_avg_hz","sch_any_fundamental_avg_hz"
+        ])
+    }
+    rows = supabase_select("daily_features", params, schema="marts")
+    if not rows:
+        logging.warning("Supabase: no marts.daily_features found for day=%s user=%s", day.isoformat(), SUPABASE_USER_ID)
+        return None
+    return rows[0]
+
+def fetch_post_for(day: dt.date, platform: str="default") -> Optional[dict]:
+    if not SUPABASE_REST_URL:
+        return None
+    params = {
+        "day": f"eq.{day.isoformat()}",
+        "platform": f"eq.{platform}",
+        "select": "day,platform,title,caption,body_markdown,hashtags,metrics_json,sources_json",
+        "limit": "1"
+    }
+    rows = supabase_select("daily_posts", params, schema="content")
+    if not rows:
+        logging.warning("Supabase: no content.daily_posts found for day=%s platform=%s", day.isoformat(), platform)
+        return None
+    return rows[0]
+
+# -------------------------
+# COPY
+# -------------------------
+def generate_daily_forecast(sch: float, kp_current: float) -> Tuple[str, str, str]:
+    sch_is_default = abs(sch - 7.83) < 0.01
+    if (not sch_is_default and sch >= 12.0) or kp_current >= 6.0:
+        energy = "High"
+        mood = "Wired, anxious, or extra sensitive? Earth’s energy is intense today. Be mindful of your heart and nervous system."
+        tip  = "Ground outside, hydrate, and reduce caffeine and screen time."
+    elif (not sch_is_default and 8.0 <= sch < 12.0) or 4.0 <= kp_current < 6.0:
+        energy = "Elevated"
+        mood = "Restlessness or mood swings possible—Earth is moderately active. Spurts of creativity mixed with bouts of exhaustion or anxiety."
+        tip  = "Move gently, breathe deeper, drink water."
+    else:
+        energy = "Calm"
+        mood = "The ideal energy day! Balanced energy—great for clarity and steady focus."
+        tip  = "Plan, create, and enjoy steady vibes."
+    return energy, mood, tip
+
+def get_daily_affirmation() -> str:
+    affirmations = [
+        "You're deeply connected to Earth's energy. Trust your intuition today.",
+        "Let Earth's rhythms guide your actions—go slow and steady.",
+        "Today, embrace calmness and clarity. Earth's energy supports you.",
+        "Stay open to change and trust the flow of the Universe today.",
+        "Remember to breathe and ground yourself—you are exactly where you're meant to be.",
+        "You are aligned, you are supported, and you are enough.",
+        "Every breath you take grounds you deeper into your true self.",
+        "Your body knows the rhythm of the Earth. Trust it.",
+        "There is peace in slowing down. Let go and receive.",
+        "You are safe, you are centered, and you are in tune with Gaia.",
+    ]
+    return random.choice(affirmations)
+
+
+# Robust section extractor (supports **Bold** or ## Markdown headings)
+import re as _re
+
+def extract_section(md: str, header: str) -> Optional[str]:
+    """
+    Extract the text under a header until the next header. Recognizes headings written as:
+      - Markdown ATX headers:  #, ##, ### (any level)
+      - Bold headings:         **Header** or __Header__ (optional trailing colon)
+    Matching is case-insensitive and ignores surrounding asterisks/# and a trailing colon.
+    """
+    if not md:
+        return None
+    text = md.replace('\r', '')
+    # Build a regex that matches a heading line for the target header
+    hdr = _re.escape(header)
+    heading_pat = rf"(?im)^\s*(?:#{1,6}\s*|\*\*\s*|__\s*)?{hdr}\s*:?\s*(?:\*\*|__)?.*$"
+    m = _re.search(heading_pat, text)
+    if not m:
+        return None
+    start_idx = m.end()
+    # Next heading start (any bold or ATX header)
+    next_heading_pat = r"(?im)^\s*(?:#{1,6}\s*|\*\*\s*|__\s*)([A-Za-z].+?)\s*(?:\*\*|__)?\s*:?.*$"
+    n = _re.search(next_heading_pat, text[start_idx:])
+    body = text[start_idx: start_idx + n.start()] if n else text[start_idx:]
+    # Trim extra blank lines
+    lines = [ln.rstrip() for ln in body.split('\n')]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    out = "\n".join(lines).strip()
+    return out or None
+
+# -------------------------
+# IMAGE RENDER UTIL
+# -------------------------
+def _draw_gradient(w: int, h: int) -> Image.Image:
+    img = Image.new("RGB", (w, h), (6, 10, 20))
+    draw = ImageDraw.Draw(img)
+    for y in range(h):
+        r = 10 + int(10 * (y / h))
+        g = 60 + int(120 * (y / h))
+        b = 90 + int(120 * (y / h))
+        draw.line([(0, y), (w, y)], fill=(r, g, b))
+    return img
+
+def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w: int):
+    words = text.split()
+    lines = []
+    line = ""
+    for w in words:
+        test = (line + " " + w).strip()
+        if draw.textlength(test, font=font) <= max_w:
+            line = test
+        else:
+            if line:
+                lines.append(line)
+            line = w
+    if line:
+        lines.append(line)
+    return lines
+
+from random import choice
+def _list_backgrounds(kind: str = "square") -> List[Path]:
+    if kind == "square":
+        base = BG_DIR_SQUARE
+    elif kind == "tall":
+        base = BG_DIR_TALL
+    else:
+        base = (MEDIA_REPO_PATH / "backgrounds" / "wide")
+    if not base.exists():
+        return []
+    return [p for p in base.glob("*.*") if p.suffix.lower() in {".jpg", ".jpeg", ".png"}]
+
+_TAGS_HIGH = ("solar", "flare", "cme", "storm")
+_TAGS_CALM = ("aurora", "nebula", "earth", "lake", "forest")
+
+def _choose_background(energy: Optional[str], kind: str = "square") -> Optional[Path]:
+    files = _list_backgrounds(kind)
+    if not files:
+        return None
+    available = [p for p in files if p not in RUN_BG_USED]
+    pool = available or files
+    # Exclude recently used backgrounds across runs
+    recent = set(_load_bg_history())
+    pool = [p for p in pool if p.name not in recent] or pool
+    if not energy:
+        return choice(pool)
+    e = energy.lower()
+    tags: Tuple[str, ...] = _TAGS_CALM
+    if e == "high":
+        tags = _TAGS_HIGH
+    elif e == "calm":
+        tags = _TAGS_CALM
+    tagged = [p for p in pool if any(t in p.name.lower() for t in tags)]
+    return choice(tagged or pool)
+
+def _compose_bg(W: int, H: int, energy: Optional[str], kind: str = "square") -> Image.Image:
+    bgp = _choose_background(energy, kind)
+    if bgp:
+        RUN_BG_USED.add(bgp)
+        try:
+            _save_bg_history(bgp.name)
+        except Exception:
+            pass
+    if bgp and bgp.exists():
+        try:
+            base = Image.open(bgp).convert("RGBA")
+            base = ImageOps.fit(base, (W, H), method=Image.LANCZOS, centering=(0.5, 0.5))
+        except Exception as e:
+            logging.warning(f"Background load failed {bgp}: {e}")
+            base = _draw_gradient(W, H).convert("RGBA")
+    else:
+        base = _draw_gradient(W, H).convert("RGBA")
+
+    e = (energy or "").lower()
+    alpha = 90
+    if e == "high": alpha = 130
+    elif e == "elevated": alpha = 110
+    elif e == "calm": alpha = 80
+
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, alpha))
+    base.alpha_composite(overlay)
+
+    vignette = Image.new("L", (W, H), 0)
+    vg = ImageDraw.Draw(vignette)
+    margin = int(min(W, H) * 0.08)
+    vg.ellipse([margin, margin, W - margin, H - margin], fill=255)
+    vignette = vignette.filter(ImageFilter.GaussianBlur(radius=80))
+    inv = ImageOps.invert(vignette)
+    dark = Image.new("RGBA", (W, H), (0, 0, 0, 60))
+    base = Image.composite(dark, base, inv)
+    return base
+
+def _safe_text(s: str) -> str:
+    if not s:
+        return s
+    repl = {
+        "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2013": "-", "\u2014": "-", "\u2015": "-",
+        "\u2018": "'", "\u2019": "'", "\u201A": ",",
+        "\u201C": '"', "\u201D": '"', "\u201E": '"',
+    }
+    for k, v in repl.items():
+        s = s.replace(k, v)
+    return s
+
+_EMOJI_PATTERN = re.compile(r"[\U0001F300-\U0001FAFF\U00002700-\U000027BF\U0001F1E6-\U0001F1FF]", flags=re.UNICODE)
+def strip_hashtags_and_emojis(text: str) -> str:
+    if not text:
+        return text
+    text = re.sub(r"#[\w_]+", "", text)
+    text = re.sub(r"\s{2,}", " ", text).strip()
+    try:
+        text = _EMOJI_PATTERN.sub("", text)
+    except re.error:
+        pass
+    return text
+
+def _draw_wrapped_multilines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont,
+                             x0: int, y: int, max_w: int, line_gap: int = 60) -> int:
+    for para in (text or "").splitlines():
+        if not para.strip():
+            y += line_gap
+            continue
+        for ln in _wrap(draw, para, font, max_w):
+            draw.text((x0+2, y+2), ln, fill=(0,0,0,180), font=font)
+            draw.text((x0, y), ln, fill=(235,245,255,255), font=font)
+            y += line_gap
+    return y
+
+def _shadowed_text(draw: ImageDraw.ImageDraw, xy: tuple[int,int], text: str, font: ImageFont.ImageFont, fill=(235,245,255,255), shadow=(0,0,0,160), offset=(2,2)):
+    x, y = xy
+    draw.text((x+offset[0], y+offset[1]), text, font=font, fill=shadow)
+    draw.text((x, y), text, font=font, fill=fill)
+
+def _draw_badge(im: Image.Image, draw: ImageDraw.ImageDraw, text: str, xy: tuple[int,int], pad: tuple[int,int]=(24,12),
+                fill=(60,180,120,190), stroke=(0,0,0,140), font: Optional[ImageFont.ImageFont]=None) -> tuple[int,int,int,int]:
+    x, y = xy
+    f = font or ImageFont.load_default()
+    tw = int(draw.textlength(text, font=f))
+    w = tw + pad[0]*2
+    h = f.size + pad[1]*2
+    r = h//2
+    box = (x, y, x+w, y+h)
+    badge = Image.new("RGBA", (w, h), (0,0,0,0))
+    bd = ImageDraw.Draw(badge)
+    bd.rounded_rectangle([0,0,w-1,h-1], radius=r, fill=fill, outline=stroke, width=2)
+    sh = Image.new("RGBA", (w, h), (0,0,0,0))
+    sd = ImageDraw.Draw(sh)
+    sd.rounded_rectangle([2,2,w-1,h-1], radius=r, fill=(0,0,0,90))
+    im.alpha_composite(sh, (x, y))
+    im.alpha_composite(badge, (x, y))
+    tx = x + (w - tw)//2
+    ty = y + (h - f.size)//2 - 4
+    draw.text((tx+1,ty+1), text, font=f, fill=(0,0,0,160))
+    draw.text((tx,ty), text, font=f, fill=(255,255,255,230))
+    return box
+
+def _blur_panel(im: Image.Image, box: tuple[int,int,int,int], blur_radius: int = 6, panel_alpha: int = 80) -> None:
+    x0, y0, x1, y1 = box
+    crop = im.crop((x0, y0, x1, y1)).filter(ImageFilter.GaussianBlur(blur_radius))
+    im.paste(crop, (x0, y0))
+    panel = Image.new("RGBA", (x1 - x0, y1 - y0), (0, 0, 0, panel_alpha))
+    im.alpha_composite(panel, (x0, y0))
+
+def render_card(energy_label: str, mood: str, sch: float, kp: float, kind: str = "square") -> Image.Image:
+    if kind == "tall":
+        W, H = 1080, 1350
+    else:
+        W, H = 1080, 1080
+    im = _compose_bg(W, H, energy_label, kind)
+    draw = ImageDraw.Draw(im)
+    font_h1   = _load_font(["BebasNeue.ttf", "BebasNeue-Regular.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"], 68)
+    font_h2   = _load_font(["Oswald-Bold.ttf", "AbrilFatface-Regular.ttf", "BebasNeue.ttf"], 46)
+    font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf", "AbrilFatface-Regular.ttf"], 36)
+    font_small= _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 30)
+    panel = Image.new("RGBA", (W - 80, H - 80), (0, 0, 0, 60))
+    im.alpha_composite(panel, (40, 40))
+    outline = Image.new("RGBA", (W - 60, H - 60), (255, 255, 255, 30))
+    im.alpha_composite(outline, (30, 30))
+    fg = (235, 245, 255, 255); sub = (210, 225, 255, 255); dim = (190, 205, 230, 255)
+    x0, y = 90, 100
+    draw.text((x0, y), "Gaia Eyes • Daily EarthScope", fill=fg, font=font_h1); y += 90
+    el = (energy_label or "").lower()
+    col = (59,201,168,190) if el=="calm" else ((243,193,75,190) if el=="elevated" else ((239,106,106,190) if el=="high" else (104,162,224,190)))
+    _draw_badge(im, draw, f"Energy: {energy_label}", (x0, y), fill=col, font=font_h2); y += 70
+    y += 36  # extra spacing under badge (no inline stats here)
+
+    def section(head: str, body: str) -> None:
+        nonlocal y
+        draw.text((x0, y), head, fill=sub, font=font_h2); y += 50
+        lines = _wrap(draw, body, font_body, W - x0 - 120)
+        for ln in lines:
+            draw.text((x0, y), ln, fill=fg, font=font_body); y += 46
+        y += 16
+
+    mood = strip_hashtags_and_emojis(mood)
+    section("How You Might Feel:", mood)
+    _overlay_logo_and_tagline(im, "Decode the unseen.")
+    return im.convert("RGB")
+
+def render_stats_card_from_features(day: dt.date, feats: dict, energy: Optional[str] = None, kind: str = "square") -> Image.Image:
+    if kind == "tall":
+        W, H = 1080, 1350
+    else:
+        W, H = 1080, 1080
+    im = _compose_bg(W, H, energy, kind)
+    draw = ImageDraw.Draw(im)
+    font_h1   = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"], 68)
+    font_h2   = _load_font(["Oswald-Bold.ttf", "AbrilFatface-Regular.ttf"], 44)
+    font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 40)
+    fg = (235,245,255,255); dim=(190,205,230,255)
+
+    label = "avg"
+    has_t = feats.get("sch_fundamental_avg_hz") is not None
+    has_c = feats.get("sch_cumiana_fundamental_avg_hz") is not None
+    if has_t and not has_c: label = "Tomsk"
+    elif has_c and not has_t: label = "Cumiana"
+
+    x0, y0 = 80, 96
+    header_txt = "EarthScope • Today’s Metrics"
+    date_txt   = day.strftime('%b %d, %Y')
+    header_w = draw.textlength(header_txt, font=font_h1)
+    date_w   = draw.textlength(date_txt,   font=font_h1)
+    gap = 40; max_w = W - 2*x0
+    if header_w + gap + date_w <= max_w:
+        _shadowed_text(draw, (x0, y0), header_txt, font=font_h1, fill=fg)
+        _shadowed_text(draw, (x0 + int(header_w + gap), y0), f" —  {date_txt}", font=font_h1, fill=fg)
+        y = y0 + 94
+    else:
+        _shadowed_text(draw, (x0, y0), header_txt, font=font_h1, fill=fg)
+        date_x = x0 + max(0, int(min(header_w, max_w) - date_w))
+        _shadowed_text(draw, (date_x, y0 + 74), date_txt, font=font_h1, fill=fg)
+        y = y0 + 148
+
+    el = (energy or "").lower()
+    col = (59,201,168,190) if el=="calm" else ((243,193,75,190) if el=="elevated" else ((239,106,106,190) if el=="high" else (104,162,224,190)))
+    _draw_badge(im, draw, f"Energy: {energy}", (x0, y-10), fill=col, font=font_h2)
+    y += 70
+
+    panel_top = max(180, y + 10)
+    panel_box = (80, panel_top, W - 80, H - 140)
+    _blur_panel(im, panel_box, blur_radius=6, panel_alpha=70)
+
+    sch_val = (feats.get("sch_any_fundamental_avg_hz") or feats.get("sch_fundamental_avg_hz") or feats.get("sch_cumiana_fundamental_avg_hz") or 0)
+    rows = [
+        ("Kp (max)", f"{(feats.get('kp_max') or 0):.2f}", (255,180,60,220), "KP"),
+        ("Bz (min)", f"{(feats.get('bz_min') or 0):.2f} nT", (100,160,220,220), "Bz"),
+        ("SW speed", f"{(feats.get('sw_speed_avg') or 0):.0f} km/s", (80,200,140,220), "SW"),
+        (f"Schumann ({label})", f"{float(sch_val):.2f} Hz", (160,120,240,220), "Sch"),
+        ("Flares", f"{int(feats.get('flares_count') or 0)}", (240,120,120,220), "Fl"),
+        ("CMEs", f"{int(feats.get('cmes_count') or 0)}", (240,160,120,220), "CM"),
+    ]
+    font_val = _load_font(["Menlo.ttf", "Courier New.ttf", "Oswald-Bold.ttf"], 40)
+    chip_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 26)
+
+    def _chip(draw: ImageDraw.ImageDraw, x:int, y:int, color:tuple, txt:str):
+        r = 22
+        draw.ellipse([x, y, x+2*r, y+2*r], fill=color, outline=(0,0,0,140), width=2)
+        tw = int(draw.textlength(txt, font=chip_font))
+        tx = x + r - tw//2
+        ty = y + r - chip_font.size//2 - 2
+        draw.text((tx+1,ty+1), txt, font=chip_font, fill=(0,0,0,160))
+        draw.text((tx,ty), txt, font=chip_font, fill=(255,255,255,235))
+
+    x_label, x_val = 160, W//2 + 40
+    draw.text((x_label+2, y+2), "Metric", fill=(0,0,0,160), font=font_h2)
+    draw.text((x_val+2, y+2), "Value",  fill=(0,0,0,160), font=font_h2)
+    draw.text((x_label, y), "Metric", fill=dim, font=font_h2)
+    draw.text((x_val, y), "Value",  fill=dim, font=font_h2)
+    y += 56
+    draw.line([(110, y), (W-110, y)], fill=(255,255,255,30), width=2)
+    y += 24
+
+    for lab, val, colr, abbr in rows:
+        _chip(draw, x_label-56, y+2, colr, abbr)
+        draw.text((x_label+2, y+2), lab, fill=(0,0,0,160), font=font_body)
+        draw.text((x_label, y), lab, fill=fg, font=font_body)
+        draw.text((x_val+2, y+2), val, fill=(0,0,0,160), font=font_val)
+        draw.text((x_val, y), val, fill=fg, font=font_val)
+        y += 52
+
+    # Stats card Did you know:
+    y += 40
+    did_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf"], 36)
+    facts = [
+        "Did you know? Solar storms can affect human heart-rate variability.",
+        "Did you know? Schumann resonance is linked to brainwave frequencies.",
+        "Did you know? Geomagnetic activity may influence sleep quality.",
+    ]
+    fact = random.choice(facts)
+    y = _draw_wrapped_multilines(draw, fact, did_font, x_label, y, W - x_label - 120, line_gap=56)
+
+    _overlay_logo_and_tagline(im, "Decode the unseen.")
+    return im.convert("RGB")
+
+def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: str = "square") -> Image.Image:
+    if kind == "tall":
+        W, H = 1080, 1350
+    else:
+        W, H = 1080, 1080
+    im = _compose_bg(W, H, energy, kind)
+    draw = ImageDraw.Draw(im)
+    font_h1   = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"], 66)
+    font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 40)
+    fg = (235,245,255,255)
+    x0, y = 80, 120
+    title = _safe_text(title); body = _safe_text(body)
+
+    # Split out special sub-sections if present
+    tip_head = None; tip_body = None
+    aff_head = None; aff_body = None
+    if "QUICK TIP:" in body:
+        parts = body.split("QUICK TIP:", 1)
+        body = parts[0].rstrip()
+        tip_head, tip_body = "QUICK TIP:", parts[1].strip()
+    if "DAILY COSMIC AFFIRMATION:" in body:
+        parts = body.split("DAILY COSMIC AFFIRMATION:", 1)
+        body = parts[0].rstrip()
+        aff_head, aff_body = "DAILY COSMIC AFFIRMATION:", parts[1].strip()
+    # If both were present originally (due to ordering), ensure we didn't drop one
+    # by checking original text again
+    if tip_head is None and "QUICK TIP:" in (aff_body or ""):
+        sub = aff_body.split("QUICK TIP:", 1)
+        aff_body = sub[0].rstrip()
+        tip_head, tip_body = "QUICK TIP:", sub[1].strip()
+    if aff_head is None and "DAILY COSMIC AFFIRMATION:" in (tip_body or ""):
+        sub = tip_body.split("DAILY COSMIC AFFIRMATION:", 1)
+        tip_body = sub[0].rstrip()
+        aff_head, aff_body = "DAILY COSMIC AFFIRMATION:", sub[1].strip()
+
+    # Daily Affects card title: add fixed header if title matches
+    if title == "How This Affects You":
+        header = f"Daily Earthscope • {dt.datetime.utcnow().strftime('%b %d, %Y')}"
+        _shadowed_text(draw, (x0, y), header, font=font_h1, fill=fg)
+        y += 70
+    # Daily Playbook title: add fixed header if title matches
+    if title == "Self-Care Playbook":
+        header = f"Daily Earthscope • {dt.datetime.utcnow().strftime('%b %d, %Y')}"
+        _shadowed_text(draw, (x0, y), header, font=font_h1, fill=fg)
+        y += 70
+
+    _shadowed_text(draw, (x0, y), title, font=font_h1, fill=fg); y += 80
+
+    # Normalize lists: bullets or numbered -> bullet list (applies to body only)
+    if " - " in body or body.strip().startswith("-") or re.match(r"^\d+\.\s", body.strip()):
+        cleaned = body.replace("\r", "").strip()
+        lines = [ln.strip() for ln in cleaned.split("\n") if ln.strip()]
+        parts = []
+        for ln in lines:
+            ln = re.sub(r"^(?:[-•]\s*|\d+\.)\s*", "", ln)
+            if not ln: continue
+            if not ln.endswith((".", "!", "?")): ln += "."
+            parts.append(ln)
+        # CAPS-only keyword headings, normalize already-bolded headings
+        keywords = ["Mood", "Energy", "Heart", "Nervous System"]
+        processed = []
+        for p in parts:
+            orig = p
+            for kw in keywords:
+                # Match optional leading bold markers around the keyword, e.g. **Mood**:
+                pat = r"^(?:\*\*\s*)?(" + re.escape(kw) + r")(?:\s*\*\*)?(.*)$"
+                m = re.match(pat, p, flags=re.IGNORECASE)
+                if m:
+                    rest = m.group(2)
+                    p = m.group(1).upper() + rest
+                    break
+            processed.append(p)
+        body = "\n".join([f"• {p}" for p in processed])
+
+    y = _draw_wrapped_multilines(draw, body, font_body, x0, y, W - x0 - 120, line_gap=60)
+
+    # Render special sub-sections without bullets
+    if tip_head and tip_body:
+        y += 24
+        _shadowed_text(draw, (x0, y), tip_head, font=font_h1, fill=fg); y += 60
+        y = _draw_wrapped_multilines(draw, tip_body, font_body, x0, y, W - x0 - 120, line_gap=60)
+    if aff_head and aff_body:
+        y += 24
+        _shadowed_text(draw, (x0, y), aff_head, font=font_h1, fill=fg); y += 60
+        y = _draw_wrapped_multilines(draw, aff_body, font_body, x0, y, W - x0 - 120, line_gap=60)
+
+    _overlay_logo_and_tagline(im, "Decode the unseen.")
+    return im.convert("RGB")
+
+# -------------------------
+# FILE WRITERS
+# -------------------------
+def save_images(sch: float, kp: float, energy: str, mood: str, tip: str) -> Tuple[Path, Path]:
+    ensure_repo_paths()
+    im = render_card(energy, mood, sch, kp)
+    ts = dt.datetime.utcnow().strftime("%Y-%m-%d_%H-%M-%S")
+    local_path = OUTPUT_DIR / f"earthscope_{ts}.jpg"
+    im.save(local_path, format="JPEG", quality=90)
+    logging.info(f"Saved image (local): {local_path}")
+    im.save(IMG_PATH_REPO, format="JPEG", quality=90)
+    logging.info(f"Saved image (repo):  {IMG_PATH_REPO}")
+    return local_path, IMG_PATH_REPO
+
+def write_json_csv(payload: dict) -> None:
+    ensure_repo_paths()
+    with open(JSON_PATH_REPO, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    header = [
+        "timestamp_utc","kp_index","kp_time_utc","kp_band","storm_warning","storm_level",
+        "schumann_hz","schumann_amp","aqi","aqi_city","image_path","image_url_hint","commit_sha"
+    ]
+    with open(CSV_PATH_REPO, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f); w.writerow(header); w.writerow([payload.get(k) for k in header])
+
+def save_all_cards(stats_im: Image.Image, caption_im: Image.Image, affects_im: Image.Image, play_im: Image.Image) -> list:
+    ensure_repo_paths()
+    out = []
+    stats_p = MEDIA_REPO_PATH / "images" / "daily_stats.jpg"; stats_im.save(stats_p, "JPEG", quality=90); out.append(stats_p)
+    cap_p   = MEDIA_REPO_PATH / "images" / "daily_caption.jpg"; caption_im.save(cap_p, "JPEG", quality=90); out.append(cap_p)
+    aff_p   = MEDIA_REPO_PATH / "images" / "daily_affects.jpg"; affects_im.save(aff_p, "JPEG", quality=90); out.append(aff_p)
+    play_p  = MEDIA_REPO_PATH / "images" / "daily_playbook.jpg"; play_im.save(play_p, "JPEG", quality=90); out.append(play_p)
+    logging.info("Saved 4 images into repo/images/")
+    return out
+
+# -------------------------
+# GIT HELPERS
+# -------------------------
+def git_run(args: list) -> subprocess.CompletedProcess:
+    return subprocess.run(args, capture_output=True, text=True)
+
+def git_commit_push(paths: list) -> str:
+    add = git_run(["git", "-C", str(MEDIA_REPO_PATH), "add"] + [str(p) for p in paths])
+    if add.returncode != 0: raise RuntimeError(add.stderr.strip())
+    cm = git_run(["git", "-C", str(MEDIA_REPO_PATH), "commit", "-m", f"daily: update image and data ({utcnow_iso()})"])
+    if cm.returncode != 0 and "nothing to commit" not in (cm.stderr or "").lower():
+        raise RuntimeError(f"git commit failed: {cm.stderr.strip()}")
+    pr = git_run(["git", "-C", str(MEDIA_REPO_PATH), "pull", "--rebase", "origin", "main"])
+    if pr.returncode != 0:
+        git_run(["git", "-C", str(MEDIA_REPO_PATH), "stash", "push", "-u", "-m", "auto-stash"])
+        pr2 = git_run(["git", "-C", str(MEDIA_REPO_PATH), "pull", "--rebase", "origin", "main"])
+        if pr2.returncode == 0: git_run(["git", "-C", str(MEDIA_REPO_PATH), "stash", "pop"])
+        else: raise RuntimeError(pr.stderr.strip())
+    ps = git_run(["git", "-C", str(MEDIA_REPO_PATH), "push"])
+    if ps.returncode != 0: raise RuntimeError(f"git push failed: {ps.stderr.strip()}")
+    sha = git_run(["git", "-C", str(MEDIA_REPO_PATH), "rev-parse", "--short", "HEAD"])
+    return (sha.stdout or "").strip()
+
+# -------------------------
+# BAND / PAYLOAD
+# -------------------------
+def kp_band_for(kp: float) -> str:
+    if kp < 2.0: return "calm"
+    if kp < 4.0: return "mild"
+    if kp < 5.0: return "active"
+    return "storm"
+
+def build_payload(ts_iso_utc: str, kp: float, kp_time: Optional[str], sch: float, commit_sha: str) -> dict:
+    return {
+        "timestamp_utc": ts_iso_utc,
+        "kp_index": round(kp, 2),
+        "kp_time_utc": kp_time or ts_iso_utc,
+        "kp_band": kp_band_for(kp),
+        "storm_warning": kp >= 5.0,
+        "storm_level": None,
+        "schumann_hz": round(sch, 2),
+        "schumann_amp": None,
+        "aqi": None,
+        "aqi_city": None,
+        "image_path": "images/dailypost.jpg",
+        "image_url_hint": "https://cdn.jsdelivr.net/gh/gennwu/gaiaeyes-media/images/dailypost.jpg",
+        "commit_sha": commit_sha
+    }
+
+# -------------------------
+# MAIN
+# -------------------------
+def main():
+    RUN_BG_USED.clear()
+    key_prefix = (SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY)[:8] if (SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY) else "(none)"
+    logging.info("Supabase REST: url=%s key[0:8]=%s", SUPABASE_REST_URL or "(unset)", key_prefix)
+
+    day = target_day_utc()
+    feats_probe = fetch_daily_features_for(day) if SUPABASE_REST_URL else None
+    post_probe  = fetch_post_for(day, "default") if SUPABASE_REST_URL else None
+    if not TARGET_DAY and not feats_probe and not post_probe:
+        latest = fetch_latest_day_from_supabase()
+        if latest:
+            logging.info("No data for today; rendering latest available day from Supabase: %s", latest.isoformat())
+            day = latest
+
+    feats = fetch_daily_features_for(day) if SUPABASE_REST_URL else None
+    if feats:
+        kp = float(feats.get("kp_max") or 0.0)
+        sch_any = feats.get("sch_any_fundamental_avg_hz") or feats.get("sch_fundamental_avg_hz")
+        sch = float(sch_any or 7.83)
+    else:
+        logging.info("No marts.daily_features for target day; using mirror sources")
+        sch = fetch_schumann_from_repo_csv(MEDIA_REPO_PATH) or 7.83
+        kp = fetch_kp_index()
+
+    # Compute energy/mood/tip early so `tip` is available
+    energy, mood, tip = generate_daily_forecast(sch, kp)
+
+    post = fetch_post_for(day, "default") if SUPABASE_REST_URL else None
+    caption_text = (post or {}).get("caption") or "Daily Earthscope"
+    body_md = (post or {}).get("body_markdown") or ""
+
+    # Extract sections
+    affects_txt  = extract_section(body_md, "How This Affects You") or ""
+    playbook_txt = extract_section(body_md, "Self-Care Playbook") or ""
+    if not affects_txt or not playbook_txt:
+        fa, fp = generate_daily_forecast(sch, kp)[1], " - " + generate_daily_forecast(sch, kp)[2]
+        affects_txt = affects_txt or fa
+        playbook_txt = playbook_txt or fp
+    # Quick Tip placement
+    if tip:
+        if affects_txt:
+            affects_txt = affects_txt.strip() + "\n\nQUICK TIP:\n" + tip.strip()
+        else:
+            affects_txt = "QUICK TIP:\n" + tip.strip()
+    aff_line = get_daily_affirmation()
+    # Affirmation placement
+    if aff_line:
+        if playbook_txt:
+            playbook_txt = playbook_txt.strip() + "\n\nDAILY COSMIC AFFIRMATION:\n" + aff_line
+        else:
+            playbook_txt = "DAILY COSMIC AFFIRMATION:\n" + aff_line
+
+    caption_text = strip_hashtags_and_emojis(_safe_text(caption_text))
+    body_md = _safe_text(body_md)
+
+    stats_im   = render_stats_card_from_features(day, feats or {}, energy, kind="tall")
+
+    caption_for_card = caption_text if feats else caption_text
+    if hasattr(caption_for_card, "strip"):
+        caption_for_card = caption_for_card.strip()
+
+    caption_im = render_card(energy, caption_for_card, sch, kp, kind="square")
+    affects_im = render_text_card("How This Affects You", affects_txt, energy, kind="tall")
+    play_im    = render_text_card("Self-Care Playbook", playbook_txt, energy, kind="tall")
+
+    repo_paths = save_all_cards(stats_im, caption_im, affects_im, play_im)
+
+    try:
+        sha1 = git_commit_push(repo_paths)
+    except Exception as e:
+        logging.error(f"git push (images) failed: {e}")
+
+    ts_iso = utcnow_iso()
+    payload = build_payload(ts_iso, kp, None, sch, "")
+    write_json_csv(payload)
+    try:
+        sha2 = git_commit_push([JSON_PATH_REPO, CSV_PATH_REPO])
+    except Exception as e:
+        logging.error(f"git push (data) failed: {e}")
+
+    logging.info("✅ Done. Generated 4 images + data artifacts.")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception:
+        logging.exception("Run failed")
+        sys.exit(1)
