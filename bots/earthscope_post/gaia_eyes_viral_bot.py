@@ -257,6 +257,40 @@ def supabase_select(table: str, params: dict, schema: Optional[str] = None) -> L
         logging.warning(f"Supabase parse error for {sch}.{tbl}: {e}")
         return []
 
+
+# Fallback: read space weather marts directly
+def _fetch_space_weather_mart(day: dt.date) -> dict:
+    params = {
+        "day": f"eq.{day.isoformat()}",
+        "select": "kp_max,bz_min,sw_speed_avg,flares_count,cmes_count"
+    }
+    rows = supabase_select("space_weather_daily", params, schema="marts")
+    return rows[0] if rows else {}
+
+# Fallback: read schumann marts directly and average Tomsk + Cumiana f0
+def _fetch_schumann_mart(day: dt.date) -> dict:
+    params = {"day": f"eq.{day.isoformat()}", "select": "station_id,f0_avg_hz"}
+    rows = supabase_select("schumann_daily", params, schema="marts")
+    tomsk = None; cumiana = None
+    for r in (rows or []):
+        sid = (r.get("station_id") or "").lower()
+        v = r.get("f0_avg_hz")
+        try:
+            v = float(v) if v is not None else None
+        except Exception:
+            v = None
+        if sid == "tomsk": tomsk = v
+        if sid == "cumiana": cumiana = v
+    avg = None
+    vals = [v for v in [tomsk, cumiana] if v is not None]
+    if vals:
+        avg = sum(vals)/len(vals)
+    out = {}
+    if tomsk is not None: out["sch_fundamental_avg_hz"] = tomsk
+    if cumiana is not None: out["sch_cumiana_fundamental_avg_hz"] = cumiana
+    if avg is not None: out["sch_any_fundamental_avg_hz"] = avg
+    return out
+
 def fetch_latest_day_from_supabase() -> Optional[dt.date]:
     if not SUPABASE_REST_URL or not (SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY):
         return None
@@ -276,20 +310,39 @@ def fetch_latest_day_from_supabase() -> Optional[dt.date]:
 def fetch_daily_features_for(day: dt.date) -> Optional[dict]:
     if not SUPABASE_REST_URL:
         return None
+    # First try daily_features with user filter (if provided)
     params = {
-        "user_id": f"eq.{SUPABASE_USER_ID}",
         "day": f"eq.{day.isoformat()}",
         "select": ",".join([
-            "day","steps_total","hr_min","hr_max","hrv_avg","spo2_avg",
-            "sleep_total_minutes","kp_max","bz_min","sw_speed_avg","flares_count","cmes_count",
+            "day","kp_max","bz_min","sw_speed_avg","flares_count","cmes_count",
             "sch_fundamental_avg_hz","sch_cumiana_fundamental_avg_hz","sch_any_fundamental_avg_hz"
         ])
     }
+    if SUPABASE_USER_ID:
+        params["user_id"] = f"eq.{SUPABASE_USER_ID}"
     rows = supabase_select("daily_features", params, schema="marts")
-    if not rows:
-        logging.warning("Supabase: no marts.daily_features found for day=%s user=%s", day.isoformat(), SUPABASE_USER_ID)
-        return None
-    return rows[0]
+    if rows:
+        return rows[0]
+
+    # Retry without user_id filter (some marts don't include user_id)
+    if SUPABASE_USER_ID:
+        params.pop("user_id", None)
+        rows = supabase_select("daily_features", params, schema="marts")
+        if rows:
+            return rows[0]
+
+    # Build fallback from component marts
+    sw = _fetch_space_weather_mart(day)
+    sr = _fetch_schumann_mart(day)
+    combo = {}
+    combo.update(sw)
+    combo.update(sr)
+    if combo:
+        logging.warning("Supabase: built features from marts fallback for day=%s (missing daily_features)", day.isoformat())
+        return combo
+
+    logging.warning("Supabase: no marts daily data found for day=%s", day.isoformat())
+    return None
 
 def fetch_post_for(day: dt.date, platform: str="default") -> Optional[dict]:
     if not SUPABASE_REST_URL:
