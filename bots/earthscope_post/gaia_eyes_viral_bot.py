@@ -968,14 +968,22 @@ def main():
     caption_text = (post or {}).get("caption") or "Daily Earthscope"
     body_md = (post or {}).get("body_markdown") or ""
 
-    # Extract sections
-    affects_txt  = extract_section(body_md, "How This Affects You") or ""
+    # Extract sections (tolerant to Unicode hyphens/dashes and case)
+    affects_txt  = extract_any_section(body_md, [
+        "How This Affects You",
+        "How this affects you",
+        "How This Affects You –",
+        "How This Affects You —"
+    ]) or ""
+
     playbook_txt = extract_any_section(body_md, [
-        "Self-Care Playbook",
-        "Self-Care Playbook",
-        "Self–Care Playbook",
-        "Self – Care Playbook",
-        "Self Care Playbook"
+        "Self-Care Playbook",      # ASCII hyphen
+        "Self‑Care Playbook",      # U+2011 non-breaking hyphen
+        "Self–Care Playbook",      # U+2013 en dash
+        "Self—Care Playbook",      # U+2014 em dash
+        "Self – Care Playbook",    # spaced en dash
+        "Self — Care Playbook",    # spaced em dash
+        "Self Care Playbook"       # no hyphen
     ]) or ""
     if not affects_txt or not playbook_txt:
         fa, fp = generate_daily_forecast(sch, kp)[1], " - " + generate_daily_forecast(sch, kp)[2]
