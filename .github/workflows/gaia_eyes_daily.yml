@@ -60,8 +60,7 @@ jobs:
           DATE_ARG=""
           if [ -n "${{ github.event.inputs.date }}" ]; then DATE_ARG="--date ${{ github.event.inputs.date }}"; fi
           python earthscope_generate.py $DATE_ARG --platform ${{ env.EARTHSCOPE_PLATFORM }}
-
- render:
+render:
   name: Render Images → Media Repo
   runs-on: ubuntu-latest
   needs: generate
