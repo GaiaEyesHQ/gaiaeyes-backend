@@ -409,7 +409,7 @@ def extract_section(md: str, header: str) -> Optional[str]:
     text = md.replace('\r', '')
     # Build a regex that matches a heading line for the target header
     hdr = _re.escape(header)
-    heading_pat = rf"(?im)^\s*(?:#{1,6}\s*|\*\*\s*|__\s*)?{hdr}\s*:?\s*(?:\*\*|__)?.*$"
+    heading_pat = rf"(?im)^\s*(?:#{1,6}\s*|\*\*\s*|__\s*)?(?:[^\w]*\s*)?{hdr}\s*:?\s*(?:\*\*|__)?.*$"
     m = _re.search(heading_pat, text)
     if not m:
         return None
