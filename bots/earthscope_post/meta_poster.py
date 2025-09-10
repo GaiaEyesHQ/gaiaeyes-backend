@@ -185,14 +185,17 @@ def build_square_caption(post: dict) -> str:
         return caption + "\n\n" + hashtags
     return caption
 
+# meta_poster.py
+
+# 1) ensure you still import os, etc. (no need for time now)
+
 def default_image_urls() -> Dict[str,str]:
-    # Cache-buster to force CDN + IG to fetch fresh content
-    cb = int(time.time())
+    base = MEDIA_CDN_BASE.rstrip("/")
     return {
-        "square": f"{MEDIA_CDN_BASE}/daily_caption.jpg?cb={cb}",
-        "stats":  f"{MEDIA_CDN_BASE}/daily_stats.jpg?cb={cb}",
-        "affects":f"{MEDIA_CDN_BASE}/daily_affects.jpg?cb={cb}",
-        "play":   f"{MEDIA_CDN_BASE}/daily_playbook.jpg?cb={cb}",
+        "square": f"{base}/daily_caption.jpg",
+        "stats":  f"{base}/daily_stats.jpg",
+        "affects":f"{base}/daily_affects.jpg",
+        "play":   f"{base}/daily_playbook.jpg",
     }
 # --------------- CLI -----------------
 
