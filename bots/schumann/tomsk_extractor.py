@@ -286,6 +286,8 @@ def main():
                     help="If time-anchor trails the frontier guard by more than this many minutes, snap to the frontier guard.")
     ap.add_argument("--draw-debug", action="store_true",
                     help="Draw extra guide lines: day splits, frontier and guard rails, plus pph source label.")
+    ap.add_argument("--stale-hours", type=float, default=6.0,
+                    help="Mark Tomsk as stale_source if Last-Modified age exceeds this many hours.")
     args = ap.parse_args()
 
     img, last_mod_h = fetch_image(TOMSK_IMG, insecure=args.insecure)
@@ -296,6 +298,12 @@ def main():
     last_mod = parse_last_modified(last_mod_h)
     if args.verbose and last_mod:
         print(f"[dates] Last-Modified={last_mod.isoformat()}")
+
+    age_hours = None
+    if last_mod is not None:
+        age_hours = (datetime.now(timezone.utc) - last_mod).total_seconds() / 3600.0
+        if args.verbose:
+            print(f"[fresh] age={age_hours:.2f}h (stale > {args.stale_hours}h)")
 
     x0,y0,x1,y1 = ROI
     x_day0, x_day1, x_day2, day_w = estimate_day_boundaries(img, ROI)
@@ -392,8 +400,12 @@ def main():
     if args.overlay:
         cv2.imwrite(args.overlay, overlay_img)
 
+    status_val = "ok"
+    if age_hours is not None and age_hours > float(args.stale_hours):
+        status_val = "stale_source"
+
     out = {
-        "status":"ok",
+        "status": status_val,
         "source":"tomsk",
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "last_modified": last_mod.isoformat() if last_mod else None,
@@ -423,6 +435,8 @@ def main():
                 "bias_minutes_applied": float(bias_minutes_applied),
                 "measured_bias_minutes": (None if measured_bias_minutes is None else float(measured_bias_minutes)),
                 "guard_applied": bool(x_now != x_ideal),
+                "age_hours": (None if age_hours is None else float(age_hours)),
+                "stale_hours": float(args.stale_hours),
             },
             "method": "tick-ruler px/h + adaptive frontier guard; day3(48–72h) time-anchor; banded picker + fallbacks",
         }
