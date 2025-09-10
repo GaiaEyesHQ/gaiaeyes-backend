@@ -2,7 +2,7 @@ name: Gaia Eyes — Daily Pipeline
 
 on:
   schedule:
-    - cron: "5 14 * * *"  # 14:05 UTC ~ 09:05 America/Chicago; adjust as needed
+    - cron: "5 14 * * *" # 14:05 UTC ~ 09:05 America/Chicago
   workflow_dispatch:
     inputs:
       date:
@@ -36,11 +36,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show repo tree (first run only)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        working-directory: bots/earthscope_post
         run: |
-          pwd
-          ls -la
-          find bots/earthscope_post -maxdepth 2 -type f | sort
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install openai supabase
+
+      - name: Run generator (earthscope_generate.py)
+        working-directory: bots/earthscope_post
+        run: |
+          DATE_ARG=""
+          if [ -n "${{ github.event.inputs.date }}" ]; then DATE_ARG="--date ${{ github.event.inputs.date }}"; fi
+          python earthscope_generate.py $DATE_ARG --platform ${{ env.EARTHSCOPE_PLATFORM }}
+
+  render:
+    name: Render Images → Media Repo
+    runs-on: ubuntu-latest
+    needs: generate
+    permissions:
+      contents: read
+    env:
+      GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
+      SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_USER_ID: ${{ secrets.EARTHSCOPE_USER_ID }}
+      MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
+      MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
+      MEDIA_REPO_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
+      MEDIA_REPO_PATH:  ${{ github.workspace }}/gaiaeyes-media
+      LOGO_PATH:        ${{ github.workspace }}/bots/earthscope_post/GaiaEyesLogo.png
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone media repo
+        run: |
+          git clone https://x-access-token:${MEDIA_REPO_TOKEN}@github.com/${MEDIA_REPO_OWNER}/${MEDIA_REPO_NAME}.git "${MEDIA_REPO_PATH}"
+
+      - name: Configure git identity (media repo)
+        run: |
+          git -C "${MEDIA_REPO_PATH}" config user.name  "github-actions[bot]"
+          git -C "${MEDIA_REPO_PATH}" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -52,61 +94,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install openai
+          pip install pillow requests python-dotenv
 
-      - name: Run generator (earthscope_generate.py)
+      - name: Render cards (bot commits & pushes)
         working-directory: bots/earthscope_post
+        env:
+          MEDIA_REPO_PATH: ${{ env.MEDIA_REPO_PATH }}
+          LOGO_PATH: ${{ env.LOGO_PATH }}
         run: |
-          DATE_ARG=""
-          if [ -n "${{ github.event.inputs.date }}" ]; then DATE_ARG="--date ${{ github.event.inputs.date }}"; fi
-          python earthscope_generate.py $DATE_ARG --platform ${{ env.EARTHSCOPE_PLATFORM }}
-render:
-  name: Render Images → Media Repo
-  runs-on: ubuntu-latest
-  needs: generate
-  permissions:
-    contents: read
-  env:
-    GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
-    SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
-    SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-    SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-    SUPABASE_USER_ID: ${{ secrets.EARTHSCOPE_USER_ID }}
-    MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
-    MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
-    MEDIA_REPO_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
-    MEDIA_REPO_PATH:  ${{ github.workspace }}/gaiaeyes-media
-    LOGO_PATH:        ${{ github.workspace }}/bots/earthscope_post/GaiaEyesLogo.png
-  steps:
-    - uses: actions/checkout@v4
-
-    - name: Clone media repo
-      run: |
-        git clone https://x-access-token:${MEDIA_REPO_TOKEN}@github.com/${MEDIA_REPO_OWNER}/${MEDIA_REPO_NAME}.git "${MEDIA_REPO_PATH}"
-
-    - name: Configure git identity (media repo)
-      run: |
-        git -C "${MEDIA_REPO_PATH}" config user.name  "github-actions[bot]"
-        git -C "${MEDIA_REPO_PATH}" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-
-    - name: Install deps
-      working-directory: bots/earthscope_post
-      run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-    - name: Render cards (bot commits & pushes)
-      working-directory: bots/earthscope_post
-      env:
-        MEDIA_REPO_PATH: ${{ env.MEDIA_REPO_PATH }}
-        LOGO_PATH: ${{ env.LOGO_PATH }}
-      run: |
-        python gaia_eyes_viral_bot.py
+          python gaia_eyes_viral_bot.py
 
   post:
     name: Post Square + Carousel
@@ -135,6 +131,7 @@ render:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install requests python-dotenv
 
       - name: Post square (FB)
         working-directory: bots/earthscope_post
