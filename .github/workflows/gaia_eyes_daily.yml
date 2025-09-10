@@ -72,7 +72,7 @@ jobs:
       # Paths in CI
       MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
       MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
-      MEDIA_REPO_TOKEN: ${{ secrets.MEDIA_REPO_TOKEN }}
+      GAIAEYES_MEDIA_TOKEN: ${{ secrets.MEDIA_REPO_TOKEN }}
       MEDIA_REPO_PATH:  ${{ github.workspace }}/gaiaeyes-media
       LOGO_PATH:        ${{ github.workspace }}/GaiaEyesLogo.png
     steps:
@@ -80,7 +80,7 @@ jobs:
 
       - name: Clone media repo
         run: |
-          git clone https://x-access-token:${MEDIA_REPO_TOKEN}@github.com/${MEDIA_REPO_OWNER}/${MEDIA_REPO_NAME}.git "${MEDIA_REPO_PATH}"
+          git clone https://x-access-token:${GAIAEYES_MEDIA_TOKEN}@github.com/${MEDIA_REPO_OWNER}/${MEDIA_REPO_NAME}.git "${MEDIA_REPO_PATH}"
 
       - name: Set up Python
         uses: actions/setup-python@v5
