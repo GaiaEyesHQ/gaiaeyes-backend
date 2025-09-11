@@ -675,8 +675,8 @@ def render_stats_card_from_features(day: dt.date, feats: dict, energy: Optional[
     im = _compose_bg(W, H, energy, kind)
     draw = ImageDraw.Draw(im)
     font_h1   = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"], 68)
-    font_h2   = _load_font(["Oswald-Bold.ttf", "AbrilFatface-Regular.ttf"], 44)
-    font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 44)
+    font_h2   = _load_font(["Oswald-Bold.ttf", "AbrilFatface-Regular.ttf"], 40)
+    font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 36)
     fg = (235,245,255,255); dim=(190,205,230,255)
 
     label = "avg"
@@ -719,7 +719,7 @@ def render_stats_card_from_features(day: dt.date, feats: dict, energy: Optional[
         ("Flares", f"{int(feats.get('flares_count') or 0)}", (240,120,120,220), "Fl"),
         ("CMEs", f"{int(feats.get('cmes_count') or 0)}", (240,160,120,220), "CM"),
     ]
-    font_val = _load_font(["Oswald-Bold.ttf", "Oswald-Regular.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 64)
+    font_val = _load_font(["Oswald-Bold.ttf", "Oswald-Regular.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 52)
     chip_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 26)
 
     def _chip(draw: ImageDraw.ImageDraw, x:int, y:int, color:tuple, txt:str):
@@ -770,7 +770,7 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
     im = _compose_bg(W, H, energy, kind)
     draw = ImageDraw.Draw(im)
     font_h1   = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"], 66)
-    font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 40)
+    font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 36)
     fg = (235,245,255,255)
     x0, y = 80, 120
     title = _safe_text(title); body = _safe_text(body)
@@ -840,10 +840,11 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
                     if p.lower().startswith(kw.lower()):
                         p = kw.upper() + p[len(kw):]
                         break
+            p = p.replace("**", "").strip()    
             processed.append(p)
         body = "\n".join([f"• {p}" for p in processed])
 
-    y = _draw_wrapped_multilines(draw, body, font_body, x0, y, W - x0 - 120, line_gap=60)
+    y = _draw_wrapped_multilines(draw, body, font_body, x0, y, W - x0 - 120, line_gap=54)
 
     # Render special sub-sections without bullets
     if tip_head and tip_body:
