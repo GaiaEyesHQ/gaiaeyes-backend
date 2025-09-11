@@ -23,7 +23,6 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      EARTHSCOPE_USER_ID: ${{ secrets.EARTHSCOPE_USER_ID }}
       GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       SUPABASE_POSTS_SCHEMA: content
