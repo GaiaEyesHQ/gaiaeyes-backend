@@ -48,16 +48,17 @@ jobs:
         run: |
           set -euo pipefail
           TS="$(date -u +'%Y%m%d_%H%M%SZ')"
-          echo "ts=$TS" >> $GITHUB_OUTPUT
-
+          echo "ts=$TS" >> "$GITHUB_OUTPUT"
           mkdir -p runs
 
+          # Tomsk (mark stale if LM > 6h)
           python tomsk_extractor.py \
             --out runs/tomsk_now.json \
             --overlay runs/tomsk_overlay.png \
             --stale-hours 6 \
             --insecure || true
 
+          # Cumiana (SR-only, fixed now offset)
           python cumiana_extractor.py \
             --out runs/cumiana_now.json \
             --overlay runs/cumiana_overlay.png \
@@ -65,6 +66,7 @@ jobs:
             --prefer auto \
             --insecure || true
 
+          # Merge (always include both)
           python schumann_multi.py \
             --prefer "${PREFER}" \
             --out runs/schumann_now.json \
@@ -77,24 +79,27 @@ jobs:
           TS: ${{ steps.run.outputs.ts }}
           MEDIA_DIR: ${{ github.workspace }}/media
         run: |
+          set -euo pipefail
           mkdir -p "$MEDIA_DIR/images" "$MEDIA_DIR/data"
 
-          cp -f runs/tomsk_overlay.png   "$MEDIA_DIR/images/tomsk_latest.png"   || true
-          cp -f runs/cumiana_overlay.png "$MEDIA_DIR/images/cumiana_latest.png" || true
-          cp -f runs/schumann_now.json   "$MEDIA_DIR/data/schumann_latest.json" || true
+          # Latest
+          cp -f runs/tomsk_overlay.png        "$MEDIA_DIR/images/tomsk_latest.png"       || true
+          cp -f runs/cumiana_overlay.png      "$MEDIA_DIR/images/cumiana_latest.png"     || true
+          cp -f runs/schumann_now.json        "$MEDIA_DIR/data/schumann_latest.json"     || true
+          cp -f runs/tomsk_now.json           "$MEDIA_DIR/data/tomsk_latest.json"        || true
+          cp -f runs/cumiana_now.json         "$MEDIA_DIR/data/cumiana_latest.json"      || true
 
-          cp -f runs/tomsk_now.json      "$MEDIA_DIR/data/tomsk_latest.json"    || true
-          cp -f runs/cumiana_now.json    "$MEDIA_DIR/data/cumiana_latest.json"  || true
-
-          cp -f runs/tomsk_overlay.png   "$MEDIA_DIR/images/tomsk_${TS}.png"    || true
-          cp -f runs/cumiana_overlay.png "$MEDIA_DIR/images/cumiana_${TS}.png"  || true
-          cp -f runs/schumann_now.json   "$MEDIA_DIR/data/schumann_${TS}.json"  || true
-          cp -f runs/tomsk_now.json      "$MEDIA_DIR/data/tomsk_${TS}.json"     || true
-          cp -f runs/cumiana_now.json    "$MEDIA_DIR/data/cumiana_${TS}.json"   || true
+          # Timestamped history
+          cp -f runs/tomsk_overlay.png        "$MEDIA_DIR/images/tomsk_${TS}.png"        || true
+          cp -f runs/cumiana_overlay.png      "$MEDIA_DIR/images/cumiana_${TS}.png"      || true
+          cp -f runs/schumann_now.json        "$MEDIA_DIR/data/schumann_${TS}.json"      || true
+          cp -f runs/tomsk_now.json           "$MEDIA_DIR/data/tomsk_${TS}.json"         || true
+          cp -f runs/cumiana_now.json         "$MEDIA_DIR/data/cumiana_${TS}.json"       || true
 
       - name: Commit & push to media repo
         working-directory: ${{ env.MEDIA_DIR }}
         run: |
+          set -euo pipefail
           git config user.name  "gaiaeyes-bot"
           git config user.email "actions@users.noreply.github.com"
           git add -A
@@ -105,18 +110,22 @@ jobs:
             git push
           fi
 
-      - name: Append rows to Supabase
-        if: ${{ secrets.SUPABASE_URL != '' && secrets.SUPABASE_SERVICE_ROLE != '' }}
+      - name: Append rows to Supabase (guarded in-shell)
         working-directory: ${{ env.WORKDIR }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
         run: |
           set -euo pipefail
-          TS_ISO="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          # Guard: only run if both secrets are set and non-empty
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE:-}" ]; then
+            echo "Supabase secrets missing; skipping append."
+            exit 0
+          fi
 
-          TJSON=$(cat runs/tomsk_now.json 2>/dev/null || echo '{}')
-          CJSON=$(cat runs/cumiana_now.json 2>/dev/null || echo '{}')
+          TS_ISO="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          TJSON="$(cat runs/tomsk_now.json 2>/dev/null || echo '{}')"
+          CJSON="$(cat runs/cumiana_now.json 2>/dev/null || echo '{}')"
 
           T_STATUS=$(echo "$TJSON" | jq -r '.status // "down"')
           T_F1=$(echo "$TJSON" | jq -r '.fundamental_hz // null')
