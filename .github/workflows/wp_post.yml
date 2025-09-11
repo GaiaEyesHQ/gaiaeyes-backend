@@ -1,0 +1,30 @@
+name: WP — Publish Daily
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "20 14 * * *"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
+      MEDIA_CDN_BASE:   ${{ secrets.MEDIA_CDN_BASE }}
+      WP_BASE_URL:      ${{ secrets.WP_BASE_URL }}
+      WP_USERNAME:      ${{ secrets.WP_USERNAME }}
+      WP_APP_PASSWORD:  ${{ secrets.WP_APP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Install deps
+        working-directory: bots/earthscope_post
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests python-dotenv
+      - name: Publish to WordPress
+        working-directory: bots/earthscope_post
+        run: python wp_poster.py
