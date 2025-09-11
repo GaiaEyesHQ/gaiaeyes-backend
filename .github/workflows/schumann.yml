@@ -2,56 +2,172 @@ name: Schumann Extractors
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # every 15 minutes
+    - cron: "*/15 * * * *"   # every 15 minutes (UTC)
   workflow_dispatch:
 
 jobs:
   run-schumann:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    env:
+      BACKEND_DIR: backend
+      WORKDIR: backend/bots/schumann
+      MEDIA_DIR: media
+
+      PYTHON_VERSION: "3.10"
+      PREFER: "tomsk,cumiana"
+
+      # Extractor tunables (safe defaults)
+      TOMSK_TIME_BIAS_MINUTES: ""     # leave empty for auto-bias; set like "-45" to override
+      TOMSK_STALE_HOURS: "6"          # do not mark OK when older than this
+      CUMIANA_FIXED_DX: "22"          # your best-now offset (pixels from right edge)
 
     steps:
-      - name: Checkout backend repo
+      # 1) Clone backend (this repo)
+      - name: Checkout backend
         uses: actions/checkout@v4
         with:
-          repository: gennwu/gaiaeyes-backend
-          path: backend
+          path: ${{ env.BACKEND_DIR }}
 
+      # 2) Clone media repo (write outputs here)
       - name: Checkout media repo
         uses: actions/checkout@v4
         with:
           repository: gennwu/gaiaeyes-media
-          path: media
+          path: ${{ env.MEDIA_DIR }}
           token: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
 
+      # 3) Python setup
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
+      - name: Install dependencies (pyproject)
+        working-directory: ${{ env.WORKDIR }}
         run: |
-          cd backend/bots/schumann
+          python -m pip install --upgrade pip
           pip install .
 
-      - name: Run Schumann orchestrator
+      # 4) Run both extractors + merger
+      - name: Run extractors and merge
+        id: run
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          PREFER: ${{ env.PREFER }}
+          TOMSK_TIME_BIAS_MINUTES: ${{ env.TOMSK_TIME_BIAS_MINUTES }}
+          TOMSK_STALE_HOURS: ${{ env.TOMSK_STALE_HOURS }}
+          CUMIANA_FIXED_DX: ${{ env.CUMIANA_FIXED_DX }}
         run: |
-          cd backend/bots/schumann
+          set -euo pipefail
+
+          # UTC timestamp for history filenames
+          TS="$(date -u +'%Y%m%d_%H%M%SZ')"
+          echo "TS=$TS" >> $GITHUB_OUTPUT
+
+          # Clean or create scratch output dir in backend (optional)
+          mkdir -p runs
+
+          echo ">>> Run Tomsk"
+          python tomsk_extractor.py \
+            --out runs/tomsk_now.json \
+            --overlay runs/tomsk_overlay.png \
+            --stale-hours "${TOMSK_STALE_HOURS}" \
+            ${TOMSK_TIME_BIAS_MINUTES:+--time-bias-minutes "${TOMSK_TIME_BIAS_MINUTES}"} \
+            --insecure --verbose || true
+
+          echo ">>> Run Cumiana"
+          python cumiana_extractor.py \
+            --out runs/cumiana_now.json \
+            --overlay runs/cumiana_overlay.png \
+            --anchor fixed --fixed-offset-px "${CUMIANA_FIXED_DX}" \
+            --prefer auto \
+            --insecure --verbose || true
+
+          echo ">>> Merge (both sources always present)"
           python schumann_multi.py \
-            --prefer tomsk,cumiana \
-            --out schumann_now.json \
-            --overlay schumann_overlay.png --insecure
+            --prefer "${PREFER}" \
+            --out runs/schumann_now.json \
+            --overlay runs/.ignore_overlay.png \
+            --insecure --verbose || true
 
-      - name: Copy outputs into media repo
+      # 5) Copy both latest + timestamped to media repo
+      - name: Stage artifacts into media repo
+        working-directory: ${{ env.BACKEND_DIR }}/bots/schumann
+        env:
+          TS: ${{ steps.run.outputs.TS }}
+          MEDIA_DIR: ${{ env.MEDIA_DIR }}
         run: |
-          mkdir -p media/images media/data
-          cp backend/bots/schumann/*overlay.png media/images/ || true
-          cp backend/bots/schumann/*now.json media/data/ || true
+          set -euo pipefail
 
-      - name: Commit and push to media repo
+          mkdir -p "${MEDIA_DIR}/images" "${MEDIA_DIR}/data"
+
+          # Latest
+          cp -f runs/tomsk_overlay.png        "${MEDIA_DIR}/images/tomsk_latest.png"       || true
+          cp -f runs/cumiana_overlay.png      "${MEDIA_DIR}/images/cumiana_latest.png"     || true
+          cp -f runs/schumann_now.json        "${MEDIA_DIR}/data/schumann_latest.json"     || true
+          cp -f runs/tomsk_now.json           "${MEDIA_DIR}/data/tomsk_latest.json"        || true
+          cp -f runs/cumiana_now.json         "${MEDIA_DIR}/data/cumiana_latest.json"      || true
+
+          # Timestamped history (append-only)
+          cp -f runs/tomsk_overlay.png        "${MEDIA_DIR}/images/tomsk_${TS}.png"        || true
+          cp -f runs/cumiana_overlay.png      "${MEDIA_DIR}/images/cumiana_${TS}.png"      || true
+          cp -f runs/schumann_now.json        "${MEDIA_DIR}/data/schumann_${TS}.json"      || true
+          cp -f runs/tomsk_now.json           "${MEDIA_DIR}/data/tomsk_${TS}.json"         || true
+          cp -f runs/cumiana_now.json         "${MEDIA_DIR}/data/cumiana_${TS}.json"       || true
+
+      # 6) (Optional) Append samples to Supabase (two rows/run)
+      #    Requires table schumann_samples(source text, ts_utc timestamptz, f1_hz numeric, harmonics jsonb, status text, primary key (source, ts_utc))
+      - name: Append rows to Supabase (optional)
+        if: ${{ secrets.SUPABASE_URL && secrets.SUPABASE_SERVICE_ROLE }}
+        working-directory: ${{ env.BACKEND_DIR }}/bots/schumann
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+          TS: ${{ steps.run.outputs.TS }}
         run: |
-          cd media
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add images/*.png data/*.json
-          git commit -m "Update Schumann outputs [skip ci]" || echo "No changes"
-          git push
+          set -euo pipefail
+
+          TJSON="$(cat runs/tomsk_now.json 2>/dev/null || echo '{}')"
+          CJSON="$(cat runs/cumiana_now.json 2>/dev/null || echo '{}')"
+          TS_ISO="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          # Extract fields with jq (fallbacks preserve null)
+          T_STATUS=$(echo "$TJSON" | jq -r '.status // "down"')
+          T_F1=$(echo "$TJSON" | jq -r '.fundamental_hz // null')
+          T_HARM=$(echo "$TJSON" | jq -c '.harmonics_hz // {}')
+
+          C_STATUS=$(echo "$CJSON" | jq -r '.status // "down"')
+          C_F1=$(echo "$CJSON" | jq -r '.fundamental_hz // null')
+          C_HARM=$(echo "$CJSON" | jq -c '.harmonics_hz // {}')
+
+          cat > rows.json <<EOF
+          [
+            {"source":"tomsk","ts_utc":"${TS_ISO}","f1_hz":${T_F1},"harmonics":${T_HARM},"status":"${T_STATUS}"},
+            {"source":"cumiana","ts_utc":"${TS_ISO}","f1_hz":${C_F1},"harmonics":${C_HARM},"status":"${C_STATUS}"}
+          ]
+          EOF
+
+          curl -sS "${SUPABASE_URL}/rest/v1/schumann_samples" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: resolution=ignore-duplicates" \
+            -d @rows.json || true
+
+      # 7) Commit & push to media repo (only when files changed)
+      - name: Commit & push to media repo
+        working-directory: ${{ env.MEDIA_DIR }}
+        run: |
+          set -euo pipefail
+          git config user.name  "gaiaeyes-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No media changes to commit."
+          else
+            git commit -m "schumann: ${GITHUB_RUN_ID} $(date -u +'%Y-%m-%d %H:%M:%SZ') [skip ci]"
+            git push
+          fi
