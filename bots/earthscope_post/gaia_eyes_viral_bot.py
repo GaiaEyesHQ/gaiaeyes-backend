@@ -139,6 +139,32 @@ def _save_bg_history(name: str) -> None:
     except Exception as e:
         logging.warning(f"bg_history write failed: {e}")
 
+AFFIRM_HISTORY_PATH = MEDIA_REPO_PATH / "data" / "affirm_history.json"
+AFFIRM_HISTORY_SIZE = 28  # keep ~1 month of history
+
+def _load_affirm_history() -> list[str]:
+    try:
+        with open(AFFIRM_HISTORY_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return [str(x) for x in data]
+    except Exception:
+        pass
+    return []
+
+def _save_affirm_history(val: str) -> None:
+    (MEDIA_REPO_PATH / "data").mkdir(parents=True, exist_ok=True)
+    hist = _load_affirm_history()
+    hist = [h for h in hist if h != val]
+    hist.append(val)
+    if len(hist) > AFFIRM_HISTORY_SIZE:
+        hist = hist[-AFFIRM_HISTORY_SIZE:]
+    try:
+        with open(AFFIRM_HISTORY_PATH, "w", encoding="utf-8") as f:
+            json.dump(hist, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logging.warning(f"affirm_history write failed: {e}")
+      
 # NOAA 1-minute planetary K index JSON
 K_INDEX_URL = "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json"
 
@@ -364,9 +390,9 @@ def fetch_post_for(day: dt.date, platform: str="default") -> Optional[dict]:
 # -------------------------
 def generate_daily_forecast(sch: float, kp_current: float) -> Tuple[str, str, str]:
     # Energy label primarily from Kp (geomagnetic activity)
-    if kp_current >= 6.0:
+    if kp_current >= 5.0:
         energy = "High"
-    elif kp_current >= 4.0:
+    elif kp_current >= 3.0:
         energy = "Elevated"
     elif kp_current >= 2.0:
         energy = "Calm"
@@ -376,7 +402,7 @@ def generate_daily_forecast(sch: float, kp_current: float) -> Tuple[str, str, st
     if kp_current >= 6.0:
         mood = "Wired, anxious, or extra sensitive? Earth’s energy is intense today. Be mindful of your heart and nervous system."
         tip  = "Ground outside, hydrate, and reduce caffeine and screen time."
-    elif kp_current >= 4.0:
+    elif kp_current >= 3.0:
         mood = "Restlessness or mood swings possible—Earth is moderately active. Spurts of creativity mixed with bouts of exhaustion or anxiety."
         tip  = "Move gently, breathe deeper, drink water."
     else:
@@ -386,6 +412,7 @@ def generate_daily_forecast(sch: float, kp_current: float) -> Tuple[str, str, st
 
 def get_daily_affirmation() -> str:
     affirmations = [
+        # existing 10
         "You're deeply connected to Earth's energy. Trust your intuition today.",
         "Let Earth's rhythms guide your actions—go slow and steady.",
         "Today, embrace calmness and clarity. Earth's energy supports you.",
@@ -396,8 +423,35 @@ def get_daily_affirmation() -> str:
         "Your body knows the rhythm of the Earth. Trust it.",
         "There is peace in slowing down. Let go and receive.",
         "You are safe, you are centered, and you are in tune with Gaia.",
+        # +12 new
+        "The Earth holds you steady—breathe and let her rhythm restore your balance.",
+        "Each moment is an invitation to reconnect with your heart and the cosmos.",
+        "As the Schumann hums, so too does your soul find harmony.",
+        "Today, trust the quiet—within stillness, your energy realigns.",
+        "Like solar winds, let inspiration flow through you with ease.",
+        "Ground yourself, root deep, and feel the calm strength of Gaia within.",
+        "Your energy is part of Earth’s song; every heartbeat is in tune with her.",
+        "Release the static of the day—clarity comes when you attune to Earth’s frequency.",
+        "Let the cosmos remind you: you are vast, resilient, and connected.",
+        "With each breath, you align more fully to the universal flow of energy.",
+        "There is peace in slowing down. Let go and receive.",
+        "You are safe, you are centered, and you are in tune with Gaia."
     ]
-    return random.choice(affirmations)
+
+    # rotation: avoid recent repeats
+    recent = set(_load_affirm_history()[-14:])   # last 14 used
+    candidates = [a for a in affirmations if a not in recent] or affirmations[:]
+
+    # deterministic choice per day (but not repeating recent)
+    try:
+        seed = int(dt.datetime.utcnow().strftime("%Y%m%d"))
+        random.seed(seed)
+    except Exception:
+        pass
+
+    choice = random.choice(candidates)
+    _save_affirm_history(choice)
+    return choice
 
 
 # Robust section extractor (supports **Bold** or ## Markdown headings)
