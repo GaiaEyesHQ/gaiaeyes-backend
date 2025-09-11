@@ -985,46 +985,6 @@ def main():
             day = dt.date.fromisoformat(post["day"])  # adjust header date to post's day
         except Exception:
             pass
-
-    # Prefer metrics from content.daily_posts.metrics_json when available
-    metrics = {}
-    if post and post.get("metrics_json"):
-        try:
-            metrics = json.loads(post["metrics_json"]) if isinstance(post["metrics_json"], str) else (post["metrics_json"] or {})
-        except Exception as e:
-            logging.warning(f"metrics_json parse failed: {e}")
-    if metrics:
-        # Map Earthscope metrics_json → feats dict used by stats renderer
-        m = metrics
-        feats = feats or {}
-        # Kp (max 24h)
-        if m.get("kp_max_24h") is not None:
-            try: feats["kp_max"] = float(m["kp_max_24h"]) 
-            except Exception: pass
-        # Bz min (optional)
-        if m.get("bz_min") is not None:
-            try: feats["bz_min"] = float(m["bz_min"]) 
-            except Exception: pass
-        # Solar wind km/s
-        if m.get("solar_wind_kms") is not None:
-            try: feats["sw_speed_avg"] = float(m["solar_wind_kms"]) 
-            except Exception: pass
-        # Flares / CMEs (counts)
-        if m.get("flares_24h") is not None:
-            try: feats["flares_count"] = int(m["flares_24h"]) 
-            except Exception: pass
-        if m.get("cmes_24h") is not None:
-            try: feats["cmes_count"] = int(m["cmes_24h"]) 
-            except Exception: pass
-        # Schumann f0
-        if m.get("schumann_value_hz") is not None:
-            try:
-                f0 = float(m["schumann_value_hz"]) 
-                feats["sch_any_fundamental_avg_hz"] = f0
-            except Exception: pass
-        # Optional harmonics structure (not drawn currently)
-        # metrics.get("harmonics") can be kept if needed later
-
     caption_text = (post or {}).get("caption") or "Daily Earthscope"
     body_md = (post or {}).get("body_markdown") or ""
 
