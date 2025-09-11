@@ -596,6 +596,27 @@ def _draw_wrapped_multilines(draw: ImageDraw.ImageDraw, text: str, font: ImageFo
             y += line_gap
     return y
 
+# Helper: draw text with wrapping, but stop before bottom. If truncated, add ellipsis.
+def _draw_wrapped_to_bottom(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont,
+                            x0: int, y: int, max_w: int, bottom: int, line_gap: int = 54) -> int:
+    """Wrap and draw text but stop before `bottom`. If truncated, add ellipsis."""
+    lines_drawn = 0
+    for para in (text or "").splitlines():
+        if not para.strip():
+            if y + line_gap >= bottom: return y
+            y += line_gap; continue
+        for ln in _wrap(draw, para, font, max_w):
+            if y + line_gap >= bottom:
+                # add ellipsis to previous line if possible
+                if lines_drawn > 0:
+                    draw.text((x0, y - line_gap), ("…"), fill=(235,245,255,255), font=font)
+                return y
+            draw.text((x0+2, y+2), ln, fill=(0,0,0,180), font=font)
+            draw.text((x0, y), ln, fill=(235,245,255,255), font=font)
+            y += line_gap
+            lines_drawn += 1
+    return y
+
 def _shadowed_text(draw: ImageDraw.ImageDraw, xy: tuple[int,int], text: str, font: ImageFont.ImageFont, fill=(235,245,255,255), shadow=(0,0,0,160), offset=(2,2)):
     x, y = xy
     draw.text((x+offset[0], y+offset[1]), text, font=font, fill=shadow)
@@ -719,7 +740,7 @@ def render_stats_card_from_features(day: dt.date, feats: dict, energy: Optional[
         ("Flares", f"{int(feats.get('flares_count') or 0)}", (240,120,120,220), "Fl"),
         ("CMEs", f"{int(feats.get('cmes_count') or 0)}", (240,160,120,220), "CM"),
     ]
-    font_val = _load_font(["Oswald-Bold.ttf", "Oswald-Regular.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 52)
+    font_val = _load_font(["Oswald-Bold.ttf", "Oswald-Regular.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 48)
     chip_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 26)
 
     def _chip(draw: ImageDraw.ImageDraw, x:int, y:int, color:tuple, txt:str):
@@ -746,7 +767,7 @@ def render_stats_card_from_features(day: dt.date, feats: dict, energy: Optional[
         draw.text((x_label, y), lab, fill=fg, font=font_body)
         draw.text((x_val+2, y+2), val, fill=(0,0,0,160), font=font_val)
         draw.text((x_val, y), val, fill=fg, font=font_val)
-        y += 58
+        y += 56
 
     # Stats card Did you know:
     y += 40
@@ -840,21 +861,23 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
                     if p.lower().startswith(kw.lower()):
                         p = kw.upper() + p[len(kw):]
                         break
-            p = p.replace("**", "").strip()    
+            p = p.replace("**", "").strip()
             processed.append(p)
         body = "\n".join([f"• {p}" for p in processed])
 
     y = _draw_wrapped_multilines(draw, body, font_body, x0, y, W - x0 - 120, line_gap=54)
+    # reserve footer space before special sections
+    safe_bottom = H - 170
 
     # Render special sub-sections without bullets
     if tip_head and tip_body:
         y += 24
         _shadowed_text(draw, (x0, y), tip_head, font=font_h1, fill=fg); y += 60
-        y = _draw_wrapped_multilines(draw, tip_body, font_body, x0, y, W - x0 - 120, line_gap=60)
+        y = _draw_wrapped_to_bottom(draw, tip_body, font_body, x0, y, W - x0 - 120, bottom=safe_bottom, line_gap=54)
     if aff_head and aff_body:
         y += 24
         _shadowed_text(draw, (x0, y), aff_head, font=font_h1, fill=fg); y += 60
-        y = _draw_wrapped_multilines(draw, aff_body, font_body, x0, y, W - x0 - 120, line_gap=60)
+        y = _draw_wrapped_to_bottom(draw, aff_body, font_body, x0, y, W - x0 - 120, bottom=safe_bottom, line_gap=54)
 
     _overlay_logo_and_tagline(im, "Decode the unseen.")
     return im.convert("RGB")
