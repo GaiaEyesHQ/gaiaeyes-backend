@@ -363,17 +363,23 @@ def fetch_post_for(day: dt.date, platform: str="default") -> Optional[dict]:
 # COPY
 # -------------------------
 def generate_daily_forecast(sch: float, kp_current: float) -> Tuple[str, str, str]:
-    sch_is_default = abs(sch - 7.83) < 0.01
-    if (not sch_is_default and sch >= 12.0) or kp_current >= 6.0:
+    # Energy label primarily from Kp (geomagnetic activity)
+    if kp_current >= 6.0:
         energy = "High"
+    elif kp_current >= 4.0:
+        energy = "Elevated"
+    elif kp_current >= 2.0:
+        energy = "Calm"
+    else:
+        energy = "Calm"
+
+    if kp_current >= 6.0:
         mood = "Wired, anxious, or extra sensitive? Earth’s energy is intense today. Be mindful of your heart and nervous system."
         tip  = "Ground outside, hydrate, and reduce caffeine and screen time."
-    elif (not sch_is_default and 8.0 <= sch < 12.0) or 4.0 <= kp_current < 6.0:
-        energy = "Elevated"
+    elif kp_current >= 4.0:
         mood = "Restlessness or mood swings possible—Earth is moderately active. Spurts of creativity mixed with bouts of exhaustion or anxiety."
         tip  = "Move gently, breathe deeper, drink water."
     else:
-        energy = "Calm"
         mood = "The ideal energy day! Balanced energy—great for clarity and steady focus."
         tip  = "Plan, create, and enjoy steady vibes."
     return energy, mood, tip
@@ -415,7 +421,7 @@ def extract_section(md: str, header: str) -> Optional[str]:
         return None
     start_idx = m.end()
     # Next heading start (any bold or ATX header)
-    next_heading_pat = r"(?im)^\s*(?:#{1,6}\s*|\*\*\s*|__\s*)([A-Za-z].+?)\s*(?:\*\*|__)?\s*:?.*$"
+    next_heading_pat = r"(?im)^\s*(?:#{1,6}\s*|\*\*\s*|__\s*)(?:[^\w]*\s*)?([A-Za-z].+?)\s*(?:\*\*|__)?\s*:?.*$"
     n = _re.search(next_heading_pat, text[start_idx:])
     body = text[start_idx: start_idx + n.start()] if n else text[start_idx:]
     # Trim extra blank lines
@@ -534,7 +540,13 @@ def _compose_bg(W: int, H: int, energy: Optional[str], kind: str = "square") -> 
     if e == "high": alpha = 130
     elif e == "elevated": alpha = 110
     elif e == "calm": alpha = 80
-
+    # small day-based variation to avoid sameness
+    try:
+        seed = int(dt.datetime.utcnow().strftime('%Y%m%d')) + (hash(kind) % 7)
+        random.seed(seed)
+        alpha = max(60, min(140, alpha + random.randint(-8, 8)))
+    except Exception:
+        pass
     overlay = Image.new("RGBA", (W, H), (0, 0, 0, alpha))
     base.alpha_composite(overlay)
 
@@ -808,19 +820,26 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
             if not ln: continue
             if not ln.endswith((".", "!", "?")): ln += "."
             parts.append(ln)
-        # CAPS-only keyword headings, normalize already-bolded headings
-        keywords = ["Mood", "Energy", "Heart", "Nervous System"]
+        # Normalize bullets: strip emojis, normalize headings, and keyword casing
         processed = []
         for p in parts:
-            orig = p
-            for kw in keywords:
-                # Match optional leading bold markers around the keyword, e.g. **Mood**:
-                pat = r"^(?:\*\*\s*)?(" + re.escape(kw) + r")(?:\s*\*\*)?(.*)$"
-                m = re.match(pat, p, flags=re.IGNORECASE)
-                if m:
-                    rest = m.group(2)
-                    p = m.group(1).upper() + rest
-                    break
+            # Strip emojis
+            try:
+                p = _EMOJI_PATTERN.sub("", p)
+            except Exception:
+                pass
+            # Normalize "**Label:** text" → "LABEL: text"
+            m = re.match(r"^\**\s*([^:*]+?)\s*\**\s*:\s*(.*)", p)
+            if m:
+                head = m.group(1).strip().upper()
+                rest = m.group(2).strip()
+                p = f"{head}: {rest}" if rest else f"{head}:"
+            else:
+                # Also normalize common keywords if they appear
+                for kw in ("Mood", "Energy", "Heart", "Nervous System"):
+                    if p.lower().startswith(kw.lower()):
+                        p = kw.upper() + p[len(kw):]
+                        break
             processed.append(p)
         body = "\n".join([f"• {p}" for p in processed])
 
@@ -973,7 +992,9 @@ def main():
         "How This Affects You",
         "How this affects you",
         "How This Affects You –",
-        "How This Affects You —"
+        "How This Affects You —",
+        "How This Might Affect You",
+        "How this might affect you"
     ]) or ""
 
     playbook_txt = extract_any_section(body_md, [
