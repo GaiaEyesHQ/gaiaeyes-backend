@@ -891,9 +891,14 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
         lines = [ln.strip() for ln in cleaned.split("\n") if ln.strip()]
         parts = []
         for ln in lines:
-            ln = re.sub(r"^(?:[-•]\s*|\d+\.)\s*", "", ln)
-            if not ln: continue
-            if not ln.endswith((".", "!", "?")): ln += "."
+            ln = re.sub(r"^(?:[-•]\s*|\d+\.)\s*", "", ln).strip()
+            if not ln:
+                continue
+            # Skip if the line is just dashes or punctuation (e.g. "--", "--.", "—")
+            if re.match(r"^[\-\.\u2013\u2014]+$", ln):
+                continue
+            if not ln.endswith((".", "!", "?")):
+                ln += "."
             parts.append(ln)
         # Normalize bullets: strip emojis, normalize headings, and keyword casing
         processed = []
