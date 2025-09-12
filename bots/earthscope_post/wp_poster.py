@@ -30,6 +30,9 @@ WP_FEATURED_SOURCE = (os.getenv("WP_FEATURED_SOURCE", "esa").lower())  # esa | c
 WP_FEATURED_CREDIT = os.getenv("WP_FEATURED_CREDIT", "Credit: ESA/Hubble").strip()
 WP_ADD_TOC        = (os.getenv("WP_ADD_TOC", "false").lower() in ("1","true","yes"))
 
+WP_ALT_USERNAME = os.getenv("WP_ALT_USERNAME", "").strip()
+_SELECTED_AUTH: Optional[tuple[str,str]] = None
+
 # -------- Supabase --------
 SUPABASE_REST_URL   = os.getenv("SUPABASE_REST_URL","").rstrip("/")
 SUPABASE_SERVICE_KEY= os.getenv("SUPABASE_SERVICE_KEY","").strip()
@@ -115,18 +118,36 @@ def fetch_daily_post(day: dt.date, platform="default") -> Optional[dict]:
 
 # ---------------- WordPress helpers ----------------
 def wp_auth() -> tuple[str,str]:
-    if not (WP_BASE_URL and WP_USERNAME and WP_APP_PASSWORD):
+    global _SELECTED_AUTH
+    if _SELECTED_AUTH:
+        return _SELECTED_AUTH
+    user = (WP_USERNAME or "").strip()
+    pwd  = (WP_APP_PASSWORD or "").strip()
+    if not (WP_BASE_URL and user and pwd):
         raise SystemExit("Missing WP_BASE_URL / WP_USERNAME / WP_APP_PASSWORD")
-    return WP_USERNAME, WP_APP_PASSWORD
+    return user, pwd
 
 def wp_verify_credentials():
+    global _SELECTED_AUTH
+    # Try primary
+    u, p = wp_auth()
     url = f"{WP_BASE_URL}/wp-json/wp/v2/users/me"
-    resp = session.get(url, auth=wp_auth(), timeout=20)
-    try:
-        resp.raise_for_status()
-    except Exception:
-        print("[WP] Auth failed:", resp.status_code, resp.text[:300])
-        raise
+    resp = session.get(url, auth=(u, p), timeout=20)
+    if resp.status_code == 200:
+        _SELECTED_AUTH = (u, p)
+        return
+    # If invalid_username and alt provided, try alternate username
+    body = resp.text[:300]
+    if resp.status_code == 401 and WP_ALT_USERNAME:
+        altu = WP_ALT_USERNAME.strip()
+        resp2 = session.get(url, auth=(altu, p), timeout=20)
+        if resp2.status_code == 200:
+            _SELECTED_AUTH = (altu, p)
+            return
+        print("[WP] Auth failed (alt username):", resp2.status_code, resp2.text[:300])
+        resp2.raise_for_status()
+    print("[WP] Auth failed:", resp.status_code, body)
+    resp.raise_for_status()
 
 def wp_upload_image_from_url(image_url: str, filename_hint="gaiaeyes.jpg") -> Optional[int]:
     try:
