@@ -129,6 +129,8 @@ def _parse_jsdelivr_base(base: str) -> Optional[tuple[str,str,str]]:
         m = JSDELIVR_RE.search(base)
         if not m:
             return None
+        # Stronger debug: show what we parsed
+        print(f"[WP] MEDIA_CDN_BASE parsed: owner={m.group(1)} repo={m.group(2)} sha={m.group(3)}")
         return m.group(1), m.group(2), m.group(3)
     except Exception:
         return None
@@ -152,6 +154,7 @@ def _list_jsdelivr_paths(owner: str, repo: str, sha: str) -> List[str]:
                 elif f.get("type") == "directory":
                     walk(f.get("files", []), path)
         walk(j.get("files", []), "")
+        print(f"[WP] jsDelivr listed {len(out)} paths")
         return out
     except Exception as e:
         print("[WP] jsDelivr list error:", e)
@@ -173,6 +176,7 @@ def pick_background_from_cdn(kind: str = "square") -> Optional[str]:
     cand = [p for p in files if p.startswith(f"/backgrounds/{kind}/") and p.lower().endswith((".jpg",".jpeg",".png",".webp"))]
     if not cand and kind != "square":
         cand = [p for p in files if p.startswith("/backgrounds/square/") and p.lower().endswith((".jpg",".jpeg",".png",".webp"))]
+    print(f"[WP] Background candidates for kind='{kind}': {len(cand)}")
     if not cand:
         return None
     # Deterministic daily pick
@@ -438,14 +442,18 @@ def build_post_html(post: dict, inline_images: bool, upload_inline: bool) -> (st
         if featured_id:
             print(f"[WP] Featured image uploaded, id={featured_id}")
         else:
-            print("[WP] Featured image upload skipped/failed")
+            print("[WP] Featured image upload skipped/failed — will inline featured at top")
 
     parts = []
+    # If featured upload failed but we have a URL, inline it at the top as a visible hero
+    if featured_id is None and featured_url:
+        parts.append(f'<p><img src="{html.escape(featured_url)}" alt="Featured image" style="max-width:100%;height:auto;"/></p>')
     # Credit line for ESA featured image or optional bg credit
     if WP_FEATURED_SOURCE == "esa" and WP_FEATURED_CREDIT:
         parts.append(f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>")
-    elif WP_FEATURED_SOURCE == "bg" and WP_FEATURED_CREDIT:
-        parts.append(f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>")
+    elif WP_FEATURED_SOURCE == "bg":
+        credit = WP_FEATURED_CREDIT or "Image: Gaia Eyes backgrounds"
+        parts.append(f"<p><em>{html.escape(credit)}</em></p>")
     # Optional TOC
     toc_html = build_toc_from_md(body_md)
     if toc_html:
