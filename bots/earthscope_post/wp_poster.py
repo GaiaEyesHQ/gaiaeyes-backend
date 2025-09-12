@@ -6,6 +6,8 @@ import datetime as dt
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from urllib.parse import urljoin
+from urllib.parse import urlparse
+import urllib.parse as _uparse
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -27,10 +29,11 @@ WP_INLINE_IMAGES= (os.getenv("WP_INLINE_IMAGES","true").lower() in ("1","true","
 WP_UPLOAD_INLINE= (os.getenv("WP_UPLOAD_INLINE","false").lower() in ("1","true","yes"))
 WP_CTA_HTML     = os.getenv("WP_CTA_HTML","").strip()  # optional HTML appended at bottom
 
-WP_FEATURED_SOURCE = (os.getenv("WP_FEATURED_SOURCE", "esa").lower())  # esa | caption | none
+WP_FEATURED_SOURCE = (os.getenv("WP_FEATURED_SOURCE", "esa").lower())  # esa | caption | none | bg
 WP_FEATURED_CREDIT = os.getenv("WP_FEATURED_CREDIT", "Credit: ESA/Hubble").strip()
 WP_ADD_TOC        = (os.getenv("WP_ADD_TOC", "false").lower() in ("1","true","yes"))
 WP_INCLUDE_BODY  = (os.getenv("WP_INCLUDE_BODY", "false").lower() in ("1","true","yes"))
+WP_FEATURED_BG_KIND = os.getenv("WP_FEATURED_BG_KIND", "square").strip().lower()  # square|tall|wide
 
 WP_ALT_USERNAME = os.getenv("WP_ALT_USERNAME", "").strip()
 _SELECTED_AUTH: Optional[tuple[str,str]] = None
@@ -116,6 +119,77 @@ def fetch_esa_featured_url() -> Optional[str]:
     except Exception as e:
         print("[WP] ESA fetch error:", e)
         return None
+
+JSDELIVR_RE = re.compile(r"cdn\.jsdelivr\.net/gh/([^/]+)/([^@]+)@([^/]+)")
+
+def _parse_jsdelivr_base(base: str) -> Optional[tuple[str,str,str]]:
+    """Extract (owner, repo, sha) from MEDIA_CDN_BASE like
+       https://cdn.jsdelivr.net/gh/OWNER/REPO@SHA/images"""
+    try:
+        m = JSDELIVR_RE.search(base)
+        if not m:
+            return None
+        return m.group(1), m.group(2), m.group(3)
+    except Exception:
+        return None
+
+def _list_jsdelivr_paths(owner: str, repo: str, sha: str) -> List[str]:
+    """Return list of file paths in the repo@sha using jsDelivr data API."""
+    try:
+        url = f"https://data.jsdelivr.com/v1/package/gh/{owner}/{repo}@{sha}"
+        r = session.get(url, timeout=25)
+        r.raise_for_status()
+        j = r.json()
+        out = []
+        def walk(files, prefix=""):
+            for f in files:
+                name = f.get("name")
+                if not name:
+                    continue
+                path = f"{prefix}/{name}"
+                if f.get("type") == "file":
+                    out.append(path)
+                elif f.get("type") == "directory":
+                    walk(f.get("files", []), path)
+        walk(j.get("files", []), "")
+        return out
+    except Exception as e:
+        print("[WP] jsDelivr list error:", e)
+        return []
+
+def pick_background_from_cdn(kind: str = "square") -> Optional[str]:
+    """Pick a background image URL from backgrounds/{kind} using MEDIA_CDN_BASE root."""
+    if not MEDIA_CDN_BASE:
+        return None
+    parsed = _parse_jsdelivr_base(MEDIA_CDN_BASE)
+    if not parsed:
+        print("[WP] MEDIA_CDN_BASE not parseable for jsDelivr")
+        return None
+    owner, repo, sha = parsed
+    files = _list_jsdelivr_paths(owner, repo, sha)
+    if not files:
+        return None
+    # Collect image paths under backgrounds/kind
+    cand = [p for p in files if p.startswith(f"/backgrounds/{kind}/") and p.lower().endswith((".jpg",".jpeg",".png",".webp"))]
+    if not cand and kind != "square":
+        cand = [p for p in files if p.startswith("/backgrounds/square/") and p.lower().endswith((".jpg",".jpeg",".png",".webp"))]
+    if not cand:
+        return None
+    # Deterministic daily pick
+    try:
+        from zoneinfo import ZoneInfo
+        dseed = int(dt.datetime.now(ZoneInfo(GAIA_TIMEZONE)).strftime("%Y%m%d"))
+    except Exception:
+        dseed = int(dt.datetime.utcnow().strftime("%Y%m%d"))
+    random.seed(dseed)
+    path = random.choice(cand)
+    # Build full CDN URL: derive repo root from MEDIA_CDN_BASE (strip trailing /images)
+    root = MEDIA_CDN_BASE
+    if root.endswith("/images"):
+        root = root[:-7]
+    url = f"{root}{path}"
+    print(f"[WP] Picked featured background: {url}")
+    return url
 
 # ---------------- Supabase helpers ----------------
 def sb_headers(schema: str = "content") -> Dict[str,str]:
@@ -351,7 +425,9 @@ def build_post_html(post: dict, inline_images: bool, upload_inline: bool) -> (st
 
     featured_id = None
     featured_url = None
-    if WP_FEATURED_SOURCE == "esa":
+    if WP_FEATURED_SOURCE == "bg":
+        featured_url = pick_background_from_cdn(WP_FEATURED_BG_KIND)
+    elif WP_FEATURED_SOURCE == "esa":
         featured_url = fetch_esa_featured_url()
     elif WP_FEATURED_SOURCE == "caption":
         featured_url = square_url
@@ -365,8 +441,10 @@ def build_post_html(post: dict, inline_images: bool, upload_inline: bool) -> (st
             print("[WP] Featured image upload skipped/failed")
 
     parts = []
-    # Credit line for ESA featured image
+    # Credit line for ESA featured image or optional bg credit
     if WP_FEATURED_SOURCE == "esa" and WP_FEATURED_CREDIT:
+        parts.append(f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>")
+    elif WP_FEATURED_SOURCE == "bg" and WP_FEATURED_CREDIT:
         parts.append(f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>")
     # Optional TOC
     toc_html = build_toc_from_md(body_md)
