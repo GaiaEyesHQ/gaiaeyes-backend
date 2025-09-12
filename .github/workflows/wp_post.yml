@@ -11,7 +11,7 @@ on:
         required: false
         default: "false"
   schedule:
-    - cron: "20 14 * * *" # 14:20 UTC ~ 09:20 America/Chicago
+    - cron: "20 14 * * *"
 
 jobs:
   media_sha:
@@ -46,42 +46,34 @@ jobs:
     runs-on: ubuntu-latest
     needs: media_sha
     env:
-      # --- Supabase ---
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
 
-      # --- Media CDN (versioned with resolved SHA) ---
       MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
       MEDIA_REPO_NAME: ${{ secrets.MEDIA_REPO_NAME }}
-      MEDIA_CDN_BASE: https://cdn.jsdelivr.net/gh/${{ secrets.MEDIA_REPO_OWNER }}/${{ secrets.MEDIA_REPO_NAME }}@${{ needs.media_sha.outputs.sha }}/images
+      MEDIA_CDN_BASE: "https://cdn.jsdelivr.net/gh/${{ secrets.MEDIA_REPO_OWNER }}/${{ secrets.MEDIA_REPO_NAME }}@${{ needs.media_sha.outputs.sha }}/images"
 
-      # --- WordPress creds ---
       WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
       WP_USERNAME: ${{ secrets.WP_USERNAME }}
       WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
       WP_ALT_USERNAME: ${{ secrets.WP_ALT_USERNAME }}
 
-      # --- Posting controls ---
-      WP_STATUS: publish                      # change to 'draft' during testing
-      WP_CATEGORY_ID: ${{ secrets.WP_CATEGORY_ID }}     # optional
-      WP_TAG_IDS: ${{ secrets.WP_TAG_IDS }}             # optional comma-separated IDs
+      WP_STATUS: "publish"
+      WP_CATEGORY_ID: ${{ secrets.WP_CATEGORY_ID }}
+      WP_TAG_IDS: ${{ secrets.WP_TAG_IDS }}
 
-      # Featured image from backgrounds in media repo
-      WP_FEATURED_SOURCE: bg                  # 'bg' | 'caption' | 'none'
-      WP_FEATURED_BG_KIND: square            # 'square' | 'tall' | 'wide'
-      WP_FEATURED_CREDIT: Image: Gaia Eyes backgrounds
+      WP_FEATURED_SOURCE: "bg"
+      WP_FEATURED_BG_KIND: "square"
+      WP_FEATURED_CREDIT: "Image: Gaia Eyes backgrounds"
 
-      # Body/TOC options
-      WP_INLINE_IMAGES: "true"                # include tall images as a gallery
-      WP_UPLOAD_INLINE: "false"               # hotlink tall images; set "true" to upload to WP media
-      WP_ADD_TOC: "false"                     # optional table of contents
+      WP_INLINE_IMAGES: "true"
+      WP_UPLOAD_INLINE: "false"
+      WP_ADD_TOC: "false"
       WP_INCLUDE_BODY: ${{ github.event.inputs.include_body || 'false' }}
 
-      # Optional CTA (HTML) appended at end of post
       WP_CTA_HTML: ${{ secrets.WP_CTA_HTML }}
 
-      # Optional UTM query to append to image URLs
       UTM_QUERY: "?utm_source=wp&utm_medium=post&utm_campaign=daily-earthscope"
 
     steps:
