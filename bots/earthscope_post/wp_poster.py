@@ -29,6 +29,7 @@ WP_CTA_HTML     = os.getenv("WP_CTA_HTML","").strip()  # optional HTML appended 
 WP_FEATURED_SOURCE = (os.getenv("WP_FEATURED_SOURCE", "esa").lower())  # esa | caption | none
 WP_FEATURED_CREDIT = os.getenv("WP_FEATURED_CREDIT", "Credit: ESA/Hubble").strip()
 WP_ADD_TOC        = (os.getenv("WP_ADD_TOC", "false").lower() in ("1","true","yes"))
+WP_INCLUDE_BODY  = (os.getenv("WP_INCLUDE_BODY", "false").lower() in ("1","true","yes"))
 
 WP_ALT_USERNAME = os.getenv("WP_ALT_USERNAME", "").strip()
 _SELECTED_AUTH: Optional[tuple[str,str]] = None
@@ -67,10 +68,27 @@ def fetch_esa_featured_url() -> Optional[str]:
         item = ch.find("item")
         if item is None:
             return None
+        # Prefer enclosure url if present
         enc = item.find("enclosure")
         if enc is not None and enc.get("url"):
-            return enc.get("url")
+            url = enc.get("url")
+            if url.lower().endswith((".jpg",".jpeg",".png",".webp")):
+                return url
+        # Fallback: resolve from item link via og:image
         link = item.findtext("link")
+        if not link:
+            return None
+        # Fetch page and parse og:image
+        pr = session.get(link, timeout=20)
+        pr.raise_for_status()
+        html_txt = pr.text
+        m = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html_txt, re.IGNORECASE)
+        if m:
+            return m.group(1)
+        # Secondary: first large <img src>
+        m2 = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', html_txt, re.IGNORECASE)
+        if m2 and m2.group(1).lower().endswith((".jpg",".jpeg",".png",".webp")):
+            return m2.group(1)
         return link
     except Exception:
         return None
@@ -311,7 +329,12 @@ def build_post_html(post: dict, inline_images: bool, upload_inline: bool) -> (st
         featured_url = square_url
     # else: none
     if featured_url:
+        print(f"[WP] Using featured URL: {featured_url}")
         featured_id = wp_upload_image_from_url(featured_url, filename_hint="featured.jpg")
+        if featured_id:
+            print(f"[WP] Featured image uploaded, id={featured_id}")
+        else:
+            print("[WP] Featured image upload skipped/failed")
 
     parts = []
     # Credit line for ESA featured image
@@ -326,8 +349,8 @@ def build_post_html(post: dict, inline_images: bool, upload_inline: bool) -> (st
     if caption:
         parts.append(p(caption))
 
-    # Body markdown → clean HTML
-    if body_md:
+    # Body markdown → clean HTML (only if enabled)
+    if WP_INCLUDE_BODY and body_md:
         parts.append(md_to_clean_html(body_md))
 
     # Inline tall images (gallery-like)
