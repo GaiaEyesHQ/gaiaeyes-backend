@@ -64,25 +64,33 @@ def fetch_esa_featured_url() -> Optional[str]:
     print("[WP] ESA featured source disabled; using MEDIA_CDN_BASE backgrounds.")
     return None
 
-JSDELIVR_RE = re.compile(r"cdn\.jsdelivr\.net/gh/([^/]+)/([^@]+)@([^/]+)")
+JSDELIVR_RE = re.compile(r"cdn\.jsdelivr\.net/gh/([^/]+)/([^/@]+)(?:@([^/]+))?")
 
 def _parse_jsdelivr_base(base: str) -> Optional[tuple[str,str,str]]:
     """Extract (owner, repo, sha) from MEDIA_CDN_BASE like
-       https://cdn.jsdelivr.net/gh/OWNER/REPO@SHA/images"""
+       https://cdn.jsdelivr.net/gh/OWNER/REPO@SHA/images (sha optional)"""
     try:
         m = JSDELIVR_RE.search(base)
         if not m:
+            print(f"[WP] MEDIA_CDN_BASE not parseable for jsDelivr: {base}")
             return None
-        # Stronger debug: show what we parsed
-        print(f"[WP] MEDIA_CDN_BASE parsed: owner={m.group(1)} repo={m.group(2)} sha={m.group(3)}")
-        return m.group(1), m.group(2), m.group(3)
-    except Exception:
+        owner, repo, sha = m.group(1), m.group(2), (m.group(3) or "")
+        if sha:
+            print(f"[WP] MEDIA_CDN_BASE parsed: owner={owner} repo={repo} sha={sha}")
+        else:
+            print(f"[WP] MEDIA_CDN_BASE parsed (no @sha): owner={owner} repo={repo}")
+        return owner, repo, sha
+    except Exception as e:
+        print("[WP] MEDIA_CDN_BASE parse error:", e)
         return None
 
 def _list_jsdelivr_paths(owner: str, repo: str, sha: str) -> List[str]:
     """Return list of file paths in the repo@sha using jsDelivr data API."""
     try:
-        url = f"https://data.jsdelivr.com/v1/package/gh/{owner}/{repo}@{sha}"
+        if sha:
+            url = f"https://data.jsdelivr.com/v1/package/gh/{owner}/{repo}@{sha}"
+        else:
+            url = f"https://data.jsdelivr.com/v1/package/gh/{owner}/{repo}"
         r = session.get(url, timeout=25)
         r.raise_for_status()
         j = r.json()
@@ -115,6 +123,7 @@ def pick_background_from_cdn(kind: str = "square") -> Optional[str]:
     owner, repo, sha = parsed
     files = _list_jsdelivr_paths(owner, repo, sha)
     if not files:
+        print("[WP] jsDelivr returned no file listing")
         return None
     # Collect image paths under backgrounds/kind
     cand = [p for p in files if p.startswith(f"/backgrounds/{kind}/") and p.lower().endswith((".jpg",".jpeg",".png",".webp"))]
