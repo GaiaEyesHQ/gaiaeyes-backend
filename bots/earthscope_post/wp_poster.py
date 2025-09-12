@@ -5,6 +5,7 @@ import os, sys, json, time, html, re
 import datetime as dt
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+from urllib.parse import urljoin
 
 import requests
 from requests.adapters import HTTPAdapter, Retry
@@ -64,33 +65,56 @@ def fetch_esa_featured_url() -> Optional[str]:
         root = ET.fromstring(r.text)
         ch = root.find("channel")
         if ch is None:
+            print("[WP] ESA RSS: no channel")
             return None
         item = ch.find("item")
         if item is None:
+            print("[WP] ESA RSS: no item")
             return None
-        # Prefer enclosure url if present
+        # Prefer enclosure url if present and looks like an image
         enc = item.find("enclosure")
         if enc is not None and enc.get("url"):
             url = enc.get("url")
             if url.lower().endswith((".jpg",".jpeg",".png",".webp")):
+                print(f"[WP] ESA enclosure url: {url}")
                 return url
-        # Fallback: resolve from item link via og:image
+        # Fallback: resolve from item link via og:image/twitter:image
         link = item.findtext("link")
         if not link:
+            print("[WP] ESA RSS: no link in item")
             return None
-        # Fetch page and parse og:image
         pr = session.get(link, timeout=20)
         pr.raise_for_status()
         html_txt = pr.text
-        m = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html_txt, re.IGNORECASE)
-        if m:
-            return m.group(1)
-        # Secondary: first large <img src>
+        # Try multiple meta patterns
+        patterns = [
+            r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+            r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
+            r'<link[^>]+rel=["\']image_src["\'][^>]+href=["\']([^"\']+)["\']',
+        ]
+        for pat in patterns:
+            m = re.search(pat, html_txt, re.IGNORECASE)
+            if m:
+                cand = m.group(1).strip()
+                # absolutize if relative
+                if cand.startswith("/"):
+                    cand = urljoin(link, cand)
+                if cand.lower().endswith((".jpg",".jpeg",".png",".webp")):
+                    print(f"[WP] ESA meta image: {cand}")
+                    return cand
+        # Secondary: find first <img src> that looks like an image
         m2 = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', html_txt, re.IGNORECASE)
-        if m2 and m2.group(1).lower().endswith((".jpg",".jpeg",".png",".webp")):
-            return m2.group(1)
+        if m2:
+            cand = m2.group(1).strip()
+            if cand.startswith("/"):
+                cand = urljoin(link, cand)
+            if cand.lower().endswith((".jpg",".jpeg",".png",".webp")):
+                print(f"[WP] ESA img tag: {cand}")
+                return cand
+        print("[WP] ESA resolve fell back to page link")
         return link
-    except Exception:
+    except Exception as e:
+        print("[WP] ESA fetch error:", e)
         return None
 
 # ---------------- Supabase helpers ----------------
@@ -176,7 +200,11 @@ def wp_upload_image_from_url(image_url: str, filename_hint="gaiaeyes.jpg") -> Op
         return None
     filename = os.path.basename(image_url.split("?")[0]) or filename_hint
     media_endpoint = f"{WP_BASE_URL}/wp-json/wp/v2/media"
-    files = {"file": (filename, r.content, "image/jpeg")}
+    mime = "image/jpeg"
+    lower = filename.lower()
+    if lower.endswith(".png"): mime = "image/png"
+    elif lower.endswith(".webp"): mime = "image/webp"
+    files = {"file": (filename, r.content, mime)}
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     resp = session.post(media_endpoint, auth=wp_auth(), files=files, headers=headers, timeout=45)
     if resp.status_code not in (200,201):
