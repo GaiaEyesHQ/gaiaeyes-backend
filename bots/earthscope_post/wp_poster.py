@@ -29,7 +29,7 @@ WP_INLINE_IMAGES= (os.getenv("WP_INLINE_IMAGES","true").lower() in ("1","true","
 WP_UPLOAD_INLINE= (os.getenv("WP_UPLOAD_INLINE","false").lower() in ("1","true","yes"))
 WP_CTA_HTML     = os.getenv("WP_CTA_HTML","").strip()  # optional HTML appended at bottom
 
-WP_FEATURED_SOURCE = (os.getenv("WP_FEATURED_SOURCE", "esa").lower())  # esa | caption | none | bg
+WP_FEATURED_SOURCE = (os.getenv("WP_FEATURED_SOURCE", "bg").lower())  # bg | caption | none
 WP_FEATURED_CREDIT = os.getenv("WP_FEATURED_CREDIT", "Credit: ESA/Hubble").strip()
 WP_ADD_TOC        = (os.getenv("WP_ADD_TOC", "false").lower() in ("1","true","yes"))
 WP_INCLUDE_BODY  = (os.getenv("WP_INCLUDE_BODY", "false").lower() in ("1","true","yes"))
@@ -60,65 +60,9 @@ def today_in_tz(tz: str) -> dt.date:
         return dt.datetime.utcnow().date()
 
 def fetch_esa_featured_url() -> Optional[str]:
-    """Fetch the latest ESA/Hubble image URL from the RSS feed.
-    Returns a direct image URL when possible; falls back to the item link otherwise."""
-    try:
-        r = session.get("https://esahubble.org/images/rss/", timeout=20)
-        r.raise_for_status()
-        root = ET.fromstring(r.text)
-        ch = root.find("channel")
-        if ch is None:
-            print("[WP] ESA RSS: no channel")
-            return None
-        item = ch.find("item")
-        if item is None:
-            print("[WP] ESA RSS: no item")
-            return None
-        # Prefer enclosure url if present and looks like an image
-        enc = item.find("enclosure")
-        if enc is not None and enc.get("url"):
-            url = enc.get("url")
-            if url.lower().endswith((".jpg",".jpeg",".png",".webp")):
-                print(f"[WP] ESA enclosure url: {url}")
-                return url
-        # Fallback: resolve from item link via og:image/twitter:image
-        link = item.findtext("link")
-        if not link:
-            print("[WP] ESA RSS: no link in item")
-            return None
-        pr = session.get(link, timeout=20)
-        pr.raise_for_status()
-        html_txt = pr.text
-        # Try multiple meta patterns
-        patterns = [
-            r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
-            r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
-            r'<link[^>]+rel=["\']image_src["\'][^>]+href=["\']([^"\']+)["\']',
-        ]
-        for pat in patterns:
-            m = re.search(pat, html_txt, re.IGNORECASE)
-            if m:
-                cand = m.group(1).strip()
-                # absolutize if relative
-                if cand.startswith("/"):
-                    cand = urljoin(link, cand)
-                if cand.lower().endswith((".jpg",".jpeg",".png",".webp")):
-                    print(f"[WP] ESA meta image: {cand}")
-                    return cand
-        # Secondary: find first <img src> that looks like an image
-        m2 = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', html_txt, re.IGNORECASE)
-        if m2:
-            cand = m2.group(1).strip()
-            if cand.startswith("/"):
-                cand = urljoin(link, cand)
-            if cand.lower().endswith((".jpg",".jpeg",".png",".webp")):
-                print(f"[WP] ESA img tag: {cand}")
-                return cand
-        print("[WP] ESA resolve fell back to page link")
-        return link
-    except Exception as e:
-        print("[WP] ESA fetch error:", e)
-        return None
+    """ESA source disabled — using backgrounds from media repo."""
+    print("[WP] ESA featured source disabled; using MEDIA_CDN_BASE backgrounds.")
+    return None
 
 JSDELIVR_RE = re.compile(r"cdn\.jsdelivr\.net/gh/([^/]+)/([^@]+)@([^/]+)")
 
@@ -431,8 +375,6 @@ def build_post_html(post: dict, inline_images: bool, upload_inline: bool) -> (st
     featured_url = None
     if WP_FEATURED_SOURCE == "bg":
         featured_url = pick_background_from_cdn(WP_FEATURED_BG_KIND)
-    elif WP_FEATURED_SOURCE == "esa":
-        featured_url = fetch_esa_featured_url()
     elif WP_FEATURED_SOURCE == "caption":
         featured_url = square_url
     # else: none
@@ -448,10 +390,8 @@ def build_post_html(post: dict, inline_images: bool, upload_inline: bool) -> (st
     # If featured upload failed but we have a URL, inline it at the top as a visible hero
     if featured_id is None and featured_url:
         parts.append(f'<p><img src="{html.escape(featured_url)}" alt="Featured image" style="max-width:100%;height:auto;"/></p>')
-    # Credit line for ESA featured image or optional bg credit
-    if WP_FEATURED_SOURCE == "esa" and WP_FEATURED_CREDIT:
-        parts.append(f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>")
-    elif WP_FEATURED_SOURCE == "bg":
+    # Credit line for optional bg credit
+    if WP_FEATURED_SOURCE == "bg":
         credit = WP_FEATURED_CREDIT or "Image: Gaia Eyes backgrounds"
         parts.append(f"<p><em>{html.escape(credit)}</em></p>")
     # Optional TOC
