@@ -45,6 +45,9 @@ GAIA_TIMEZONE       = os.getenv("GAIA_TIMEZONE","America/Chicago")
 
 # -------- Media (CDN) --------
 MEDIA_CDN_BASE  = os.getenv("MEDIA_CDN_BASE","").rstrip("/")
+
+# Use existing media token if available; allows listing private repo contents
+GITHUB_API_TOKEN = os.getenv("GITHUB_API_TOKEN", "").strip() or os.getenv("GAIAEYES_MEDIA_TOKEN", "").strip()
 UTM_QUERY       = os.getenv("UTM_QUERY","").strip()  # e.g. ?utm_source=wp...
 
 session = requests.Session()
@@ -112,6 +115,31 @@ def _list_jsdelivr_paths(owner: str, repo: str, sha: str) -> List[str]:
         print("[WP] jsDelivr list error:", e)
         return []
 
+# GitHub API fallback for file listing
+def _list_github_paths(owner: str, repo: str, sha: str) -> List[str]:
+    """List file paths via GitHub API for repo@sha (or default branch if sha is empty)."""
+    try:
+        headers = {"Accept": "application/vnd.github+json"}
+        if GITHUB_API_TOKEN:
+            headers["Authorization"] = f"Bearer {GITHUB_API_TOKEN}"
+        if sha:
+            url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{sha}?recursive=1"
+        else:
+            # default branch tree
+            url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/heads/main?recursive=1"
+        r = session.get(url, headers=headers, timeout=25)
+        r.raise_for_status()
+        j = r.json()
+        out = []
+        for node in j.get("tree", []):
+            if node.get("type") == "blob":
+                out.append("/" + node.get("path", ""))
+        print(f"[WP] GitHub listed {len(out)} paths")
+        return out
+    except Exception as e:
+        print("[WP] GitHub list error:", e)
+        return []
+
 def pick_background_from_cdn(kind: str = "square") -> Optional[str]:
     """Pick a background image URL from backgrounds/{kind} using MEDIA_CDN_BASE root."""
     if not MEDIA_CDN_BASE:
@@ -123,7 +151,10 @@ def pick_background_from_cdn(kind: str = "square") -> Optional[str]:
     owner, repo, sha = parsed
     files = _list_jsdelivr_paths(owner, repo, sha)
     if not files:
-        print("[WP] jsDelivr returned no file listing")
+        print("[WP] jsDelivr returned no file listing; falling back to GitHub API")
+        files = _list_github_paths(owner, repo, sha)
+    if not files:
+        print("[WP] No files found via jsDelivr or GitHub")
         return None
     # Collect image paths under backgrounds/kind
     cand = [p for p in files if p.startswith(f"/backgrounds/{kind}/") and p.lower().endswith((".jpg",".jpeg",".png",".webp"))]
