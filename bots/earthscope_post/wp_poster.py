@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any, List
 import requests
 from requests.adapters import HTTPAdapter, Retry
 from dotenv import load_dotenv
+import xml.etree.ElementTree as ET
 
 HERE = Path(__file__).resolve().parent
 load_dotenv(HERE / ".env")
@@ -24,6 +25,10 @@ WP_TAG_IDS      = os.getenv("WP_TAG_IDS","").strip()  # e.g., "12,34,56"
 WP_INLINE_IMAGES= (os.getenv("WP_INLINE_IMAGES","true").lower() in ("1","true","yes"))
 WP_UPLOAD_INLINE= (os.getenv("WP_UPLOAD_INLINE","false").lower() in ("1","true","yes"))
 WP_CTA_HTML     = os.getenv("WP_CTA_HTML","").strip()  # optional HTML appended at bottom
+
+WP_FEATURED_SOURCE = (os.getenv("WP_FEATURED_SOURCE", "esa").lower())  # esa | caption | none
+WP_FEATURED_CREDIT = os.getenv("WP_FEATURED_CREDIT", "Credit: ESA/Hubble").strip()
+WP_ADD_TOC        = (os.getenv("WP_ADD_TOC", "false").lower() in ("1","true","yes"))
 
 # -------- Supabase --------
 SUPABASE_REST_URL   = os.getenv("SUPABASE_REST_URL","").rstrip("/")
@@ -45,6 +50,27 @@ def today_in_tz(tz: str) -> dt.date:
         return dt.datetime.now(ZoneInfo(tz)).date()
     except Exception:
         return dt.datetime.utcnow().date()
+
+def fetch_esa_featured_url() -> Optional[str]:
+    """Fetch the latest ESA/Hubble image URL from the RSS feed.
+    Returns a direct image URL when possible; falls back to the item link otherwise."""
+    try:
+        r = session.get("https://esahubble.org/images/rss/", timeout=20)
+        r.raise_for_status()
+        root = ET.fromstring(r.text)
+        ch = root.find("channel")
+        if ch is None:
+            return None
+        item = ch.find("item")
+        if item is None:
+            return None
+        enc = item.find("enclosure")
+        if enc is not None and enc.get("url"):
+            return enc.get("url")
+        link = item.findtext("link")
+        return link
+    except Exception:
+        return None
 
 # ---------------- Supabase helpers ----------------
 def sb_headers(schema: str = "content") -> Dict[str,str]:
@@ -162,6 +188,20 @@ def bullet_ul(lines: List[str]) -> str:
     items = "\n".join(f"<li>{html.escape(x)}</li>" for x in lines if x.strip())
     return f"<ul>\n{items}\n</ul>"
 
+def build_toc_from_md(md: str) -> str:
+    if not md or not WP_ADD_TOC:
+        return ""
+    heads = []
+    for line in md.splitlines():
+        t = line.strip()
+        if t and t.endswith(":") and not t.startswith("•"):
+            head = t[:-1].strip(" *")
+            heads.append(head)
+    if not heads:
+        return ""
+    items = "\n".join(f'<li><a href="#{slugify(h)}">{html.escape(h)}</a></li>' for h in heads)
+    return f"<div class=\"toc\"><strong>On this page</strong><ul>\n{items}\n</ul></div>"
+
 def md_to_clean_html(md: str) -> str:
     """
     Minimal markdown-to-HTML for our sections:
@@ -242,17 +282,24 @@ def build_post_html(post: dict, inline_images: bool, upload_inline: bool) -> (st
     affects_url = f"{base}/daily_affects.jpg{q}" if base else ""
     play_url    = f"{base}/daily_playbook.jpg{q}" if base else ""
 
-    # upload square to WP and set as featured image
     featured_id = None
-    if square_url:
-        featured_id = wp_upload_image_from_url(square_url, filename_hint="daily_caption.jpg")
+    featured_url = None
+    if WP_FEATURED_SOURCE == "esa":
+        featured_url = fetch_esa_featured_url()
+    elif WP_FEATURED_SOURCE == "caption":
+        featured_url = square_url
+    # else: none
+    if featured_url:
+        featured_id = wp_upload_image_from_url(featured_url, filename_hint="featured.jpg")
 
-    # Build HTML
     parts = []
-    # Optional: keep image inline too (below title)
-    if inline_images and square_url:
-        alt = metrics_alt_text(metrics)
-        parts.append(f'<p><img src="{html.escape(square_url)}" alt="{html.escape(alt)}" style="max-width:100%;height:auto;"/></p>')
+    # Credit line for ESA featured image
+    if WP_FEATURED_SOURCE == "esa" and WP_FEATURED_CREDIT:
+        parts.append(f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>")
+    # Optional TOC
+    toc_html = build_toc_from_md(body_md)
+    if toc_html:
+        parts.append(toc_html)
 
     # Caption paragraph
     if caption:
