@@ -30,6 +30,16 @@ session.headers.update({
     "Accept": "application/json"
 })
 
+# --- WordPress helpers / diagnostics ---
+def wp_verify_credentials(base_url: str, auth: tuple[str, str]) -> None:
+    url = f"{base_url}/wp-json/wp/v2/users/me"
+    r = session.get(url, auth=auth, timeout=30)
+    ct = r.headers.get("content-type", "")
+    print(f"[WP] /users/me status={r.status_code} ct={ct}")
+    if r.status_code != 200:
+        print("[WP] body:", (r.text or "")[:300])
+        r.raise_for_status()
+
 def sb_recent_summaries(days=1, limit=8) -> List[Dict[str,Any]]:
     url = f"{SUPABASE_REST_URL}/research_articles"
     since = (dt.datetime.utcnow() - dt.timedelta(days=days)).isoformat() + "Z"
@@ -59,18 +69,37 @@ def wp_auth():
     return (WP_USERNAME, WP_APP_PASSWORD)
 
 def wp_create_post(title: str, html_content: str) -> dict:
-    payload = {"title":title, "content":html_content, "status":WP_STATUS}
+    endpoint = f"{WP_BASE_URL}/wp-json/wp/v2/posts"
+    payload = {"title": title, "content": html_content, "status": WP_STATUS}
     if WP_CATEGORY_ID:
-        try: payload["categories"] = [int(WP_CATEGORY_ID)]
-        except: pass
+        try:
+            payload["categories"] = [int(WP_CATEGORY_ID)]
+        except:
+            pass
     if WP_TAG_IDS:
         try:
             ids = [int(x.strip()) for x in WP_TAG_IDS.split(",") if x.strip().isdigit()]
-            if ids: payload["tags"] = ids
-        except: pass
-    r = session.post(f"{WP_BASE_URL}/wp-json/wp/v2/posts", auth=wp_auth(), json=payload, timeout=40)
-    r.raise_for_status()
-    return r.json()
+            if ids:
+                payload["tags"] = ids
+        except:
+            pass
+
+    print(f"[WP] POST {endpoint}")
+    r = session.post(endpoint, auth=wp_auth(), json=payload, timeout=45)
+    ct = r.headers.get("content-type", "")
+    print(f"[WP] create status={r.status_code} ct={ct}")
+
+    try:
+        r.raise_for_status()
+    except Exception:
+        print("[WP] body:", (r.text or "")[:400])
+        raise
+
+    try:
+        return r.json()
+    except Exception:
+        print("[WP] non-JSON response body:", (r.text or "")[:400])
+        return {"status_code": r.status_code, "text": r.text}
 
 def roundup_html(items: List[Dict[str,Any]]) -> str:
     parts = [f"<p><em>Curated highlights from today’s sources.</em></p>"]
@@ -94,11 +123,17 @@ def main():
     if not items:
         print("No recent research items.")
         return
+
+    # Preflight auth/URL so failures are obvious
+    wp_verify_credentials(WP_BASE_URL, wp_auth())
+
     today = dt.datetime.utcnow().strftime("%b %d, %Y")
     title = f"Gaia Eyes Research Roundup — {today}"
     html = roundup_html(items)
     created = wp_create_post(title, html)
-    print("WP research post created:", created.get("link"), "status:", created.get("status"))
+    link = created.get("link") if isinstance(created, dict) else None
+    status = created.get("status") if isinstance(created, dict) else None
+    print("WP research post created:", link or "(no JSON link)", "status:", status or created.get("status_code"))
 
 if __name__=="__main__":
     main()
