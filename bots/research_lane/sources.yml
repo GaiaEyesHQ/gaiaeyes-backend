@@ -41,4 +41,19 @@ api:
     url: https://api.weather.gov/alerts/active
     parser: nws_alerts
     tags: [weather, alerts]
+
+rss:
+  - id: spaceweather-com
+    url: https://www.spaceweather.com/rss.php
+    tags: [space-weather, solar]
+
+  - id: noaa-spaceweather-enthusiasts
+    url: https://services.swpc.noaa.gov/news/space-weather-enthusiasts-rss.xml
+    tags: [space-weather, swpc, enthusiasts]
+
+api:
+  - id: nws-alerts-geo
+    url: https://api.weather.gov/alerts?status=actual&message_type=alert&limit=20
+    parser: nws_alerts
+    tags: [weather, alerts]
 # You can add NOAA/SWPC JSON endpoints here later
