@@ -80,4 +80,18 @@ jobs:
           WP_STATUS: draft     # set to publish when you’re ready
           WP_CATEGORY_ID: ${{ secrets.WP_CATEGORY_ID }}
           WP_TAG_IDS: ${{ secrets.WP_TAG_IDS }}
+          MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
+          MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
+          # Versioned CDN base built with media SHA:
+          MEDIA_CDN_BASE: "https://cdn.jsdelivr.net/gh/${{ secrets.MEDIA_REPO_OWNER }}/${{ secrets.MEDIA_REPO_NAME }}@${{ needs.media_sha.outputs.sha }}/images"
+        
+          WP_FEATURED_SOURCE: "bg"
+          WP_FEATURED_BG_KIND: "square"
+          WP_FEATURED_CREDIT: "Image: Gaia Eyes backgrounds"
+        
+          # Optional CTA
+          WP_CTA_HTML: ${{ secrets.WP_CTA_HTML }}
+        
+          # If media repo is private:
+          GAIAEYES_MEDIA_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
         run: python research_wp_poster.py
