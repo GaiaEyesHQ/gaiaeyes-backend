@@ -73,10 +73,9 @@ jobs:
             --overlay runs/.ignore_overlay.png \
             --insecure || true
 
-      - name: Stage artifacts into media repo (latest + timestamped)
+      - name: Stage artifacts into media repo (latest only)
         working-directory: ${{ env.WORKDIR }}
         env:
-          TS: ${{ steps.run.outputs.ts }}
           MEDIA_DIR: ${{ github.workspace }}/media
         run: |
           set -euo pipefail
@@ -89,47 +88,19 @@ jobs:
           cp -f runs/tomsk_now.json           "$MEDIA_DIR/data/tomsk_latest.json"        || true
           cp -f runs/cumiana_now.json         "$MEDIA_DIR/data/cumiana_latest.json"      || true
 
-          # Timestamped history (append-only)
-          cp -f runs/tomsk_overlay.png        "$MEDIA_DIR/images/tomsk_${TS}.png"        || true
-          cp -f runs/cumiana_overlay.png      "$MEDIA_DIR/images/cumiana_${TS}.png"      || true
-          cp -f runs/schumann_now.json        "$MEDIA_DIR/data/schumann_${TS}.json"      || true
-          cp -f runs/tomsk_now.json           "$MEDIA_DIR/data/tomsk_${TS}.json"         || true
-          cp -f runs/cumiana_now.json         "$MEDIA_DIR/data/cumiana_${TS}.json"       || true
-
-      - name: Prune media history (keep last N per pattern)
+      - name: Remove timestamped media artifacts (keep only *_latest.*)
         working-directory: ${{ env.MEDIA_DIR }}
-        env:
-          KEEP_PER_PATTERN: "200"   # adjust (e.g., 60 ~ 2 weeks at 30-min cadence)
         run: |
           set -euo pipefail
-          echo "Keeping *_latest.* always; pruning timestamped history..."
-
-          prune() {
-            local dir="$1"; shift
-            local pattern="$1"; shift
-            local keep="${1:-200}"
-            cd "$dir"
-            mapfile -t files < <(ls -1t $pattern 2>/dev/null || true)
-            if [ "${#files[@]}" -le "$keep" ]; then
-              cd - >/dev/null; return
-            fi
-            to_delete=("${files[@]:$keep}")
-            if [ "${#to_delete[@]}" -gt 0 ]; then
-              printf '%s\0' "${to_delete[@]}" | xargs -0 rm -f --
-              echo "Pruned ${#to_delete[@]} from $dir/$pattern"
-            fi
-            cd - >/dev/null
-          }
-
-          # PNGs
-          prune images 'tomsk_*.png'   "${KEEP_PER_PATTERN}"
-          prune images 'cumiana_*.png' "${KEEP_PER_PATTERN}"
-          prune images 'schumann_*.png' "${KEEP_PER_PATTERN}"
-
-          # JSONs
-          prune data 'tomsk_*.json'     "${KEEP_PER_PATTERN}"
-          prune data 'cumiana_*.json'   "${KEEP_PER_PATTERN}"
-          prune data 'schumann_*.json'  "${KEEP_PER_PATTERN}"
+          echo "Removing timestamped PNG/JSON files; keeping *_latest.* only..."
+          # Remove station/merged PNGs with timestamps
+          git rm -f images/tomsk_*.png 2>/dev/null || true
+          git rm -f images/cumiana_*.png 2>/dev/null || true
+          git rm -f images/schumann_*.png 2>/dev/null || true
+          # Remove station/merged JSONs with timestamps
+          git rm -f data/tomsk_*.json 2>/dev/null || true
+          git rm -f data/cumiana_*.json 2>/dev/null || true
+          git rm -f data/schumann_*.json 2>/dev/null || true
 
       - name: Commit & push to media repo
         working-directory: ${{ env.MEDIA_DIR }}
