@@ -29,6 +29,9 @@ WP_CTA_HTML         = os.getenv("WP_CTA_HTML", "").strip()
 # Token for GitHub tree listing fallback (private media repo)
 GITHUB_API_TOKEN    = os.getenv("GITHUB_API_TOKEN", "").strip() or os.getenv("GAIAEYES_MEDIA_TOKEN", "").strip()
 
+# Add a small table of contents by default
+WP_ADD_TOC         = (os.getenv("WP_ADD_TOC", "true").lower() in ("1","true","yes"))
+
 # Supabase
 SUPABASE_REST_URL   = os.getenv("SUPABASE_REST_URL","").rstrip("/")
 SUPABASE_SERVICE_KEY= os.getenv("SUPABASE_SERVICE_KEY","").strip()
@@ -151,6 +154,48 @@ def wp_upload_image_from_url(image_url: str, filename_hint="featured.jpg", dl_he
         return None, None
     j = r.json() or {}
     return j.get("id"), j.get("source_url") or j.get("guid", {}).get("rendered")
+
+# --- TOC helpers ---
+
+def slugify(txt: str) -> str:
+    s = re.sub(r"[^a-zA-Z0-9\- ]+", "", txt).strip().lower()
+    s = re.sub(r"\s+", "-", s)
+    return s[:64] or "section"
+
+def build_toc_and_inject_ids(html_content: str) -> tuple[str, str]:
+    """
+    Find <h3>...</h3> headings, inject id="..." if missing, and build a UL TOC.
+    Returns (modified_html, toc_html).
+    """
+    headings = []
+    # match minimal h3 blocks
+    pattern = re.compile(r"<h3(.*?)>(.*?)</h3>", re.IGNORECASE | re.DOTALL)
+
+    def _strip_tags(s: str) -> str:
+        return re.sub(r"<[^>]+>", "", s or "").strip()
+
+    def _has_id(attrs: str) -> bool:
+        return bool(re.search(r"\bid=\"[^\"]+\"", attrs or ""))
+
+    def repl(m):
+        attrs, inner = m.group(1), m.group(2)
+        text = _strip_tags(inner)
+        if not text:
+            return m.group(0)
+        slug = slugify(text)
+        headings.append((text, slug))
+        if _has_id(attrs):
+            return m.group(0)
+        # inject id into opening tag
+        new_open = f"<h3 id=\"{slug}\"{attrs}>"
+        return new_open + inner + "</h3>"
+
+    modified = pattern.sub(repl, html_content)
+    if not headings:
+        return html_content, ""
+    items = "\n".join(f'<li><a href="#${{slug}}">{html.escape(text)}</a></li>'.replace("${slug}", slug) for text, slug in headings)
+    toc = f"<div class=\"toc\"><strong>On this page</strong><ul>\n{items}\n</ul></div>"
+    return modified, toc
 
 # --- WordPress helpers / diagnostics ---
 def wp_verify_credentials(base_url: str, auth: tuple[str, str]) -> None:
@@ -297,6 +342,12 @@ def main():
         html_content = f'<p><img src="{html.escape(hero_url)}" alt="Featured image" style="max-width:100%;height:auto;"/></p>\n' + html_content
         if WP_FEATURED_CREDIT:
             html_content = f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>\n" + html_content
+
+    # Optional TOC: build from H3 headings and inject anchor IDs
+    if WP_ADD_TOC:
+        html_content, toc_html = build_toc_and_inject_ids(html_content)
+        if toc_html:
+            html_content = toc_html + "\n" + html_content
 
     # Optional CTA footer
     if WP_CTA_HTML:
