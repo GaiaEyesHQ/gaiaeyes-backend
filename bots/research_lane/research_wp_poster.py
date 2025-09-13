@@ -15,7 +15,7 @@ load_dotenv(HERE.parent / ".env")
 WP_BASE_URL     = os.getenv("WP_BASE_URL","").rstrip("/")
 WP_USERNAME     = os.getenv("WP_USERNAME","")
 WP_APP_PASSWORD = os.getenv("WP_APP_PASSWORD","")
-WP_STATUS       = (os.getenv("WP_STATUS","draft") or "draft").lower()
+WP_STATUS       = (os.getenv("WP_STATUS","publish") or "publish").lower()
 WP_CATEGORY_ID  = os.getenv("WP_CATEGORY_ID","").strip()
 WP_TAG_IDS      = os.getenv("WP_TAG_IDS","").strip()
 
@@ -101,11 +101,12 @@ def _list_github_paths(owner: str, repo: str, sha: str):
     except Exception as e:
         print("[WP] GitHub list error:", e); return []
 
-def pick_background_from_cdn(kind: str = "square") -> str | None:
+def pick_background_from_cdn(kind: str = "square") -> tuple[str|None, str|None, str|None, str|None, str|None]:
+    """Return (owner, repo, sha, path, cdn_url) or (None,... ) on failure."""
     if not MEDIA_CDN_BASE:
-        return None
+        return None, None, None, None, None
     parsed = _parse_jsdelivr_base(MEDIA_CDN_BASE)
-    if not parsed: return None
+    if not parsed: return None, None, None, None, None
     owner, repo, sha = parsed
     files = _list_jsdelivr_paths(owner, repo, sha)
     if not files:
@@ -113,13 +114,13 @@ def pick_background_from_cdn(kind: str = "square") -> str | None:
         files = _list_github_paths(owner, repo, sha)
     if not files:
         print("[WP] No files found via jsDelivr or GitHub")
-        return None
+        return None, None, None, None, None
     cand = [p for p in files if p.startswith(f"/backgrounds/{kind}/") and p.lower().endswith((".jpg",".jpeg",".png",".webp"))]
     if not cand and kind != "square":
         cand = [p for p in files if p.startswith("/backgrounds/square/") and p.lower().endswith((".jpg",".jpeg",".png",".webp"))]
     if not cand:
         print("[WP] No background candidates found")
-        return None
+        return None, None, None, None, None
     # deterministic daily pick
     dseed = int(dt.datetime.utcnow().strftime("%Y%m%d"))
     random.seed(dseed)
@@ -128,14 +129,14 @@ def pick_background_from_cdn(kind: str = "square") -> str | None:
     if root.endswith("/images"): root = root[:-7]
     url = f"{root}{path}"
     print(f"[WP] Picked featured background: {url}")
-    return url
+    return owner, repo, sha, path, url
 
-def wp_upload_image_from_url(image_url: str, filename_hint="featured.jpg") -> int | None:
+def wp_upload_image_from_url(image_url: str, filename_hint="featured.jpg", dl_headers: dict | None = None) -> tuple[int|None, str|None]:
     try:
-        resp = session.get(image_url, timeout=30)
+        resp = session.get(image_url, headers=dl_headers or {}, timeout=30)
         resp.raise_for_status()
     except Exception as e:
-        print("[WP] download image failed:", e); return None
+        print("[WP] download image failed:", e); return None, None
     filename = os.path.basename(image_url.split("?")[0]) or filename_hint
     mime = "image/jpeg"
     lower = filename.lower()
@@ -147,8 +148,9 @@ def wp_upload_image_from_url(image_url: str, filename_hint="featured.jpg") -> in
     r = session.post(media_endpoint, auth=wp_auth(), files=files, headers=headers, timeout=45)
     if r.status_code not in (200,201):
         print("[WP] media upload failed:", r.status_code, (r.text or "")[:200])
-        return None
-    return (r.json() or {}).get("id")
+        return None, None
+    j = r.json() or {}
+    return j.get("id"), j.get("source_url") or j.get("guid", {}).get("rendered")
 
 # --- WordPress helpers / diagnostics ---
 def wp_verify_credentials(base_url: str, auth: tuple[str, str]) -> None:
@@ -253,26 +255,48 @@ def main():
     title = f"Gaia Eyes Research Roundup — {today}"
     html_content = roundup_html(items)
 
-    # Featured image from media backgrounds (or caption/none)
     featured_id = None
-    featured_url = None
+    featured_src_url = None  # WP media source_url
+    owner = repo = sha = path = None
+    cdn_url = None
+
     if WP_FEATURED_SOURCE == "bg":
-        featured_url = pick_background_from_cdn(WP_FEATURED_BG_KIND)
+        owner, repo, sha, path, cdn_url = pick_background_from_cdn(WP_FEATURED_BG_KIND)
     elif WP_FEATURED_SOURCE == "caption":
         # no caption image in roundup; keep None
         pass
 
-    if featured_url:
-        print(f"[WP] Using featured URL: {featured_url}")
-        featured_id = wp_upload_image_from_url(featured_url)
+    # Try to upload featured image if we have a CDN URL
+    if cdn_url:
+        print(f"[WP] Using featured URL: {cdn_url}")
+        # First attempt: jsDelivr CDN
+        fid, fsrc = wp_upload_image_from_url(cdn_url)
+        if not fid and owner and repo and path is not None:
+            # Fallback: GitHub raw (private repo case) with token
+            raw_url = None
+            if sha:
+                raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{sha}{path}"
+            else:
+                # default branch fallback
+                raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/main{path}"
+            print(f"[WP] jsDelivr download failed; trying raw GitHub: {raw_url}")
+            headers = {}
+            if GITHUB_API_TOKEN:
+                headers["Authorization"] = f"Bearer {GITHUB_API_TOKEN}"
+            fid, fsrc = wp_upload_image_from_url(raw_url, dl_headers=headers)
+        featured_id, featured_src_url = fid, fsrc
         if featured_id:
             print(f"[WP] Featured image uploaded, id={featured_id}")
-            # add credit line at top of post for transparency
-            if WP_FEATURED_CREDIT:
-                html_content = f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>\n" + html_content
         else:
-            print("[WP] Featured upload failed; inlining hero at top")
-            html_content = f'<p><img src="{html.escape(featured_url)}" alt="Featured image" style="max-width:100%;height:auto;"/></p>\n' + html_content
+            print("[WP] Featured upload failed; will inline external hero if available")
+
+    # Always place a visible hero at the top: prefer WP media URL if we have one,
+    # otherwise use the external CDN URL as a fallback.
+    hero_url = featured_src_url or cdn_url
+    if hero_url:
+        html_content = f'<p><img src="{html.escape(hero_url)}" alt="Featured image" style="max-width:100%;height:auto;"/></p>\n' + html_content
+        if WP_FEATURED_CREDIT:
+            html_content = f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>\n" + html_content
 
     # Optional CTA footer
     if WP_CTA_HTML:
