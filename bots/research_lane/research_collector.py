@@ -17,14 +17,6 @@ SUPABASE_REST_URL   = os.getenv("SUPABASE_REST_URL","").rstrip("/")
 SUPABASE_SERVICE_KEY= os.getenv("SUPABASE_SERVICE_KEY","").strip()
 GAIA_TIMEZONE       = os.getenv("GAIA_TIMEZONE","America/Chicago")
 
-session = requests.Session()
-session.headers.update({
-    "apikey": SUPABASE_SERVICE_KEY,
-    "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-    "Accept": "application/json"
-})
-TIMEOUT=20
-
 # after existing imports / dotenv loads
 HTTP_USER_AGENT = os.getenv(
     "HTTP_USER_AGENT",
@@ -33,10 +25,12 @@ HTTP_USER_AGENT = os.getenv(
 
 session = requests.Session()
 session.headers.update({
-    "User-Agent": HTTP_USER_AGENT,           # <-- required by api.weather.gov
+    "apikey": SUPABASE_SERVICE_KEY,
+    "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+    "User-Agent": HTTP_USER_AGENT,
     "Accept": "application/json, application/xml;q=0.9, */*;q=0.8"
 })
-# If using Supabase here too, keep a separate session or add those headers in the SB functions.
+TIMEOUT=20
 
 def sb_upsert_articles(rows: List[Dict[str,Any]]):
     if not rows:
