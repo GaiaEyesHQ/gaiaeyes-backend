@@ -25,6 +25,19 @@ session.headers.update({
 })
 TIMEOUT=20
 
+# after existing imports / dotenv loads
+HTTP_USER_AGENT = os.getenv(
+    "HTTP_USER_AGENT",
+    "GaiaEyesBot/1.0 (+https://gaiaeyes.com; gaiaeyes7.83@gmail.com)"
+)
+
+session = requests.Session()
+session.headers.update({
+    "User-Agent": HTTP_USER_AGENT,           # <-- required by api.weather.gov
+    "Accept": "application/json, application/xml;q=0.9, */*;q=0.8"
+})
+# If using Supabase here too, keep a separate session or add those headers in the SB functions.
+
 def sb_upsert_articles(rows: List[Dict[str,Any]]):
     if not rows:
         return
