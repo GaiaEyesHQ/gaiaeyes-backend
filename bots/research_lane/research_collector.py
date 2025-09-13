@@ -93,6 +93,84 @@ def parse_usgs_quake(url: str, source_id: str, tags: List[str]) -> List[Dict[str
         })
     return out
 
+def parse_swpc_alerts(url: str, source_id: str, tags: list) -> list:
+    r = session.get(url, timeout=TIMEOUT); r.raise_for_status()
+    data = r.json()  # list of lists or list of dicts depending on endpoint
+    out = []
+    # alerts.json (list of dicts with keys like issue_datetime, alert_type, message)
+    # If endpoint returns a list of lists (table form), adjust accordingly.
+    if isinstance(data, list) and data and isinstance(data[0], dict):
+        for row in data:
+            title = row.get("alert_type") or row.get("message") or "SWPC Alert"
+            link  = row.get("link") or "https://www.swpc.noaa.gov/"
+            pub   = row.get("issue_datetime") or row.get("time_issued") or None
+            out.append({
+                "source": source_id, "source_type": "api",
+                "title": title.strip()[:240], "url": link,
+                "published_at": pub,
+                "summary_raw": (row.get("message") or "").strip(),
+                "tags": tags
+            })
+    else:
+        # be resilient if table-like
+        for row in data[1:]:
+            title = f"SWPC Alert: {row[2]}" if len(row) > 2 else "SWPC Alert"
+            pub   = row[0] if len(row) > 0 else None
+            link  = "https://www.swpc.noaa.gov/"
+            out.append({
+                "source": source_id, "source_type":"api",
+                "title": title.strip()[:240],
+                "url": link, "published_at": pub,
+                "summary_raw": " ".join(map(str, row))[:500],
+                "tags": tags
+            })
+    return out
+
+def parse_swpc_kp(url: str, source_id: str, tags: list) -> list:
+    r = session.get(url, timeout=TIMEOUT); r.raise_for_status()
+    data = r.json()  # [header, row, row...]
+    out = []
+    if isinstance(data, list) and len(data) > 1 and isinstance(data[0], list):
+        hdr = [h.lower() for h in data[0]]
+        # try to find kp column
+        kp_idx = None
+        for i, h in enumerate(hdr):
+            if "kp" in h:
+                kp_idx = i; break
+        # pick last row
+        last = data[-1]
+        kp_val = last[kp_idx] if kp_idx is not None and len(last) > kp_idx else None
+        timestamp = last[0] if last else None
+        title = f"Kp update: {kp_val}"
+        out.append({
+            "source": source_id, "source_type":"api",
+            "title": title, "url": url,
+            "published_at": timestamp,
+            "summary_raw": f"Latest NOAA Planetary K index: {kp_val}",
+            "tags": tags
+        })
+    return out
+
+def parse_nws_alerts(url: str, source_id: str, tags: list) -> list:
+    # api.weather.gov requires a UA (already set). Parse active alerts.
+    r = session.get(url, timeout=TIMEOUT); r.raise_for_status()
+    j = r.json()
+    out = []
+    for feat in (j.get("features") or []):
+        props = feat.get("properties", {})
+        headline = props.get("headline") or props.get("event") or "NWS Alert"
+        link = props.get("url") or props.get("alert_link") or "https://api.weather.gov/alerts"
+        pub  = props.get("sent") or props.get("onset") or props.get("effective")
+        desc = props.get("description") or ""
+        out.append({
+            "source": source_id, "source_type":"api",
+            "title": headline.strip()[:240],
+            "url": link, "published_at": pub,
+            "summary_raw": desc.strip()[:1000],
+            "tags": tags
+        })
+    return out
+
 def load_sources() -> Dict[str,Any]:
     import yaml
     with open(HERE / "sources.yaml","r",encoding="utf-8") as f:
@@ -111,10 +189,17 @@ def main():
     for ent in src.get("api", []):
         print("[API]", ent["id"], ent["url"])
         try:
-            if ent.get("parser") == "usgs_quake":
+            parser = ent.get("parser")
+            if parser == "usgs_quake":
                 to_upsert += parse_usgs_quake(ent["url"], ent["id"], ent.get("tags",[]))
+            elif parser == "swpc_alerts":
+                to_upsert += parse_swpc_alerts(ent["url"], ent["id"], ent.get("tags",[]))
+            elif parser == "swpc_kp":
+                to_upsert += parse_swpc_kp(ent["url"], ent["id"], ent.get("tags",[]))
+            elif parser == "nws_alerts":
+                to_upsert += parse_nws_alerts(ent["url"], ent["id"], ent.get("tags",[]))
             else:
-                # generic: store URL + title if present
+            # Generic catch-all
                 r = session.get(ent["url"], timeout=TIMEOUT); r.raise_for_status()
                 j = r.json()
                 title = j.get("title") or ent["id"]
