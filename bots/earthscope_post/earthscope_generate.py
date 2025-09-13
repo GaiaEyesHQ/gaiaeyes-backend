@@ -150,39 +150,115 @@ def _avg_non_null(values: List[Optional[float]]) -> Optional[float]:
 
 
 def fetch_schumann_from_marts(day: str) -> Dict[str, Any]:
-    """Fetch Schumann fundamentals/harmonics for both stations and combine.
-    Returns f0..h4 averages across available stations and a note.
+    """Fetch Schumann fundamentals/harmonics for the given day.
+    Robust to station_id variants and to missing exact-day rows (falls back to latest <= day).
+    Computes f0 and harmonics by averaging across Tomsk/Cumiana if present, else across all.
     """
+    def _avg(xs: List[Optional[float]]) -> Optional[float]:
+        vals = [v for v in xs if isinstance(v, (int, float)) and v is not None]
+        return round(sum(vals) / len(vals), 2) if vals else None
+
     try:
+        # 1) Try exact day first
         res = (
             SB.schema(SPACE_SCHEMA)
               .table(SR_TABLE)
               .select("*")
               .eq(DAY_COLUMN, day)
-              .in_("station_id", ["tomsk", "cumiana"])
               .execute()
         )
         rows = res.data or []
-        # Map by station
-        by_station = {r.get("station_id"): r for r in rows}
-        f0_t = to_float(by_station.get("tomsk", {}).get("f0_avg_hz"))
-        f0_c = to_float(by_station.get("cumiana", {}).get("f0_avg_hz"))
-        f0 = _avg_non_null([f0_t, f0_c])
-        f1 = _avg_non_null([to_float(by_station.get("tomsk", {}).get("f1_avg_hz")),
-                            to_float(by_station.get("cumiana", {}).get("f1_avg_hz"))])
-        f2 = _avg_non_null([to_float(by_station.get("tomsk", {}).get("f2_avg_hz")),
-                            to_float(by_station.get("cumiana", {}).get("f2_avg_hz"))])
-        h3 = _avg_non_null([to_float(by_station.get("tomsk", {}).get("h3_avg_hz")),
-                            to_float(by_station.get("cumiana", {}).get("h3_avg_hz"))])
-        # Some datasets use h4_avg_hz; handle typos gracefully
-        h4_t = by_station.get("tomsk", {})
-        h4_c = by_station.get("cumiana", {})
-        h4 = _avg_non_null([
-            to_float(h4_t.get("h4_avg_hz") or h4_t.get("h4_avg")),
-            to_float(h4_c.get("h4_avg_hz") or h4_c.get("h4_avg")),
-        ])
-        stations_used = ",".join([s for s in ("tomsk" if f0_t is not None else None, "cumiana" if f0_c is not None else None) if s]) or "none"
-        note = f"Schumann f0 from {stations_used}; harmonics averaged across available stations."
+
+        # 2) If no rows for that day, fall back to latest <= day
+        if not rows:
+            fb = (
+                SB.schema(SPACE_SCHEMA)
+                  .table(SR_TABLE)
+                  .select("*")
+                  .lte(DAY_COLUMN, day)
+                  .order(DAY_COLUMN, desc=True)
+                  .limit(4)
+                  .execute()
+            )
+            rows = fb.data or []
+            if not rows:
+                print(f"[WARN] schumann_daily: no rows for {day} or earlier")
+                return {}
+
+        # Map by station substring (avoid brittle exact matches)
+        tomsk_rows: List[Dict[str, Any]] = []
+        cumiana_rows: List[Dict[str, Any]] = []
+        other_rows: List[Dict[str, Any]] = []
+        for r in rows:
+            sid = (r.get("station_id") or "").lower()
+            if "tomsk" in sid:
+                tomsk_rows.append(r)
+            elif "cumiana" in sid:
+                cumiana_rows.append(r)
+            else:
+                other_rows.append(r)
+
+        def _collect(key: str, coll: List[Dict[str, Any]]) -> List[Optional[float]]:
+            vals: List[Optional[float]] = []
+            for rr in coll:
+                v = rr.get(key)
+                try:
+                    vals.append(float(v) if v is not None and str(v) != "" else None)
+                except Exception:
+                    vals.append(None)
+            return vals
+
+        # Compute averages per station group, then overall
+        f0_t = _avg(_collect("f0_avg_hz", tomsk_rows))
+        f0_c = _avg(_collect("f0_avg_hz", cumiana_rows))
+        f1_t = _avg(_collect("f1_avg_hz", tomsk_rows))
+        f1_c = _avg(_collect("f1_avg_hz", cumiana_rows))
+        f2_t = _avg(_collect("f2_avg_hz", tomsk_rows))
+        f2_c = _avg(_collect("f2_avg_hz", cumiana_rows))
+        h3_t = _avg(_collect("h3_avg_hz", tomsk_rows))
+        h3_c = _avg(_collect("h3_avg_hz", cumiana_rows))
+        # Some datasets use h4_avg or h4_avg_hz
+        def _h4_key(rr: Dict[str, Any]) -> Optional[float]:
+            v = rr.get("h4_avg_hz", rr.get("h4_avg"))
+            try:
+                return float(v) if v is not None and str(v) != "" else None
+            except Exception:
+                return None
+        h4_t = _avg([_h4_key(rr) for rr in tomsk_rows])
+        h4_c = _avg([_h4_key(rr) for rr in cumiana_rows])
+
+        # If we didn't get station-specific rows, average across *all* available rows
+        def _avg_all(col: str) -> Optional[float]:
+            vals: List[Optional[float]] = []
+            for rr in rows:
+                v = rr.get(col)
+                try:
+                    vals.append(float(v) if v is not None and str(v) != "" else None)
+                except Exception:
+                    vals.append(None)
+            return _avg(vals)
+
+        f0 = _avg([v for v in [f0_t, f0_c] if v is not None]) or _avg_all("f0_avg_hz")
+        f1 = _avg([v for v in [f1_t, f1_c] if v is not None]) or _avg_all("f1_avg_hz")
+        f2 = _avg([v for v in [f2_t, f2_c] if v is not None]) or _avg_all("f2_avg_hz")
+        h3 = _avg([v for v in [h3_t, h3_c] if v is not None]) or _avg_all("h3_avg_hz")
+        # Handle h4 key variants
+        h4_all = []
+        for rr in rows:
+            h4v = rr.get("h4_avg_hz", rr.get("h4_avg"))
+            try:
+                h4_all.append(float(h4v) if h4v is not None and str(h4v) != "" else None)
+            except Exception:
+                h4_all.append(None)
+        h4 = _avg([v for v in [h4_t, h4_c] if v is not None]) or _avg(h4_all)
+
+        stations = []
+        if tomsk_rows: stations.append("tomsk")
+        if cumiana_rows: stations.append("cumiana")
+        if other_rows: stations.append("other")
+        used = ",".join(stations) if stations else "none"
+        note = f"Schumann f0 from {used}; harmonics averaged across available stations."
+
         return {
             "schumann_value_hz": f0,
             "schumann_harmonics": {"f1": f1, "f2": f2, "h3": h3, "h4": h4},
