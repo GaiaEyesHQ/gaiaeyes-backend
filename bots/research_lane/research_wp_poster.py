@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import os, sys, html, datetime as dt
+import os, sys, html, re, random, datetime as dt
 from pathlib import Path
 from typing import List, Dict, Any
 import requests
@@ -19,6 +19,16 @@ WP_STATUS       = (os.getenv("WP_STATUS","draft") or "draft").lower()
 WP_CATEGORY_ID  = os.getenv("WP_CATEGORY_ID","").strip()
 WP_TAG_IDS      = os.getenv("WP_TAG_IDS","").strip()
 
+# Featured image / media settings
+MEDIA_CDN_BASE      = os.getenv("MEDIA_CDN_BASE", "").rstrip("/")
+WP_FEATURED_SOURCE  = (os.getenv("WP_FEATURED_SOURCE", "bg").lower())  # 'bg' | 'caption' | 'none'
+WP_FEATURED_BG_KIND = os.getenv("WP_FEATURED_BG_KIND", "square").strip().lower()  # 'square' | 'tall' | 'wide'
+WP_FEATURED_CREDIT  = os.getenv("WP_FEATURED_CREDIT", "Image: Gaia Eyes backgrounds").strip()
+# Optional footer CTA
+WP_CTA_HTML         = os.getenv("WP_CTA_HTML", "").strip()
+# Token for GitHub tree listing fallback (private media repo)
+GITHUB_API_TOKEN    = os.getenv("GITHUB_API_TOKEN", "").strip() or os.getenv("GAIAEYES_MEDIA_TOKEN", "").strip()
+
 # Supabase
 SUPABASE_REST_URL   = os.getenv("SUPABASE_REST_URL","").rstrip("/")
 SUPABASE_SERVICE_KEY= os.getenv("SUPABASE_SERVICE_KEY","").strip()
@@ -29,6 +39,116 @@ session.headers.update({
     "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
     "Accept": "application/json"
 })
+
+# --- Media listing helpers (backgrounds) ---
+JSDELIVR_RE = re.compile(r"cdn\.jsdelivr\.net/gh/([^/]+)/([^/@]+)(?:@([^/]+))?")
+
+def _parse_jsdelivr_base(base: str):
+    m = JSDELIVR_RE.search(base)
+    if not m:
+        print(f"[WP] MEDIA_CDN_BASE not parseable for jsDelivr: {base}")
+        return None
+    owner, repo, sha = m.group(1), m.group(2), (m.group(3) or "")
+    if sha:
+        print(f"[WP] MEDIA_CDN_BASE parsed: owner={owner} repo={repo} sha={sha}")
+    else:
+        print(f"[WP] MEDIA_CDN_BASE parsed (no @sha): owner={owner} repo={repo}")
+    return owner, repo, sha
+
+def _list_jsdelivr_paths(owner: str, repo: str, sha: str):
+    try:
+        if sha:
+            url = f"https://data.jsdelivr.com/v1/package/gh/{owner}/{repo}@{sha}"
+        else:
+            url = f"https://data.jsdelivr.com/v1/package/gh/{owner}/{repo}"
+        r = session.get(url, timeout=25)
+        r.raise_for_status()
+        j = r.json()
+        out = []
+        def walk(files, prefix=""):
+            for f in files:
+                name = f.get("name");
+                if not name: continue
+                path = f"{prefix}/{name}"
+                if f.get("type") == "file":
+                    out.append(path)
+                elif f.get("type") == "directory":
+                    walk(f.get("files", []), path)
+        walk(j.get("files", []), "")
+        print(f"[WP] jsDelivr listed {len(out)} paths")
+        return out
+    except Exception as e:
+        print("[WP] jsDelivr list error:", e)
+        return []
+
+def _list_github_paths(owner: str, repo: str, sha: str):
+    try:
+        headers = {"Accept": "application/vnd.github+json"}
+        if GITHUB_API_TOKEN:
+            headers["Authorization"] = f"Bearer {GITHUB_API_TOKEN}"
+        if sha:
+            url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{sha}?recursive=1"
+        else:
+            url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/heads/main?recursive=1"
+        r = session.get(url, headers=headers, timeout=25)
+        r.raise_for_status()
+        j = r.json(); out=[]
+        for node in j.get("tree", []):
+            if node.get("type") == "blob":
+                out.append("/" + node.get("path",""))
+        print(f"[WP] GitHub listed {len(out)} paths")
+        return out
+    except Exception as e:
+        print("[WP] GitHub list error:", e); return []
+
+def pick_background_from_cdn(kind: str = "square") -> str | None:
+    if not MEDIA_CDN_BASE:
+        return None
+    parsed = _parse_jsdelivr_base(MEDIA_CDN_BASE)
+    if not parsed: return None
+    owner, repo, sha = parsed
+    files = _list_jsdelivr_paths(owner, repo, sha)
+    if not files:
+        print("[WP] jsDelivr returned no file listing; falling back to GitHub API")
+        files = _list_github_paths(owner, repo, sha)
+    if not files:
+        print("[WP] No files found via jsDelivr or GitHub")
+        return None
+    cand = [p for p in files if p.startswith(f"/backgrounds/{kind}/") and p.lower().endswith((".jpg",".jpeg",".png",".webp"))]
+    if not cand and kind != "square":
+        cand = [p for p in files if p.startswith("/backgrounds/square/") and p.lower().endswith((".jpg",".jpeg",".png",".webp"))]
+    if not cand:
+        print("[WP] No background candidates found")
+        return None
+    # deterministic daily pick
+    dseed = int(dt.datetime.utcnow().strftime("%Y%m%d"))
+    random.seed(dseed)
+    path = random.choice(cand)
+    root = MEDIA_CDN_BASE
+    if root.endswith("/images"): root = root[:-7]
+    url = f"{root}{path}"
+    print(f"[WP] Picked featured background: {url}")
+    return url
+
+def wp_upload_image_from_url(image_url: str, filename_hint="featured.jpg") -> int | None:
+    try:
+        resp = session.get(image_url, timeout=30)
+        resp.raise_for_status()
+    except Exception as e:
+        print("[WP] download image failed:", e); return None
+    filename = os.path.basename(image_url.split("?")[0]) or filename_hint
+    mime = "image/jpeg"
+    lower = filename.lower()
+    if lower.endswith(".png"): mime = "image/png"
+    elif lower.endswith(".webp"): mime = "image/webp"
+    media_endpoint = f"{WP_BASE_URL}/wp-json/wp/v2/media"
+    files = {"file": (filename, resp.content, mime)}
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    r = session.post(media_endpoint, auth=wp_auth(), files=files, headers=headers, timeout=45)
+    if r.status_code not in (200,201):
+        print("[WP] media upload failed:", r.status_code, (r.text or "")[:200])
+        return None
+    return (r.json() or {}).get("id")
 
 # --- WordPress helpers / diagnostics ---
 def wp_verify_credentials(base_url: str, auth: tuple[str, str]) -> None:
@@ -68,7 +188,7 @@ def wp_auth():
         raise SystemExit("Missing WP_* envs")
     return (WP_USERNAME, WP_APP_PASSWORD)
 
-def wp_create_post(title: str, html_content: str) -> dict:
+def wp_create_post(title: str, html_content: str, featured_media: int | None = None) -> dict:
     endpoint = f"{WP_BASE_URL}/wp-json/wp/v2/posts"
     payload = {"title": title, "content": html_content, "status": WP_STATUS}
     if WP_CATEGORY_ID:
@@ -83,6 +203,8 @@ def wp_create_post(title: str, html_content: str) -> dict:
                 payload["tags"] = ids
         except:
             pass
+    if featured_media:
+        payload["featured_media"] = int(featured_media)
 
     print(f"[WP] POST {endpoint}")
     r = session.post(endpoint, auth=wp_auth(), json=payload, timeout=45)
@@ -130,7 +252,33 @@ def main():
     today = dt.datetime.utcnow().strftime("%b %d, %Y")
     title = f"Gaia Eyes Research Roundup — {today}"
     html = roundup_html(items)
-    created = wp_create_post(title, html)
+
+    # Featured image from media backgrounds (or caption/none)
+    featured_id = None
+    featured_url = None
+    if WP_FEATURED_SOURCE == "bg":
+        featured_url = pick_background_from_cdn(WP_FEATURED_BG_KIND)
+    elif WP_FEATURED_SOURCE == "caption":
+        # no caption image in roundup; keep None
+        pass
+
+    if featured_url:
+        print(f"[WP] Using featured URL: {featured_url}")
+        featured_id = wp_upload_image_from_url(featured_url)
+        if featured_id:
+            print(f"[WP] Featured image uploaded, id={featured_id}")
+            # add credit line at top of post for transparency
+            if WP_FEATURED_CREDIT:
+                html = f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>\n" + html
+        else:
+            print("[WP] Featured upload failed; inlining hero at top")
+            html = f'<p><img src="{html.escape(featured_url)}" alt="Featured image" style="max-width:100%;height:auto;"/></p>\n' + html
+
+    # Optional CTA footer
+    if WP_CTA_HTML:
+        html = html + "\n" + WP_CTA_HTML
+
+    created = wp_create_post(title, html, featured_media=featured_id)
     link = created.get("link") if isinstance(created, dict) else None
     status = created.get("status") if isinstance(created, dict) else None
     print("WP research post created:", link or "(no JSON link)", "status:", status or created.get("status_code"))
