@@ -79,28 +79,65 @@ jobs:
           MEDIA_DIR: ${{ github.workspace }}/media
         run: |
           set -euo pipefail
+          set -x
           mkdir -p "$MEDIA_DIR/images" "$MEDIA_DIR/data"
 
-          # Latest
-          cp -f runs/tomsk_overlay.png        "$MEDIA_DIR/images/tomsk_latest.png"       || true
-          cp -f runs/cumiana_overlay.png      "$MEDIA_DIR/images/cumiana_latest.png"     || true
-          cp -f runs/schumann_now.json        "$MEDIA_DIR/data/schumann_latest.json"     || true
-          cp -f runs/tomsk_now.json           "$MEDIA_DIR/data/tomsk_latest.json"        || true
-          cp -f runs/cumiana_now.json         "$MEDIA_DIR/data/cumiana_latest.json"      || true
+          echo "Listing runs/ before copy:"; ls -lah runs || true
+
+          # Copy latest overlays if they exist; keep previous *_latest.png if absent
+          if [ -f runs/tomsk_overlay.png ]; then
+            cp -f runs/tomsk_overlay.png        "$MEDIA_DIR/images/tomsk_latest.png"
+          else
+            echo "WARN: runs/tomsk_overlay.png not found; keeping existing images/tomsk_latest.png"
+          fi
+
+          if [ -f runs/cumiana_overlay.png ]; then
+            cp -f runs/cumiana_overlay.png      "$MEDIA_DIR/images/cumiana_latest.png"
+          else
+            echo "WARN: runs/cumiana_overlay.png not found; keeping existing images/cumiana_latest.png"
+          fi
+
+          # JSON latest always overwrite when present; if missing, keep existing
+          if [ -f runs/schumann_now.json ]; then
+            cp -f runs/schumann_now.json        "$MEDIA_DIR/data/schumann_latest.json"
+          else
+            echo "WARN: runs/schumann_now.json not found; keeping existing data/schumann_latest.json"
+          fi
+
+          if [ -f runs/tomsk_now.json ]; then
+            cp -f runs/tomsk_now.json           "$MEDIA_DIR/data/tomsk_latest.json"
+          else
+            echo "WARN: runs/tomsk_now.json not found; keeping existing data/tomsk_latest.json"
+          fi
+
+          if [ -f runs/cumiana_now.json ]; then
+            cp -f runs/cumiana_now.json         "$MEDIA_DIR/data/cumiana_latest.json"
+          else
+            echo "WARN: runs/cumiana_now.json not found; keeping existing data/cumiana_latest.json"
+          fi
+
+          echo "Listing media/ after copy:"; ls -lah "$MEDIA_DIR/images" || true; ls -lah "$MEDIA_DIR/data" || true
 
       - name: Remove timestamped media artifacts (keep only *_latest.*)
         working-directory: ${{ env.MEDIA_DIR }}
         run: |
           set -euo pipefail
           echo "Removing timestamped PNG/JSON files; keeping *_latest.* only..."
-          # Remove station/merged PNGs with timestamps
+
+          # Ensure directories exist
+          mkdir -p images data
+
+          # Remove station/merged PNGs with timestamps (do not touch *_latest.png)
           git rm -f images/tomsk_*.png 2>/dev/null || true
           git rm -f images/cumiana_*.png 2>/dev/null || true
           git rm -f images/schumann_*.png 2>/dev/null || true
-          # Remove station/merged JSONs with timestamps
+
+          # Remove station/merged JSONs with timestamps (do not touch *_latest.json)
           git rm -f data/tomsk_*.json 2>/dev/null || true
           git rm -f data/cumiana_*.json 2>/dev/null || true
           git rm -f data/schumann_*.json 2>/dev/null || true
+
+          echo "After cleanup, media contains:"; ls -lah images || true; ls -lah data || true
 
       - name: Commit & push to media repo
         working-directory: ${{ env.MEDIA_DIR }}
