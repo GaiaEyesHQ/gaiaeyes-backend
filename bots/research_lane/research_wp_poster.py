@@ -251,7 +251,7 @@ def main():
 
     today = dt.datetime.utcnow().strftime("%b %d, %Y")
     title = f"Gaia Eyes Research Roundup — {today}"
-    html = roundup_html(items)
+    html_content = roundup_html(items)
 
     # Featured image from media backgrounds (or caption/none)
     featured_id = None
@@ -269,16 +269,16 @@ def main():
             print(f"[WP] Featured image uploaded, id={featured_id}")
             # add credit line at top of post for transparency
             if WP_FEATURED_CREDIT:
-                html = f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>\n" + html
+                html_content = f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>\n" + html_content
         else:
             print("[WP] Featured upload failed; inlining hero at top")
-            html = f'<p><img src="{html.escape(featured_url)}" alt="Featured image" style="max-width:100%;height:auto;"/></p>\n' + html
+            html_content = f'<p><img src="{html.escape(featured_url)}" alt="Featured image" style="max-width:100%;height:auto;"/></p>\n' + html_content
 
     # Optional CTA footer
     if WP_CTA_HTML:
-        html = html + "\n" + WP_CTA_HTML
+        html_content = html_content + "\n" + WP_CTA_HTML
 
-    created = wp_create_post(title, html, featured_media=featured_id)
+    created = wp_create_post(title, html_content, featured_media=featured_id)
     link = created.get("link") if isinstance(created, dict) else None
     status = created.get("status") if isinstance(created, dict) else None
     print("WP research post created:", link or "(no JSON link)", "status:", status or created.get("status_code"))
