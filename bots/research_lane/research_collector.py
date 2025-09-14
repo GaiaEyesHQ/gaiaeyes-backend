@@ -32,6 +32,20 @@ session.headers.update({
 })
 TIMEOUT=20
 
+from datetime import timezone
+
+# --- Time helpers ---
+def _now_utc_iso() -> str:
+    return dt.datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
+
+def _year_tag(iso_ts: str | None) -> str:
+    try:
+        y = (iso_ts or "")[:4]
+        int(y)
+        return f"year-{y}"
+    except Exception:
+        return "year-unknown"
+
 # ---------- Topic filters (reduce local weather noise) ----------
 DENY_TITLE_PATTERNS = [
     r"\bSevere Thunderstorm Warning\b",
@@ -78,14 +92,19 @@ def parse_rss(feed_url: str, source_id: str, tags: List[str]) -> List[Dict[str,A
             continue
         pub = None
         if e.get("published_parsed"):
-            pub = dt.datetime(*e.published_parsed[:6], tzinfo=dt.timezone.utc).isoformat()
+            pub = dt.datetime(*e.published_parsed[:6], tzinfo=timezone.utc).isoformat()
+        elif e.get("updated_parsed"):
+            pub = dt.datetime(*e.updated_parsed[:6], tzinfo=timezone.utc).isoformat()
+        else:
+            pub = _now_utc_iso()
         summary = (e.get("summary") or e.get("description") or "").strip()
+        tags_out = list(tags) + [_year_tag(pub)]
         out.append({
             "source": source_id, "source_type":"rss",
             "title": title, "url": link,
             "published_at": pub,
             "summary_raw": summary,
-            "tags": tags
+            "tags": tags_out
         })
     return out
 
@@ -111,7 +130,7 @@ def parse_usgs_quake(url: str, source_id: str, tags: List[str]) -> List[Dict[str
             "title": title[:240], "url": link,
             "published_at": pub,
             "summary_raw": f"Magnitude {mag_f} at {props.get('place')}",
-            "tags": list(tags) + [f"quake-M{mag_f}"]
+            "tags": list(tags) + [f"quake-M{mag_f}", _year_tag(pub)]
         })
     return out
 
@@ -134,7 +153,7 @@ def parse_swpc_alerts(url: str, source_id: str, tags: list) -> list:
                 "title": title.strip()[:240], "url": link,
                 "published_at": pub,
                 "summary_raw": (row.get("message") or "").strip(),
-                "tags": tags
+                "tags": list(tags) + [_year_tag(pub)]
             })
     else:
         # be resilient if table-like
@@ -150,7 +169,7 @@ def parse_swpc_alerts(url: str, source_id: str, tags: list) -> list:
                 "title": title.strip()[:240],
                 "url": link, "published_at": pub,
                 "summary_raw": " ".join(map(str, row))[:500],
-                "tags": tags
+                "tags": list(tags) + [_year_tag(pub)]
             })
     return out
 
@@ -175,7 +194,7 @@ def parse_swpc_kp(url: str, source_id: str, tags: list) -> list:
             "title": title, "url": url,
             "published_at": timestamp,
             "summary_raw": f"Latest NOAA Planetary K index: {kp_val}",
-            "tags": tags
+            "tags": list(tags) + [_year_tag(timestamp)]
         })
     return out
 
@@ -233,10 +252,14 @@ def main():
                 title = j.get("title") or ent["id"]
                 if ent["id"] not in ALLOW_SOURCES and _title_denied(title):
                     continue
+                pub = j.get("published_at") or j.get("date") or _now_utc_iso()
                 to_upsert += [{
                     "source": ent["id"], "source_type":"api",
                     "title": f"{title}",
-                    "url": ent["url"], "tags": ent.get("tags",[])
+                    "url": ent["url"],
+                    "published_at": pub,
+                    "summary_raw": (j.get("summary") or j.get("description") or "")[:800],
+                    "tags": list(ent.get("tags",[])) + [_year_tag(pub)]
                 }]
         except Exception as e:
             print("[ERR api]", ent["id"], e)
