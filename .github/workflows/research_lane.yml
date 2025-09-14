@@ -77,7 +77,7 @@ jobs:
           WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
           WP_USERNAME: ${{ secrets.WP_USERNAME }}
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
-          WP_STATUS: draft     # set to publish when you’re ready
+          WP_STATUS: publish     # set to publish when you’re ready
           WP_CATEGORY_ID: ${{ secrets.WP_CATEGORY_ID }}
           WP_TAG_IDS: ${{ secrets.WP_TAG_IDS }}
           MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
@@ -88,10 +88,11 @@ jobs:
           WP_FEATURED_SOURCE: "bg"
           WP_FEATURED_BG_KIND: "square"
           WP_FEATURED_CREDIT: "Image: Gaia Eyes backgrounds"
+          WP_ADD_TOC: "true"
         
           # Optional CTA
           WP_CTA_HTML: ${{ secrets.WP_CTA_HTML }}
         
           # If media repo is private:
-          GAIAEYES_MEDIA_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
+          GITHUB_API_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
         run: python research_wp_poster.py
