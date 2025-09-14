@@ -31,6 +31,7 @@ GITHUB_API_TOKEN    = os.getenv("GITHUB_API_TOKEN", "").strip() or os.getenv("GA
 
 # Add a small table of contents by default
 WP_ADD_TOC         = (os.getenv("WP_ADD_TOC", "true").lower() in ("1","true","yes"))
+WP_LOOKBACK_DAYS  = int(os.getenv("WP_LOOKBACK_DAYS", "3"))
 
 # Supabase
 SUPABASE_REST_URL   = os.getenv("SUPABASE_REST_URL","").rstrip("/")
@@ -194,7 +195,19 @@ def build_toc_and_inject_ids(html_content: str) -> tuple[str, str]:
     if not headings:
         return html_content, ""
     items = "\n".join(f'<li><a href="#${{slug}}">{html.escape(text)}</a></li>'.replace("${slug}", slug) for text, slug in headings)
-    toc = f"<div class=\"toc\"><strong>On this page</strong><ul>\n{items}\n</ul></div>"
+    # Minimal inline CSS for TOC (scoped to .toc)
+    toc_style = (
+        "<style>"
+        ".toc{background:#f5f8f7;border:1px solid rgba(0,0,0,.06);border-radius:8px;"
+        "padding:12px 14px;margin:12px 0 18px;font-size:0.95rem;line-height:1.35}"
+        ".toc strong{display:block;margin-bottom:6px;font-size:0.95rem;letter-spacing:.2px}"
+        ".toc ul{list-style:disc;margin:0 0 0 18px;padding:0}"
+        ".toc li{margin:4px 0}"
+        ".toc a{text-decoration:none}"
+        ".toc a:hover{text-decoration:underline}"
+        "</style>"
+    )
+    toc = f"{toc_style}<div class=\"toc\"><strong>On this page</strong><ul>\n{items}\n</ul></div>"
     return modified, toc
 
 # --- WordPress helpers / diagnostics ---
@@ -288,7 +301,7 @@ def roundup_html(items: List[Dict[str,Any]]) -> str:
     return "\n".join(parts)
 
 def main():
-    items = sb_recent_summaries(days=1, limit=8)
+    items = sb_recent_summaries(days=WP_LOOKBACK_DAYS, limit=8)
     if not items:
         print("No recent research items.")
         return
@@ -335,10 +348,15 @@ def main():
         else:
             print("[WP] Featured upload failed; will inline external hero if available")
 
-    # Always place a visible hero at the top: prefer WP media URL if we have one,
-    # otherwise use the external CDN URL as a fallback.
+    # Hero image handling: if featured upload succeeded, **do not** inline the hero to avoid duplicates.
+    # If featured upload failed, inline the external hero so we still have a visible header image.
     hero_url = featured_src_url or cdn_url
-    if hero_url:
+    if featured_id:
+        # Featured image present — keep page clean and just add credit line (no inline duplicate)
+        if WP_FEATURED_CREDIT:
+            html_content = f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>\n" + html_content
+    elif hero_url:
+        # No featured media — inline hero so the post still has a visible header image
         html_content = f'<p><img src="{html.escape(hero_url)}" alt="Featured image" style="max-width:100%;height:auto;"/></p>\n' + html_content
         if WP_FEATURED_CREDIT:
             html_content = f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>\n" + html_content
