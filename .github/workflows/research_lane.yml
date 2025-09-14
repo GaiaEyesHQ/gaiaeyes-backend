@@ -20,7 +20,7 @@ jobs:
       - name: Run collector
         working-directory: bots/research_lane
         env:
-          WP_LOOKBACK_DAYS: 3
+          WP_LOOKBACK_DAYS: 1
           SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
