@@ -195,16 +195,16 @@ def build_toc_and_inject_ids(html_content: str) -> tuple[str, str]:
     if not headings:
         return html_content, ""
     items = "\n".join(f'<li><a href="#${{slug}}">{html.escape(text)}</a></li>'.replace("${slug}", slug) for text, slug in headings)
-    # Minimal inline CSS for TOC (scoped to .toc)
+    # Minimal inline CSS for TOC (scoped to .toc) — dark friendly
     toc_style = (
         "<style>"
-        ".toc{background:#f5f8f7;border:1px solid rgba(0,0,0,.06);border-radius:8px;"
-        "padding:12px 14px;margin:12px 0 18px;font-size:0.95rem;line-height:1.35}"
-        ".toc strong{display:block;margin-bottom:6px;font-size:0.95rem;letter-spacing:.2px}"
+        ".toc{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.12);border-radius:8px;"
+        "padding:12px 14px;margin:12px 0 18px;font-size:0.95rem;line-height:1.35;color:inherit}"
+        ".toc strong{display:block;margin-bottom:6px;font-size:0.95rem;letter-spacing:.2px;color:inherit}"
         ".toc ul{list-style:disc;margin:0 0 0 18px;padding:0}"
         ".toc li{margin:4px 0}"
-        ".toc a{text-decoration:none}"
-        ".toc a:hover{text-decoration:underline}"
+        ".toc a{color:inherit;text-decoration:none;border-bottom:1px dashed rgba(255,255,255,.25)}"
+        ".toc a:hover{text-decoration:none;border-bottom-color:rgba(255,255,255,.5)}"
         "</style>"
     )
     toc = f"{toc_style}<div class=\"toc\"><strong>On this page</strong><ul>\n{items}\n</ul></div>"
