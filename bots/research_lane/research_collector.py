@@ -4,6 +4,7 @@
 import os, sys, json, hashlib, datetime as dt
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+import re
 
 import requests
 import feedparser
@@ -16,6 +17,8 @@ load_dotenv(HERE.parent / ".env")
 SUPABASE_REST_URL   = os.getenv("SUPABASE_REST_URL","").rstrip("/")
 SUPABASE_SERVICE_KEY= os.getenv("SUPABASE_SERVICE_KEY","").strip()
 GAIA_TIMEZONE       = os.getenv("GAIA_TIMEZONE","America/Chicago")
+
+ALLOW_SOURCES = {"swpc-alerts-rss","swpc-news-rss","swpc-alerts-json","swpc-kp-3day","solarham","nasa-news","livescience-space","usgs-quakes"}
 
 # after existing imports / dotenv loads
 HTTP_USER_AGENT = os.getenv(
@@ -222,6 +225,46 @@ def load_sources() -> Dict[str,Any]:
     import yaml
     with open(HERE / "sources.yaml","r",encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
+
+def craft_prompts(article):
+    title = article["title"]
+    url   = article["url"]
+    raw   = article.get("summary_raw") or ""
+    body  = article.get("content_raw") or ""
+    pub   = article.get("published_at") or ""
+    year  = (pub[:4] if pub else "")
+
+    base = f"""
+Title: {title}
+URL: {url}
+Published_At_UTC: {pub}
+
+Context (may be brief): {raw}
+
+Rules:
+- Write in clear, accessible language for the Gaia Eyes audience (space weather, Schumann, HRV/EEG/nervous system).
+- Do NOT invent calendar dates. If you reference a date or year, use the provided year {year} only; otherwise avoid dates.
+- Prefer relative phrasing ("recent", "today", "last 24 hours") unless a concrete timestamp is clearly provided above.
+"""
+
+    short_p = base + """
+Task: Write a short social caption (<= 600 chars). Start with a hook. Mention the key event briefly and note a possible human impact (mood/energy/heart/nervous system). Include 3–5 relevant hashtags at the end.
+"""
+
+    long_p = base + """
+Task: Write a concise blog-ready summary with 3 sections and short bullets:
+1) What Happened
+2) Why It Matters (links to mood/energy/heart/nervous system; be measured; no medical claims)
+3) What To Watch (1–3 practical notes or how to follow updates)
+
+Keep it ~150–250 words total. Avoid adding calendar dates unless using the provided year.
+"""
+
+    fact_p = base + """
+Task: Extract 1–2 short hookable facts (max 140 chars each) that can be used as image overlays. Return each fact on a new line with no numbering.
+"""
+
+    return {"short": short_p, "long": long_p, "fact": fact_p}
 
 def main():
     src=load_sources()
