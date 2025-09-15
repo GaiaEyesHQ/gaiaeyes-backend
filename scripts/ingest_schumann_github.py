@@ -2,7 +2,7 @@
 """
 Ingest Schumann now JSON from gennwu/gaiaeyes-media into ext.schumann (and stations/assets).
 
-JSON: https://raw.githubusercontent.com/gennwu/gaiaeyes-media/data/schumann_now.json
+JSON: https://raw.githubusercontent.com/gennwu/gaiaeyes-media/data/schumann_latest.json
 
 - stations: 'tomsk', 'cumiana'
 - per station we ingest:
@@ -19,7 +19,7 @@ import os, sys, json, asyncio
 from datetime import datetime, timezone
 import asyncpg, httpx
 
-RAW_JSON = "https://raw.githubusercontent.com/gennwu/gaiaeyes-media/main/data/schumann_now.json"
+RAW_JSON = "https://raw.githubusercontent.com/gennwu/gaiaeyes-media/main/data/schumann_latest.json"
 RAW_IMG_BASE = "https://raw.githubusercontent.com/gennwu/gaiaeyes-media/main/images/"
 
 DB = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
