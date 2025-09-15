@@ -223,13 +223,16 @@ def wp_verify_credentials(base_url: str, auth: tuple[str, str]) -> None:
 def sb_recent_summaries(days=1, limit=8) -> List[Dict[str,Any]]:
     url = f"{SUPABASE_REST_URL}/research_articles"
     since = (dt.datetime.utcnow() - dt.timedelta(days=days)).isoformat() + "Z"
-    # join-like via outputs: fetch articles, then get outputs per article
-    r = session.get(url, params={
-        "select":"id,source,title,url,published_at",
+    # Exclude already-used items (allow null or false)
+    params = {
+        "select": "id,source,title,url,published_at",
         "published_at": f"gte.{since}",
-        "order":"published_at.desc",
+        # Exclude already-used items (allow null or false)
+        "or": "(roundup_used.is.null,roundup_used.eq.false)",
+        "order": "published_at.desc",
         "limit": str(limit)
-    }, timeout=20)
+    }
+    r = session.get(url, params=params, timeout=20)
     r.raise_for_status()
     arts = r.json() or []
     # fetch outputs per article
@@ -242,6 +245,22 @@ def sb_recent_summaries(days=1, limit=8) -> List[Dict[str,Any]]:
         rr.raise_for_status()
         a["outputs"] = rr.json() or []
     return arts
+
+# --- Mark articles as used in roundup ---
+def sb_mark_roundup_used(ids: List[str]) -> None:
+    if not ids:
+        return
+    url = f"{SUPABASE_REST_URL}/research_articles"
+    for i in ids:
+        try:
+            r = session.patch(url,
+                              params={"id": f"eq.{i}"},
+                              json={"roundup_used": True},
+                              timeout=20)
+            if r.status_code not in (200, 204):
+                print("[SB] mark roundup_used failed:", i, r.status_code, (r.text or "")[:160])
+        except Exception as e:
+            print("[SB] mark roundup_used error:", i, e)
 
 def wp_auth():
     if not (WP_BASE_URL and WP_USERNAME and WP_APP_PASSWORD):
@@ -372,6 +391,11 @@ def main():
         html_content = html_content + "\n" + WP_CTA_HTML
 
     created = wp_create_post(title, html_content, featured_media=featured_id)
+    try:
+        used_ids = [a.get("id") for a in items if a.get("id")]
+        sb_mark_roundup_used(used_ids)
+    except Exception as e:
+        print("[SB] roundup_used post-mark failed:", e)
     link = created.get("link") if isinstance(created, dict) else None
     status = created.get("status") if isinstance(created, dict) else None
     print("WP research post created:", link or "(no JSON link)", "status:", status or created.get("status_code"))
