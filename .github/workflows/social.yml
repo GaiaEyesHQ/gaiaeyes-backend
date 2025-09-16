@@ -1,0 +1,64 @@
+name: Social automations
+
+on:
+  schedule:
+    - cron: "15 12 * * *"   # 12:15 UTC (~morning CT) – render fact
+    - cron: "30 12 * * *"   # 12:30 UTC – post fact to FB/IG
+  workflow_dispatch:
+
+jobs:
+  fact-render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -r requirements.txt
+      - name: Render daily fact images
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          MEDIA_ROOT: gaiaeyes-media
+          BRAND_FOOTER_TEXT: Gaia Eyes – We are the watchers
+        run: python bots/fact_overlay/fact_renderer.py
+      - name: Commit media (optional, if you keep images in repo)
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add gaiaeyes-media/images/facts || true
+          git commit -m "chore: add daily fact images" || true
+          git push || true
+
+  fact-post:
+    needs: fact-render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -r requirements.txt
+      - name: Post fact to FB + IG
+        env:
+          MEDIA_ROOT: gaiaeyes-media
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
+          IG_BUSINESS_ID: ${{ secrets.IG_USER_ID }}
+        run: python bots/fact_overlay/social_poster.py
+
+  fb-reel:
+    if: github.event_name == 'workflow_dispatch'  # start manual, add schedule later if desired
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -r requirements.txt
+      - name: Build reel from last 3 tall facts
+        env:
+          MEDIA_ROOT: gaiaeyes-media
+        run: python bots/reels/reel_builder.py
+      - name: Post FB Reel
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
+        run: python bots/reels/fb_reel_poster.py

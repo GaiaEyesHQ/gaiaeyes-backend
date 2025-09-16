@@ -1,0 +1,330 @@
+# Context Reload Kit – Gaia Eyes (Master)
+
+*A drop‑in briefing you can paste into any new chat to instantly restore project context. Keep this updated as the single source of truth.*
+
+---
+
+## 1) How to use this kit
+
+* Keep this file in your repo (e.g., `/docs/context-reload.md`) and a copy in Google Drive.
+* When a conversation hits length limits, open a new chat and paste **Section 2: Copy‑Paste Primer**.
+* Update **Section 9: Changelog** at the end of each working session.
+
+---
+
+## 2) Copy‑Paste Primer (drop this into a fresh chat)
+
+**Paste everything in this block:**
+
+```
+You’re joining an ongoing project called “Gaia Eyes.” It’s a solo founder + AI assistant build. Your job is to continue the exact approach already in place and avoid re‑architecting unless asked.
+
+Core: A daily “EarthScope” and a research roundup fed by automations pulling real‑time data (space weather, Schumann resonance, extreme weather, etc.) into Supabase/Sheets. Renderers produce social images and WordPress posts. Facebook/Instagram bots post short and multi‑image content.
+
+Non‑negotiable prefs:
+- Reliability > cleverness. Respect timezone (America/Chicago), caching, and robustness.
+- Rendering: avoid footer overlap; implement text clipping for affirmations; TOC enabled by default on articles; never inline duplicate hero when featured set.
+- News: dedupe research roundup using `roundup_used`; respect env‑based limits; avoid stale dates—use `published_at`, not crawl time.
+- Keep code patches concrete. Provide copy‑pasteable patches and SQL snippets.
+
+Current focus:
+- Fix WP article poster image (not the same as Daily EarthScope).
+- Add IFLScience as a source; exclude keyword `covid` for news pulls.
+- Investigate Schumann ingest periodic error; check health stats stop on 2025‑09‑09.
+- Add more space weather data + triggers for major events (e.g., solar storms) to auto‑post.
+- Add “Fact renderer” and FB reels bot; keep existing FB/IG posting working.
+
+Stack sketch (don’t re‑invent unless asked): Python bots + GitHub Actions + Render; Supabase; WordPress (SiteGround); future WooCommerce store; optional Glide/Bubble frontends.
+
+Code etiquette: deliver minimal diffs with clear file paths; include env var updates and migration steps. If context seems missing, ask to consult the Context Reload Kit.
+```
+
+---
+
+## 3) Project elevator pitch (one paragraph)
+
+Gaia Eyes correlates real‑time Earth/space‑weather signals (Kp index, Schumann resonance, solar flares, extreme weather, quakes) with human‑centric metrics (HRV, EEG, smartwatch data). Output = daily “EarthScope,” research roundups, and social posts (single + multi‑image), with a future dual‑lens UI (“scientific” vs “mystical”).
+
+---
+
+## 4) Canonical environment & commands
+
+* **Timezone:** `America/Chicago`
+
+* **Python:** 3.11+
+
+* **Core env vars (sample):**
+
+  * `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
+  * `WP_BASE_URL`, `WP_USER`, `WP_APP_PW`
+  * `FB_PAGE_ID`, `FB_ACCESS_TOKEN`, `IG_BUSINESS_ID`
+  * `NEWS_SOURCES="nasa, noaa, spaceweatherlive, iflscience"`
+  * `NEWS_EXCLUDE_KEYWORDS="covid,politics,celebrity"`
+  * `WP_LOOKBACK=3`  # research poster lookback (days)
+  * `EARTHSCOPE_USER_ID`  # validate UUID before upsert
+  * `ROUNDUP_ENV_LIMIT=50` # env‑based cap for research roundup
+
+* **Bootstrap:**
+
+  ```bash
+  python -m venv .venv && source .venv/bin/activate
+  pip install -r requirements.txt
+  pre-commit install || true
+  ```
+
+* **Run bots locally:**
+
+  ```bash
+  python bots/earthscope_post/main.py
+  python bots/research_roundup/main.py
+  python bots/social/fact_renderer.py
+  python bots/social/fb_reels_bot.py
+  ```
+
+---
+
+## 5) Data contracts (schemas & examples)
+
+**EarthScope post (Supabase table: `earthscope_posts`)**
+
+```sql
+create table if not exists earthscope_posts (
+  id uuid primary key default gen_random_uuid(),
+  run_at timestamptz not null,
+  kp_index numeric,
+  solar_events jsonb,
+  schumann jsonb,
+  headline text,
+  image_url text,
+  article_url text,
+  created_at timestamptz default now()
+);
+```
+
+**Research roundup item**
+
+```sql
+create table if not exists research_items (
+  id uuid primary key default gen_random_uuid(),
+  source text not null,
+  title text not null,
+  url text not null,
+  published_at timestamptz not null,
+  summary text,
+  roundup_used boolean default false,
+  created_at timestamptz default now()
+);
+```
+
+---
+
+## 6) Renderer & posting rules (non‑negotiables)
+
+* **Rendering:** avoid footer overlap; enable text clipping for affirmations; hero not duplicated when featured image present.
+* **TOC:** enabled by default; fix special character encoding issues.
+* **Dates:** never rely on crawl time; use `published_at` to avoid staleness.
+* **Roundup:** maintain `roundup_used` flag to prevent duplicates; respect `ROUNDUP_ENV_LIMIT`.
+* **Social bots:** keep FB/IG posting credentials in env; reels: 3‑image EarthScope + tall research images.
+
+---
+
+## 7) Open tasks (running list)
+
+* [ ] Add IFLScience source.
+* [ ] Add `covid` to exclude keywords for news pulls.
+* [ ] Fix WP article poster image logic (separate from Daily EarthScope).
+* [ ] Resolve WP TOC special‑char issue.
+* [ ] Investigate Schumann ingest periodic error.
+* [ ] Investigate health‑stats stop on **2025‑09‑09**.
+* [ ] Add more space‑weather data; event‑triggered posts for solar storms.
+* [ ] Implement **Fact renderer** and **FB reels** bots; produce a clean, copy‑paste workflow.
+
+---
+
+## 8) Quick recovery playbook
+
+1. Create a new chat.
+2. Paste **Section 2: Copy‑Paste Primer**.
+3. Share the most recent **changelog excerpt** (Section 9) and any error traces.
+4. If code diverged, link the canonical files in repo + `.env` diffs.
+5. Continue with small, testable patches.
+
+---
+
+## 9) Changelog (append newest on top)
+
+* **2025‑09‑15:** Created Context Reload Kit; codified non‑negotiables; listed open tasks; added sample schemas and envs.
+
+---
+
+## 10) Patches & snippets (ready to drop in)
+
+### 10.1 Validate `EARTHSCOPE_USER_ID` before upsert (Python)
+
+```python
+import uuid
+
+def valid_uuid(v: str) -> bool:
+    try:
+        uuid.UUID(v)
+        return True
+    except Exception:
+        return False
+
+user_id = os.getenv("EARTHSCOPE_USER_ID")
+payload = {k: v for k, v in payload.items() if v is not None}
+if user_id and valid_uuid(user_id):
+    payload["user_id"] = user_id
+# else: omit user_id entirely to avoid 22P02
+```
+
+### 10.2 News de‑dup and freshness
+
+```python
+# Ensure we use published_at and skip used items
+items = [i for i in items if i.published_at and i.published_at >= cutoff]
+items = [i for i in items if not i.roundup_used]
+```
+
+### 10.3 WordPress TOC encoding fix (example)
+
+```python
+html = html.replace("&amp;#", "&#")  # normalize double‑encoded entities
+```
+
+### 10.4 Env‑based roundup limit
+
+```python
+limit = int(os.getenv("ROUNDUP_ENV_LIMIT", 50))
+items = items[:limit]
+```
+
+---
+
+## 11) Links (fill in once):
+
+
+FB_ACCESS_TOKEN=EAALeprUm4HwBPDXpacqsvdr2H9dmjC3ZAbd33BzReDwI8KKMMH0Jy3Ju1lzmnit5nD20GZBGVrLa38lWBEXsZBBTrKHzIIQewbGqFfRZCaclI5UYjedrpO6wJqs4wZBJOr1oP510jiOq9dftnz9wjIDBJCbBmyRfCtUlI8UM49TvddQNtrvlzrQgsAth173ZAZBvkfxbH8z
+FB_PAGE_ID=772867052570153
+IG_USER_ID=17841476128531063
+MEDIA_CDN_BASE=https://cdn.jsdelivr.net/gh/gennwu/gaiaeyes-media/images
+SUPABASE_REST_URL=https://qadwzkwubfbfuslfxkzl.supabase.co/rest/v1
+SUPABASE_USER_ID=e20a3e9e-1fc2-41ad-b6f7-656668310d13
+GAIA_TIMEZONE=America/Chicago
+#Image hosting
+IG_STATIC_IMAGE_URL=https://gennwu.github.io/gaiaeyes-media/images/dailypost.jpg
+IG_IMAGE_BASE_URL=https://gennwu.github.io/gaiaeyes-media/images/
+
+# === APIs ===
+NASA_API_KEY=aGYhKBDmeDfGFM2JkWg2lnCimJn5XgUmwM5UkB3d
+NEWS_API_KEY= 77748626e024b9b985f07e97826e4db
+# OpenWeather (set your location)
+OPENWEATHER_API_KEY=0ab5dc524a2d5dc7f726017a2b98c687
+OPENWEATHER_LAT=33.44
+OPENWEATHER_LON=-94.04
+
+#api weather gov
+HTTP_USER_AGENT='(gaiaeyes.com, gaiaeyes7.83@gmail.com)'
+
+# --- Earthscope content generation ---
+OPENAI_API_KEY=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
+GAIA_TIMEZONE=America/Chicago
+
+LOGO_PATH=/Users/jenniferobrien/Desktop/GaiaEyes/GaiaEyesLogo.png
+DATABASE_URL=postgresql://postgres.qadwzkwubfbfuslfxkzl:cixbaj-tedrac-6syZke@aws-1-us-east-2.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require
+SUPABASE_DB_URL=postgresql://postgres.qadwzkwubfbfuslfxkzl:cixbaj-tedrac-6syZke@aws-1-us-east-2.pooler.supabase.com:6543/postgres?pgbouncer=true&sslmode=require
+DEV_BEARER=devtoken123
+# keep your existing DATABASE_URL line as-is
+DIRECT_URL=postgresql://postgres.qadwzkwubfbfuslfxkzl:cixbaj-tedrac-6syZke@aws-1-us-east-2.pooler.supabase.com:5432/postgres?sslmode=require
+---
+
+## 12) Style & language
+
+* Keep tone clear, non‑fluffy. Prefer bullet points and code patches.
+* Always show paths for changed files; include migrations and env updates.
+* Add tests or quick asserts when reasonable.
+
+---
+
+## 13) Wire this into your repo (copy/paste)
+
+### 13.1 Create the file in your repo
+
+```bash
+# from repo root
+mkdir -p docs
+curl -sSL "https://raw.githubusercontent.com/placeholder/gaiaeyes-context/main/context-reload.md" -o docs/context-reload.md || true
+# if curl fails (no internet), manually paste the canvas contents into docs/context-reload.md
+
+# commit
+git add docs/context-reload.md
+git commit -m "docs: add Context Reload Kit"
+git push origin HEAD
+```
+
+> If you prefer, just open `docs/context-reload.md` locally and paste the entire canvas content.
+
+### 13.2 Optional: add a README pointer
+
+```bash
+awk '/^## Documentation/{p=1} p{print} END{if(!p) print "## Documentation
+- See [Context Reload Kit](docs/context-reload.md) for fast ramp-up."}' README.md > README.tmp && mv README.tmp README.md
+
+git add README.md && git commit -m "docs: link Context Reload Kit from README" && git push
+```
+
+### 13.3 GitHub label & issue template for context updates (optional)
+
+Create `.github/ISSUE_TEMPLATE/context_update.yml`:
+
+```yaml
+name: Context Update
+description: Update the Context Reload Kit when behavior/requirements change
+labels: [docs, context]
+body:
+  - type: textarea
+    id: change
+    attributes:
+      label: What changed?
+      description: Describe the new rule, env var, or workflow step.
+      placeholder: e.g., Added IFLScience to sources, excluded keyword 'covid'.
+    validations:
+      required: true
+```
+
+### 13.4 CI check to remind updates (optional)
+
+Add `.github/workflows/context-check.yml`:
+
+```yaml
+name: Context Kit Reminder
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure kit exists
+        run: test -f docs/context-reload.md
+      - name: Warn if kit not touched in last 14 days
+        run: |
+          if [ $(git log -1 --since="14 days ago" --pretty=format:%H -- docs/context-reload.md | wc -l) -eq 0 ]; then
+            echo "::warning::Context Reload Kit hasn't been updated in 14 days. Consider refreshing open tasks/changelog.";
+          fi
+```
+
+### 13.5 Fill these placeholders now
+
+* Replace **Links (Section 11)** with your actual URLs.
+
+* Add current repo path(s) for bots under **Section 4**.
+
+* Append today’s entry to **Section 9: Changelog** after you wire this in.
+
+* Keep tone clear, non‑fluffy. Prefer bullet points and code patches.
+
+* Always show paths for changed files; include migrations and env updates.
+
+* Add tests or quick asserts when reasonable.
