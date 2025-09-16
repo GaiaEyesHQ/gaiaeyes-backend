@@ -33,6 +33,11 @@ GITHUB_API_TOKEN    = os.getenv("GITHUB_API_TOKEN", "").strip() or os.getenv("GA
 WP_ADD_TOC         = (os.getenv("WP_ADD_TOC", "true").lower() in ("1","true","yes"))
 WP_LOOKBACK_DAYS  = int(os.getenv("WP_LOOKBACK_DAYS", "3"))
 
+# Gallery injection controls
+WP_GALLERY_ENABLE = (os.getenv("WP_GALLERY_ENABLE","1").strip().lower() in ("1","true","yes","on"))
+WP_GALLERY_KIND   = os.getenv("WP_GALLERY_KIND","wide").strip().lower()    # 'wide' | 'tall' | 'square'
+WP_GALLERY_COUNT  = int(os.getenv("WP_GALLERY_COUNT","3"))
+
 # Supabase
 SUPABASE_REST_URL   = os.getenv("SUPABASE_REST_URL","").rstrip("/")
 SUPABASE_SERVICE_KEY= os.getenv("SUPABASE_SERVICE_KEY","").strip()
@@ -134,6 +139,52 @@ def pick_background_from_cdn(kind: str = "square") -> tuple[str|None, str|None, 
     url = f"{root}{path}"
     print(f"[WP] Picked featured background: {url}")
     return owner, repo, sha, path, url
+
+# --- Gallery helpers ---
+def pick_backgrounds_from_cdn(kind: str = "wide", count: int = 3) -> list[str]:
+    """
+    Return a list of CDN URLs for background images of the requested kind.
+    Falls back to 'square' if none found. Deterministic daily selection.
+    """
+    if not MEDIA_CDN_BASE:
+        return []
+    parsed = _parse_jsdelivr_base(MEDIA_CDN_BASE)
+    if not parsed:
+        return []
+    owner, repo, sha = parsed
+    files = _list_jsdelivr_paths(owner, repo, sha)
+    if not files:
+        files = _list_github_paths(owner, repo, sha)
+    if not files:
+        return []
+    cand = [p for p in files if p.startswith(f"/backgrounds/{kind}/") and p.lower().endswith((".jpg",".jpeg",".png",".webp"))]
+    if not cand and kind != "square":
+        cand = [p for p in files if p.startswith("/backgrounds/square/") and p.lower().endswith((".jpg",".jpeg",".png",".webp"))]
+    if not cand:
+        return []
+    # daily-deterministic shuffle
+    dseed = int(dt.datetime.utcnow().strftime("%Y%m%d"))
+    random.seed(dseed)
+    random.shuffle(cand)
+    chosen = cand[:max(0, int(count))]
+    root = MEDIA_CDN_BASE
+    if root.endswith("/images"):
+        root = root[:-7]
+    return [f"{root}{p}" for p in chosen]
+
+def inject_gallery_block(html_content: str, urls: list[str]) -> str:
+    """Insert a simple gallery of images after the first H2/H3 or at top if none."""
+    if not urls:
+        return html_content
+    gallery_block = "\n".join(
+        f'<!-- wp:image {{"id":0,"sizeSlug":"large"}} --><figure class="wp-block-image size-large"><img src="{html.escape(u)}" alt=""/></figure><!-- /wp:image -->'
+        for u in urls
+    )
+    if "</h2>" in html_content:
+        return html_content.replace("</h2>", "</h2>\n" + gallery_block, 1)
+    if "</h3>" in html_content:
+        return html_content.replace("</h3>", "</h3>\n" + gallery_block, 1)
+    return gallery_block + "\n" + html_content
 
 def wp_upload_image_from_url(image_url: str, filename_hint="featured.jpg", dl_headers: dict | None = None) -> tuple[int|None, str|None]:
     try:
@@ -379,6 +430,14 @@ def main():
         html_content = f'<p><img src="{html.escape(hero_url)}" alt="Featured image" style="max-width:100%;height:auto;"/></p>\n' + html_content
         if WP_FEATURED_CREDIT:
             html_content = f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>\n" + html_content
+
+    # Optional gallery injection (after first H2/H3 or top of article)
+    if WP_GALLERY_ENABLE:
+        gallery_urls = pick_backgrounds_from_cdn(WP_GALLERY_KIND, WP_GALLERY_COUNT)
+        # avoid duplicating the same image as the hero if applicable
+        if hero_url:
+            gallery_urls = [u for u in gallery_urls if u != hero_url]
+        html_content = inject_gallery_block(html_content, gallery_urls)
 
     # Optional TOC: build from H3 headings and inject anchor IDs
     if WP_ADD_TOC:
