@@ -51,9 +51,9 @@ def sb_select_facts(limit=10):
         f"{SUPABASE_URL}/rest/v1/article_outputs",
         headers=headers,
         params={
-            "output_type": "eq.fact",
+            "output_type": "ilike.fact",
             "created_at": f"gte.{from_date}",
-            "select": "id,title,output_type,content,created_at",
+            "select": "id,output_type,content,created_at",
             "order": "created_at.desc",
             "limit": str(limit)
         }
