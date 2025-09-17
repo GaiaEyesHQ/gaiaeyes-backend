@@ -39,22 +39,22 @@ def _extract_text(record: dict) -> str:
     return ""
 
 def sb_select_facts(limit=10):
-    # Expecting a table `article_outputs` with columns: id, output_type, text, published_at
+    # Expecting table `article_outputs` with: id, output_type, content, created_at
     # Pull only facts not yet rendered (left-join to research_fact_images)
     url = f"{SUPABASE_URL}/rest/v1/rpc/fetch_unrendered_facts"
     # If you don't have the RPC, you can emulate with a view or do it client-side.
     # For simplicity, we do a naive select (replace with your SDK if available).
     headers = {"apikey": SUPABASE_SERVICE_KEY, "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}"}
-    # Fallback: select facts from last 7 days
+    # Fallback: select facts from last 7 days (using created_at)
     from_date = (dt.datetime.utcnow() - dt.timedelta(days=7)).isoformat()
     resp = requests.get(
         f"{SUPABASE_URL}/rest/v1/article_outputs",
         headers=headers,
         params={
             "output_type": "eq.fact",
-            "published_at": f"gte.{from_date}",
-            "select": "*",
-            "order": "published_at.desc",
+            "created_at": f"gte.{from_date}",
+            "select": "id,title,output_type,content,created_at",
+            "order": "created_at.desc",
             "limit": str(limit)
         }
     )
