@@ -1,30 +1,41 @@
-MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", "gaiaeyes-media"))
-FB_PAGE_ID = os.getenv("FB_PAGE_ID")
-FB_ACCESS_TOKEN = os.getenv("FB_ACCESS_TOKEN")
-IG_ID = os.getenv("IG_BUSINESS_ID") or os.getenv("IG_USER_ID")
-GRAPH = "https://graph.facebook.com/v21.0"
+name: Social automations
 
-def ig_post_photo(image_url, caption):
-    create_url = f"{GRAPH}/{IG_ID}/media"
-    payload = {
-        "image_url": image_url,
-        "caption": caption,
-        "access_token": FB_ACCESS_TOKEN,
-    }
-    r = requests.post(create_url, data=payload)
-    r.raise_for_status()
-    container_id = r.json()["id"]
+on:
+  schedule:
+    - cron: "15 12 * * *"   # 12:15 UTC (~morning CT) – render fact
+    - cron: "30 12 * * *"   # 12:30 UTC – post fact to FB/IG
+  workflow_dispatch:
 
-    publish = requests.post(f"{GRAPH}/{IG_ID}/media_publish", data={"creation_id": container_id, "access_token": FB_ACCESS_TOKEN})
-    publish.raise_for_status()
-    return publish.json()
+permissions:
+  contents: write
 
-def main():
-    ...
-    if tall and IG_ID:
-        ...
-          IG_POST_ID = ig_post_photo(tall_url, caption)
-    ...
+jobs:
+  fact-render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Render daily fact images
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          MEDIA_ROOT: gaiaeyes-media
+          BRAND_FOOTER_TEXT: Gaia Eyes – We are the watchers
+        run: python bots/fact_overlay/fact_renderer.py
+      - name: Commit media (optional, if you keep images in repo)
+        run: |
+          if [ -d gaiaeyes-media/images/facts ] && [ -n "$(ls -A gaiaeyes-media/images/facts 2>/dev/null)" ]; then
+            git config user.name "github-actions"
+            git config user.email "actions@users.noreply.github.com"
+            git add gaiaeyes-media/images/facts
+            git commit -m "chore: add daily fact images" || exit 0
+            git push
+          else
+            echo "No fact images to commit."
+          fi
 
   fact-post:
     needs: fact-render
@@ -32,7 +43,8 @@ def main():
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
+        with:
+          python-version: "3.11"
       - run: pip install -r requirements.txt
       - name: Post fact to FB + IG
         env:
@@ -41,3 +53,22 @@ def main():
           FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
         run: python bots/fact_overlay/social_poster.py
+
+  fb-reel:
+    if: github.event_name == 'workflow_dispatch'  # start manual, add schedule later if desired
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Build reel from last 3 tall facts
+        env:
+          MEDIA_ROOT: gaiaeyes-media
+        run: python bots/reels/reel_builder.py
+      - name: Post FB Reel
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
+        run: python bots/reels/fb_reel_poster.py
