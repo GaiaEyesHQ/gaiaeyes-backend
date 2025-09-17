@@ -26,7 +26,7 @@ def sb_select_facts(limit=10):
     headers = {"apikey": SUPABASE_SERVICE_KEY, "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}"}
     # Fallback: select facts from last 7 days
     from_date = (dt.datetime.utcnow() - dt.timedelta(days=7)).isoformat()
-    facts = requests.get(
+    resp = requests.get(
         f"{SUPABASE_URL}/rest/v1/article_outputs",
         headers=headers,
         params={
@@ -36,8 +36,25 @@ def sb_select_facts(limit=10):
             "order": "published_at.desc",
             "limit": str(limit)
         }
-    ).json()
-    return facts
+    )
+    try:
+        resp.raise_for_status()
+    except requests.HTTPError as e:
+        print(f"[facts] HTTP error from Supabase: {e} — {getattr(resp, 'text', '')[:300]}")
+        return []
+    try:
+        data = resp.json()
+    except Exception as e:
+        print(f"[facts] Failed to parse JSON: {e}")
+        return []
+    # Supabase returns a list on success; dict usually indicates an error object
+    if isinstance(data, dict):
+        print(f"[facts] Unexpected dict payload from Supabase: {str(data)[:300]}")
+        return []
+    if not isinstance(data, list):
+        print(f"[facts] Unexpected payload type: {type(data)}")
+        return []
+    return data
 
 def pick_bg(folder: Path) -> Image.Image:
     folder.mkdir(parents=True, exist_ok=True)
@@ -116,11 +133,15 @@ def render_one(kind: str, output) -> Path:
 
 def main():
     facts = sb_select_facts(limit=5)
-    if not facts: 
-        print("No facts to render.")
+    if not facts or not isinstance(facts, list):
+        print("No facts to render (empty or unexpected payload).")
         return
     # Render only first new fact per day to avoid spam
-    out = facts[0]
+    try:
+        out = facts[0]
+    except (IndexError, KeyError, TypeError):
+        print("No usable fact item found.")
+        return
     sq = render_one("square", out)
     tl = render_one("tall", out)
     print("Rendered:", sq, tl)
