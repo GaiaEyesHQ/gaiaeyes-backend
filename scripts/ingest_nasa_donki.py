@@ -8,7 +8,7 @@ ENV:
   START_DAYS_AGO   (default 7)  -- pulls events from now()-N days to today
 """
 
-import os, sys, asyncio, json
+import os, sys, asyncio, json, random
 from datetime import datetime, timedelta, timezone
 import httpx, asyncpg
 
@@ -21,6 +21,8 @@ def env(k, default=None, required=False):
 DB   = env("SUPABASE_DB_URL", required=True)
 KEY  = env("NASA_API_KEY", required=True)
 DAYS = int(env("START_DAYS_AGO", "7"))
+RETRIES = int(env("DONKI_MAX_RETRIES", "5"))
+RETRY_BASE_MS = int(env("DONKI_RETRY_BASE_MS", "500"))  # base backoff in milliseconds
 
 BASE = "https://api.nasa.gov/DONKI"
 
@@ -50,10 +52,41 @@ def parse_iso(ts):
     except Exception:
         return None
 
-async def fetch(client: httpx.AsyncClient, path: str, params: dict):
-    r = await client.get(f"{BASE}/{path}", params=params, timeout=httpx.Timeout(45.0, connect=10.0))
-    r.raise_for_status()
-    return r.json()
+async def fetch(client: httpx.AsyncClient, path: str, params: dict, retries: int = RETRIES, base_ms: int = RETRY_BASE_MS):
+    """
+    Fetch with retry/backoff. Retries on 5xx and 429. Returns [] on exhausted retries.
+    """
+    url = f"{BASE}/{path}"
+    attempt = 0
+    while True:
+        try:
+            r = await client.get(url, params=params, timeout=httpx.Timeout(45.0, connect=10.0))
+            r.raise_for_status()
+            return r.json()
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code if e.response is not None else None
+            retryable = (status == 429) or (status is not None and 500 <= status < 600)
+            attempt += 1
+            if retryable and attempt <= retries:
+                # exponential backoff with jitter
+                delay = (base_ms / 1000.0) * (2 ** (attempt - 1)) + (random.random() * 0.25)
+                print(f"[DONKI] {path} got HTTP {status}; retry {attempt}/{retries} in {delay:.2f}s", file=sys.stderr)
+                await asyncio.sleep(delay)
+                continue
+            if retryable:
+                print(f"[DONKI] {path} failed after {retries} retries with HTTP {status}; skipping.", file=sys.stderr)
+                return []
+            # non-retryable
+            raise
+        except httpx.RequestError as e:
+            attempt += 1
+            if attempt <= retries:
+                delay = (base_ms / 1000.0) * (2 ** (attempt - 1)) + (random.random() * 0.25)
+                print(f"[DONKI] network error on {path}: {e!r}; retry {attempt}/{retries} in {delay:.2f}s", file=sys.stderr)
+                await asyncio.sleep(delay)
+                continue
+            print(f"[DONKI] network error on {path}; exhausted retries; skipping.", file=sys.stderr)
+            return []
 
 async def main():
     now = datetime.now(timezone.utc)
@@ -61,8 +94,8 @@ async def main():
     params = {"startDate": iso_day(start), "endDate": iso_day(now), "api_key": KEY}
 
     async with httpx.AsyncClient() as client:
-        flr = await fetch(client, "FLR", params)
-        cme = await fetch(client, "CME", params)
+        flr = await fetch(client, "FLR", params) or []
+        cme = await fetch(client, "CME", params) or []
 
     rows = []
     # FLR: fields: flrID, beginTime, peakTime, endTime, classType
