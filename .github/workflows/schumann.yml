@@ -114,7 +114,7 @@ jobs:
           fi
 
           if [ -f runs/cumiana_now.json ]; then
-            cp -f runs/cumiana_now.json    "$MEDIA_DIR/data/cumiana_latest.json" && have_any=true
+            if cp -f runs/cumiana_now.json "$MEDIA_DIR/data/cumiana_latest.json"; then have_any=true; fi
           else
             echo "WARN: runs/cumiana_now.json not found; keeping existing data/cumiana_latest.json"
           fi
