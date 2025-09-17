@@ -29,8 +29,7 @@ jobs:
         with:
           repository: gennwu/gaiaeyes-media
           path: ${{ env.MEDIA_DIR }}
-          ssh-key: ${{ secrets.GAIAEYES_MEDIA_SSH_KEY }}
-          ssh-strict: true
+          token: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
           persist-credentials: true
           clean: true
           sparse-checkout-cone-mode: true
@@ -118,7 +117,7 @@ jobs:
           fi
 
           if [ -f runs/tomsk_now.json ]; then
-            cp -f runs/tomsk_now.json      "$MEDIA_DIR/data/tomsk_latest.json" && have_any=true
+            if cp -f runs/tomsk_now.json "$MEDIA_DIR/data/tomsk_latest.json"; then have_any=true; fi
           else
             echo "WARN: runs/tomsk_now.json not found; keeping existing data/tomsk_latest.json"
           fi
@@ -166,6 +165,17 @@ jobs:
           git rm -f data/schumann_*.json 2>/dev/null || true
 
           echo "After cleanup, media contains:"; ls -lah images || true; ls -lah data || true
+
+      - name: Preflight: verify media remote auth
+        if: steps.stage_latest.outputs.ok == 'true'
+        working-directory: ${{ env.MEDIA_DIR }}
+        run: |
+          set -euo pipefail
+          echo "Remote URL:"
+          git remote -v
+          echo "Testing auth with a read-only call..."
+          git ls-remote --heads origin >/dev/null
+          echo "Auth looks good."
 
       - name: Commit & push to media repo
         if: steps.stage_latest.outputs.ok == 'true'
