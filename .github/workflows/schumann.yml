@@ -74,51 +74,69 @@ jobs:
             --insecure || true
 
       - name: Stage artifacts into media repo (latest only)
+        id: stage_latest
         working-directory: ${{ env.WORKDIR }}
         env:
           MEDIA_DIR: ${{ github.workspace }}/media
         run: |
           set -euo pipefail
-          set -x
           mkdir -p "$MEDIA_DIR/images" "$MEDIA_DIR/data"
 
           echo "Listing runs/ before copy:"; ls -lah runs || true
 
-          # Copy latest overlays if they exist; keep previous *_latest.png if absent
+          # Track whether we copied or have at least one usable artifact
+          have_any=false
+
+          # Images (latest only). If missing, keep existing.
           if [ -f runs/tomsk_overlay.png ]; then
-            cp -f runs/tomsk_overlay.png        "$MEDIA_DIR/images/tomsk_latest.png"
+            cp -f runs/tomsk_overlay.png   "$MEDIA_DIR/images/tomsk_latest.png" && have_any=true
           else
             echo "WARN: runs/tomsk_overlay.png not found; keeping existing images/tomsk_latest.png"
           fi
 
           if [ -f runs/cumiana_overlay.png ]; then
-            cp -f runs/cumiana_overlay.png      "$MEDIA_DIR/images/cumiana_latest.png"
+            cp -f runs/cumiana_overlay.png "$MEDIA_DIR/images/cumiana_latest.png" && have_any=true
           else
             echo "WARN: runs/cumiana_overlay.png not found; keeping existing images/cumiana_latest.png"
           fi
 
-          # JSON latest always overwrite when present; if missing, keep existing
+          # JSONs (latest only). If missing, keep existing.
           if [ -f runs/schumann_now.json ]; then
-            cp -f runs/schumann_now.json        "$MEDIA_DIR/data/schumann_latest.json"
+            cp -f runs/schumann_now.json   "$MEDIA_DIR/data/schumann_latest.json" && have_any=true
           else
             echo "WARN: runs/schumann_now.json not found; keeping existing data/schumann_latest.json"
           fi
 
           if [ -f runs/tomsk_now.json ]; then
-            cp -f runs/tomsk_now.json           "$MEDIA_DIR/data/tomsk_latest.json"
+            cp -f runs/tomsk_now.json      "$MEDIA_DIR/data/tomsk_latest.json" && have_any=true
           else
             echo "WARN: runs/tomsk_now.json not found; keeping existing data/tomsk_latest.json"
           fi
 
           if [ -f runs/cumiana_now.json ]; then
-            cp -f runs/cumiana_now.json         "$MEDIA_DIR/data/cumiana_latest.json"
+            cp -f runs/cumiana_now.json    "$MEDIA_DIR/data/cumiana_latest.json" && have_any=true
           else
             echo "WARN: runs/cumiana_now.json not found; keeping existing data/cumiana_latest.json"
           fi
 
           echo "Listing media/ after copy:"; ls -lah "$MEDIA_DIR/images" || true; ls -lah "$MEDIA_DIR/data" || true
 
+          # Final guard: ensure at least one latest artifact exists in media (image or JSON)
+          if [ "$have_any" = false ] && \
+             [ ! -f "$MEDIA_DIR/images/tomsk_latest.png" ] && \
+             [ ! -f "$MEDIA_DIR/images/cumiana_latest.png" ] && \
+             [ ! -f "$MEDIA_DIR/data/schumann_latest.json" ] && \
+             [ ! -f "$MEDIA_DIR/data/tomsk_latest.json" ] && \
+             [ ! -f "$MEDIA_DIR/data/cumiana_latest.json" ]; then
+            echo "ERROR: No latest artifacts to publish (neither images nor JSON). Aborting commit to avoid wiping repo."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
       - name: Remove timestamped media artifacts (keep only *_latest.*)
+        if: steps.stage_latest.outputs.ok == 'true'
         working-directory: ${{ env.MEDIA_DIR }}
         run: |
           set -euo pipefail
@@ -140,6 +158,7 @@ jobs:
           echo "After cleanup, media contains:"; ls -lah images || true; ls -lah data || true
 
       - name: Commit & push to media repo
+        if: steps.stage_latest.outputs.ok == 'true'
         working-directory: ${{ env.MEDIA_DIR }}
         run: |
           set -euo pipefail
@@ -154,6 +173,7 @@ jobs:
           fi
 
       - name: Append harmonics to ext.schumann (stale rows kept with null value_num)
+        if: steps.stage_latest.outputs.ok == 'true'
         working-directory: ${{ env.WORKDIR }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
