@@ -4,7 +4,7 @@ from pathlib import Path
 MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", "gaiaeyes-media"))
 FB_PAGE_ID = os.getenv("FB_PAGE_ID")
 FB_ACCESS_TOKEN = os.getenv("FB_ACCESS_TOKEN")
-IG_BUSINESS_ID = os.getenv("IG_PAGE_ID")
+IG_ID = os.getenv("IG_BUSINESS_ID") OR OS.GETENV("IG_USER_ID")  # IG_BUSINESS_ID is preferre
 GRAPH = "https://graph.facebook.com/v21.0"
 
 def latest(kind: str) -> Path:

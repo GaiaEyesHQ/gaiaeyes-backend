@@ -17,6 +17,27 @@ HOOKS = [
   "Something to ground you:"
 ]
 
+def _extract_text(record: dict) -> str:
+    """
+    Try common fields for text; also check nested JSON like {output:{text:...}}.
+    """
+    if not isinstance(record, dict):
+        return ""
+    # flat possibilities
+    for key in ("text", "content", "body", "summary", "fact_text", "message"):
+        v = record.get(key)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    # nested common containers
+    for container in ("output", "data", "payload"):
+        v = record.get(container)
+        if isinstance(v, dict):
+            for key in ("text", "content", "body", "summary", "fact"):
+                vv = v.get(key)
+                if isinstance(vv, str) and vv.strip():
+                    return vv.strip()
+    return ""
+
 def sb_select_facts(limit=10):
     # Expecting a table `article_outputs` with columns: id, output_type, text, published_at
     # Pull only facts not yet rendered (left-join to research_fact_images)
@@ -32,7 +53,7 @@ def sb_select_facts(limit=10):
         params={
             "output_type": "eq.fact",
             "published_at": f"gte.{from_date}",
-            "select": "id,text,published_at",
+            "select": "*",
             "order": "published_at.desc",
             "limit": str(limit)
         }
@@ -119,16 +140,19 @@ def render_one(kind: str, output) -> Path:
     # kind: "square" or "tall"
     bg = pick_bg(BG_TALL if kind=="tall" else BG_SQUARE)
     hook = seeded_hook()
-    text = output.get("text","").strip()
+    text = _extract_text(output)
+    if not text:
+        text = "No fact text available."
     body = text if len(text) < 600 else text[:600] + "…"
     composed = draw_text(bg, hook, body)
     ensure_dirs()
-    fn = f"{dt.datetime.utcnow().strftime('%Y%m%d')}-{output['id']}-{kind}.png"
+    rec_id = str(output.get("id", "unknown"))
+    fn = f"{dt.datetime.utcnow().strftime('%Y%m%d')}-{rec_id}-{kind}.png"
     out_path = MEDIA_ROOT / "images" / "facts" / fn
     composed.save(out_path, "PNG")
     # URL resolution: if MEDIA_ROOT is a repo synced to a public CDN or WP media, replace with public URL builder
     image_url = str(out_path)
-    insert_fact_image_row(output["id"], kind, image_url)
+    insert_fact_image_row(output.get("id"), kind, image_url)
     return out_path
 
 def main():
@@ -139,6 +163,9 @@ def main():
     # Render only first new fact per day to avoid spam
     try:
         out = facts[0]
+        if not _extract_text(out):
+            print("Top fact has no usable text; skipping render.")
+            return
     except (IndexError, KeyError, TypeError):
         print("No usable fact item found.")
         return
