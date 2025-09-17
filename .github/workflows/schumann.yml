@@ -145,7 +145,7 @@ jobs:
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Remove timestamped media artifacts (keep only *_latest.*)
-        if: steps.stage_latest.outputs.ok == 'true'
+        if: ${{ steps.stage_latest.outputs.ok == 'true' }}
         working-directory: ${{ env.MEDIA_DIR }}
         run: |
           set -euo pipefail
@@ -166,8 +166,8 @@ jobs:
 
           echo "After cleanup, media contains:"; ls -lah images || true; ls -lah data || true
 
-      - name: Preflight: verify media remote auth
-        if: steps.stage_latest.outputs.ok == 'true'
+      - name: "Preflight: verify media remote auth"
+        if: ${{ steps.stage_latest.outputs.ok == 'true' }}
         working-directory: ${{ env.MEDIA_DIR }}
         run: |
           set -euo pipefail
@@ -178,7 +178,7 @@ jobs:
           echo "Auth looks good."
 
       - name: Commit & push to media repo
-        if: steps.stage_latest.outputs.ok == 'true'
+        if: ${{ steps.stage_latest.outputs.ok == 'true' }}
         working-directory: ${{ env.MEDIA_DIR }}
         run: |
           set -euo pipefail
