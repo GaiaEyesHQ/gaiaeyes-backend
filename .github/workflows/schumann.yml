@@ -29,7 +29,17 @@ jobs:
         with:
           repository: gennwu/gaiaeyes-media
           path: ${{ env.MEDIA_DIR }}
-          token: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
+          ssh-key: ${{ secrets.GAIAEYES_MEDIA_SSH_KEY }}
+          ssh-strict: true
+          persist-credentials: true
+          clean: true
+          sparse-checkout-cone-mode: true
+          fetch-depth: 1
+          fetch-tags: false
+          show-progress: true
+          lfs: false
+          submodules: false
+          set-safe-directory: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
