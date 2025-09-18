@@ -377,6 +377,111 @@ def collect_quick_facts(items: List[Dict[str,Any]], max_facts: int = 6) -> List[
                         return facts
     return facts
 
+# --- Body formatting helpers ---
+TERM_AP_RE = re.compile(r"\bAp\s+index\b", re.IGNORECASE)
+
+def normalize_terms(txt: str) -> str:
+    """Project-wide wording fixes (non-destructive)."""
+    if not isinstance(txt, str):
+        return ""
+    # Prefer Kp terminology unless we explicitly detect Ap context (not implemented here)
+    return TERM_AP_RE.sub("Kp index", txt)
+
+
+def format_body_blocks(raw: str) -> list[str]:
+    """
+    Convert plain text with blank lines and simple bullets into HTML blocks.
+    - Recognizes bullets starting with '-', '•', or '*'
+    - Keeps paragraphs tidy; preserves single newlines as <br/>
+    - Escapes HTML in text content
+    Returns a list of HTML strings (<p>...</p> or <ul>...</ul>)
+    """
+    if not raw:
+        return []
+    text = normalize_terms(raw)
+    # Normalize newlines and trim trailing spaces
+    text = re.sub(r"\r\n?", "\n", text).strip()
+    # Split into blocks on 2+ newlines
+    blocks = re.split(r"\n{2,}", text)
+    rendered: list[str] = []
+    for block in blocks:
+        lines = [ln.strip() for ln in block.split("\n") if ln.strip()]
+        if not lines:
+            continue
+        # bullet detection: at least half of lines start with a bullet marker
+        bullet_lines = [ln for ln in lines if re.match(r"^(\-|\*|•)\s+", ln)]
+        if bullet_lines and len(bullet_lines) >= max(1, len(lines)//2):
+            items = []
+            for ln in lines:
+                m = re.match(r"^(\-|\*|•)\s+(.*)$", ln)
+                if m:
+                    items.append(f"<li>{html.escape(m.group(2).strip())}</li>")
+                else:
+                    # treat as a continuation line for previous bullet
+                    if items:
+                        items[-1] = items[-1][:-5] + "<br/>" + html.escape(ln) + "</li>"
+                    else:
+                        items.append(f"<li>{html.escape(ln)}</li>")
+            rendered.append("<ul>" + "".join(items) + "</ul>")
+        else:
+            # Regular paragraph; convert single newlines to <br/>
+            para = html.escape(" ".join(lines)).replace("\n", "<br/>")
+            rendered.append(f"<p>{para}</p>")
+    return rendered
+
+# --- Narrative helpers (less repetitive, more human) ---
+BOILER_HEADINGS_RE = re.compile(
+    r"^\s*(what happened\??|why (it )?matters\??|what to watch\??|bottom line\??|the takeaway\??)\s*:?\s*$",
+    re.IGNORECASE
+)
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+FACT_HEADER_VARIANTS = [
+    "Key facts",
+    "Quick hits",
+    "In brief",
+    "Need‑to‑know",
+    "Fast facts",
+    "Signals at a glance"
+]
+
+def strip_boilerplate_headings(text: str) -> str:
+    """Remove repetitive section headings like 'What Happened?', keep the content."""
+    if not text:
+        return ""
+    lines = re.split(r"\r?\n", text)
+    kept = []
+    for ln in lines:
+        if BOILER_HEADINGS_RE.match(ln.strip()):
+            continue
+        kept.append(ln)
+    return "\n".join(kept).strip()
+
+def summarize_text(raw: str, max_chars: int = 280) -> str:
+    """
+    Create a short, human-like summary: take the first 1–2 sentences after stripping boilerplate.
+    """
+    if not raw:
+        return ""
+    cleaned = strip_boilerplate_headings(raw)
+    # Collapse whitespace
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if not cleaned:
+        return ""
+    parts = SENTENCE_SPLIT_RE.split(cleaned)
+    if not parts:
+        return cleaned[:max_chars]
+    # Take first 1–2 sentences
+    lead = parts[0]
+    if len(lead) < max_chars * 0.6 and len(parts) > 1:
+        lead = (lead + " " + parts[1]).strip()
+    return lead[:max_chars].rstrip(" ,;:") + ("…" if len(lead) > max_chars else "")
+
+def pick_fact_header(seed_key: str) -> str:
+    """Pick a stable header variant per-article (based on title/url)."""
+    h = abs(hash(seed_key)) % len(FACT_HEADER_VARIANTS)
+    return FACT_HEADER_VARIANTS[h]
+
 # --- Mark articles as used in roundup ---
 def sb_mark_roundup_used(ids: List[str]) -> None:
     if not ids:
@@ -453,20 +558,31 @@ def roundup_html(items: List[Dict[str,Any]]) -> str:
         long = next((o["content"] for o in a.get("outputs",[]) if o.get("output_type")=="summary_long"), "")
         short= next((o["content"] for o in a.get("outputs",[]) if o.get("output_type")=="summary_short"), "")
         body = long or short
-        # light paragraph formatting
-        for para in (body or "").split("\n\n"):
-            if para.strip():
-                parts.append(f"<p>{html.escape(para.strip())}</p>")
-        # Facts (max 2)
-        facts = [o["content"] for o in a.get("outputs",[]) if o.get("output_type")=="fact"][:2]
+
+        # 1) Add a concise, human-like lead summary (one short paragraph)
+        lead = summarize_text(body or "")
+        if lead:
+            parts.append(f"<p><strong>Summary:</strong> {html.escape(lead)}</p>")
+
+        # 2) Render the rest of the body with improved formatting, minus boilerplate headings
+        body_clean = strip_boilerplate_headings(body or "")
+        for chunk in format_body_blocks(body_clean):
+            parts.append(chunk)
+
+        # 3) Facts list with varied header (if present)
+        facts = [o["content"] for o in a.get("outputs",[]) if o.get("output_type")=="fact"][:4]
         if facts:
+            parts.append(f"<h4>{html.escape(pick_fact_header(title + url))}</h4>")
             parts.append("<ul>" + "".join(f"<li>{html.escape(f)}</li>" for f in facts) + "</ul>")
     # Quick Facts footer (research-only, for overlays/social reuse)
     qf = collect_quick_facts(items)
     if qf:
         parts.append("<h3>Quick Facts</h3>")
         parts.append("<ul>" + "".join(f"<li>{html.escape(f)}</li>" for f in qf) + "</ul>")
-    return "\n".join(parts)
+    # Final normalization pass for terminology (e.g., Ap -> Kp)
+    final_html = "\n".join(parts)
+    final_html = normalize_terms(final_html)
+    return final_html
 
 def main():
     items = sb_recent_summaries(days=WP_LOOKBACK_DAYS, limit=8)
