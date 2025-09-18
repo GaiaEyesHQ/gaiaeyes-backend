@@ -7,6 +7,30 @@ from typing import Dict, Any, List
 import requests
 from dotenv import load_dotenv
 
+def _to_text(v, max_len: int | None = None) -> str:
+    """Coerce arbitrary JSON values (str/list/dict/number) into a clean string.
+    - dict: prefer 'text' then 'content', else JSON-dump
+    - list: join items coerced to text with spaces
+    - str: strip and clip
+    """
+    try:
+        if isinstance(v, str):
+            s = v
+        elif isinstance(v, list):
+            s = " ".join([_to_text(x) for x in v if x is not None])
+        elif isinstance(v, dict):
+            s = v.get("text") or v.get("content") or json.dumps(v, ensure_ascii=False)
+        elif v is None:
+            s = ""
+        else:
+            s = str(v)
+        s = s.strip()
+        if max_len and len(s) > max_len:
+            s = s[: max_len - 1].rstrip() + "…"
+        return s
+    except Exception:
+        return ""
+
 HERE = Path(__file__).resolve().parent
 load_dotenv(HERE / ".env")
 load_dotenv(HERE.parent / ".env")
@@ -149,9 +173,14 @@ def main():
 
         # prepare outputs
         article_id = a["id"]
-        short = (j.get("summary_short") or "").strip()
-        long  = (j.get("summary_long") or "").strip()
-        facts = [s.strip() for s in (j.get("facts") or []) if isinstance(s,str) and 8 <= len(s.strip()) <= 140]
+        short = _to_text(j.get("summary_short"), max_len=600)
+        long  = _to_text(j.get("summary_long"))
+        facts_raw = j.get("facts") or []
+        facts = []
+        for f in facts_raw:
+            t = _to_text(f)
+            if 8 <= len(t) <= 140:
+                facts.append(t)
 
         outs.append({"article_id": article_id, "output_type":"summary_short", "content": short[:600], "model": MODEL})
         outs.append({"article_id": article_id, "output_type":"summary_long",  "content": long,        "model": MODEL})
