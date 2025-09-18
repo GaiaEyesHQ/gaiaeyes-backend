@@ -185,12 +185,15 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
     x_day0, x_day1, x_day2, day_w = estimate_day_boundaries(img_bgr, (x0,y0,x1,y1))
     pph_day = day_w/24.0
     pph_tick, tick_count, _ = detect_tick_pph(img_bgr, (x0,y0,x1,y1), verbose=verbose)
-    if pp_hour_source == "ticks":
-        pph, pph_src = (pph_tick, "ticks") if (pph_tick and tick_count>=tick_min_count) else (pph_day, "day_width (forced)")
-    elif pp_hour_source == "day":
-        pph, pph_src = pph_day, "day_width"
-    else:
-        pph, pph_src = (pph_tick, "ticks") if (pph_tick and tick_count>=tick_min_count) else (pph_day, "day_width")
+    # choose px-per-hour; prefer day width when tick spacing is noisy (e.g., half-hour ticks)
+    use_ticks = (pph_tick is not None and tick_count >= int(tick_min_count))
+    pph = pph_day; pph_src = "day_width"
+    if pp_hour_source == "ticks" and use_ticks:
+        pph = pph_tick; pph_src = "ticks (forced)"
+    elif pp_hour_source == "auto" and use_ticks:
+        # only trust ticks if close to day-derived pph (within 20%)
+        if abs(pph_tick - pph_day) / max(pph_day, 1e-6) <= 0.2:
+            pph = pph_tick; pph_src = "ticks"
     x_frontier = detect_frontier(img_bgr, (x0,y0,x1,y1))
     guard_px = max(MIN_GUARD_PX, int(round(pph * (guard_minutes/60.0))))
     now_tsst = tsst_now(); hour_now = hour_float(now_tsst); x_time = x_for_hour_in_day(x_day2, pph, hour_now)
@@ -234,7 +237,11 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
     x0,y0,x1,y1 = roi
     x = int(np.clip(x_now, x0+1, x1-2))
     lo = max(x0, x - band_px); hi = min(x1, x + band_px + 1)
-    crop = img_bgr[y0:y1, lo:hi, :]  # H x W x 3
+    # avoid chart borders: shrink vertical span slightly
+    pad_top, pad_bot = 4, 18
+    y0i = min(y1-1, y0 + pad_top)
+    y1i = max(y0i+1, y1 - pad_bot)
+    crop = img_bgr[y0i:y1i, lo:hi, :]
     if crop.size == 0 or (hi - lo) <= 0:
         mid_y = (y0 + y1) // 2
         results = {}
@@ -248,9 +255,9 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
 
     # Helper to convert Hz ranges to row indices (for F windows)
     def hz_to_row_bounds(hz_lo, hz_hi):
-        y_lo = int(round(y0 + (hz_lo/freq_max_hz) * (y1 - y0)))
-        y_hi = int(round(y0 + (hz_hi/freq_max_hz) * (y1 - y0)))
-        y_lo, y_hi = sorted((max(y0, y_lo), min(y1-1, y_hi)))
+        y_lo = int(round(y0i + (hz_lo/freq_max_hz) * (y1i - y0i)))
+        y_hi = int(round(y0i + (hz_hi/freq_max_hz) * (y1i - y0i)))
+        y_lo, y_hi = sorted((max(y0i, y_lo), min(y1i-1, y_hi)))
         return y_lo, y_hi
 
     # nominal vertical windows for F1..F4 (approximate)
@@ -280,8 +287,8 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
                 row_cost = row_cost + mask
 
         y_rel = int(np.argmin(row_cost))
-        y_pix = y0 + y_rel
-        y_norm = (y_pix - y0) / max(1.0, (y1 - y0))
+        y_pix = y0i + y_rel
+        y_norm = (y_pix - y0i) / max(1.0, (y1i - y0i))
         results[series_name] = {"y_px": int(y_pix), "y_norm": float(y_norm), "draw": bgr_draw}
     return results
 
@@ -295,7 +302,7 @@ def draw_overlay_with_picks(img_bgr, roi, x_now, picks, title, chart_type="F"):
         y = int(val["y_px"]); color = val["draw"]
         cv2.circle(out, (x_now, y), 5, color, -1)
         txt = f"{series_name}"
-        cv2.putText(out, txt, (min(x_now+8, x1-120), max(y-6, y0+14)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1, cv2.LINE_AA)
+        cv2.putText(out, txt, (min(x_now+8, x1-140), max(y-6, y0+14)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1, cv2.LINE_AA)
     cv2.putText(out, title, (x0+8, y0+18), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255,255,255), 1, cv2.LINE_AA)
     return out
 
