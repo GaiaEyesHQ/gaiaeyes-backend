@@ -25,11 +25,11 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
           HTTP_USER_AGENT: "GaiaEyesBot/1.0 (+https://gaiaeyes.com; gaiaeyes7.83@gmail.com)"
-          RESEARCH_TIER1="aurora,geomagnetic,kp,planetary k,imf,bz,solar wind,cme,flare,x-class,m-class,coronal hole,coronal mass ejection,sunspot,solar storm,magnetosphere,ionosphere"
-          RESEARCH_TIER2="hrv,heart rate variability,coherence,eeg,autonomic,vagal,schumann,emf,rf,0.1 hz,sleep,anxiety,nervous system"
-          DOMAIN_ALLOW="swpc.noaa.gov,services.swpc.noaa.gov,spaceweatherlive.com,spaceweather.com,solarham.com,science.nasa.gov,nasa.gov,heartmath.org,heartmath.com,earthsky.org,soho.nascom.nasa.gov,ccmc.gsfc.nasa.gov,usgs.gov"
-          MAX_AGE_DAYS="7"
-          USGS_MIN_MAG="5.5"
+          RESEARCH_TIER1: "aurora,geomagnetic,kp,planetary k,imf,bz,solar wind,cme,flare,x-class,m-class,coronal hole,coronal mass ejection,sunspot,solar storm,magnetosphere,ionosphere"
+          RESEARCH_TIER2: "hrv,heart rate variability,coherence,eeg,autonomic,vagal,schumann,emf,rf,0.1 hz,sleep,anxiety,nervous system"
+          DOMAIN_ALLOW: "swpc.noaa.gov,services.swpc.noaa.gov,spaceweatherlive.com,spaceweather.com,solarham.com,science.nasa.gov,nasa.gov,heartmath.org,heartmath.com,earthsky.org,soho.nascom.nasa.gov,ccmc.gsfc.nasa.gov,usgs.gov"
+          MAX_AGE_DAYS: "7"
+          USGS_MIN_MAG: "5.5"
         run: python research_collector.py
 
   summarize:
@@ -89,7 +89,7 @@ jobs:
           MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
           MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
           # Versioned CDN base built with media SHA:
-          MEDIA_CDN_BASE: "https://cdn.jsdelivr.net/gh/${{ secrets.MEDIA_REPO_OWNER }}/${{ secrets.MEDIA_REPO_NAME }}@${{ needs.media_sha.outputs.sha }}/images"
+          MEDIA_CDN_BASE: "https://cdn.jsdelivr.net/gh/${{ secrets.MEDIA_REPO_OWNER }}/${{ secrets.MEDIA_REPO_NAME }}/images"
         
           WP_FEATURED_SOURCE: "bg"
           WP_FEATURED_BG_KIND: "square"
