@@ -114,8 +114,9 @@ def craft_prompts_json(article: Dict[str,Any]) -> Dict[str,str]:
     body  = (article.get("content_raw") or "").strip()
 
     system = (
-        "You are an assistant for Gaia Eyes. Write concise, credible outputs about space weather, EM fields, and human physiology. "
-        "No speculation, no medical claims. Use a calm, science-forward tone (accessible, not clickbait). If data is missing, omit it."
+        "You are an assistant for Gaia Eyes. Write concise, credible outputs about space weather, electromagnetic phenomena, and human physiology. "
+        "No speculation and no medical claims. Do NOT include advice, tips, or self‑care recommendations—stick to data, mechanisms, and research context. "
+        "Use a calm, science‑forward tone (accessible, not clickbait). If data is missing, omit it."
     )
 
     user = f"""
@@ -125,19 +126,20 @@ SUMMARY_RAW: {raw}
 CONTENT_RAW: {body}
 
 Produce STRICT JSON with the following keys:
-- summary_short: string (<=600 chars). A social-ready caption with a hook, 3–5 relevant hashtags appended inline.
-- summary_long: string (150–250 words). Use mini sections with labels:
-  1) What Happened — 1–3 short bullets
-  2) Why It Matters — 1–2 bullets linking to mood/energy/heart/HRV/nervous system (measured, non-diagnostic)
-  3) What To Watch — 1–3 actionable notes or how to follow updates
-- facts: array of strings (1–3 items, each 40–140 chars) suitable for image overlays (“Did you know?” tone). No numbering.
+- summary_short: string (<=600 chars). Social-ready research caption with a clear hook and 3–5 relevant research hashtags appended inline. No advice.
+- summary_long: string (150–250 words). Use labeled mini sections:
+  1) What Happened — 1–3 short bullets with concrete details/metrics from the article
+  2) Why It Matters — 1–2 bullets linking to mechanisms or context (space weather ↔ ionosphere/magnetosphere; or frequency ↔ physiology); non-diagnostic
+  3) What To Watch — 1–3 bullets about upcoming data windows/models/instruments; no advice
+- facts: array of strings (1–3 items, each 40–140 chars) suitable for image overlays; objective, no emojis/hashtags/advice.
 - credibility: "high"|"medium"|"low" based on sourcing and specificity.
 - topics: array subset of ["space_weather","geomagnetic","schumann","hrv","eeg","emf","ionosphere","magnetosphere","sleep","nervous_system"].
 
 Rules:
-- Pull concrete data points (e.g., Kp, Bz, solar-wind speed) only if present in the text. Do not fabricate.
-- Keep language measured; no fear-based wording. Avoid generic site descriptions.
-- If the article is off-mission, set credibility="low" and topics=[].
+- Pull concrete data points (e.g., Kp, Bz, solar-wind speed) only if present in the text. Do NOT fabricate.
+- Avoid wellness or self‑care language; this output is research‑only.
+- Keep language measured; no fear‑based or anthropomorphic wording. Avoid generic site descriptions.
+- If the article is off‑mission, set credibility="low" and topics=[].
 Return ONLY the JSON object, no prose.
 """
     return {"system": system, "user": user}

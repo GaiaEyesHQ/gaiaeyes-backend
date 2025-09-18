@@ -357,9 +357,25 @@ def render_top_signals(metrics: Dict[str,Any] | None) -> str:
         f"<li><strong>Bz (min)</strong>: {bz} (more negative = stronger southward)</li>",
         f"<li><strong>Solar wind (avg)</strong>: {sw}</li>",
         "</ul>",
-        "<p><em>Gaia Eyes insight:</em> Calmer Kp and easing wind typically coincide with steadier focus windows and better HRV/coherence; brief dips can still occur near IMF/Bz swings. Use short breathing resets and low‑stim evenings to consolidate recovery.</p>",
+        "<p><em>Gaia Eyes research insight:</em> Lower Kp and easing solar‑wind speed generally indicate reduced geomagnetic disturbance. Observational work often notes HRV rebound as conditions calm, with brief dips near southward Bz swings.</p>",
     ]
     return "\n".join(html_parts)
+
+
+# --- Quick Facts helper ---
+def collect_quick_facts(items: List[Dict[str,Any]], max_facts: int = 6) -> List[str]:
+    facts: List[str] = []
+    seen = set()
+    for a in items:
+        for o in a.get("outputs", []):
+            if o.get("output_type") == "fact":
+                t = (o.get("content") or "").strip()
+                if 8 <= len(t) <= 160 and t not in seen:
+                    facts.append(t)
+                    seen.add(t)
+                    if len(facts) >= max_facts:
+                        return facts
+    return facts
 
 # --- Mark articles as used in roundup ---
 def sb_mark_roundup_used(ids: List[str]) -> None:
@@ -445,14 +461,11 @@ def roundup_html(items: List[Dict[str,Any]]) -> str:
         facts = [o["content"] for o in a.get("outputs",[]) if o.get("output_type")=="fact"][:2]
         if facts:
             parts.append("<ul>" + "".join(f"<li>{html.escape(f)}</li>" for f in facts) + "</ul>")
-    # Self‑care footer matched to calmer day
-    parts.append("<h3>Self‑Care Picks</h3>")
-    parts.append("<ul>"
-                 "<li>5–8 min coherence breathing (≈6 breaths/min) in morning and pre‑bed</li>"
-                 "<li>10–15 min outdoor light + short nature walk</li>"
-                 "<li>Mineral‑forward hydration; reduce late‑day stimulants</li>"
-                 "<li>Digital sunset & warm, low lighting in the evening</li>"
-                 "</ul>")
+    # Quick Facts footer (research-only, for overlays/social reuse)
+    qf = collect_quick_facts(items)
+    if qf:
+        parts.append("<h3>Quick Facts</h3>")
+        parts.append("<ul>" + "".join(f"<li>{html.escape(f)}</li>" for f in qf) + "</ul>")
     return "\n".join(parts)
 
 def main():
