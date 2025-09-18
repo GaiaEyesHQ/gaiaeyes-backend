@@ -31,13 +31,39 @@ TICK_MIN_SEP = 8
 TICK_MIN_COUNT = 24
 MIN_GUARD_PX = 6
 
-# Series colors (RGB for reading; drawing uses BGR)
+# Series colors (RGB for reading; drawing uses BGR). Order is consistent across charts.
 SERIES = {
-    "F1/A1/Q1": ("white",  (240,240,240), (255,255,255)),
-    "F2/A2/Q2": ("yellow", (230,210,30),  (0,255,255)),
-    "F3/A3/Q3": ("red",    (200,40,40),   (0,0,255)),
-    "F4/A4/Q4": ("green",  (40,160,60),   (0,200,100)),
+    "s1": ("white",  (240,240,240), (255,255,255), "F1", "A1", "Q1"),
+    "s2": ("yellow", (230,210,30),  (0,255,255),   "F2", "A2", "Q2"),
+    "s3": ("red",    (200,40,40),   (0,0,255),     "F3", "A3", "Q3"),
+    "s4": ("green",  (40,160,60),   (0,200,100),   "F4", "A4", "Q4"),
 }
+
+def bgr_to_hsv_color(bgr_tuple):
+    color = np.uint8([[list(bgr_tuple)]])
+    hsv = cv2.cvtColor(color, cv2.COLOR_BGR2HSV)[0,0]
+    return hsv.astype(np.float32)
+
+def hsv_row_distance(row_hsv, target_hsv, label):
+    """
+    Weighted HSV distance per row. For 'white' we emphasize low-S, high-V.
+    For chromatic colors we emphasize hue circular distance and moderate S/V.
+    row_hsv: HxWx3 in HSV; we reduce across columns later.
+    """
+    H = row_hsv[:,:,0].astype(np.float32)
+    S = row_hsv[:,:,1].astype(np.float32)
+    V = row_hsv[:,:,2].astype(np.float32)
+    th, ts, tv = target_hsv
+    if label == "white":
+        # prefer low saturation, high value
+        d = ( (S/255.0)**2 * 2.0 ) + ((1.0 - V/255.0)**2 * 1.5)
+        return d.mean(axis=1)
+    # hue circular distance in [0..180]
+    dh = np.minimum(np.abs(H - th), 180.0 - np.abs(H - th)) / 90.0  # ~0..1
+    ds = (S - ts)/255.0
+    dv = (V - tv)/255.0
+    d = (dh**2)*3.0 + (ds**2)*1.0 + (dv**2)*0.5
+    return d.mean(axis=1)
 
 def sanitize_roi(img_bgr, roi, min_width=120):
     h, w = img_bgr.shape[:2]
@@ -199,43 +225,77 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
            "measured_bias_minutes":measured_bias_minutes,"status":status}
     return x_now, dbg
 
-def pick_colored_lines_at_x(img_bgr, roi, x_now, band_px=5):
+def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq_max_hz=40.0):
+    """
+    For each series color, find y where HSV distance is minimal around x_now.
+    Uses small per-series vertical windows for F (based on nominal Hz ranges) to avoid grid/legend.
+    Returns y positions and normalized [0..1] values from top->bottom plus draw color and proper label per chart.
+    """
     x0,y0,x1,y1 = roi
     x = int(np.clip(x_now, x0+1, x1-2))
     lo = max(x0, x - band_px); hi = min(x1, x + band_px + 1)
     crop = img_bgr[y0:y1, lo:hi, :]  # H x W x 3
     if crop.size == 0 or (hi - lo) <= 0:
-        # fallback: return midline picks to avoid crashes; caller can detect via y_norm ~0.5
         mid_y = (y0 + y1) // 2
-        return { key: {"y_px": int(mid_y), "y_norm": 0.5, "draw": bgr_draw} for key, (_, _, bgr_draw) in SERIES.items() }
-    H = crop.shape[0]
+        results = {}
+        for key, (label, rgb, bgr_draw, f_lbl, a_lbl, q_lbl) in SERIES.items():
+            series_name = {"F": f_lbl, "A": a_lbl, "Q": q_lbl}[chart_type]
+            results[series_name] = {"y_px": int(mid_y), "y_norm": 0.5, "draw": bgr_draw}
+        return results
+
+    # Convert band to HSV once
+    crop_hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+
+    # Helper to convert Hz ranges to row indices (for F windows)
+    def hz_to_row_bounds(hz_lo, hz_hi):
+        y_lo = int(round(y0 + (hz_lo/freq_max_hz) * (y1 - y0)))
+        y_hi = int(round(y0 + (hz_hi/freq_max_hz) * (y1 - y0)))
+        y_lo, y_hi = sorted((max(y0, y_lo), min(y1-1, y_hi)))
+        return y_lo, y_hi
+
+    # nominal vertical windows for F1..F4 (approximate)
+    f_windows = {
+        "F1": hz_to_row_bounds(6.5, 9.0),
+        "F2": hz_to_row_bounds(12.0, 16.0),
+        "F3": hz_to_row_bounds(18.0, 22.5),
+        "F4": hz_to_row_bounds(24.0, 28.0),
+    }
+
     results = {}
-    for key, (label, rgb, bgr_draw) in SERIES.items():
-        tgt = np.array([rgb[2], rgb[1], rgb[0]], dtype=np.float32)  # BGR
-        diff = (crop.astype(np.float32) - tgt)**2
-        dist = diff.sum(axis=2).mean(axis=1)  # avg across columns
-        y_rel = int(np.argmin(dist))
+    for key, (label, rgb, bgr_draw, f_lbl, a_lbl, q_lbl) in SERIES.items():
+        series_name = {"F": f_lbl, "A": a_lbl, "Q": q_lbl}[chart_type]
+        # Build row cost from HSV distance
+        tgt_hsv = bgr_to_hsv_color((rgb[2], rgb[1], rgb[0]))  # convert from RGB->BGR then to HSV
+        row_cost = hsv_row_distance(crop_hsv, tgt_hsv, label)
+
+        # Apply windowing for F to avoid wrong trace
+        if chart_type == "F":
+            wy0, wy1 = f_windows[series_name]  # absolute image coords
+            # convert to crop row indices
+            wy0c = max(0, wy0 - y0); wy1c = min(crop.shape[0]-1, wy1 - y0)
+            if wy1c > wy0c:
+                # penalize outside window
+                mask = np.ones_like(row_cost) * 10.0
+                mask[wy0c:wy1c+1] = 0.0
+                row_cost = row_cost + mask
+
+        y_rel = int(np.argmin(row_cost))
         y_pix = y0 + y_rel
         y_norm = (y_pix - y0) / max(1.0, (y1 - y0))
-        results[key] = {"y_px": int(y_pix), "y_norm": float(y_norm), "draw": tuple(bgr_draw)}
+        results[series_name] = {"y_px": int(y_pix), "y_norm": float(y_norm), "draw": bgr_draw}
     return results
 
-def draw_overlay_with_picks(img_bgr, roi, x_now, picks, title, freq_max_hz=None, show_units=False):
+def draw_overlay_with_picks(img_bgr, roi, x_now, picks, title, chart_type="F"):
     out = img_bgr.copy()
     x0,y0,x1,y1 = roi
     # vertical x_now
     cv2.line(out, (x_now, y0), (x_now, y1), (0,0,255), 2)
     # markers + labels
-    for key, val in picks.items():
+    for series_name, val in picks.items():
         y = int(val["y_px"]); color = val["draw"]
         cv2.circle(out, (x_now, y), 5, color, -1)
-        if show_units and freq_max_hz is not None and key.startswith("F"):
-            hz = y_to_unit(y, roi, 0.0, float(freq_max_hz))
-            txt = f"{key.split('/')[0]} {hz:.2f} Hz"
-        else:
-            txt = f"{key.split('/')[0]} y={y}"
-        # offset label to avoid overlap
-        cv2.putText(out, txt, (min(x_now+8, x1-200), max(y-6, y0+14)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1, cv2.LINE_AA)
+        txt = f"{series_name}"
+        cv2.putText(out, txt, (min(x_now+8, x1-120), max(y-6, y0+14)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1, cv2.LINE_AA)
     cv2.putText(out, title, (x0+8, y0+18), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255,255,255), 1, cv2.LINE_AA)
     return out
 
@@ -267,17 +327,9 @@ def main():
     xA, dbgA = compute_x_now(A_img, roiA, last_modified=A_lm_dt, verbose=args.verbose)
     xQ, dbgQ = compute_x_now(Q_img, roiQ, last_modified=Q_lm_dt, verbose=args.verbose)
 
-    picksF = pick_colored_lines_at_x(F_img, roiF, xF)
-    picksA = pick_colored_lines_at_x(A_img, roiA, xA)
-    picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ)
-
-    # convert F y to Hz
-    freq_max = float(args.freq_max_hz)
-    F_vals = {k: float(y_to_unit(v["y_px"], roiF, 0.0, freq_max)) for k,v in picksF.items()}
-
-    # A/Q keep normalized (0..1) for now
-    A_vals = {k: float(v["y_norm"]) for k,v in picksA.items()}
-    Q_vals = {k: float(v["y_norm"]) for k,v in picksQ.items()}
+    picksF = pick_colored_lines_at_x(F_img, roiF, xF, chart_type="F", band_px=5, freq_max_hz=float(args.freq_max_hz))
+    picksA = pick_colored_lines_at_x(A_img, roiA, xA, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz))
+    picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz))
 
     # overlays
     F_overlay = A_overlay = Q_overlay = None
@@ -285,15 +337,24 @@ def main():
         F_overlay = os.path.join(args.dir, "tomsk_params_f_overlay.png")
         A_overlay = os.path.join(args.dir, "tomsk_params_a_overlay.png")
         Q_overlay = os.path.join(args.dir, "tomsk_params_q_overlay.png")
-        cv2.imwrite(F_overlay, draw_overlay_with_picks(F_img, roiF, xF, picksF, "F params @ x_now", freq_max_hz=freq_max, show_units=True))
-        cv2.imwrite(A_overlay, draw_overlay_with_picks(A_img, roiA, xA, picksA, "A params @ x_now"))
-        cv2.imwrite(Q_overlay, draw_overlay_with_picks(Q_img, roiQ, xQ, picksQ, "Q params @ x_now"))
+        cv2.imwrite(F_overlay, draw_overlay_with_picks(F_img, roiF, xF, picksF, "F params @ x_now", chart_type="F"))
+        cv2.imwrite(A_overlay, draw_overlay_with_picks(A_img, roiA, xA, picksA, "A params @ x_now", chart_type="A"))
+        cv2.imwrite(Q_overlay, draw_overlay_with_picks(Q_img, roiQ, xQ, picksQ, "Q params @ x_now", chart_type="Q"))
+
+    freq_max = float(args.freq_max_hz)
 
     out = {
         "saved_at_utc": datetime.now(timezone.utc).isoformat(),
         "source": "tomsk_sos70_param_charts",
         "freq_max_hz": freq_max,
-        "values": { "F_hz": F_vals, "A_norm": A_vals, "Q_norm": Q_vals },
+        "values": {
+            "F_norm": {k: float(v["y_norm"]) for k,v in picksF.items()},
+            "F_y_px": {k: int(v["y_px"]) for k,v in picksF.items()},
+            "A_norm": {k: float(v["y_norm"]) for k,v in picksA.items()},
+            "A_y_px": {k: int(v["y_px"]) for k,v in picksA.items()},
+            "Q_norm": {k: float(v["y_norm"]) for k,v in picksQ.items()},
+            "Q_y_px": {k: int(v["y_px"]) for k,v in picksQ.items()},
+        },
         "debug": { "F": dbgF, "A": dbgA, "Q": dbgQ,
                    "urls": {"F": URL_F, "A": URL_A, "Q": URL_Q},
                    "overlays": {"F": F_overlay, "A": A_overlay, "Q": Q_overlay} }
