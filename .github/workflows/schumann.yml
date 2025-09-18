@@ -17,6 +17,8 @@ jobs:
       MEDIA_DIR: media
       PYTHON_VERSION: "3.10"
       PREFER: "tomsk,cumiana"
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
 
     steps:
       - name: Checkout backend
@@ -193,7 +195,7 @@ jobs:
           fi
 
       - name: Append harmonics to ext.schumann (stale rows kept with null value_num)
-        if: ${{ steps.stage_latest.outputs.ok == 'true' && secrets.SUPABASE_URL && secrets.SUPABASE_SERVICE_ROLE }}
+        if: ${{ steps.stage_latest.outputs.ok == 'true' && env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE != '' }}
         working-directory: ${{ env.WORKDIR }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
