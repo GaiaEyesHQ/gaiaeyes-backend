@@ -74,7 +74,26 @@ jobs:
       - uses: actions/checkout@v4
       - name: Clone media repo
         run: |
-          git clone https://x-access-token:${MEDIA_REPO_TOKEN}@github.com/${MEDIA_REPO_OWNER}/${MEDIA_REPO_NAME}.git "${MEDIA_REPO_PATH}"
+          set -euo pipefail
+          if [ -d "${MEDIA_REPO_PATH}" ]; then
+            echo "MEDIA_REPO_PATH exists: ${MEDIA_REPO_PATH}"
+            if [ -d "${MEDIA_REPO_PATH}/.git" ]; then
+              echo "Existing git repo detected — syncing with remote."
+              git -C "${MEDIA_REPO_PATH}" remote set-url origin "https://x-access-token:${MEDIA_REPO_TOKEN}@github.com/${MEDIA_REPO_OWNER}/${MEDIA_REPO_NAME}.git"
+              git -C "${MEDIA_REPO_PATH}" fetch --prune --depth=1 origin
+              # default branch assumed 'main'; adjust if your media repo uses a different default
+              git -C "${MEDIA_REPO_PATH}" checkout -B main
+              git -C "${MEDIA_REPO_PATH}" reset --hard origin/main
+              git -C "${MEDIA_REPO_PATH}" clean -fdx
+            else
+              echo "Existing non-git directory — removing and recloning."
+              rm -rf "${MEDIA_REPO_PATH}"
+              git clone --depth 1 "https://x-access-token:${MEDIA_REPO_TOKEN}@github.com/${MEDIA_REPO_OWNER}/${MEDIA_REPO_NAME}.git" "${MEDIA_REPO_PATH}"
+            fi
+          else
+            echo "Cloning fresh media repo into ${MEDIA_REPO_PATH}"
+            git clone --depth 1 "https://x-access-token:${MEDIA_REPO_TOKEN}@github.com/${MEDIA_REPO_OWNER}/${MEDIA_REPO_NAME}.git" "${MEDIA_REPO_PATH}"
+          fi
       - name: Configure git identity (media repo)
         run: |
           git -C "${MEDIA_REPO_PATH}" config user.name  "github-actions[bot]"
