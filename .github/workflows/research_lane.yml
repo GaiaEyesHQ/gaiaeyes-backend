@@ -4,6 +4,17 @@ on:
   schedule:
     - cron: "0 13 * * *"   # 13:00 UTC daily; adjust as needed
   workflow_dispatch:
+    inputs:
+      stage:
+        description: "Which stage to run? (collect | summarize | publish | all)"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - collect
+          - summarize
+          - publish
+          - all
 
 jobs:
   collect:
@@ -100,5 +111,97 @@ jobs:
           WP_CTA_HTML: ${{ secrets.WP_CTA_HTML }}
         
           # If media repo is private:
+          GITHUB_API_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
+        run: python research_wp_poster.py
+
+  collect_manual:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.stage == 'collect'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run collector
+        working-directory: bots/research_lane
+        env:
+          WP_LOOKBACK_DAYS: 1
+          SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
+          HTTP_USER_AGENT: "GaiaEyesBot/1.0 (+https://gaiaeyes.com; gaiaeyes7.83@gmail.com)"
+          RESEARCH_TIER1: "aurora,geomagnetic,kp,planetary k,imf,bz,solar wind,cme,flare,x-class,m-class,coronal hole,coronal mass ejection,sunspot,solar storm,magnetosphere,ionosphere"
+          RESEARCH_TIER2: "hrv,heart rate variability,coherence,eeg,autonomic,vagal,schumann,emf,rf,0.1 hz,sleep,anxiety,nervous system"
+          DOMAIN_ALLOW: "swpc.noaa.gov,services.swpc.noaa.gov,spaceweatherlive.com,spaceweather.com,solarham.com,science.nasa.gov,nasa.gov,heartmath.org,heartmath.com,earthsky.org,soho.nascom.nasa.gov,ccmc.gsfc.nasa.gov,usgs.gov"
+          MAX_AGE_DAYS: "7"
+          USGS_MIN_MAG: "5.5"
+        run: python research_collector.py
+
+  summarize_manual:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.stage == 'summarize'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt      
+      - name: Install deps
+        working-directory: bots/research_lane
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests python-dotenv openai
+      - name: Summarize new articles
+        working-directory: bots/research_lane
+        env:
+          SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GAIA_OPENAI_MODEL: gpt-4o-mini
+        run: python research_summarize.py
+
+  publish_manual:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.stage == 'publish'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt          
+      - name: Install deps
+        working-directory: bots/research_lane
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests python-dotenv
+      - name: Post roundup to WordPress
+        working-directory: bots/research_lane
+        env:
+          SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+          WP_STATUS: publish
+          WP_CATEGORY_ID: ${{ secrets.WP_CATEGORY_ID }}
+          WP_TAG_IDS: ${{ secrets.WP_TAG_IDS }}
+          MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
+          MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
+          MEDIA_CDN_BASE: "https://cdn.jsdelivr.net/gh/${{ secrets.MEDIA_REPO_OWNER }}/${{ secrets.MEDIA_REPO_NAME }}/images"
+          WP_FEATURED_SOURCE: "bg"
+          WP_FEATURED_BG_KIND: "square"
+          WP_FEATURED_CREDIT: "Image: Gaia Eyes backgrounds"
+          WP_ADD_TOC: "true"
+          WP_CTA_HTML: ${{ secrets.WP_CTA_HTML }}
           GITHUB_API_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
         run: python research_wp_poster.py
