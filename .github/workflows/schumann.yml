@@ -84,6 +84,13 @@ jobs:
             --overlay runs/.ignore_overlay.png \
             --insecure || true
 
+          python tomsk_sos70_params_extractor.py \
+            --out runs/tomsk_params_values.json \
+            --dir runs \
+            --save-overlays true \
+            --freq-max-hz 40 \
+            --verbose || true
+
       - name: Stage artifacts into media repo (latest only)
         id: stage_latest
         working-directory: ${{ env.WORKDIR }}
@@ -128,6 +135,18 @@ jobs:
             if cp -f runs/cumiana_now.json "$MEDIA_DIR/data/cumiana_latest.json"; then have_any=true; fi
           else
             echo "WARN: runs/cumiana_now.json not found; keeping existing data/cumiana_latest.json"
+          fi
+
+          # Images (latest overlays)
+          for f in tomsk_params_f_overlay.png tomsk_params_a_overlay.png tomsk_params_q_overlay.png; do
+            if [ -f "runs/$f" ]; then
+              cp -f "runs/$f" "$MEDIA_DIR/images/${f%.png}_latest.png" && have_any=true
+            fi
+          done
+
+          # Values JSON
+          if [ -f runs/tomsk_params_values.json ]; then
+            cp -f runs/tomsk_params_values.json "$MEDIA_DIR/data/tomsk_params_values_latest.json" && have_any=true
           fi
 
           echo "Listing media/ after copy:"; ls -lah "$MEDIA_DIR/images" || true; ls -lah "$MEDIA_DIR/data" || true
