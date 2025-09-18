@@ -114,9 +114,10 @@ def craft_prompts_json(article: Dict[str,Any]) -> Dict[str,str]:
     body  = (article.get("content_raw") or "").strip()
 
     system = (
-        "You are an assistant for Gaia Eyes. Write concise, credible outputs about space weather, electromagnetic phenomena, and human physiology. "
-        "No speculation and no medical claims. Do NOT include advice, tips, or self‑care recommendations—stick to data, mechanisms, and research context. "
-        "Use a calm, science‑forward tone (accessible, not clickbait). If data is missing, omit it."
+        "You are an assistant for Gaia Eyes. Write concise, credible research outputs about space weather and electromagnetic phenomena. "
+        "No speculation and no medical claims. Do NOT include advice, tips, or self‑care. "
+        "If a source does not discuss human physiology, do not infer or mention mood/HRV/EEG/nervous system. "
+        "Write in a plain scientific newsroom style. No markdown headings, no ###, no bullets, no emojis."
     )
 
     user = f"""
@@ -125,22 +126,18 @@ ARTICLE_URL: {url}
 SUMMARY_RAW: {raw}
 CONTENT_RAW: {body}
 
-Produce STRICT JSON with the following keys:
-- summary_short: string (<=600 chars). Social-ready research caption with a clear hook and 3–5 relevant research hashtags appended inline. No advice.
-- summary_long: string (150–250 words). Use labeled mini sections:
-  1) What Happened — 1–3 short bullets with concrete details/metrics from the article
-  2) Why It Matters — 1–2 bullets linking to mechanisms or context (space weather ↔ ionosphere/magnetosphere; or frequency ↔ physiology); non-diagnostic
-  3) What To Watch — 1–3 bullets about upcoming data windows/models/instruments; no advice
-- facts: array of strings (1–3 items, each 40–140 chars) suitable for image overlays; objective, no emojis/hashtags/advice.
-- credibility: "high"|"medium"|"low" based on sourcing and specificity.
+Produce STRICT JSON with keys:
+- summary_short: string (<=600 chars). One sentence with the concrete update (numbers when present) + 3–5 research hashtags inline. No advice. No emojis.
+- summary_long: string (2–4 short paragraphs, plain text). Cover only what the article reports: instruments, models, metrics, timings. Do not use markdown headings or bullets. Only discuss human physiology if the article itself discusses it explicitly; otherwise omit.
+- facts: array of 1–3 short strings (40–140 chars), each a single objective statement suitable for an overlay; no hashtags/emojis/advice.
+- credibility: "high"|"medium"|"low" based on the source and specificity.
 - topics: array subset of ["space_weather","geomagnetic","schumann","hrv","eeg","emf","ionosphere","magnetosphere","sleep","nervous_system"].
 
 Rules:
-- Pull concrete data points (e.g., Kp, Bz, solar-wind speed) only if present in the text. Do NOT fabricate.
-- Avoid wellness or self‑care language; this output is research‑only.
-- Keep language measured; no fear‑based or anthropomorphic wording. Avoid generic site descriptions.
+- Pull concrete data points (Kp, Bz, solar wind speed, forecast windows) only if present. Do NOT fabricate.
+- No markdown syntax (no ###, **, *, -). Plain sentences only.
 - If the article is off‑mission, set credibility="low" and topics=[].
-Return ONLY the JSON object, no prose.
+Return ONLY the JSON object.
 """
     return {"system": system, "user": user}
 

@@ -6,6 +6,20 @@ from pathlib import Path
 
 import os, sys, html, re, random, datetime as dt
 import json
+
+# --- Markdown sanitizer utilities ---
+MD_HEAD_RE = re.compile(r"^\s{0,3}#{1,6}\s+", re.M)
+MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+MD_ITALIC_RE = re.compile(r"\*(.+?)\*|_(.+?)_")
+
+def strip_markdown_syntax(txt: str) -> str:
+    if not isinstance(txt, str):
+        return ""
+    s = MD_HEAD_RE.sub("", txt)
+    s = MD_BOLD_RE.sub(r"\1", s)
+    s = MD_ITALIC_RE.sub(lambda m: m.group(1) or (m.group(2) or ""), s)
+    s = re.sub(r"^\s*[-•*]\s+", "", s, flags=re.M)
+    return s
 RELEVANT_RE = re.compile(r"(aurora|geomagnetic|kp\b|solar wind|cme|flare|sunspot|coronal hole|schumann|magnetosphere|ionosphere|hrv|coherence|eeg|emf|0\.1\s*hz|autonomic|vagal)", re.I)
 def sb_today_metrics() -> Dict[str, Any] | None:
     url = f"{SUPABASE_REST_URL}/marts.space_weather_daily"
@@ -398,7 +412,7 @@ def format_body_blocks(raw: str) -> list[str]:
     """
     if not raw:
         return []
-    text = normalize_terms(raw)
+    text = strip_markdown_syntax(normalize_terms(raw))
     # Normalize newlines and trim trailing spaces
     text = re.sub(r"\r\n?", "\n", text).strip()
     # Split into blocks on 2+ newlines
@@ -559,13 +573,14 @@ def roundup_html(items: List[Dict[str,Any]]) -> str:
         short= next((o["content"] for o in a.get("outputs",[]) if o.get("output_type")=="summary_short"), "")
         body = long or short
 
+        sanitized = strip_markdown_syntax(body or "")
         # 1) Add a concise, human-like lead summary (one short paragraph)
-        lead = summarize_text(body or "")
+        lead = summarize_text(sanitized)
         if lead:
             parts.append(f"<p><strong>Summary:</strong> {html.escape(lead)}</p>")
 
-        # 2) Render the rest of the body with improved formatting, minus boilerplate headings
-        body_clean = strip_boilerplate_headings(body or "")
+        # 2) Render the rest of the body without markdown, minus boilerplate headings
+        body_clean = strip_boilerplate_headings(sanitized)
         for chunk in format_body_blocks(body_clean):
             parts.append(chunk)
 
