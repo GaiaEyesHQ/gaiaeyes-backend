@@ -336,6 +336,100 @@ def parse_swpc_kp(url: str, source_id: str, tags: list) -> list:
         })
     return out
 
+
+# ---- Additional SWPC Parsers ----
+def parse_swpc_rtsw_plasma1d(url: str, source_id: str, tags: list) -> list:
+    r = session.get(url, timeout=TIMEOUT); r.raise_for_status()
+    data = r.json()  # [header, row...]
+    out = []
+    if not isinstance(data, list) or len(data) < 2 or not isinstance(data[0], list):
+        return out
+    hdr = [h.strip().lower() for h in data[0]]
+    idx = {name: i for i, name in enumerate(hdr)}
+    last = data[-1]
+    try:
+        ts = last[idx.get("time_tag", 0)]
+        dens = last[idx.get("density", -1)]
+        speed = last[idx.get("speed", -1)]
+        temp = last[idx.get("temperature", -1)]
+    except Exception:
+        return out
+    title = f"RTSW Plasma: V={speed} km/s, n={dens} cm^-3"
+    out.append({
+        "source": source_id, "source_type": "api",
+        "title": title,
+        "url": normalize_url(url),
+        "published_at": ts,
+        "summary_raw": f"NOAA DSCOVR real-time solar wind plasma (1-day): speed={speed} km/s, density={dens} cm^-3, temperature={temp} K",
+        "tags": list(tags) + [_year_tag(ts)]
+    })
+    return out
+
+
+def parse_swpc_rtsw_mag1d(url: str, source_id: str, tags: list) -> list:
+    r = session.get(url, timeout=TIMEOUT); r.raise_for_status()
+    data = r.json()
+    out = []
+    if not isinstance(data, list) or len(data) < 2 or not isinstance(data[0], list):
+        return out
+    hdr = [h.strip().lower() for h in data[0]]
+    idx = {name: i for i, name in enumerate(hdr)}
+    last = data[-1]
+    try:
+        ts = last[idx.get("time_tag", 0)]
+        bt = last[idx.get("bt", -1)]
+        bz = last[idx.get("bz_gsm", -1)]
+    except Exception:
+        return out
+    title = f"RTSW Mag: Bt={bt} nT, Bz={bz} nT"
+    out.append({
+        "source": source_id, "source_type": "api",
+        "title": title,
+        "url": normalize_url(url),
+        "published_at": ts,
+        "summary_raw": f"NOAA DSCOVR real-time magnetic (1-day): Bt={bt} nT, Bz={bz} nT",
+        "tags": list(tags) + [_year_tag(ts)]
+    })
+    return out
+
+
+def parse_swpc_ovation_latest(url: str, source_id: str, tags: list) -> list:
+    # The JSON can be large; produce a compact bulletin with timestamp
+    r = session.get(url, timeout=TIMEOUT); r.raise_for_status()
+    try:
+        j = r.json()
+    except Exception:
+        return []
+    # Try to get a forecast time or model run time
+    ts = j.get("ForecastTime") or j.get("forecasTime") or j.get("time") or _now_utc_iso()
+    title = "OVATION Aurora Latest"
+    summary = "Latest auroral probability model from SWPC OVATION is available."
+    return [{
+        "source": source_id, "source_type": "api",
+        "title": title, "url": normalize_url(url),
+        "published_at": ts,
+        "summary_raw": summary,
+        "tags": list(tags) + [_year_tag(ts)]
+    }]
+
+
+def parse_swpc_geomag_3day_txt(url: str, source_id: str, tags: list) -> list:
+    r = session.get(url, timeout=TIMEOUT); r.raise_for_status()
+    txt = r.text or ""
+    # Extract a couple of indicative lines; keep it compact for summarizer
+    lines = [ln.strip() for ln in txt.splitlines() if ln.strip()]
+    head = lines[:12]
+    ts = _now_utc_iso()
+    title = "SWPC 3-day Geomagnetic Forecast"
+    summary = " ".join(head)[:1000]
+    return [{
+        "source": source_id, "source_type": "api",
+        "title": title, "url": normalize_url(url),
+        "published_at": ts,
+        "summary_raw": summary,
+        "tags": list(tags) + [_year_tag(ts)]
+    }]
+
 def parse_nws_alerts(url: str, source_id: str, tags: list) -> list:
     # api.weather.gov requires a UA (already set). Parse active alerts.
     r = session.get(url, timeout=TIMEOUT); r.raise_for_status()
@@ -383,6 +477,14 @@ def main():
                 to_upsert += parse_swpc_kp(ent["url"], ent["id"], ent.get("tags",[]))
             elif parser == "nws_alerts":
                 to_upsert += parse_nws_alerts(ent["url"], ent["id"], ent.get("tags",[]))
+            elif parser == "swpc_rtsw_plasma1d":
+                to_upsert += parse_swpc_rtsw_plasma1d(ent["url"], ent["id"], ent.get("tags",[]))
+            elif parser == "swpc_rtsw_mag1d":
+                to_upsert += parse_swpc_rtsw_mag1d(ent["url"], ent["id"], ent.get("tags",[]))
+            elif parser == "swpc_ovation_latest":
+                to_upsert += parse_swpc_ovation_latest(ent["url"], ent["id"], ent.get("tags",[]))
+            elif parser == "swpc_geomag_3day_txt":
+                to_upsert += parse_swpc_geomag_3day_txt(ent["url"], ent["id"], ent.get("tags",[]))
             else:
             # Generic catch-all
                 r = session.get(ent["url"], timeout=TIMEOUT); r.raise_for_status()

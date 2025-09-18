@@ -530,13 +530,12 @@ def main():
         if WP_FEATURED_CREDIT:
             html_content = f"<p><em>{html.escape(WP_FEATURED_CREDIT)}</em></p>\n" + html_content
 
-    # Optional gallery injection (after first H2/H3 or top of article)
-    if WP_GALLERY_ENABLE:
-        gallery_urls = pick_backgrounds_from_cdn(WP_GALLERY_KIND, WP_GALLERY_COUNT)
-        # avoid duplicating the same image as the hero if applicable
-        if hero_url:
-            gallery_urls = [u for u in gallery_urls if u != hero_url]
-        html_content = inject_gallery_block(html_content, gallery_urls)
+    # Gallery injection disabled by default for research posts
+    # if WP_GALLERY_ENABLE:
+    #     gallery_urls = pick_backgrounds_from_cdn(WP_GALLERY_KIND, WP_GALLERY_COUNT)
+    #     if hero_url:
+    #         gallery_urls = [u for u in gallery_urls if u != hero_url]
+    #     html_content = inject_gallery_block(html_content, gallery_urls)
 
     # Optional TOC: build from H3 headings and inject anchor IDs
     if WP_ADD_TOC:
