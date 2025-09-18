@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+from typing import List, Dict, Any
+from pathlib import Path
+
 import os, sys, html, re, random, datetime as dt
 import json
 RELEVANT_RE = re.compile(r"(aurora|geomagnetic|kp\b|solar wind|cme|flare|sunspot|coronal hole|schumann|magnetosphere|ionosphere|hrv|coherence|eeg|emf|0\.1\s*hz|autonomic|vagal)", re.I)
@@ -31,8 +34,6 @@ def _is_relevant_item(a: Dict[str,Any]) -> bool:
             blob.append(o.get("content",""))
     text = "\n".join(blob)
     return bool(RELEVANT_RE.search(text))
-from pathlib import Path
-from typing import List, Dict, Any
 import requests
 from dotenv import load_dotenv
 
