@@ -69,6 +69,14 @@ jobs:
             --stale-hours 6 \
             --insecure || true
 
+          # Debug: verify Tomsk overlay emitted
+          if [ -f runs/tomsk_overlay.png ]; then
+            echo "[OK] tomsk_overlay.png emitted"
+          else
+            echo "[ERR] tomsk_overlay.png was not produced by tomsk_extractor.py"
+            ls -lah runs || true
+          fi
+
           # Cumiana (SR-only, fixed now offset = 22 px)
           python cumiana_extractor.py \
             --out runs/cumiana_now.json \
@@ -76,6 +84,14 @@ jobs:
             --anchor fixed --fixed-offset-px 22 \
             --prefer auto \
             --insecure || true
+
+          # Debug: verify Cumiana overlay emitted
+          if [ -f runs/cumiana_overlay.png ]; then
+            echo "[OK] cumiana_overlay.png emitted"
+          else
+            echo "[ERR] cumiana_overlay.png was not produced by cumiana_extractor.py"
+            ls -lah runs || true
+          fi
 
           # Merge (both sources always present)
           python schumann_multi.py \
@@ -90,6 +106,10 @@ jobs:
             --save-overlays true \
             --freq-max-hz 40 \
             --verbose || true
+
+          # Debug: quick listing after params extractor
+          echo "Post-extract listing:"
+          ls -lah runs || true
 
       - name: Stage artifacts into media repo (latest only)
         id: stage_latest
