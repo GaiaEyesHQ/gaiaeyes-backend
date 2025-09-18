@@ -2,6 +2,35 @@
 # -*- coding: utf-8 -*-
 
 import os, sys, html, re, random, datetime as dt
+import json
+RELEVANT_RE = re.compile(r"(aurora|geomagnetic|kp\b|solar wind|cme|flare|sunspot|coronal hole|schumann|magnetosphere|ionosphere|hrv|coherence|eeg|emf|0\.1\s*hz|autonomic|vagal)", re.I)
+def sb_today_metrics() -> Dict[str, Any] | None:
+    url = f"{SUPABASE_REST_URL}/marts.space_weather_daily"
+    today = dt.datetime.utcnow().date().isoformat()
+    r = session.get(url, params={"select":"day,kp_max,bz_min,sw_speed_avg","day":f"eq.{today}"}, timeout=20)
+    if r.status_code != 200:
+        return None
+    j = r.json() or []
+    if j:
+        return j[0]
+    # fallback to yesterday if today sparse
+    y = (dt.datetime.utcnow().date() - dt.timedelta(days=1)).isoformat()
+    r2 = session.get(url, params={"select":"day,kp_max,bz_min,sw_speed_avg","day":f"eq.{y}"}, timeout=20)
+    if r2.status_code != 200:
+        return None
+    jj = r2.json() or []
+    return jj[0] if jj else None
+
+def _is_relevant_item(a: Dict[str,Any]) -> bool:
+    """Basic on-mission filter for roundup display.
+    Uses title and any output text to keep only space-weather/frequency/physiology items."""
+    title = a.get("title") or ""
+    blob = [title]
+    for o in a.get("outputs", []):
+        if o.get("output_type") in ("summary_short","summary_long"):
+            blob.append(o.get("content",""))
+    text = "\n".join(blob)
+    return bool(RELEVANT_RE.search(text))
 from pathlib import Path
 from typing import List, Dict, Any
 import requests
@@ -295,7 +324,41 @@ def sb_recent_summaries(days=1, limit=8) -> List[Dict[str,Any]]:
         }, timeout=20)
         rr.raise_for_status()
         a["outputs"] = rr.json() or []
-    return arts
+    filtered = []
+    for a in arts:
+        if a.get("outputs"):
+            if _is_relevant_item(a):
+                filtered.append(a)
+    return filtered
+def _fmt(v: Any, unit: str = "") -> str:
+    try:
+        if v is None:
+            return "n/a"
+        vf = float(v)
+        if unit and unit.strip().startswith("nT"):
+            return f"{vf:.1f} nT"
+        if unit and unit.strip().startswith("km/s"):
+            return f"{vf:.0f} km/s"
+        return f"{vf:.1f}{unit}"
+    except Exception:
+        return "n/a"
+
+def render_top_signals(metrics: Dict[str,Any] | None) -> str:
+    if not metrics:
+        return ""
+    kp = _fmt(metrics.get("kp_max"))
+    bz = _fmt(metrics.get("bz_min"), "nT")
+    sw = _fmt(metrics.get("sw_speed_avg"), "km/s")
+    html_parts = [
+        "<h2>Top Signals</h2>",
+        "<ul>",
+        f"<li><strong>Kp (max)</strong>: {kp}</li>",
+        f"<li><strong>Bz (min)</strong>: {bz} (more negative = stronger southward)</li>",
+        f"<li><strong>Solar wind (avg)</strong>: {sw}</li>",
+        "</ul>",
+        "<p><em>Gaia Eyes insight:</em> Calmer Kp and easing wind typically coincide with steadier focus windows and better HRV/coherence; brief dips can still occur near IMF/Bz swings. Use short breathing resets and low‑stim evenings to consolidate recovery.</p>",
+    ]
+    return "\n".join(html_parts)
 
 # --- Mark articles as used in roundup ---
 def sb_mark_roundup_used(ids: List[str]) -> None:
@@ -354,24 +417,46 @@ def wp_create_post(title: str, html_content: str, featured_media: int | None = N
         return {"status_code": r.status_code, "text": r.text}
 
 def roundup_html(items: List[Dict[str,Any]]) -> str:
-    parts = [f"<p><em>Curated highlights from today’s sources.</em></p>"]
+    # Header note
+    parts = [f"<p><em>Curated highlights from today’s mission‑relevant sources.</em></p>"]
+    # Top signals from marts
+    try:
+        top = render_top_signals(sb_today_metrics())
+        if top:
+            parts.append(top)
+    except Exception as e:
+        print("[WP] top signals error:", e)
+    # Items (max 7)
+    items = items[:7]
     for a in items:
-        parts.append(f'<h3><a href="{html.escape(a["url"])}" target="_blank" rel="noopener">{html.escape(a["title"])}</a></h3>')
-        shorts = [o["content"] for o in a["outputs"] if o["output_type"]=="summary_short"]
-        longs  = [o["content"] for o in a["outputs"] if o["output_type"]=="summary_long"]
-        if shorts:
-            parts.append(f"<p>{html.escape(shorts[0])}</p>")
-        if longs:
-            # lightly format into paragraphs
-            for para in longs[0].split("\n\n"):
+        title = html.escape(a.get("title","(untitled)"))
+        url = html.escape(a.get("url","#"))
+        parts.append(f'<h3><a href="{url}" target="_blank" rel="noopener">{title}</a></h3>')
+        # Prefer long summary, then short
+        long = next((o["content"] for o in a.get("outputs",[]) if o.get("output_type")=="summary_long"), "")
+        short= next((o["content"] for o in a.get("outputs",[]) if o.get("output_type")=="summary_short"), "")
+        body = long or short
+        # light paragraph formatting
+        for para in (body or "").split("\n\n"):
+            if para.strip():
                 parts.append(f"<p>{html.escape(para.strip())}</p>")
-        facts = [o["content"] for o in a["outputs"] if o["output_type"]=="fact"][:2]
+        # Facts (max 2)
+        facts = [o["content"] for o in a.get("outputs",[]) if o.get("output_type")=="fact"][:2]
         if facts:
             parts.append("<ul>" + "".join(f"<li>{html.escape(f)}</li>" for f in facts) + "</ul>")
+    # Self‑care footer matched to calmer day
+    parts.append("<h3>Self‑Care Picks</h3>")
+    parts.append("<ul>"
+                 "<li>5–8 min coherence breathing (≈6 breaths/min) in morning and pre‑bed</li>"
+                 "<li>10–15 min outdoor light + short nature walk</li>"
+                 "<li>Mineral‑forward hydration; reduce late‑day stimulants</li>"
+                 "<li>Digital sunset & warm, low lighting in the evening</li>"
+                 "</ul>")
     return "\n".join(parts)
 
 def main():
     items = sb_recent_summaries(days=WP_LOOKBACK_DAYS, limit=8)
+    print(f"[WP] roundup candidates after relevance filter: {len(items)}")
     if not items:
         print("No recent research items.")
         return

@@ -27,6 +27,32 @@ RESEARCH_KEYWORDS = os.getenv(
 KEYWORDS = [k.strip() for k in RESEARCH_KEYWORDS.split(",") if k.strip()]
 KW_REGEX = re.compile(r"(" + r"|".join([re.escape(k) for k in KEYWORDS]) + r")", re.I)
 
+# ---- Tiered relevance (tighter control) ----
+# Tier 1: hard space-weather terms (must-match for non-allow sources)
+RESEARCH_TIER1 = os.getenv(
+    "RESEARCH_TIER1",
+    "aurora,geomagnetic,kp,planetary k,imf,bz,solar wind,cme,flare,x-class,m-class,coronal hole,coronal mass ejection,sunspot,solar storm,magnetosphere,ionosphere"
+)
+# Tier 2: human-physiology/frequency terms (optional reinforcement)
+RESEARCH_TIER2 = os.getenv(
+    "RESEARCH_TIER2",
+    "hrv,heart rate variability,coherence,eeg,autonomic,vagal,schumann,emf,rf,0.1 hz,sleep,anxiety,nervous system"
+)
+T1 = [k.strip() for k in RESEARCH_TIER1.split(",") if k.strip()]
+T2 = [k.strip() for k in RESEARCH_TIER2.split(",") if k.strip()]
+T1_RE = re.compile(r"(" + r"|".join([re.escape(k) for k in T1]) + r")", re.I)
+T2_RE = re.compile(r"(" + r"|".join([re.escape(k) for k in T2]) + r")", re.I)
+
+# ---- Domain allow/deny lists (comma-separated) ----
+DOMAIN_ALLOW = set([d.strip().lower() for d in os.getenv(
+    "DOMAIN_ALLOW",
+    "swpc.noaa.gov,services.swpc.noaa.gov,spaceweatherlive.com,spaceweather.com,solarham.com,science.nasa.gov,nasa.gov,heartmath.org,heartmath.com,earthsky.org,soho.nascom.nasa.gov,ccmc.gsfc.nasa.gov,usgs.gov"
+).split(",") if d.strip()])
+DOMAIN_DENY = set([d.strip().lower() for d in os.getenv("DOMAIN_DENY","").split(",") if d.strip()])
+
+# ---- Recency (drop stale items) ----
+MAX_AGE_DAYS = int(os.getenv("MAX_AGE_DAYS","7"))
+
 # after existing imports / dotenv loads
 HTTP_USER_AGENT = os.getenv(
     "HTTP_USER_AGENT",
@@ -80,12 +106,71 @@ DENY_TITLE_PATTERNS = [
     r"\bTornado Warning\b",
 ]
 ALLOW_SOURCES = {
+    # authoritative space-weather producers: bypass Tier2 but still parse
     "swpc-alerts-rss","swpc-news-rss","swpc-alerts-json","swpc-kp-3day",
-    "solarham","nasa-news","livescience-space","usgs-quakes"
+    "solarham","spaceweatherlive","spaceweather.com",
+    # NASA heliophysics/science feeds
+    "nasa-news","nasa-heliophysics",
+    # observatories / agencies
+    "usgs-quakes","heartmath-gcms"
 }
 USGS_MIN_MAG = float(os.getenv("USGS_MIN_MAG", "5.5"))
 
 DENY_REGEXES = [re.compile(p, re.I) for p in DENY_TITLE_PATTERNS]
+
+def _domain(host: str) -> str:
+    host = host.lower()
+    return host[4:] if host.startswith("www.") else host
+
+def _is_domain_denied(u: str) -> bool:
+    try:
+        h = _domain(urlparse(u).netloc)
+        return h in DOMAIN_DENY
+    except Exception:
+        return False
+
+def _is_domain_allowed(u: str, source_id: str) -> bool:
+    try:
+        h = _domain(urlparse(u).netloc)
+        return (h in DOMAIN_ALLOW) or (source_id in ALLOW_SOURCES)
+    except Exception:
+        return source_id in ALLOW_SOURCES
+
+GENERIC_SUMMARY_PATTERNS = [
+    re.compile(r"^sign\s*up|subscribe|cookie|privacy", re.I),
+    re.compile(r"^fundraiser|donate", re.I),
+]
+
+def _too_generic(text: str) -> bool:
+    if not text or len(text.strip()) < 40:
+        return True
+    return any(rx.search(text) for rx in GENERIC_SUMMARY_PATTERNS)
+
+def _is_recent(iso_ts: str | None) -> bool:
+    if not iso_ts:
+        return True
+    try:
+        ts = dt.datetime.fromisoformat(iso_ts.replace("Z","+00:00"))
+    except Exception:
+        return True
+    return (dt.datetime.now(dt.timezone.utc) - ts).days <= MAX_AGE_DAYS
+
+
+def _is_relevant(title: str, summary: str, url: str, source_id: str) -> bool:
+    """Require Tier1 for non-allow sources; allow Tier2 to reinforce but not replace.
+       Allowlisted domains/sources bypass Tier2 but must not be generic/denied.
+    """
+    blob = f"{title}\n{summary}"
+    if _is_domain_denied(url):
+        return False
+    # allowlist: still drop generic junk
+    if _is_domain_allowed(url, source_id):
+        return not _too_generic(summary)
+    # not allowlisted: require Tier1, and prefer Tier2 if present
+    if not T1_RE.search(blob):
+        return False
+    # optional: if Tier2 exists, it strengthens the match; we don't hard-require it
+    return True
 
 def _title_denied(title: str) -> bool:
     return bool(title) and any(rx.search(title) for rx in DENY_REGEXES)
@@ -136,13 +221,8 @@ def parse_rss(feed_url: str, source_id: str, tags: List[str]) -> List[Dict[str,A
         # quick deny by severe local weather
         if source_id not in ALLOW_SOURCES and _title_denied(title):
             continue
-        # relevance filter: if source not explicitly allowed, require keyword in title or summary
         summary = (e.get("summary") or e.get("description") or "").strip()
-        if source_id not in ALLOW_SOURCES:
-            blob = f"{title}\n{summary}"
-            if not KW_REGEX.search(blob):
-                # skip off-mission items
-                continue
+        # recency (skip very old items)
         pub = None
         if e.get("published_parsed"):
             pub = dt.datetime(*e.published_parsed[:6], tzinfo=timezone.utc).isoformat()
@@ -150,6 +230,11 @@ def parse_rss(feed_url: str, source_id: str, tags: List[str]) -> List[Dict[str,A
             pub = dt.datetime(*e.updated_parsed[:6], tzinfo=timezone.utc).isoformat()
         else:
             pub = _now_utc_iso()
+        if not _is_recent(pub):
+            continue
+        # domain + relevance tests
+        if not _is_relevant(title, summary, link, source_id):
+            continue
         tags_out = list(tags) + [_year_tag(pub)]
         out.append({
             "source": source_id, "source_type":"rss",
@@ -302,16 +387,23 @@ def main():
             # Generic catch-all
                 r = session.get(ent["url"], timeout=TIMEOUT); r.raise_for_status()
                 j = r.json()
+                raw_url = ent["url"]
+                clean_url = normalize_url(raw_url)
+                if _is_domain_denied(clean_url):
+                    continue
                 title = j.get("title") or ent["id"]
-                if ent["id"] not in ALLOW_SOURCES and _title_denied(title):
+                summary = (j.get("summary") or j.get("description") or "")
+                if not _is_relevant(title, summary, clean_url, ent["id"]):
                     continue
                 pub = j.get("published_at") or j.get("date") or _now_utc_iso()
+                if not _is_recent(pub):
+                    continue
                 to_upsert += [{
                     "source": ent["id"], "source_type":"api",
                     "title": f"{title}",
-                    "url": ent["url"],
+                    "url": clean_url,
                     "published_at": pub,
-                    "summary_raw": (j.get("summary") or j.get("description") or "")[:800],
+                    "summary_raw": summary[:800],
                     "tags": list(ent.get("tags",[])) + [_year_tag(pub)]
                 }]
         except Exception as e:
@@ -330,6 +422,10 @@ def main():
         r["url_hash"] = h
         deduped.append(r)
     print(f"[COLLECTOR] candidates={len(to_upsert)} unique={len(deduped)}")
+    by_src = {}
+    for r in deduped:
+        by_src[r["source"]] = by_src.get(r["source"], 0) + 1
+    print("[COLLECTOR] per-source unique:", by_src)
     sb_upsert_articles(deduped)
 
 if __name__=="__main__":

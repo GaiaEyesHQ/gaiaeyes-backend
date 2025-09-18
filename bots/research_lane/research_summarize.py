@@ -39,7 +39,9 @@ def sb_select_new(limit=10) -> List[Dict[str,Any]]:
 def sb_insert_outputs(rows: List[Dict[str,Any]]):
     if not rows: return
     url = f"{SUPABASE_REST_URL}/article_outputs"
-    r = session.post(url, json=rows, timeout=TIMEOUT)
+    headers = dict(session.headers)
+    headers["Prefer"] = "return=representation"
+    r = session.post(url, json=rows, timeout=TIMEOUT, headers=headers)
     if r.status_code not in (200,201,204):
         print("[SB] insert outputs failed:", r.status_code, r.text[:200])
     else:
@@ -52,50 +54,69 @@ def sb_mark_processed(ids: List[str]):
         if r.status_code not in (200,204):
             print("[SB] mark processed failed:", i, r.status_code, r.text[:120])
 
-def call_openai(prompt: str, max_tokens=500, temperature=0.6) -> str:
+def call_openai_chat(messages: List[Dict[str,str]], max_tokens=800, temperature=0.3) -> str:
     import openai
     openai.api_key = OPENAI_API_KEY
     resp = openai.chat.completions.create(
         model=MODEL,
-        messages=[{"role":"user","content":prompt}],
+        messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
     )
     return resp.choices[0].message.content.strip()
 
-def craft_prompts(article: Dict[str,Any]) -> Dict[str,str]:
-    title = article["title"]
-    url   = article["url"]
-    raw   = article.get("summary_raw") or ""
-    body  = article.get("content_raw") or ""
+def call_openai_json(system: str, user: str, max_tokens=900, temperature=0.2) -> Dict[str, Any]:
+    """Ask the model to return strict JSON; fall back to best-effort parse."""
+    import json as _json
+    sys_msg = {"role":"system","content":system}
+    usr_msg = {"role":"user","content":user}
+    txt = call_openai_chat([sys_msg, usr_msg], max_tokens=max_tokens, temperature=temperature)
+    try:
+        return _json.loads(txt)
+    except Exception:
+        # try to locate a JSON object in the text
+        s = txt.find('{'); e = txt.rfind('}')
+        if s != -1 and e != -1 and e > s:
+            try:
+                return _json.loads(txt[s:e+1])
+            except Exception:
+                pass
+        raise
 
-    base = f"""
-Title: {title}
-URL: {url}
+def craft_prompts_json(article: Dict[str,Any]) -> Dict[str,str]:
+    title = article.get("title","(untitled)")
+    url   = article.get("url","")
+    raw   = (article.get("summary_raw") or "").strip()
+    body  = (article.get("content_raw") or "").strip()
 
-Context (may be brief): {raw}
+    system = (
+        "You are an assistant for Gaia Eyes. Write concise, credible outputs about space weather, EM fields, and human physiology. "
+        "No speculation, no medical claims. Use a calm, science-forward tone (accessible, not clickbait). If data is missing, omit it."
+    )
 
-Write in clear, accessible language for the Gaia Eyes audience (space weather, Schumann, HRV/EEG/nervous system).
+    user = f"""
+ARTICLE_TITLE: {title}
+ARTICLE_URL: {url}
+SUMMARY_RAW: {raw}
+CONTENT_RAW: {body}
+
+Produce STRICT JSON with the following keys:
+- summary_short: string (<=600 chars). A social-ready caption with a hook, 3–5 relevant hashtags appended inline.
+- summary_long: string (150–250 words). Use mini sections with labels:
+  1) What Happened — 1–3 short bullets
+  2) Why It Matters — 1–2 bullets linking to mood/energy/heart/HRV/nervous system (measured, non-diagnostic)
+  3) What To Watch — 1–3 actionable notes or how to follow updates
+- facts: array of strings (1–3 items, each 40–140 chars) suitable for image overlays (“Did you know?” tone). No numbering.
+- credibility: "high"|"medium"|"low" based on sourcing and specificity.
+- topics: array subset of ["space_weather","geomagnetic","schumann","hrv","eeg","emf","ionosphere","magnetosphere","sleep","nervous_system"].
+
+Rules:
+- Pull concrete data points (e.g., Kp, Bz, solar-wind speed) only if present in the text. Do not fabricate.
+- Keep language measured; no fear-based wording. Avoid generic site descriptions.
+- If the article is off-mission, set credibility="low" and topics=[].
+Return ONLY the JSON object, no prose.
 """
-
-    short_p = base + """
-Task: Write a short social caption (<= 600 chars). Start with a hook. Mention the key event briefly and note a possible human impact (mood/energy/heart/nervous system). Include 3–5 relevant hashtags at the end.
-"""
-
-    long_p = base + """
-Task: Write a concise blog-ready summary with 3 sections and short bullets:
-1) What Happened
-2) Why It Matters (links to mood/energy/heart/nervous system; be measured; no medical claims)
-3) What To Watch (1–3 practical notes or how to follow updates)
-
-Keep it ~150–250 words total.
-"""
-
-    fact_p = base + """
-Task: Extract 1–2 short 'Did you know?' style facts (max 140 chars each) that can be used as image overlays. Return each fact on a new line with no numbering.
-"""
-
-    return {"short": short_p, "long": long_p, "fact": fact_p}
+    return {"system": system, "user": user}
 
 def main():
     arts = sb_select_new(limit=12)
@@ -106,23 +127,36 @@ def main():
     outs=[]
     processed=[]
     for a in arts:
-        prompts = craft_prompts(a)
+        # Build JSON prompt and call model
+        p = craft_prompts_json(a)
         try:
-            short = call_openai(prompts["short"], max_tokens=350)
-            long  = call_openai(prompts["long"],  max_tokens=500)
-            facts = call_openai(prompts["fact"],  max_tokens=120)
+            j = call_openai_json(p["system"], p["user"], max_tokens=1000, temperature=0.2)
         except Exception as e:
-            print("[AI] error:", e)
-            continue
+            # Fallback: try legacy 3-call mode using summary_raw only
+            print("[AI] JSON parse error; falling back:", e)
+            legacy = {
+                "short": f"{a.get('title','')} — {a.get('summary_raw','')[:420]}",
+                "long": a.get('summary_raw','')[:1200],
+                "facts": []
+            }
+            j = {
+                "summary_short": legacy["short"][:600],
+                "summary_long": legacy["long"],
+                "facts": legacy["facts"],
+                "credibility": "medium",
+                "topics": []
+            }
 
         # prepare outputs
         article_id = a["id"]
-        outs.append({"article_id": article_id, "output_type":"summary_short", "content": short, "model": MODEL})
-        outs.append({"article_id": article_id, "output_type":"summary_long",  "content": long,  "model": MODEL})
-        for line in (facts or "").splitlines():
-            fact = line.strip(" -•\t")
-            if 8 <= len(fact) <= 140:
-                outs.append({"article_id": article_id, "output_type":"fact", "content": fact, "model": MODEL})
+        short = (j.get("summary_short") or "").strip()
+        long  = (j.get("summary_long") or "").strip()
+        facts = [s.strip() for s in (j.get("facts") or []) if isinstance(s,str) and 8 <= len(s.strip()) <= 140]
+
+        outs.append({"article_id": article_id, "output_type":"summary_short", "content": short[:600], "model": MODEL})
+        outs.append({"article_id": article_id, "output_type":"summary_long",  "content": long,        "model": MODEL})
+        for fact in facts:
+            outs.append({"article_id": article_id, "output_type":"fact", "content": fact, "model": MODEL})
 
         processed.append(article_id)
 
