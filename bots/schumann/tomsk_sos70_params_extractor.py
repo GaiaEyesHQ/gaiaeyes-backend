@@ -39,6 +39,24 @@ SERIES = {
     "F4/A4/Q4": ("green",  (40,160,60),   (0,200,100)),
 }
 
+def sanitize_roi(img_bgr, roi, min_width=120):
+    h, w = img_bgr.shape[:2]
+    x0, y0, x1, y1 = roi
+    x0 = max(0, min(x0, w-1))
+    x1 = max(0, min(x1, w))
+    y0 = max(0, min(y0, h-1))
+    y1 = max(0, min(y1, h))
+    if x1 - x0 < min_width:
+        # fallback to centered band if ROI is too narrow or invalid
+        cx = w // 2
+        half = max(min_width//2, min(w//2 - 1, 400))
+        x0 = max(0, cx - half)
+        x1 = min(w, cx + half)
+    if y1 <= y0 + 10:
+        y0 = max(0, (h//2) - 100)
+        y1 = min(h, (h//2) + 100)
+    return int(x0), int(y0), int(x1), int(y1)
+
 def fetch_image(url, timeout=30):
     r = requests.get(url, timeout=timeout, headers={"User-Agent":"Mozilla/5.0"})
     r.raise_for_status()
@@ -68,6 +86,8 @@ def vertical_energy(gray):
 
 def detect_tick_pph(img_bgr, roi, verbose=False):
     x0,y0,x1,y1 = roi
+    if x1 - x0 < 10:
+        return None, 0, 0.0
     y_top = max(y0, y1 - (TICK_STRIP_H + 2))
     strip = img_bgr[y_top:y1-2, x0:x1]
     if strip.size == 0: return None, 0, 0.0
@@ -94,7 +114,7 @@ def detect_tick_pph(img_bgr, roi, verbose=False):
     return pph_tick, tick_count, quality
 
 def estimate_day_boundaries(img_bgr, roi):
-    x0,y0,x1,y1 = roi
+    x0,y0,x1,y1 = sanitize_roi(img_bgr, roi)
     gray = cv2.cvtColor(img_bgr[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
     ce = vertical_energy(gray)
     k = max(3, (x1-x0)//400)
@@ -102,7 +122,13 @@ def estimate_day_boundaries(img_bgr, roi):
     W = (x1 - x0); approx1 = int(round(W/3)); approx2 = int(round(2*W/3))
     def snap(idx):
         lo = max(0, idx-40); hi = min(W-1, idx+40)
-        seg = ce_s[lo:hi]; return x0 + int(lo + np.argmin(seg))
+        if hi <= lo or ce_s.size == 0:
+            # fallback to unsnapped position within ROI
+            return x0 + int(max(1, min(W-2, idx)))
+        seg = ce_s[lo:hi]
+        if seg.size == 0:
+            return x0 + int(max(1, min(W-2, idx)))
+        return x0 + int(lo + int(np.argmin(seg)))
     d1 = snap(approx1); d2 = snap(approx2)
     if not (x0+100 < d1 < d2 < x1-100): d1 = x0 + approx1; d2 = x0 + approx2
     day_w = (d2 - x0) / 2.0
@@ -129,17 +155,17 @@ def x_for_hour_in_day(x_day_start, pph, hour_in_day):
 def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
                   pp_hour_source="auto", verbose=False, accept_minutes=90.0,
                   last_modified=None, stale_hours=6.0):
-    x0,y0,x1,y1 = roi
-    x_day0, x_day1, x_day2, day_w = estimate_day_boundaries(img_bgr, roi)
+    x0,y0,x1,y1 = sanitize_roi(img_bgr, roi)
+    x_day0, x_day1, x_day2, day_w = estimate_day_boundaries(img_bgr, (x0,y0,x1,y1))
     pph_day = day_w/24.0
-    pph_tick, tick_count, _ = detect_tick_pph(img_bgr, roi, verbose=verbose)
+    pph_tick, tick_count, _ = detect_tick_pph(img_bgr, (x0,y0,x1,y1), verbose=verbose)
     if pp_hour_source == "ticks":
         pph, pph_src = (pph_tick, "ticks") if (pph_tick and tick_count>=tick_min_count) else (pph_day, "day_width (forced)")
     elif pp_hour_source == "day":
         pph, pph_src = pph_day, "day_width"
     else:
         pph, pph_src = (pph_tick, "ticks") if (pph_tick and tick_count>=tick_min_count) else (pph_day, "day_width")
-    x_frontier = detect_frontier(img_bgr, roi)
+    x_frontier = detect_frontier(img_bgr, (x0,y0,x1,y1))
     guard_px = max(MIN_GUARD_PX, int(round(pph * (guard_minutes/60.0))))
     now_tsst = tsst_now(); hour_now = hour_float(now_tsst); x_time = x_for_hour_in_day(x_day2, pph, hour_now)
 
@@ -178,6 +204,10 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, band_px=5):
     x = int(np.clip(x_now, x0+1, x1-2))
     lo = max(x0, x - band_px); hi = min(x1, x + band_px + 1)
     crop = img_bgr[y0:y1, lo:hi, :]  # H x W x 3
+    if crop.size == 0 or (hi - lo) <= 0:
+        # fallback: return midline picks to avoid crashes; caller can detect via y_norm ~0.5
+        mid_y = (y0 + y1) // 2
+        return { key: {"y_px": int(mid_y), "y_norm": 0.5, "draw": bgr_draw} for key, (_, _, bgr_draw) in SERIES.items() }
     H = crop.shape[0]
     results = {}
     for key, (label, rgb, bgr_draw) in SERIES.items():
@@ -229,19 +259,21 @@ def main():
     A_lm_dt = parse_last_modified(A_lm)
     Q_lm_dt = parse_last_modified(Q_lm)
 
-    # compute x_now per image (frontier may differ slightly)
-    xF, dbgF = compute_x_now(F_img, ROI, last_modified=F_lm_dt, verbose=args.verbose)
-    xA, dbgA = compute_x_now(A_img, ROI, last_modified=A_lm_dt, verbose=args.verbose)
-    xQ, dbgQ = compute_x_now(Q_img, ROI, last_modified=Q_lm_dt, verbose=args.verbose)
+    roiF = sanitize_roi(F_img, ROI)
+    roiA = sanitize_roi(A_img, ROI)
+    roiQ = sanitize_roi(Q_img, ROI)
 
-    # pick series at x_now
-    picksF = pick_colored_lines_at_x(F_img, ROI, xF)
-    picksA = pick_colored_lines_at_x(A_img, ROI, xA)
-    picksQ = pick_colored_lines_at_x(Q_img, ROI, xQ)
+    xF, dbgF = compute_x_now(F_img, roiF, last_modified=F_lm_dt, verbose=args.verbose)
+    xA, dbgA = compute_x_now(A_img, roiA, last_modified=A_lm_dt, verbose=args.verbose)
+    xQ, dbgQ = compute_x_now(Q_img, roiQ, last_modified=Q_lm_dt, verbose=args.verbose)
+
+    picksF = pick_colored_lines_at_x(F_img, roiF, xF)
+    picksA = pick_colored_lines_at_x(A_img, roiA, xA)
+    picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ)
 
     # convert F y to Hz
     freq_max = float(args.freq_max_hz)
-    F_vals = {k: float(y_to_unit(v["y_px"], ROI, 0.0, freq_max)) for k,v in picksF.items()}
+    F_vals = {k: float(y_to_unit(v["y_px"], roiF, 0.0, freq_max)) for k,v in picksF.items()}
 
     # A/Q keep normalized (0..1) for now
     A_vals = {k: float(v["y_norm"]) for k,v in picksA.items()}
@@ -253,9 +285,9 @@ def main():
         F_overlay = os.path.join(args.dir, "tomsk_params_f_overlay.png")
         A_overlay = os.path.join(args.dir, "tomsk_params_a_overlay.png")
         Q_overlay = os.path.join(args.dir, "tomsk_params_q_overlay.png")
-        cv2.imwrite(F_overlay, draw_overlay_with_picks(F_img, ROI, xF, picksF, "F params @ x_now", freq_max_hz=freq_max, show_units=True))
-        cv2.imwrite(A_overlay, draw_overlay_with_picks(A_img, ROI, xA, picksA, "A params @ x_now"))
-        cv2.imwrite(Q_overlay, draw_overlay_with_picks(Q_img, ROI, xQ, picksQ, "Q params @ x_now"))
+        cv2.imwrite(F_overlay, draw_overlay_with_picks(F_img, roiF, xF, picksF, "F params @ x_now", freq_max_hz=freq_max, show_units=True))
+        cv2.imwrite(A_overlay, draw_overlay_with_picks(A_img, roiA, xA, picksA, "A params @ x_now"))
+        cv2.imwrite(Q_overlay, draw_overlay_with_picks(Q_img, roiQ, xQ, picksQ, "Q params @ x_now"))
 
     out = {
         "saved_at_utc": datetime.now(timezone.utc).isoformat(),
