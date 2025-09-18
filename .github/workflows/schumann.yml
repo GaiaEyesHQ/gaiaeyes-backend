@@ -155,14 +155,14 @@ jobs:
           mkdir -p images data
 
           # Remove station/merged PNGs with timestamps (do not touch *_latest.png)
-          git rm -f images/tomsk_*.png 2>/dev/null || true
-          git rm -f images/cumiana_*.png 2>/dev/null || true
-          git rm -f images/schumann_*.png 2>/dev/null || true
+          git rm -f images/tomsk_[0-9]*.png 2>/dev/null || true
+          git rm -f images/cumiana_[0-9]*.png 2>/dev/null || true
+          git rm -f images/schumann_[0-9]*.png 2>/dev/null || true
 
           # Remove station/merged JSONs with timestamps (do not touch *_latest.json)
-          git rm -f data/tomsk_*.json 2>/dev/null || true
-          git rm -f data/cumiana_*.json 2>/dev/null || true
-          git rm -f data/schumann_*.json 2>/dev/null || true
+          git rm -f data/tomsk_[0-9]*.json 2>/dev/null || true
+          git rm -f data/cumiana_[0-9]*.json 2>/dev/null || true
+          git rm -f data/schumann_[0-9]*.json 2>/dev/null || true
 
           echo "After cleanup, media contains:"; ls -lah images || true; ls -lah data || true
 
@@ -193,17 +193,13 @@ jobs:
           fi
 
       - name: Append harmonics to ext.schumann (stale rows kept with null value_num)
-        if: steps.stage_latest.outputs.ok == 'true'
+        if: ${{ steps.stage_latest.outputs.ok == 'true' && secrets.SUPABASE_URL && secrets.SUPABASE_SERVICE_ROLE }}
         working-directory: ${{ env.WORKDIR }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
         run: |
           set -euo pipefail
-          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE:-}" ]; then
-            echo "Supabase secrets missing; skipping insert."
-            exit 0
-          fi
 
           TS_ISO="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
