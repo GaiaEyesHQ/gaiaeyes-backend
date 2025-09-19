@@ -24,6 +24,9 @@ DAYS = int(env("START_DAYS_AGO", "7"))
 RETRIES = int(env("DONKI_MAX_RETRIES", "5"))
 RETRY_BASE_MS = int(env("DONKI_RETRY_BASE_MS", "500"))  # base backoff in milliseconds
 
+DAY_MODE = env("DONKI_DAY_MODE", "1").strip().lower() in ("1","true","yes","on")
+DAY_SLEEP_MS = int(env("DONKI_DAY_SLEEP_MS", "600"))  # pause between day calls
+
 BASE = "https://api.nasa.gov/DONKI"
 
 UPSERT = """
@@ -51,6 +54,18 @@ def parse_iso(ts):
         return datetime.fromisoformat(s)
     except Exception:
         return None
+
+def day_range(start_dt: datetime, end_dt: datetime):
+    cur = datetime(year=start_dt.year, month=start_dt.month, day=start_dt.day, tzinfo=start_dt.tzinfo)
+    end = datetime(year=end_dt.year, month=end_dt.month, day=end_dt.day, tzinfo=end_dt.tzinfo)
+    while cur <= end:
+        yield cur, min(end_dt, cur + timedelta(days=1))
+        cur = cur + timedelta(days=1)
+
+async def sleepy(ms: int):
+    # add small jitter so parallel runners don't thump the API at once
+    delay = (ms / 1000.0) + (random.random() * 0.35)
+    await asyncio.sleep(delay)
 
 async def fetch(client: httpx.AsyncClient, path: str, params: dict, retries: int = RETRIES, base_ms: int = RETRY_BASE_MS):
     """
@@ -94,8 +109,21 @@ async def main():
     params = {"startDate": iso_day(start), "endDate": iso_day(now), "api_key": KEY}
 
     async with httpx.AsyncClient() as client:
-        flr = await fetch(client, "FLR", params) or []
-        cme = await fetch(client, "CME", params) or []
+        if DAY_MODE:
+            flr_all, cme_all = [], []
+            for d0, d1 in day_range(start, now):
+                day_params = {"startDate": iso_day(d0), "endDate": iso_day(d1), "api_key": KEY}
+                flr_day = await fetch(client, "FLR", day_params) or []
+                cme_day = await fetch(client, "CME", day_params) or []
+                if flr_day:
+                    flr_all.extend(flr_day)
+                if cme_day:
+                    cme_all.extend(cme_day)
+                await sleepy(DAY_SLEEP_MS)
+            flr, cme = flr_all, cme_all
+        else:
+            flr = await fetch(client, "FLR", params) or []
+            cme = await fetch(client, "CME", params) or []
 
     rows = []
     # FLR: fields: flrID, beginTime, peakTime, endTime, classType
