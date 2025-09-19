@@ -15,7 +15,7 @@ jobs:
       DONKI_MAX_RETRIES: "6"     # max retries for NASA DONKI API calls
       DONKI_RETRY_BASE_MS: "800"  # base ms for exponential backoff of retries
       DONKI_DAY_MODE: "1"        # 1 = use day mode (more granular, more calls), 0 = use month mode (less granular, fewer calls)
-      DONKI_DAY_SLEEP_MS: "700"   # ms to sleep between day mode calls (to avoid rate limiting)
+      DONKI_DAY_SLEEP_MS: "800"   # ms to sleep between day mode calls (to avoid rate limiting)
       DONKI_PRIMARY_RETRIES: "2" # primary retries for NASA DONKI API calls (after initial call, before exponential backoff)
       DONKI_FALLBACK_RETRIES: "6" # fallback retries for NASA DONKI API calls (after primary retries, with exponential backoff)
     steps:
