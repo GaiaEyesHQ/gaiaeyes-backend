@@ -27,7 +27,10 @@ RETRY_BASE_MS = int(env("DONKI_RETRY_BASE_MS", "500"))  # base backoff in millis
 DAY_MODE = env("DONKI_DAY_MODE", "1").strip().lower() in ("1","true","yes","on")
 DAY_SLEEP_MS = int(env("DONKI_DAY_SLEEP_MS", "600"))  # pause between day calls
 
-BASE = "https://api.nasa.gov/DONKI"
+# Primary (NASA Open APIs) + Fallback (CCMC DONKI WS on kauai)
+BASE_PRIMARY = os.getenv("DONKI_BASE_PRIMARY", "https://api.nasa.gov/DONKI").rstrip("/")
+BASE_FALLBACK = os.getenv("DONKI_BASE_FALLBACK", "https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get").rstrip("/")
+BASES = [BASE_PRIMARY, BASE_FALLBACK]
 
 UPSERT = """
 insert into ext.donki_event (event_id, event_type, start_time, peak_time, end_time, class, source, meta)
@@ -69,39 +72,50 @@ async def sleepy(ms: int):
 
 async def fetch(client: httpx.AsyncClient, path: str, params: dict, retries: int = RETRIES, base_ms: int = RETRY_BASE_MS):
     """
-    Fetch with retry/backoff. Retries on 5xx and 429. Returns [] on exhausted retries.
+    Fetch with retry/backoff across primary and fallback DONKI endpoints.
+    - Tries NASA Open API first (requires api_key), then CCMC 'kauai' WS (no key).
+    - Retries (per base) on 5xx/429; returns [] when both bases fail.
     """
-    url = f"{BASE}/{path}"
-    attempt = 0
-    while True:
-        try:
-            r = await client.get(url, params=params, timeout=httpx.Timeout(45.0, connect=10.0))
-            r.raise_for_status()
-            return r.json()
-        except httpx.HTTPStatusError as e:
-            status = e.response.status_code if e.response is not None else None
-            retryable = (status == 429) or (status is not None and 500 <= status < 600)
-            attempt += 1
-            if retryable and attempt <= retries:
-                # exponential backoff with jitter
-                delay = (base_ms / 1000.0) * (2 ** (attempt - 1)) + (random.random() * 0.25)
-                print(f"[DONKI] {path} got HTTP {status}; retry {attempt}/{retries} in {delay:.2f}s", file=sys.stderr)
-                await asyncio.sleep(delay)
-                continue
-            if retryable:
-                print(f"[DONKI] {path} failed after {retries} retries with HTTP {status}; skipping.", file=sys.stderr)
-                return []
-            # non-retryable
-            raise
-        except httpx.RequestError as e:
-            attempt += 1
-            if attempt <= retries:
-                delay = (base_ms / 1000.0) * (2 ** (attempt - 1)) + (random.random() * 0.25)
-                print(f"[DONKI] network error on {path}: {e!r}; retry {attempt}/{retries} in {delay:.2f}s", file=sys.stderr)
-                await asyncio.sleep(delay)
-                continue
-            print(f"[DONKI] network error on {path}; exhausted retries; skipping.", file=sys.stderr)
-            return []
+    for base in BASES:
+        attempt = 0
+        url = f"{base}/{path.lstrip('/')}"
+        # Adjust params: CCMC WS does not accept api_key
+        call_params = dict(params)
+        if "kauai.ccmc.gsfc.nasa.gov" in base:
+            call_params.pop("api_key", None)
+        while True:
+            try:
+                r = await client.get(url, params=call_params, timeout=httpx.Timeout(45.0, connect=10.0))
+                r.raise_for_status()
+                data = r.json()
+                # Some endpoints return dict on error; normalize to list-success
+                if isinstance(data, dict):
+                    # Unexpected payload (likely error) — treat as failure for this base
+                    raise httpx.HTTPStatusError("Unexpected dict payload", request=r.request, response=r)
+                return data
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code if e.response is not None else None
+                retryable = (status == 429) or (status is not None and 500 <= status < 600)
+                attempt += 1
+                if retryable and attempt <= retries:
+                    delay = (base_ms / 1000.0) * (2 ** (attempt - 1)) + (random.random() * 0.35)
+                    print(f"[DONKI] {path} via {base} HTTP {status}; retry {attempt}/{retries} in {delay:.2f}s", file=sys.stderr)
+                    await asyncio.sleep(delay)
+                    continue
+                # If this was not the last base, fall through to try next base
+                print(f"[DONKI] {path} failed via {base} (HTTP {status}); trying next base." if base != BASES[-1] else f"[DONKI] {path} failed via all bases.", file=sys.stderr)
+                break
+            except httpx.RequestError as e:
+                attempt += 1
+                if attempt <= retries:
+                    delay = (base_ms / 1000.0) * (2 ** (attempt - 1)) + (random.random() * 0.35)
+                    print(f"[DONKI] network error on {path} via {base}: {e!r}; retry {attempt}/{retries} in {delay:.2f}s", file=sys.stderr)
+                    await asyncio.sleep(delay)
+                    continue
+                print(f"[DONKI] network error on {path} via {base}; trying next base.", file=sys.stderr)
+                break
+    # Exhausted all bases
+    return []
 
 async def main():
     now = datetime.now(timezone.utc)
