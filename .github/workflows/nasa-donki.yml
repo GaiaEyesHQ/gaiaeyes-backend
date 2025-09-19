@@ -12,10 +12,10 @@ jobs:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       NASA_API_KEY: ${{ secrets.NASA_API_KEY }}
       START_DAYS_AGO: "14"         # pull last 14 days each run (idempotent upsert)
-      DONKI_MAX_RETRIES= "6"     # max retries for NASA DONKI API calls
-      DONKI_RETRY_BASE_MS= "800"  # base ms for exponential backoff of retries
-      DONKI_DAY_MODE= "1"        # 1 = use day mode (more granular, more calls), 0 = use month mode (less granular, fewer calls)
-      DONKI_DAY_SLEEP_MS= "700"   # ms to sleep between day mode calls (to avoid rate limiting)
+      DONKI_MAX_RETRIES: "6"     # max retries for NASA DONKI API calls
+      DONKI_RETRY_BASE_MS: "800"  # base ms for exponential backoff of retries
+      DONKI_DAY_MODE: "1"        # 1 = use day mode (more granular, more calls), 0 = use month mode (less granular, fewer calls)
+      DONKI_DAY_SLEEP_MS: "700"   # ms to sleep between day mode calls (to avoid rate limiting)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
