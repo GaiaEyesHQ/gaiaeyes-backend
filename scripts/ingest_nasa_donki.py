@@ -24,6 +24,10 @@ DAYS = int(env("START_DAYS_AGO", "7"))
 RETRIES = int(env("DONKI_MAX_RETRIES", "5"))
 RETRY_BASE_MS = int(env("DONKI_RETRY_BASE_MS", "500"))  # base backoff in milliseconds
 
+# Optional: tune retries per base so we fail over to fallback faster
+PRIMARY_RETRIES = int(env("DONKI_PRIMARY_RETRIES", str(RETRIES)))
+FALLBACK_RETRIES = int(env("DONKI_FALLBACK_RETRIES", str(RETRIES)))
+
 DAY_MODE = env("DONKI_DAY_MODE", "1").strip().lower() in ("1","true","yes","on")
 DAY_SLEEP_MS = int(env("DONKI_DAY_SLEEP_MS", "600"))  # pause between day calls
 
@@ -76,9 +80,12 @@ async def fetch(client: httpx.AsyncClient, path: str, params: dict, retries: int
     - Tries NASA Open API first (requires api_key), then CCMC 'kauai' WS (no key).
     - Retries (per base) on 5xx/429; returns [] when both bases fail.
     """
+    print(f"[DONKI] Bases in use: {BASES}", file=sys.stderr)
     for base in BASES:
-        attempt = 0
         url = f"{base}/{path.lstrip('/')}"
+        print(f"[DONKI] Trying {path} via {base} -> {url}", file=sys.stderr)
+        attempt = 0
+        max_retries = PRIMARY_RETRIES if base == BASES[0] else FALLBACK_RETRIES
         # Adjust params: CCMC WS does not accept api_key
         call_params = dict(params)
         if "kauai.ccmc.gsfc.nasa.gov" in base:
@@ -97,22 +104,22 @@ async def fetch(client: httpx.AsyncClient, path: str, params: dict, retries: int
                 status = e.response.status_code if e.response is not None else None
                 retryable = (status == 429) or (status is not None and 500 <= status < 600)
                 attempt += 1
-                if retryable and attempt <= retries:
+                if retryable and attempt <= max_retries:
                     delay = (base_ms / 1000.0) * (2 ** (attempt - 1)) + (random.random() * 0.35)
-                    print(f"[DONKI] {path} via {base} HTTP {status}; retry {attempt}/{retries} in {delay:.2f}s", file=sys.stderr)
+                    print(f"[DONKI] {path} via {base} HTTP {status}; retry {attempt}/{max_retries} in {delay:.2f}s", file=sys.stderr)
                     await asyncio.sleep(delay)
                     continue
                 # If this was not the last base, fall through to try next base
-                print(f"[DONKI] {path} failed via {base} (HTTP {status}); trying next base." if base != BASES[-1] else f"[DONKI] {path} failed via all bases.", file=sys.stderr)
+                print(f"[DONKI] {path} failed via {base} (HTTP {status}) after {attempt} attempts; {'trying next base' if base != BASES[-1] else 'no more bases'}.", file=sys.stderr)
                 break
             except httpx.RequestError as e:
                 attempt += 1
-                if attempt <= retries:
+                if attempt <= max_retries:
                     delay = (base_ms / 1000.0) * (2 ** (attempt - 1)) + (random.random() * 0.35)
-                    print(f"[DONKI] network error on {path} via {base}: {e!r}; retry {attempt}/{retries} in {delay:.2f}s", file=sys.stderr)
+                    print(f"[DONKI] network error on {path} via {base}: {e!r}; retry {attempt}/{max_retries} in {delay:.2f}s", file=sys.stderr)
                     await asyncio.sleep(delay)
                     continue
-                print(f"[DONKI] network error on {path} via {base}; trying next base.", file=sys.stderr)
+                print(f"[DONKI] network error on {path} via {base} after {attempt} attempts; {'trying next base' if base != BASES[-1] else 'no more bases'}.", file=sys.stderr)
                 break
     # Exhausted all bases
     return []
@@ -128,6 +135,7 @@ async def main():
             for d0, d1 in day_range(start, now):
                 day_params = {"startDate": iso_day(d0), "endDate": iso_day(d1), "api_key": KEY}
                 flr_day = await fetch(client, "FLR", day_params) or []
+                await sleepy(int(DAY_SLEEP_MS/2))
                 cme_day = await fetch(client, "CME", day_params) or []
                 if flr_day:
                     flr_all.extend(flr_day)
