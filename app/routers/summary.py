@@ -37,8 +37,16 @@ async def features_today(request: Request):
     sql = """
     with sr as (
       select (start_time at time zone 'America/Chicago')::date as day,
+             sum(case when lower(value_text) = 'rem'
+                      then extract(epoch from (end_time - start_time))/60 end) as rem_m,
+             sum(case when lower(value_text) = 'core'
+                      then extract(epoch from (end_time - start_time))/60 end) as core_m,
+             sum(case when lower(value_text) = 'deep'
+                      then extract(epoch from (end_time - start_time))/60 end) as deep_m,
+             sum(case when lower(value_text) = 'awake'
+                      then extract(epoch from (end_time - start_time))/60 end) as awake_m,
              sum(case when lower(value_text) in ('inbed','in_bed')
-                      then extract(epoch from (end_time - start_time))/60 else 0 end) as inbed_m
+                      then extract(epoch from (end_time - start_time))/60 end) as inbed_m
       from gaia.samples
       where type = 'sleep_stage'
       group by 1
@@ -49,6 +57,12 @@ async def features_today(request: Request):
            df.hrv_avg,
            df.spo2_avg,
            df.sleep_total_minutes,
+           -- expose stage minutes (rounded) alongside total
+           round(coalesce(sr.rem_m,   0)::numeric, 0) as rem_m,
+           round(coalesce(sr.core_m,  0)::numeric, 0) as core_m,
+           round(coalesce(sr.deep_m,  0)::numeric, 0) as deep_m,
+           round(coalesce(sr.awake_m, 0)::numeric, 0) as awake_m,
+           round(coalesce(sr.inbed_m, 0)::numeric, 0) as inbed_m,
            case when sr.inbed_m > 0
                 then round((df.sleep_total_minutes::numeric / sr.inbed_m)::numeric, 3)
                 else null end as sleep_efficiency,
