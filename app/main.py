@@ -1,6 +1,8 @@
-from fastapi import FastAPI, Depends, Header, HTTPException, status
+from fastapi import FastAPI, Depends, Header, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timezone
+
+from uuid import UUID
 
 from .db import settings
 from .routers import ingest, summary
@@ -37,7 +39,12 @@ async def health():
     }
 
 # ---- Simple bearer auth for /v1/*
-async def require_auth(authorization: str = Header(..., alias="Authorization")):
+async def require_auth(
+    request: Request,
+    authorization: str = Header(..., alias="Authorization"),
+    x_dev_userid: str | None = Header(None, alias="X-Dev-UserId"),
+):
+    # Bearer token check
     if not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Missing or invalid Authorization header")
@@ -45,6 +52,16 @@ async def require_auth(authorization: str = Header(..., alias="Authorization")):
     if not settings.DEV_BEARER or token != settings.DEV_BEARER:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="Invalid bearer token")
+
+    # Optional: propagate user_id into request.state if provided and looks like a UUID
+    request.state.user_id = None
+    if x_dev_userid:
+        try:
+            _ = UUID(x_dev_userid)
+            request.state.user_id = x_dev_userid
+        except Exception:
+            # leave as None if invalid
+            pass
 
 # Mount routers WITH /v1 prefix and the auth dependency
 app.include_router(ingest.router, prefix="/v1", dependencies=[Depends(require_auth)])
