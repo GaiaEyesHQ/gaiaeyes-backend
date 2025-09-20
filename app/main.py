@@ -26,9 +26,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# No auth dependency for now
-app.include_router(ingest.router, prefix="/v1")
-app.include_router(summary.router, prefix="/v1")
 
 @app.get("/health")
 async def health():
