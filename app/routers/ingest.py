@@ -94,6 +94,7 @@ on conflict (user_id, type, start_time, end_time) do nothing
 
 
 @router.post("/samples/batch")
+@router.post("/v1/samples/batch")  # compatibility path so clients using /v1/... also hit this handler
 async def samples_batch(
     payload: Payload,
     request: Request,

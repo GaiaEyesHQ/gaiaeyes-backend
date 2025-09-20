@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime, timezone
 
 from .db import settings
 from .routers import ingest, summary
@@ -13,6 +14,9 @@ app = FastAPI(
     version="0.1.0",
     generate_unique_id_function=custom_generate_unique_id
 )
+
+# Build marker for health checks (update per deploy or wire to your CI SHA)
+BUILD = "2025-09-20T02:45Z"
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,7 +32,12 @@ app.include_router(summary.router, prefix="/v1")
 
 @app.get("/health")
 async def health():
-    return {"ok": True}
+    return {
+        "ok": True,
+        "service": "gaiaeyes-backend",
+        "build": BUILD,
+        "time": datetime.now(timezone.utc).isoformat()
+    }
 
 # ---- Simple bearer auth for /v1/*
 async def require_auth(authorization: str = Header(..., alias="Authorization")):
