@@ -12,6 +12,9 @@ from pydantic import BaseModel
 
 from ..db import get_pool, settings  # settings.DEV_BEARER, async pg pool
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["ingest"])
 
 
@@ -101,6 +104,16 @@ async def samples_batch(
     if not items:
         return {"ok": True, "received": 0, "inserted": 0, "skipped": 0}
 
+    # Debug summary of this batch (types and time window)
+    try:
+        _types = sorted({s.type for s in items})
+        _start = min(s.start_time for s in items).isoformat()
+        _end = max(s.start_time for s in items).isoformat()
+        logger.info("/samples/batch received=%d types=%s window=[%s..%s]", len(items), _types, _start, _end)
+    except Exception:
+        # best-effort only
+        pass
+
     # Optional header override of user_id (useful for dev/testing)
     x_uid = request.headers.get("X-Dev-UserId", "").strip() or None
     dev_uid = x_uid
@@ -110,49 +123,65 @@ async def samples_batch(
     skipped = 0
     errors: list[dict] = []
 
-    async with pool.connection() as conn:
-        async with conn.cursor() as cur:
-            for s in items:
-                # validate before touching the DB
-                ok, reason = _validate_sample(s)
-                if not ok:
-                    skipped += 1
-                    if len(errors) < 10:
-                        errors.append({
-                            "index": skipped + inserted,
-                            "type": s.type,
-                            "reason": reason,
-                            "start_time": s.start_time.isoformat(),
-                        })
-                    continue
-                # prepare values tuple
-                v = (
-                    dev_uid or s.user_id,
-                    s.device_os,
-                    s.source,
-                    s.type,
-                    s.start_time,
-                    s.end_time,
-                    s.value,
-                    s.unit,
-                    s.value_text,
-                )
-                try:
-                    await cur.execute(sql, v, prepare=False)
-                    inserted += 1
-                except pg_errors.UniqueViolation:
-                    # on-conflict do nothing should already prevent this, but be safe
-                    continue
-                except Exception as e:  # capture and keep inserting
-                    skipped += 1
-                    if len(errors) < 10:
-                        errors.append({
-                            "index": skipped + inserted,
-                            "type": s.type,
-                            "reason": f"db_error: {type(e).__name__}",
-                            "message": str(e)[:200],
-                        })
-            await conn.commit()
+    try:
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                for s in items:
+                    # validate before touching the DB
+                    ok, reason = _validate_sample(s)
+                    if not ok:
+                        skipped += 1
+                        if len(errors) < 10:
+                            errors.append({
+                                "index": skipped + inserted,
+                                "type": s.type,
+                                "reason": reason,
+                                "start_time": s.start_time.isoformat(),
+                            })
+                        continue
+                    # prepare values tuple
+                    v = (
+                        dev_uid or s.user_id,
+                        s.device_os,
+                        s.source,
+                        s.type,
+                        s.start_time,
+                        s.end_time,
+                        s.value,
+                        s.unit,
+                        s.value_text,
+                    )
+                    try:
+                        await cur.execute(sql, v, prepare=False)
+                        inserted += 1
+                    except pg_errors.UniqueViolation:
+                        # on-conflict do nothing should already prevent this, but be safe
+                        continue
+                    except Exception as e:  # capture and keep inserting
+                        skipped += 1
+                        if len(errors) < 10:
+                            errors.append({
+                                "index": skipped + inserted,
+                                "type": s.type,
+                                "reason": f"db_error: {type(e).__name__}",
+                                "message": str(e)[:200],
+                            })
+                await conn.commit()
+    except Exception as e:
+        # Return structured response instead of 500 on unexpected failures
+        logger.exception("/samples/batch fatal error: %s", e)
+        return {
+            "ok": False,
+            "received": len(items),
+            "inserted": inserted,
+            "skipped": skipped if (inserted + skipped) else len(items),
+            "errors": errors + [{
+                "index": inserted + skipped,
+                "type": "<fatal>",
+                "reason": "server_error",
+                "message": str(e)[:200],
+            }],
+        }
 
     resp = {"ok": True, "received": len(items), "inserted": inserted, "skipped": skipped}
     if errors:
