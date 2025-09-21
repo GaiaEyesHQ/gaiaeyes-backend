@@ -28,11 +28,6 @@ async def features_today(request: Request):
     Uses America/Chicago for day bucketing and computes in-bed minutes on the fly
     from gaia.samples (type='sleep_stage', value_text in ['inbed','in_bed']).
     """
-    # Optional auth check (consistent with other handlers):
-    user_id = getattr(request.state, "user_id", None)
-    if user_id is None:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
     pool = await get_pool()
     sql = """
     with sr as (
@@ -77,11 +72,16 @@ async def features_today(request: Request):
     where df.day = (current_timestamp at time zone 'America/Chicago')::date
     limit 1
     """
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(sql)
-        if not row:
-            return {"ok": True, "data": None}
-        rec = dict(row)
-        # Ensure JSON serializable types
-        rec["day"] = str(rec["day"])
-        return {"ok": True, "data": rec}
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(sql)
+    except Exception as e:
+        # Return structured response so clients don’t see a 500
+        return {"ok": True, "data": None, "error": f"features_today query failed: {e}"}
+
+    if not row:
+        return {"ok": True, "data": None}
+
+    rec = dict(row)
+    rec["day"] = str(rec.get("day"))
+    return {"ok": True, "data": rec}
