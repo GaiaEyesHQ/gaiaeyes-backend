@@ -77,9 +77,9 @@ async def features_today(request: Request):
            p.updated_at,
            d.max_day,
            d.total_rows
-    from pick p
+    from diag d
+    left join pick p on true
     left join sr on sr.day = p.day
-    cross join diag d
     """
     try:
         async with pool.acquire() as conn:
@@ -88,10 +88,15 @@ async def features_today(request: Request):
         # Return structured response so clients don’t see a 500
         return {"ok": True, "data": None, "error": f"features_today query failed: {e}"}
 
+    # Always return diagnostics; data is present only when a day was picked
     if not row:
-        return {"ok": True, "data": None}
+        return {"ok": True, "data": None, "diagnostics": {}}
 
     rec = dict(row)
-    rec["day"] = str(rec.get("day"))
     diagnostics = {"max_day": str(rec.pop("max_day", None)), "total_rows": rec.pop("total_rows", None)}
+
+    if rec.get("day") is None:
+        return {"ok": True, "data": None, "diagnostics": diagnostics}
+
+    rec["day"] = str(rec.get("day"))
     return {"ok": True, "data": rec, "diagnostics": diagnostics}
