@@ -45,33 +45,41 @@ async def features_today(request: Request):
       from gaia.samples
       where type = 'sleep_stage'
       group by 1
+    ), pick as (
+      select *
+      from marts.daily_features df
+      where df.day <= (current_timestamp at time zone 'America/Chicago')::date
+      order by df.day desc
+      limit 1
+    ), diag as (
+      select max(day) as max_day, count(*) as total_rows
+      from marts.daily_features
     )
-    select df.day,
-           df.steps_total,
-           df.hr_min,
-           df.hrv_avg,
-           df.spo2_avg,
-           df.sleep_total_minutes,
-           -- expose stage minutes (rounded) alongside total
+    select p.day,
+           p.steps_total,
+           p.hr_min,
+           p.hrv_avg,
+           p.spo2_avg,
+           p.sleep_total_minutes,
            round(coalesce(sr.rem_m,   0)::numeric, 0) as rem_m,
            round(coalesce(sr.core_m,  0)::numeric, 0) as core_m,
            round(coalesce(sr.deep_m,  0)::numeric, 0) as deep_m,
            round(coalesce(sr.awake_m, 0)::numeric, 0) as awake_m,
            round(coalesce(sr.inbed_m, 0)::numeric, 0) as inbed_m,
            case when sr.inbed_m > 0
-                then round((df.sleep_total_minutes::numeric / sr.inbed_m)::numeric, 3)
+                then round((p.sleep_total_minutes::numeric / sr.inbed_m)::numeric, 3)
                 else null end as sleep_efficiency,
-           df.kp_max,
-           df.bz_min,
-           df.sw_speed_avg,
-           df.flares_count,
-           df.cmes_count,
-           df.updated_at
-    from marts.daily_features df
-    left join sr on sr.day = df.day
-    where df.day <= (current_timestamp at time zone 'America/Chicago')::date
-    order by df.day desc
-    limit 1
+           p.kp_max,
+           p.bz_min,
+           p.sw_speed_avg,
+           p.flares_count,
+           p.cmes_count,
+           p.updated_at,
+           d.max_day,
+           d.total_rows
+    from pick p
+    left join sr on sr.day = p.day
+    cross join diag d
     """
     try:
         async with pool.acquire() as conn:
@@ -85,4 +93,5 @@ async def features_today(request: Request):
 
     rec = dict(row)
     rec["day"] = str(rec.get("day"))
-    return {"ok": True, "data": rec}
+    diagnostics = {"max_day": str(rec.pop("max_day", None)), "total_rows": rec.pop("total_rows", None)}
+    return {"ok": True, "data": rec, "diagnostics": diagnostics}
