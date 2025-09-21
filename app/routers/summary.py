@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from datetime import date
 from ..db import get_pool
+from psycopg.rows import dict_row
 
 router = APIRouter(tags=["summary"])
 
@@ -10,14 +11,16 @@ async def get_daily_summary(request: Request, date: date):
     if user_id is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     pool = await get_pool()
-    sql = "select * from gaia.daily_summary where user_id=$1 and date=$2"
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(sql, user_id, date)
-        if not row:
-            return {"date": str(date), "summary": None}
-        rec = dict(row)
-        rec["user_id"] = str(rec["user_id"])
-        return {"date": str(date), "summary": rec}
+    sql = "select * from gaia.daily_summary where user_id=%s and date=%s"
+    async with pool.connection() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(sql, (user_id, date))
+            row = await cur.fetchone()
+            if not row:
+                return {"date": str(date), "summary": None}
+            rec = dict(row)
+            rec["user_id"] = str(rec["user_id"])
+            return {"date": str(date), "summary": rec}
 
 
 # New endpoint: features_today
@@ -82,8 +85,10 @@ async def features_today(request: Request):
     left join sr on sr.day = p.day
     """
     try:
-        async with pool.acquire() as conn:
-            row = await conn.fetchrow(sql)
+        async with pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cur:
+                await cur.execute(sql)
+                row = await cur.fetchone()
     except Exception as e:
         # Return structured response so clients don’t see a 500
         return {"ok": True, "data": None, "error": f"features_today query failed: {e}"}
