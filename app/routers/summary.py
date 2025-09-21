@@ -69,7 +69,8 @@ async def features_today(request: Request):
            df.updated_at
     from marts.daily_features df
     left join sr on sr.day = df.day
-    where df.day = (current_timestamp at time zone 'America/Chicago')::date
+    where df.day <= (current_timestamp at time zone 'America/Chicago')::date
+    order by df.day desc
     limit 1
     """
     try:
