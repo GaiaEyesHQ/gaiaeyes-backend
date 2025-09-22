@@ -59,27 +59,27 @@ async def features_today(request: Request):
     ), diag as (
       select max(day) as max_day, count(*) as total_rows
       from marts.daily_features
-    )
-    , schu as (
+    ), schu as (
       select s.day,
              s.station_id,
              s.f0_avg_hz, s.f1_avg_hz, s.f2_avg_hz, s.h3_avg_hz, s.h4_avg_hz,
              row_number() over (
-               partition by s.day
-               order by case when s.station_id = 'tomsk' then 0 when s.station_id = 'cumiana' then 1 else 2 end
+               order by s.day desc,
+                        case when s.station_id = 'tomsk' then 0 when s.station_id = 'cumiana' then 1 else 2 end
              ) as rn
       from marts.schumann_daily s
       where s.station_id in ('tomsk','cumiana')
-    )
-    , post as (
+        and s.day <= (current_timestamp at time zone 'America/Chicago')::date
+    ), post as (
       select p.day,
              p.title as post_title,
              p.caption as post_caption,
              p.body_markdown as post_body,
              p.hashtags as post_hashtags,
-             row_number() over (partition by p.day order by p.updated_at desc) as rn
+             row_number() over (order by p.day desc, p.updated_at desc) as rn
       from content.dailyposts p
       where p.platform = 'default'
+        and p.day <= (current_timestamp at time zone 'America/Chicago')::date
     )
     select p.day,
            p.steps_total,
@@ -116,8 +116,8 @@ async def features_today(request: Request):
     from diag d
     left join pick p on true
     left join sr  on sr.day = p.day
-    left join schu sch on sch.day = p.day and sch.rn = 1
-    left join post dp on dp.day = p.day and dp.rn = 1
+    left join schu sch on sch.rn = 1
+    left join post dp on dp.rn = 1
     """
     try:
         async with pool.connection() as conn:
