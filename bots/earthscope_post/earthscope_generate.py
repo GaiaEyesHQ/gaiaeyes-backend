@@ -49,6 +49,10 @@ DAY_COLUMN   = os.getenv("SUPABASE_DAY_COLUMN", "day")
 PLATFORM     = os.getenv("EARTHSCOPE_PLATFORM", "default")
 USER_ID      = os.getenv("EARTHSCOPE_USER_ID", None)
 
+# --- Hook mode toggles ---
+HOOK_MODE = os.getenv("EARTHSCOPE_HOOK_MODE", "guard").strip().lower()  # guard | blend | always
+HOOK_BLEND_P = float(os.getenv("EARTHSCOPE_HOOK_BLEND_P", "0.35"))       # used when HOOK_MODE=blend
+
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise SystemExit("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env")
 
@@ -86,6 +90,133 @@ def _strip_intro_header(block: str) -> str:
         if head.startswith("###") or head.startswith("##") or (head.startswith("**") and "Gaia Eyes" in head):
             lines = lines[1:]
     return "\n".join(lines).strip()
+
+# --- hook + tone system (no questions, no "Feeling...", no emojis) ---
+import random, re
+
+BAN_STARTS = ("feeling ", "are you ", "ever feel ", "ready to ", "it’s time", "its time", "let’s ", "lets ")
+EMOJI_RE = re.compile(r"[\U00010000-\U0010ffff]", flags=re.UNICODE)
+
+HOOKS = {
+    "calm": [
+        "Quieter field today—good for deep focus.",
+        "Calm geomagnetics; lock in your rhythm.",
+        "Steady skies, steady mind.",
+        "Low Kp, longer runway for clarity.",
+        "Baseline is smooth—use your late‑morning window.",
+        "Stable backdrop—clean shots at focus blocks.",
+        "Quiet day upstairs—keep it simple and sharp.",
+        "Magnetic weather is tame—work the plan.",
+    ],
+    "unsettled": [
+        "Small waves, not a storm—pace beats push.",
+        "Pulse‑and‑dip kind of day.",
+        "A few bumps on the line; keep cadence.",
+        "Unsettled doesn’t mean unworkable—buffer your peaks.",
+        "Short surges, brief dips—ride the middle.",
+        "Minor fluctuation day—aim for steady cadence.",
+        "Some texture in the field—stay rhythmic.",
+        "Patchy flow—tighten your timing windows.",
+    ],
+    "stormy": [
+        "Charged air today—keep your cadence tight.",
+        "Storm‑leaning field—short bursts, longer recoveries.",
+        "Expect a punchy arc today.",
+        "Strong coupling window—step lightly.",
+        "Spiky profile—protect the edges of your day.",
+        "Lively magnetics—move with firm guardrails.",
+        "High‑gain conditions—keep resets close.",
+        "Aurora‑style volatility—work in clips, not sprints.",
+    ],
+    "neutral": [
+        "Straightforward field—set your tempo.",
+        "No big swings on the board.",
+        "Good canvas—paint a clear day.",
+        "Ordinary profile—make ordinary work count.",
+        "Middle‑of‑the‑road day—consistency wins.",
+        "Plain sailing—don’t overcomplicate it.",
+    ],
+}
+
+def _tone_from_ctx(ctx: Dict[str, Any]) -> str:
+    kp = ctx.get("kp_max_24h"); bz = ctx.get("bz_min"); wind = ctx.get("solar_wind_kms")
+    try:
+        kpf = float(kp) if kp is not None else None
+        bzf = float(bz) if bz is not None else None
+        wf  = float(wind) if wind is not None else None
+    except Exception:
+        kpf = bzf = wf = None
+    if (kpf is not None and kpf >= 5) or (bzf is not None and bzf <= -6):
+        return "stormy"
+    if kpf is not None and kpf > 2.67:
+        return "unsettled"
+    if (kpf is not None and kpf <= 2.67) and (bzf is None or bzf >= 0):
+        return "calm"
+    return "neutral"
+
+def _daily_seed() -> int:
+    return int(datetime.utcnow().strftime("%Y%m%d"))
+
+
+# --- Recent opener helpers for hook variation ---
+SENT_SPLIT_RE = re.compile(r"(?<=\.)\s+|(?<=! )\s+|(?<=\?)\s+", re.X)
+
+def _first_sentence(txt: str) -> str:
+    if not txt: return ""
+    parts = SENT_SPLIT_RE.split(txt.strip(), maxsplit=1)
+    return parts[0].strip() if parts else txt.strip()
+
+def _recent_openers(days_back: int = 7) -> set:
+    try:
+        since = (datetime.utcnow() - timedelta(days=days_back)).date().isoformat()
+        res = (
+            SB.schema(POSTS_SCHEMA)
+              .table(POSTS_TABLE)
+              .select("day,caption,platform")
+              .gte("day", since)
+              .order("day", desc=True)
+              .limit(20)
+              .execute()
+        )
+        rows = res.data or []
+        opens = set()
+        for r in rows:
+            cap = r.get("caption") or ""
+            if cap:
+                opens.add(_first_sentence(cap).lower())
+        return opens
+    except Exception:
+        return set()
+
+def _pick_hook(tone: str, last_used: set | None = None) -> str:
+    pool = HOOKS.get(tone) or HOOKS["neutral"]
+    random.seed(_daily_seed() + hash(tone))
+    candidates = pool.copy()
+    random.shuffle(candidates)
+    if last_used:
+        filtered = [h for h in candidates if _first_sentence(h).lower() not in last_used]
+        if filtered:
+            candidates = filtered
+    return candidates[0]
+
+def _sanitize_caption(txt: str) -> str:
+    if not txt:
+        return ""
+    s = txt.strip()
+    # drop emojis
+    s = EMOJI_RE.sub("", s)
+    # collapse whitespace
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+def _needs_rehook(s: str) -> bool:
+    if not s: return True
+    head = s.strip().lower()
+    if any(head.startswith(b) for b in BAN_STARTS):
+        return True
+    if head.endswith("?"):
+        return True
+    return False
 
 # --- deterministic snapshot builder ---
 def _build_snapshot_md(ctx: Dict[str, Any]) -> str:
@@ -296,32 +427,36 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
 
     if not client:
         # Deterministic fallback
-        hook = "Magnetic calm" if (kp_max is not None and kp_max < 3) else "Magnetic storm watch"
-        cap = (f"{hook} — Kp max {kp_max}, wind {wind} km/s, flares {flr}, CMEs {cme}. "
-               f"Schumann ~{sr} Hz. Breathe, ground, hydrate. 💫")
-        tags = "#GaiaEyes #SpaceWeather #KpIndex #SolarWind #Mindfulness #Wellness"
+        tone = _tone_from_ctx(ctx)
+        last_used = _recent_openers(7)
+        hook = _pick_hook(tone, last_used=last_used)
+        cap = (f"{hook} Kp max {kp_max}, wind {wind} km/s, flares {int(flr)} CMEs {int(cme)}. "
+               f"Schumann ~{sr} Hz." )
+        tags = "#GaiaEyes #SpaceWeather #KpIndex #SolarWind #Aurora"
         return cap, tags
 
     model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
-    prompt = f"""
-Using the data below, write a short, viral-friendly caption for Gaia Eyes.
-Start with an attention-grabbing line appropriate to the conditions (if Kp_max≥5 or wind≥600 km/s, lean urgent; else calm & curious). Relate to mood, energy, heart, and nervous system. Include 4–6 relevant hashtags on the last line. ≤700 chars. Render flare/ CME counts as integers.
-
-Data:
-- Kp now: {kp_now}
-- Kp max (24h): {kp_max}
-- Solar wind speed (km/s): {wind}
-- Flares past 24h: {flr}
-- CMEs past 24h: {cme}
-- Schumann: {sr} Hz ({sr_note})
-""".strip()
     try:
         resp = client.chat.completions.create(
             model=model,
-            temperature=0.75,
+            temperature=0.9,
+            presence_penalty=0.6,
+            frequency_penalty=0.4,
             max_tokens=320,
-            messages=[{"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, warm, and helpful."},
-                     {"role":"user","content": prompt}],
+            messages=[
+                {"role":"system","content":(
+                    "You are Gaia Eyes' space‑weather writer. Write an accurate, human, declarative caption. "
+                    "Do not start with questions or phrases like 'Feeling', 'Are you', 'Ever feel', 'Ready to', 'Let’s'. "
+                    "Never use emojis. Vary openings day‑to‑day."
+                )},
+                {"role":"user","content":(
+                    "Using the data below, write one short, viral‑friendly caption for Gaia Eyes. "
+                    "Start with a declarative, data‑aware hook (4–10 words). No questions. No emojis. "
+                    "Relate concisely (one sentence max) to mood/energy/heart/nervous system—only if consistent with the data (calm vs stormy). "
+                    "On the final line include 4–6 relevant hashtags. ≤600 chars. Render flare/CME counts as integers.\n\n"
+                    f"Kp max (24h): {kp_max}\nSolar wind (km/s): {wind}\nFlares (24h): {flr}\nCMEs (24h): {cme}\nSchumann: {sr} Hz ({sr_note})"
+                )},
+            ],
         )
         text = resp.choices[0].message.content.strip()
         lines = [l.strip() for l in text.splitlines() if l.strip()]
@@ -331,12 +466,35 @@ Data:
             hashtags = lines[-1]
             caption = "\n".join(lines[:-1]).strip()
         if not hashtags:
-            hashtags = "#GaiaEyes #SpaceWeather #Wellness #Mindfulness #HeartBrain"
+            hashtags = "#GaiaEyes #SpaceWeather #KpIndex #SolarWind #Aurora"
+        # Post‑process: sanitize and fix repetitive/question intros
+        caption = _sanitize_caption(caption)
+        doit = False
+        if HOOK_MODE == "always":
+            doit = True
+        elif HOOK_MODE == "blend":
+            doit = _needs_rehook(caption) or (random.random() < HOOK_BLEND_P)
+        else:  # guard
+            doit = _needs_rehook(caption)
+        if doit:
+            tone = _tone_from_ctx(ctx)
+            last_used = _recent_openers(7)
+            hook = _pick_hook(tone, last_used=last_used)
+            first_split = re.split(r"(?<=\.)\s+", caption, maxsplit=1)
+            rest = first_split[1] if len(first_split) > 1 else caption
+            caption = f"{hook} {rest}".strip()
+        # ensure hashtags exist
+        if not hashtags:
+            hashtags = "#GaiaEyes #SpaceWeather #KpIndex #SolarWind #Aurora"
         return caption, hashtags
     except Exception:
-        cap = (f"Space weather check — Kp max {kp_max}, wind {wind} km/s; flares {flr}, CMEs {cme}. "
-               f"Schumann ~{sr} Hz. Stay regulated. ✨")
-        return cap, "#GaiaEyes #SpaceWeather #Wellness #Mindfulness #HeartBrain"
+        tone = _tone_from_ctx(ctx)
+        last_used = _recent_openers(7)
+        hook = _pick_hook(tone, last_used=last_used)
+        cap = (f"{hook} Kp max {kp_max}, wind {wind} km/s, flares {int(flr)} CMEs {int(cme)}. "
+               f"Schumann ~{sr} Hz." )
+        tags = "#GaiaEyes #SpaceWeather #KpIndex #SolarWind #Aurora"
+        return cap, tags
 
 
 def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
@@ -532,7 +690,7 @@ def main():
 
     # 4) Build final body markdown and upsert (single row per date/platform)
     body_md = (
-        "### 🌌 Gaia Eyes Daily Space Weather Forecast\n\n" +
+        "### Gaia Eyes Daily Space Weather Forecast\n\n" +
         "\n\n".join([snapshot, affects, playbook]).strip()
     )
 
