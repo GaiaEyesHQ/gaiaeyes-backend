@@ -55,7 +55,7 @@ async def features_today(request: Request):
     schu as (
       select s.day,
              s.station_id,
-             s.f0_avg_hz, s.f1_avg_hz, s.f2_avg_hz, s.h3_avg_hz, s.h4_avg_hz,
+             s.f0_avg_hz, s.f1_avg_hz, s.f2_avg_hz, s.f3_avg_hz, s.f4_avg_hz,
              row_number() over (
                order by s.day desc,
                         case when s.station_id='tomsk' then 0 when s.station_id='cumiana' then 1 else 2 end
@@ -99,8 +99,8 @@ async def features_today(request: Request):
            sch.f0_avg_hz   as sch_f0_hz,
            sch.f1_avg_hz   as sch_f1_hz,
            sch.f2_avg_hz   as sch_f2_hz,
-           sch.h3_avg_hz   as sch_h3_hz,
-           sch.h4_avg_hz   as sch_h4_hz,
+           sch.f3_avg_hz   as sch_h3_hz,
+           sch.f4_avg_hz   as sch_h4_hz,
            dp.post_title,
            dp.post_caption,
            dp.post_body,
