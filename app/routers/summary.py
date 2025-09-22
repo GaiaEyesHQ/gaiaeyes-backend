@@ -69,7 +69,7 @@ async def features_today(request: Request):
              p.body_markdown as post_body,
              p.hashtags as post_hashtags,
              row_number() over (order by p.day desc, p.updated_at desc) as rn
-      from content.dailyposts p
+      from content.daily_posts p
       where p.platform = 'default'
     ),
     diag as (
