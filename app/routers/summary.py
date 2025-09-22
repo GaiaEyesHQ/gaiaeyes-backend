@@ -63,14 +63,14 @@ async def features_today(request: Request):
            p.hr_min,
            p.hrv_avg,
            p.spo2_avg,
-           p.sleep_total_minutes,
+           (coalesce(sr.rem_m,0) + coalesce(sr.core_m,0) + coalesce(sr.deep_m,0))::int as sleep_total_minutes,
            round(coalesce(sr.rem_m,   0)::numeric, 0) as rem_m,
            round(coalesce(sr.core_m,  0)::numeric, 0) as core_m,
            round(coalesce(sr.deep_m,  0)::numeric, 0) as deep_m,
            round(coalesce(sr.awake_m, 0)::numeric, 0) as awake_m,
            round(coalesce(sr.inbed_m, 0)::numeric, 0) as inbed_m,
            case when sr.inbed_m > 0
-                then round((p.sleep_total_minutes::numeric / sr.inbed_m)::numeric, 3)
+                then round(((coalesce(sr.rem_m,0) + coalesce(sr.core_m,0) + coalesce(sr.deep_m,0)) / sr.inbed_m)::numeric, 3)
                 else null end as sleep_efficiency,
            p.kp_max,
            p.bz_min,
