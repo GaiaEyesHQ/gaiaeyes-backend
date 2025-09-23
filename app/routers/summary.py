@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 from datetime import date
 from ..db import get_pool
 from psycopg.rows import dict_row
+from os import getenv
 
 router = APIRouter(tags=["summary"])
 
@@ -31,6 +32,7 @@ async def features_today(request: Request):
     Uses America/Chicago for day bucketing and computes in-bed minutes on the fly
     from gaia.samples (type='sleep_stage', value_text in ['inbed','in_bed']).
     """
+    media_base = getenv("MEDIA_BASE_URL", "").rstrip("/")
     pool = await get_pool()
     sql = """
     with pick as (
@@ -113,7 +115,7 @@ async def features_today(request: Request):
     try:
         async with pool.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cur:
-                await cur.execute(sql)
+                await cur.execute(sql, prepare=False)
                 row = await cur.fetchone()
     except Exception as e:
         return {"ok": True, "data": None, "error": f"features_today query failed: {e}"}
@@ -124,4 +126,11 @@ async def features_today(request: Request):
     rec = dict(row)
     rec["day"] = str(rec.get("day"))
     diagnostics = {"max_day": str(rec.pop("max_day", None)), "total_rows": rec.pop("total_rows", None)}
+    if media_base:
+        rec["earthscope_images"] = {
+            "caption": f"{media_base}/images/daily_caption.jpg",
+            "stats": f"{media_base}/images/daily_stats.jpg",
+            "affects": f"{media_base}/images/daily_affects.jpg",
+            "playbook": f"{media_base}/images/daily_playbook.jpg",
+        }
     return {"ok": True, "data": rec, "diagnostics": diagnostics}
