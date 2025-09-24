@@ -77,8 +77,11 @@ async def features_today(request: Request):
     select p.day,
            p.steps_total,
            p.hr_min,
+           p.hr_max,
            p.hrv_avg,
            p.spo2_avg,
+           p.bp_sys_avg,
+           p.bp_dia_avg,
            (coalesce(sr2.rem_m,0)+coalesce(sr2.core_m,0)+coalesce(sr2.deep_m,0))::int as sleep_total_minutes,
            round(coalesce(sr2.rem_m,0)::numeric,0)  as rem_m,
            round(coalesce(sr2.core_m,0)::numeric,0) as core_m,
@@ -88,6 +91,9 @@ async def features_today(request: Request):
            case when coalesce(sr2.inbed_m,0) > 0
                 then round(((coalesce(sr2.rem_m,0)+coalesce(sr2.core_m,0)+coalesce(sr2.deep_m,0)) / sr2.inbed_m)::numeric, 3)
                 else null end as sleep_efficiency,
+           p.kp_current,
+           (case when p.kp_max >= 5 then true else false end) as kp_alert,
+           (case when p.flares_count > 0 then true else false end) as flare_alert,
            p.kp_max,
            p.bz_min,
            p.sw_speed_avg,
