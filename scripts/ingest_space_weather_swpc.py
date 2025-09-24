@@ -38,17 +38,19 @@ SRC = "noaa-swpc"
 BASE_SUM = "https://services.swpc.noaa.gov/products/summary"
 BASE_PROD = "https://services.swpc.noaa.gov/products"
 URLS_LIST = {
-    # Try summary first, then products fallbacks
+    # Prefer products URLs; keep summary as fallback where it still works
     "kp": [
-        f"{BASE_PROD}/noaa-planetary-k-index.json",      # primary
-        f"{BASE_SUM}/planetary-k-index.json",           # legacy
+        f"{BASE_PROD}/noaa-planetary-k-index.json",      # preferred
+        f"{BASE_SUM}/planetary-k-index.json",           # legacy fallback
     ],
     "speed": [
-        f"{BASE_SUM}/solar-wind-speed.json",
+        f"{BASE_PROD}/solar-wind-speed.json",           # preferred
+        f"{BASE_SUM}/solar-wind-speed.json",            # fallback
     ],
     "mag": [
-        f"{BASE_SUM}/solar-wind-mag.json",              # primary
-        f"{BASE_SUM}/solar-wind-mag-field.json",        # legacy/alt
+        f"{BASE_PROD}/solar-wind-mag-field.json",       # preferred
+        f"{BASE_SUM}/solar-wind-mag-field.json",        # fallback
+        f"{BASE_SUM}/solar-wind-mag.json",              # legacy/alt
     ],
 }
 ALERTS_URL = "https://services.swpc.noaa.gov/products/alerts.json"
