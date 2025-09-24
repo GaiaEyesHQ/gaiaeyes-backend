@@ -71,7 +71,7 @@ async def features_today(request: Request):
            case when coalesce(sr2.inbed_m,0) > 0
                 then round(((coalesce(sr2.rem_m,0)+coalesce(sr2.core_m,0)+coalesce(sr2.deep_m,0)) / sr2.inbed_m)::numeric, 3)
                 else null end as sleep_efficiency,
-           p.kp_max as kp_current,
+           coalesce(cur.kp_current, p.kp_max) as kp_current,
            (case when p.kp_max >= 5 then true else false end) as kp_alert,
            (case when p.flares_count > 0 then true else false end) as flare_alert,
            p.kp_max,
@@ -94,6 +94,8 @@ async def features_today(request: Request):
            d.total_rows
     from pick p
     left join sr   sr2 on sr2.day = p.day
+    -- current 3h space weather readings (kp_current, etc.)
+    left join marts.space_weather_current cur on true
     -- pick latest Schumann row on or before the picked day, preferring tomsk over cumiana
     left join LATERAL (
       select s.station_id,
