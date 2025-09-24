@@ -51,26 +51,6 @@ async def features_today(request: Request):
       from gaia.samples
       group by 1
     ),
-    schu as (
-      select s.day,
-             s.station_id,
-             s.f0_avg_hz, s.f1_avg_hz, s.f2_avg_hz, s.f3_avg_hz, s.f4_avg_hz,
-             row_number() over (
-               order by s.day desc,
-                        case when s.station_id='tomsk' then 0 when s.station_id='cumiana' then 1 else 2 end
-             ) as rn
-      from marts.schumann_daily s
-    ),
-    post as (
-      select p.day,
-             p.title as post_title,
-             p.caption as post_caption,
-             p.body_markdown as post_body,
-             p.hashtags as post_hashtags,
-             row_number() over (order by p.day desc, p.updated_at desc) as rn
-      from content.daily_posts p
-      where p.platform = 'default'
-    ),
     diag as (
       select max(day) as max_day, count(*) as total_rows from marts.daily_features
     )
@@ -114,8 +94,29 @@ async def features_today(request: Request):
            d.total_rows
     from pick p
     left join sr   sr2 on sr2.day = p.day
-    left join schu sch on sch.rn = 1 and sch.day <= p.day
-    left join post dp  on dp.rn = 1  and dp.day  <= p.day
+    -- pick latest Schumann row on or before the picked day, preferring tomsk over cumiana
+    left join LATERAL (
+      select s.station_id,
+             s.f0_avg_hz, s.f1_avg_hz, s.f2_avg_hz, s.f3_avg_hz, s.f4_avg_hz
+      from marts.schumann_daily s
+      where s.station_id in ('tomsk','cumiana')
+        and s.day <= p.day
+      order by s.day desc,
+               case when s.station_id='tomsk' then 0 when s.station_id='cumiana' then 1 else 2 end
+      limit 1
+    ) sch on true
+    -- pick latest Earthscope default post on or before the picked day
+    left join LATERAL (
+      select p0.title as post_title,
+             p0.caption as post_caption,
+             p0.body_markdown as post_body,
+             p0.hashtags as post_hashtags
+      from content.daily_posts p0
+      where p0.platform = 'default'
+        and p0.day <= p.day
+      order by p0.day desc, p0.updated_at desc
+      limit 1
+    ) dp on true
     cross join diag d
     """
     try:
