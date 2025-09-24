@@ -35,11 +35,21 @@ if not DB:
     sys.exit(2)
 
 SRC = "noaa-swpc"
-BASE = "https://services.swpc.noaa.gov/products/summary"
-URLS = {
-    "kp": f"{BASE}/planetary-k-index.json",
-    "speed": f"{BASE}/solar-wind-speed.json",
-    "mag": f"{BASE}/solar-wind-mag-field.json",
+BASE_SUM = "https://services.swpc.noaa.gov/products/summary"
+BASE_PROD = "https://services.swpc.noaa.gov/products"
+URLS_LIST = {
+    # Try summary first, then products fallbacks
+    "kp": [
+        f"{BASE_PROD}/noaa-planetary-k-index.json",      # primary
+        f"{BASE_SUM}/planetary-k-index.json",           # legacy
+    ],
+    "speed": [
+        f"{BASE_SUM}/solar-wind-speed.json",
+    ],
+    "mag": [
+        f"{BASE_SUM}/solar-wind-mag.json",              # primary
+        f"{BASE_SUM}/solar-wind-mag-field.json",        # legacy/alt
+    ],
 }
 ALERTS_URL = "https://services.swpc.noaa.gov/products/alerts.json"
 FORECAST_URL = "https://services.swpc.noaa.gov/text/3-day-forecast.txt"
@@ -70,6 +80,18 @@ async def fetch_json_array(client: httpx.AsyncClient, url: str):
     if not isinstance(data, list) or not data:
         raise ValueError(f"Unexpected JSON shape from {url}")
     return data  # array-of-arrays: [ header_row, row1, row2, ... ]
+
+async def fetch_any_json_array(client: httpx.AsyncClient, urls: list[str], label: str):
+    last_err = None
+    for u in urls:
+        try:
+            return await fetch_json_array(client, u)
+        except Exception as e:
+            last_err = e
+            print(f"[warn] {label} fetch failed for {u}: {e}")
+            continue
+    print(f"[warn] {label} fetch failed for all URLs")
+    return []
 
 async def fetch_text(client: httpx.AsyncClient, url: str) -> str:
     r = await client.get(url)
@@ -196,9 +218,9 @@ async def main():
     headers = {"User-Agent": UA, "Accept": "application/json"}
     timeout = httpx.Timeout(45.0, connect=10.0)
     async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
-        kp_arr   = await fetch_json_array(client, URLS["kp"])
-        spd_arr  = await fetch_json_array(client, URLS["speed"])
-        mag_arr  = await fetch_json_array(client, URLS["mag"])
+        kp_arr   = await fetch_any_json_array(client, URLS_LIST["kp"],   "kp")
+        spd_arr  = await fetch_any_json_array(client, URLS_LIST["speed"],"speed")
+        mag_arr  = await fetch_any_json_array(client, URLS_LIST["mag"],  "mag")
         # Optional feeds
         try:
             alerts_arr = await fetch_json_array(client, ALERTS_URL)
@@ -212,9 +234,9 @@ async def main():
             forecast_txt = None
 
     # Parse arrays → records (with timestamps)
-    kp_recs  = rows_to_records(kp_arr,  {"ts": ["time_tag","time","datetime","timestamp"]})
-    spd_recs = rows_to_records(spd_arr, {"ts": ["time_tag","time","datetime","timestamp"]})
-    mag_recs = rows_to_records(mag_arr, {"ts": ["time_tag","time","datetime","timestamp"]})
+    kp_recs  = rows_to_records(kp_arr,  {"ts": ["time_tag","time","datetime","timestamp"]}) if kp_arr else []
+    spd_recs = rows_to_records(spd_arr, {"ts": ["time_tag","time","datetime","timestamp"]}) if spd_arr else []
+    mag_recs = rows_to_records(mag_arr, {"ts": ["time_tag","time","datetime","timestamp"]}) if mag_arr else []
 
     # Merge values into a dict keyed by timestamp
     merged = {}
@@ -233,7 +255,7 @@ async def main():
     # Prepare rows for upsert
     rows = []
     for ts, v in sorted(merged.items()):
-        meta = {"kp_source": URLS["kp"], "speed_source": URLS["speed"], "mag_source": URLS["mag"]}
+        meta = {"kp_source": URLS_LIST["kp"][0] if URLS_LIST["kp"] else None, "speed_source": URLS_LIST["speed"][0] if URLS_LIST["speed"] else None, "mag_source": URLS_LIST["mag"][0] if URLS_LIST["mag"] else None}
         rows.append((
             ts,
             v.get("kp_index"),

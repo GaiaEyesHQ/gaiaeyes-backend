@@ -71,9 +71,9 @@ async def features_today(request: Request):
            case when coalesce(sr2.inbed_m,0) > 0
                 then round(((coalesce(sr2.rem_m,0)+coalesce(sr2.core_m,0)+coalesce(sr2.deep_m,0)) / sr2.inbed_m)::numeric, 3)
                 else null end as sleep_efficiency,
-           cur.kp_current as kp_current,
-           cur.bz_current,
-           cur.sw_speed_current,
+           cur_kp.kp_current,
+           cur_bz.bz_current,
+           cur_sw.sw_speed_current,
            (case when p.kp_max >= 5 then true else false end) as kp_alert,
            (case when p.flares_count > 0 then true else false end) as flare_alert,
            p.kp_max,
@@ -96,17 +96,32 @@ async def features_today(request: Request):
            d.total_rows
     from pick p
     left join sr   sr2 on sr2.day = p.day
-    -- current 3h space weather readings (latest ext.space_weather row)
+    -- latest Kp row (independent)
     left join LATERAL (
-      select
-        kp_index      as kp_current,
-        bz_nt         as bz_current,
-        sw_speed_kms  as sw_speed_current
+      select kp_index as kp_current
       from ext.space_weather
-      where ts_utc <= now()
+      where ts_utc <= now() and kp_index is not null
       order by ts_utc desc
       limit 1
-    ) cur on true
+    ) cur_kp on true
+
+    -- latest Bz row (independent)
+    left join LATERAL (
+      select bz_nt as bz_current
+      from ext.space_weather
+      where ts_utc <= now() and bz_nt is not null
+      order by ts_utc desc
+      limit 1
+    ) cur_bz on true
+
+    -- latest Solar Wind speed row (independent)
+    left join LATERAL (
+      select sw_speed_kms as sw_speed_current
+      from ext.space_weather
+      where ts_utc <= now() and sw_speed_kms is not null
+      order by ts_utc desc
+      limit 1
+    ) cur_sw on true
     -- pick latest Schumann row on or before the picked day, preferring tomsk over cumiana
     left join LATERAL (
       select s.station_id,
