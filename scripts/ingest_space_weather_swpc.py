@@ -41,6 +41,8 @@ URLS = {
     "speed": f"{BASE}/solar-wind-speed.json",
     "mag": f"{BASE}/solar-wind-mag-field.json",
 }
+ALERTS_URL = "https://services.swpc.noaa.gov/products/alerts.json"
+FORECAST_URL = "https://services.swpc.noaa.gov/text/3-day-forecast.txt"
 
 UA = os.getenv("HTTP_USER_AGENT", "gaiaeyes.com contact: gaiaeyes7.83@gmail.com")
 
@@ -68,6 +70,11 @@ async def fetch_json_array(client: httpx.AsyncClient, url: str):
     if not isinstance(data, list) or not data:
         raise ValueError(f"Unexpected JSON shape from {url}")
     return data  # array-of-arrays: [ header_row, row1, row2, ... ]
+
+async def fetch_text(client: httpx.AsyncClient, url: str) -> str:
+    r = await client.get(url)
+    r.raise_for_status()
+    return r.text
 
 def rows_to_records(arr, wanted_cols):
     """
@@ -134,6 +141,33 @@ def filter_since(d: dict, hours: int):
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     return {ts: v for ts, v in d.items() if ts and ts >= cutoff}
 
+def parse_alert_rows(arr):
+    """SWPC alerts.json is an array-of-arrays with header row.
+    We return a list of dicts with issued_at (datetime), message (str), and meta (dict).
+    We keep all columns in meta for traceability.
+    """
+    if not isinstance(arr, list) or not arr:
+        return []
+    header = arr[0]
+    rows = arr[1:]
+    idx = {h: i for i, h in enumerate(header)}
+    out = []
+    for r in rows:
+        m = {header[i]: r[i] if i < len(r) else None for i in range(len(header))}
+        # Try common time keys in alerts feed
+        ts_raw = None
+        for k in ("issue_time", "issue_time_utc", "time_tag", "time"):
+            if k in m and m[k]:
+                ts_raw = m[k]
+                break
+        try:
+            issued = parse_iso(ts_raw) if ts_raw else None
+        except Exception:
+            issued = None
+        message = m.get("message") or m.get("alert_message") or json.dumps(m)
+        out.append({"issued_at": issued, "message": message, "meta": m})
+    return out
+
 UPSERT_SQL = """
 insert into ext.space_weather (ts_utc, kp_index, bz_nt, sw_speed_kms, src, meta)
 values ($1, $2, $3, $4, $5, $6::jsonb)
@@ -145,6 +179,19 @@ set kp_index     = excluded.kp_index,
     meta         = excluded.meta;
 """
 
+UPSERT_ALERT_SQL = """
+insert into ext.space_alerts (issued_at, src, message, meta)
+values ($1, $2, $3, $4::jsonb)
+on conflict (issued_at, src, message) do update
+set meta = excluded.meta;
+"""
+
+UPSERT_FORECAST_SQL = """
+insert into ext.space_forecast (fetched_at, src, body_text)
+values ($1, $2, $3)
+on conflict (fetched_at, src) do nothing;
+"""
+
 async def main():
     headers = {"User-Agent": UA, "Accept": "application/json"}
     timeout = httpx.Timeout(45.0, connect=10.0)
@@ -152,6 +199,17 @@ async def main():
         kp_arr   = await fetch_json_array(client, URLS["kp"])
         spd_arr  = await fetch_json_array(client, URLS["speed"])
         mag_arr  = await fetch_json_array(client, URLS["mag"])
+        # Optional feeds
+        try:
+            alerts_arr = await fetch_json_array(client, ALERTS_URL)
+        except Exception as e:
+            print(f"[warn] alerts fetch failed: {e}")
+            alerts_arr = []
+        try:
+            forecast_txt = await fetch_text(client, FORECAST_URL)
+        except Exception as e:
+            print(f"[warn] forecast fetch failed: {e}")
+            forecast_txt = None
 
     # Parse arrays → records (with timestamps)
     kp_recs  = rows_to_records(kp_arr,  {"ts": ["time_tag","time","datetime","timestamp"]})
@@ -172,10 +230,6 @@ async def main():
     # Keep recent
     merged = filter_since(merged, SINCE_HOURS)
 
-    if not merged:
-        print("No recent space-weather records to upsert.")
-        return
-
     # Prepare rows for upsert
     rows = []
     for ts, v in sorted(merged.items()):
@@ -189,10 +243,32 @@ async def main():
             json.dumps(meta),
         ))
 
-    conn = await asyncpg.connect(dsn=DB, statement_cache_size=0)  # PgBouncer-friendly
+    conn = await asyncpg.connect(dsn=DB, statement_cache_size=0)
     try:
-        await conn.executemany(UPSERT_SQL, rows)
-        print(f"Upserted {len(rows)} ext.space_weather rows from {SRC}")
+        # Upsert space weather time series
+        if rows:
+            await conn.executemany(UPSERT_SQL, rows)
+            print(f"Upserted {len(rows)} ext.space_weather rows from {SRC}")
+        else:
+            print("No recent space-weather records to upsert.")
+
+        # Ingest alerts (best-effort)
+        if alerts_arr:
+            alert_rows = [a for a in parse_alert_rows(alerts_arr) if a.get("issued_at")]
+            if alert_rows:
+                ups = [(
+                    a["issued_at"],
+                    SRC,
+                    a["message"],
+                    json.dumps(a["meta"]),
+                ) for a in alert_rows]
+                await conn.executemany(UPSERT_ALERT_SQL, ups)
+                print(f"Upserted {len(ups)} ext.space_alerts rows from {SRC}")
+
+        # Store raw 3-day forecast text (best-effort, retains history by fetched_at)
+        if forecast_txt:
+            await conn.execute(UPSERT_FORECAST_SQL, datetime.now(timezone.utc), SRC, forecast_txt)
+            print("Stored 3-day forecast text in ext.space_forecast")
     finally:
         await conn.close()
 
