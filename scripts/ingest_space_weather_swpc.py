@@ -57,10 +57,29 @@ FORECAST_URL = "https://services.swpc.noaa.gov/text/3-day-forecast.txt"
 UA = os.getenv("HTTP_USER_AGENT", "gaiaeyes.com contact: gaiaeyes7.83@gmail.com")
 
 def parse_iso(ts: str) -> datetime:
-    # SWPC timestamps are usually ISO8601 with 'Z'
-    if ts.endswith("Z"):
-        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
-    return datetime.fromisoformat(ts)
+    """Parse ISO8601-ish strings and ensure tz-aware (UTC)."""
+    if not ts:
+        return None  # type: ignore
+    s = ts.strip()
+    # normalize common variants
+    if s.endswith("Z"):
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    else:
+        # some feeds use "YYYY-MM-DD HH:MM:SS" without TZ
+        # make sure it parses and becomes UTC-aware
+        try:
+            dt = datetime.fromisoformat(s)
+        except Exception:
+            # last resort: replace space with T
+            try:
+                dt = datetime.fromisoformat(s.replace(" ", "T"))
+            except Exception:
+                return None  # type: ignore
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt
 
 def coerce_float(x):
     if x in (None, "", "null"):
@@ -121,11 +140,13 @@ def rows_to_records(arr, wanted_cols):
     ts_i = col_index(wanted_cols["ts"])
     out = []
     for r in rows:
+        ts = None
         try:
             ts_raw = r[ts_i] if ts_i is not None and ts_i < len(r) else None
             ts = parse_iso(ts_raw) if ts_raw else None
         except Exception:
             ts = None
+        # keep rows even if ts is None; later filters will drop them
         out.append({"ts": ts, "row": r, "idx": idx})
     return out
 
@@ -161,7 +182,18 @@ def merge_metric(records, candidates, field_name, out_map):
 
 def filter_since(d: dict, hours: int):
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
-    return {ts: v for ts, v in d.items() if ts and ts >= cutoff}
+    out = {}
+    for ts, v in d.items():
+        if not ts:
+            continue
+        t = ts
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        else:
+            t = t.astimezone(timezone.utc)
+        if t >= cutoff:
+            out[t] = v
+    return out
 
 def parse_alert_rows(arr):
     """SWPC alerts.json is an array-of-arrays with header row.
