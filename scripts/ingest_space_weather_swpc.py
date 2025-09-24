@@ -38,19 +38,21 @@ SRC = "noaa-swpc"
 BASE_SUM = "https://services.swpc.noaa.gov/products/summary"
 BASE_PROD = "https://services.swpc.noaa.gov/products"
 URLS_LIST = {
-    # Prefer products URLs; keep summary as fallback where it still works
+    # Prefer products/* 1-day, then 7-day; keep summary as last fallback
     "kp": [
-        f"{BASE_PROD}/noaa-planetary-k-index.json",      # preferred
-        f"{BASE_SUM}/planetary-k-index.json",           # legacy fallback
+        f"{BASE_PROD}/noaa-planetary-k-index.json",
+        f"{BASE_SUM}/planetary-k-index.json",
     ],
     "speed": [
-        f"{BASE_PROD}/solar-wind-speed.json",           # preferred
-        f"{BASE_SUM}/solar-wind-speed.json",            # fallback
+        f"{BASE_SUM}/solar-wind-speed.json",            # preferred (works, single-object)
+        f"{BASE_PROD}/solar-wind/plasma-1-day.json",
+        f"{BASE_PROD}/solar-wind/plasma-7-day.json",
     ],
     "mag": [
-        f"{BASE_PROD}/solar-wind-mag-field.json",       # preferred
-        f"{BASE_SUM}/solar-wind-mag-field.json",        # fallback
-        f"{BASE_SUM}/solar-wind-mag.json",              # legacy/alt
+        f"{BASE_PROD}/solar-wind/mag-1-day.json",
+        f"{BASE_PROD}/solar-wind/mag-7-day.json",
+        f"{BASE_SUM}/solar-wind-mag-field.json",
+        f"{BASE_SUM}/solar-wind-mag.json",
     ],
 }
 ALERTS_URL = "https://services.swpc.noaa.gov/products/alerts.json"
@@ -98,15 +100,22 @@ async def fetch_json_array(client: httpx.AsyncClient, url: str):
     r = await client.get(url)
     r.raise_for_status()
     data = r.json()
-    if not isinstance(data, list) or not data:
+    # Some products return { "data": [header, ...] }
+    try:
+        table = normalize_to_table(data)
+    except Exception:
         raise ValueError(f"Unexpected JSON shape from {url}")
-    return data  # array-of-arrays: [ header_row, row1, row2, ... ]
+    if not isinstance(table, list) or not table:
+        raise ValueError(f"Unexpected JSON shape from {url}")
+    return table  # array-of-arrays: [ header_row, row1, row2, ... ]
 
 async def fetch_any_json_array(client: httpx.AsyncClient, urls: list[str], label: str):
     last_err = None
     for u in urls:
         try:
-            return await fetch_json_array(client, u)
+            arr = await fetch_json_array(client, u)
+            print(f"[info] {label} fetched from {u}")
+            return arr
         except Exception as e:
             last_err = e
             print(f"[warn] {label} fetch failed for {u}: {e}")
@@ -118,6 +127,32 @@ async def fetch_text(client: httpx.AsyncClient, url: str) -> str:
     r = await client.get(url)
     r.raise_for_status()
     return r.text
+
+def normalize_to_table(data):
+    """Accept SWPC JSON in one of:
+       - [ [header...], [row...], ... ] (pass through)
+       - { "data": [ [header...], [row...], ... ] } (unwrap data)
+       - [ {k:v}, {k:v}, ... ] (array of dicts) -> [header, row...]
+       - { k:v, ... } (single dict) -> [header, row]
+       Returns a list. Raises ValueError if cannot normalize.
+    """
+    # Unwrap {"data": [...]}
+    if isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
+        data = data["data"]
+    # Already table
+    if isinstance(data, list) and data and isinstance(data[0], list):
+        return data
+    # Array of dicts -> table
+    if isinstance(data, list) and data and isinstance(data[0], dict):
+        header = list(data[0].keys())
+        rows = [[row.get(k) for k in header] for row in data]
+        return [header] + rows
+    # Single dict -> single-row table
+    if isinstance(data, dict):
+        header = list(data.keys())
+        row = [data.get(k) for k in header]
+        return [header, row]
+    raise ValueError("Unexpected JSON shape")
 
 def rows_to_records(arr, wanted_cols):
     """
@@ -322,10 +357,10 @@ async def main():
     # Kp can be under different header names; common ones in these feeds:
     # 'kp_index', 'kp_est', 'kp'
     merge_metric(kp_recs,  ["kp_index","kp_est","kp"],               "kp_index",     merged)
-    # Solar wind speed columns often: 'speed', 'solar_wind_speed'
-    merge_metric(spd_recs, ["speed","solar_wind_speed","sw_speed"],  "sw_speed_kms", merged)
-    # Magnetic field Bz: 'bz', 'bz_gsm', 'bz_nt'
-    merge_metric(mag_recs, ["bz","bz_gsm","bz_nt"],                  "bz_nt",        merged)
+    # Speed (km/s) appears as: 'windspeed', 'speed', 'V', 'proton_speed', 'solar_wind_speed', 'sw_speed'
+    merge_metric(spd_recs, ["windspeed","speed","V","proton_speed","solar_wind_speed","sw_speed"], "sw_speed_kms", merged)
+    # Bz (nT) appears as: 'bz_gsm', 'Bz', 'bz', 'bz_nt'
+    merge_metric(mag_recs, ["bz_gsm","Bz","bz","bz_nt"], "bz_nt", merged)
 
     # Keep recent
     merged = filter_since(merged, SINCE_HOURS)
