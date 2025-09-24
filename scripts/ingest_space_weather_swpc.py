@@ -196,31 +196,75 @@ def filter_since(d: dict, hours: int):
     return out
 
 def parse_alert_rows(arr):
-    """SWPC alerts.json is an array-of-arrays with header row.
-    We return a list of dicts with issued_at (datetime), message (str), and meta (dict).
-    We keep all columns in meta for traceability.
+    """Parse SWPC alerts feed into a list of rows.
+    Accepts one of:
+      - array-of-arrays with header row
+      - array of dicts
+      - dict with an 'alerts' key containing either of the above
+    Returns list of dicts: {issued_at: datetime|None, message: str, meta: dict}
     """
+    def _row_to_dict_list(header, rows):
+        out = []
+        for r in rows:
+            # tolerate ragged rows
+            meta = {header[i]: (r[i] if i < len(r) else None) for i in range(len(header))}
+            ts_raw = None
+            for k in ("issue_time", "issue_time_utc", "time_tag", "time"):
+                if k in meta and meta[k]:
+                    ts_raw = meta[k]
+                    break
+            issued = None
+            try:
+                issued = parse_iso(ts_raw) if ts_raw else None
+            except Exception:
+                issued = None
+            message = meta.get("message") or meta.get("alert_message") or json.dumps(meta)
+            out.append({"issued_at": issued, "message": message, "meta": meta})
+        return out
+
+    # Unwrap dict wrapper
+    if isinstance(arr, dict):
+        if "alerts" in arr and isinstance(arr["alerts"], list):
+            arr = arr["alerts"]
+        else:
+            # Unknown dict shape
+            return []
+
     if not isinstance(arr, list) or not arr:
         return []
-    header = arr[0]
-    rows = arr[1:]
-    idx = {h: i for i, h in enumerate(header)}
-    out = []
-    for r in rows:
-        m = {header[i]: r[i] if i < len(r) else None for i in range(len(header))}
-        # Try common time keys in alerts feed
-        ts_raw = None
-        for k in ("issue_time", "issue_time_utc", "time_tag", "time"):
-            if k in m and m[k]:
-                ts_raw = m[k]
-                break
-        try:
-            issued = parse_iso(ts_raw) if ts_raw else None
-        except Exception:
+
+    first = arr[0]
+    # Case 1: array-of-arrays with header row
+    if isinstance(first, list):
+        header = first
+        rows = arr[1:]
+        # If header isn’t strings, bail safely
+        if not all(isinstance(h, str) for h in header):
+            return []
+        return _row_to_dict_list(header, rows)
+
+    # Case 2: array of dicts
+    if isinstance(first, dict):
+        out = []
+        for meta in arr:
+            if not isinstance(meta, dict):
+                continue
+            ts_raw = None
+            for k in ("issue_time", "issue_time_utc", "time_tag", "time"):
+                if k in meta and meta[k]:
+                    ts_raw = meta[k]
+                    break
             issued = None
-        message = m.get("message") or m.get("alert_message") or json.dumps(m)
-        out.append({"issued_at": issued, "message": message, "meta": m})
-    return out
+            try:
+                issued = parse_iso(ts_raw) if ts_raw else None
+            except Exception:
+                issued = None
+            message = meta.get("message") or meta.get("alert_message") or json.dumps(meta)
+            out.append({"issued_at": issued, "message": message, "meta": meta})
+        return out
+
+    # Unknown list shape → ignore
+    return []
 
 UPSERT_SQL = """
 insert into ext.space_weather (ts_utc, kp_index, bz_nt, sw_speed_kms, src, meta)
