@@ -96,8 +96,17 @@ async def features_today(request: Request):
            d.total_rows
     from pick p
     left join sr   sr2 on sr2.day = p.day
-    -- current 3h space weather readings (kp_current, etc.)
-    left join marts.space_weather_current cur on true
+    -- current 3h space weather readings (latest ext.space_weather row)
+    left join LATERAL (
+      select
+        kp_index      as kp_current,
+        bz_nt         as bz_current,
+        sw_speed_kms  as sw_speed_current
+      from ext.space_weather
+      where ts_utc <= now()
+      order by ts_utc desc
+      limit 1
+    ) cur on true
     -- pick latest Schumann row on or before the picked day, preferring tomsk over cumiana
     left join LATERAL (
       select s.station_id,
