@@ -91,7 +91,7 @@ async def features_today(request: Request):
            case when coalesce(sr2.inbed_m,0) > 0
                 then round(((coalesce(sr2.rem_m,0)+coalesce(sr2.core_m,0)+coalesce(sr2.deep_m,0)) / sr2.inbed_m)::numeric, 3)
                 else null end as sleep_efficiency,
-           p.kp_current,
+           p.kp_max as kp_current,
            (case when p.kp_max >= 5 then true else false end) as kp_alert,
            (case when p.flares_count > 0 then true else false end) as flare_alert,
            p.kp_max,
