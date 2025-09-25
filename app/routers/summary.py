@@ -205,15 +205,17 @@ async def forecast_summary():
     if not body:
         return {"ok": True, "data": {"fetched_at": fetched_at, "headline": None, "lines": None, "body": None}}
 
-    # Heuristic: headline is first non-empty line; lines are next few concise points
-    lines_raw = [ln.strip() for ln in body.splitlines()]
-    lines_raw = [ln for ln in lines_raw if ln]  # drop empties
-    headline = lines_raw[0] if lines_raw else None
+    # Heuristic: filter boilerplate (lines starting with ':' or '#'),
+    # pick first remaining as headline, then collect up to 4 concise points
+    raw_lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
+    # drop NOAA headers like ':Product:', ':Issued:', '# Prepared by', etc.
+    lines = [ln for ln in raw_lines if not ln.startswith((':', '#'))]
+
+    headline = lines[0] if lines else None
 
     bullets = []
-    for ln in lines_raw[1:]:
+    for ln in lines[1:]:
         if ln.startswith(("-", "*", "•")) or len(ln) <= 120:
-            # strip leading bullet symbols
             cleaned = ln.lstrip("-*• ")
             bullets.append(cleaned)
         if len(bullets) >= 4:
