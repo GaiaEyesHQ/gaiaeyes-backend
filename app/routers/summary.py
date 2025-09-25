@@ -247,7 +247,7 @@ async def space_series(days: int = 7):
                     """
                     select ts_utc, kp_index as kp, bz_nt as bz, sw_speed_kms as sw
                     from ext.space_weather
-                    where ts_utc >= now() - interval %s
+                    where ts_utc >= now() - %s::interval
                     order by ts_utc asc
                     """,
                     (f"{days} days",),
@@ -265,7 +265,7 @@ async def space_series(days: int = 7):
                                              when station_id='cumiana' then 1
                                         else 2 end) as rn
                       from marts.schumann_daily
-                      where day >= (current_date - interval %s)::date
+                      where day >= (current_date - %s::interval)::date
                     )
                     select day, station_id, f0_avg_hz, f1_avg_hz, f2_avg_hz
                     from d where rn=1
