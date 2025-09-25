@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request
-from datetime import date
+from datetime import date, timezone
 from ..db import get_pool
 from psycopg.rows import dict_row
 from os import getenv
@@ -169,3 +169,62 @@ async def features_today(request: Request):
             "playbook": f"{media_base}/images/daily_playbook.jpg",
         }
     return {"ok": True, "data": rec, "diagnostics": diagnostics}
+
+@router.get("/space/forecast/summary")
+async def forecast_summary():
+    """
+    Return a compact summary of the latest SWPC 3-day geomagnetic forecast.
+    Assumes the ingester stores raw text in ext.space_forecast (fetched_at, body_text).
+    """
+    pool = await get_pool()
+    sql = """
+      select fetched_at, body_text
+      from ext.space_forecast
+      order by fetched_at desc
+      limit 1
+    """
+    try:
+        async with pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cur:
+                await cur.execute(sql)
+                row = await cur.fetchone()
+    except Exception as e:
+        return {"ok": True, "data": None, "error": f"forecast_summary query failed: {e}"}
+
+    if not row:
+        return {"ok": True, "data": None}
+
+    fetched_at = None
+    try:
+        # ensure ISO-8601 UTC string
+        fetched_at = row["fetched_at"].astimezone(timezone.utc).isoformat() if row.get("fetched_at") else None
+    except Exception:
+        fetched_at = None
+
+    body = (row.get("body_text") or "").strip()
+    if not body:
+        return {"ok": True, "data": {"fetched_at": fetched_at, "headline": None, "lines": None, "body": None}}
+
+    # Heuristic: headline is first non-empty line; lines are next few concise points
+    lines_raw = [ln.strip() for ln in body.splitlines()]
+    lines_raw = [ln for ln in lines_raw if ln]  # drop empties
+    headline = lines_raw[0] if lines_raw else None
+
+    bullets = []
+    for ln in lines_raw[1:]:
+        if ln.startswith(("-", "*", "•")) or len(ln) <= 120:
+            # strip leading bullet symbols
+            cleaned = ln.lstrip("-*• ")
+            bullets.append(cleaned)
+        if len(bullets) >= 4:
+            break
+
+    return {
+        "ok": True,
+        "data": {
+            "fetched_at": fetched_at,
+            "headline": headline,
+            "lines": bullets if bullets else None,
+            "body": None
+        }
+    }
