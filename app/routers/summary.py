@@ -232,7 +232,7 @@ async def forecast_summary():
     }
 
 @router.get("/space/series")
-async def space_series(days: int = 7, request: Request):
+async def space_series(request: Request, days: int = 7):
     """
     Return timeseries for space weather (kp, bz, sw) and daily Schumann (f0/f1/f2)
     for the last N days. Intended for lightweight charting in the app.
