@@ -232,12 +232,13 @@ async def forecast_summary():
     }
 
 @router.get("/space/series")
-async def space_series(days: int = 7):
+async def space_series(days: int = 7, request: Request):
     """
     Return timeseries for space weather (kp, bz, sw) and daily Schumann (f0/f1/f2)
     for the last N days. Intended for lightweight charting in the app.
     """
     days = max(1, min(days, 31))
+    user_id = getattr(request.state, "user_id", None)
     pool = await get_pool()
     try:
         async with pool.connection() as conn:
@@ -275,6 +276,22 @@ async def space_series(days: int = 7):
                     prepare=False,
                 )
                 sch_rows = await cur.fetchall()
+
+                # Daily HR min/max for the current user
+                hr_rows = []
+                if user_id is not None:
+                    await cur.execute(
+                        """
+                        select date as day, hr_min, hr_max
+                        from gaia.daily_summary
+                        where user_id = %s
+                          and date >= (current_date - %s::interval)::date
+                        order by day asc
+                        """,
+                        (user_id, f"{days} days"),
+                        prepare=False,
+                    )
+                    hr_rows = await cur.fetchall()
     except Exception as e:
         return {"ok": True, "data": None, "error": f"space_series query failed: {e}"}
 
@@ -298,4 +315,12 @@ async def space_series(days: int = 7):
             "f2": r.get("f2_avg_hz"),
         })
 
-    return {"ok": True, "data": {"space_weather": sw_list, "schumann_daily": sch_list}}
+    hr_list = []
+    for r in (hr_rows or []):
+        hr_list.append({
+            "day": str(r.get("day")) if r.get("day") is not None else None,
+            "hr_min": r.get("hr_min"),
+            "hr_max": r.get("hr_max"),
+        })
+
+    return {"ok": True, "data": {"space_weather": sw_list, "schumann_daily": sch_list, "hr_daily": hr_list}}
