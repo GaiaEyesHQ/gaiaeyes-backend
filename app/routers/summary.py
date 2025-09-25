@@ -228,3 +228,72 @@ async def forecast_summary():
             "body": None
         }
     }
+
+@router.get("/space/series")
+async def space_series(days: int = 7):
+    """
+    Return timeseries for space weather (kp, bz, sw) and daily Schumann (f0/f1/f2)
+    for the last N days. Intended for lightweight charting in the app.
+    """
+    days = max(1, min(days, 31))
+    pool = await get_pool()
+    try:
+        async with pool.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cur:
+                # Space weather raw (latest values over window)
+                await cur.execute(
+                    """
+                    select ts_utc, kp_index as kp, bz_nt as bz, sw_speed_kms as sw
+                    from ext.space_weather
+                    where ts_utc >= now() - interval %s
+                    order by ts_utc asc
+                    """,
+                    (f"{days} days",),
+                    prepare=False,
+                )
+                sw_rows = await cur.fetchall()
+
+                # Schumann daily (prefer tomsk over cumiana per day)
+                await cur.execute(
+                    """
+                    with d as (
+                      select day, station_id, f0_avg_hz, f1_avg_hz, f2_avg_hz,
+                             row_number() over (partition by day
+                               order by case when station_id='tomsk' then 0
+                                             when station_id='cumiana' then 1
+                                        else 2 end) as rn
+                      from marts.schumann_daily
+                      where day >= (current_date - interval %s)::date
+                    )
+                    select day, station_id, f0_avg_hz, f1_avg_hz, f2_avg_hz
+                    from d where rn=1
+                    order by day asc
+                    """,
+                    (f"{days} days",),
+                    prepare=False,
+                )
+                sch_rows = await cur.fetchall()
+    except Exception as e:
+        return {"ok": True, "data": None, "error": f"space_series query failed: {e}"}
+
+    # Normalize to simple lists of dicts the app can chart easily
+    sw_list = []
+    for r in sw_rows or []:
+        sw_list.append({
+            "ts": r.get("ts_utc").astimezone(timezone.utc).isoformat() if r.get("ts_utc") else None,
+            "kp": r.get("kp"),
+            "bz": r.get("bz"),
+            "sw": r.get("sw"),
+        })
+
+    sch_list = []
+    for r in sch_rows or []:
+        sch_list.append({
+            "day": str(r.get("day")) if r.get("day") is not None else None,
+            "station_id": r.get("station_id"),
+            "f0": r.get("f0_avg_hz"),
+            "f1": r.get("f1_avg_hz"),
+            "f2": r.get("f2_avg_hz"),
+        })
+
+    return {"ok": True, "data": {"space_weather": sw_list, "schumann_daily": sch_list}}
