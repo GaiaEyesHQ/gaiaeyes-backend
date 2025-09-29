@@ -15,8 +15,10 @@ jobs:
       SUMMARY_MODE: evergreen
       EVERGREEN_MODE: "1"
       RESEARCH_MAX_PER_RUN: "1"
+      EVG_FETCH_LIMIT: "7"
       WP_CATEGORY_SLUG: research
       WP_TITLE_PREFIX: "Research Spotlight: "
+      AUTO_POST: "1"
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }

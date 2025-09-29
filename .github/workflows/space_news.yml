@@ -19,6 +19,7 @@ jobs:
       WP_CATEGORY_SLUG: space-news
       WP_TITLE_PREFIX: "Space Weather Daily: "
       SUMMARY_MODE: news
+      AUTO_POST: "1"
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
