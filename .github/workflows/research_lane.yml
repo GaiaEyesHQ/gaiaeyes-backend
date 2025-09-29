@@ -9,9 +9,9 @@ jobs:
     env:
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-      WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
-      WP_USERNAME: ${{ secrets.WP_USER }}
-      WP_APP_PASSWORD: ${{ secrets.WP_APP_PW }}
+      WP_BASE_URL:     ${{ secrets.WP_BASE_URL }}
+      WP_USERNAME:     ${{ secrets.WP_USERNAME }}
+      WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
       SUMMARY_MODE: evergreen
       EVERGREEN_MODE: "1"
       RESEARCH_MAX_PER_RUN: "1"

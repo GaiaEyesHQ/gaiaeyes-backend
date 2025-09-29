@@ -13,9 +13,9 @@ jobs:
       NEWS_LOOKBACK_DAYS: "3"
       NEWS_MIN_ITEMS: "5"
       NEWS_EXCLUDE_KEYWORDS: "covid,politics"
-      WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
-      WP_USERNAME: ${{ secrets.WP_USER }}
-      WP_APP_PASSWORD: ${{ secrets.WP_APP_PW }}
+      WP_BASE_URL:     ${{ secrets.WP_BASE_URL }}
+      WP_USERNAME:     ${{ secrets.WP_USERNAME }}
+      WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
       WP_CATEGORY_SLUG: space-news
       WP_TITLE_PREFIX: "Space Weather Daily: "
       SUMMARY_MODE: news
