@@ -3,7 +3,7 @@ import os, sys, datetime as dt
 from pathlib import Path
 
 # Reuse the SWPC/USGS parsers you already have in research_collector
-sys.path.append(str(Path(__file__).resolve().parents[1] / "research_lane"))
+sys.path.append(str(Path(__file__).resolve().parents[1] / "research_collector"))
 from research_collector import (
     parse_swpc_alerts, parse_swpc_kp, parse_swpc_geomag_3day_txt,
     parse_swpc_rtsw_plasma1d, parse_swpc_rtsw_mag1d, parse_swpc_ovation_latest,
@@ -43,7 +43,7 @@ def collect():
     items=[]
     # SWPC JSON/TXT endpoints (authoritative + structured)
     items += parse_swpc_alerts("https://services.swpc.noaa.gov/products/alerts.json", "swpc-alerts-json", ["SWPC","alerts"])
-    items += parse_swpc_kp("https://services.swpc.noaa.gov/products/summary/planetary-k-index-3-day.json", "swpc-kp-3day", ["SWPC","kp"])
+    items += parse_swpc_kp("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json", "swpc-kp-3day", ["SWPC","kp"])
     items += parse_swpc_rtsw_plasma1d("https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json", "swpc-rtsw-plasma1d", ["SWPC","DSCOVR"])
     items += parse_swpc_rtsw_mag1d("https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json", "swpc-rtsw-mag1d", ["SWPC","DSCOVR"])
     items += parse_swpc_ovation_latest("https://services.swpc.noaa.gov/json/ovation_aurora_latest.json", "swpc-ovation-latest", ["SWPC","OVATION"])
@@ -72,8 +72,8 @@ def main():
     # Run your existing summarizer + poster
     # Expectation: research_summarize.py reads COLLECTED_NEWS_PATH when SUMMARY_MODE=news
     #              research_wp_poster.py then posts the produced HTML under WP_CATEGORY_SLUG
-    os.system(f"{sys.executable} {Path(__file__).resolve().parents[1] / 'research_lane' / 'research_summarize.py'}")
-    os.system(f"{sys.executable} {Path(__file__).resolve().parents[1] / 'research_lane' / 'research_wp_poster.py'}")
+    os.system(f"{sys.executable} {Path(__file__).resolve().parents[1] / 'research_collector' / 'research_summarize.py'}")
+    os.system(f"{sys.executable} {Path(__file__).resolve().parents[1] / 'research_collector' / 'research_wp_poster.py'}")
 
 if __name__ == "__main__":
     main()

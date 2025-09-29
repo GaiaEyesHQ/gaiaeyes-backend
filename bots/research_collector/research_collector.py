@@ -319,29 +319,73 @@ def parse_swpc_alerts(url: str, source_id: str, tags: list) -> list:
     return out
 
 def parse_swpc_kp(url: str, source_id: str, tags: list) -> list:
-    r = session.get(url, timeout=TIMEOUT); r.raise_for_status()
-    data = r.json()  # [header, row, row...]
+    # Try primary URL; on 404/HTTP error or unexpected payload, fall back to single-table endpoint.
+    FALLBACK = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
+    sources_tried = []
     out = []
-    if isinstance(data, list) and len(data) > 1 and isinstance(data[0], list):
-        hdr = [h.lower() for h in data[0]]
-        # try to find kp column
+    def _parse_table_payload(data, source_url:str) -> list:
+        # data expected like [header, row, row...]
+        if not isinstance(data, list) or len(data) < 2 or not isinstance(data[0], list):
+            return []
+        hdr = [str(h).strip().lower() for h in data[0]]
+        idx_map = {name: i for i, name in enumerate(hdr)}
+        # try common header names
+        ts_idx = idx_map.get("time_tag", 0)
         kp_idx = None
-        for i, h in enumerate(hdr):
-            if "kp" in h:
-                kp_idx = i; break
-        # pick last row
-        last = data[-1]
-        kp_val = last[kp_idx] if kp_idx is not None and len(last) > kp_idx else None
-        timestamp = last[0] if last else None
-        title = f"Kp update: {kp_val}"
-        out.append({
-            "source": source_id, "source_type":"api",
-            "title": title,
-            "url": normalize_url(url),
-            "published_at": timestamp,
-            "summary_raw": f"Latest NOAA Planetary K index: {kp_val}",
-            "tags": list(tags) + [_year_tag(timestamp)] + (['evergreen'] if EVERGREEN_MODE else [])
-        })
+        for key in ("kp", "kp_index", "planetary_k_index", "kp-value", "k-index"):
+            if key in idx_map:
+                kp_idx = idx_map[key]; break
+        # if we didn't find a kp column in headers, try to locate by name containing 'kp'
+        if kp_idx is None:
+            for i, h in enumerate(hdr):
+                if "kp" in h:
+                    kp_idx = i; break
+        if kp_idx is None:
+            return []
+        # walk from the end to find the last valid numeric kp row with a timestamp
+        for row in reversed(data[1:]):
+            try:
+                ts = row[ts_idx] if ts_idx is not None and len(row) > ts_idx else None
+                kp_val = row[kp_idx] if len(row) > kp_idx else None
+                # basic sanity: non-empty timestamp and kp
+                if not ts or kp_val in (None, "", "-"):
+                    continue
+                title = f"Kp update: {kp_val}"
+                return [{
+                    "source": source_id, "source_type":"api",
+                    "title": title,
+                    "url": normalize_url(source_url),
+                    "published_at": ts,
+                    "summary_raw": f"Latest NOAA Planetary K index: {kp_val}",
+                    "tags": list(tags) + [_year_tag(ts)] + (['evergreen'] if EVERGREEN_MODE else [])
+                }]
+            except Exception:
+                continue
+        return []
+    # Attempt primary
+    try:
+        r = session.get(url, timeout=TIMEOUT); sources_tried.append(url); r.raise_for_status()
+        data = r.json()
+        parsed = _parse_table_payload(data, url)
+        if parsed:
+            return parsed
+        else:
+            print(f"[SWPC-KP] Unexpected payload from primary, falling back. url={url}")
+    except requests.HTTPError as e:
+        print(f"[SWPC-KP] HTTP error {e.response.status_code if e.response else 'NA'} at {url}; trying fallback.")
+    except Exception as e:
+        print(f"[SWPC-KP] Error at {url}: {e}; trying fallback.")
+    # Fallback
+    try:
+        r2 = session.get(FALLBACK, timeout=TIMEOUT); sources_tried.append(FALLBACK); r2.raise_for_status()
+        data2 = r2.json()
+        parsed2 = _parse_table_payload(data2, FALLBACK)
+        if parsed2:
+            return parsed2
+        else:
+            print(f"[SWPC-KP] Unexpected payload from fallback as well.")
+    except Exception as e:
+        print(f"[SWPC-KP] Fallback fetch failed: {e}")
     return out
 
 
