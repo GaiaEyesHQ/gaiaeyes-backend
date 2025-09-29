@@ -55,22 +55,20 @@ api:
     tags: [swpc, forecast, geomag]
 
   # --- Additional SWPC text products (enable after parsers are added) ---
-  # - id: swpc-forecast-discussion
-  #   url: https://services.swpc.noaa.gov/text/discussion.txt
-  #   parser: swpc_discussion_txt
-  #   tags: [swpc, discussion]
-  #
-  # - id: swpc-3-day-forecast
-  #   url: https://services.swpc.noaa.gov/text/3-day-forecast.txt
-  #   parser: swpc_3day_forecast_txt
-  #   tags: [swpc, forecast]
-  #
-  # - id: swpc-advisory-outlook
-  #   url: https://services.swpc.noaa.gov/text/advisory-outlook.txt
-  #   parser: swpc_advisory_outlook_txt
-  #   tags: [swpc, advisory, outlook]
-  #
-  # - id: swpc-report-geo-activity
-  #   url: https://services.swpc.noaa.gov/text/weekly.txt
-  #   parser: swpc_weekly_report_txt
-  #   tags: [swpc, weekly, report]
+  - id: swpc-forecast-discussion
+    url: https://services.swpc.noaa.gov/text/discussion.txt
+    parser: swpc_discussion_txt
+    tags: [swpc, discussion]
+  
+  - id: swpc-3-day-forecast
+    url: https://services.swpc.noaa.gov/text/3-day-forecast.txt
+    parser: swpc_3day_forecast_txt
+    tags: [swpc, forecast]
+  - id: swpc-advisory-outlook
+    url: https://services.swpc.noaa.gov/text/advisory-outlook.txt
+    parser: swpc_advisory_outlook_txt
+    tags: [swpc, advisory, outlook]
+  - id: swpc-report-geo-activity
+    url: https://services.swpc.noaa.gov/text/weekly.txt
+    parser: swpc_weekly_report_txt
+    tags: [swpc, weekly, report]
