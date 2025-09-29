@@ -47,7 +47,7 @@ def collect():
     items += parse_swpc_rtsw_plasma1d("https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json", "swpc-rtsw-plasma1d", ["SWPC","DSCOVR"])
     items += parse_swpc_rtsw_mag1d("https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json", "swpc-rtsw-mag1d", ["SWPC","DSCOVR"])
     items += parse_swpc_ovation_latest("https://services.swpc.noaa.gov/json/ovation_aurora_latest.json", "swpc-ovation-latest", ["SWPC","OVATION"])
-    items += parse_swpc_geomag_3day_txt("https://www.swpc.noaa.gov/ftpdir/forecasts/3-day_forecast.txt", "swpc-geomag-3day", ["SWPC","forecast"])
+    items += parse_swpc_geomag_3day_txt("https://services.swpc.noaa.gov/text/3-day-forecast.txt", "swpc-geomag-3day", ["SWPC","forecast"])
 
     # Freshness gate (strict) + optional excludes
     items = [r for r in items if _fresh(r.get("published_at"))]
