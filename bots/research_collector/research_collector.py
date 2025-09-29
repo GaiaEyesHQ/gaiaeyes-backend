@@ -53,6 +53,10 @@ DOMAIN_DENY = set([d.strip().lower() for d in os.getenv("DOMAIN_DENY","").split(
 # ---- Recency (drop stale items) ----
 MAX_AGE_DAYS = int(os.getenv("MAX_AGE_DAYS","7"))
 
+# Evergreen mode (no recency gate) + cap how many we ingest per run
+EVERGREEN_MODE = (os.getenv("EVERGREEN_MODE", "1").strip().lower() in ("1","true","yes","on"))
+RESEARCH_MAX_PER_RUN = int(os.getenv("RESEARCH_MAX_PER_RUN","1"))
+
 # after existing imports / dotenv loads
 HTTP_USER_AGENT = os.getenv(
     "HTTP_USER_AGENT",
@@ -147,6 +151,8 @@ def _too_generic(text: str) -> bool:
     return any(rx.search(text) for rx in GENERIC_SUMMARY_PATTERNS)
 
 def _is_recent(iso_ts: str | None) -> bool:
+    if EVERGREEN_MODE:
+        return True
     if not iso_ts:
         return True
     try:
@@ -236,6 +242,8 @@ def parse_rss(feed_url: str, source_id: str, tags: List[str]) -> List[Dict[str,A
         if not _is_relevant(title, summary, link, source_id):
             continue
         tags_out = list(tags) + [_year_tag(pub)]
+        if EVERGREEN_MODE:
+            tags_out.append("evergreen")
         out.append({
             "source": source_id, "source_type":"rss",
             "title": title, "url": link,
@@ -267,7 +275,7 @@ def parse_usgs_quake(url: str, source_id: str, tags: List[str]) -> List[Dict[str
             "title": title[:240], "url": link,
             "published_at": pub,
             "summary_raw": f"Magnitude {mag_f} at {props.get('place')}",
-            "tags": list(tags) + [f"quake-M{mag_f}", _year_tag(pub)]
+            "tags": list(tags) + [f"quake-M{mag_f}", _year_tag(pub)] + (["evergreen"] if EVERGREEN_MODE else [])
         })
     return out
 
@@ -290,7 +298,7 @@ def parse_swpc_alerts(url: str, source_id: str, tags: list) -> list:
                 "title": title.strip()[:240], "url": link,
                 "published_at": pub,
                 "summary_raw": (row.get("message") or "").strip(),
-                "tags": list(tags) + [_year_tag(pub)]
+                "tags": list(tags) + [_year_tag(pub)] + (['evergreen'] if EVERGREEN_MODE else [])
             })
     else:
         # be resilient if table-like
@@ -306,7 +314,7 @@ def parse_swpc_alerts(url: str, source_id: str, tags: list) -> list:
                 "title": title.strip()[:240],
                 "url": link, "published_at": pub,
                 "summary_raw": " ".join(map(str, row))[:500],
-                "tags": list(tags) + [_year_tag(pub)]
+                "tags": list(tags) + [_year_tag(pub)] + (['evergreen'] if EVERGREEN_MODE else [])
             })
     return out
 
@@ -332,7 +340,7 @@ def parse_swpc_kp(url: str, source_id: str, tags: list) -> list:
             "url": normalize_url(url),
             "published_at": timestamp,
             "summary_raw": f"Latest NOAA Planetary K index: {kp_val}",
-            "tags": list(tags) + [_year_tag(timestamp)]
+            "tags": list(tags) + [_year_tag(timestamp)] + (['evergreen'] if EVERGREEN_MODE else [])
         })
     return out
 
@@ -361,7 +369,7 @@ def parse_swpc_rtsw_plasma1d(url: str, source_id: str, tags: list) -> list:
         "url": normalize_url(url),
         "published_at": ts,
         "summary_raw": f"NOAA DSCOVR real-time solar wind plasma (1-day): speed={speed} km/s, density={dens} cm^-3, temperature={temp} K",
-        "tags": list(tags) + [_year_tag(ts)]
+        "tags": list(tags) + [_year_tag(ts)] + (['evergreen'] if EVERGREEN_MODE else [])
     })
     return out
 
@@ -388,7 +396,7 @@ def parse_swpc_rtsw_mag1d(url: str, source_id: str, tags: list) -> list:
         "url": normalize_url(url),
         "published_at": ts,
         "summary_raw": f"NOAA DSCOVR real-time magnetic (1-day): Bt={bt} nT, Bz={bz} nT",
-        "tags": list(tags) + [_year_tag(ts)]
+        "tags": list(tags) + [_year_tag(ts)] + (['evergreen'] if EVERGREEN_MODE else [])
     })
     return out
 
@@ -409,7 +417,7 @@ def parse_swpc_ovation_latest(url: str, source_id: str, tags: list) -> list:
         "title": title, "url": normalize_url(url),
         "published_at": ts,
         "summary_raw": summary,
-        "tags": list(tags) + [_year_tag(ts)]
+        "tags": list(tags) + [_year_tag(ts)] + (['evergreen'] if EVERGREEN_MODE else [])
     }]
 
 
@@ -427,7 +435,7 @@ def parse_swpc_geomag_3day_txt(url: str, source_id: str, tags: list) -> list:
         "title": title, "url": normalize_url(url),
         "published_at": ts,
         "summary_raw": summary,
-        "tags": list(tags) + [_year_tag(ts)]
+        "tags": list(tags) + [_year_tag(ts)] + (['evergreen'] if EVERGREEN_MODE else [])
     }]
 
 def parse_nws_alerts(url: str, source_id: str, tags: list) -> list:
@@ -506,7 +514,7 @@ def main():
                     "url": clean_url,
                     "published_at": pub,
                     "summary_raw": summary[:800],
-                    "tags": list(ent.get("tags",[])) + [_year_tag(pub)]
+                    "tags": list(ent.get("tags",[])) + [_year_tag(pub)] + (["evergreen"] if EVERGREEN_MODE else [])
                 }]
         except Exception as e:
             print("[ERR api]", ent["id"], e)
@@ -528,6 +536,22 @@ def main():
     for r in deduped:
         by_src[r["source"]] = by_src.get(r["source"], 0) + 1
     print("[COLLECTOR] per-source unique:", by_src)
+
+    # Prioritize allowlisted domains and newer content, then cap per run
+    def _is_allowlisted_row(r: Dict[str,Any]) -> bool:
+        return _is_domain_allowed(r.get("url",""), r.get("source",""))
+
+    def _parse_dt(s: Optional[str]) -> dt.datetime:
+        try:
+            return dt.datetime.fromisoformat((s or "").replace("Z","+00:00"))
+        except Exception:
+            return dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+
+    deduped.sort(key=lambda r: (_is_allowlisted_row(r), _parse_dt(r.get("published_at"))), reverse=True)
+    if RESEARCH_MAX_PER_RUN > 0 and len(deduped) > RESEARCH_MAX_PER_RUN:
+        print(f"[COLLECTOR] capping from {len(deduped)} to {RESEARCH_MAX_PER_RUN} (evergreen mode)")
+        deduped = deduped[:RESEARCH_MAX_PER_RUN]
+
     sb_upsert_articles(deduped)
 
 if __name__=="__main__":

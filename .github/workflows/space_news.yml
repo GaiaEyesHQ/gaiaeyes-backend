@@ -1,7 +1,7 @@
-name: Research Spotlight
+name: Space News Daily
 on:
   schedule:
-    - cron: "45 18 * * *"   # later in the day
+    - cron: "15 12 * * *"   # ~morning CT
   workflow_dispatch: {}
 jobs:
   run:
@@ -9,20 +9,20 @@ jobs:
     env:
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      GAIA_TIMEZONE: America/Chicago
+      NEWS_LOOKBACK_DAYS: "3"
+      NEWS_MIN_ITEMS: "5"
+      NEWS_EXCLUDE_KEYWORDS: "covid,politics"
       WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
       WP_USERNAME: ${{ secrets.WP_USER }}
       WP_APP_PASSWORD: ${{ secrets.WP_APP_PW }}
-      SUMMARY_MODE: evergreen
-      EVERGREEN_MODE: "1"
-      RESEARCH_MAX_PER_RUN: "1"
-      WP_CATEGORY_SLUG: research
-      WP_TITLE_PREFIX: "Research Spotlight: "
+      WP_CATEGORY_SLUG: space-news
+      WP_TITLE_PREFIX: "Space Weather Daily: "
+      SUMMARY_MODE: news
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - run: pip install -r bots/research_collector/requirements.txt
-      - run: |
-          python bots/research_collector/research_summarize.py
-          python bots/research_collector/research_wp_poster.py
+      - run: python bots/space_news_collector/main.py

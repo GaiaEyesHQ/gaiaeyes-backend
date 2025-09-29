@@ -63,6 +63,11 @@ WP_STATUS       = (os.getenv("WP_STATUS","publish") or "publish").lower()
 WP_CATEGORY_ID  = os.getenv("WP_CATEGORY_ID","").strip()
 WP_TAG_IDS      = os.getenv("WP_TAG_IDS","").strip()
 
+# Optional category by slug and title prefix (allow reusing this poster for multiple lanes)
+WP_CATEGORY_SLUG = os.getenv("WP_CATEGORY_SLUG","").strip().lower()
+WP_TITLE_PREFIX  = os.getenv("WP_TITLE_PREFIX","").strip()
+SUMMARY_MODE     = os.getenv("SUMMARY_MODE","").strip().lower()  # "news" | "evergreen" | ""
+
 # Featured image / media settings
 MEDIA_CDN_BASE      = os.getenv("MEDIA_CDN_BASE", "").rstrip("/")
 WP_FEATURED_SOURCE  = (os.getenv("WP_FEATURED_SOURCE", "bg").lower())  # 'bg' | 'caption' | 'none'
@@ -92,6 +97,25 @@ session.headers.update({
     "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
     "Accept": "application/json"
 })
+
+# --- Category slug resolver ---
+def wp_resolve_category_id(slug: str) -> str | None:
+    if not (WP_BASE_URL and slug):
+        return None
+    try:
+        url = f"{WP_BASE_URL}/wp-json/wp/v2/categories"
+        r = session.get(url, params={"slug": slug}, auth=wp_auth(), timeout=30)
+        if r.status_code != 200:
+            print("[WP] resolve category slug failed:", r.status_code, (r.text or "")[:200])
+            return None
+        arr = r.json() or []
+        if arr and isinstance(arr, list):
+            cid = str(arr[0].get("id"))
+            print(f"[WP] resolved category '{slug}' -> id {cid}")
+            return cid
+    except Exception as e:
+        print("[WP] resolve category error:", e)
+    return None
 
 # --- Media listing helpers (backgrounds) ---
 JSDELIVR_RE = re.compile(r"cdn\.jsdelivr\.net/gh/([^/]+)/([^/@]+)(?:@([^/]+))?")
@@ -519,10 +543,14 @@ def wp_auth():
 
 def wp_create_post(title: str, html_content: str, featured_media: int | None = None) -> dict:
     endpoint = f"{WP_BASE_URL}/wp-json/wp/v2/posts"
+    # Resolve category by slug if no numeric id provided
+    cat_id = WP_CATEGORY_ID
+    if (not cat_id) and WP_CATEGORY_SLUG:
+        cat_id = wp_resolve_category_id(WP_CATEGORY_SLUG) or ""
     payload = {"title": title, "content": html_content, "status": WP_STATUS}
-    if WP_CATEGORY_ID:
+    if cat_id:
         try:
-            payload["categories"] = [int(WP_CATEGORY_ID)]
+            payload["categories"] = [int(cat_id)]
         except:
             pass
     if WP_TAG_IDS:
@@ -599,19 +627,52 @@ def roundup_html(items: List[Dict[str,Any]]) -> str:
     final_html = normalize_terms(final_html)
     return final_html
 
-def main():
-    items = sb_recent_summaries(days=WP_LOOKBACK_DAYS, limit=8)
-    print(f"[WP] roundup candidates after relevance filter: {len(items)}")
-    if not items:
-        print("No recent research items.")
-        return
+def read_summary_files() -> tuple[str|None, str|None]:
+    """
+    Try to read pre-rendered title/body from either research_lane/_summary.* (preferred)
+    or local folder if present. Returns (title, html) or (None, None) if not found.
+    """
+    candidates = [
+        (HERE.parent / "research_lane" / "_summary_title.txt", HERE.parent / "research_lane" / "_summary.html"),
+        (HERE / "_summary_title.txt", HERE / "_summary.html"),
+    ]
+    for t, h in candidates:
+        try:
+            if t.exists() and h.exists():
+                title = t.read_text(encoding="utf-8").strip()
+                body  = h.read_text(encoding="utf-8")
+                if title and body:
+                    print(f"[WP] found pre-rendered summary at {h}")
+                    return title, body
+        except Exception as e:
+            print("[WP] read summary files error:", e)
+    return None, None
 
+def main():
     # Preflight auth/URL so failures are obvious
     wp_verify_credentials(WP_BASE_URL, wp_auth())
 
-    today = dt.datetime.utcnow().strftime("%b %d, %Y")
-    title = f"Gaia Eyes Research Roundup — {today}"
-    html_content = roundup_html(items)
+    # If in NEWS mode (or summary files exist), read the pre-rendered summary and post it
+    use_summary = SUMMARY_MODE == "news"
+    sum_title, sum_html = read_summary_files()
+    if sum_title and sum_html:
+        use_summary = True
+
+    if use_summary:
+        # Title prefix support
+        title = (WP_TITLE_PREFIX + " " + sum_title).strip() if WP_TITLE_PREFIX else sum_title
+        html_content = sum_html
+        items = []
+    else:
+        items = sb_recent_summaries(days=WP_LOOKBACK_DAYS, limit=8)
+        print(f"[WP] roundup candidates after relevance filter: {len(items)}")
+        if not items:
+            print("No recent research items.")
+            return
+        today = dt.datetime.utcnow().strftime("%b %d, %Y")
+        base_title = f"Gaia Eyes Research Roundup — {today}"
+        title = (WP_TITLE_PREFIX + " " + base_title).strip() if WP_TITLE_PREFIX else base_title
+        html_content = roundup_html(items)
 
     featured_id = None
     featured_src_url = None  # WP media source_url
@@ -669,7 +730,7 @@ def main():
     #     html_content = inject_gallery_block(html_content, gallery_urls)
 
     # Optional TOC: build from H3 headings and inject anchor IDs
-    if WP_ADD_TOC:
+    if WP_ADD_TOC and SUMMARY_MODE != "news":
         html_content, toc_html = build_toc_and_inject_ids(html_content)
         if toc_html:
             html_content = toc_html + "\n" + html_content

@@ -24,7 +24,7 @@ api:
 
   # NOAA SWPC planetary K index (JSON table)
   - id: swpc-kp-3day
-    url: https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json
+    url: https://services.swpc.noaa.gov/products/summary/planetary-k-index-3-day.json
     parser: swpc_kp
     tags: [space-weather, kp]
 
@@ -34,7 +34,6 @@ api:
     parser: usgs_quake
     tags: [earth, quake]
 
-    api:
   - id: swpc-rtsw-plasma
     url: https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json
     parser: swpc_rtsw_plasma1d
@@ -54,3 +53,24 @@ api:
     url: https://services.swpc.noaa.gov/text/3-day-geomag-forecast.txt
     parser: swpc_geomag_3day_txt
     tags: [swpc, forecast, geomag]
+
+  # --- Additional SWPC text products (enable after parsers are added) ---
+  # - id: swpc-forecast-discussion
+  #   url: https://services.swpc.noaa.gov/text/discussion.txt
+  #   parser: swpc_discussion_txt
+  #   tags: [swpc, discussion]
+  #
+  # - id: swpc-3-day-forecast
+  #   url: https://services.swpc.noaa.gov/text/3-day-forecast.txt
+  #   parser: swpc_3day_forecast_txt
+  #   tags: [swpc, forecast]
+  #
+  # - id: swpc-advisory-outlook
+  #   url: https://services.swpc.noaa.gov/text/advisory-outlook.txt
+  #   parser: swpc_advisory_outlook_txt
+  #   tags: [swpc, advisory, outlook]
+  #
+  # - id: swpc-report-geo-activity
+  #   url: https://services.swpc.noaa.gov/text/weekly.txt
+  #   parser: swpc_weekly_report_txt
+  #   tags: [swpc, weekly, report]
