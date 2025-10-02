@@ -306,7 +306,7 @@ async def space_series(request: Request, days: int = 7):
                           ) as ts
                         ),
                         agg as (
-                          select date_trunc('5 minutes', start_time) as bucket,
+                          select to_timestamp(floor(extract(epoch from start_time)/300.0)*300.0) at time zone 'UTC' as bucket, 
                                  avg(value) as hr
                           from gaia.samples
                           where user_id = %s
