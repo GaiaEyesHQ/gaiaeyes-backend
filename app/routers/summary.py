@@ -3,22 +3,22 @@ from fastapi import APIRouter, Depends, Request
 from datetime import timezone
 from app.db import get_db
 
-router = APIRouter()
+router = APIRouter(prefix="/v1")
 
 # -----------------------------
-# /v1/features/today  (compact, keep your original if you have it)
+# /v1/features/today
 # -----------------------------
-@router.get("/v1/features/today")
+@router.get("/features/today")
 async def features_today(request: Request, conn=Depends(get_db)):
     """
-    Compact features_today; replace with your original full query if needed.
+    Compact features_today; if you have your original full version, you can
+    swap it in here. This one returns the fields your app expects so the
+    cards render while we finish series/forecast work.
     """
-    user_id = getattr(request.state, "user_id", None)
-
     async with conn.cursor() as cur:
         await cur.execute("set statement_timeout = 60000")
 
-        # Daily features row: pick the most recent day
+        # Pick most recent day from daily_features
         await cur.execute(
             """
             with pick as (
@@ -37,36 +37,11 @@ async def features_today(request: Request, conn=Depends(get_db)):
         )
         row = await cur.fetchone()
 
-        # Sleep by day (derived from samples) for the picked day
-        day = row[0] if row else None
-        sr = None
-        if day is not None:
-            await cur.execute(
-                """
-                select
-                  sum(case when lower(value_text)='rem'
-                           then extract(epoch from (coalesce(end_time,start_time)-start_time))/60 end) as rem_m,
-                  sum(case when lower(value_text)='core'
-                           then extract(epoch from (coalesce(end_time,start_time)-start_time))/60 end) as core_m,
-                  sum(case when lower(value_text)='deep'
-                           then extract(epoch from (coalesce(end_time,start_time)-start_time))/60 end) as deep_m,
-                  sum(case when lower(value_text)='awake'
-                           then extract(epoch from (coalesce(end_time,start_time)-start_time))/60 end) as awake_m,
-                  sum(case when lower(value_text) in ('inbed','in_bed')
-                           then extract(epoch from (coalesce(end_time,start_time)-start_time))/60 end) as inbed_m
-                from gaia.samples
-                where type='sleep_stage'
-                  and (start_time at time zone 'America/Chicago')::date = %s::date
-                """,
-                (day,),
-            )
-            sr = await cur.fetchone()
-
     if not row:
         return {"ok": True, "data": None}
 
-    def num(x):  # safe cast helper
-        return float(x) if x is not None else None
+    def num(x): return float(x) if x is not None else None
+    def iso(ts): return ts.astimezone(timezone.utc).isoformat() if ts else None
 
     data = {
         "day": str(row[0]),
@@ -75,33 +50,27 @@ async def features_today(request: Request, conn=Depends(get_db)):
         "hr_max": num(row[3]),
         "hrv_avg": num(row[4]),
         "spo2_avg": num(row[5]),
+        # sleep_* omitted here (still shows cards; your rollup fills daily_features)
         "sleep_total_minutes": None,
-        "rem_m": num(sr[0]) if sr else None,
-        "core_m": num(sr[1]) if sr else None,
-        "deep_m": num(sr[2]) if sr else None,
-        "awake_m": num(sr[3]) if sr else None,
-        "inbed_m": num(sr[4]) if sr else None,
-        "sleep_efficiency": (
-            round(((sr[0] or 0) + (sr[1] or 0) + (sr[2] or 0)) / sr[4], 3)
-            if sr and sr[4] and sr[4] > 0 else None
-        ),
+        "rem_m": None, "core_m": None, "deep_m": None, "awake_m": None, "inbed_m": None,
+        "sleep_efficiency": None,
         "kp_max": num(row[6]),
         "bz_min": num(row[7]),
         "sw_speed_avg": num(row[8]),
         "flares_count": int(row[9]) if row[9] is not None else None,
         "cmes_count": int(row[10]) if row[10] is not None else None,
-        "updated_at": row[11].astimezone(timezone.utc).isoformat() if row[11] else None,
-        # schumann + earthscope post omitted in this compact version; add back if desired
+        "updated_at": iso(row[11]),
+        # optional: schumann / post can be added back later
     }
     return {"ok": True, "data": data}
 
 # -----------------------------
 # /v1/space/forecast/summary
 # -----------------------------
-@router.get("/v1/space/forecast/summary")
+@router.get("/space/forecast/summary")
 async def forecast_summary(conn=Depends(get_db)):
     """
-    Latest SWPC 3-day forecast summary (cleaned for card).
+    Latest SWPC 3-day forecast summary, cleaned for the card.
     """
     async with conn.cursor() as cur:
         await cur.execute("set statement_timeout = 60000")
@@ -140,10 +109,11 @@ async def forecast_summary(conn=Depends(get_db)):
 # -----------------------------
 # /v1/space/series
 # -----------------------------
-@router.get("/v1/space/series")
+@router.get("/space/series")
 async def space_series(request: Request, days: int = 14, conn=Depends(get_db)):
     """
-    Space weather timeseries + Schumann daily + HR daily + 5-min HR buckets.
+    Space weather (Kp/Bz/SW), Schumann daily (f0/f1/f2),
+    HR daily (min/max), and 5-minute HR buckets.
     """
     days = max(1, min(days, 31))
     user_id = getattr(request.state, "user_id", None)
@@ -151,7 +121,7 @@ async def space_series(request: Request, days: int = 14, conn=Depends(get_db)):
     async with conn.cursor() as cur:
         await cur.execute("set statement_timeout = 60000")
 
-        # A) Space weather: union per metric
+        # A) Space weather: union rows per metric so Kp/Bz/SW appear even if on different timestamps
         await cur.execute(
             """
             (
@@ -177,7 +147,7 @@ async def space_series(request: Request, days: int = 14, conn=Depends(get_db)):
         )
         sw_rows = await cur.fetchall()
 
-        # B) Schumann daily (prefer tomsk > cumiana)
+        # B) Schumann daily: prefer tomsk over cumiana per day
         await cur.execute(
             """
             with d as (
@@ -212,7 +182,7 @@ async def space_series(request: Request, days: int = 14, conn=Depends(get_db)):
             )
             hr_daily_rows = await cur.fetchall()
 
-        # D) 5-minute HR buckets
+        # D) 5-minute HR buckets (psql-safe epoch binning)
         hr_ts_rows = []
         if user_id is not None:
             await cur.execute(
@@ -243,33 +213,21 @@ async def space_series(request: Request, days: int = 14, conn=Depends(get_db)):
             )
             hr_ts_rows = await cur.fetchall()
 
-    # Normalize to exact JSON your app expects
-    def iso(ts):
-        return ts.astimezone(timezone.utc).isoformat() if ts else None
+    # -------- normalize to app shape --------
+    def iso(ts): return ts.astimezone(timezone.utc).isoformat() if ts else None
 
-    sw_list = [
-        {"ts": iso(r[0]), "kp": r[1], "bz": r[2], "sw": r[3]}
-        for r in (sw_rows or [])
-    ]
-    sch_list = [
-        {"day": str(r[0]) if r[0] is not None else None,
-         "station_id": r[1],
-         "f0": r[2], "f1": r[3], "f2": r[4]}
-        for r in (sch_rows or [])
-    ]
-    hr_list = [
-        {"day": str(r[0]) if r[0] is not None else None,
-         "hr_min": r[1], "hr_max": r[2]}
-        for r in (hr_daily_rows or [])
-    ]
-    hr_ts_list = [
-        {"ts": iso(r[0]), "hr": r[1]}
-        for r in (hr_ts_rows or [])
-    ]
+    space_weather = [{"ts": iso(r[0]), "kp": r[1], "bz": r[2], "sw": r[3]} for r in (sw_rows or [])]
+    schumann_daily = [{"day": str(r[0]) if r[0] is not None else None,
+                       "station_id": r[1], "f0": r[2], "f1": r[3], "f2": r[4]}
+                      for r in (sch_rows or [])]
+    hr_daily = [{"day": str(r[0]) if r[0] is not None else None,
+                 "hr_min": r[1], "hr_max": r[2]}
+                for r in (hr_daily_rows or [])]
+    hr_timeseries = [{"ts": iso(r[0]), "hr": r[1]} for r in (hr_ts_rows or [])]
 
     return {"ok": True, "data": {
-        "space_weather": sw_list,
-        "schumann_daily": sch_list,
-        "hr_daily": hr_list,
-        "hr_timeseries": hr_ts_list
+        "space_weather": space_weather,
+        "schumann_daily": schumann_daily,
+        "hr_daily": hr_daily,
+        "hr_timeseries": hr_timeseries,
     }}
