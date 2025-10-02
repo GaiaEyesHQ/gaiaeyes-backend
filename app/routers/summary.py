@@ -3,13 +3,14 @@ from app.db import get_db
 
 router = APIRouter()
 
-@router.get("/space/series")
-async def space_series(days: int = 14, conn: Depends(get_db)):
-    # ... other code ...
 
-    await conn.execute("set statement_timeout = 60000")
-    async with conn.transaction():
-        cur = await conn.cursor()
+@router.get("/space/series")
+async def space_series(days: int = 14, conn=Depends(get_db)):
+    # Set a statement timeout to avoid runaway queries
+    async with conn.cursor() as cur:
+        await cur.execute("set statement_timeout = 60000")
+
+        # Space weather union query: Kp, Bz, SW
         await cur.execute(
             """
             (
@@ -32,8 +33,8 @@ async def space_series(days: int = 14, conn: Depends(get_db)):
             order by ts_utc asc
             """,
             (f"{days} days", f"{days} days", f"{days} days"),
-            prepare=False,
         )
         sw_rows = await cur.fetchall()
 
-    # ... rest of the function unchanged ...
+    # TODO: normalize sw_rows, join with schumann + hr_timeseries queries, and return consistent JSON
+    return {"ok": True, "data": sw_rows}
