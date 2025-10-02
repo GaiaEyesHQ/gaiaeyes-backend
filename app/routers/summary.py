@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends
-from typing import Any
 from app.db import get_db
 
 router = APIRouter()
