@@ -292,6 +292,37 @@ async def space_series(request: Request, days: int = 7):
                         prepare=False,
                     )
                     hr_rows = await cur.fetchall()
+
+                # 5-minute heart-rate buckets (averaged) for current user
+                hr_ts_rows = []
+                if user_id is not None:
+                    await cur.execute(
+                        """
+                        with buckets as (
+                          select generate_series(
+                            now() - %s::interval,
+                            now(),
+                            interval '5 minutes'
+                          ) as ts
+                        ),
+                        agg as (
+                          select date_trunc('5 minutes', start_time) as bucket,
+                                 avg(value) as hr
+                          from gaia.samples
+                          where user_id = %s
+                            and type in ('heart_rate','hr')
+                            and start_time >= now() - %s::interval
+                          group by 1
+                        )
+                        select b.ts as ts_utc, a.hr
+                        from buckets b
+                        left join agg a on a.bucket = b.ts
+                        order by ts_utc asc
+                        """,
+                        (f"{days} days", user_id, f"{days} days"),
+                        prepare=False,
+                    )
+                    hr_ts_rows = await cur.fetchall()
     except Exception as e:
         return {"ok": True, "data": None, "error": f"space_series query failed: {e}"}
 
@@ -323,4 +354,11 @@ async def space_series(request: Request, days: int = 7):
             "hr_max": r.get("hr_max"),
         })
 
-    return {"ok": True, "data": {"space_weather": sw_list, "schumann_daily": sch_list, "hr_daily": hr_list}}
+    hr_ts_list = []
+    for r in (locals().get('hr_ts_rows') or []):
+        hr_ts_list.append({
+            "ts": r.get("ts_utc").astimezone(timezone.utc).isoformat() if r.get("ts_utc") else None,
+            "hr": r.get("hr"),
+        })
+
+    return {"ok": True, "data": {"space_weather": sw_list, "schumann_daily": sch_list, "hr_daily": hr_list, "hr_timeseries": hr_ts_list}}
