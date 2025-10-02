@@ -1,7 +1,9 @@
 # app/db.py
 from __future__ import annotations
 
-from typing import Optional
+from contextlib import asynccontextmanager
+from typing import Optional, AsyncGenerator
+
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,6 +16,7 @@ class Settings(BaseSettings):
     DEV_BEARER: Optional[str] = None
     CORS_ORIGINS: Optional[str] = "*"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
 
 settings = Settings()
 
@@ -35,6 +38,10 @@ def _sanitize_conninfo(dsn: str) -> str:
 
 
 async def get_pool() -> AsyncConnectionPool:
+    """
+    Lazily initialize and return a global AsyncConnectionPool.
+    Pool is PgBouncer-safe via prepare_threshold=0 and sslmode=require.
+    """
     global _pool
     if _pool is None:
         conninfo = _sanitize_conninfo(settings.DATABASE_URL)
@@ -45,9 +52,28 @@ async def get_pool() -> AsyncConnectionPool:
             timeout=30,
             open=False,                 # lazy
             kwargs={
-                "prepare_threshold": 0, # <-- NEVER prepare (PgBouncer-safe)
+                "prepare_threshold": 0, # NEVER prepare (PgBouncer-safe)
                 "connect_timeout": 10,
             },
         )
         await _pool.open()
     return _pool
+
+
+@asynccontextmanager
+async def get_db() -> AsyncGenerator:
+    """
+    FastAPI dependency that yields a psycopg3 async connection
+    from the global pool. Use it like:
+
+        @router.get("/path")
+        async def handler(conn = Depends(get_db)):
+            async with conn.cursor() as cur:
+                await cur.execute("select 1")
+                ...
+
+    The connection is returned to the pool when the request completes.
+    """
+    pool = await get_pool()
+    async with pool.connection() as conn:
+        yield conn
