@@ -65,4 +65,4 @@ async def require_auth(
 
 # Mount routers WITH /v1 prefix and the auth dependency
 app.include_router(ingest.router, prefix="/v1", dependencies=[Depends(require_auth)])
-app.include_router(summary.router, prefix="/v1", dependencies=[Depends(require_auth)])
+app.include_router(summary.router, dependencies=[Depends(require_auth)])
