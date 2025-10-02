@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends
-from asyncpg import Connection
+from typing import Any
 from app.db import get_db
 
 router = APIRouter()
 
 @router.get("/space/series")
-async def space_series(days: int = 14, conn: Connection = Depends(get_db)):
+async def space_series(days: int = 14, conn: Any = Depends(get_db)):
     # ... other code ...
 
     await conn.execute("set statement_timeout = 60000")
