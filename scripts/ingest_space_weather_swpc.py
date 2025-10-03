@@ -44,9 +44,9 @@ URLS_LIST = {
         f"{BASE_SUM}/planetary-k-index.json",
     ],
     "speed": [
-        f"{BASE_SUM}/solar-wind-speed.json",            # preferred (works, single-object)
         f"{BASE_PROD}/solar-wind/plasma-1-day.json",
         f"{BASE_PROD}/solar-wind/plasma-7-day.json",
+        f"{BASE_SUM}/solar-wind-speed.json",            # preferred (works, single-object)
     ],
     "mag": [
         f"{BASE_PROD}/solar-wind/mag-1-day.json",
@@ -371,7 +371,9 @@ async def main():
         meta = {"kp_source": URLS_LIST["kp"][0] if URLS_LIST["kp"] else None, "speed_source": URLS_LIST["speed"][0] if URLS_LIST["speed"] else None, "mag_source": URLS_LIST["mag"][0] if URLS_LIST["mag"] else None}
         rows.append((
             ts,
-            v.get("kp_index"),
+            v.get("kp_index"),Why this fixes it
+	•	generate_series(now() …) returns a timestamptz series.
+	•	to_timestamp(floor(epoch/300)*300) also returns timestamptz.
             v.get("bz_nt"),
             v.get("sw_speed_kms"),
             SRC,
