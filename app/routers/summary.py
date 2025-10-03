@@ -347,7 +347,7 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
             ],
             "hr_timeseries": [
                 {"ts": iso(r.get("ts_utc")), "hr": fnum(r.get("hr"))}
-                for r in (hr_ts_rows or [])
+                for r in (hr_ts_rows or []) if r.get("hr") is not None
             ]
         }
     }
