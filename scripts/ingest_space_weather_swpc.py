@@ -371,7 +371,7 @@ async def main():
         meta = {"kp_source": URLS_LIST["kp"][0] if URLS_LIST["kp"] else None, "speed_source": URLS_LIST["speed"][0] if URLS_LIST["speed"] else None, "mag_source": URLS_LIST["mag"][0] if URLS_LIST["mag"] else None}
         rows.append((
             ts,
-            v.get("kp_index"),Why this fixes it
+            v.get("kp_index"),
   	generate_series(now() …) returns a timestamptz series.
   	to_timestamp(floor(epoch/300)*300) also returns timestamptz.
             v.get("bz_nt"),
