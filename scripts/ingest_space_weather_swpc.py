@@ -372,8 +372,8 @@ async def main():
         rows.append((
             ts,
             v.get("kp_index"),Why this fixes it
-	•	generate_series(now() …) returns a timestamptz series.
-	•	to_timestamp(floor(epoch/300)*300) also returns timestamptz.
+  	generate_series(now() …) returns a timestamptz series.
+  	to_timestamp(floor(epoch/300)*300) also returns timestamptz.
             v.get("bz_nt"),
             v.get("sw_speed_kms"),
             SRC,
