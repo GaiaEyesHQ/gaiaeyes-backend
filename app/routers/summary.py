@@ -214,7 +214,7 @@ async def forecast_summary(conn = Depends(get_db)):
 async def space_series(request: Request, days: int = 30, conn = Depends(get_db)):
     """
     Space weather (Kp/Bz/SW), Schumann daily (f0/f1/f2), HR daily (min/max),
-    and 5-minute HR buckets. Returns the exact JSON the app expects.
+    and 5-minute HR buckets. Kp is forward-filled from its 3h cadence.
     """
     days = max(1, min(days, 31))
     user_id = getattr(request.state, "user_id", None)
@@ -222,25 +222,37 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute("set statement_timeout = 60000", prepare=False)
 
-        # A) Space weather: aggregate per timestamp (align kp/bz/sw on the same ts)
+        # A) Space weather: align bz/sw with latest kp <= ts
         await cur.execute(
             """
-            select ts_utc,
-                   max(kp_index)       as kp,
-                   max(bz_nt)          as bz,
-                   max(sw_speed_kms)   as sw
-            from ext.space_weather
-            where ts_utc >= now() - %s::interval
-              and (kp_index is not null or bz_nt is not null or sw_speed_kms is not null)
-            group by ts_utc
-            order by ts_utc asc
+            with base as (
+              select ts_utc,
+                     bz_nt,
+                     sw_speed_kms
+              from ext.space_weather
+              where ts_utc >= now() - %s::interval
+            )
+            select b.ts_utc,
+                   k.kp_index as kp,
+                   b.bz_nt     as bz,
+                   b.sw_speed_kms as sw
+            from base b
+            left join lateral (
+              select kp_index
+              from ext.space_weather
+              where kp_index is not null
+                and ts_utc <= b.ts_utc
+              order by ts_utc desc
+              limit 1
+            ) k on true
+            order by b.ts_utc asc
             """,
             (f"{days} days",),
             prepare=False,
         )
         sw_rows = await cur.fetchall()
 
-        # B) Schumann daily (prefer tomsk > cumiana)
+        # B) Schumann daily
         await cur.execute(
             """
             with d as (
@@ -261,7 +273,7 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
         )
         sch_rows = await cur.fetchall()
 
-        # C) HR daily from daily_summary
+        # C) HR daily
         hr_daily_rows = []
         if user_id is not None:
             await cur.execute(
@@ -277,7 +289,7 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
             )
             hr_daily_rows = await cur.fetchall()
 
-        # D) 5-minute HR buckets (epoch bin)
+        # D) HR timeseries
         hr_ts_rows = []
         if user_id is not None:
             await cur.execute(
@@ -309,63 +321,29 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
             )
             hr_ts_rows = await cur.fetchall()
 
-        # Diagnostics: counts by source in the same window
-        await cur.execute("select count(*) as n from ext.space_weather where ts_utc >= now() - %s::interval", (f"{days} days",), prepare=False)
-        sw_count_row = await cur.fetchone()
-        sw_count = sw_count_row.get("n") if sw_count_row else None
-
-        await cur.execute("select count(*) as n from ext.space_weather where ts_utc >= now() - %s::interval and kp_index is not null", (f"{days} days",), prepare=False)
-        sw_kp_count_row = await cur.fetchone()
-        sw_kp_count = sw_kp_count_row.get("n") if sw_kp_count_row else None
-
-        await cur.execute("select count(*) as n from marts.schumann_daily where day >= (current_date - %s::interval)::date", (f"{days} days",), prepare=False)
-        sch_count_row = await cur.fetchone()
-        sch_count = sch_count_row.get("n") if sch_count_row else None
-
-        hr_daily_count = len(hr_daily_rows or [])
-        hr_ts_count = len(hr_ts_rows or [])
-
-    # Normalize
     def iso(ts): return ts.astimezone(timezone.utc).isoformat() if ts else None
 
-    space_weather = [{
-        "ts": iso(r.get("ts_utc")),
-        "kp": r.get("kp"),
-        "bz": r.get("bz"),
-        "sw": r.get("sw"),
-    } for r in (sw_rows or [])]
-
-    schumann_daily = [{
-        "day": str(r.get("day")) if r.get("day") is not None else None,
-        "station_id": r.get("station_id"),
-        "f0": r.get("f0_avg_hz"),
-        "f1": r.get("f1_avg_hz"),
-        "f2": r.get("f2_avg_hz"),
-    } for r in (sch_rows or [])]
-
-    hr_daily = [{
-        "day": str(r.get("day")) if r.get("day") is not None else None,
-        "hr_min": r.get("hr_min"),
-        "hr_max": r.get("hr_max"),
-    } for r in (hr_daily_rows or [])]
-
-    hr_timeseries = [{
-        "ts": iso(r.get("ts_utc")),
-        "hr": r.get("hr"),
-    } for r in (hr_ts_rows or [])]
-
-    return {"ok": True, "data": {
-        "space_weather": space_weather,
-        "schumann_daily": schumann_daily,
-        "hr_daily": hr_daily,
-        "hr_timeseries": hr_timeseries,
-    }, "diag": {
-        "days": days,
-        "sw_rows": len(space_weather),
-        "sw_kp_non_null_rows": sw_kp_count,
-        "sch_rows": len(schumann_daily),
-        "hr_daily_rows": len(hr_daily),
-        "hr_ts_rows": len(hr_timeseries),
-        "sw_count_db": sw_count,
-        "sch_count_db": sch_count
-    }}
+    return {
+        "ok": True,
+        "data": {
+            "space_weather": [
+                {"ts": iso(r.get("ts_utc")), "kp": r.get("kp"), "bz": r.get("bz"), "sw": r.get("sw")}
+                for r in (sw_rows or [])
+            ],
+            "schumann_daily": [
+                {"day": str(r.get("day")) if r.get("day") else None,
+                 "station_id": r.get("station_id"),
+                 "f0": r.get("f0_avg_hz"), "f1": r.get("f1_avg_hz"), "f2": r.get("f2_avg_hz")}
+                for r in (sch_rows or [])
+            ],
+            "hr_daily": [
+                {"day": str(r.get("day")) if r.get("day") else None,
+                 "hr_min": r.get("hr_min"), "hr_max": r.get("hr_max")}
+                for r in (hr_daily_rows or [])
+            ],
+            "hr_timeseries": [
+                {"ts": iso(r.get("ts_utc")), "hr": r.get("hr")}
+                for r in (hr_ts_rows or [])
+            ]
+        }
+    }
