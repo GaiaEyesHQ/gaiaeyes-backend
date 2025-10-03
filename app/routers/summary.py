@@ -69,7 +69,7 @@ async def features_today(request: Request, conn = Depends(get_db)):
            sch.f1_avg_hz   as sch_f1_hz,
            sch.f2_avg_hz   as sch_f2_hz,
            sch.f3_avg_hz   as sch_h3_hz,
-           sch.f4_avg_hz   as sch_h4_hz,
+           sch.f4_avg_hz   as sch_f4_hz,
            dp.post_title,
            dp.post_caption,
            dp.post_body,
@@ -226,7 +226,7 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
         await cur.execute(
             """
             select ts_utc,
-                   max(kp_index) as kp,
+                   coalesce(max(kp_index), 0) as kp,
                    max(bz_nt)    as bz,
                    max(sw_speed_kms) as sw
             from ext.space_weather
@@ -309,6 +309,10 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
         sw_count_row = await cur.fetchone()
         sw_count = sw_count_row.get("n") if sw_count_row else None
 
+        await cur.execute("select count(*) as n from ext.space_weather where ts_utc >= now() - %s::interval and kp_index is not null", (f"{days} days",))
+        sw_kp_count_row = await cur.fetchone()
+        sw_kp_count = sw_kp_count_row.get("n") if sw_kp_count_row else None
+
         await cur.execute("select count(*) as n from marts.schumann_daily where day >= (current_date - %s::interval)::date", (f"{days} days",))
         sch_count_row = await cur.fetchone()
         sch_count = sch_count_row.get("n") if sch_count_row else None
@@ -353,6 +357,7 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
     }, "diag": {
         "days": days,
         "sw_rows": len(space_weather),
+        "sw_kp_non_null_rows": sw_kp_count,
         "sch_rows": len(schumann_daily),
         "hr_daily_rows": len(hr_daily),
         "hr_ts_rows": len(hr_timeseries),
