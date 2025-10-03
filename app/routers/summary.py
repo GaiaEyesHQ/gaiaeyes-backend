@@ -294,17 +294,20 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
         if user_id is not None:
             await cur.execute(
                 """
-                with buckets as (
+                with bounds as (
+                  select to_timestamp(floor(extract(epoch from now())/300.0)*300.0) as now5
+                ),
+                buckets as (
                   select generate_series(
-                    now() - %s::interval,
-                    now(),
+                    (select now5 from bounds) - %s::interval,
+                    (select now5 from bounds),
                     interval '5 minutes'
                   ) as ts_utc
                 ),
                 agg as (
                   select
                     to_timestamp(floor(extract(epoch from start_time)/300.0)*300.0) as bucket_utc,
-                    avg(nullif(value,'')::numeric) filter (where value ~ '^[0-9]+(\\.[0-9]+)?$') as hr
+                    avg(nullif(value,'')::numeric) filter (where value ~ '^[0-9]+(\.[0-9]+)?$') as hr
                   from gaia.samples
                   where user_id = %s
                     and type = 'heart_rate'
