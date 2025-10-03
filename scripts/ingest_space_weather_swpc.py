@@ -363,23 +363,24 @@ async def main():
     merge_metric(mag_recs, ["bz_gsm","Bz","bz","bz_nt"], "bz_nt", merged)
 
     # Keep recent
-    merged = filter_since(merged, SINCE_HOURS)
-
+    merged = filter_since(merged, SINCE_
     # Prepare rows for upsert
     rows = []
     for ts, v in sorted(merged.items()):
-        meta = {"kp_source": URLS_LIST["kp"][0] if URLS_LIST["kp"] else None, "speed_source": URLS_LIST["speed"][0] if URLS_LIST["speed"] else None, "mag_source": URLS_LIST["mag"][0] if URLS_LIST["mag"] else None}
+        meta = {
+            "kp_source": URLS_LIST["kp"][0] if URLS_LIST.get("kp") else None,
+            "speed_source": URLS_LIST["speed"][0] if URLS_LIST.get("speed") else None,
+            "mag_source": URLS_LIST["mag"][0] if URLS_LIST.get("mag") else None,
+        }
         rows.append((
             ts,
             v.get("kp_index"),
-  	generate_series(now() …) returns a timestamptz series.
-  	to_timestamp(floor(epoch/300)*300) also returns timestamptz.
             v.get("bz_nt"),
             v.get("sw_speed_kms"),
             SRC,
             json.dumps(meta),
         ))
-
+    
     conn = await asyncpg.connect(dsn=DB, statement_cache_size=0)
     try:
         # Upsert space weather time series
