@@ -363,7 +363,8 @@ async def main():
     merge_metric(mag_recs, ["bz_gsm","Bz","bz","bz_nt"], "bz_nt", merged)
 
     # Keep recent
-    merged = filter_since(merged, SINCE_)
+    merged = filter_since(merged, SINCE_HOURS)
+
     # Prepare rows for upsert
     rows = []
     for ts, v in sorted(merged.items()):
