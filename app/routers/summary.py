@@ -323,11 +323,14 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
 
     def iso(ts): return ts.astimezone(timezone.utc).isoformat() if ts else None
 
+    def fnum(x):
+        return float(x) if x is not None else None
+
     return {
         "ok": True,
         "data": {
             "space_weather": [
-                {"ts": iso(r.get("ts_utc")), "kp": r.get("kp"), "bz": r.get("bz"), "sw": r.get("sw")}
+                {"ts": iso(r.get("ts_utc")), "kp": fnum(r.get("kp")), "bz": fnum(r.get("bz")), "sw": fnum(r.get("sw"))}
                 for r in (sw_rows or [])
             ],
             "schumann_daily": [
@@ -342,7 +345,7 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
                 for r in (hr_daily_rows or [])
             ],
             "hr_timeseries": [
-                {"ts": iso(r.get("ts_utc")), "hr": r.get("hr")}
+                {"ts": iso(r.get("ts_utc")), "hr": fnum(r.get("hr"))}
                 for r in (hr_ts_rows or [])
             ]
         }
