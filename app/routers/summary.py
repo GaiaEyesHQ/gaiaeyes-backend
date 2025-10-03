@@ -211,7 +211,7 @@ async def forecast_summary(conn = Depends(get_db)):
 # /v1/space/series
 # -----------------------------
 @router.get("/space/series")
-async def space_series(request: Request, days: int = 14, conn = Depends(get_db)):
+async def space_series(request: Request, days: int = 30, conn = Depends(get_db)):
     """
     Space weather (Kp/Bz/SW), Schumann daily (f0/f1/f2), HR daily (min/max),
     and 5-minute HR buckets. Returns the exact JSON the app expects.
@@ -314,6 +314,18 @@ async def space_series(request: Request, days: int = 14, conn = Depends(get_db))
             )
             hr_ts_rows = await cur.fetchall()
 
+        # Diagnostics: counts by source in the same window
+        await cur.execute("select count(*) as n from ext.space_weather where ts_utc >= now() - %s::interval", (f"{days} days",))
+        sw_count_row = await cur.fetchone()
+        sw_count = sw_count_row.get("n") if sw_count_row else None
+
+        await cur.execute("select count(*) as n from marts.schumann_daily where day >= (current_date - %s::interval)::date", (f"{days} days",))
+        sch_count_row = await cur.fetchone()
+        sch_count = sch_count_row.get("n") if sch_count_row else None
+
+        hr_daily_count = len(hr_daily_rows or [])
+        hr_ts_count = len(hr_ts_rows or [])
+
     # Normalize
     def iso(ts): return ts.astimezone(timezone.utc).isoformat() if ts else None
 
@@ -348,4 +360,12 @@ async def space_series(request: Request, days: int = 14, conn = Depends(get_db))
         "schumann_daily": schumann_daily,
         "hr_daily": hr_daily,
         "hr_timeseries": hr_timeseries,
+    }, "diag": {
+        "days": days,
+        "sw_rows": len(space_weather),
+        "sch_rows": len(schumann_daily),
+        "hr_daily_rows": len(hr_daily),
+        "hr_ts_rows": len(hr_timeseries),
+        "sw_count_db": sw_count,
+        "sch_count_db": sch_count
     }}
