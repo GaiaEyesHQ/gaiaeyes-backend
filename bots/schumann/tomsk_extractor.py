@@ -20,7 +20,7 @@ import cv2
 # --------------------------
 # Constants / configuration
 # --------------------------
-TOMSK_IMG = "https://sosrff.tsu.ru/new/shm.jpg"
+TOMSK_IMG = "https://sos70.ru/provider.php?file=shm.jpg"
 UTC_TO_TSST_HOURS = 7                 # Tomsk local on spectrogram
 DEFAULT_ACCEPT_MINUTES = 90.0         # max |auto bias| to apply
 FRONTIER_GUARD_PX = 30                # avoid sampling at very edge
