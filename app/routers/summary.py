@@ -219,110 +219,108 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
     days = max(1, min(days, 31))
     user_id = getattr(request.state, "user_id", None)
 
-    async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute("set statement_timeout = 60000", prepare=False)
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute("set statement_timeout = 60000", prepare=False)
 
-        # A) Space weather: align bz/sw with latest kp <= ts
-        await cur.execute(
-            """
-            with base as (
-              select ts_utc,
-                     bz_nt,
-                     sw_speed_kms
-              from ext.space_weather
-              where ts_utc >= now() - %s::interval
-            )
-            select b.ts_utc,
-                   k.kp_index as kp,
-                   b.bz_nt     as bz,
-                   b.sw_speed_kms as sw
-            from base b
-            left join lateral (
-              select kp_index
-              from ext.space_weather
-              where kp_index is not null
-                and ts_utc <= b.ts_utc
-              order by ts_utc desc
-              limit 1
-            ) k on true
-            order by b.ts_utc asc
-            """,
-            (f"{days} days",),
-            prepare=False,
-        )
-        sw_rows = await cur.fetchall()
-
-        # B) Schumann daily
-        await cur.execute(
-            """
-            with d as (
-              select day, station_id, f0_avg_hz, f1_avg_hz, f2_avg_hz,
-                     row_number() over (partition by day
-                       order by case when station_id='tomsk' then 0
-                                     when station_id='cumiana' then 1
-                                else 2 end) as rn
-              from marts.schumann_daily
-              where day >= (current_date - %s::interval)::date
-            )
-            select day, station_id, f0_avg_hz, f1_avg_hz, f2_avg_hz
-            from d where rn=1
-            order by day asc
-            """,
-            (f"{days} days",),
-            prepare=False,
-        )
-        sch_rows = await cur.fetchall()
-
-        # C) HR daily
-        hr_daily_rows = []
-        if user_id is not None:
+            # A) Space weather: align bz/sw with latest kp <= ts
             await cur.execute(
                 """
-                select date as day, hr_min, hr_max
-                from gaia.daily_summary
-                where user_id = %s
-                  and date >= (current_date - %s::interval)::date
+                with base as (
+                  select ts_utc, bz_nt, sw_speed_kms
+                  from ext.space_weather
+                  where ts_utc >= now() - %s::interval
+                )
+                select b.ts_utc,
+                       k.kp_index as kp,
+                       b.bz_nt     as bz,
+                       b.sw_speed_kms as sw
+                from base b
+                left join lateral (
+                  select kp_index
+                  from ext.space_weather
+                  where kp_index is not null
+                    and ts_utc <= b.ts_utc
+                  order by ts_utc desc
+                  limit 1
+                ) k on true
+                order by b.ts_utc asc
+                """,
+                (f"{days} days",), prepare=False,
+            )
+            sw_rows = await cur.fetchall()
+
+            # B) Schumann daily
+            await cur.execute(
+                """
+                with d as (
+                  select day, station_id, f0_avg_hz, f1_avg_hz, f2_avg_hz,
+                         row_number() over (partition by day
+                           order by case when station_id='tomsk' then 0
+                                         when station_id='cumiana' then 1
+                                    else 2 end) as rn
+                  from marts.schumann_daily
+                  where day >= (current_date - %s::interval)::date
+                )
+                select day, station_id, f0_avg_hz, f1_avg_hz, f2_avg_hz
+                from d where rn=1
                 order by day asc
                 """,
-                (user_id, f"{days} days"),
-                prepare=False,
+                (f"{days} days",), prepare=False,
             )
-            hr_daily_rows = await cur.fetchall()
+            sch_rows = await cur.fetchall()
 
-        # D) HR timeseries
-        hr_ts_rows = []
-        if user_id is not None:
-            await cur.execute(
-                """
-                with bounds as (
-                  select to_timestamp(floor(extract(epoch from now())/300.0)*300.0) as now5
-                ),
-                buckets as (
-                  select generate_series(
-                    (select now5 from bounds) - %s::interval,
-                    (select now5 from bounds),
-                    interval '5 minutes'
-                  ) as ts_utc
-                ),
-                agg as (
-                  select
-                    to_timestamp(floor(extract(epoch from start_time)/300.0)*300.0) as bucket_utc,
-                    avg(nullif(value,'')::numeric) filter (where value ~ '^[0-9]+(\.[0-9]+)?$') as hr
-                  from gaia.samples
-                  where user_id = %s
-                    and type = 'heart_rate'
-                    and start_time >= now() - %s::interval
-                  group by 1
+            # C) HR daily
+            hr_daily_rows = []
+            if user_id is not None:
+                await cur.execute(
+                    """
+                    select date as day, hr_min, hr_max
+                    from gaia.daily_summary
+                    where user_id = %s
+                      and date >= (current_date - %s::interval)::date
+                    order by day asc
+                    """,
+                    (user_id, f"{days} days"), prepare=False,
                 )
-                select b.ts_utc, a.hr
-                from buckets b
-                left join agg a on a.bucket_utc = b.ts_utc
-                order by ts_utc asc
-                """,
-                (f"{days} days", user_id, f"{days} days"),
-                prepare=False,
-            )
-            hr_ts_rows = await cur.fetchall()
+                hr_daily_rows = await cur.fetchall()
+
+            # D) HR timeseries with aligned 5-min buckets
+            hr_ts_rows = []
+            if user_id is not None:
+                await cur.execute(
+                    """
+                    with bounds as (
+                      select to_timestamp(floor(extract(epoch from now())/300.0)*300.0) as now5
+                    ),
+                    buckets as (
+                      select generate_series(
+                        (select now5 from bounds) - %s::interval,
+                        (select now5 from bounds),
+                        interval '5 minutes'
+                      ) as ts_utc
+                    ),
+                    agg as (
+                      select
+                        to_timestamp(floor(extract(epoch from start_time)/300.0)*300.0) as bucket_utc,
+                        avg(nullif(value,'')::numeric)
+                          filter (where value ~ '^[0-9]+(\\.[0-9]+)?$') as hr
+                      from gaia.samples
+                      where user_id = %s
+                        and type = 'heart_rate'
+                        and start_time >= now() - %s::interval
+                      group by 1
+                    )
+                    select b.ts_utc, a.hr
+                    from buckets b
+                    left join agg a on a.bucket_utc = b.ts_utc
+                    order by ts_utc asc
+                    """,
+                    (f"{days} days", user_id, f"{days} days"), prepare=False,
+                )
+                hr_ts_rows = await cur.fetchall()
+    except Exception as e:
+        return {"ok": False, "data": None, "error": str(e)}
 
     def iso(ts): return ts.astimezone(timezone.utc).isoformat() if ts else None
 
