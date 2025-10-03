@@ -299,11 +299,11 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
                     now() - %s::interval,
                     now(),
                     interval '5 minutes'
-                  ) as ts
+                  ) as ts_utc
                 ),
                 agg as (
                   select
-                    to_timestamp(floor(extract(epoch from start_time)/300.0)*300.0) at time zone 'UTC' as bucket,
+                    to_timestamp(floor(extract(epoch from start_time)/300.0)*300.0) as bucket_utc,
                     avg(value) as hr
                   from gaia.samples
                   where user_id = %s
@@ -311,9 +311,9 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
                     and start_time >= now() - %s::interval
                   group by 1
                 )
-                select b.ts as ts_utc, a.hr
+                select b.ts_utc, a.hr
                 from buckets b
-                left join agg a on a.bucket = b.ts
+                left join agg a on a.bucket_utc = b.ts_utc
                 order by ts_utc asc
                 """,
                 (f"{days} days", user_id, f"{days} days"),
