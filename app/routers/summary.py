@@ -220,21 +220,23 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
     user_id = getattr(request.state, "user_id", None)
 
     async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute("set statement_timeout = 60000")
+        await cur.execute("set statement_timeout = 60000", prepare=False)
 
         # A) Space weather: aggregate per timestamp (align kp/bz/sw on the same ts)
         await cur.execute(
             """
             select ts_utc,
-                   coalesce(max(kp_index), 0) as kp,
-                   max(bz_nt)    as bz,
-                   max(sw_speed_kms) as sw
+                   max(kp_index)       as kp,
+                   max(bz_nt)          as bz,
+                   max(sw_speed_kms)   as sw
             from ext.space_weather
             where ts_utc >= now() - %s::interval
+              and (kp_index is not null or bz_nt is not null or sw_speed_kms is not null)
             group by ts_utc
             order by ts_utc asc
             """,
             (f"{days} days",),
+            prepare=False,
         )
         sw_rows = await cur.fetchall()
 
@@ -255,6 +257,7 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
             order by day asc
             """,
             (f"{days} days",),
+            prepare=False,
         )
         sch_rows = await cur.fetchall()
 
@@ -270,6 +273,7 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
                 order by day asc
                 """,
                 (user_id, f"{days} days"),
+                prepare=False,
             )
             hr_daily_rows = await cur.fetchall()
 
@@ -301,19 +305,20 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
                 order by ts_utc asc
                 """,
                 (f"{days} days", user_id, f"{days} days"),
+                prepare=False,
             )
             hr_ts_rows = await cur.fetchall()
 
         # Diagnostics: counts by source in the same window
-        await cur.execute("select count(*) as n from ext.space_weather where ts_utc >= now() - %s::interval", (f"{days} days",))
+        await cur.execute("select count(*) as n from ext.space_weather where ts_utc >= now() - %s::interval", (f"{days} days",), prepare=False)
         sw_count_row = await cur.fetchone()
         sw_count = sw_count_row.get("n") if sw_count_row else None
 
-        await cur.execute("select count(*) as n from ext.space_weather where ts_utc >= now() - %s::interval and kp_index is not null", (f"{days} days",))
+        await cur.execute("select count(*) as n from ext.space_weather where ts_utc >= now() - %s::interval and kp_index is not null", (f"{days} days",), prepare=False)
         sw_kp_count_row = await cur.fetchone()
         sw_kp_count = sw_kp_count_row.get("n") if sw_kp_count_row else None
 
-        await cur.execute("select count(*) as n from marts.schumann_daily where day >= (current_date - %s::interval)::date", (f"{days} days",))
+        await cur.execute("select count(*) as n from marts.schumann_daily where day >= (current_date - %s::interval)::date", (f"{days} days",), prepare=False)
         sch_count_row = await cur.fetchone()
         sch_count = sch_count_row.get("n") if sch_count_row else None
 
