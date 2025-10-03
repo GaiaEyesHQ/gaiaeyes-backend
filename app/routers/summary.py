@@ -222,29 +222,19 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute("set statement_timeout = 60000")
 
-        # A) Space weather: union per metric
+        # A) Space weather: aggregate per timestamp (align kp/bz/sw on the same ts)
         await cur.execute(
             """
-            (
-              select ts_utc, kp_index as kp, null::double precision as bz, null::double precision as sw
-              from ext.space_weather
-              where ts_utc >= now() - %s::interval and kp_index is not null
-            )
-            union all
-            (
-              select ts_utc, null::double precision as kp, bz_nt as bz, null::double precision as sw
-              from ext.space_weather
-              where ts_utc >= now() - %s::interval and bz_nt is not null
-            )
-            union all
-            (
-              select ts_utc, null::double precision as kp, null::double precision as bz, sw_speed_kms as sw
-              from ext.space_weather
-              where ts_utc >= now() - %s::interval and sw_speed_kms is not null
-            )
+            select ts_utc,
+                   max(kp_index) as kp,
+                   max(bz_nt)    as bz,
+                   max(sw_speed_kms) as sw
+            from ext.space_weather
+            where ts_utc >= now() - %s::interval
+            group by ts_utc
             order by ts_utc asc
             """,
-            (f"{days} days", f"{days} days", f"{days} days"),
+            (f"{days} days",),
         )
         sw_rows = await cur.fetchall()
 
