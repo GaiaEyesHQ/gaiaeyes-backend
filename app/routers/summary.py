@@ -303,12 +303,12 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
                     agg as (
                       select
                         to_timestamp(floor(extract(epoch from start_time)/300.0)*300.0) as bucket_utc,
-                        avg(nullif(value,'')::numeric)
-                          filter (where value ~ '^[0-9]+(\\.[0-9]+)?$') as hr
+                        avg(value) as hr
                       from gaia.samples
                       where user_id = %s
                         and type = 'heart_rate'
                         and start_time >= now() - %s::interval
+                        and value is not null
                       group by 1
                     )
                     select b.ts_utc, a.hr
