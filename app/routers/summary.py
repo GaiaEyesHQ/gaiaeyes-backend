@@ -307,7 +307,7 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
                     avg(value) as hr
                   from gaia.samples
                   where user_id = %s
-                    and type in ('heart_rate','hr')
+                    and type = 'heart_rate'
                     and start_time >= now() - %s::interval
                   group by 1
                 )
