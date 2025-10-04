@@ -75,19 +75,25 @@ jobs:
         run: |
           set -e
           cd gaiaeyes-media
-          # Option A: Always publish to repo root under data/
+          # Always publish to repo root under data/
           DEST_DIR="data"
+          FILE="${DEST_DIR}/flares_cmes.json"
+          echo "Ensuring ${DEST_DIR} exists"
           mkdir -p "${DEST_DIR}"
-          # Ensure emitter output exists at fixed path
-          SRC_JSON="${{ github.workspace }}/gaiaeyes-media/data/flares_cmes.json"
-          if [ -f "${SRC_JSON}" ]; then
-            cp -f "${SRC_JSON}" "${DEST_DIR}/flares_cmes.json"
-          fi
-          echo "DEBUG git status under ${DEST_DIR}"
+          echo "Git status before:"
+          git status --porcelain || true
+          echo "Listing ${DEST_DIR}:"
+          ls -l "${DEST_DIR}" || true
+          # No copy needed: emitter already wrote directly into gaiaeyes-media/data/flares_cmes.json
+          # Proceed to commit if changed or new
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git status --porcelain | grep -E "^\s*M\s+${DEST_DIR}/flares_cmes\.json|^\?\?\s+${DEST_DIR}/flares_cmes\.json"; then
-            git add ${DEST_DIR}/flares_cmes.json
+          if [ -f "${FILE}" ]; then
+            git add "${FILE}"
+          else
+            echo "ERROR: ${FILE} not found"; exit 1
+          fi
+          if ! git diff --cached --quiet -- "${FILE}"; then
             git commit -m "chore(donki): update flares_cmes.json [skip ci]"
             git push
             if [ -n "${MEDIA_CDN_BASE}" ]; then
