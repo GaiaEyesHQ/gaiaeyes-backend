@@ -35,14 +35,11 @@ jobs:
           repository: ${{ env.MEDIA_REPO_OWNER }}/${{ env.MEDIA_REPO_NAME }}
           token: ${{ env.GAIAEYES_MEDIA_TOKEN }}
           path: gaiaeyes-media
-      - name: Set OUTPUT_JSON_PATH for emitter
+      - name: Set OUTPUT_JSON_PATH for emitter (fixed to media/data)
         run: |
-          # Always emit into gaiaeyes-media/<MEDIA_ROOT or root>/data/flares_cmes.json
-          if [ -n "${MEDIA_ROOT}" ]; then
-            DEST="${{ github.workspace }}/gaiaeyes-media/${MEDIA_ROOT%/}/data/flares_cmes.json"
-          else
-            DEST="${{ github.workspace }}/gaiaeyes-media/data/flares_cmes.json"
-          fi
+          # Always emit into gaiaeyes-media/data first (stable), then we'll copy to docs if MEDIA_ROOT=docs
+          DEST="${{ github.workspace }}/gaiaeyes-media/data/flares_cmes.json"
+          mkdir -p "$(dirname "${DEST}")"
           echo "OUTPUT_JSON_PATH=${DEST}" >> $GITHUB_ENV
           echo "Using OUTPUT_JSON_PATH=${DEST}"
       - uses: actions/setup-python@v5
@@ -74,7 +71,7 @@ jobs:
             DEST_DIR="data"
           fi
           mkdir -p "${DEST_DIR}"
-          # Ensure file is present in the chosen dir (if emitter wrote to /data when MEDIA_ROOT is set)
+          # Ensure file is present in the chosen dir (copy from fixed emitter path if MEDIA_ROOT is set)
           SRC_JSON="${{ github.workspace }}/gaiaeyes-media/data/flares_cmes.json"
           if [ -n "${MEDIA_ROOT}" ] && [ -f "${SRC_JSON}" ] && [ "${DEST_DIR}" != "data" ]; then
             cp -f "${SRC_JSON}" "${DEST_DIR}/flares_cmes.json"
