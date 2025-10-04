@@ -24,7 +24,6 @@ jobs:
       # MAG_URL: "https://services.swpc.noaa.gov/products/solar-wind/mag-7-day.json"
       ALERTS_URL: "https://services.swpc.noaa.gov/products/alerts.json"
       FORECAST_URL: "https://services.swpc.noaa.gov/text/3-day-forecast.txt"
-      OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/space_weather.json
       OUTPUT_JSON_GZIP: "false"
       NEXT72_DEFAULT: "Quiet to unsettled"
       MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
@@ -44,6 +43,16 @@ jobs:
           repository: ${{ env.MEDIA_REPO_OWNER }}/${{ env.MEDIA_REPO_NAME }}
           token: ${{ env.GAIAEYES_MEDIA_TOKEN }}
           path: gaiaeyes-media
+
+      - name: Set OUTPUT_JSON_PATH for emitter
+        run: |
+          if [ -n "${MEDIA_ROOT}" ]; then
+            DEST="${{ github.workspace }}/gaiaeyes-media/${MEDIA_ROOT%/}/data/space_weather.json"
+          else
+            DEST="${{ github.workspace }}/gaiaeyes-media/data/space_weather.json"
+          fi
+          echo "OUTPUT_JSON_PATH=${DEST}" >> $GITHUB_ENV
+          echo "Using OUTPUT_JSON_PATH=${DEST}"
 
       - name: Setup Python
         uses: actions/setup-python@v5
