@@ -23,7 +23,7 @@ Notes:
 - We pick rows newer than now()-SINCE_HOURS.
 """
 
-import os, sys, asyncio, math, json
+import os, sys, asyncio, math, json, gzip, pathlib, re
 from datetime import datetime, timezone, timedelta
 import asyncpg
 import httpx
@@ -33,6 +33,10 @@ DB = os.getenv("SUPABASE_DB_URL")
 if not DB:
     print("Missing SUPABASE_DB_URL", file=sys.stderr)
     sys.exit(2)
+
+OUTPUT_JSON_PATH = os.getenv("OUTPUT_JSON_PATH")  # e.g., ../gaiaeyes-media/data/space_weather.json
+OUTPUT_JSON_GZIP = os.getenv("OUTPUT_JSON_GZIP", "false").lower() in ("1","true","yes")
+NEXT72_DEFAULT = os.getenv("NEXT72_DEFAULT", "Quiet to unsettled")
 
 SRC = "noaa-swpc"
 BASE_SUM = "https://services.swpc.noaa.gov/products/summary"
@@ -59,6 +63,145 @@ ALERTS_URL = "https://services.swpc.noaa.gov/products/alerts.json"
 FORECAST_URL = "https://services.swpc.noaa.gov/text/3-day-forecast.txt"
 
 UA = os.getenv("HTTP_USER_AGENT", "gaiaeyes.com contact: gaiaeyes7.83@gmail.com")
+
+def _safe_mkdirs(path: str):
+    p = pathlib.Path(path)
+    if p.suffix:
+        p.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        p.mkdir(parents=True, exist_ok=True)
+
+def latest_ts_and_vals(merged: dict):
+    """Return (ts, vals) for the most recent merged entry."""
+    if not merged:
+        return None, {}
+    ts = max(merged.keys())
+    return ts, merged[ts]
+
+def parse_next72_headline(forecast_txt: str|None) -> tuple[str,str]:
+    """
+    Heuristic: scan SWPC 3-day text for strongest G-level keywords and adverbs.
+    Returns (headline, confidence).
+    """
+    if not forecast_txt:
+        return NEXT72_DEFAULT, "low"
+    txt = forecast_txt.lower()
+    # Find strongest G-level mentioned
+    level = None
+    for g in ["g5","g4","g3","g2","g1"]:
+        if g in txt:
+            level = g.upper()
+            break
+    # Confidence terms
+    conf = "medium"
+    if re.search(r"\blikely\b|\bexpected\b|\bprobable\b", txt):
+        conf = "high"
+    elif re.search(r"\bslight\b|\bchance\b|\bpossible\b", txt):
+        conf = "medium"
+    elif re.search(r"\bunlikely\b|\bminimal\b", txt):
+        conf = "low"
+    if level:
+        # Try to infer timing phrases
+        when = None
+        m = re.search(r"(tonight|tomorrow|day\s+\d|day\s+two|day\s+three|day\s+1|day\s+2|day\s+3|weekend|overnight)", txt)
+        if m:
+            when = m.group(1).replace("day 1","today").replace("day 2","tomorrow").replace("day two","tomorrow").replace("day 3","day 3")
+        headline = f"{level} possible{(' ' + when) if when else ''}".strip()
+    else:
+        headline = NEXT72_DEFAULT
+    return headline, conf
+
+def extract_recent_alert_tags(alert_rows: list[dict], hours:int=24) -> list[str]:
+    """
+    Pull compact tags like G1..G5, R1..R5, S1..S5 from recent SWPC alerts.
+    """
+    if not alert_rows:
+        return []
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    tags = []
+    for a in alert_rows:
+        t = a.get("issued_at")
+        if t and t >= cutoff:
+            msg = (a.get("message") or "").upper()
+            for tag in ("G1","G2","G3","G4","G5","R1","R2","R3","R4","R5","S1","S2","S3","S4","S5"):
+                if tag in msg and tag not in tags:
+                    tags.append(tag)
+    return tags
+
+def humanize_impacts(kp: float|None, bz: float|None) -> dict:
+    """
+    Simple rules to turn current Kp and Bz orientation into human-readable impacts.
+    """
+    gps = "Normal"
+    comms = "Normal"
+    grids = "Normal"
+    aurora = "Unlikely except high latitudes"
+
+    if kp is not None:
+        if kp >= 7:
+            gps = "Significant errors & dropouts possible; favor multi-constellation + dual-frequency"
+            comms = "HF blackouts and GNSS scintillation likely at high/mid latitudes"
+            grids = "Geomagnetically induced currents possible; operators may see alarms"
+            aurora = "Likely far south from usual; widespread visibility"
+        elif kp >= 6:
+            gps = "Elevated errors at high/mid latitudes; brief loss of lock possible"
+            comms = "HF degradation likely at high latitudes; some mid-latitude impacts"
+            grids = "Minor voltage fluctuations possible"
+            aurora = "Likely at high latitudes; possible into mid-latitudes"
+        elif kp >= 5:
+            gps = "Minor positioning errors at high latitudes"
+            comms = "Occasional HF fades near poles"
+            grids = "Low risk; minor fluctuations"
+            aurora = "Possible at high latitudes"
+        elif kp >= 4:
+            gps = "Mostly normal; slight high-lat jitter"
+            comms = "Mostly normal"
+            grids = "Normal"
+            aurora = "More frequent high-lat aurora"
+        else:
+            gps = "Normal"
+            comms = "Normal"
+            grids = "Normal"
+            aurora = "Mostly confined to polar regions"
+
+    # Bz southward increases coupling → nudge risk upward
+    if bz is not None and bz < -5:
+        gps = ("Slightly elevated risk due to southward Bz — " + gps).strip()
+        comms = ("Polar HF more variable — " + comms).strip()
+        aurora = ("Enhanced if sustained — " + aurora).strip()
+
+    return {"gps": gps, "comms": comms, "grids": grids, "aurora": aurora}
+
+def emit_space_weather_json(now_ts: datetime, now_vals: dict, next_headline: str, confidence: str, alerts: list[str], sources_meta: dict):
+    payload = {
+        "timestamp_utc": now_ts.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z"),
+        "now": {
+            "kp": now_vals.get("kp_index"),
+            "solar_wind_kms": now_vals.get("sw_speed_kms"),
+            "bz_nt": now_vals.get("bz_nt"),
+        },
+        "next_72h": {
+            "headline": next_headline,
+            "confidence": confidence,
+        },
+        "alerts": alerts,
+        "impacts": humanize_impacts(now_vals.get("kp_index"), now_vals.get("bz_nt")),
+        "sources": sources_meta,
+    }
+    if not OUTPUT_JSON_PATH:
+        print("[info] OUTPUT_JSON_PATH not set; skipping JSON file emission.")
+        return
+    _safe_mkdirs(OUTPUT_JSON_PATH)
+    raw = json.dumps(payload, separators=(",",":"), ensure_ascii=False)
+    if OUTPUT_JSON_GZIP:
+        out_path = OUTPUT_JSON_PATH + ("" if OUTPUT_JSON_PATH.endswith(".gz") else ".gz")
+        with gzip.open(out_path, "wb") as f:
+            f.write(raw.encode("utf-8"))
+        print(f"[info] Wrote gzipped space-weather JSON -> {out_path}")
+    else:
+        with open(OUTPUT_JSON_PATH, "w", encoding="utf-8") as f:
+            f.write(raw)
+        print(f"[info] Wrote space-weather JSON -> {OUTPUT_JSON_PATH}")
 
 def parse_iso(ts: str) -> datetime:
     """Parse ISO8601-ish strings and ensure tz-aware (UTC)."""
@@ -365,6 +508,21 @@ async def main():
     # Keep recent
     merged = filter_since(merged, SINCE_HOURS)
 
+    # Compute latest snapshot for JSON emission
+    latest_ts, latest_vals = latest_ts_and_vals(merged)
+    # alerts parsing for JSON (if any)
+    alert_rows = [a for a in parse_alert_rows(alerts_arr) if a.get("issued_at")] if alerts_arr else []
+    recent_alert_tags = extract_recent_alert_tags(alert_rows, hours=24)
+    # headline/confidence from forecast
+    next_headline, next_conf = parse_next72_headline(forecast_txt)
+    sources_meta = {
+        "kp_source": URLS_LIST["kp"][0] if URLS_LIST.get("kp") else None,
+        "speed_source": URLS_LIST["speed"][0] if URLS_LIST.get("speed") else None,
+        "mag_source": URLS_LIST["mag"][0] if URLS_LIST.get("mag") else None,
+        "alerts_source": ALERTS_URL,
+        "forecast_source": FORECAST_URL,
+    }
+
     # Prepare rows for upsert
     rows = []
     for ts, v in sorted(merged.items()):
@@ -408,6 +566,15 @@ async def main():
         if forecast_txt:
             await conn.execute(UPSERT_FORECAST_SQL, datetime.now(timezone.utc), SRC, forecast_txt)
             print("Stored 3-day forecast text in ext.space_forecast")
+
+        # Emit dashboard JSON (best-effort)
+        try:
+            if latest_ts and latest_vals:
+                emit_space_weather_json(latest_ts, latest_vals, next_headline, next_conf, recent_alert_tags, sources_meta)
+            else:
+                print("[warn] No latest space-weather values to emit JSON.")
+        except Exception as e:
+            print(f"[warn] Failed to emit space-weather JSON: {e}")
     finally:
         await conn.close()
 

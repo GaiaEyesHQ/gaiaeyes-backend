@@ -18,76 +18,90 @@
 
 **Decode the unseen.**
 
-Gaia Eyes is an iOS app (SwiftUI) that combines **health metrics**, **space weather**, and **Earthscope insights** into a daily dashboard.
+Gaia Eyes is an iOS app (SwiftUI) that combines **health metrics**, **space weather**, and **Earthscope insights** into a comprehensive daily dashboard with enhanced visualizations and detailed insights.
 
 ---
 
 ## Features
 
 ### Sleep
-- Sleep card shows **total sleep in hours + minutes** (e.g. `7h 9m total`).
-- Stage breakdowns (REM / Core / Deep / In Bed) in minutes.
-- Auto-sync fallback: if today’s sleep = 0, trigger a 2-day sleep sync and refetch.
+- Displays total sleep in hours and minutes (e.g. `7h 9m total`).
+- Detailed stage breakdowns including REM, Core, Deep, and In Bed times.
+- Auto-sync fallback: if today’s sleep equals 0, triggers a 2-day sleep sync and refetch.
 
 ### Health Stats
-- Displays Steps, HR min, HRV, SpO₂.
-- Color cues:
+- Shows Steps, Heart Rate minimum and maximum, HRV, SpO₂, and average Blood Pressure.
+- Color-coded cues for quick assessment:
   - Steps ≥ 8000 → green
-  - HR min ≤ 50 → blue
+  - Heart Rate min ≤ 50 → blue
+  - Heart Rate max ≥ 120 → red
   - HRV ≥ 80 → green
   - SpO₂ < 95% → red
+  - Blood Pressure averages outside normal range → yellow/red as appropriate
 
 ### Space Weather
-- Split into three rows for clarity:
-  - Row 1: Kp, Bz, Solar Wind speed
-  - Row 2: Flares, CMEs
-  - Row 3: Schumann station + f0/f1/f2
-- Compact **StatPills** with scaling to avoid overflow.
+- Organized into clear sections with compact **StatPills** for readability:
+  - Kp index: current and maximum values
+  - Bz component: current and minimum values
+  - Solar Wind speed: average and current
+  - Flares and CMEs counts
+  - Schumann resonance frequencies f0 through f4
 
 ### Earthscope
-- **Card**:
-  - Daily random **square background** from `/backgrounds/square/manifest.json`.
-  - Background blur: 8, opacity: 0.45.
-  - “Read more” link larger, bold, with spacing below.
-  - Thumbnails padded down for breathing room.
-- **Detail (Read More)**:
-  - Daily random **tall background** from `/backgrounds/tall/manifest.json`; fallback = `earth_space_tall.jpg`.
-  - Background blur: 2, opacity: 0.70, with subtle vignette.
-  - Body text softened (rgba 220,220,235,0.88), line height 1.6.
-  - Markdown → HTML:
+- **Card view**:
+  - Uses a daily random square background image selected from `/backgrounds/square/manifest.json`.
+  - Background blur set to 8 with opacity 0.45 for subtle visual effect.
+  - “Read more” link is larger, bold, and spaced below content for better accessibility.
+  - Thumbnails have added padding for improved breathing room.
+- **Detail (Read More) view**:
+  - Displays a daily random tall background from `/backgrounds/tall/manifest.json` with a fallback image `earth_space_tall.jpg`.
+  - Background blur set to 2 with opacity 0.70 and a subtle vignette overlay.
+  - Body text softened with rgba(220,220,235,0.88) and line height of 1.6 for comfortable reading.
+  - Markdown content is converted to HTML with enhanced styling:
     - Headings: `##` → `<h2>`, `###` → `<h3>`
     - Lists:
       - Numbered (`1.`) → `<ol>`
-      - Dashed (`- item`) → `<ul>`
-      - Asterisk (`* item`) → `<ul>`
-  - Hashtags stripped everywhere.
+      - Dashed (`- item`) and asterisk (`* item`) → `<ul>`
+  - All hashtags are stripped from the detail view content for clarity.
+
+### Space Alerts
+- Small card displays warnings prominently when solar flares count is greater than 0 or Kp index is 5 or higher, alerting users to significant space weather events.
+
+### Weekly Trends
+- Provides graphical representations of key metrics over the past week:
+  - Heart Rate timeseries with min/max and average lines
+  - Kp index trends
+  - Bz component trends
+  - Schumann resonance frequency f0 trends
+- Includes legends, counts, and indicators of improvements or declines for easy interpretation.
 
 ### Debug / Status
-- Status card removed from main view.
-- Now shown under Debug panel → DisclosureGroup("Status").
-- Debug panel also includes Logs + manual sync buttons.
+- The Status card has been removed from the main view for a cleaner interface.
+- Now accessible under the Debug panel within a DisclosureGroup labeled "Status".
+- Debug panel also contains Logs and manual sync buttons for developer use.
 
 ---
 
 ## Fonts
-Custom fonts loaded via `/fonts/` (GitHub Pages):
+Custom fonts are loaded via `/fonts/` (hosted on GitHub Pages):
 - AbrilFatface-Regular.ttf
 - BebasNeue.ttf
 - ChangaOne-Regular.ttf
 - Oswald-VariableFont_wght.ttf
-- **Poppins-Regular.tttf** (note extra `t` in filename; fix later to `.ttf`)
+- **Poppins-Regular.ttf** (corrected from previous typo with extra `t` in the filename)
 
 ---
 
 ## Dev Notes
-- Backgrounds rotate daily using `manifest.json`.
-- Earthscope card = square backgrounds; Read More = tall backgrounds.
-- When starting a new ChatGPT conversation, paste this README at the top so context isn’t lost.
+- Background images rotate daily using `manifest.json` files.
+- Earthscope card backgrounds use square images; the Read More detail view uses tall images.
+- Markdown parsing has been improved for better HTML conversion and styling.
+- When starting a new ChatGPT conversation, include this README at the top to maintain context.
 
 ---
 
 ## Roadmap / Next
-- [ ] Format stage breakdowns (REM/Core/Deep) as `Xh Ym` when >60m.
-- [ ] Sync square/tall backgrounds by name (e.g. `aurora_square` → `aurora_tall`).
-- [ ] Add pinch-zoom for Earthscope image viewer.
-- [ ] Improve Markdown parser or move to server-side HTML generation.
+- [ ] Sync square and tall backgrounds by matching names (e.g. `aurora_square` → `aurora_tall`).
+- [ ] Improve Markdown parser or migrate to server-side HTML generation for enhanced formatting.
+- [ ] Add pinch-zoom functionality for the Earthscope image viewer.
+- [ ] Display updated timestamps on cards to indicate data freshness.
