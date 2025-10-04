@@ -6,17 +6,16 @@ ENV:
   SUPABASE_DB_URL  (required)
   NASA_API_KEY     (required)
   START_DAYS_AGO   (default 7)  -- pulls events from now()-N days to today
+  OUTPUT_JSON_PATH  (optional) path to write flares_cmes.json (e.g., ../gaiaeyes-media/docs/data/flares_cmes.json)
+  OUTPUT_JSON_GZIP  (optional) "true"/"false" to also write .gz
 """
 
-import os, sys, asyncio, json, random
+import os, sys, asyncio, json, random, gzip, pathlib
 from datetime import datetime, timedelta, timezone
 import httpx, asyncpg
 
-def env(k, default=None, required=False):
-    v = os.getenv(k, default)
-    if required and (v is None or v == ""):
-        print(f"Missing env: {k}", file=sys.stderr); sys.exit(2)
-    return v
+OUTPUT_JSON_PATH = os.getenv("OUTPUT_JSON_PATH")
+OUTPUT_JSON_GZIP = os.getenv("OUTPUT_JSON_GZIP", "false").strip().lower() in ("1","true","yes")
 
 DB   = env("SUPABASE_DB_URL", required=True)
 KEY  = env("NASA_API_KEY", required=True)
@@ -46,6 +45,120 @@ set start_time = excluded.start_time,
     class      = excluded.class,
     meta       = excluded.meta;
 """
+
+FLARE_ORDER = {"A":0,"B":1,"C":2,"M":3,"X":4}
+
+def parse_iso_to_utc(ts):
+    dt = parse_iso(ts)
+    if not dt:
+        return None
+    return dt.astimezone(timezone.utc)
+
+def flare_key(cls: str):
+    """Return tuple for sorting flare classes like 'C3.2', 'M1.0'."""
+    if not cls or not isinstance(cls, str):
+        return (-1, 0.0)
+    cls = cls.strip().upper()
+    band = cls[:1]
+    mag = 0.0
+    try:
+        mag = float(cls[1:])
+    except Exception:
+        mag = 0.0
+    return (FLARE_ORDER.get(band, -1), mag)
+
+def summarize_flares(flr_list: list, now: datetime):
+    """Return summary dict with max_24h class and recent list of peaks."""
+    max_cls = None
+    recent = []
+    cutoff = now - timedelta(hours=24)
+    for e in flr_list or []:
+        cls = e.get("classType")
+        peak = parse_iso_to_utc(e.get("peakTime"))
+        if peak:
+            if peak >= cutoff:
+                recent.append({"class": cls, "peak_utc": peak.replace(microsecond=0).isoformat().replace("+00:00","Z")})
+            if (max_cls is None) or (flare_key(cls) > flare_key(max_cls)):
+                # consider only last 24h for max_24h
+                if peak >= cutoff:
+                    max_cls = cls
+    # sort recent by time desc
+    recent.sort(key=lambda x: x.get("peak_utc",""), reverse=True)
+    return {"max_24h": max_cls, "recent": recent}
+
+def earth_directed_from_analyses(cme_event: dict) -> bool|None:
+    """
+    Try to infer earth-directed from DONKI fields.
+    Prefer explicit 'cmeAnalyses' bools; otherwise return None.
+    """
+    analyses = cme_event.get("cmeAnalyses") or cme_event.get("analyses") or []
+    if isinstance(analyses, dict):
+        analyses = [analyses]
+    for a in analyses:
+        ed = a.get("isEarthDirected")
+        if isinstance(ed, bool):
+            return ed
+    return None
+
+def summarize_cmes(cme_list: list, now: datetime):
+    """Return last_72h simplified entries and headline."""
+    cutoff = now - timedelta(hours=72)
+    rows = []
+    any_ed = False
+    for e in cme_list or []:
+        st = parse_iso_to_utc(e.get("startTime"))
+        if not st or st < cutoff:
+            continue
+        speed = None
+        # speed may live in 'cmeAnalyses' entries
+        analyses = e.get("cmeAnalyses") or []
+        if isinstance(analyses, dict):
+            analyses = [analyses]
+        for a in analyses:
+            sp = a.get("speed")
+            if sp:
+                try:
+                    speed = int(round(float(sp)))
+                    break
+                except Exception:
+                    pass
+        ed = earth_directed_from_analyses(e)
+        any_ed = any_ed or bool(ed)
+        rows.append({
+            "time_utc": st.replace(microsecond=0).isoformat().replace("+00:00","Z"),
+            "speed_kms": speed,
+            "earth_directed": ed
+        })
+    # sort desc
+    rows.sort(key=lambda r: r["time_utc"], reverse=True)
+    if not rows:
+        headline = "No CMEs in last 72h"
+    else:
+        headline = "Earth-directed CME possible" if any_ed else "No Earth-directed CMEs detected"
+    return {"last_72h": rows, "headline": headline}
+
+def emit_json_flares_cmes(now_ts: datetime, flr_summary: dict, cme_summary: dict, sources: dict):
+    if not OUTPUT_JSON_PATH:
+        print("[DONKI] OUTPUT_JSON_PATH not set; skipping JSON emission.")
+        return
+    payload = {
+        "timestamp_utc": now_ts.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z"),
+        "flares": flr_summary,
+        "cmes": cme_summary,
+        "sources": sources
+    }
+    p = pathlib.Path(OUTPUT_JSON_PATH)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    raw = json.dumps(payload, separators=(",",":"), ensure_ascii=False)
+    if OUTPUT_JSON_GZIP:
+        out = p if str(p).endswith(".gz") else pathlib.Path(str(p) + ".gz")
+        with gzip.open(out, "wb") as f:
+            f.write(raw.encode("utf-8"))
+        print(f"[DONKI] wrote gz JSON -> {out}")
+    else:
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(raw)
+        print(f"[DONKI] wrote JSON -> {p}")
 
 def iso_day(d: datetime) -> str:
     return d.strftime("%Y-%m-%d")
@@ -147,6 +260,15 @@ async def main():
             flr = await fetch(client, "FLR", params) or []
             cme = await fetch(client, "CME", params) or []
 
+    # Build JSON summaries
+    now_ts = datetime.now(timezone.utc)
+    flares_summary = summarize_flares(flr, now_ts)
+    cmes_summary = summarize_cmes(cme, now_ts)
+    sources_meta = {
+        "flr_source": f"{BASE_PRIMARY}/FLR",
+        "cme_source": f"{BASE_PRIMARY}/CME"
+    }
+
     rows = []
     # FLR: fields: flrID, beginTime, peakTime, endTime, classType
     if isinstance(flr, list):
@@ -180,6 +302,11 @@ async def main():
     try:
         await conn.executemany(UPSERT, rows)
         print(f"Upserted {len(rows)} DONKI events")
+        # Emit companion JSON for web/app dashboards
+        try:
+            emit_json_flares_cmes(now_ts, flares_summary, cmes_summary, sources_meta)
+        except Exception as e:
+            print(f"[DONKI] WARN: failed to emit flares_cmes.json: {e}")
     finally:
         await conn.close()
 

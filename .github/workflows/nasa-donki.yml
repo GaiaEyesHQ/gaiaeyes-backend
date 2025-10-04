@@ -1,4 +1,6 @@
 name: nasa-donki
+permissions:
+  contents: write
 
 on:
   schedule:
@@ -18,9 +20,75 @@ jobs:
       DONKI_DAY_SLEEP_MS: "800"   # ms to sleep between day mode calls (to avoid rate limiting)
       DONKI_PRIMARY_RETRIES: "2" # primary retries for NASA DONKI API calls (after initial call, before exponential backoff)
       DONKI_FALLBACK_RETRIES: "6" # fallback retries for NASA DONKI API calls (after primary retries, with exponential backoff)
+      # JSON emitter / media publish
+      OUTPUT_JSON_GZIP: "false"
+      MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
+      MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
+      GAIAEYES_MEDIA_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
+      MEDIA_ROOT: ${{ secrets.MEDIA_ROOT }}
+      MEDIA_CDN_BASE: ${{ secrets.MEDIA_CDN_BASE }}
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout media repo (gaiaeyes-media)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MEDIA_REPO_OWNER }}/${{ env.MEDIA_REPO_NAME }}
+          token: ${{ env.GAIAEYES_MEDIA_TOKEN }}
+          path: gaiaeyes-media
+      - name: Set OUTPUT_JSON_PATH for emitter
+        run: |
+          # Always emit into gaiaeyes-media/<MEDIA_ROOT or root>/data/flares_cmes.json
+          if [ -n "${MEDIA_ROOT}" ]; then
+            DEST="${{ github.workspace }}/gaiaeyes-media/${MEDIA_ROOT%/}/data/flares_cmes.json"
+          else
+            DEST="${{ github.workspace }}/gaiaeyes-media/data/flares_cmes.json"
+          fi
+          echo "OUTPUT_JSON_PATH=${DEST}" >> $GITHUB_ENV
+          echo "Using OUTPUT_JSON_PATH=${DEST}"
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - run: pip install httpx asyncpg
-      - run: python scripts/ingest_nasa_donki.py
+      - name: Run DONKI ingester
+        env:
+          OUTPUT_JSON_PATH: ${{ env.OUTPUT_JSON_PATH }}
+        run: |
+          echo "DEBUG OUTPUT_JSON_PATH at runtime: ${OUTPUT_JSON_PATH}"
+          python scripts/ingest_nasa_donki.py
+      - name: (Optional) Validate flares_cmes.json
+        run: |
+          FILE="${OUTPUT_JSON_PATH}"
+          echo "Validating ${FILE}"
+          if command -v jq >/dev/null 2>&1; then
+            jq -e '.timestamp_utc and .flares and .cmes and (.cmes.headline|type=="string")' "${FILE}" >/dev/null && echo "JSON looks OK" || echo "WARN: JSON missing fields"
+          else
+            echo "jq not found; skipping validation"
+          fi
+      - name: Commit & push updated flares_cmes.json
+        run: |
+          set -e
+          cd gaiaeyes-media
+          # Compute destination directory inside media repo (root or docs)
+          if [ -n "${MEDIA_ROOT}" ]; then
+            DEST_DIR="${MEDIA_ROOT%/}/data"
+          else
+            DEST_DIR="data"
+          fi
+          mkdir -p "${DEST_DIR}"
+          # Ensure file is present in the chosen dir (if emitter wrote to /data when MEDIA_ROOT is set)
+          SRC_JSON="${{ github.workspace }}/gaiaeyes-media/data/flares_cmes.json"
+          if [ -n "${MEDIA_ROOT}" ] && [ -f "${SRC_JSON}" ] && [ "${DEST_DIR}" != "data" ]; then
+            cp -f "${SRC_JSON}" "${DEST_DIR}/flares_cmes.json"
+          fi
+          echo "DEBUG git status under ${DEST_DIR}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git status --porcelain | grep -E "^\s*M\s+${DEST_DIR}/flares_cmes\.json|^\?\?\s+${DEST_DIR}/flares_cmes\.json"; then
+            git add ${DEST_DIR}/flares_cmes.json
+            git commit -m "chore(donki): update flares_cmes.json [skip ci]"
+            git push
+            if [ -n "${MEDIA_CDN_BASE}" ]; then
+              echo "Published: ${MEDIA_CDN_BASE%/}/flares_cmes.json"
+            fi
+          else
+            echo "No JSON changes to commit."
+          fi
