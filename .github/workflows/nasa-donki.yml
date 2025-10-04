@@ -75,16 +75,12 @@ jobs:
         run: |
           set -e
           cd gaiaeyes-media
-          # Compute destination directory inside media repo (root or docs)
-          if [ -n "${MEDIA_ROOT}" ]; then
-            DEST_DIR="${MEDIA_ROOT%/}/data"
-          else
-            DEST_DIR="data"
-          fi
+          # Option A: Always publish to repo root under data/
+          DEST_DIR="data"
           mkdir -p "${DEST_DIR}"
-          # Ensure file is present in the chosen dir (copy from fixed emitter path if MEDIA_ROOT is set)
+          # Ensure emitter output exists at fixed path
           SRC_JSON="${{ github.workspace }}/gaiaeyes-media/data/flares_cmes.json"
-          if [ -n "${MEDIA_ROOT}" ] && [ -f "${SRC_JSON}" ] && [ "${DEST_DIR}" != "data" ]; then
+          if [ -f "${SRC_JSON}" ]; then
             cp -f "${SRC_JSON}" "${DEST_DIR}/flares_cmes.json"
           fi
           echo "DEBUG git status under ${DEST_DIR}"
