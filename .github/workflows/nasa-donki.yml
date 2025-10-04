@@ -51,6 +51,17 @@ jobs:
         run: |
           echo "DEBUG OUTPUT_JSON_PATH at runtime: ${OUTPUT_JSON_PATH}"
           python scripts/ingest_nasa_donki.py
+      - name: Debug media paths & remotes
+        run: |
+          echo "GITHUB_WORKSPACE=${GITHUB_WORKSPACE}"
+          echo "Listing gaiaeyes-media/data:"
+          ls -l "${GITHUB_WORKSPACE}/gaiaeyes-media/data" || true
+          if [ -n "${MEDIA_ROOT}" ]; then
+            echo "Listing gaiaeyes-media/${MEDIA_ROOT%/}/data:"
+            ls -l "${GITHUB_WORKSPACE}/gaiaeyes-media/${MEDIA_ROOT%/}/data" || true
+          fi
+          echo "Git remotes for media repo:"
+          git -C gaiaeyes-media remote -v
       - name: (Optional) Validate flares_cmes.json
         run: |
           FILE="${OUTPUT_JSON_PATH}"
