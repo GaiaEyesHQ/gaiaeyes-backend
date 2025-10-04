@@ -46,14 +46,10 @@ jobs:
 
       - name: Set OUTPUT_JSON_PATH for emitter
         run: |
-          if [ -n "${MEDIA_ROOT}" ]; then
-            DEST="${{ github.workspace }}/gaiaeyes-media/${MEDIA_ROOT%/}/data/space_weather.json"
-          else
-            DEST="${{ github.workspace }}/gaiaeyes-media/data/space_weather.json"
-          fi
+          # Always emit into gaiaeyes-media/data to avoid path traversal from MEDIA_ROOT
+          DEST="${{ github.workspace }}/gaiaeyes-media/data/space_weather.json"
           echo "OUTPUT_JSON_PATH=${DEST}" >> $GITHUB_ENV
           echo "Using OUTPUT_JSON_PATH=${DEST}"
-          echo "DEBUG will write JSON to: ${DEST}"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -89,6 +85,17 @@ jobs:
             DEST_DIR="${MEDIA_ROOT%/}/data"
           else
             DEST_DIR="data"
+          fi
+          # Guard MEDIA_ROOT to only 'docs' or root
+          if [ -n "${MEDIA_ROOT}" ] && [ "${MEDIA_ROOT}" != "docs" ]; then
+            echo "WARN: Unsupported MEDIA_ROOT='${MEDIA_ROOT}', falling back to repo root."
+            DEST_DIR="data"
+          fi
+          # Ensure DEST_DIR has the latest file (copy from fixed emitter location)
+          SRC_JSON="${{ github.workspace }}/gaiaeyes-media/data/space_weather.json"
+          if [ -f "${SRC_JSON}" ] && [ "${DEST_DIR}" != "data" ]; then
+            mkdir -p "${DEST_DIR}"
+            cp -f "${SRC_JSON}" "${DEST_DIR}/space_weather.json"
           fi
           mkdir -p "${DEST_DIR}"
           echo "DEBUG checking git status under ${DEST_DIR}"
