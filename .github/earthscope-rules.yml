@@ -1,0 +1,52 @@
+name: earthscope-rules
+permissions:
+  contents: write
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"  # every 30 minutes (safe since inputs refresh often)
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
+      MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
+      GAIAEYES_MEDIA_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout media repo (gaiaeyes-media)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MEDIA_REPO_OWNER }}/${{ env.MEDIA_REPO_NAME }}
+          token: ${{ env.GAIAEYES_MEDIA_TOKEN }}
+          path: gaiaeyes-media
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      - name: Emit earthscope.json
+        env:
+          MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
+          OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/earthscope.json
+        run: |
+          python scripts/earthscope_rules_emit.py
+
+      - name: Commit & push updated earthscope.json
+        run: |
+          set -e
+          cd gaiaeyes-media
+          mkdir -p data
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git status --porcelain | grep -E "^\s*M\s+data/earthscope\.json|^\?\?\s+data/earthscope\.json"; then
+            git add data/earthscope.json
+            git commit -m "chore(earthscope): update earthscope.json [skip ci]"
+            git push
+          else
+            echo "No JSON changes to commit."
+          fi
