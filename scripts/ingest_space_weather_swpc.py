@@ -71,12 +71,35 @@ def _safe_mkdirs(path: str):
     else:
         p.mkdir(parents=True, exist_ok=True)
 
+
 def latest_ts_and_vals(merged: dict):
     """Return (ts, vals) for the most recent merged entry."""
     if not merged:
         return None, {}
     ts = max(merged.keys())
     return ts, merged[ts]
+
+def latest_field_value(merged: dict, field: str):
+    """Return the most recent non-None value for a field from the merged map."""
+    if not merged:
+        return None
+    latest_val = None
+    for ts in sorted(merged.keys()):
+        v = merged[ts].get(field)
+        if v is not None:
+            latest_val = v
+    return latest_val
+
+def _to_float_or_none(x):
+    try:
+        if x is None:
+            return None
+        f = float(x)
+        if math.isnan(f) or math.isinf(f):
+            return None
+        return f
+    except Exception:
+        return None
 
 def parse_next72_headline(forecast_txt: str|None) -> tuple[str,str]:
     """
@@ -508,8 +531,25 @@ async def main():
     # Keep recent
     merged = filter_since(merged, SINCE_HOURS)
 
-    # Compute latest snapshot for JSON emission
+    # Compute latest snapshot for JSON emission with robust fallbacks
     latest_ts, latest_vals = latest_ts_and_vals(merged)
+    if latest_vals is None:
+        latest_vals = {}
+    # Fallbacks: if any key missing in the latest entry, use the latest non-None value across the window
+    if latest_vals.get("kp_index") is None:
+        latest_vals["kp_index"] = latest_field_value(merged, "kp_index")
+    if latest_vals.get("sw_speed_kms") is None:
+        latest_vals["sw_speed_kms"] = latest_field_value(merged, "sw_speed_kms")
+    if latest_vals.get("bz_nt") is None:
+        latest_vals["bz_nt"] = latest_field_value(merged, "bz_nt")
+    # Coerce types / rounding for clean JSON
+    if latest_vals.get("kp_index") is not None:
+        latest_vals["kp_index"] = round(_to_float_or_none(latest_vals["kp_index"]) or 0.0, 1)
+    if latest_vals.get("sw_speed_kms") is not None:
+        latest_vals["sw_speed_kms"] = int(round(_to_float_or_none(latest_vals["sw_speed_kms"]) or 0.0))
+    if latest_vals.get("bz_nt") is not None:
+        latest_vals["bz_nt"] = round(_to_float_or_none(latest_vals["bz_nt"]) or 0.0, 1)
+
     # alerts parsing for JSON (if any)
     alert_rows = [a for a in parse_alert_rows(alerts_arr) if a.get("issued_at")] if alerts_arr else []
     recent_alert_tags = extract_recent_alert_tags(alert_rows, hours=24)
