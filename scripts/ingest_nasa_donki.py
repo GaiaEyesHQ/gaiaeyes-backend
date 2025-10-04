@@ -11,6 +11,14 @@ ENV:
 """
 
 import os, sys, asyncio, json, random, gzip, pathlib
+
+# Helper to get environment variables with optional default and required flag
+def env(k, default=None, required=False):
+    v = os.getenv(k, default)
+    if required and (v is None or v == ""):
+        print(f"Missing env: {k}", file=sys.stderr)
+        sys.exit(2)
+    return v
 from datetime import datetime, timedelta, timezone
 import httpx, asyncpg
 
