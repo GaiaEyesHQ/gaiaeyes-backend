@@ -22,6 +22,85 @@ def env(k, default=None, required=False):
 from datetime import datetime, timedelta, timezone
 import httpx, asyncpg
 
+GOES_XRS_1DAY = os.getenv("GOES_XRS_1DAY_URL", "https://services.swpc.noaa.gov/json/goes/primary/xrays-1-day.json")
+
+def flare_class_from_flux(flux_wm2: float) -> str | None:
+    """
+    Convert 1–8Å X-ray flux (W/m^2) to class string 'A0.0'..'X99.9'.
+    """
+    try:
+        f = float(flux_wm2)
+    except Exception:
+        return None
+    if f <= 0 or not (f < 1e2):
+        return None
+    # Determine band and magnitude
+    if f >= 1e-4:
+        band, base = "X", 1e-4
+    elif f >= 1e-5:
+        band, base = "M", 1e-5
+    elif f >= 1e-6:
+        band, base = "C", 1e-6
+    elif f >= 1e-7:
+        band, base = "B", 1e-7
+    else:
+        band, base = "A", 1e-8
+    mag = f / base
+    return f"{band}{mag:.1f}"
+
+def parse_goes_long_flux(entry: dict) -> tuple[datetime | None, float | None]:
+    """
+    Try multiple common GOES XRS JSON shapes to extract time + long (1–8Å) flux.
+    """
+    if not isinstance(entry, dict):
+        return None, None
+    ts = entry.get("time_tag") or entry.get("time") or entry.get("timestamp") or entry.get("date_time")
+    # common keys for long channel
+    val = (
+        entry.get("xrsb") or entry.get("long") or entry.get("flux") or
+        entry.get("value") or entry.get("observed_flux") or entry.get("primary")
+    )
+    t = parse_iso(ts)
+    try:
+        v = float(val) if val is not None else None
+    except Exception:
+        v = None
+    return t, v
+
+async def fetch_goes_xrs(client: httpx.AsyncClient) -> list:
+    """
+    Fetch GOES XRS 1-day JSON. Returns list of entries (dicts) or [].
+    """
+    try:
+        r = await client.get(GOES_XRS_1DAY, timeout=httpx.Timeout(45.0, connect=10.0))
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, list):
+            return data
+    except Exception as e:
+        print(f"[DONKI] GOES XRS fetch failed: {e}", file=sys.stderr)
+    return []
+
+def summarize_flares_from_goes(goes_list: list, now: datetime) -> dict:
+    """
+    Build flare summary using GOES long-channel flux.
+    Picks max flux in last 24h and reports its class/time.
+    """
+    cutoff = now - timedelta(hours=24)
+    max_flux = None
+    max_time = None
+    for e in goes_list or []:
+        t, v = parse_goes_long_flux(e)
+        if not t or t < cutoff or v is None:
+            continue
+        if (max_flux is None) or (v > max_flux):
+            max_flux, max_time = v, t
+    if max_flux is None:
+        return {"max_24h": None, "recent": []}
+    cls = flare_class_from_flux(max_flux)
+    recent = [{"class": cls, "peak_utc": max_time.replace(microsecond=0).isoformat().replace("+00:00","Z")} ] if cls else []
+    return {"max_24h": cls, "recent": recent}
+
 OUTPUT_JSON_PATH = os.getenv("OUTPUT_JSON_PATH")
 OUTPUT_JSON_GZIP = os.getenv("OUTPUT_JSON_GZIP", "false").strip().lower() in ("1","true","yes")
 
@@ -113,6 +192,7 @@ def summarize_cmes(cme_list: list, now: datetime):
     cutoff = now - timedelta(hours=72)
     rows = []
     any_ed = False
+    max_speed = 0
     for e in cme_list or []:
         st = parse_iso_to_utc(e.get("startTime"))
         if not st or st < cutoff:
@@ -131,18 +211,49 @@ def summarize_cmes(cme_list: list, now: datetime):
                 except Exception:
                     pass
         ed = earth_directed_from_analyses(e)
-        any_ed = any_ed or bool(ed)
-        rows.append({
+        if ed is True:
+            any_ed = True
+        max_speed = max(max_speed, speed or 0)
+        row = {
             "time_utc": st.replace(microsecond=0).isoformat().replace("+00:00","Z"),
             "speed_kms": speed,
             "earth_directed": ed
-        })
+        }
+        # Collapse by time_utc, prefer higher speed and any earth_directed=True
+        # Use a dict keyed by time_utc
+        if '___best_by_time' not in locals():
+            ___best_by_time = {}
+        k = row["time_utc"]
+        prev = ___best_by_time.get(k)
+        if prev is None:
+            ___best_by_time[k] = row
+        else:
+            # prefer explicit True for earth_directed
+            ed_prev = prev.get("earth_directed")
+            take = False
+            if (ed is True) and (ed_prev is not True):
+                take = True
+            elif (ed is ed_prev) or (ed is None and ed_prev is None):
+                # tie on ED flag → prefer higher speed
+                take = (row.get("speed_kms") or 0) > (prev.get("speed_kms") or 0)
+            # else keep prev (e.g., prev True, new False/None)
+            if take:
+                ___best_by_time[k] = row
+    # materialize collapsed rows
+    rows = list((locals().get("___best_by_time") or {}).values())
     # sort desc
     rows.sort(key=lambda r: r["time_utc"], reverse=True)
+    # Headline logic
     if not rows:
         headline = "No CMEs in last 72h"
+    elif any_ed:
+        headline = "Earth-directed CME possible"
+    elif max_speed >= 1000:
+        headline = "Fast CMEs observed"
+    elif max_speed >= 600:
+        headline = "Moderate CMEs in last 72h"
     else:
-        headline = "Earth-directed CME possible" if any_ed else "No Earth-directed CMEs detected"
+        headline = "No Earth-directed CMEs detected"
     return {"last_72h": rows, "headline": headline}
 
 def emit_json_flares_cmes(now_ts: datetime, flr_summary: dict, cme_summary: dict, sources: dict):
@@ -268,9 +379,15 @@ async def main():
             flr = await fetch(client, "FLR", params) or []
             cme = await fetch(client, "CME", params) or []
 
+        # Also fetch GOES XRS for reliable flare max in last 24h
+        goes = await fetch_goes_xrs(client)
+
     # Build JSON summaries
     now_ts = datetime.now(timezone.utc)
     flares_summary = summarize_flares(flr, now_ts)
+    goes_summary = summarize_flares_from_goes(goes, now_ts)
+    if goes_summary.get("max_24h"):
+        flares_summary = goes_summary
     cmes_summary = summarize_cmes(cme, now_ts)
     sources_meta = {
         "flr_source": f"{BASE_PRIMARY}/FLR",
