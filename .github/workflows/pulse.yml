@@ -28,7 +28,7 @@ jobs:
         uses: actions/setup-python@v5
         with: { python-version: "3.11" }
 
-      - name: Emit quakes / alerts / pulse
+      - name: Emit quakes / alerts / gdacs / pulse
         env:
           MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
           OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/quakes_latest.json
@@ -36,6 +36,7 @@ jobs:
           mkdir -p "${MEDIA_DIR}/data"
           python scripts/ingest_usgs_quakes.py
           OUTPUT_JSON_PATH="${MEDIA_DIR}/data/alerts_us_latest.json" python scripts/ingest_alerts_us.py
+          OUTPUT_JSON_PATH="${MEDIA_DIR}/data/gdacs_latest.json"    python scripts/ingest_gdacs.py
           OUTPUT_JSON_PATH="${MEDIA_DIR}/data/pulse.json" python scripts/pulse_emit.py
 
       - name: Commit & push updates
@@ -45,7 +46,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if git status --porcelain | grep -E "^\?\? |^\s*M\s+"; then
-            git add data/quakes_latest.json data/alerts_us_latest.json data/pulse.json
+            git add data/quakes_latest.json data/alerts_us_latest.json data/gdacs_latest.json data/pulse.json
             git commit -m "chore(pulse): update pulse + sources [skip ci]"
             git push
           else

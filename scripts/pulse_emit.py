@@ -12,6 +12,9 @@ def load(name):
         except: return None
     return None
 
+def first_or_none(seq):
+    return seq[0] if seq else None
+
 def card(type_, title, summary, severity="info", time_window=None, details_url=None, data=None):
     c = {"type":type_, "title":title, "summary":summary, "severity":severity}
     if time_window: c["time_window"]=time_window
@@ -26,6 +29,7 @@ def main():
     es  = load("earthscope.json") or {}
     qk  = load("quakes_latest.json") or {}
     nws = load("alerts_us_latest.json") or {}
+    gd  = load("gdacs_latest.json") or {}
 
     cards = []
 
@@ -35,23 +39,23 @@ def main():
     speeds = [e.get("speed_kms") or 0 for e in (cmes.get("last_72h") or [])]
     max_spd = max(speeds) if speeds else 0
     if cmes.get("last_72h"):
-        sev = "high" if max_spd>=1000 else ("medium" if max_spd>=600 else "low")
-        tw  = "Next 2–3 days" if max_spd>=400 else "Next few days"
-        cards.append(card("cme",
-                          "Two Slow CMEs Expected Oct 7–8" if sev=="low" else "CME Activity Continues",
+        sev = "high" if max_spd >= 1000 else ("medium" if max_spd >= 600 else "low")
+        tw  = "Next 2–3 days" if max_spd >= 400 else "Next few days"
+        title = "Fast CMEs Observed" if sev == "high" else ("CME Activity Continues" if sev == "medium" else "Two Slow CMEs Expected Oct 7–8")
+        cards.append(card("cme", title,
                           cme_head or "Recent CMEs observed; monitor for geomagnetic effects.",
                           severity=sev, time_window=tw,
-                          data={"max_speed_kms":max_spd}))
+                          data={"max_speed_kms": max_spd}))
 
     # Flare
     max24 = (fc.get("flares") or {}).get("max_24h")
     if max24:
         sev = "high" if max24.startswith("X") else ("medium" if max24.startswith("M") else "low")
-        tw  = "Next 24–48h" if sev!="low" else "Next 24h"
-        title = "M-class Solar Flare Risk Persists" if sev=="medium" else ("X-class Risk" if sev=="high" else "C-class Flares Ongoing")
+        tw  = "Next 24–48h" if sev != "low" else "Next 24h"
+        title = "X-class Flare Risk" if sev == "high" else ("M-class Solar Flare Risk Persists" if sev == "medium" else "C-class Flares Ongoing")
         cards.append(card("flare", title,
                           f"Recent peak {max24}. Radio/HF may see brief fades during bursts.",
-                          severity=sev, time_window=tw, data={"max_24h":max24}))
+                          severity=sev, time_window=tw, data={"max_24h": max24}))
 
     # Aurora
     headline = (wx.get("next_72h") or {}).get("headline","")
@@ -92,6 +96,17 @@ def main():
                               severity="medium", time_window="Next 48h",
                               details_url="https://www.weather.gov/alerts",
                               data={"examples": kinds[:4]}))
+
+    # GDACS global (top alert)
+    g = first_or_none(gd.get("alerts") or [])
+    if g:
+        gtitle = (g.get("title") or "").strip()
+        gcode  = (g.get("code") or "").strip()
+        sev = "high" if gcode in ("TC",) else ("medium" if gcode in ("FL","EQ") else "info")
+        cards.append(card("global",
+                          "Global Hazard — " + gtitle[:60],
+                          "GDACS reports an active event; monitor local advisories.",
+                          severity=sev, time_window=g.get("published") or "", details_url=g.get("url")))
 
     payload = {"timestamp_utc": now, "cards": cards}
     p = pathlib.Path(OUT); p.parent.mkdir(parents=True, exist_ok=True)
