@@ -14,9 +14,23 @@ Notes:
 """
 
 import os, json, argparse
+import math
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, List
+
+# Style guardrails to keep tone scientific/medical, not woo
+STYLE_GUIDE = (
+    "Voice: clinical, plain-language, humane. Avoid new-age phrasing. "
+    "Facts first; never contradict provided metrics. No emojis. No rhetorical questions. "
+    "Prefer terms like 'geomagnetic activity', 'autonomic/HRV', 'sleep continuity', 'GNSS accuracy'. "
+    "Never claim deterministic health effects; use 'some may', 'can', 'tends to'."
+)
+BAN_PHRASES = [
+    "energy is calm", "calm vibes", "mindful living", "cosmic vibes",
+    "mother earth recharge", "sound bath", "tap into", "manifest", "alchemy",
+    "grounding energy", "soothe your soul"
+]
 
 import requests
 from dotenv import load_dotenv
@@ -49,6 +63,11 @@ DAY_COLUMN   = os.getenv("SUPABASE_DAY_COLUMN", "day")
 PLATFORM     = os.getenv("EARTHSCOPE_PLATFORM", "default")
 USER_ID      = os.getenv("EARTHSCOPE_USER_ID", None)
 
+# Output JSON for website/app card (optional)
+EARTHSCOPE_OUTPUT_JSON = os.getenv("EARTHSCOPE_OUTPUT_JSON_PATH")  # e.g., ../gaiaeyes-media/data/earthscope_daily.json
+# Force rule-based writing (skip OpenAI even if available)
+EARTHSCOPE_FORCE_RULES = os.getenv("EARTHSCOPE_FORCE_RULES", "false").strip().lower() in ("1","true","yes","on")
+
 # --- Hook mode toggles ---
 HOOK_MODE = os.getenv("EARTHSCOPE_HOOK_MODE", "guard").strip().lower()  # guard | blend | always
 HOOK_BLEND_P = float(os.getenv("EARTHSCOPE_HOOK_BLEND_P", "0.35"))       # used when HOOK_MODE=blend
@@ -75,6 +94,37 @@ def to_float(x):
         return float(x)
     except Exception:
         return None
+
+# --- simple banding/labels ---
+def _band_kp(kp: float|None) -> str:
+    if kp is None: return "unknown"
+    if kp >= 7: return "severe"
+    if kp >= 5: return "storm"
+    if kp >= 4: return "active"
+    if kp >= 3: return "unsettled"
+    return "quiet"
+
+def _band_sw(speed: float|None) -> str:
+    if speed is None: return "unknown"
+    if speed >= 700: return "very-high"
+    if speed >= 600: return "high"
+    if speed >= 500: return "elevated"
+    return "normal"
+
+def _bz_desc(bz: float|None) -> str:
+    if bz is None: return "undetermined"
+    if bz <= -10: return "strong southward"
+    if bz <= -6: return "southward"
+    if bz < 0: return "slightly southward"
+    if bz >= 8: return "strong northward"
+    if bz >= 3: return "northward"
+    return "near neutral"
+
+def _fmt_num(x, nd=1):
+    try:
+        return f"{float(x):.{nd}f}"
+    except Exception:
+        return "—"
 
 # --- text sanitizers ---
 def _strip_intro_header(block: str) -> str:
@@ -146,11 +196,14 @@ def _tone_from_ctx(ctx: Dict[str, Any]) -> str:
         wf  = float(wind) if wind is not None else None
     except Exception:
         kpf = bzf = wf = None
-    if (kpf is not None and kpf >= 5) or (bzf is not None and bzf <= -6):
+    # Stormy if KP>=5 or strong southward Bz with elevated wind
+    if (kpf is not None and kpf >= 5) or ((bzf is not None and bzf <= -8) and (wf is not None and wf >= 550)):
         return "stormy"
-    if kpf is not None and kpf > 2.67:
+    # Unsettled if KP>=3.5 or wind>=550 or Bz <= -6
+    if (kpf is not None and kpf >= 3.5) or (wf is not None and wf >= 550) or (bzf is not None and bzf <= -6):
         return "unsettled"
-    if (kpf is not None and kpf <= 2.67) and (bzf is None or bzf >= 0):
+    # Calm if KP<=2.5 and Bz >= -2
+    if (kpf is not None and kpf <= 2.5) and (bzf is None or bzf > -2):
         return "calm"
     return "neutral"
 
@@ -217,6 +270,143 @@ def _needs_rehook(s: str) -> bool:
     if head.endswith("?"):
         return True
     return False
+
+# --- deterministic rule-based copy ---
+def _rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
+    kp = ctx.get("kp_max_24h")
+    bz = ctx.get("bz_min")
+    sw = ctx.get("solar_wind_kms")
+    flr = ctx.get("flares_24h")
+    cme = ctx.get("cmes_24h")
+    sr = ctx.get("schumann_value_hz")
+
+    tone = _tone_from_ctx(ctx)
+    # Caption: concise, clinical, social-friendly
+    kp_band = _band_kp(kp); sw_band = _band_sw(sw); bz_txt = _bz_desc(bz)
+    parts = []
+    if kp is not None: parts.append(f"Kp { _fmt_num(kp,1) } ({kp_band})")
+    if sw is not None: parts.append(f"SW { int(round(float(sw))) } km/s ({sw_band})")
+    if bz is not None: parts.append(f"Bz { _fmt_num(bz,1) } nT ({bz_txt})")
+    cap_lead = " • ".join(parts) if parts else "Space weather update"
+    if tone == "stormy":
+        trailing = "Expect geomagnetic sensitivity windows; protect focus blocks."
+    elif tone == "unsettled":
+        trailing = "Some variability—schedule breaks and buffer critical tasks."
+    elif tone == "calm":
+        trailing = "Stable backdrop—good day for deep work and recovery."
+    else:
+        trailing = "Moderate profile—steady cadence tends to work best."
+    caption = f"{cap_lead}. {trailing}"
+
+    # Snapshot bullets (only present values)
+    snap = []
+    if kp is not None: snap.append(f"- Kp max (24h): { _fmt_num(kp,1) }")
+    if sw is not None: snap.append(f"- Solar wind: { int(round(float(sw))) } km/s")
+    if bz is not None: snap.append(f"- Bz: { _fmt_num(bz,1) } nT ({bz_txt})")
+    if flr is not None: snap.append(f"- Flares (24h): {int(round(float(flr)))}")
+    if cme is not None: snap.append(f"- CMEs (24h): {int(round(float(cme)))}")
+    if sr is not None: snap.append(f"- Schumann f0: { _fmt_num(sr,2) } Hz")
+    snapshot = "Space Weather Snapshot\n" + "\n".join(snap)
+
+    # Affects (scientific-plain)
+    aff = []
+    if tone in ("stormy","unsettled"):
+        aff.append("- **Focus/energy:** Expect ebbs and spikes; shorten sprints, add buffers.")
+        aff.append("- **Autonomic/HRV:** Southward Bz or higher Kp can reduce HRV in some; use paced breathing.")
+        aff.append("- **Sleep:** Late spikes can fragment sleep; dim screens and finish stimulants early.")
+        aff.append("- **Comms/GNSS:** Minor accuracy or HF variability possible at higher latitudes.")
+    else:
+        aff.append("- **Focus/energy:** Stable; good window for structured or deep work.")
+        aff.append("- **Autonomic/HRV:** Conditions generally support recovery and coherence practices.")
+        aff.append("- **Sleep:** Usual hygiene works; keep evening light warm and low.")
+        aff.append("- **Comms/GNSS:** Normal for most regions.")
+    affects = "How This Affects You\n" + "\n".join(aff)
+
+    # Playbook: targeted, practical
+    care = []
+    if tone in ("stormy","unsettled"):
+        care.append("- 5–10 min paced breathing (e.g., 4:6) or brief HRV biofeedback")
+        care.append("- Hydration + electrolytes; short daylight exposure")
+        care.append("- Protect sleep: blue‑light filters, consistent wind‑down")
+        care.append("- If sensitive, quick grounding/outdoor walk")
+    else:
+        care.append("- Schedule 1–2 focus blocks (60–90 min) while conditions are steady")
+        care.append("- Light mobility or walk; natural light breaks")
+        care.append("- Hydrate; keep caffeine earlier in the day")
+    playbook = "Self-Care Playbook\n" + "\n".join(care)
+
+    tags = "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus"
+    return {"caption": caption, "snapshot": snapshot, "affects": affects, "playbook": playbook, "hashtags": tags}
+
+# --- banned phrase and repetition scrubber ---
+def _scrub_banned_phrases(text: str) -> str:
+    s = text or ""
+    low = s.lower()
+    for bp in BAN_PHRASES:
+        if bp in low:
+            # Replace banned phrase with neutral wording
+            s = re.sub(re.escape(bp), "stable conditions", s, flags=re.I)
+            low = s.lower()
+    # light n-gram de-dupe: collapse repeated bigrams
+    s = re.sub(r"\b(\w+\s+\w+)\s+\1\b", r"\1", s, flags=re.I)
+    return s.strip()
+
+# --- LLM rewrite from rules ---
+def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: str, affects: str, playbook: str, ctx: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Ask the LLM to paraphrase rule output into tighter prose without changing facts.
+    Returns possibly rewritten pieces with banned phrases scrubbed.
+    """
+    if not client:
+        return {"caption": _scrub_banned_phrases(caption),
+                "snapshot": snapshot, "affects": affects,
+                "playbook": playbook, "hashtags": "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus"}
+    model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
+    sys_msg = (
+        "Rewrite the provided sections to be data-accurate, concise, and clinically styled. "
+        + STYLE_GUIDE +
+        " Keep numbers and qualifiers intact. Do not invent data. No emojis. No questions."
+    )
+    user_payload = {
+        "tone": _tone_from_ctx(ctx),
+        "bands": {
+            "kp": _band_kp(ctx.get("kp_max_24h")),
+            "sw": _band_sw(ctx.get("solar_wind_kms")),
+            "bz": _bz_desc(ctx.get("bz_min")),
+        },
+        "sections": {
+            "caption": caption,
+            "snapshot": snapshot,
+            "affects": affects,
+            "playbook": playbook
+        }
+    }
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            temperature=0.5,
+            max_tokens=700,
+            messages=[
+                {"role":"system","content": sys_msg},
+                {"role":"user","content": json.dumps(user_payload, ensure_ascii=False)}
+            ],
+        )
+        text = resp.choices[0].message.content.strip()
+        # Simple splitter expecting four blocks separated by blank lines
+        parts = [p.strip() for p in text.split("\n\n") if p.strip()]
+        cap, snap, aff, play = caption, snapshot, affects, playbook
+        if parts:
+            cap = parts[0]
+            if len(parts) > 1: snap = parts[1]
+            if len(parts) > 2: aff = parts[2]
+            if len(parts) > 3: play = parts[3]
+        cap = _scrub_banned_phrases(_sanitize_caption(cap))
+        return {"caption": cap, "snapshot": snap, "affects": aff, "playbook": play,
+                "hashtags": "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus"}
+    except Exception:
+        return {"caption": _scrub_banned_phrases(caption),
+                "snapshot": snapshot, "affects": affects,
+                "playbook": playbook, "hashtags": "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus"}
 
 # --- deterministic snapshot builder ---
 def _build_snapshot_md(ctx: Dict[str, Any]) -> str:
@@ -417,6 +607,18 @@ def openai_client() -> Optional[OpenAI]:
 
 def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     client = openai_client()
+    if EARTHSCOPE_FORCE_RULES or not client:
+        rc = _rule_copy(ctx)
+        return rc["caption"], rc["hashtags"]
+
+    # Hybrid: generate rule copy and ask LLM to tighten it (no change of facts)
+    rc = _rule_copy(ctx)
+    try_rewrite = os.getenv("EARTHSCOPE_HYBRID_REWRITE", "true").strip().lower() in ("1","true","yes","on")
+    if try_rewrite:
+        out = _llm_rewrite_from_rules(client, rc["caption"], rc["snapshot"], rc["affects"], rc["playbook"], ctx)
+        if out and out.get("caption"):
+            return out["caption"], out["hashtags"]
+
     kp_now = ctx.get("kp_now")
     kp_max = ctx.get("kp_max_24h")
     wind   = ctx.get("solar_wind_kms")
@@ -424,16 +626,6 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     cme    = ctx.get("cmes_24h")
     sr     = ctx.get("schumann_value_hz")
     sr_note= ctx.get("schumann_note")
-
-    if not client:
-        # Deterministic fallback
-        tone = _tone_from_ctx(ctx)
-        last_used = _recent_openers(7)
-        hook = _pick_hook(tone, last_used=last_used)
-        cap = (f"{hook} Kp max {kp_max}, wind {wind} km/s, flares {int(flr)} CMEs {int(cme)}. "
-               f"Schumann ~{sr} Hz." )
-        tags = "#GaiaEyes #SpaceWeather #KpIndex #SolarWind #Aurora"
-        return cap, tags
 
     model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
     try:
@@ -486,19 +678,27 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
         # ensure hashtags exist
         if not hashtags:
             hashtags = "#GaiaEyes #SpaceWeather #KpIndex #SolarWind #Aurora"
+        caption = _scrub_banned_phrases(caption)
         return caption, hashtags
     except Exception:
-        tone = _tone_from_ctx(ctx)
-        last_used = _recent_openers(7)
-        hook = _pick_hook(tone, last_used=last_used)
-        cap = (f"{hook} Kp max {kp_max}, wind {wind} km/s, flares {int(flr)} CMEs {int(cme)}. "
-               f"Schumann ~{sr} Hz." )
-        tags = "#GaiaEyes #SpaceWeather #KpIndex #SolarWind #Aurora"
-        return cap, tags
+        rc = _rule_copy(ctx)
+        return rc["caption"], rc["hashtags"]
 
 
 def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
     client = openai_client()
+    if EARTHSCOPE_FORCE_RULES or not client:
+        rc = _rule_copy(ctx)
+        return rc["snapshot"], rc["affects"], rc["playbook"], rc["hashtags"]
+
+    # Hybrid paraphrase path
+    try_rewrite = os.getenv("EARTHSCOPE_HYBRID_REWRITE", "true").strip().lower() in ("1","true","yes","on")
+    if try_rewrite:
+        rc = _rule_copy(ctx)
+        out = _llm_rewrite_from_rules(client, rc["caption"], rc["snapshot"], rc["affects"], rc["playbook"], ctx)
+        if out:
+            return out["snapshot"], out["affects"], out["playbook"], out["hashtags"]
+
     kp_now = ctx.get("kp_now")
     kp_max = ctx.get("kp_max_24h")
     wind   = ctx.get("solar_wind_kms")
@@ -506,24 +706,6 @@ def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
     cme    = ctx.get("cmes_24h")
     sr     = ctx.get("schumann_value_hz")
     sr_note= ctx.get("schumann_note")
-
-    if not client:
-        snapshot = _build_snapshot_md(ctx)
-        affects = (
-            "How This Affects You\n"
-            "- Calm geomagnetics support steadier mood and coherence.\n"
-            "- Adjust effort to energy; let wind/pressure shifts guide pacing.\n"
-            "- Gentle breath and longer exhales settle the ANS.\n"
-            "- Hydration + daylight help cognition when winds fluctuate."
-        )
-        playbook = (
-            "Self-Care Playbook\n"
-            "- 5–10 min breathwork or HRV biofeedback\n"
-            "- Nature time / barefoot grounding\n"
-            "- Extra water + electrolytes\n"
-            "- Gentle mobility; reduce doomscrolling"
-        )
-        return snapshot, affects, playbook, "#GaiaEyes #SpaceWeather #Wellness #HeartBrain #Mindfulness"
 
     model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
     prompt = f"""
@@ -575,28 +757,36 @@ Data:
         snapshot = _strip_intro_header(snapshot)
         affects  = _strip_intro_header(affects)
         playbook = _strip_intro_header(playbook)
+        snapshot = _scrub_banned_phrases(snapshot)
+        affects = _scrub_banned_phrases(affects)
+        playbook = _scrub_banned_phrases(playbook)
         return snapshot.strip(), affects.strip(), playbook.strip(), hashtags
     except Exception:
-        snapshot = (
-            f"Space Weather Snapshot\n"
-            f"- Kp now: {kp_now}\n- Kp max (24h): {kp_max}\n- Solar wind: {wind} km/s\n"
-            f"- Flares (24h): {flr}\n- CMEs (24h): {cme}\n- Schumann: {sr} Hz\n"
-        )
-        affects = (
-            "How This Affects You\n"
-            "- Calm geomagnetics support steadier mood and coherence.\n"
-            "- Adjust effort to energy; let wind/pressure shifts guide pacing.\n"
-            "- Gentle breath and longer exhales settle the ANS.\n"
-            "- Hydration + daylight help cognition when winds fluctuate."
-        )
-        playbook = (
-            "Self-Care Playbook\n"
-            "- 5–10 min breathwork or HRV biofeedback\n"
-            "- Nature time / barefoot grounding\n"
-            "- Extra water + electrolytes\n"
-            "- Gentle mobility; reduce doomscrolling"
-        )
-        return snapshot, affects, playbook, "#GaiaEyes #SpaceWeather #Wellness #HeartBrain #Mindfulness"
+        rc = _rule_copy(ctx)
+        return rc["snapshot"], rc["affects"], rc["playbook"], rc["hashtags"]
+# ============================================================
+# Web/app JSON emit (optional)
+# ============================================================
+def emit_earthscope_json(day: str, title: str, caption: str, snapshot: str, affects: str, playbook: str, metrics: Dict[str, Any]):
+    if not EARTHSCOPE_OUTPUT_JSON:
+        return
+    payload = {
+        "day": day,
+        "title": title,
+        "caption": caption,
+        "snapshot": snapshot,
+        "affects": affects,
+        "playbook": playbook,
+        "metrics": metrics,
+        "timestamp_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z")
+    }
+    try:
+        out = Path(EARTHSCOPE_OUTPUT_JSON)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(payload, separators=(",",":"), ensure_ascii=False), encoding="utf-8")
+        print(f"[earthscope] wrote card JSON -> {out}")
+    except Exception as e:
+        print(f"[WARN] failed to write earthscope card JSON: {e}")
 
 # ============================================================
 # Supabase write: posts upsert
@@ -688,7 +878,18 @@ def main():
         "marts.schumann_daily": True,
     }
 
-    # 4) Build final body markdown and upsert (single row per date/platform)
+    # 4) Emit optional JSON for web/app card
+    emit_earthscope_json(
+        day=day,
+        title=title,
+        caption=short_caption,
+        snapshot=snapshot,
+        affects=affects,
+        playbook=playbook,
+        metrics=metrics_json
+    )
+
+    # Build final body markdown and upsert (single row per date/platform)
     body_md = (
         "### Gaia Eyes Daily Space Weather Forecast\n\n" +
         "\n\n".join([snapshot, affects, playbook]).strip()
