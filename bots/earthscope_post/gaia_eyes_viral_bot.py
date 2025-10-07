@@ -1107,8 +1107,52 @@ def main():
         # Optional harmonics structure (not drawn currently)
         # metrics.get("harmonics") can be kept if needed later
 
+    # Prefer structured sections from metrics_json (caption/affects/playbook) when available
+    sections = None
+    tone_band_energy = None
+    try:
+        sections = metrics.get("sections") if isinstance(metrics, dict) else None
+    except Exception:
+        sections = None
+    tone_val = (metrics.get("tone") if isinstance(metrics, dict) else None) or ""
+    bands = (metrics.get("bands") if isinstance(metrics, dict) else {}) or {}
+    kp_band = (bands.get("kp") or "").lower()
+    # Map bands/tone → energy badge
+    def _energy_from_tone_and_bands(tone: str, kp_band_str: str) -> str:
+        t = (tone or "").lower()
+        if t in ("stormy","high"):
+            return "High"
+        kb = kp_band_str
+        if kb in ("storm","severe"):
+            return "High"
+        if kb in ("active","unsettled","mild"):
+            return "Elevated"
+        return "Calm"
+    if tone_val or kp_band:
+        tone_band_energy = _energy_from_tone_and_bands(tone_val, kp_band)
+
     caption_text = (post or {}).get("caption") or "Daily Earthscope"
     body_md = (post or {}).get("body_markdown") or ""
+
+    # If body_markdown accidentally contains a JSON blob, try to parse and use fields
+    if body_md.strip().startswith("{") and '"sections"' in body_md:
+        try:
+            bdj = json.loads(body_md)
+            if isinstance(bdj, dict):
+                sec2 = bdj.get("sections") or {}
+                if not sections and sec2:
+                    sections = sec2
+                if not tone_val and bdj.get("tone"):
+                    tone_val = bdj.get("tone")
+                if not kp_band and isinstance(bdj.get("bands"), dict):
+                    kp_band = (bdj["bands"].get("kp") or "").lower()
+                if (tone_val or kp_band) and not tone_band_energy:
+                    tone_band_energy = _energy_from_tone_and_bands(tone_val, kp_band)
+        except Exception:
+            pass
+    # Override text from structured sections if present
+    if isinstance(sections, dict):
+        caption_text = sections.get("caption") or caption_text
 
     # Extract sections (tolerant to Unicode hyphens/dashes and case)
     affects_txt  = extract_any_section(body_md, [
@@ -1129,6 +1173,10 @@ def main():
         "Self — Care Playbook",    # spaced em dash
         "Self Care Playbook"       # no hyphen
     ]) or ""
+    # If structured sections exist, prefer them over markdown extraction
+    if isinstance(sections, dict):
+        affects_txt  = sections.get("affects")  or affects_txt
+        playbook_txt = sections.get("playbook") or playbook_txt
     if not affects_txt or not playbook_txt:
         fa, fp = generate_daily_forecast(sch, kp)[1], " - " + generate_daily_forecast(sch, kp)[2]
         affects_txt = affects_txt or fa
@@ -1152,11 +1200,16 @@ def main():
 
     stats_im   = render_stats_card_from_features(day, feats or {}, energy, kind="tall")
 
-    caption_for_card = caption_text if feats else caption_text
-    if hasattr(caption_for_card, "strip"):
-        caption_for_card = caption_for_card.strip()
+    if isinstance(caption_text, (dict, list)):
+        caption_text = json.dumps(caption_text, ensure_ascii=False)
+    if hasattr(caption_text, "strip"):
+        caption_text = caption_text.strip()
 
-    caption_im = render_card(energy, caption_for_card, sch, kp, kind="square")
+    # Override energy label from tone/bands if provided by metrics_json
+    if tone_band_energy:
+        energy = tone_band_energy
+
+    caption_im = render_card(energy, caption_text, sch, kp, kind="square")
     affects_im = render_text_card("How This Affects You", affects_txt, energy, kind="tall")
     play_im    = render_text_card("Self-Care Playbook", playbook_txt, energy, kind="tall")
 

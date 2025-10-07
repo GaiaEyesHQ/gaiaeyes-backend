@@ -850,6 +850,20 @@ def main():
     short_caption, short_tags = generate_short_caption(ctx)
     snapshot, affects, playbook, long_tags = generate_long_sections(ctx)
 
+    # === Structured sections payload for renderers (back-compat) ===
+    tone = _tone_from_ctx(ctx)
+    bands = {
+        "kp": _band_kp(ctx.get("kp_max_24h")),
+        "sw": _band_sw(ctx.get("solar_wind_kms")),
+        "bz": _bz_desc(ctx.get("bz_min")),
+    }
+    sections_struct = {
+        "caption": short_caption,
+        "snapshot": snapshot,
+        "affects": affects,
+        "playbook": playbook,
+    }
+
     # Title heuristic (tiered)
     kpmax = ctx.get("kp_max_24h")
     wind  = ctx.get("solar_wind_kms")
@@ -872,6 +886,9 @@ def main():
         "cmes_24h": ctx.get("cmes_24h"),
         "schumann_value_hz": ctx.get("schumann_value_hz"),
         "harmonics": ctx.get("harmonics"),
+        "tone": tone,
+        "bands": bands,
+        "sections": sections_struct,
     }
     sources_json = {
         "marts.space_weather_daily": True,
