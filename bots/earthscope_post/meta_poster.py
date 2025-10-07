@@ -79,7 +79,7 @@ def sb_select_daily_post(day: dt.date, platform: str = "default") -> Optional[di
         return None
     url = f"{SUPABASE_REST_URL}/daily_posts"
     params = {"day": f"eq.{day.isoformat()}", "platform": f"eq.{platform}",
-              "select": "day,platform,caption,hashtags,body_markdown"}
+              "select": "day,platform,caption,hashtags,body_markdown,metrics_json"}
     r = session.get(url, headers=_sb_headers("content"), params=params, timeout=20)
     if r.status_code != 200:
         logging.error("Supabase posts fetch failed: %s %s", r.status_code, r.text[:200])
@@ -93,7 +93,7 @@ def sb_select_latest_post(platform: str = "default") -> Optional[dict]:
     url = f"{SUPABASE_REST_URL}/daily_posts"
     params = {
         "platform": f"eq.{platform}",
-        "select": "day,platform,caption,hashtags,body_markdown",
+        "select": "day,platform,caption,hashtags,body_markdown,metrics_json",
         "order": "day.desc",
         "limit": "1",
     }
@@ -185,6 +185,38 @@ def build_square_caption(post: dict) -> str:
         return caption + "\n\n" + hashtags
     return caption
 
+def derive_caption_and_hashtags(post: dict) -> (str, str):
+    """Return (caption, hashtags) preferring structured sections from metrics_json or JSON caption."""
+    cap = (post.get("caption") or "").strip()
+    tags = (post.get("hashtags") or "").strip()
+    # 1) If caption looks like a JSON blob with sections, parse it
+    if cap.startswith("{") and '"sections"' in cap:
+        try:
+            j = json.loads(cap)
+            sec = j.get("sections") or {}
+            if isinstance(sec, dict) and sec.get("caption"):
+                cap = sec["caption"].strip()
+            # metrics-level hashtags not expected here, keep existing tags
+        except Exception:
+            pass
+    # 2) Prefer sections from metrics_json when available
+    try:
+        metrics = post.get("metrics_json")
+        if isinstance(metrics, str):
+            metrics = json.loads(metrics)
+        if isinstance(metrics, dict):
+            sec = metrics.get("sections") or {}
+            if isinstance(sec, dict):
+                cap2 = sec.get("caption")
+                if cap2: cap = str(cap2).strip()
+                # Optionally allow hashtags from metrics if present later
+    except Exception:
+        pass
+    # 3) Build final caption block with hashtags at the end
+    if tags:
+        return cap + "\n\n" + tags, tags
+    return cap, tags
+
 # meta_poster.py
 
 # 1) ensure you still import os, etc. (no need for time now)
@@ -226,7 +258,7 @@ def main():
     urls = default_image_urls()
 
     if args.cmd == "post-square":
-        caption = build_square_caption(post)
+        caption, _ = derive_caption_and_hashtags(post)
         resp_fb = fb_post_photo(urls["square"], caption, dry_run=args.dry_run)
         logging.info("FB resp: %s", resp_fb)
         # For IG, you can optionally re-post the same square as a photo post:
@@ -242,7 +274,7 @@ def main():
         return
 
     if args.cmd == "post-carousel":
-        caption = build_square_caption(post)  # reuse long caption/hashtags if desired
+        caption, _ = derive_caption_and_hashtags(post)  # reuse long caption/hashtags if desired
         image_urls = [urls["stats"], urls["affects"], urls["play"]]
         resp_ig = ig_post_carousel(image_urls, caption, dry_run=args.dry_run)
         logging.info("IG resp: %s", resp_ig)
