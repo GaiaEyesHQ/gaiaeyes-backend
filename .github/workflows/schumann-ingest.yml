@@ -1,4 +1,6 @@
 name: schumann-ingest
+permissions:
+  contents: write
 on:
   schedule:
     - cron: "*/15 * * * *"
@@ -9,10 +11,43 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}   # Pooler DSN with pgbouncer & sslmode
+      MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
+      MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
+      GAIAEYES_MEDIA_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout media repo (gaiaeyes-media)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MEDIA_REPO_OWNER }}/${{ env.MEDIA_REPO_NAME }}
+          token: ${{ env.GAIAEYES_MEDIA_TOKEN }}
+          path: gaiaeyes-media
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: pip install httpx asyncpg
-      - run: python scripts/ingest_schumann_github.py
+      - name: Run Schumann ingester
+        env:
+          MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
+        run: |
+          python scripts/ingest_schumann_github.py
+      - name: Commit & push media updates
+        run: |
+          set -e
+          cd gaiaeyes-media
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Make sure we're up-to-date to avoid non-fast-forward rejections
+          git fetch origin main
+          git pull --rebase --autostash origin main || true
+          # Stage any changes produced by the ingester
+          git add -A
+          # Create a commit only if there are staged changes
+          if ! git diff --cached --quiet; then
+            ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            git commit -m "schumann update ${ts} [skip ci]"
+            # Prefer safe push; if someone raced us, try pulling/rebasing once more, then push
+            git push origin main || { git pull --rebase --autostash origin main && git push origin main; }
+          else
+            echo "No changes to commit."
+          fi
