@@ -117,7 +117,7 @@ jobs:
       MEDIA_REPO_PATH:  ${{ github.workspace }}/gaiaeyes-media
       LOGO_PATH:        ${{ github.workspace }}/bots/earthscope_post/GaiaEyesLogo.png
       EARTHSCOPE_USE_MEDIA: "true"
-      EARTHSCOPE_MEDIA_DIR: ${{ env.MEDIA_REPO_PATH }}
+      EARTHSCOPE_MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
     steps:
       - uses: actions/checkout@v4
       - name: Clone media repo
