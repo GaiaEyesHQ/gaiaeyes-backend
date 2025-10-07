@@ -1,3 +1,5 @@
+import argparse
+import logging
 def derive_caption_and_hashtags(post: dict) -> (str, str):
     """Return (caption, hashtags) preferring structured sections from metrics_json; fallback to plain fields."""
     cap = (post.get("caption") or "").strip()
