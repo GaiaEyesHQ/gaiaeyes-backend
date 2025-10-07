@@ -1,0 +1,53 @@
+name: pulse
+permissions:
+  contents: write
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
+      MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
+      GAIAEYES_MEDIA_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout media repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MEDIA_REPO_OWNER }}/${{ env.MEDIA_REPO_NAME }}
+          token: ${{ env.GAIAEYES_MEDIA_TOKEN }}
+          path: gaiaeyes-media
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      - name: Emit quakes / alerts / pulse
+        env:
+          MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
+          OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/quakes_latest.json
+        run: |
+          mkdir -p "${MEDIA_DIR}/data"
+          python scripts/ingest_usgs_quakes.py
+          OUTPUT_JSON_PATH="${MEDIA_DIR}/data/alerts_us_latest.json" python scripts/ingest_alerts_us.py
+          OUTPUT_JSON_PATH="${MEDIA_DIR}/data/pulse.json" python scripts/pulse_emit.py
+
+      - name: Commit & push updates
+        run: |
+          set -e
+          cd gaiaeyes-media
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git status --porcelain | grep -E "^\?\? |^\s*M\s+"; then
+            git add data/quakes_latest.json data/alerts_us_latest.json data/pulse.json
+            git commit -m "chore(pulse): update pulse + sources [skip ci]"
+            git push
+          else
+            echo "No changes."
+          fi
