@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -95,6 +94,32 @@ def _require_meta():
   if missing:
     raise RuntimeError(f"Missing env for Meta posting: {', '.join(missing)}")
 
+def _ig_wait_finished(container_id: str, timeout_sec: int = 90, interval_sec: int = 3) -> bool:
+  """Poll IG container until status_code == FINISHED or timeout."""
+  import time
+  deadline = time.time() + timeout_sec
+  url = f"https://graph.facebook.com/v19.0/{container_id}"
+  params = {"fields": "status_code", "access_token": FB_ACCESS_TOKEN}
+  last = ""
+  while time.time() < deadline:
+    r = session.get(url, params=params, timeout=15)
+    try:
+      j = r.json()
+    except Exception:
+      j = {}
+    status = (j or {}).get("status_code") or ""
+    if status and status != last:
+      logging.info("IG container %s status: %s", container_id, status)
+      last = status
+    if status == "FINISHED":
+      return True
+    if status in ("ERROR", "EXPIRED"):
+      logging.error("IG container %s terminal status: %s", container_id, status)
+      return False
+    time.sleep(interval_sec)
+  logging.error("IG container %s not ready after %ss", container_id, timeout_sec)
+  return False
+
 def fb_post_photo(image_url: str, caption: str, dry_run: bool=False) -> dict:
   _require_meta()
   url = f"https://graph.facebook.com/v19.0/{FB_PAGE_ID}/photos"
@@ -139,6 +164,10 @@ def ig_post_carousel(image_urls: List[str], caption: str, dry_run: bool=False) -
     raise RuntimeError("IG carousel container failed")
   creation_id = j["id"]
 
+  if not dry_run:
+    if not _ig_wait_finished(creation_id, timeout_sec=90, interval_sec=3):
+      return {"error": {"message": "Container not ready", "id": creation_id}}
+
   # Step 3: publish
   r = session.post(f"https://graph.facebook.com/v19.0/{IG_USER_ID}/media_publish",
                    data={"creation_id": creation_id, "access_token": FB_ACCESS_TOKEN}, timeout=30)
@@ -164,8 +193,8 @@ def default_image_urls() -> Dict[str,str]:
   }
 
 def derive_caption_and_hashtags(post: dict) -> (str, str):
-  """Return (caption, hashtags) preferring structured sections from metrics_json; fallback to plain fields."""
-  cap = (post.get("caption") or "").strip()
+  """Return (caption, hashtags) preferring metrics_json.sections.caption; fallback to plain fields or JSON in caption/body."""
+  cap = (post.get("caption") or "")
   tags = (post.get("hashtags") or "").strip()
 
   # 1) Prefer sections from metrics_json when available
@@ -178,21 +207,40 @@ def derive_caption_and_hashtags(post: dict) -> (str, str):
       if isinstance(sec, dict):
         cap2 = sec.get("caption")
         if cap2 and str(cap2).strip():
-          cap = str(cap2).strip()
+          cap = str(cap2)
   except Exception:
     pass
 
-  # 2) If the (fallback) caption looks like a JSON blob with "sections", parse it
-  if cap.startswith("{") and '"sections"' in cap:
+  # 2) If caption is still a JSON blob, parse once or twice
+  def _try_parse_sections(s: str) -> Optional[str]:
     try:
-      j = json.loads(cap)
-      sec = j.get("sections") or {}
-      if isinstance(sec, dict) and sec.get("caption"):
-        cap = sec["caption"].strip()
+      obj = json.loads(s.lstrip())
+      # double-encoded string case
+      if isinstance(obj, str) and obj.strip().startswith("{"):
+        obj = json.loads(obj)
+      if isinstance(obj, dict):
+        sec = obj.get("sections") or {}
+        if isinstance(sec, dict) and sec.get("caption"):
+          return str(sec["caption"])
     except Exception:
-      pass
+      return None
+    return None
 
-  # 3) Append hashtags
+  cap = cap.strip()
+  if cap.startswith("{") and '"sections"' in cap:
+    parsed = _try_parse_sections(cap)
+    if parsed:
+      cap = parsed
+
+  # 3) Fallback: check body_markdown for JSON sections if present
+  if (not cap) or (cap.startswith("{") and '"sections"' in cap):
+    body = (post.get("body_markdown") or "").strip()
+    if body.startswith("{") and '"sections"' in body:
+      parsed = _try_parse_sections(body)
+      if parsed:
+        cap = parsed
+
+  cap = cap.strip()
   if tags:
     return cap + "\n\n" + tags, tags
   return cap, tags
@@ -234,8 +282,12 @@ def main():
       data = {"image_url": urls["square"], "caption": caption, "access_token": FB_ACCESS_TOKEN}
       r = session.post(f"https://graph.facebook.com/v19.0/{IG_USER_ID}/media", data=data, timeout=30).json()
       if "id" in r:
-        session.post(f"https://graph.facebook.com/v19.0/{IG_USER_ID}/media_publish",
-                     data={"creation_id": r["id"], "access_token": FB_ACCESS_TOKEN}, timeout=30)
+        cid = r["id"]
+        if _ig_wait_finished(cid, timeout_sec=90, interval_sec=3):
+          session.post(f"https://graph.facebook.com/v19.0/{IG_USER_ID}/media_publish",
+                       data={"creation_id": cid, "access_token": FB_ACCESS_TOKEN}, timeout=30)
+        else:
+          logging.error("IG single-photo container not ready; skipping publish.")
     return
 
   if args.cmd == "post-carousel":
