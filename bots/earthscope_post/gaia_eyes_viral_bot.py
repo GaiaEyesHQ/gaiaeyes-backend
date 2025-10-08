@@ -738,7 +738,7 @@ def render_card(energy_label: str, mood: str, sch: float, kp: float, kind: str =
         y += 16
 
     mood = strip_hashtags_and_emojis(mood)
-    section("How You Might Feel:", mood)
+    section("How it may feel", mood)
     _overlay_logo_and_tagline(im, "Decode the unseen.")
     return im.convert("RGB")
 
@@ -872,14 +872,14 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
         tip_body = sub[0].rstrip()
         aff_head, aff_body = "DAILY COSMIC AFFIRMATION:", sub[1].strip()
 
-    # Daily Affects card title: add fixed header if title matches
-    if title == "How This Affects You":
-        header = f"Daily Earthscope • {dt.datetime.utcnow().strftime('%b %d, %Y')}"
+    # Daily headers for affects/care cards
+    title_norm = (title or "").strip().lower()
+    if title_norm in ("how this affects you", "how it may feel"):
+        header = f"Daily EarthScope • {dt.datetime.utcnow().strftime('%b %d, %Y')}"
         _shadowed_text(draw, (x0, y), header, font=font_h1, fill=fg)
         y += 70
-    # Daily Playbook title: add fixed header if title matches
-    if title == "Self-Care Playbook":
-        header = f"Daily Earthscope • {dt.datetime.utcnow().strftime('%b %d, %Y')}"
+    if title_norm in ("self-care playbook", "care notes"):
+        header = f"Daily EarthScope • {dt.datetime.utcnow().strftime('%b %d, %Y')}"
         _shadowed_text(draw, (x0, y), header, font=font_h1, fill=fg)
         y += 70
 
@@ -1209,9 +1209,13 @@ def main():
     if tone_band_energy:
         energy = tone_band_energy
 
+    # Strip hashtags/emojis from affects/playbook text for layout robustness
+    affects_txt  = strip_hashtags_and_emojis(_safe_text(affects_txt))
+    playbook_txt = strip_hashtags_and_emojis(_safe_text(playbook_txt))
+
     caption_im = render_card(energy, caption_text, sch, kp, kind="square")
-    affects_im = render_text_card("How This Affects You", affects_txt, energy, kind="tall")
-    play_im    = render_text_card("Self-Care Playbook", playbook_txt, energy, kind="tall")
+    affects_im = render_text_card("How it may feel", affects_txt, energy, kind="tall")
+    play_im    = render_text_card("Care notes", playbook_txt, energy, kind="tall")
 
     repo_paths = save_all_cards(stats_im, caption_im, affects_im, play_im)
 

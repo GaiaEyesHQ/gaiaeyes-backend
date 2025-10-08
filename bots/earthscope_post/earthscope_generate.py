@@ -19,12 +19,14 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
-# Style guardrails to keep tone scientific/medical, not woo
 STYLE_GUIDE = (
-    "Voice: clinical, plain-language, humane. Avoid new-age phrasing. "
-    "Facts first; never contradict provided metrics. No emojis. No rhetorical questions. "
+    "Persona: holistic clinician‑researcher who studies space/earth frequencies and their effects on physiology. "
+    "Voice: clinical, plain‑language, humane, lightly empathic; first‑person is OK in short asides. "
+    "Audience: people who consider themselves sensitive (HRV, sleep, nerve/pain flares during storms). "
+    "Rules: facts first; never contradict provided metrics; no emojis; no rhetorical questions. "
     "Prefer terms like 'geomagnetic activity', 'autonomic/HRV', 'sleep continuity', 'GNSS accuracy'. "
-    "Never claim deterministic health effects; use 'some may', 'can', 'tends to'."
+    "Never claim deterministic health effects; use 'some may', 'can', 'tends to', 'I often see'. "
+    "Keep sections compact and scannable."
 )
 BAN_PHRASES = [
     "energy is calm", "calm vibes", "mindful living", "cosmic vibes",
@@ -65,8 +67,36 @@ USER_ID      = os.getenv("EARTHSCOPE_USER_ID", None)
 
 # Output JSON for website/app card (optional)
 EARTHSCOPE_OUTPUT_JSON = os.getenv("EARTHSCOPE_OUTPUT_JSON_PATH")  # e.g., ../gaiaeyes-media/data/earthscope_daily.json
-# Force rule-based writing (skip OpenAI even if available)
 EARTHSCOPE_FORCE_RULES = os.getenv("EARTHSCOPE_FORCE_RULES", "false").strip().lower() in ("1","true","yes","on")
+# Toggle for first-person clinical asides in affects/playbook
+EARTHSCOPE_FIRST_PERSON = os.getenv("EARTHSCOPE_FIRST_PERSON", "true").strip().lower() in ("1","true","yes","on")
+PHRASE_VARIANTS = {
+    "feel_stable": [
+        "Steady backdrop—good window for structured work.",
+        "Quieter field—use the clarity for deep tasks.",
+        "Stable profile—set a simple plan and move steadily."
+    ],
+    "feel_unsettled": [
+        "Pulses and dips—short blocks, gentle pacing.",
+        "Variable flow—add margins around focus.",
+        "Bit of texture—aim for rhythm over intensity."
+    ],
+    "sleep_guard": [
+        "Dim light earlier; protect sleep continuity.",
+        "Wind down on schedule; keep evenings warm‑lit.",
+        "Guard bedtime routine; keep screens softer."
+    ],
+    "nerve_note": [
+        "If you run sensitive, brief tingles or nerve heaviness can show—plan micro‑breaks.",
+        "Sensitives can feel more wired; keep shoulders relaxed, jaw unclenched.",
+        "If pain flares on stormy days, keep heat/contrast and pacing nearby."
+    ],
+}
+def _pick_variant(key: str, seed_extra: int = 0) -> str:
+    arr = PHRASE_VARIANTS.get(key) or []
+    if not arr: return ""
+    random.seed(_daily_seed() + hash(key) + seed_extra)
+    return random.choice(arr)
 
 # --- Hook mode toggles ---
 HOOK_MODE = os.getenv("EARTHSCOPE_HOOK_MODE", "guard").strip().lower()  # guard | blend | always
@@ -306,34 +336,39 @@ def _rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
     if flr is not None: snap.append(f"- Flares (24h): {int(round(float(flr)))}")
     if cme is not None: snap.append(f"- CMEs (24h): {int(round(float(cme)))}")
     if sr is not None: snap.append(f"- Schumann f0: { _fmt_num(sr,2) } Hz")
-    snapshot = "Space Weather Snapshot\n" + "\n".join(snap)
+    snapshot = "Space weather snapshot\n" + "\n".join(snap)
 
-    # Affects (scientific-plain)
-    aff = []
+    # How it may feel (human clinical tone)
+    feel = []
     if tone in ("stormy","unsettled"):
-        aff.append("- **Focus/energy:** Expect ebbs and spikes; shorten sprints, add buffers.")
-        aff.append("- **Autonomic/HRV:** Southward Bz or higher Kp can reduce HRV in some; use paced breathing.")
-        aff.append("- **Sleep:** Late spikes can fragment sleep; dim screens and finish stimulants early.")
-        aff.append("- **Comms/GNSS:** Minor accuracy or HF variability possible at higher latitudes.")
+        feel.append(f"- Focus/energy: {_pick_variant('feel_unsettled') or 'Expect ebbs/spikes; keep sprints short.'}")
+        feel.append("- Autonomic/HRV: Southward Bz or higher Kp can nudge HRV down in some; paced breathing helps.")
+        feel.append(f"- Sleep: {_pick_variant('sleep_guard')}")
+        if EARTHSCOPE_FIRST_PERSON:
+            feel.append(f"- Clinician note: {_pick_variant('nerve_note', seed_extra=1)}")
+        else:
+            feel.append(f"- Sensitivity note: {_pick_variant('nerve_note', seed_extra=1)}")
+        feel.append("- Comms/GNSS: Minor accuracy or HF variability is possible at higher latitudes.")
     else:
-        aff.append("- **Focus/energy:** Stable; good window for structured or deep work.")
-        aff.append("- **Autonomic/HRV:** Conditions generally support recovery and coherence practices.")
-        aff.append("- **Sleep:** Usual hygiene works; keep evening light warm and low.")
-        aff.append("- **Comms/GNSS:** Normal for most regions.")
-    affects = "How This Affects You\n" + "\n".join(aff)
+        feel.append(f"- Focus/energy: {_pick_variant('feel_stable') or 'Stable; good window for structured work.'}")
+        feel.append("- Autonomic/HRV: Conditions generally support recovery and coherence practices.")
+        feel.append("- Sleep: Keep evening light warm and low; usual hygiene works.")
+        if EARTHSCOPE_FIRST_PERSON:
+            feel.append("- Clinician note: I see steadier HRV and less reactivity for many on days like this.")
+    affects = "How it may feel\n" + "\n".join(feel)
 
-    # Playbook: targeted, practical
-    care = []
+    # Care notes (practical, small set)
+    care_lines = []
     if tone in ("stormy","unsettled"):
-        care.append("- 5–10 min paced breathing (e.g., 4:6) or brief HRV biofeedback")
-        care.append("- Hydration + electrolytes; short daylight exposure")
-        care.append("- Protect sleep: blue‑light filters, consistent wind‑down")
-        care.append("- If sensitive, quick grounding/outdoor walk")
+        care_lines.append("- 5–10 min paced breathing (e.g., 4:6) or brief HRV biofeedback")
+        care_lines.append("- Hydration + electrolytes; short daylight exposure; gentle mobility")
+        care_lines.append("- Protect sleep: blue‑light filters and a consistent wind‑down")
+        care_lines.append("- If sensitive, quick grounding/outdoor walk; warm pack for nerve flare windows")
     else:
-        care.append("- Schedule 1–2 focus blocks (60–90 min) while conditions are steady")
-        care.append("- Light mobility or walk; natural light breaks")
-        care.append("- Hydrate; keep caffeine earlier in the day")
-    playbook = "Self-Care Playbook\n" + "\n".join(care)
+        care_lines.append("- Block 1–2 focus sessions (60–90 min) while the field is steady")
+        care_lines.append("- Natural light and movement breaks to reinforce circadian tone")
+        care_lines.append("- Hydrate; keep caffeine earlier in the day")
+    playbook = "Care notes\n" + "\n".join(care_lines)
 
     tags = "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus"
     return {"caption": caption, "snapshot": snapshot, "affects": affects, "playbook": playbook, "hashtags": tags}
@@ -363,9 +398,9 @@ def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: 
                 "playbook": playbook, "hashtags": "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus"}
     model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
     sys_msg = (
-        "Rewrite the provided sections to be data-accurate, concise, and clinically styled. "
-        + STYLE_GUIDE +
-        " Keep numbers and qualifiers intact. Do not invent data. No emojis. No questions."
+        "You are the daily author. " + STYLE_GUIDE +
+        " Rewrite the provided sections to sound like a human daily note—compact, empathic, and clinical. "
+        "Do not change facts or numbers. No emojis. No questions. Keep bullets tight."
     )
     user_payload = {
         "tone": _tone_from_ctx(ctx),
@@ -690,7 +725,6 @@ def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
     if EARTHSCOPE_FORCE_RULES or not client:
         rc = _rule_copy(ctx)
         return rc["snapshot"], rc["affects"], rc["playbook"], rc["hashtags"]
-
     # Hybrid paraphrase path
     try_rewrite = os.getenv("EARTHSCOPE_HYBRID_REWRITE", "true").strip().lower() in ("1","true","yes","on")
     if try_rewrite:
@@ -699,6 +733,7 @@ def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
         if out:
             return out["snapshot"], out["affects"], out["playbook"], out["hashtags"]
 
+    # Fallback: legacy LLM block splitting
     kp_now = ctx.get("kp_now")
     kp_max = ctx.get("kp_max_24h")
     wind   = ctx.get("solar_wind_kms")
@@ -908,7 +943,7 @@ def main():
 
     # Build final body markdown and upsert (single row per date/platform)
     body_md = (
-        "### Gaia Eyes Daily Space Weather Forecast\n\n" +
+        "Gaia Eyes — Daily EarthScope\n\n" +
         "\n\n".join([snapshot, affects, playbook]).strip()
     )
 
