@@ -109,6 +109,14 @@ JSON_PATH_REPO = MEDIA_REPO_PATH / "data" / "latest.json"
 CSV_PATH_REPO  = MEDIA_REPO_PATH / "data" / "latest.csv"
 SCHUMANN_CSV_REPO = MEDIA_REPO_PATH / "data" / "schumann.csv"
 
+# Prefer media EarthScope card JSON if present (new pipeline)
+EARTHSCOPE_MEDIA_DIR = Path(os.getenv("EARTHSCOPE_MEDIA_DIR", str(MEDIA_REPO_PATH))).expanduser()
+EARTHSCOPE_CARD_CANDIDATES = [
+    EARTHSCOPE_MEDIA_DIR / "data" / "earthscope_daily.json",   # new daily card
+    EARTHSCOPE_MEDIA_DIR / "data" / "earthscope.json",         # consolidated earthscope
+    EARTHSCOPE_MEDIA_DIR / "data" / "earthscope_latest.json",  # legacy name
+]
+
 # Backgrounds (square posts)
 BG_DIR_SQUARE = MEDIA_REPO_PATH / "backgrounds" / "square"
 BG_DIR_TALL   = MEDIA_REPO_PATH / "backgrounds" / "tall"
@@ -202,6 +210,23 @@ def utcnow_iso() -> str:
 def ensure_repo_paths():
     (MEDIA_REPO_PATH / "images").mkdir(parents=True, exist_ok=True)
     (MEDIA_REPO_PATH / "data").mkdir(parents=True, exist_ok=True)
+
+# -------------------------
+# EARTHSCOPE MEDIA CARD LOADER
+# -------------------------
+def load_earthscope_card() -> Optional[dict]:
+    """Load the newest EarthScope card from media repo, preferring the new daily JSON."""
+    for p in EARTHSCOPE_CARD_CANDIDATES:
+        try:
+            if p.exists():
+                with open(p, "r", encoding="utf-8") as f:
+                    j = json.load(f)
+                    if isinstance(j, dict):
+                        logging.info(f"Loaded EarthScope card: {p.name}")
+                        return j
+        except Exception as e:
+            logging.warning(f"EarthScope card read failed {p}: {e}")
+    return None
 
 # -------------------------
 # TARGET DAY
@@ -1068,6 +1093,9 @@ def main():
         except Exception:
             pass
 
+    # Try loading media EarthScope card JSON for sections/metrics if Supabase post is missing or outdated
+    media_card = load_earthscope_card()
+
     # Prefer metrics from content.daily_posts.metrics_json when available
     metrics = {}
     if post and post.get("metrics_json"):
@@ -1106,6 +1134,29 @@ def main():
             except Exception: pass
         # Optional harmonics structure (not drawn currently)
         # metrics.get("harmonics") can be kept if needed later
+
+    # If metrics/sections are still empty, prefer media_card contents (new pipeline)
+    if (not metrics or not isinstance(metrics, dict) or not metrics.get("sections")) and isinstance(media_card, dict):
+        # Map a minimal metrics view from media card if available
+        m2 = media_card.get("metrics") or {}
+        if isinstance(m2, dict):
+            metrics = metrics or {}
+            # Copy over numeric fields if present
+            for k_old, k_new in [
+                ("kp_max_24h","kp_max_24h"),
+                ("solar_wind_kms","solar_wind_kms"),
+                ("flares_24h","flares_24h"),
+                ("cmes_24h","cmes_24h"),
+                ("schumann_value_hz","schumann_value_hz"),
+            ]:
+                if m2.get(k_old) is not None and metrics.get(k_new) is None:
+                    metrics[k_new] = m2.get(k_old)
+            # Deltas/bands/tone may also be present
+            if m2.get("deltas"): metrics["deltas"] = m2["deltas"]
+            if m2.get("g_headline"): metrics["g_headline"] = m2["g_headline"]
+            if m2.get("sections"): metrics["sections"] = m2["sections"]  # pass-through if exists
+            if m2.get("bands"): metrics["bands"] = m2["bands"]
+            if m2.get("tone"): metrics["tone"] = m2["tone"]
 
     # Prefer structured sections from metrics_json (caption/affects/playbook) when available
     sections = None
@@ -1153,6 +1204,10 @@ def main():
     # Override text from structured sections if present
     if isinstance(sections, dict):
         caption_text = sections.get("caption") or caption_text
+    elif isinstance(media_card, dict):
+        sec_mc = media_card.get("sections") or {}
+        if isinstance(sec_mc, dict):
+            caption_text = sec_mc.get("caption") or caption_text
 
     # Extract sections (tolerant to Unicode hyphens/dashes and case)
     affects_txt  = extract_any_section(body_md, [
@@ -1177,6 +1232,11 @@ def main():
     if isinstance(sections, dict):
         affects_txt  = sections.get("affects")  or affects_txt
         playbook_txt = sections.get("playbook") or playbook_txt
+    elif isinstance(media_card, dict):
+        sec_mc = media_card.get("sections") or {}
+        if isinstance(sec_mc, dict):
+            affects_txt  = sec_mc.get("affects")  or affects_txt
+            playbook_txt = sec_mc.get("playbook") or playbook_txt
     if not affects_txt or not playbook_txt:
         fa, fp = generate_daily_forecast(sch, kp)[1], " - " + generate_daily_forecast(sch, kp)[2]
         affects_txt = affects_txt or fa
@@ -1208,6 +1268,18 @@ def main():
     # Override energy label from tone/bands if provided by metrics_json
     if tone_band_energy:
         energy = tone_band_energy
+    elif isinstance(media_card, dict):
+        m2 = media_card.get("metrics") or {}
+        bands2 = m2.get("bands") or {}
+        tone2  = (m2.get("tone") or "").lower()
+        kb2    = (bands2.get("kp") or "").lower()
+        if tone2 or kb2:
+            def _energy_from_tb(t, kb):
+                if t in ("stormy","high"): return "High"
+                if kb in ("storm","severe"): return "High"
+                if kb in ("active","unsettled","mild"): return "Elevated"
+                return "Calm"
+            energy = _energy_from_tb(tone2, kb2)
 
     # Strip hashtags/emojis from affects/playbook text for layout robustness
     affects_txt  = strip_hashtags_and_emojis(_safe_text(affects_txt))
