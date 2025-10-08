@@ -1205,7 +1205,15 @@ def main():
     if isinstance(sections, dict):
         caption_text = sections.get("caption") or caption_text
     elif isinstance(media_card, dict):
-        sec_mc = media_card.get("sections") or {}
+        # media_card may use top-level keys (caption/affects/playbook) or a sections{} block
+        sec_mc = media_card.get("sections")
+        if not isinstance(sec_mc, dict):
+            sec_mc = {
+                "caption": media_card.get("caption"),
+                "snapshot": media_card.get("snapshot"),
+                "affects": media_card.get("affects"),
+                "playbook": media_card.get("playbook"),
+            }
         if isinstance(sec_mc, dict):
             caption_text = sec_mc.get("caption") or caption_text
 
@@ -1216,7 +1224,8 @@ def main():
         "How This Affects You –",
         "How This Affects You —",
         "How This Might Affect You",
-        "How this might affect you"
+        "How this might affect you",
+        "How it may feel"
     ]) or ""
 
     playbook_txt = extract_any_section(body_md, [
@@ -1226,14 +1235,23 @@ def main():
         "Self—Care Playbook",      # U+2014 em dash
         "Self – Care Playbook",    # spaced en dash
         "Self — Care Playbook",    # spaced em dash
-        "Self Care Playbook"       # no hyphen
+        "Self Care Playbook",      # no hyphen
+        "Care notes"
     ]) or ""
     # If structured sections exist, prefer them over markdown extraction
     if isinstance(sections, dict):
         affects_txt  = sections.get("affects")  or affects_txt
         playbook_txt = sections.get("playbook") or playbook_txt
     elif isinstance(media_card, dict):
-        sec_mc = media_card.get("sections") or {}
+        # media_card may have sections{} or top-level keys
+        sec_mc = media_card.get("sections")
+        if not isinstance(sec_mc, dict):
+            sec_mc = {
+                "caption": media_card.get("caption"),
+                "snapshot": media_card.get("snapshot"),
+                "affects": media_card.get("affects"),
+                "playbook": media_card.get("playbook"),
+            }
         if isinstance(sec_mc, dict):
             affects_txt  = sec_mc.get("affects")  or affects_txt
             playbook_txt = sec_mc.get("playbook") or playbook_txt
