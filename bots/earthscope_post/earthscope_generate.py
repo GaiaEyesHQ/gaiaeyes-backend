@@ -374,6 +374,7 @@ def _rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
     return {"caption": caption, "snapshot": snapshot, "affects": affects, "playbook": playbook, "hashtags": tags}
 
 # --- banned phrase and repetition scrubber ---
+
 def _scrub_banned_phrases(text: str) -> str:
     s = text or ""
     low = s.lower()
@@ -386,62 +387,186 @@ def _scrub_banned_phrases(text: str) -> str:
     s = re.sub(r"\b(\w+\s+\w+)\s+\1\b", r"\1", s, flags=re.I)
     return s.strip()
 
-# --- LLM rewrite from rules ---
-def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: str, affects: str, playbook: str, ctx: Dict[str, Any]) -> Dict[str, str]:
-    """
-    Ask the LLM to paraphrase rule output into tighter prose without changing facts.
-    Returns possibly rewritten pieces with banned phrases scrubbed.
-    """
-    if not client:
-        return {"caption": _scrub_banned_phrases(caption),
-                "snapshot": snapshot, "affects": affects,
-                "playbook": playbook, "hashtags": "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus"}
-    model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
-    sys_msg = (
-        "You are the daily author. " + STYLE_GUIDE +
-        " Rewrite the provided sections to sound like a human daily note—compact, empathic, and clinical. "
-        "Do not change facts or numbers. No emojis. No questions. Keep bullets tight."
-    )
-    user_payload = {
+# --- Context summarizer & JSON rewrite utilities (interpretive, number-free) ---
+
+def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract the subset of facts we pass to the LLM. These are context, not for citation."""
+    return {
+        "kp_max_24h": ctx.get("kp_max_24h"),
+        "bz_min": ctx.get("bz_min"),
+        "solar_wind_kms": ctx.get("solar_wind_kms"),
+        "flares_24h": ctx.get("flares_24h"),
+        "cmes_24h": ctx.get("cmes_24h"),
+        "schumann_value_hz": ctx.get("schumann_value_hz"),
+        # Earthquakes can be integrated later if present in ctx
+        "earthquakes_72h": ctx.get("earthquakes_72h"),
         "tone": _tone_from_ctx(ctx),
         "bands": {
             "kp": _band_kp(ctx.get("kp_max_24h")),
             "sw": _band_sw(ctx.get("solar_wind_kms")),
             "bz": _bz_desc(ctx.get("bz_min")),
         },
-        "sections": {
-            "caption": caption,
-            "snapshot": snapshot,
-            "affects": affects,
-            "playbook": playbook
+    }
+
+
+def _summarize_context(facts: Dict[str, Any]) -> str:
+    """Deterministic short hint that guides narrative without numbers."""
+    kp = facts.get("kp_max_24h")
+    cmes = facts.get("cmes_24h")
+    flr = facts.get("flares_24h")
+    sr = facts.get("schumann_value_hz")
+    tone = facts.get("tone") or "neutral"
+
+    parts: List[str] = []
+    if cmes and (cmes or 0) > 0:
+        parts.append("recent CME activity")
+    if flr and (flr or 0) > 0:
+        parts.append("fresh solar flare effects")
+    if isinstance(kp, (int, float)) and kp >= 5:
+        parts.append("geomagnetic storm window")
+    elif isinstance(kp, (int, float)) and kp >= 4:
+        parts.append("active geomagnetics")
+    if isinstance(sr, (int, float)) and sr:
+        parts.append("lively Schumann resonance")
+
+    if not parts:
+        parts.append("steady background field")
+    return ", ".join(parts) + f"; tone {tone}."
+
+
+def _contains_digits(s: str) -> bool:
+    return bool(re.search(r"\d", s or ""))
+
+
+def _validate_rewrite(obj: Any) -> Optional[Dict[str, str]]:
+    """Ensure JSON has required keys and no numerals in text fields."""
+    if not isinstance(obj, dict):
+        return None
+    required = ["caption", "snapshot", "affects", "playbook", "hashtags"]
+    for k in required:
+        if k not in obj or not isinstance(obj[k], str):
+            return None
+    # Enforce number-free narrative in main fields (hashtags may include numbers, allow there)
+    for k in ["caption", "snapshot", "affects", "playbook"]:
+        if _contains_digits(obj[k]):
+            return None
+    return obj  # looks valid
+
+
+def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str], facts: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """Call the LLM to rewrite into interpretive, number-free JSON. Returns dict or None."""
+    if not client:
+        return None
+
+    system_msg = (
+        "You are Gaia Eyes’ daily author. Interpret today’s space/earth conditions for humans. "
+        "Do NOT cite numeric measurements or units (e.g., 'Kp 4.7', '386 km/s'). "
+        "Explain significance and likely felt effects in calm, clinical-warm language. "
+        "Offer practical self-care suggestions. Never catastrophize. No emojis. No questions. "
+        "Return ONLY a compact JSON object with EXACTLY these string keys: caption, snapshot, affects, playbook, hashtags. "
+        "No markdown, no extra keys, no code fences."
+    )
+
+    payload = {
+        "metrics": facts,
+        "context": _summarize_context(facts),
+        "draft": draft,
+        "style": {
+            "persona": "researcher-coach",
+            "audience": "people tracking HRV, sleep, nervous-system sensitivity",
+            "opener_palette": HOOKS.get(facts.get("tone") or "neutral", HOOKS["neutral"]),
+            "ban_phrases": BAN_PHRASES,
+            "bullet_style": "short"
+        },
+        "constraints": {
+            "omit_numbers": True,
+            "no_questions": True,
+            "no_emojis": True,
+            "max_caption_chars": 600
         }
     }
+
+    model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
     try:
         resp = client.chat.completions.create(
             model=model,
-            temperature=0.5,
+            temperature=0.7,
+            top_p=0.9,
+            presence_penalty=0.3,
+            frequency_penalty=0.2,
             max_tokens=700,
             messages=[
-                {"role":"system","content": sys_msg},
-                {"role":"user","content": json.dumps(user_payload, ensure_ascii=False)}
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
             ],
         )
-        text = resp.choices[0].message.content.strip()
-        # Simple splitter expecting four blocks separated by blank lines
-        parts = [p.strip() for p in text.split("\n\n") if p.strip()]
-        cap, snap, aff, play = caption, snapshot, affects, playbook
-        if parts:
-            cap = parts[0]
-            if len(parts) > 1: snap = parts[1]
-            if len(parts) > 2: aff = parts[2]
-            if len(parts) > 3: play = parts[3]
-        cap = _scrub_banned_phrases(_sanitize_caption(cap))
-        return {"caption": cap, "snapshot": snap, "affects": aff, "playbook": play,
-                "hashtags": "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus"}
+        text = (resp.choices[0].message.content or "").strip()
+        # Expect raw JSON object only
+        try:
+            obj = json.loads(text)
+        except Exception:
+            return None
+        valid = _validate_rewrite(obj)
+        if valid:
+            # final scrubs
+            valid["caption"] = _scrub_banned_phrases(_sanitize_caption(valid["caption"]))
+            valid["snapshot"] = _scrub_banned_phrases(valid["snapshot"]) 
+            valid["affects"] = _scrub_banned_phrases(valid["affects"]) 
+            valid["playbook"] = _scrub_banned_phrases(valid["playbook"]) 
+            return valid
+        return None
     except Exception:
-        return {"caption": _scrub_banned_phrases(caption),
-                "snapshot": snapshot, "affects": affects,
-                "playbook": playbook, "hashtags": "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus"}
+        return None
+
+
+# --- LLM rewrite from rules ---
+def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: str, affects: str, playbook: str, ctx: Dict[str, Any]) -> Dict[str, str]:
+    """Number-free interpretive rewrite. Falls back to rule copy if JSON invalid or client missing."""
+    # If no client, return the rule copy unchanged (but scrub)
+    if not client:
+        return {
+            "caption": _scrub_banned_phrases(_sanitize_caption(caption)),
+            "snapshot": _scrub_banned_phrases(snapshot),
+            "affects": _scrub_banned_phrases(affects),
+            "playbook": _scrub_banned_phrases(playbook),
+            "hashtags": "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus",
+        }
+
+    draft = {
+        "caption": caption,
+        "snapshot": snapshot,
+        "affects": affects,
+        "playbook": playbook,
+        "hashtags": "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus",
+    }
+    facts = _build_facts(ctx)
+
+    # Try once
+    out = _rewrite_json_interpretive(client, draft, facts)
+    if out:
+        return out
+    # Try a second time with a slightly different temperature
+    client_tweak = client
+    try:
+        # Some SDKs allow per-call overrides only; we just reissue with different params inside helper if needed.
+        out = _rewrite_json_interpretive(client_tweak, draft, facts)
+    except Exception:
+        out = None
+
+    if out:
+        return out
+
+    # Final fallback: scrub the deterministic copy and also remove digits to honor number-free request
+    def _no_digits(s: str) -> str:
+        return re.sub(r"\d+\.?\d*\s*(km/s|nT|Hz)?", "", s).strip()
+
+    return {
+        "caption": _no_digits(_scrub_banned_phrases(_sanitize_caption(caption))),
+        "snapshot": _no_digits(_scrub_banned_phrases(snapshot)),
+        "affects": _no_digits(_scrub_banned_phrases(affects)),
+        "playbook": _no_digits(_scrub_banned_phrases(playbook)),
+        "hashtags": "#GaiaEyes #SpaceWeather #Wellness #HRV #Sleep",
+    }
 
 # --- deterministic snapshot builder ---
 def _build_snapshot_md(ctx: Dict[str, Any]) -> str:
@@ -628,6 +753,7 @@ def fetch_schumann_from_marts(day: str) -> Dict[str, Any]:
 # LLM (spreadsheet-style copy)
 # ============================================================
 
+
 def openai_client() -> Optional[OpenAI]:
     if not HAVE_OPENAI:
         return None
@@ -638,6 +764,25 @@ def openai_client() -> Optional[OpenAI]:
         return OpenAI()
     except Exception:
         return None
+
+# --- Single-call rewrite cache (avoid double API calls in one run) ---
+_REWRITE_CACHE: Optional[Dict[str, str]] = None
+
+def _get_cached_rewrite(client: Optional["OpenAI"], ctx: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """Compute interpretive JSON rewrite once per run and cache it. Returns dict or None."""
+    global _REWRITE_CACHE
+    if _REWRITE_CACHE:
+        return _REWRITE_CACHE
+    if not client:
+        return None
+    rc_local = _rule_copy(ctx)
+    out = _llm_rewrite_from_rules(
+        client,
+        rc_local["caption"], rc_local["snapshot"], rc_local["affects"], rc_local["playbook"], ctx
+    )
+    if out:
+        _REWRITE_CACHE = out
+    return _REWRITE_CACHE
 
 
 def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
@@ -650,9 +795,10 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     rc = _rule_copy(ctx)
     try_rewrite = os.getenv("EARTHSCOPE_HYBRID_REWRITE", "true").strip().lower() in ("1","true","yes","on")
     if try_rewrite:
-        out = _llm_rewrite_from_rules(client, rc["caption"], rc["snapshot"], rc["affects"], rc["playbook"], ctx)
+        # New: interpretive, number-free JSON rewrite (cached single-call reuse)
+        out = _get_cached_rewrite(client, ctx)
         if out and out.get("caption"):
-            return out["caption"], out["hashtags"]
+            return out["caption"], out.get("hashtags", rc.get("hashtags", "#GaiaEyes #SpaceWeather"))
 
     kp_now = ctx.get("kp_now")
     kp_max = ctx.get("kp_max_24h")
@@ -728,10 +874,10 @@ def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
     # Hybrid paraphrase path
     try_rewrite = os.getenv("EARTHSCOPE_HYBRID_REWRITE", "true").strip().lower() in ("1","true","yes","on")
     if try_rewrite:
-        rc = _rule_copy(ctx)
-        out = _llm_rewrite_from_rules(client, rc["caption"], rc["snapshot"], rc["affects"], rc["playbook"], ctx)
+        # New: interpretive, number-free JSON rewrite (cached single-call reuse)
+        out = _get_cached_rewrite(client, ctx)
         if out:
-            return out["snapshot"], out["affects"], out["playbook"], out["hashtags"]
+            return out["snapshot"], out["affects"], out["playbook"], out.get("hashtags", "#GaiaEyes #SpaceWeather #Wellness #HeartBrain")
 
     # Fallback: legacy LLM block splitting
     kp_now = ctx.get("kp_now")
