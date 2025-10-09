@@ -70,6 +70,13 @@ EARTHSCOPE_OUTPUT_JSON = os.getenv("EARTHSCOPE_OUTPUT_JSON_PATH")  # e.g., ../ga
 EARTHSCOPE_FORCE_RULES = os.getenv("EARTHSCOPE_FORCE_RULES", "false").strip().lower() in ("1","true","yes","on")
 # Toggle for first-person clinical asides in affects/playbook
 EARTHSCOPE_FIRST_PERSON = os.getenv("EARTHSCOPE_FIRST_PERSON", "true").strip().lower() in ("1","true","yes","on")
+
+# Debug flag for rewrite path tracing
+EARTHSCOPE_DEBUG_REWRITE = os.getenv("EARTHSCOPE_DEBUG_REWRITE", "false").strip().lower() in ("1","true","yes","on")
+
+def _dbg(msg: str) -> None:
+    if EARTHSCOPE_DEBUG_REWRITE:
+        print(f"[earthscope.debug] {msg}")
 PHRASE_VARIANTS = {
     "feel_stable": [
         "Steady backdrop—good window for structured work.",
@@ -488,6 +495,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
 
     model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
     try:
+        _dbg("rewrite: request -> OpenAI (interpretive JSON)")
         resp = client.chat.completions.create(
             model=model,
             temperature=0.7,
@@ -503,10 +511,13 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         text = (resp.choices[0].message.content or "").strip()
         # Expect raw JSON object only
         try:
+            _dbg("rewrite: response received; attempting JSON parse")
             obj = json.loads(text)
-        except Exception:
+        except Exception as e:
+            _dbg(f"rewrite: JSON parse failed: {e}")
             return None
         valid = _validate_rewrite(obj)
+        _dbg("rewrite: JSON valid") if valid else _dbg("rewrite: JSON invalid by validator")
         if valid:
             # final scrubs
             valid["caption"] = _scrub_banned_phrases(_sanitize_caption(valid["caption"]))
@@ -515,15 +526,18 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             valid["playbook"] = _scrub_banned_phrases(valid["playbook"]) 
             return valid
         return None
-    except Exception:
+    except Exception as e:
+        _dbg(f"rewrite: OpenAI call failed: {e}")
         return None
 
 
 # --- LLM rewrite from rules ---
 def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: str, affects: str, playbook: str, ctx: Dict[str, Any]) -> Dict[str, str]:
     """Number-free interpretive rewrite. Falls back to rule copy if JSON invalid or client missing."""
+    _dbg("rewrite: begin")
     # If no client, return the rule copy unchanged (but scrub)
     if not client:
+        _dbg("rewrite: no client; returning scrubbed rule copy")
         return {
             "caption": _scrub_banned_phrases(_sanitize_caption(caption)),
             "snapshot": _scrub_banned_phrases(snapshot),
@@ -543,6 +557,7 @@ def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: 
 
     # Try once
     out = _rewrite_json_interpretive(client, draft, facts)
+    _dbg("rewrite: primary succeeded") if out else _dbg("rewrite: primary failed; retrying")
     if out:
         return out
     # Try a second time with a slightly different temperature
@@ -553,10 +568,12 @@ def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: 
     except Exception:
         out = None
 
+    _dbg("rewrite: retry succeeded") if out else _dbg("rewrite: retry failed; falling back to qualitative")
     if out:
         return out
 
     # Final fallback: qualitative narrative (no metric numbers), preserve useful timings in affects/playbook
+    _dbg("rewrite: using qualitative fallback")
     rc_fallback = _rule_copy(ctx)
     qual_snap = _qualitative_snapshot(ctx)
     tone = _tone_from_ctx(ctx)
@@ -830,17 +847,22 @@ _REWRITE_CACHE: Optional[Dict[str, str]] = None
 def _get_cached_rewrite(client: Optional["OpenAI"], ctx: Dict[str, Any]) -> Optional[Dict[str, str]]:
     """Compute interpretive JSON rewrite once per run and cache it. Returns dict or None."""
     global _REWRITE_CACHE
+    _dbg("rewrite-cache: check")
     if _REWRITE_CACHE:
+        _dbg("rewrite-cache: hit")
         return _REWRITE_CACHE
     if not client:
+        _dbg("rewrite-cache: no client; skipping")
         return None
     rc_local = _rule_copy(ctx)
+    _dbg("rewrite-cache: miss; computing via LLM")
     out = _llm_rewrite_from_rules(
         client,
         rc_local["caption"], rc_local["snapshot"], rc_local["affects"], rc_local["playbook"], ctx
     )
     if out:
         _REWRITE_CACHE = out
+    _dbg("rewrite-cache: stored" if _REWRITE_CACHE else "rewrite-cache: compute failed; using None")
     return _REWRITE_CACHE
 
 
