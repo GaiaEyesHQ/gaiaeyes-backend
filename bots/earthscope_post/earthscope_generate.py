@@ -67,6 +67,8 @@ USER_ID      = os.getenv("EARTHSCOPE_USER_ID", None)
 
 # Output JSON for website/app card (optional)
 EARTHSCOPE_OUTPUT_JSON = os.getenv("EARTHSCOPE_OUTPUT_JSON_PATH")  # e.g., ../gaiaeyes-media/data/earthscope_daily.json
+# Optional: external pulse file (aurora/quake/severe signals)
+EARTHSCOPE_PULSE_JSON = os.getenv("EARTHSCOPE_PULSE_JSON", str((BASE_DIR / ".." / ".." / "gaiaeyes-media" / "data" / "pulse.json").resolve()))
 EARTHSCOPE_FORCE_RULES = os.getenv("EARTHSCOPE_FORCE_RULES", "false").strip().lower() in ("1","true","yes","on")
 # Toggle for first-person clinical asides in affects/playbook
 EARTHSCOPE_FIRST_PERSON = os.getenv("EARTHSCOPE_FIRST_PERSON", "true").strip().lower() in ("1","true","yes","on")
@@ -413,6 +415,11 @@ def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
             "sw": _band_sw(ctx.get("solar_wind_kms")),
             "bz": _bz_desc(ctx.get("bz_min")),
         },
+        "aurora_headline": ctx.get("aurora_headline"),
+        "aurora_window": ctx.get("aurora_window"),
+        "aurora_severity": ctx.get("aurora_severity"),
+        "quakes_count": ctx.get("quakes_count"),
+        "severe_summary": ctx.get("severe_summary"),
     }
 
 
@@ -670,10 +677,63 @@ def _qualitative_snapshot(ctx: Dict[str, Any]) -> str:
     else:
         lines.append("Resonance bed looks ordinary overall.")
 
+    # Aurora chances
+    if ctx.get("aurora_headline"):
+        lines.append("Aurora chances look favorable at higher latitudes—dark skies after local midnight tend to help.")
+
+    # Recent notable quakes
+    if ctx.get("quakes_count"):
+        lines.append("Recent notable earthquakes were logged; keep news checks brief if you’re prone to stress.")
+
+    # Severe weather
+    if ctx.get("severe_summary"):
+        lines.append("Regional storm/flood alerts are active—check local guidance if you’re in the affected area.")
+
     # Close with guidance intent
     lines.append("Plan a steady rhythm; if you run sensitive, keep a quick breath reset and short movement breaks.")
 
     return "Space Weather Snapshot\n" + " ".join(lines)
+# ============================================================
+# Optional pulse file: aurora, quakes, severe
+# ============================================================
+
+def _load_pulse_cards(pulse_path: str) -> Dict[str, Any]:
+    """Read a pulse.json-like file and extract compact signals for context.
+    Expected structure: {"timestamp_utc": ..., "cards": [{"type": ..., ...}]}
+    Returns keys safe to merge into ctx and metrics.
+    """
+    try:
+        p = Path(pulse_path)
+        if not p.exists():
+            _dbg(f"pulse: not found at {pulse_path}")
+            return {}
+        data = json.loads(p.read_text(encoding="utf-8"))
+        cards = data.get("cards", []) or []
+        out: Dict[str, Any] = {}
+        # Aurora forecast
+        aur = next((c for c in cards if c.get("type") == "aurora"), None)
+        if aur:
+            ad = aur.get("data", {}) or {}
+            out["aurora_headline"] = ad.get("headline") or aur.get("title")
+            out["aurora_window"] = aur.get("time_window")
+            out["aurora_severity"] = aur.get("severity")
+        # Quake: count and last title
+        quakes = [c for c in cards if c.get("type") == "quake"]
+        if quakes:
+            out["quakes_count"] = len(quakes)
+            # take the most recent item
+            q0 = sorted(quakes, key=lambda c: c.get("data", {}).get("time_utc") or c.get("time_window") or "", reverse=True)[0]
+            out["quake_top_title"] = q0.get("title")
+            out["quake_top_summary"] = q0.get("summary")
+        # Severe weather summary (if any)
+        sev = next((c for c in cards if c.get("type") == "severe"), None)
+        if sev:
+            out["severe_summary"] = sev.get("summary")
+            out["severe_window"] = sev.get("time_window")
+        return out
+    except Exception as e:
+        _dbg(f"pulse: failed to load -> {e}")
+        return {}
 
 # ============================================================
 # Data fetch: Supabase marts
@@ -1115,6 +1175,15 @@ def main():
         "harmonics": sr.get("schumann_harmonics"),
     }
 
+    # Optional: merge pulse signals (aurora/quakes/severe)
+    try:
+        pulse_ctx = _load_pulse_cards(EARTHSCOPE_PULSE_JSON)
+        if pulse_ctx:
+            ctx.update(pulse_ctx)
+            _dbg("pulse: merged into ctx")
+    except Exception as e:
+        _dbg(f"pulse: merge failed -> {e}")
+
     # 2) Generate copy
     short_caption, short_tags = generate_short_caption(ctx)
     snapshot, affects, playbook, long_tags = generate_long_sections(ctx)
@@ -1155,6 +1224,13 @@ def main():
         "cmes_24h": ctx.get("cmes_24h"),
         "schumann_value_hz": ctx.get("schumann_value_hz"),
         "harmonics": ctx.get("harmonics"),
+        "pulse": {
+            "aurora_headline": ctx.get("aurora_headline"),
+            "aurora_window": ctx.get("aurora_window"),
+            "aurora_severity": ctx.get("aurora_severity"),
+            "quakes_count": ctx.get("quakes_count"),
+            "severe_summary": ctx.get("severe_summary"),
+        },
         "tone": tone,
         "bands": bands,
         "sections": sections_struct,
@@ -1162,6 +1238,7 @@ def main():
     sources_json = {
         "marts.space_weather_daily": True,
         "marts.schumann_daily": True,
+        "pulse.json": Path(EARTHSCOPE_PULSE_JSON).name if EARTHSCOPE_PULSE_JSON else False,
     }
 
     # 4) Emit optional JSON for web/app card
