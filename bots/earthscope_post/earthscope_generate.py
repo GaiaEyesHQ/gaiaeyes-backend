@@ -446,18 +446,21 @@ def _contains_digits(s: str) -> bool:
 
 
 def _validate_rewrite(obj: Any) -> Optional[Dict[str, str]]:
-    """Ensure JSON has required keys and no numerals in text fields."""
+    """Ensure JSON has required keys. For number policy: forbid digits in caption/snapshot, but allow in affects/playbook (e.g., "5–10 min")."""
     if not isinstance(obj, dict):
+        _dbg("validate: not a dict")
         return None
     required = ["caption", "snapshot", "affects", "playbook", "hashtags"]
     for k in required:
         if k not in obj or not isinstance(obj[k], str):
+            _dbg(f"validate: missing or non-str key: {k}")
             return None
-    # Enforce number-free narrative in main fields (hashtags may include numbers, allow there)
-    for k in ["caption", "snapshot", "affects", "playbook"]:
+    # Enforce number-free narrative in top fields only
+    for k in ["caption", "snapshot"]:
         if _contains_digits(obj[k]):
+            _dbg(f"validate: digits found in {k}")
             return None
-    return obj  # looks valid
+    return obj
 
 
 def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str], facts: Dict[str, Any]) -> Optional[Dict[str, str]]:
@@ -467,7 +470,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
 
     system_msg = (
         "You are Gaia Eyes’ daily author. Interpret today’s space/earth conditions for humans. "
-        "Do NOT cite numeric measurements or units (e.g., 'Kp 4.7', '386 km/s'). "
+        "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
+        "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
         "Explain significance and likely felt effects in calm, clinical-warm language. "
         "Offer practical self-care suggestions. Never catastrophize. No emojis. No questions. "
         "Return ONLY a compact JSON object with EXACTLY these string keys: caption, snapshot, affects, playbook, hashtags. "
@@ -518,6 +522,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             return None
         valid = _validate_rewrite(obj)
         _dbg("rewrite: JSON valid") if valid else _dbg("rewrite: JSON invalid by validator")
+        if not valid:
+            _dbg(f"rewrite: raw response snippet => {text[:180]}")
         if valid:
             # final scrubs
             valid["caption"] = _scrub_banned_phrases(_sanitize_caption(valid["caption"]))
