@@ -25,6 +25,7 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      EARTHSCOPE_DEBUG_REWRITE: "true"
       SUPABASE_POSTS_SCHEMA: content
       SUPABASE_POSTS_TABLE: daily_posts
       SUPABASE_MARTS_SCHEMA: marts
