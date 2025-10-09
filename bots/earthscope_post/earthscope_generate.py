@@ -280,6 +280,71 @@ def _recent_openers(days_back: int = 7) -> set:
     except Exception:
         return set()
 
+# --- Recent titles helper to reduce repetition ---
+def _recent_titles(days_back: int = 14) -> set:
+    try:
+        since = (datetime.utcnow() - timedelta(days=days_back)).date().isoformat()
+        res = (
+            SB.schema(POSTS_SCHEMA)
+              .table(POSTS_TABLE)
+              .select("day,title,platform")
+              .gte("day", since)
+              .order("day", desc=True)
+              .limit(30)
+              .execute()
+        )
+        rows = res.data or []
+        return { (r.get("title") or "").strip().lower() for r in rows if r and r.get("title") }
+    except Exception:
+        return set()
+# --- LLM-based title generator using cached rewrite ---
+def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rewrite: Optional[Dict[str,str]]) -> Optional[str]:
+    """Ask the LLM for a short 2–4 word title based on tone + pulse + sections. No numbers, no emojis.
+    Returns a plain string or None on failure.
+    """
+    if not client:
+        return None
+    tone = _tone_from_ctx(ctx)
+    recent = sorted(list(_recent_titles(21)))
+    # Compose compact context
+    facts = {
+        "tone": tone,
+        "bands": {"kp": _band_kp(ctx.get("kp_max_24h")), "sw": _band_sw(ctx.get("solar_wind_kms")), "bz": _bz_desc(ctx.get("bz_min"))},
+        "pulse": {
+            "aurora": bool(ctx.get("aurora_headline")),
+            "quakes": int(ctx.get("quakes_count") or 0) > 0,
+            "severe": bool(ctx.get("severe_summary")),
+        }
+    }
+    sections = rewrite or {}
+    sys = (
+        "You title Gaia Eyes daily cards. Write a **concise 2–4 word title** that fits the day’s tone and context. "
+        "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases. Keep it evocative but calm. "
+        "Output ONLY the title text with no quotes."
+    )
+    usr = {
+        "facts": facts,
+        "samples": {"recent_titles": recent[:12]},
+        "sections_excerpt": {k: (v[:160] if isinstance(v,str) else v) for k,v in sections.items() if k in ("caption","snapshot")}
+    }
+    try:
+        resp = client.chat.completions.create(
+            model=os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini"),
+            temperature=0.65,
+            top_p=0.9,
+            presence_penalty=0.2,
+            max_tokens=16,
+            messages=[{"role":"system","content":sys},{"role":"user","content":json.dumps(usr, ensure_ascii=False)}],
+        )
+        title = (resp.choices[0].message.content or "").strip()
+        # Guardrails: strip quotes and trim length
+        title = re.sub(r'^["\'']|["\'']$', "", title).strip()
+        if 0 < len(title) <= 40:
+            return title
+        return None
+    except Exception:
+        return None
+
 def _pick_hook(tone: str, last_used: set | None = None) -> str:
     pool = HOOKS.get(tone) or HOOKS["neutral"]
     random.seed(_daily_seed() + hash(tone))
@@ -966,7 +1031,10 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
         # New: interpretive, number-free JSON rewrite (cached single-call reuse)
         out = _get_cached_rewrite(client, ctx)
         if out and out.get("caption"):
-            return out["caption"], out.get("hashtags", rc.get("hashtags", "#GaiaEyes #SpaceWeather"))
+            cap = out["caption"]
+            if _tone_from_ctx(ctx) == "calm" and not cap.endswith("."):
+                cap += "."
+            return cap, out.get("hashtags", rc.get("hashtags", "#GaiaEyes #SpaceWeather"))
 
     kp_now = ctx.get("kp_now")
     kp_max = ctx.get("kp_max_24h")
@@ -1223,19 +1291,31 @@ def main():
         "playbook": playbook,
     }
 
-    # Title heuristic (tiered)
-    kpmax = ctx.get("kp_max_24h")
-    wind  = ctx.get("solar_wind_kms")
-    if kpmax is None and wind is None:
-        title = "Space Weather Update"
-    elif kpmax is not None and kpmax >= 6:
-        title = "Geomagnetic Storm Watch"
-    elif kpmax is not None and kpmax >= 4:
-        title = "Active Geomagnetics"
-    elif wind is not None and wind >= 600:
-        title = "High-Speed Solar Wind"
+    # Title via LLM (uses cached rewrite), with safe heuristic fallback
+    client = openai_client()
+    llm_title = None
+    if client:
+        try:
+            llm_title = _llm_title_from_context(client, ctx, _REWRITE_CACHE)
+        except Exception:
+            llm_title = None
+    if llm_title:
+        title = llm_title
     else:
-        title = "Magnetic Calm"
+        # Fallback heuristic (previous behavior)
+        kpmax = ctx.get("kp_max_24h"); wind  = ctx.get("solar_wind_kms")
+        if kpmax is None and wind is None:
+            title = "Space Weather Update"
+        elif kpmax is not None and kpmax >= 6:
+            title = "Geomagnetic Storm Watch"
+        elif kpmax is not None and kpmax >= 4:
+            title = "Active Geomagnetics"
+        elif wind is not None and wind >= 600:
+            title = "High-Speed Solar Wind"
+        else:
+            # nudge small variety on calm days
+            calm_titles = ["Magnetic Calm","Steady Field","Quiet Skies","Clear Runway"]
+            random.seed(_daily_seed()); title = random.choice(calm_titles)
 
     # 3) Prepare payloads
     metrics_json = {
