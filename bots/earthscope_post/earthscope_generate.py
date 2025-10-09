@@ -556,18 +556,27 @@ def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: 
     if out:
         return out
 
-    # Final fallback: scrub the deterministic copy and also remove digits to honor number-free request
-    def _no_digits(s: str) -> str:
-        return re.sub(r"\d+\.?\d*\s*(km/s|nT|Hz)?", "", s).strip()
+    # Final fallback: qualitative narrative (no metric numbers), preserve useful timings in affects/playbook
+    rc_fallback = _rule_copy(ctx)
+    qual_snap = _qualitative_snapshot(ctx)
+    tone = _tone_from_ctx(ctx)
+    cap_map = {
+        "stormy":   "Charged geomagnetics—short bursts, longer recoveries.",
+        "unsettled": "A few bumps in the field—pace beats push today.",
+        "calm":     "Steady magnetic backdrop—set a simple plan and move steadily.",
+        "neutral":  "Straightforward field—consistency wins today.",
+    }
+    cap_out = cap_map.get(tone, cap_map["neutral"])
 
     return {
-        "caption": _no_digits(_scrub_banned_phrases(_sanitize_caption(caption))),
-        "snapshot": _no_digits(_scrub_banned_phrases(snapshot)),
-        "affects": _no_digits(_scrub_banned_phrases(affects)),
-        "playbook": _no_digits(_scrub_banned_phrases(playbook)),
-        "hashtags": "#GaiaEyes #SpaceWeather #Wellness #HRV #Sleep",
+        "caption": _scrub_banned_phrases(_sanitize_caption(cap_out)),
+        "snapshot": _scrub_banned_phrases(qual_snap),
+        "affects": _scrub_banned_phrases(rc_fallback["affects"]),
+        "playbook": _scrub_banned_phrases(rc_fallback["playbook"]),
+        "hashtags": rc_fallback.get("hashtags", "#GaiaEyes #SpaceWeather #Wellness #HRV #Sleep"),
     }
 
+# --- deterministic snapshot builder ---
 # --- deterministic snapshot builder ---
 def _build_snapshot_md(ctx: Dict[str, Any]) -> str:
     bullets: List[str] = []
@@ -592,6 +601,56 @@ def _build_snapshot_md(ctx: Dict[str, Any]) -> str:
         bullets.append(f"- Schumann f0: {round(float(sr), 2)} Hz")
 
     return "Space Weather Snapshot\n" + "\n".join(bullets)
+
+# --- qualitative, number-free snapshot builder ---
+
+def _qualitative_snapshot(ctx: Dict[str, Any]) -> str:
+    """Compose a brief, human overview (no numbers) for the snapshot section.
+    Keeps the same key ('snapshot') so downstream remains compatible.
+    """
+    tone = _tone_from_ctx(ctx)
+    kp_band = _band_kp(ctx.get("kp_max_24h"))
+    sw_band = _band_sw(ctx.get("solar_wind_kms"))
+    bz_txt  = _bz_desc(ctx.get("bz_min"))
+    flr  = ctx.get("flares_24h")
+    cmes = ctx.get("cmes_24h")
+    sr   = ctx.get("schumann_value_hz")
+
+    lines: List[str] = []
+
+    # Lead sentence based on tone/bands
+    if tone == "stormy":
+        lines.append("Magnetics lean punchy today—expect short surges and brief dips.")
+    elif tone == "unsettled":
+        lines.append("Some texture in the field—small waves rather than a full storm.")
+    elif tone == "calm":
+        lines.append("Steady magnetic backdrop—a good canvas for focused work and recovery.")
+    else:
+        lines.append("Straightforward profile—ordinary variance without big swings.")
+
+    # Solar drivers without citing numbers
+    driver_bits: List[str] = []
+    if (cmes or 0) > 0:
+        driver_bits.append("recent CME after-effects")
+    if (flr or 0) > 0:
+        driver_bits.append("fresh flare activity")
+    if bz_txt in ("southward", "strong southward", "slightly southward"):
+        driver_bits.append("southward IMF windows")
+    if sw_band in ("elevated", "high", "very-high"):
+        driver_bits.append("faster solar wind")
+    if driver_bits:
+        lines.append("Drivers: " + ", ".join(driver_bits) + ".")
+
+    # Schumann / resonance context
+    if isinstance(sr, (int, float)) and sr:
+        lines.append("Schumann resonance reads on the lively side at times, matching reports of vivid dreams or restlessness for some.")
+    else:
+        lines.append("Resonance bed looks ordinary overall.")
+
+    # Close with guidance intent
+    lines.append("Plan a steady rhythm; if you run sensitive, keep a quick breath reset and short movement breaks.")
+
+    return "Space Weather Snapshot\n" + " ".join(lines)
 
 # ============================================================
 # Data fetch: Supabase marts
@@ -1019,6 +1078,7 @@ def main():
     ctx = {
         "kp_now": None,  # not in daily mart; could be added later
         "kp_max_24h": sw.get("kp_max_24h"),
+        "bz_min": sw.get("bz_min"),
         "solar_wind_kms": sw.get("solar_wind_kms"),
         "flares_24h": sw.get("flares_24h"),
         "cmes_24h": sw.get("cmes_24h"),
