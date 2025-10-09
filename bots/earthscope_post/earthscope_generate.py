@@ -338,7 +338,7 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         )
         title = (resp.choices[0].message.content or "").strip()
         # Guardrails: strip quotes and trim length
-        title = re.sub(r'^["\'']|["\'']$', "", title).strip()
+        title = re.sub(r'^["\']|["\']$', "", title).strip()
         if 0 < len(title) <= 40:
             return title
         return None
