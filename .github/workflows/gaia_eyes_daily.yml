@@ -46,6 +46,7 @@ jobs:
       EARTHSCOPE_FORCE_RULES: "false"
       AURORA_REGION: "mid"
       EARTHSCOPE_OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/earthscope_daily.json
+      EARTHSCOPE_PULSE_JSON: ${{ github.workspace }}/gaiaeyes-media/data/pulse.json
     steps:
       - uses: actions/checkout@v4
       - name: Clone media repo (for JSON emit)
