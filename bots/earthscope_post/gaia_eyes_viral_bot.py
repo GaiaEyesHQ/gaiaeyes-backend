@@ -116,7 +116,32 @@ EARTHSCOPE_CARD_CANDIDATES = [
     EARTHSCOPE_MEDIA_DIR / "data" / "earthscope.json",         # consolidated earthscope
     EARTHSCOPE_MEDIA_DIR / "data" / "earthscope_latest.json",  # legacy name
 ]
+# Optional pulse file (aurora/quakes/severe) living in media repo
+PULSE_JSON_PATH = MEDIA_REPO_PATH / "data" / "pulse.json"
 
+def load_pulse_ctx(p: Path = PULSE_JSON_PATH) -> dict:
+    """Load compact context from pulse.json (if present)."""
+    try:
+        if not p.exists():
+            return {}
+        data = json.loads(p.read_text(encoding="utf-8"))
+        cards = data.get("cards", []) or []
+        out = {}
+        aur = next((c for c in cards if c.get("type") == "aurora"), None)
+        if aur:
+            ad = aur.get("data", {}) or {}
+            out["aurora_headline"] = ad.get("headline") or aur.get("title")
+            out["aurora_window"] = aur.get("time_window")
+            out["aurora_severity"] = aur.get("severity")
+        quakes = [c for c in cards if c.get("type") == "quake"]
+        if quakes:
+            out["quakes_count"] = len(quakes)
+            q0 = sorted(quakes, key=lambda c: c.get("data", {}).get("time_utc") or c.get("time_window") or "", reverse=True)[0]
+            out["quake_top_title"] = q0.get("title")
+        return out
+    except Exception:
+        return {}
+    
 # Backgrounds (square posts)
 BG_DIR_SQUARE = MEDIA_REPO_PATH / "backgrounds" / "square"
 BG_DIR_TALL   = MEDIA_REPO_PATH / "backgrounds" / "tall"
@@ -767,7 +792,16 @@ def render_card(energy_label: str, mood: str, sch: float, kp: float, kind: str =
     _overlay_logo_and_tagline(im, "Decode the unseen.")
     return im.convert("RGB")
 
-def render_stats_card_from_features(day: dt.date, feats: dict, energy: Optional[str] = None, kind: str = "square") -> Image.Image:
+# ---------------------------------------
+# Stats card renderer
+# ---------------------------------------
+def render_stats_card_from_features(
+    day: dt.date,
+    feats: dict,
+    energy: Optional[str] = None,
+    kind: str = "square",
+    pulse: Optional[dict] = None,
+) -> Image.Image:
     if kind == "tall":
         W, H = 1080, 1350
     else:
@@ -859,6 +893,20 @@ def render_stats_card_from_features(day: dt.date, feats: dict, energy: Optional[
     fact = random.choice(facts)
     y = _draw_wrapped_multilines(draw, fact, did_font, x_label, y, W - x_label - 120, line_gap=56)
     y = min(y, H - 160)
+        # Pulse context (aurora/quakes) lines
+    y += 20
+    info_font = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 34)
+    if isinstance(pulse, dict):
+        aur_head = pulse.get("aurora_headline")
+        aur_win  = pulse.get("aurora_window")
+        if aur_head:
+            aur_line = "Aurora: " + str(aur_head)
+            if aur_win:
+                aur_line += f" — {aur_win}"
+            y = _draw_wrapped_multilines(draw, aur_line, info_font, x_label, y, W - x_label - 120, line_gap=52)
+        if pulse.get("quakes_count"):
+            q_line = "Earthquakes: recent notable events logged"
+            y = _draw_wrapped_multilines(draw, q_line, info_font, x_label, y, W - x_label - 120, line_gap=52)
     _overlay_logo_and_tagline(im, "Decode the unseen.")
     return im.convert("RGB")
 
@@ -1095,7 +1143,8 @@ def main():
 
     # Try loading media EarthScope card JSON for sections/metrics if Supabase post is missing or outdated
     media_card = load_earthscope_card()
-
+    # Prefer EarthScope media metrics when available (more reliable for flares/CMEs)
+    media_metrics = (media_card or {}).get("metrics") if isinstance(media_card, dict) else None
     # Prefer metrics from content.daily_posts.metrics_json when available
     metrics = {}
     if post and post.get("metrics_json"):
@@ -1132,11 +1181,35 @@ def main():
                 f0 = float(m["schumann_value_hz"]) 
                 feats["sch_any_fundamental_avg_hz"] = f0
             except Exception: pass
+                    # Prefer media metrics overrides if present
+        if isinstance(media_metrics, dict):
+            if media_metrics.get("flares_24h") is not None:
+                try: feats["flares_count"] = int(media_metrics["flares_24h"])
+                except Exception: pass
+            if media_metrics.get("cmes_24h") is not None:
+                try: feats["cmes_count"] = int(media_metrics["cmes_24h"])
+                except Exception: pass
+            if media_metrics.get("kp_max_24h") is not None and feats.get("kp_max") is None:
+                try: feats["kp_max"] = float(media_metrics["kp_max_24h"])
+                except Exception: pass
+            if media_metrics.get("bz_min") is not None and feats.get("bz_min") is None:
+                try: feats["bz_min"] = float(media_metrics["bz_min"])
+                except Exception: pass
+            if media_metrics.get("solar_wind_kms") is not None and feats.get("sw_speed_avg") is None:
+                try: feats["sw_speed_avg"] = float(media_metrics["solar_wind_kms"])
+                except Exception: pass
+            if media_metrics.get("schumann_value_hz") is not None and feats.get("sch_any_fundamental_avg_hz") is None:
+                try: feats["sch_any_fundamental_avg_hz"] = float(media_metrics["schumann_value_hz"])
+                except Exception: pass
         # Optional harmonics structure (not drawn currently)
         # metrics.get("harmonics") can be kept if needed later
 
     # If metrics/sections are still empty, prefer media_card contents (new pipeline)
     if (not metrics or not isinstance(metrics, dict) or not metrics.get("sections")) and isinstance(media_card, dict):
+        # Seed metrics from media_card if empty
+        if media_card.get("metrics") and not metrics:
+            metrics = dict(media_card["metrics"])  # seed directly from media card
+
         # Map a minimal metrics view from media card if available
         m2 = media_card.get("metrics") or {}
         if isinstance(m2, dict):
@@ -1275,9 +1348,8 @@ def main():
 
     caption_text = strip_hashtags_and_emojis(_safe_text(caption_text))
     body_md = _safe_text(body_md)
-
-    stats_im   = render_stats_card_from_features(day, feats or {}, energy, kind="tall")
-
+    pulse_ctx = load_pulse_ctx()
+    stats_im   = render_stats_card_from_features(day, feats or {}, energy, kind="tall", pulse=pulse_ctx)
     if isinstance(caption_text, (dict, list)):
         caption_text = json.dumps(caption_text, ensure_ascii=False)
     if hasattr(caption_text, "strip"):
