@@ -483,6 +483,10 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "Offer practical self-care suggestions. Never catastrophize. No emojis. No questions. "
         "Return ONLY a compact JSON object with EXACTLY these string keys: caption, snapshot, affects, playbook, hashtags. "
         "No markdown, no extra keys, no code fences."
+        " If aurora_headline exists, include one sentence about aurora chances (no numbers)."
+        " If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers)."
+        " If severe_summary exists, include one sentence with a calm safety note (no numbers)."
+        " Aim for: caption 1–2 sentences; snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets or 3 sentences."
     )
 
     payload = {
@@ -494,7 +498,15 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             "audience": "people tracking HRV, sleep, nervous-system sensitivity",
             "opener_palette": HOOKS.get(facts.get("tone") or "neutral", HOOKS["neutral"]),
             "ban_phrases": BAN_PHRASES,
-            "bullet_style": "short"
+            "bullet_style": "short",
+            "tone": facts.get("tone"),
+            "length_targets": {"caption": [1,2], "snapshot": [3,5], "affects": [3,4], "playbook": [3,5]},
+            "extra_ban_phrases": [
+                "structured approach to tasks",
+                "personal recovery efforts",
+                "remains effective",
+                "optimize your day"
+            ],
         },
         "constraints": {
             "omit_numbers": True,
@@ -509,7 +521,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         _dbg("rewrite: request -> OpenAI (interpretive JSON)")
         resp = client.chat.completions.create(
             model=model,
-            temperature=0.7,
+            temperature=0.75,
             top_p=0.9,
             presence_penalty=0.3,
             frequency_penalty=0.2,
@@ -537,6 +549,15 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             valid["snapshot"] = _scrub_banned_phrases(valid["snapshot"]) 
             valid["affects"] = _scrub_banned_phrases(valid["affects"]) 
             valid["playbook"] = _scrub_banned_phrases(valid["playbook"]) 
+            # Soft length diagnostics (debug only)
+            def _sent_count(x: str) -> int:
+                parts = re.split(r"(?<=[\.!?])\s+", x.strip()) if x and isinstance(x, str) else []
+                return len([p for p in parts if p])
+            sc_cap = _sent_count(valid["caption"])
+            sc_snap = _sent_count(valid["snapshot"])
+            sc_aff = _sent_count(valid["affects"])
+            sc_play = _sent_count(valid["playbook"])
+            _dbg(f"len: caption={sc_cap}, snapshot={sc_snap}, affects={sc_aff}, playbook={sc_play}")
             return valid
         return None
     except Exception as e:
