@@ -1,0 +1,50 @@
+
+version: 1
+rules:
+  - id: kp_high
+    when: "kp_24h_max >= 5"
+    set_tags: [kp_high_window]
+    impacts:
+      autonomic: sympathetic_tilt
+      mood: edgy_then_fatigued
+      sleep: onset_difficulty
+    practices: [phys_sigh, grounding_15, electrolytes]
+    confidence: medium
+
+  - id: bz_south_coupling
+    when: "bz_south_3h and sw_speed_max > 500"
+    set_tags: [coupling]
+    impacts:
+      autonomic: sympathetic_tilt
+      mood: restless
+    practices: [b478, walk20, evening_blue_min]
+    confidence: medium
+
+  - id: compression_pulse
+    when: "p_dyn_max > 6"
+    impacts:
+      mood: brief_agitation
+    practices: [box_44, posture_reset]
+    confidence: low
+
+  - id: sr_spike
+    when: "sr_spike"
+    fork:
+      calm: [grounding_15, slow_6_bpm]
+      focus: [deep_work_40]
+    confidence: low
+
+  - id: pressure_drop
+    when: "pressure_drop_hPa_24h >= 8"
+    impacts:
+      pain: headache_joint_risk
+      sleep: lighter
+    practices: [hydration_salt, mag_evening, early_winddown]
+    confidence: medium
+
+  - id: eq_nearby
+    when: "eq_nearby and nearest_mag >= 5.0 and nearest_km <= 500 and hours_ago <= 72"
+    impacts:
+      autonomic: background_tension
+    practices: [simplify_evening, short_meditation, gratitude3]
+    confidence: low
