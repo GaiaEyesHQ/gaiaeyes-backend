@@ -844,15 +844,51 @@ def render_stats_card_from_features(
     panel_box = (80, panel_top, W - 80, H - 140)
     _blur_panel(im, panel_box, blur_radius=6, panel_alpha=70)
 
-    sch_val = (feats.get("sch_any_fundamental_avg_hz") or feats.get("sch_fundamental_avg_hz") or feats.get("sch_cumiana_fundamental_avg_hz") or 0)
+    # Format helpers: show em dash when missing
+    def _fmt_float(val: Optional[float], nd: int = 2, unit: str = "") -> str:
+        if val is None:
+            return "—" if not unit else f"— {unit}".strip()
+        try:
+            s = f"{float(val):.{nd}f}"
+        except Exception:
+            return "—" if not unit else f"— {unit}".strip()
+        return f"{s} {unit}".strip()
+
+    def _fmt_int(val: Optional[float]) -> str:
+        if val is None:
+            return "—"
+        try:
+            return str(int(val))
+        except Exception:
+            return "—"
+
+    sch_val = (
+        feats.get("sch_any_fundamental_avg_hz")
+        if feats.get("sch_any_fundamental_avg_hz") is not None
+        else (feats.get("sch_fundamental_avg_hz") if feats.get("sch_fundamental_avg_hz") is not None
+              else (feats.get("sch_cumiana_fundamental_avg_hz") if feats.get("sch_cumiana_fundamental_avg_hz") is not None else None))
+    )
+
     rows = [
-        ("Kp (max)", f"{(feats.get('kp_max') or 0):.2f}", (255,180,60,220), "KP"),
-        ("Bz (min)", f"{(feats.get('bz_min') or 0):.2f} nT", (100,160,220,220), "Bz"),
-        ("SW speed", f"{(feats.get('sw_speed_avg') or 0):.0f} km/s", (80,200,140,220), "SW"),
-        (f"Schumann ({label})", f"{float(sch_val):.2f} Hz", (160,120,240,220), "Sch"),
-        ("Flares", f"{int(feats.get('flares_count') or 0)}", (240,120,120,220), "Fl"),
-        ("CMEs", f"{int(feats.get('cmes_count') or 0)}", (240,160,120,220), "CM"),
+        ("Kp (max)", _fmt_float(feats.get("kp_max"), 2), (255,180,60,220), "KP"),
+        ("Bz (min)", _fmt_float(feats.get("bz_min"), 2, "nT"), (100,160,220,220), "Bz"),
+        ("SW speed", _fmt_float(feats.get("sw_speed_avg"), 0, "km/s"), (80,200,140,220), "SW"),
+        (f"Schumann ({label})", _fmt_float(sch_val, 2, "Hz"), (160,120,240,220), "Sch"),
+        ("Flares", _fmt_int(feats.get("flares_count")), (240,120,120,220), "Fl"),
+        ("CMEs", _fmt_int(feats.get("cmes_count")), (240,160,120,220), "CM"),
     ]
+
+    # Inject pulse rows up with the stats (not under Did you know)
+    if isinstance(pulse, dict):
+        aur_head = pulse.get("aurora_headline")
+        aur_win  = pulse.get("aurora_window")
+        if aur_head:
+            aur_txt = str(aur_head)
+            if aur_win:
+                aur_txt += f" — {aur_win}"
+            rows.append(("Aurora", aur_txt, (120,200,255,220), "Au"))
+        if pulse.get("quakes_count"):
+            rows.append(("Earthquakes", "recent notable events logged", (255,190,120,220), "Eq"))
     font_val = _load_font(["Oswald-Bold.ttf", "Oswald-Regular.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 48)
     chip_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 26)
 
@@ -893,20 +929,6 @@ def render_stats_card_from_features(
     fact = random.choice(facts)
     y = _draw_wrapped_multilines(draw, fact, did_font, x_label, y, W - x_label - 120, line_gap=56)
     y = min(y, H - 160)
-        # Pulse context (aurora/quakes) lines
-    y += 20
-    info_font = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 34)
-    if isinstance(pulse, dict):
-        aur_head = pulse.get("aurora_headline")
-        aur_win  = pulse.get("aurora_window")
-        if aur_head:
-            aur_line = "Aurora: " + str(aur_head)
-            if aur_win:
-                aur_line += f" — {aur_win}"
-            y = _draw_wrapped_multilines(draw, aur_line, info_font, x_label, y, W - x_label - 120, line_gap=52)
-        if pulse.get("quakes_count"):
-            q_line = "Earthquakes: recent notable events logged"
-            y = _draw_wrapped_multilines(draw, q_line, info_font, x_label, y, W - x_label - 120, line_gap=52)
     _overlay_logo_and_tagline(im, "Decode the unseen.")
     return im.convert("RGB")
 
