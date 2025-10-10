@@ -1417,9 +1417,45 @@ def main():
 
     caption_text = strip_hashtags_and_emojis(_safe_text(caption_text))
     body_md = _safe_text(body_md)
-    # Use pulse.json for full stats richness (CME, flares, aurora, etc.)
-    pulse_stats = load_pulse_stats()
-    stats_im = render_stats_card_from_features(day, pulse_stats or {}, energy, kind="tall", pulse=pulse_stats)
+    # Build stats rows from consolidated EarthScope card (daily) if available
+    stats_feats = {}
+    pulse_like  = {}
+    if isinstance(media_card, dict):
+        mm = media_card.get("metrics") or {}
+        if isinstance(mm, dict):
+            # Map to stats renderer keys
+            if mm.get("kp_max_24h") is not None:
+                try: stats_feats["kp_max"] = float(mm["kp_max_24h"])
+                except Exception: pass
+            if mm.get("bz_min") is not None:
+                try: stats_feats["bz_min"] = float(mm["bz_min"])
+                except Exception: pass
+            if mm.get("solar_wind_kms") is not None:
+                try: stats_feats["sw_speed_avg"] = float(mm["solar_wind_kms"])
+                except Exception: pass
+            if mm.get("schumann_value_hz") is not None:
+                try: stats_feats["sch_any_fundamental_avg_hz"] = float(mm["schumann_value_hz"])
+                except Exception: pass
+            if mm.get("flares_24h") is not None:
+                try: stats_feats["flares_count"] = int(mm["flares_24h"])
+                except Exception: pass
+            if mm.get("cmes_24h") is not None:
+                try: stats_feats["cmes_count"] = int(mm["cmes_24h"])
+                except Exception: pass
+            # Aurora hints (for a chip row)
+            sx = mm.get("space_json") or {}
+            if isinstance(sx, dict):
+                if sx.get("aurora_headline"):
+                    pulse_like["aurora_headline"] = str(sx.get("aurora_headline"))
+                if sx.get("aurora_window"):
+                    pulse_like["aurora_window"]   = str(sx.get("aurora_window"))
+        # Quakes count (optional indicator)
+        qk = media_card.get("quakes") or {}
+        if isinstance(qk, dict) and qk.get("total_24h"):
+            pulse_like["quakes_count"] = int(qk.get("total_24h"))
+    # Fallback: if we didn’t assemble anything from media, reuse feats mapped from Supabase above
+    base_feats = stats_feats or (feats or {})
+    stats_im   = render_stats_card_from_features(day, base_feats, energy, kind="tall", pulse=pulse_like)
     if isinstance(caption_text, (dict, list)):
         caption_text = json.dumps(caption_text, ensure_ascii=False)
     if hasattr(caption_text, "strip"):
