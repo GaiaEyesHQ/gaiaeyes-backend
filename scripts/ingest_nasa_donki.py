@@ -155,23 +155,28 @@ def flare_key(cls: str):
     return (FLARE_ORDER.get(band, -1), mag)
 
 def summarize_flares(flr_list: list, now: datetime):
-    """Return summary dict with max_24h class and recent list of peaks."""
+    """Return summary dict with max_24h class, recent list of peaks, total_24h, and class histogram."""
     max_cls = None
     recent = []
     cutoff = now - timedelta(hours=24)
+    total_24h = 0
+    class_hist = {"A":0,"B":0,"C":0,"M":0,"X":0}
     for e in flr_list or []:
         cls = e.get("classType")
         peak = parse_iso_to_utc(e.get("peakTime"))
-        if peak:
-            if peak >= cutoff:
-                recent.append({"class": cls, "peak_utc": peak.replace(microsecond=0).isoformat().replace("+00:00","Z")})
+        if peak and peak >= cutoff:
+            total_24h += 1
+            # Basic band histogram (if classType exists)
+            if isinstance(cls, str) and cls:
+                band = cls.strip().upper()[:1]
+                if band in class_hist:
+                    class_hist[band] += 1
+            recent.append({"class": cls, "peak_utc": peak.replace(microsecond=0).isoformat().replace("+00:00","Z")})
             if (max_cls is None) or (flare_key(cls) > flare_key(max_cls)):
-                # consider only last 24h for max_24h
-                if peak >= cutoff:
-                    max_cls = cls
+                max_cls = cls
     # sort recent by time desc
     recent.sort(key=lambda x: x.get("peak_utc",""), reverse=True)
-    return {"max_24h": max_cls, "recent": recent}
+    return {"max_24h": max_cls, "recent": recent, "total_24h": total_24h, "bands_24h": class_hist}
 
 def earth_directed_from_analyses(cme_event: dict) -> bool|None:
     """
@@ -188,7 +193,7 @@ def earth_directed_from_analyses(cme_event: dict) -> bool|None:
     return None
 
 def summarize_cmes(cme_list: list, now: datetime):
-    """Return last_72h simplified entries and headline."""
+    """Return last_72h simplified entries and headline, plus stats."""
     cutoff = now - timedelta(hours=72)
     rows = []
     any_ed = False
@@ -243,6 +248,14 @@ def summarize_cmes(cme_list: list, now: datetime):
     rows = list((locals().get("___best_by_time") or {}).values())
     # sort desc
     rows.sort(key=lambda r: r["time_utc"], reverse=True)
+    # Compute stats
+    total_72h = len(rows)
+    earth_directed_count = sum(1 for r in rows if r.get("earth_directed") is True)
+    fastest_time_utc = None
+    if max_speed > 0:
+        for r in rows:
+            if (r.get("speed_kms") or 0) == max_speed:
+                fastest_time_utc = r.get("time_utc"); break
     # Headline logic
     if not rows:
         headline = "No CMEs in last 72h"
@@ -254,7 +267,16 @@ def summarize_cmes(cme_list: list, now: datetime):
         headline = "Moderate CMEs in last 72h"
     else:
         headline = "No Earth-directed CMEs detected"
-    return {"last_72h": rows, "headline": headline}
+    return {
+        "last_72h": rows,
+        "headline": headline,
+        "stats": {
+            "total_72h": total_72h,
+            "earth_directed_count": earth_directed_count,
+            "max_speed_kms": max_speed if max_speed > 0 else None,
+            "fastest_time_utc": fastest_time_utc
+        }
+    }
 
 def emit_json_flares_cmes(now_ts: datetime, flr_summary: dict, cme_summary: dict, sources: dict):
     if not OUTPUT_JSON_PATH:
