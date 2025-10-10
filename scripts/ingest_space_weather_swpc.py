@@ -195,7 +195,7 @@ def humanize_impacts(kp: float|None, bz: float|None) -> dict:
 
     return {"gps": gps, "comms": comms, "grids": grids, "aurora": aurora}
 
-def emit_space_weather_json(now_ts: datetime, now_vals: dict, next_headline: str, confidence: str, alerts: list[str], sources_meta: dict):
+def emit_space_weather_json(now_ts: datetime, now_vals: dict, next_headline: str, confidence: str, alerts: list[str], sources_meta: dict, last24: dict | None = None):
     payload = {
         "timestamp_utc": now_ts.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z"),
         "now": {
@@ -210,6 +210,7 @@ def emit_space_weather_json(now_ts: datetime, now_vals: dict, next_headline: str
         "alerts": alerts,
         "impacts": humanize_impacts(now_vals.get("kp_index"), now_vals.get("bz_nt")),
         "sources": sources_meta,
+        "last_24h": (last24 or {}),
     }
     if not OUTPUT_JSON_PATH:
         print("[info] OUTPUT_JSON_PATH not set; skipping JSON file emission.")
@@ -550,6 +551,14 @@ async def main():
     if latest_vals.get("bz_nt") is not None:
         latest_vals["bz_nt"] = round(_to_float_or_none(latest_vals["bz_nt"]) or 0.0, 1)
 
+    # Compute last-24h maxima for KP and Solar Wind
+    cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+    kp_list_24h = [v.get("kp_index") for t, v in merged.items() if t and t >= cutoff_24h and v.get("kp_index") is not None]
+    sw_list_24h = [v.get("sw_speed_kms") for t, v in merged.items() if t and t >= cutoff_24h and v.get("sw_speed_kms") is not None]
+    kp_max_24h = round(max(kp_list_24h), 1) if kp_list_24h else None
+    sw_max_24h = int(round(max(sw_list_24h))) if sw_list_24h else None
+    last24_payload = {"kp_max": kp_max_24h, "solar_wind_max_kms": sw_max_24h}
+
     # alerts parsing for JSON (if any)
     alert_rows = [a for a in parse_alert_rows(alerts_arr) if a.get("issued_at")] if alerts_arr else []
     recent_alert_tags = extract_recent_alert_tags(alert_rows, hours=24)
@@ -610,7 +619,7 @@ async def main():
         # Emit dashboard JSON (best-effort)
         try:
             if latest_ts and latest_vals:
-                emit_space_weather_json(latest_ts, latest_vals, next_headline, next_conf, recent_alert_tags, sources_meta)
+                emit_space_weather_json(latest_ts, latest_vals, next_headline, next_conf, recent_alert_tags, sources_meta, last24=last24_payload)
             else:
                 print("[warn] No latest space-weather values to emit JSON.")
         except Exception as e:
