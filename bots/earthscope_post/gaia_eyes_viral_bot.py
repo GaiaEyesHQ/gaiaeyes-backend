@@ -141,6 +141,53 @@ def load_pulse_ctx(p: Path = PULSE_JSON_PATH) -> dict:
         return out
     except Exception:
         return {}
+
+# New: Load detailed stats from pulse.json
+def load_pulse_stats(p: Path = PULSE_JSON_PATH) -> dict:
+    """Extract numeric and textual stats (Kp, Bz, CMEs, flares, aurora, etc.) from pulse.json cards."""
+    try:
+        if not p.exists():
+            return {}
+        data = json.loads(p.read_text(encoding="utf-8"))
+        cards = data.get("cards", []) or []
+        out = {}
+
+        # CME section
+        cme = next((c for c in cards if c.get("type") == "cme"), None)
+        if cme:
+            d = cme.get("data", {}) or {}
+            if d.get("max_speed_kms"): out["cmes_speed_kms"] = float(d["max_speed_kms"])
+            out["cmes_text"] = cme.get("summary")
+
+        # Flare section
+        flare = next((c for c in cards if c.get("type") == "flare"), None)
+        if flare:
+            d = flare.get("data", {}) or {}
+            out["flares_text"] = f"max {d.get('max_24h')}" if d.get("max_24h") else flare.get("summary")
+
+        # Aurora section
+        aur = next((c for c in cards if c.get("type") == "aurora"), None)
+        if aur:
+            d = aur.get("data", {}) or {}
+            if d.get("kp_now"): out["kp_now"] = float(d["kp_now"])
+            out["aurora_headline"] = d.get("headline") or aur.get("title")
+            out["aurora_window"] = aur.get("time_window")
+
+        # Quake (optional display)
+        quakes = [c for c in cards if c.get("type") == "quake"]
+        if quakes:
+            out["quake_count"] = len(quakes)
+            out["quake_top_title"] = quakes[0].get("title")
+
+        # Severe weather (optional)
+        sev = next((c for c in cards if c.get("type") == "severe"), None)
+        if sev:
+            out["severe_summary"] = sev.get("summary")
+
+        return out
+    except Exception as e:
+        logging.warning(f"pulse.json stats parse failed: {e}")
+        return {}
     
 # Backgrounds (square posts)
 BG_DIR_SQUARE = MEDIA_REPO_PATH / "backgrounds" / "square"
@@ -1370,8 +1417,9 @@ def main():
 
     caption_text = strip_hashtags_and_emojis(_safe_text(caption_text))
     body_md = _safe_text(body_md)
-    pulse_ctx = load_pulse_ctx()
-    stats_im   = render_stats_card_from_features(day, feats or {}, energy, kind="tall", pulse=pulse_ctx)
+    # Use pulse.json for full stats richness (CME, flares, aurora, etc.)
+    pulse_stats = load_pulse_stats()
+    stats_im = render_stats_card_from_features(day, pulse_stats or {}, energy, kind="tall", pulse=pulse_stats)
     if isinstance(caption_text, (dict, list)):
         caption_text = json.dumps(caption_text, ensure_ascii=False)
     if hasattr(caption_text, "strip"):
