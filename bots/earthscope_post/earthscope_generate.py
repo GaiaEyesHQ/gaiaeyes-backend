@@ -1067,6 +1067,22 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     if EARTHSCOPE_FORCE_RULES or not client:
         rc = _rule_copy(ctx)
         return rc["caption"], rc["hashtags"]
+    if out and out.get("caption"):
+        cap = out["caption"]
+        # Append daily field summary footer
+        kp = ctx.get("kp_max_24h")
+        bz = ctx.get("bz_min")
+        sr = ctx.get("schumann_value_hz")
+        footer = []
+        if kp is not None:
+            footer.append(f"Kp {_fmt_num(kp,1)}")
+        if bz is not None:
+            footer.append(f"Bz {_fmt_num(bz,1)} nT")
+        if sr is not None:
+            footer.append(f"Schumann {_fmt_num(sr,2)} Hz")
+        if footer:
+            cap += f"\n\n— {'  •  '.join(footer)}"
+        return cap, out.get("hashtags", rc.get("hashtags", "#GaiaEyes #SpaceWeather"))
 
     # Hybrid: generate rule copy and ask LLM to tighten it (no change of facts)
     rc = _rule_copy(ctx)
