@@ -633,6 +633,18 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w
         lines.append(line)
     return lines
 
+# Ellipsize text to fit within a pixel width
+def _ellipsize(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w: int) -> str:
+    if not text:
+        return ""
+    if draw.textlength(text, font=font) <= max_w:
+        return text
+    s = text
+    ell = "…"
+    while s and draw.textlength(s + ell, font=font) > max_w:
+        s = s[:-1]
+    return (s + ell) if s else ell
+
 from random import choice
 def _list_backgrounds(kind: str = "square") -> List[Path]:
     if kind == "square":
@@ -909,6 +921,13 @@ def render_stats_card_from_features(
         except Exception:
             return "—"
 
+    # Helper: check if a value is zero or None
+    def _is_zero_or_none(val) -> bool:
+        try:
+            return val is None or int(val) == 0
+        except Exception:
+            return val in (None, 0, "0")
+
     sch_val = (
         feats.get("sch_any_fundamental_avg_hz")
         if feats.get("sch_any_fundamental_avg_hz") is not None
@@ -921,9 +940,12 @@ def render_stats_card_from_features(
         ("Bz (min)", _fmt_float(feats.get("bz_min"), 2, "nT"), (100,160,220,220), "Bz"),
         ("SW speed", _fmt_float(feats.get("sw_speed_avg"), 0, "km/s"), (80,200,140,220), "SW"),
         (f"Schumann ({label})", _fmt_float(sch_val, 2, "Hz"), (160,120,240,220), "Sch"),
-        ("Flares", _fmt_int(feats.get("flares_count")), (240,120,120,220), "Fl"),
-        ("CMEs", _fmt_int(feats.get("cmes_count")), (240,160,120,220), "CM"),
     ]
+    # Conditionally add flares/CMEs only when non-zero
+    if not _is_zero_or_none(feats.get("flares_count")):
+        rows.append(("Flares", _fmt_int(feats.get("flares_count")), (240,120,120,220), "Fl"))
+    if not _is_zero_or_none(feats.get("cmes_count")):
+        rows.append(("CMEs", _fmt_int(feats.get("cmes_count")), (240,160,120,220), "CM"))
 
     # Inject pulse rows up with the stats (not under Did you know)
     if isinstance(pulse, dict):
@@ -957,12 +979,23 @@ def render_stats_card_from_features(
     draw.line([(110, y), (W-110, y)], fill=(255,255,255,30), width=2)
     y += 24
 
+    # Set available width for value column
+    max_val_w = (W - 110) - (x_val)
+
     for lab, val, colr, abbr in rows:
         _chip(draw, x_label-56, y+2, colr, abbr)
         draw.text((x_label+2, y+2), lab, fill=(0,0,0,160), font=font_body)
         draw.text((x_label, y), lab, fill=fg, font=font_body)
-        draw.text((x_val+2, y+2), val, fill=(0,0,0,160), font=font_val)
-        draw.text((x_val, y), val, fill=fg, font=font_val)
+        # For long strings (e.g., Aurora), tighten font and ellipsize to fit
+        use_font = font_val
+        val_str = str(val)
+        if lab.lower().startswith("aurora"):
+            use_font = _load_font(["Oswald-Regular.ttf","Poppins-Regular.ttf","Arial.ttf"], 40)
+            val_str = _ellipsize(draw, val_str, use_font, max_val_w)
+        else:
+            val_str = _ellipsize(draw, val_str, use_font, max_val_w)
+        draw.text((x_val+2, y+2), val_str, fill=(0,0,0,160), font=use_font)
+        draw.text((x_val, y), val_str, fill=fg, font=use_font)
         y += 56
 
     # Stats card Did you know:
