@@ -20,9 +20,9 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 STYLE_GUIDE = (
-    "Persona: holistic clinician‑researcher who studies space/earth frequencies and their effects on physiology. "
-    "Voice: clinical, plain‑language, humane, lightly empathic; first‑person is OK in short asides. "
-    "Audience: people who consider themselves sensitive (HRV, sleep, nerve/pain flares during storms). "
+    "Persona: holistic researcher who studies space/earth frequencies and their effects on physiology. "
+    "Voice: Viral, plain‑language, humane, lightly empathic; first‑person is OK in short asides. "
+    "Audience: space weather and aurora enthusiasts and people who consider themselves sensitive (HRV, sleep, nerve/pain flares during storms). "
     "Rules: facts first; never contradict provided metrics; no emojis; no rhetorical questions. "
     "Prefer terms like 'geomagnetic activity', 'autonomic/HRV', 'sleep continuity', 'GNSS accuracy'. "
     "Never claim deterministic health effects; use 'some may', 'can', 'tends to', 'I often see'. "
@@ -67,8 +67,9 @@ USER_ID      = os.getenv("EARTHSCOPE_USER_ID", None)
 
 # Output JSON for website/app card (optional)
 EARTHSCOPE_OUTPUT_JSON = os.getenv("EARTHSCOPE_OUTPUT_JSON_PATH")  # e.g., ../gaiaeyes-media/data/earthscope_daily.json
-# Optional: external pulse file (aurora/quake/severe signals)
 EARTHSCOPE_PULSE_JSON = os.getenv("EARTHSCOPE_PULSE_JSON", str((BASE_DIR / ".." / ".." / "gaiaeyes-media" / "data" / "pulse.json").resolve()))
+# Optional: external space weather JSON (now/next_72h/impacts) — preferred fallback for missing KP/Bz/SW
+EARTHSCOPE_SPACE_JSON = os.getenv("EARTHSCOPE_SPACE_JSON", str((BASE_DIR / ".." / ".." / "gaiaeyes-media" / "data" / "space_weather.json").resolve()))
 EARTHSCOPE_FORCE_RULES = os.getenv("EARTHSCOPE_FORCE_RULES", "false").strip().lower() in ("1","true","yes","on")
 # Toggle for first-person clinical asides in affects/playbook
 EARTHSCOPE_FIRST_PERSON = os.getenv("EARTHSCOPE_FIRST_PERSON", "true").strip().lower() in ("1","true","yes","on")
@@ -822,6 +823,49 @@ def _load_pulse_cards(pulse_path: str) -> Dict[str, Any]:
         return {}
 
 # ============================================================
+# Optional space_weather.json loader (now/next_72h/impacts)
+# ============================================================
+
+def _load_space_weather(space_path: str) -> Dict[str, Any]:
+    """Read a space_weather.json-like file and extract compact signals for context.
+    Expected structure:
+    {
+      "timestamp_utc": "...",
+      "now": {"kp": 2.0, "solar_wind_kms": 302, "bz_nt": -4.0},
+      "next_72h": {"headline": "G1 possible", "confidence": "high"},
+      "impacts": {"aurora": "Mostly confined to polar regions"}
+    }
+    Returns dict safe to merge into ctx.
+    """
+    try:
+        p = Path(space_path)
+        if not p.exists():
+            _dbg(f"space_json: not found at {space_path}")
+            return {}
+        data = json.loads(p.read_text(encoding="utf-8"))
+        out: Dict[str, Any] = {}
+        now = data.get("now") or {}
+        if isinstance(now, dict):
+            if now.get("kp") is not None:
+                out["kp_now"] = to_float(now.get("kp"))
+            if now.get("solar_wind_kms") is not None:
+                out["solar_wind_kms_now"] = to_float(now.get("solar_wind_kms"))
+            if now.get("bz_nt") is not None:
+                out["bz_now"] = to_float(now.get("bz_nt"))
+        nx = data.get("next_72h") or {}
+        if isinstance(nx, dict) and nx.get("headline"):
+            out["aurora_headline"] = str(nx.get("headline")).strip()
+            out["aurora_window"] = "Next 72h"
+        imp = data.get("impacts") or {}
+        if isinstance(imp, dict) and imp.get("aurora"):
+            # If headline missing, use impacts.aurora as a softer headline
+            out.setdefault("aurora_headline", str(imp.get("aurora")).strip())
+        return out
+    except Exception as e:
+        _dbg(f"space_json: failed to load -> {e}")
+        return {}
+
+# ============================================================
 # Data fetch: Supabase marts
 # ============================================================
 
@@ -1264,14 +1308,24 @@ def main():
         "harmonics": sr.get("schumann_harmonics"),
     }
 
-    # Optional: merge pulse signals (aurora/quakes/severe)
+    # Optional: merge space_weather signals (now KP/Bz/SW + aurora headline)
     try:
-        pulse_ctx = _load_pulse_cards(EARTHSCOPE_PULSE_JSON)
-        if pulse_ctx:
-            ctx.update(pulse_ctx)
-            _dbg("pulse: merged into ctx")
+        sw_json_ctx = _load_space_weather(EARTHSCOPE_SPACE_JSON)
+        if sw_json_ctx:
+            # Prefer now-values as fallbacks when daily marts are missing
+            if ctx.get("kp_max_24h") is None and sw_json_ctx.get("kp_now") is not None:
+                ctx["kp_max_24h"] = sw_json_ctx.get("kp_now")
+            if ctx.get("solar_wind_kms") is None and sw_json_ctx.get("solar_wind_kms_now") is not None:
+                ctx["solar_wind_kms"] = sw_json_ctx.get("solar_wind_kms_now")
+            if ctx.get("bz_min") is None and sw_json_ctx.get("bz_now") is not None:
+                ctx["bz_min"] = sw_json_ctx.get("bz_now")
+            # Always allow aurora headline/window as narrative context
+            if sw_json_ctx.get("aurora_headline"):
+                ctx["aurora_headline"] = sw_json_ctx.get("aurora_headline")
+                ctx["aurora_window"] = sw_json_ctx.get("aurora_window")
+            _dbg("space_json: merged into ctx")
     except Exception as e:
-        _dbg(f"pulse: merge failed -> {e}")
+        _dbg(f"space_json: merge failed -> {e}")
 
     # 2) Generate copy
     short_caption, short_tags = generate_short_caption(ctx)
@@ -1325,12 +1379,12 @@ def main():
         "cmes_24h": ctx.get("cmes_24h"),
         "schumann_value_hz": ctx.get("schumann_value_hz"),
         "harmonics": ctx.get("harmonics"),
-        "pulse": {
+        "space_json": {
+            "kp_now": ctx.get("kp_now"),
+            "bz_now": ctx.get("bz_min") if ctx.get("kp_now") is not None else None,
+            "sw_now": ctx.get("solar_wind_kms") if ctx.get("kp_now") is not None else None,
             "aurora_headline": ctx.get("aurora_headline"),
             "aurora_window": ctx.get("aurora_window"),
-            "aurora_severity": ctx.get("aurora_severity"),
-            "quakes_count": ctx.get("quakes_count"),
-            "severe_summary": ctx.get("severe_summary"),
         },
         "tone": tone,
         "bands": bands,
@@ -1339,7 +1393,7 @@ def main():
     sources_json = {
         "marts.space_weather_daily": True,
         "marts.schumann_daily": True,
-        "pulse.json": Path(EARTHSCOPE_PULSE_JSON).name if EARTHSCOPE_PULSE_JSON else False,
+        "space_weather.json": Path(EARTHSCOPE_SPACE_JSON).name if EARTHSCOPE_SPACE_JSON else False,
     }
 
     # 4) Emit optional JSON for web/app card
