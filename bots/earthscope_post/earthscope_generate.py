@@ -514,8 +514,47 @@ def _summarize_context(facts: Dict[str, Any]) -> str:
     return ", ".join(parts) + f"; tone {tone}."
 
 
+
 def _contains_digits(s: str) -> bool:
     return bool(re.search(r"\d", s or ""))
+
+# --- Robust JSON extractor ---
+from typing import Optional
+def _extract_first_json_object(text: str) -> Optional[str]:
+    """Return the first balanced {...} JSON object substring from text.
+    Handles code fences and ignores braces inside strings.
+    """
+    if not text:
+        return None
+    s = text.replace("```json", "").replace("```", "").strip()
+    # Find first '{'
+    start = s.find('{')
+    if start == -1:
+        return None
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(s)):
+        ch = s[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == '\\':
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        else:
+            if ch == '"':
+                in_str = True
+                continue
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    return s[start:i+1]
+    return None
 
 
 def _validate_rewrite(obj: Any) -> Optional[Dict[str, str]]:
@@ -599,18 +638,14 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         )
         text = (resp.choices[0].message.content or "").strip()
         _dbg("rewrite: response received; attempting JSON parse")
-        # Tolerant JSON extraction: handle extra pre/post text, code fences, or multiple JSON objects
         try:
-            raw = text.replace("```json", "").replace("```", "").strip()
-            if not raw.startswith("{"):
-                # Extract first {...} block if wrapper text exists
-                start = raw.find("{")
-                end = raw.rfind("}") + 1
-                if start != -1 and end > start:
-                    raw = raw[start:end]
+            raw = _extract_first_json_object(text)
+            if not raw:
+                raise ValueError("no-json-object-found")
             obj = json.loads(raw)
         except Exception as e:
             _dbg(f"rewrite: JSON parse failed: {e}")
+            _dbg(f"rewrite: raw snippet => {text[:200]}")
             return None
         # Make response robust: if hashtags missing, inject a sane default before validation
         if isinstance(obj, dict) and ("hashtags" not in obj or not isinstance(obj.get("hashtags"), str) or not obj.get("hashtags").strip()):
