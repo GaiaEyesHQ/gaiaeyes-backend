@@ -598,10 +598,17 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             ],
         )
         text = (resp.choices[0].message.content or "").strip()
-        # Expect raw JSON object only
+        _dbg("rewrite: response received; attempting JSON parse")
+        # Tolerant JSON extraction: handle extra pre/post text, code fences, or multiple JSON objects
         try:
-            _dbg("rewrite: response received; attempting JSON parse")
-            obj = json.loads(text)
+            raw = text.replace("```json", "").replace("```", "").strip()
+            if not raw.startswith("{"):
+                # Extract first {...} block if wrapper text exists
+                start = raw.find("{")
+                end = raw.rfind("}") + 1
+                if start != -1 and end > start:
+                    raw = raw[start:end]
+            obj = json.loads(raw)
         except Exception as e:
             _dbg(f"rewrite: JSON parse failed: {e}")
             return None
