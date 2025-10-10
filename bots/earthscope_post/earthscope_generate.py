@@ -70,6 +70,8 @@ EARTHSCOPE_OUTPUT_JSON = os.getenv("EARTHSCOPE_OUTPUT_JSON_PATH")  # e.g., ../ga
 EARTHSCOPE_PULSE_JSON = os.getenv("EARTHSCOPE_PULSE_JSON", str((BASE_DIR / ".." / ".." / "gaiaeyes-media" / "data" / "pulse.json").resolve()))
 # Optional: external space weather JSON (now/next_72h/impacts) — preferred fallback for missing KP/Bz/SW
 EARTHSCOPE_SPACE_JSON = os.getenv("EARTHSCOPE_SPACE_JSON", str((BASE_DIR / ".." / ".." / "gaiaeyes-media" / "data" / "space_weather.json").resolve()))
+# Optional: consolidated earthscope card JSON (sections + metrics) to merge and pass through
+EARTHSCOPE_CARD_JSON = os.getenv("EARTHSCOPE_CARD_JSON", str((BASE_DIR / ".." / ".." / "gaiaeyes-media" / "data" / "earthscope.json").resolve()))
 EARTHSCOPE_FORCE_RULES = os.getenv("EARTHSCOPE_FORCE_RULES", "false").strip().lower() in ("1","true","yes","on")
 # Toggle for first-person clinical asides in affects/playbook
 EARTHSCOPE_FIRST_PERSON = os.getenv("EARTHSCOPE_FIRST_PERSON", "true").strip().lower() in ("1","true","yes","on")
@@ -911,6 +913,57 @@ def _load_space_weather(space_path: str) -> Dict[str, Any]:
         return {}
 
 # ============================================================
+# Optional earthscope.json loader (consolidated card)
+# ============================================================
+
+def _load_earthscope_card(card_path: str) -> Dict[str, Any]:
+    """Read earthscope.json (consolidated card) and return compact dict for merging.
+    Expected structure (varies): title, caption, affects, playbook, metrics{ ... }, sections{...}, quakes{...}
+    Returns dict keys safe to merge into ctx and to pass-through in metrics_json.
+    """
+    out: Dict[str, Any] = {}
+    try:
+        p = Path(card_path)
+        if not p.exists():
+            _dbg(f"earth_card: not found at {card_path}")
+            return out
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return out
+        # pass-through pieces
+        out["title"] = data.get("title")
+        out["caption"] = data.get("caption")
+        out["affects"] = data.get("affects")
+        out["playbook"] = data.get("playbook")
+        if isinstance(data.get("sections"), dict):
+            out["sections"] = data["sections"]
+        # metrics subset
+        m = data.get("metrics") or {}
+        if isinstance(m, dict):
+            out["metrics"] = m
+            # mergeables for ctx
+            if m.get("schumann_value_hz") is not None:
+                out["schumann_value_hz"] = to_float(m.get("schumann_value_hz"))
+            # aurora hints
+            sx = m.get("space_json") or {}
+            if isinstance(sx, dict):
+                if sx.get("aurora_headline"):
+                    out["aurora_headline"] = str(sx.get("aurora_headline")).strip()
+                if sx.get("aurora_window"):
+                    out["aurora_window"] = str(sx.get("aurora_window")).strip()
+        # quakes (if present)
+        qk = data.get("quakes") or {}
+        if isinstance(qk, dict):
+            out["quakes"] = qk
+            # e.g., set a count hint for narrative
+            if qk.get("total_24h") is not None:
+                out["quakes_count"] = int(qk.get("total_24h"))
+        return out
+    except Exception as e:
+        _dbg(f"earth_card: failed to load -> {e}")
+        return out
+
+# ============================================================
 # Data fetch: Supabase marts
 # ============================================================
 
@@ -1384,6 +1437,25 @@ def main():
     except Exception as e:
         _dbg(f"space_json: merge failed -> {e}")
 
+    # Optional: merge consolidated earthscope card (sections + metrics + quakes)
+    try:
+        card_ctx = _load_earthscope_card(EARTHSCOPE_CARD_JSON)
+        if card_ctx:
+            # Only fill missing numeric fields; avoid overriding marts values
+            if ctx.get("schumann_value_hz") is None and card_ctx.get("schumann_value_hz") is not None:
+                ctx["schumann_value_hz"] = card_ctx["schumann_value_hz"]
+            # Always allow aurora hints for narrative
+            if card_ctx.get("aurora_headline"):
+                ctx["aurora_headline"] = card_ctx.get("aurora_headline")
+            if card_ctx.get("aurora_window"):
+                ctx["aurora_window"] = card_ctx.get("aurora_window")
+            # Quakes count for narrative context
+            if card_ctx.get("quakes_count") is not None:
+                ctx["quakes_count"] = card_ctx.get("quakes_count")
+            _dbg("earth_card: merged into ctx")
+    except Exception as e:
+        _dbg(f"earth_card: merge failed -> {e}")
+
     # 2) Generate copy
     short_caption, short_tags = generate_short_caption(ctx)
     snapshot, affects, playbook, long_tags = generate_long_sections(ctx)
@@ -1443,6 +1515,8 @@ def main():
             "aurora_headline": ctx.get("aurora_headline"),
             "aurora_window": ctx.get("aurora_window"),
         },
+        # Pass-through consolidated earthscope.json (if present) so overlays can read a single source
+        "earthscope_json": _load_earthscope_card(EARTHSCOPE_CARD_JSON),
         "tone": tone,
         "bands": bands,
         "sections": sections_struct,
