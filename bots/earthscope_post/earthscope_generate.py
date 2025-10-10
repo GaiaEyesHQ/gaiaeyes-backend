@@ -566,7 +566,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             "ban_phrases": BAN_PHRASES,
             "bullet_style": "short",
             "tone": facts.get("tone"),
-            "length_targets": {"caption": [1,2], "snapshot": [3,5], "affects": [3,4], "playbook": [3,5]},
+            "length_targets": {"caption": [3,5], "snapshot": [3,5], "affects": [3,4], "playbook": [3,5]},
             "extra_ban_phrases": [
                 "structured approach to tasks",
                 "personal recovery efforts",
@@ -605,6 +605,9 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         except Exception as e:
             _dbg(f"rewrite: JSON parse failed: {e}")
             return None
+        # Make response robust: if hashtags missing, inject a sane default before validation
+        if isinstance(obj, dict) and ("hashtags" not in obj or not isinstance(obj.get("hashtags"), str) or not obj.get("hashtags").strip()):
+            obj["hashtags"] = "#GaiaEyes #SpaceWeather #Schumann #HRV #Sleep #Wellness"
         valid = _validate_rewrite(obj)
         _dbg("rewrite: JSON valid") if valid else _dbg("rewrite: JSON invalid by validator")
         if not valid:
