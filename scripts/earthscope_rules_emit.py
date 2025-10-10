@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import os, sys, json, pathlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 MEDIA_DIR = os.getenv("MEDIA_DIR", "../gaiaeyes-media")  # checked-out media repo path
 OUT_PATH  = os.getenv("OUTPUT_JSON_PATH", f"{MEDIA_DIR}/data/earthscope.json")
@@ -17,6 +17,14 @@ def _safe(v, t, d=None):
         return t(v)
     except Exception:
         return d
+
+
+# Parse ISO8601 UTC string, handling Z
+def _parse_iso_utc(ts: str):
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(timezone.utc)
+    except Exception:
+        return None
 
 def combine_schumann(sch):
     # Prefer Cumiana, but show both; confidence-weighted blend (simple form)
@@ -84,7 +92,36 @@ def main():
     sp  = _load(f"{MEDIA_DIR}/data/space_weather.json")
     fc  = _load(f"{MEDIA_DIR}/data/flares_cmes.json")
     sch = _load(f"{MEDIA_DIR}/data/schumann_latest.json") or _load(f"{MEDIA_DIR}/data/cumiana_latest.json")
+    qk  = _load(f"{MEDIA_DIR}/data/quakes_latest.json")
     sch_block = combine_schumann(sch) if sch else None
+
+    # Build a compact quakes block if available
+    quakes_block = None
+    if isinstance(qk, dict) and isinstance(qk.get("events"), list):
+        events = qk.get("events") or []
+        total = len(events)
+        # last 24h count
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        def _within_24h(ev):
+            t = _parse_iso_utc(ev.get("time_utc") or "")
+            return (t is not None) and (t >= cutoff)
+        total_24h = sum(1 for ev in events if _within_24h(ev))
+        # top event (first in list, as emitted by ingestor is already newest-first)
+        top = events[0] if events else None
+        # trim top to key fields
+        if isinstance(top, dict):
+            top = {
+                "mag": top.get("mag"),
+                "place": top.get("place"),
+                "time_utc": top.get("time_utc"),
+                "url": top.get("url"),
+                "tsunami": top.get("tsunami"),
+            }
+        quakes_block = {
+            "total": total,
+            "total_24h": total_24h,
+            "top": top
+        }
 
     sci, myst, care = rules(sp, fc, sch_block)
     payload = {
@@ -97,7 +134,8 @@ def main():
             "flare_24h": (fc or {}).get("flares",{}).get("max_24h"),
             "cme_headline": (fc or {}).get("cmes",{}).get("headline")
         },
-        "schumann": sch_block
+        "schumann": sch_block,
+        "quakes": quakes_block
     }
 
     p = pathlib.Path(OUT_PATH)
