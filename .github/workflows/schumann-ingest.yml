@@ -33,21 +33,32 @@ jobs:
           python scripts/ingest_schumann_github.py
       - name: Commit & push media updates
         run: |
-          set -e
+          set -euo pipefail
           cd gaiaeyes-media
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Make sure we're up-to-date to avoid non-fast-forward rejections
+          # Make sure we're on main and up-to-date
           git fetch origin main
-          git pull --rebase --autostash origin main || true
+          git checkout -B main origin/main
           # Stage any changes produced by the ingester
           git add -A
-          # Create a commit only if there are staged changes
-          if ! git diff --cached --quiet; then
-            ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            git commit -m "schumann update ${ts} [skip ci]"
-            # Prefer safe push; if someone raced us, try pulling/rebasing once more, then push
-            git push origin main || { git pull --rebase --autostash origin main && git push origin main; }
-          else
+          if git diff --cached --quiet; then
             echo "No changes to commit."
+            exit 0
           fi
+          ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          git commit -m "schumann update ${ts} [skip ci]"
+          # Robust push with rebase + lease, retrying on race conditions
+          for attempt in 1 2 3; do
+            echo "Push attempt ${attempt}..."
+            # Rebase on latest remote and autostash local changes if any hooks touched files
+            git pull --rebase --autostash origin main || true
+            if git push --force-with-lease origin HEAD:main; then
+              echo "Push succeeded on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push failed on attempt ${attempt}, retrying..."
+            sleep $((2 + (RANDOM % 4)))
+          done
+          echo "ERROR: Could not push after 3 attempts."
+          exit 1

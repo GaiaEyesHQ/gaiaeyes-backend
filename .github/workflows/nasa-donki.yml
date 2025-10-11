@@ -73,32 +73,39 @@ jobs:
           fi
       - name: Commit & push updated flares_cmes.json
         run: |
-          set -e
+          set -euo pipefail
           cd gaiaeyes-media
-          # Always publish to repo root under data/
-          DEST_DIR="data"
-          FILE="${DEST_DIR}/flares_cmes.json"
-          echo "Ensuring ${DEST_DIR} exists"
-          mkdir -p "${DEST_DIR}"
-          echo "Git status before:"
-          git status --porcelain || true
-          echo "Listing ${DEST_DIR}:"
-          ls -l "${DEST_DIR}" || true
-          # No copy needed: emitter already wrote directly into gaiaeyes-media/data/flares_cmes.json
-          # Proceed to commit if changed or new
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if [ -f "${FILE}" ]; then
-            git add "${FILE}"
-          else
+          # Ensure we're on latest main before committing (avoid non-fast-forward)
+          git fetch origin main
+          git checkout -B main origin/main
+          # Stage only the target file
+          DEST_DIR="data"
+          FILE="${DEST_DIR}/flares_cmes.json"
+          if [ ! -f "${FILE}" ]; then
             echo "ERROR: ${FILE} not found"; exit 1
           fi
-          if ! git diff --cached --quiet -- "${FILE}"; then
-            git commit -m "chore(donki): update flares_cmes.json [skip ci]"
-            git push
-            if [ -n "${MEDIA_CDN_BASE}" ]; then
-              echo "Published: ${MEDIA_CDN_BASE%/}/flares_cmes.json"
-            fi
-          else
+          git add -- "${FILE}"
+          if git diff --cached --quiet -- "${FILE}"; then
             echo "No JSON changes to commit."
+            exit 0
           fi
+          ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          git commit -m "chore(donki): update flares_cmes.json ${ts} [skip ci]"
+          # Robust push with rebase + lease and bounded retries (handles concurrent pushes)
+          for attempt in 1 2 3; do
+            echo "Push attempt ${attempt}..."
+            git pull --rebase --autostash origin main || true
+            if git push --force-with-lease origin HEAD:main; then
+              echo "Push succeeded on attempt ${attempt}."
+              if [ -n "${MEDIA_CDN_BASE}" ]; then
+                echo "Published: ${MEDIA_CDN_BASE%/}/flares_cmes.json"
+              fi
+              exit 0
+            fi
+            echo "Push failed on attempt ${attempt}, retrying..."
+            sleep $((2 + (RANDOM % 4)))
+          done
+          echo "ERROR: Could not push after 3 attempts."
+          exit 1
