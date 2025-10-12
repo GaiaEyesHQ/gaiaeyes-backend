@@ -45,6 +45,9 @@ HARMONIC_WINDOWS = {
     "F5": (30.0, 45.5),
 }
 
+# Gridlines (Hz) for overlay and gridline suppression
+GRID_HZ = [8.0, 12.0, 16.0, 20.0, 24.0, 28.0, 32.0, 36.0]
+
 # --------------------------
 # Helpers
 # --------------------------
@@ -195,49 +198,99 @@ def draw_overlay(img_bgr, roi, x_now, peaks=None, debug_lines=None, pph=None, pp
 
 # ----- banded picker with fallbacks -----
 def estimate_peaks_banded(img_bgr, roi, x_now, verbose=False):
+    """
+    Banded harmonic picker (F1..F5) at x_now with robustness improvements:
+    - Wider vertical slice (11 px) and HSV-V profile instead of raw gray
+    - Gridline suppression (notches around 8,12,...,36 Hz)
+    - Dynamic per-window threshold (median + fraction of (p95 - median))
+    - F2-first strategy; F1 assisted by F2/2 when available
+    """
     x0,y0,x1,y1 = roi
     x = int(np.clip(x_now, x0+1, x1-2))
-    slice_w = img_bgr[y0:y1, x-2:x+3]  # 5 px wide
-    gry = cv2.cvtColor(slice_w, cv2.COLOR_BGR2GRAY).astype(np.float32)
-    prof = gry.mean(axis=1)
-    sig = prof.max() - prof
+    # Wider slice to stabilize ridge measurement
+    slice_w = img_bgr[y0:y1, max(x-5,x0):min(x+6,x1), :]  # 11 px wide
+    if slice_w.size == 0:
+        return {k: None for k in HARMONIC_WINDOWS.keys()}
+
+    # Use HSV Value channel (brightness correlates with signal power in colormap)
+    hsv = cv2.cvtColor(slice_w, cv2.COLOR_BGR2HSV)
+    V = hsv[:,:,2].astype(np.float32)
+    prof = V.mean(axis=1)  # average across slice width
+    # Gentle vertical smoothing
+    prof = cv2.GaussianBlur(prof.reshape(-1,1), (1,9), 0).ravel()
+
+    # Build a penalty mask for gridlines to avoid snapping to them
+    penalty = np.zeros_like(prof, dtype=np.float32)
+    Hpix = (y1 - y0)
+    for ghz in GRID_HZ:
+        yg = hz_to_y(ghz, roi)
+        gi = int(np.clip(yg - y0, 0, Hpix-1))
+        # 5-px wide Gaussian notch
+        for d in range(-3, 4):
+            idx = gi + d
+            if 0 <= idx < Hpix:
+                penalty[idx] += float(np.exp(-0.5*(d/2.0)**2)) * 12.0  # notch strength
+
+    # Convert to "signal" where high means likely ridge, then suppress gridlines
+    sig_raw = prof.copy()
+    sig = sig_raw - penalty
+    # Normalize to 0..1
     sig = (sig - sig.min()) / (np.ptp(sig) + 1e-6)
 
-    def pick_in_window(hz_lo, hz_hi):
+    def pick_in_window_named(band_name, enforce_floor=False, assist_center_hz=None):
+        hz_lo, hz_hi = HARMONIC_WINDOWS[band_name]
+        # optional stricter floor for F1 to reduce low bias
+        if band_name == "F1" and enforce_floor:
+            hz_lo = max(hz_lo, 6.8)
         y_lo = hz_to_y(hz_lo, roi); y_hi = hz_to_y(hz_hi, roi)
-        lo = max(0, min(y_lo - y0, y1 - y0 - 1))
-        hi = max(0, min(y_hi - y0, y1 - y0))
+        lo = max(0, min(y_lo - y0, Hpix - 2))
+        hi = max(1, min(y_hi - y0, Hpix - 1))
         if hi <= lo + 2:
             return None, 0.0
         seg = sig[lo:hi].copy()
-        seg = cv2.blur(seg.reshape(-1,1), (1, 7)).ravel()  # gentle smooth
+        # Dynamic threshold using window statistics
+        w_med = float(np.median(seg))
+        w_p95 = float(np.percentile(seg, 95))
+        dyn_thr = w_med + 0.25*(w_p95 - w_med)
+
+        # If we have an assist center (e.g., F2/2 for F1), bias toward it
+        if assist_center_hz is not None:
+            yc = hz_to_y(assist_center_hz, roi) - y0
+            # Create a tapered bump around the expected row to bias selection
+            bump = np.zeros_like(seg, dtype=np.float32)
+            for i in range(len(seg)):
+                d = abs((lo + i) - yc)
+                bump[i] = float(np.exp(-0.5*(d/3.0)**2)) * 0.15  # small, just nudge toward expected
+            seg = seg + bump
+
+        # Light smoothing and argmax
+        seg = cv2.blur(seg.reshape(-1,1), (1, 7)).ravel()
         idx = int(np.argmax(seg))
         val = float(seg[idx])
-        if val < 0.12:   # lowered floor (was 0.25)
+        if val < dyn_thr:
             return None, val
         y_pick = y0 + lo + idx
         return y_to_hz(y_pick, roi), val
 
-    picks = {}
-    strength = {}
-    for name,(lo,hi) in HARMONIC_WINDOWS.items():
-        hz, val = pick_in_window(lo, hi)
-        picks[name] = hz
-        strength[name] = val
+    picks = {k: None for k in HARMONIC_WINDOWS.keys()}
+    strength = {k: 0.0 for k in HARMONIC_WINDOWS.keys()}
 
-    # F1 ridge fallback if missing/weak
-    if picks.get("F1") is None or strength.get("F1",0.0) < 0.12:
-        lo, hi = HARMONIC_WINDOWS["F1"]
-        y_lo = hz_to_y(lo, roi); y_hi = hz_to_y(hi, roi)
-        loi = max(0, min(y_lo - y0, y1 - y0 - 1))
-        hii = max(0, min(y_hi - y0, y1 - y0))
-        seg = sig[loi:hii]
-        if len(seg) > 0:
-            idx = int(np.argmax(seg))
-            y_pick = y0 + loi + idx
-            picks["F1"] = y_to_hz(y_pick, roi)
-            strength["F1"] = float(seg[idx])
+    # 1) Pick F2 first (usually more stable than F1)
+    f2, v2 = pick_in_window_named("F2")
+    picks["F2"], strength["F2"] = f2, v2
 
+    # 2) Pick F1; if F2 exists, nudge around F2/2
+    f1_assist = (f2 / 2.0) if f2 is not None else None
+    f1, v1 = pick_in_window_named("F1", enforce_floor=True, assist_center_hz=f1_assist)
+    picks["F1"], strength["F1"] = f1, v1
+
+    # 3) Pick remaining bands normally
+    for name in ["F3","F4","F5"]:
+        fv, vv = pick_in_window_named(name)
+        picks[name], strength[name] = fv, vv
+
+    # Fallback repair using harmonic relations (existing helper)
+    picks = repair_harmonics(picks)
     return picks
 
 def clamp(v, lo, hi):
