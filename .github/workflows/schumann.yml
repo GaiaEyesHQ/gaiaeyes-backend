@@ -223,15 +223,32 @@ jobs:
         working-directory: ${{ env.MEDIA_DIR }}
         run: |
           set -euo pipefail
+          # Ensure we're up-to-date on main before staging
           git config user.name  "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          # Stage all changes produced earlier in this job
           git add -A
           if git diff --cached --quiet; then
             echo "No media changes to commit."
-          else
-            git commit -m "schumann update $(date -u +'%Y-%m-%dT%H:%M:%SZ') [skip ci]"
-            git push
+            exit 0
           fi
+          ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          git commit -m "schumann update ${ts} [skip ci]"
+          # Robust push with rebase + lease to handle concurrent writers
+          for attempt in 1 2 3; do
+            echo "Push attempt ${attempt}..."
+            git pull --rebase --autostash origin main || true
+            if git push --force-with-lease origin HEAD:main; then
+              echo "Push succeeded on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push failed on attempt ${attempt}, retrying..."
+            sleep $((2 + (RANDOM % 4)))
+          done
+          echo "ERROR: Could not push after 3 attempts."
+          exit 1
 
       - name: Append harmonics to ext.schumann (stale rows kept with null value_num)
         if: ${{ steps.stage_latest.outputs.ok == 'true' && env.SUPABASE_URL != '' && env.SUPABASE_SERVICE_ROLE != '' }}
