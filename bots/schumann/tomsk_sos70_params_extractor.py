@@ -214,38 +214,51 @@ def x_for_hour_in_day(x_day_start, pph, hour_in_day):
 def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
                   pp_hour_source="auto", verbose=False, accept_minutes=90.0,
                   last_modified=None, stale_hours=6.0):
-    x0,y0,x1,y1 = sanitize_roi(img_bgr, roi)
-    # tighten right edge by detecting the SOS70 logo panel if present
-    x1 = detect_right_logo_margin(img_bgr, (x0,y0,x1,y1))
-    x_day0, x_day1, x_day2, day_w = estimate_day_boundaries(img_bgr, (x0,y0,x1,y1))
-    pph_day = day_w/24.0
-    pph_tick, tick_count, _ = detect_tick_pph(img_bgr, (x0,y0,x1,y1), verbose=verbose)
-    # choose px-per-hour; prefer day width when tick spacing is noisy (e.g., half-hour ticks)
+    # 1) Use full sanitized ROI for day boundaries & px/hour
+    x0f, y0f, x1f, y1f = sanitize_roi(img_bgr, roi)
+    # 2) Build a trimmed ROI only for frontier guarding
+    x1_trim = detect_right_logo_margin(img_bgr, (x0f, y0f, x1f, y1f))
+    roi_full = (x0f, y0f, x1f, y1f)
+    roi_trim = (x0f, y0f, x1_trim, y1f)
+
+    # Day boundaries & pph from full width
+    x_day0, x_day1, x_day2, day_w = estimate_day_boundaries(img_bgr, roi_full)
+    pph_day = day_w / 24.0
+    pph_tick, tick_count, _ = detect_tick_pph(img_bgr, roi_full, verbose=verbose)
+
+    # choose px-per-hour; prefer day width; only trust ticks if very close to day estimate
     use_ticks = (pph_tick is not None and tick_count >= int(tick_min_count))
     pph = pph_day; pph_src = "day_width"
     if pp_hour_source == "ticks" and use_ticks:
         pph = pph_tick; pph_src = "ticks (forced)"
     elif pp_hour_source == "auto" and use_ticks:
-        # only trust ticks if close to day-derived pph (within 10%)
-        if abs(pph_tick - pph_day) / max(pph_day, 1e-6) <= 0.1:
+        if abs(pph_tick - pph_day) / max(pph_day, 1e-6) <= 0.08:
             pph = pph_tick; pph_src = "ticks"
-    x_frontier = detect_frontier(img_bgr, (x0,y0,x1,y1))
+
+    # Frontier based on trimmed ROI only (ignores right logo/panel)
+    x_frontier = detect_frontier(img_bgr, roi_trim)
     guard_px = max(MIN_GUARD_PX, int(round(pph * (guard_minutes/60.0))))
-    now_tsst = tsst_now(); hour_now = hour_float(now_tsst); x_time = x_for_hour_in_day(x_day2, pph, hour_now)
+
+    # Compute time in Tomsk local and map to x within day3 (full ROI geometry)
+    now_tsst = tsst_now()
+    hour_now = hour_float(now_tsst)
+    x_time = x_for_hour_in_day(x_day2, pph, hour_now)
 
     measured_bias_minutes = None; bias_minutes_applied = 0.0
-    fresh_ok=False
+    fresh_ok = False
     if last_modified is not None:
         age_min = (datetime.now(timezone.utc) - last_modified).total_seconds()/60.0
         fresh_ok = age_min < 45.0
+
     left_guard  = x_day2 + 2
-    right_guard = min(x1-2, x_frontier - guard_px)
+    right_guard = min(x1f - 2, x_frontier - guard_px)
+
     if fresh_ok:
         lm_tsst = last_modified.astimezone(timezone(timedelta(hours=UTC_TO_TSST_HOURS)))
         lm_hour = hour_float(lm_tsst)
         x_lm = x_for_hour_in_day(x_day2, pph, lm_hour)
         dx_px = x_frontier - x_lm
-        measured_bias_minutes = (dx_px / max(pph,1e-6)) * 60.0
+        measured_bias_minutes = (dx_px / max(pph, 1e-6)) * 60.0
         if abs(measured_bias_minutes) <= float(accept_minutes):
             bias_minutes_applied = float(measured_bias_minutes)
 
@@ -257,10 +270,16 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
         age_hours = (datetime.now(timezone.utc) - last_modified).total_seconds()/3600.0
     status = "ok" if (age_hours is None or age_hours <= float(stale_hours)) else "stale_source"
 
-    dbg = {"x_day0":x_day0,"x_day1":x_day1,"x_day2":x_day2,"day_w":day_w,
-           "pph":pph,"pph_source":pph_src,"x_frontier":x_frontier,"guard_px":guard_px,
-           "x_time":x_time,"x_ideal":x_ideal,"x_now":x_now,"bias_minutes_applied":bias_minutes_applied,
-           "measured_bias_minutes":measured_bias_minutes,"status":status}
+    dbg = {
+        "x_day0": x_day0, "x_day1": x_day1, "x_day2": x_day2,
+        "day_w": day_w, "pph": pph, "pph_source": pph_src,
+        "x_frontier": x_frontier, "guard_px": guard_px,
+        "x_time": x_time, "x_ideal": x_ideal, "x_now": x_now,
+        "bias_minutes_applied": bias_minutes_applied,
+        "measured_bias_minutes": measured_bias_minutes,
+        "status": status,
+        "tick_pph": pph_tick, "tick_count": tick_count
+    }
     return x_now, dbg
 
 def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq_max_hz=40.0):
