@@ -26,6 +26,7 @@ URL_Q = "https://sos70.ru/provider.php?file=srq.jpg"
 ROI = (59, 31, 1539, 431)
 TICK_STRIP_H = 14
 RIGHT_EXCLUDE_PX = 70
+RIGHT_LOGO_SCAN_PX = 180
 UTC_TO_TSST_HOURS = 7
 TICK_MIN_SEP = 8
 TICK_MIN_COUNT = 24
@@ -82,6 +83,37 @@ def sanitize_roi(img_bgr, roi, min_width=120):
         y0 = max(0, (h//2) - 100)
         y1 = min(h, (h//2) + 100)
     return int(x0), int(y0), int(x1), int(y1)
+
+
+# Helper to detect right logo/panel and shrink ROI x1 accordingly
+def detect_right_logo_margin(img_bgr, roi, scan_px=RIGHT_LOGO_SCAN_PX):
+    """
+    Detect the cyan/white SOS70 logo strip on the right and return a tighter x1.
+    We scan the rightmost `scan_px` columns for high-S (cyan) or very high V (white)
+    blocks that are mostly outside the plotting area.
+    """
+    x0,y0,x1,y1 = roi
+    h, w = img_bgr.shape[:2]
+    xR0 = max(x0, x1 - min(scan_px, max(60, int(0.12*(x1-x0)))))
+    band = img_bgr[y0:y1, xR0:x1, :]
+    if band.size == 0:
+        return x1
+    hsv = cv2.cvtColor(band, cv2.COLOR_BGR2HSV)
+    H = hsv[:,:,0].astype(np.float32)
+    S = hsv[:,:,1].astype(np.float32)
+    V = hsv[:,:,2].astype(np.float32)
+    # cyan-ish: H in [75,105], S high; or bright white V very high, S low
+    cyan = ((H >= 75) & (H <= 105) & (S > 90)).astype(np.uint8)
+    white = ((S < 40) & (V > 220)).astype(np.uint8)
+    mask = np.maximum(cyan, white)
+    col_score = mask.mean(axis=0)  # fraction per column
+    # find first column from the right where the logo coverage exceeds 0.25
+    for i in range(col_score.size - 1, -1, -1):
+        if col_score[i] > 0.25:
+            # cut the ROI a few pixels left of this to be safe
+            x1_new = xR0 + i - 4
+            return max(x0 + 50, min(x1 - 2, int(x1_new)))
+    return x1
 
 def fetch_image(url, timeout=30):
     r = requests.get(url, timeout=timeout, headers={"User-Agent":"Mozilla/5.0"})
@@ -163,7 +195,8 @@ def estimate_day_boundaries(img_bgr, roi):
 
 def detect_frontier(img_bgr, roi):
     x0, y0, x1, y1 = roi
-    x1_eff = max(x0 + 50, x1 - RIGHT_EXCLUDE_PX)
+    x1_dyn = detect_right_logo_margin(img_bgr, roi)
+    x1_eff = max(x0 + 50, min(x1_dyn, x1) - RIGHT_EXCLUDE_PX//2)
     crop = img_bgr[y0:y1, x0:x1_eff]
     if crop.size == 0: return x0
     gry = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY).astype(np.float32)
@@ -182,6 +215,8 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
                   pp_hour_source="auto", verbose=False, accept_minutes=90.0,
                   last_modified=None, stale_hours=6.0):
     x0,y0,x1,y1 = sanitize_roi(img_bgr, roi)
+    # tighten right edge by detecting the SOS70 logo panel if present
+    x1 = detect_right_logo_margin(img_bgr, (x0,y0,x1,y1))
     x_day0, x_day1, x_day2, day_w = estimate_day_boundaries(img_bgr, (x0,y0,x1,y1))
     pph_day = day_w/24.0
     pph_tick, tick_count, _ = detect_tick_pph(img_bgr, (x0,y0,x1,y1), verbose=verbose)
@@ -191,8 +226,8 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
     if pp_hour_source == "ticks" and use_ticks:
         pph = pph_tick; pph_src = "ticks (forced)"
     elif pp_hour_source == "auto" and use_ticks:
-        # only trust ticks if close to day-derived pph (within 20%)
-        if abs(pph_tick - pph_day) / max(pph_day, 1e-6) <= 0.2:
+        # only trust ticks if close to day-derived pph (within 10%)
+        if abs(pph_tick - pph_day) / max(pph_day, 1e-6) <= 0.1:
             pph = pph_tick; pph_src = "ticks"
     x_frontier = detect_frontier(img_bgr, (x0,y0,x1,y1))
     guard_px = max(MIN_GUARD_PX, int(round(pph * (guard_minutes/60.0))))
@@ -260,12 +295,12 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
         y_lo, y_hi = sorted((max(y0i, y_lo), min(y1i-1, y_hi)))
         return y_lo, y_hi
 
-    # nominal vertical windows for F1..F4 (approximate)
+    # nominal vertical windows for F1..F4 (SOS70 chart label-aligned)
     f_windows = {
-        "F1": hz_to_row_bounds(6.5, 9.0),
-        "F2": hz_to_row_bounds(12.0, 16.0),
-        "F3": hz_to_row_bounds(18.0, 22.5),
-        "F4": hz_to_row_bounds(24.0, 28.0),
+        "F1": hz_to_row_bounds(6.8, 8.9),
+        "F2": hz_to_row_bounds(12.5, 16.5),
+        "F3": hz_to_row_bounds(18.5, 22.8),
+        "F4": hz_to_row_bounds(24.5, 27.8),
     }
 
     results = {}
@@ -286,6 +321,8 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
                 mask[wy0c:wy1c+1] = 0.0
                 row_cost = row_cost + mask
 
+        # Light median filter to stabilize row cost
+        row_cost = cv2.blur(row_cost.reshape(-1,1), (1,5)).ravel()
         y_rel = int(np.argmin(row_cost))
         y_pix = y0i + y_rel
         y_norm = (y_pix - y0i) / max(1.0, (y1i - y0i))
@@ -344,9 +381,15 @@ def main():
         F_overlay = os.path.join(args.dir, "tomsk_params_f_overlay.png")
         A_overlay = os.path.join(args.dir, "tomsk_params_a_overlay.png")
         Q_overlay = os.path.join(args.dir, "tomsk_params_q_overlay.png")
-        cv2.imwrite(F_overlay, draw_overlay_with_picks(F_img, roiF, xF, picksF, "F params @ x_now", chart_type="F"))
-        cv2.imwrite(A_overlay, draw_overlay_with_picks(A_img, roiA, xA, picksA, "A params @ x_now", chart_type="A"))
-        cv2.imwrite(Q_overlay, draw_overlay_with_picks(Q_img, roiQ, xQ, picksQ, "Q params @ x_now", chart_type="Q"))
+        def stamp(img, roi, x_now, title):
+            out = draw_overlay_with_picks(img, roi, x_now, picksF if "F " in title else (picksA if "A " in title else picksQ), title, chart_type=("F" if "F " in title else ("A" if "A " in title else "Q")))
+            x0,y0,x1,y1 = roi
+            now_local = tsst_now().strftime("%Y-%m-%d %H:%M TSST")
+            cv2.putText(out, now_local, (x0+8, y1-8), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255,255,255), 1, cv2.LINE_AA)
+            return out
+        cv2.imwrite(F_overlay, stamp(F_img, roiF, xF, "F params @ x_now"))
+        cv2.imwrite(A_overlay, stamp(A_img, roiA, xA, "A params @ x_now"))
+        cv2.imwrite(Q_overlay, stamp(Q_img, roiQ, xQ, "Q params @ x_now"))
 
     freq_max = float(args.freq_max_hz)
 
