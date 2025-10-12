@@ -226,14 +226,28 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
     pph_day = day_w / 24.0
     pph_tick, tick_count, _ = detect_tick_pph(img_bgr, roi_full, verbose=verbose)
 
+    # If tick-based px/hour strongly disagrees with day-width, prefer ticks for geometry too
+    # Heuristic: high-confidence ticks (>=48) and >20% discrepancy -> rebuild day geometry
+    rebuild_from_ticks = False
+    if pph_tick is not None and tick_count >= 48:
+        discrep = abs(pph_tick - pph_day) / max(pph_day, 1e-6)
+        rebuild_from_ticks = discrep > 0.20
+
     # choose px-per-hour; prefer day width; only trust ticks if very close to day estimate
     use_ticks = (pph_tick is not None and tick_count >= int(tick_min_count))
     pph = pph_day; pph_src = "day_width"
     if pp_hour_source == "ticks" and use_ticks:
         pph = pph_tick; pph_src = "ticks (forced)"
     elif pp_hour_source == "auto" and use_ticks:
-        if abs(pph_tick - pph_day) / max(pph_day, 1e-6) <= 0.08:
+        if rebuild_from_ticks or (abs(pph_tick - pph_day) / max(pph_day, 1e-6) <= 0.08):
             pph = pph_tick; pph_src = "ticks"
+
+    # Optionally rebuild day1/day2 positions from tick px/hour to fix bad day-width snaps
+    if rebuild_from_ticks and pph is not None:
+        day_w_from_ticks = 24.0 * float(pph)
+        x_day1 = int(round(x_day0 + day_w_from_ticks))
+        x_day2 = int(round(x_day0 + 2.0 * day_w_from_ticks))
+        day_w = day_w_from_ticks
 
     # Frontier based on trimmed ROI only (ignores right logo/panel)
     x_frontier = detect_frontier(img_bgr, roi_trim)
@@ -278,6 +292,8 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
         "bias_minutes_applied": bias_minutes_applied,
         "measured_bias_minutes": measured_bias_minutes,
         "status": status,
+        "rebuild_from_ticks": rebuild_from_ticks,
+        "pph_tick": pph_tick,
         "tick_pph": pph_tick, "tick_count": tick_count
     }
     return x_now, dbg
