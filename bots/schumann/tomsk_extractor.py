@@ -225,11 +225,11 @@ def estimate_peaks_banded(img_bgr, roi, x_now, verbose=False):
     for ghz in GRID_HZ:
         yg = hz_to_y(ghz, roi)
         gi = int(np.clip(yg - y0, 0, Hpix-1))
-        # 5-px wide Gaussian notch
-        for d in range(-3, 4):
+        # narrower, gentler notch so real ridges near gridlines aren't suppressed
+        for d in range(-2, 3):
             idx = gi + d
             if 0 <= idx < Hpix:
-                penalty[idx] += float(np.exp(-0.5*(d/2.0)**2)) * 12.0  # notch strength
+                penalty[idx] += float(np.exp(-0.5*(d/1.6)**2)) * 6.0
 
     # Convert to "signal" where high means likely ridge, then suppress gridlines
     sig_raw = prof.copy()
@@ -241,7 +241,11 @@ def estimate_peaks_banded(img_bgr, roi, x_now, verbose=False):
         hz_lo, hz_hi = HARMONIC_WINDOWS[band_name]
         # optional stricter floor for F1 to reduce low bias
         if band_name == "F1" and enforce_floor:
-            hz_lo = max(hz_lo, 6.8)
+            hz_lo = max(hz_lo, 7.1)
+        # tighten window around assist center if provided (helps F1 near F2/2)
+        if assist_center_hz is not None:
+            hz_lo = max(hz_lo, assist_center_hz - 0.6)
+            hz_hi = min(hz_hi, assist_center_hz + 0.8)
         y_lo = hz_to_y(hz_lo, roi); y_hi = hz_to_y(hz_hi, roi)
         lo = max(0, min(y_lo - y0, Hpix - 2))
         hi = max(1, min(y_hi - y0, Hpix - 1))
@@ -251,25 +255,23 @@ def estimate_peaks_banded(img_bgr, roi, x_now, verbose=False):
         # Dynamic threshold using window statistics
         w_med = float(np.median(seg))
         w_p95 = float(np.percentile(seg, 95))
-        dyn_thr = w_med + 0.25*(w_p95 - w_med)
-
-        # If we have an assist center (e.g., F2/2 for F1), bias toward it
-        if assist_center_hz is not None:
-            yc = hz_to_y(assist_center_hz, roi) - y0
-            # Create a tapered bump around the expected row to bias selection
-            bump = np.zeros_like(seg, dtype=np.float32)
-            for i in range(len(seg)):
-                d = abs((lo + i) - yc)
-                bump[i] = float(np.exp(-0.5*(d/3.0)**2)) * 0.15  # small, just nudge toward expected
-            seg = seg + bump
-
-        # Light smoothing and argmax
-        seg = cv2.blur(seg.reshape(-1,1), (1, 7)).ravel()
-        idx = int(np.argmax(seg))
-        val = float(seg[idx])
+        dyn_thr = w_med + 0.22*(w_p95 - w_med)
+        # Light smoothing
+        seg_s = cv2.blur(seg.reshape(-1,1), (1, 7)).ravel()
+        idx = int(np.argmax(seg_s))
+        val = float(seg_s[idx])
         if val < dyn_thr:
             return None, val
-        y_pick = y0 + lo + idx
+        # Quadratic sub-pixel refinement around peak (clamped at edges)
+        i0 = max(0, idx-1); i2 = min(len(seg_s)-1, idx+1)
+        if i2 - i0 == 2:
+            y_m1, y_0, y_p1 = seg_s[i0], seg_s[idx], seg_s[i2]
+            denom = (y_m1 - 2*y_0 + y_p1)
+            delta = 0.0 if abs(denom) < 1e-6 else 0.5*(y_m1 - y_p1)/denom
+            idx_f = idx + float(np.clip(delta, -0.5, 0.5))
+        else:
+            idx_f = float(idx)
+        y_pick = y0 + lo + idx_f
         return y_to_hz(y_pick, roi), val
 
     picks = {k: None for k in HARMONIC_WINDOWS.keys()}
@@ -288,6 +290,15 @@ def estimate_peaks_banded(img_bgr, roi, x_now, verbose=False):
     for name in ["F3","F4","F5"]:
         fv, vv = pick_in_window_named(name)
         picks[name], strength[name] = fv, vv
+
+    # --- harmonic-consistency refinement for F1 ---
+    if picks.get("F1") is not None and picks.get("F2") is not None:
+        f1_assist = picks["F2"] / 2.0
+        # if F1 is >0.4 Hz below assisted value and its strength is modest, nudge upward
+        if (f1_assist - picks["F1"]) > 0.4 and strength.get("F1", 0.0) < max(0.35, strength.get("F2", 0.0)*0.6):
+            f1_new = 0.7*f1_assist + 0.3*picks["F1"]
+            lo, hi = HARMONIC_WINDOWS["F1"]
+            picks["F1"] = float(min(hi, max(lo, f1_new)))
 
     # Fallback repair using harmonic relations (existing helper)
     picks = repair_harmonics(picks)
