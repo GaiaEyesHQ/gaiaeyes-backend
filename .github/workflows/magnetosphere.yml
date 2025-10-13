@@ -30,6 +30,7 @@ jobs:
           GEOSPACE_FRAME_URL: ${{ secrets.GEOSPACE_FRAME_URL }}
           SYMH_URL: ${{ secrets.SYMH_URL }}
           MEDIA_OUT_DIR: ${{ github.workspace }}/media/data
+          WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
         run: python bots/magnetosphere/magnetosphere_collect.py
       - name: Commit & push media JSON
         if: always()

@@ -29,8 +29,14 @@ def supabase_client() -> Client:
 
 def sb_select_one(table: str, order: str = "ts", desc: bool = True, offset: int = 0) -> Optional[Dict[str, Any]]:
     sb = supabase_client()
-    q = sb.table(table).select("*").order(order, desc=desc).limit(1)
+    schema_name = None
+    tbl = table
+    if "." in table:
+        schema_name, tbl = table.split(".", 1)
+    builder = sb.schema(schema_name).table(tbl) if schema_name else sb.table(tbl)
+    q = builder.select("*").order(order, desc=desc).limit(1)
     if offset:
+        # use range to offset into the result set
         q = q.range(offset, offset)
     data = q.execute().data
     if data:
@@ -72,14 +78,14 @@ def fetch_kp_latest_from_supabase() -> Optional[float]:
     """
     try:
         sb = supabase_client()
-        resp = sb.table("ext.space_weather").select("kp").order("ts", desc=True).limit(1).execute()
+        resp = sb.schema("ext").table("space_weather").select("kp").order("ts", desc=True).limit(1).execute()
         if resp.data and resp.data[0].get("kp") is not None:
             return float(resp.data[0]["kp"])
     except Exception:
         pass
     try:
         sb = supabase_client()
-        resp = sb.table("ext.space_weather").select("kp_index").order("ts", desc=True).limit(1).execute()
+        resp = sb.schema("ext").table("space_weather").select("kp_index").order("ts", desc=True).limit(1).execute()
         if resp.data and resp.data[0].get("kp_index") is not None:
             return float(resp.data[0]["kp_index"])
     except Exception:
