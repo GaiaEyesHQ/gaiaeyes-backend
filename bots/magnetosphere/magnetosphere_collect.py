@@ -451,10 +451,10 @@ def main():
     <ul>
       <li>Solar wind: n={sw_now['density']:.1f} cm⁻³, V={sw_now['speed']:.0f} km/s, Bz={sw_now['bz']:.1f} nT</li>
       <li>Dynamic pressure: {pdyn:.2f} nPa</li>
-      <li>r₀ (Shue98): {r0:.1f if r0 is not None else '—'} Rᴇ ({trend})</li>
+      <li>r₀ (Shue98): {(f"{r0:.1f}" if r0 is not None else "—")} Rᴇ ({trend})</li>
       <li>SYM-H: {symh} nT</li>
       <li>dB/dt proxy: {dbdt_tag}</li>
-      <li>Plasmapause L (proxy): {lpp:.1f if lpp is not None else '—'} Rᴇ</li>
+      <li>Plasmapause L (proxy): {(f"{lpp:.1f}" if lpp is not None else "—")} Rᴇ</li>
     </ul>
     {"<p><img src='"+GEOSPACE_FRAME_URL+"' alt='Geospace dayside cut' /></p>" if GEOSPACE_FRAME_URL else ""}
     """
