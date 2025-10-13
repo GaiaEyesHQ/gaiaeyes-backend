@@ -427,19 +427,14 @@ def main():
     }
     print(json.dumps(app_json))
 
-    # 3b) Optionally write JSON files for the website repo
+    # 3b) Write a single JSON file for the website repo
     if MEDIA_OUT_DIR:
         try:
             os.makedirs(MEDIA_OUT_DIR, exist_ok=True)
             latest_path = os.path.join(MEDIA_OUT_DIR, "magnetosphere_latest.json")
             with open(latest_path, "w") as f:
                 json.dump(app_json, f, indent=2)
-            # also keep a timestamped snapshot (lightweight history)
-            ts_safe = ts.replace(":", "").replace("-", "")
-            snap_path = os.path.join(MEDIA_OUT_DIR, f"magnetosphere_{ts_safe}.json")
-            with open(snap_path, "w") as f:
-                json.dump(app_json, f, separators=(",", ":"))
-        except Exception as e:
+        except Exception:
             # non-fatal: continue; the action step will handle commits if files exist
             pass
 
