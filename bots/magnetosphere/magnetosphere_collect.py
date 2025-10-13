@@ -73,21 +73,34 @@ def fetch_symh_proper() -> Optional[int]:
 
 def fetch_kp_latest_from_supabase() -> Optional[float]:
     """
-    Try to read the latest Kp from your existing ext.space_weather (if present).
-    Looks for columns named 'kp' or 'kp_index'. Returns float or None.
+    Prefer reading Kp from a `marts.space_weather_latest` view (exposed via PostgREST).
+    Falls back to ext via raw REST if available. Returns float or None.
     """
+    # Try marts view first
     try:
         sb = supabase_client()
-        resp = sb.schema("ext").table("space_weather").select("kp").order("ts", desc=True).limit(1).execute()
-        if resp.data and resp.data[0].get("kp") is not None:
-            return float(resp.data[0]["kp"])
+        resp = sb.schema("marts").table("space_weather_latest").select("kp,kp_index").order("ts", desc=True).limit(1).execute()
+        if resp.data:
+            row = resp.data[0]
+            if row.get("kp") is not None:
+                return float(row["kp"])
+            if row.get("kp_index") is not None:
+                return float(row["kp_index"])
     except Exception:
         pass
+    # Fallback: direct REST to ext.space_weather (service role often allowed)
     try:
-        sb = supabase_client()
-        resp = sb.schema("ext").table("space_weather").select("kp_index").order("ts", desc=True).limit(1).execute()
-        if resp.data and resp.data[0].get("kp_index") is not None:
-            return float(resp.data[0]["kp_index"])
+        url = SUPABASE_URL.rstrip("/") + "/rest/v1/ext.space_weather?select=kp,kp_index,ts&order=ts.desc&limit=1"
+        headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+        r = requests.get(url, headers=headers, timeout=10)
+        if r.ok:
+            rows = r.json()
+            if rows:
+                row = rows[0]
+                if row.get("kp") is not None:
+                    return float(row["kp"])
+                if row.get("kp_index") is not None:
+                    return float(row["kp_index"])
     except Exception:
         pass
     return None
@@ -322,8 +335,8 @@ def main():
     kp_latest = fetch_kp_latest_from_supabase()
     lpp = plasmapause_L_carpenter_anderson(kp_latest)
 
-    # Fetch previous pulse to detect threshold crossings (state changes)
-    prev = sb_select_one("ext.magnetosphere_pulse", order="ts", desc=True, offset=1)
+    # Read previous from marts view (create view: marts.magnetosphere_history)
+    prev = sb_select_one("marts.magnetosphere_history", order="ts", desc=True, offset=1)
     prev_r0 = prev.get("r0_re") if prev else None
     prev_symh = prev.get("symh_est") if prev else None
     prev_dbdt = prev.get("dbdt_proxy") if prev else None
