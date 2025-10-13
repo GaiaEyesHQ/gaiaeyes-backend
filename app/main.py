@@ -6,6 +6,8 @@ from uuid import UUID
 
 from .db import settings
 from .routers import ingest, summary
+from .api.middleware import WebhookSigMiddleware
+from .api.webhooks import router as webhooks_router
 
 def custom_generate_unique_id(route):
     # method + path is always unique
@@ -27,6 +29,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Verify HMAC signatures for all /hooks/* endpoints
+app.add_middleware(WebhookSigMiddleware)
 
 
 @app.get("/health")
@@ -66,3 +71,6 @@ async def require_auth(
 # Mount routers WITH /v1 prefix and the auth dependency
 app.include_router(ingest.router, prefix="/v1", dependencies=[Depends(require_auth)])
 app.include_router(summary.router, dependencies=[Depends(require_auth)])
+
+# Webhooks are protected by HMAC middleware, not bearer auth
+app.include_router(webhooks_router)
