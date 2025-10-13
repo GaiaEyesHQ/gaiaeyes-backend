@@ -3,16 +3,158 @@ import os, time, json, math, datetime as dt
 import requests
 import numpy as np
 from supabase import create_client, Client
+from typing import Optional, Dict, Any
+from urllib.parse import urljoin
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 WP_BASE_URL = os.environ.get("WP_BASE_URL")           # already in your env
 WP_USERNAME = os.environ.get("WP_USERNAME")
 WP_APP_PASSWORD = os.environ.get("WP_APP_PASSWORD")
+EARTHSCOPE_WEBHOOK_URL = os.environ.get("EARTHSCOPE_WEBHOOK_URL")  # optional JSON webhook for app/site alerts
+SOCIAL_WEBHOOK_URL = os.environ.get("SOCIAL_WEBHOOK_URL")          # optional JSON webhook to your social poster
+GEOSPACE_FRAME_URL = os.environ.get("GEOSPACE_FRAME_URL")          # optional direct image URL for dayside cut
+SYMH_URL = os.environ.get("SYMH_URL")                              # optional endpoint returning latest SYM-H value
+# Support writing JSON for the website repo
+MEDIA_OUT_DIR = os.environ.get("MEDIA_OUT_DIR")  # e.g., /home/runner/work/.../media/data
 
 def dyn_pressure_npa(n_cm3, v_kms):
     if n_cm3 is None or v_kms is None: return None
     return 1.6726e-6 * n_cm3 * (v_kms**2)
+
+
+# === Helper functions and webhooks ===
+def supabase_client() -> Client:
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def sb_select_one(table: str, order: str = "ts", desc: bool = True, offset: int = 0) -> Optional[Dict[str, Any]]:
+    sb = supabase_client()
+    q = sb.table(table).select("*").order(order, desc=desc).limit(1)
+    if offset:
+        q = q.range(offset, offset)
+    data = q.execute().data
+    if data:
+        return data[0]
+    return None
+
+def fetch_symh_proper() -> Optional[int]:
+    """
+    Try to fetch a real SYM-H value if SYMH_URL is provided.
+    Expect the endpoint to return either JSON with a 'symh' field,
+    or plain text with the numeric value. Returns int nT or None.
+    """
+    if not SYMH_URL:
+        return None
+    try:
+        r = requests.get(SYMH_URL, timeout=10)
+        r.raise_for_status()
+        try:
+            jj = r.json()
+            if isinstance(jj, dict) and "symh" in jj:
+                return int(round(float(jj["symh"])))
+            if isinstance(jj, list) and jj and isinstance(jj[-1], dict) and "symh" in jj[-1]:
+                return int(round(float(jj[-1]["symh"])))
+        except Exception:
+            txt = r.text.strip()
+            for token in reversed(txt.replace(",", " ").split()):
+                try:
+                    return int(round(float(token)))
+                except:
+                    continue
+    except Exception:
+        return None
+    return None
+
+def fetch_kp_latest_from_supabase() -> Optional[float]:
+    """
+    Try to read the latest Kp from your existing ext.space_weather (if present).
+    Looks for columns named 'kp' or 'kp_index'. Returns float or None.
+    """
+    try:
+        sb = supabase_client()
+        resp = sb.table("ext.space_weather").select("kp").order("ts", desc=True).limit(1).execute()
+        if resp.data and resp.data[0].get("kp") is not None:
+            return float(resp.data[0]["kp"])
+    except Exception:
+        pass
+    try:
+        sb = supabase_client()
+        resp = sb.table("ext.space_weather").select("kp_index").order("ts", desc=True).limit(1).execute()
+        if resp.data and resp.data[0].get("kp_index") is not None:
+            return float(resp.data[0]["kp_index"])
+    except Exception:
+        pass
+    return None
+
+def plasmapause_L_carpenter_anderson(kp: Optional[float]) -> Optional[float]:
+    """
+    Carpenter & Anderson (1992) empirical plasmapause proxy:
+    Lpp ≈ 5.6 - 0.46*Kp_max (simplified). Uses current/recent Kp as heuristic.
+    Returns L in Earth radii.
+    """
+    if kp is None:
+        return None
+    return max(2.0, 5.6 - 0.46*kp)
+
+def post_json_webhook(url: Optional[str], payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if not url:
+        return None
+    try:
+        r = requests.post(url, json=payload, timeout=15)
+        try:
+            return r.json()
+        except Exception:
+            return {"status_code": r.status_code, "text": r.text[:200]}
+    except Exception as e:
+        return {"error": str(e)}
+
+def set_wp_banner(title: str, content_html: str, slug: str = "storm-mode-banner") -> Optional[Dict[str, Any]]:
+    """
+    Idempotent: tries to update if a page/post with ?slug= exists; otherwise creates.
+    """
+    if not (WP_BASE_URL and WP_USERNAME and WP_APP_PASSWORD):
+        return None
+    base = WP_BASE_URL.rstrip("/") + "/wp-json/wp/v2/"
+    for kind in ("pages", "posts"):
+        try:
+            q = requests.get(base + f"{kind}?slug={slug}", auth=(WP_USERNAME, WP_APP_PASSWORD), timeout=15)
+            j = q.json()
+            if isinstance(j, list) and j:
+                pid = j[0]["id"]
+                return requests.post(
+                    base + f"{kind}/{pid}",
+                    auth=(WP_USERNAME, WP_APP_PASSWORD),
+                    json={"title": title, "content": content_html, "status": "publish"},
+                    timeout=15
+                ).json()
+        except Exception:
+            pass
+    try:
+        return requests.post(
+            base + "pages",
+            auth=(WP_USERNAME, WP_APP_PASSWORD),
+            json={"title": title, "slug": slug, "content": content_html, "status": "publish"},
+            timeout=15
+        ).json()
+    except Exception as e:
+        return {"error": f"banner create failed: {e}"}
+
+def wp_alert_post(title: str, content_html: str, unique_tag: str) -> Optional[Dict[str, Any]]:
+    """
+    Create a short alert post. Unique tag (e.g., 'magnetosphere-r0') helps later filtering.
+    """
+    if not (WP_BASE_URL and WP_USERNAME and WP_APP_PASSWORD):
+        return None
+    url = WP_BASE_URL.rstrip("/") + "/wp-json/wp/v2/posts"
+    try:
+        return requests.post(
+            url,
+            auth=(WP_USERNAME, WP_APP_PASSWORD),
+            json={"title": title, "content": content_html, "status": "publish", "tags": [unique_tag]},
+            timeout=20
+        ).json()
+    except Exception as e:
+        return {"error": f"WP alert failed: {e}"}
 
 def r0_shue98(pdyn_npa, bz_nt):
     if pdyn_npa is None or bz_nt is None: return None
@@ -65,14 +207,14 @@ def fetch_solarwind_now():
 
 def fetch_symh_est():
     """
-    If live SYM-H isn’t available, derive a rough estimate:
-    more negative when Bz south & Pdyn high. This is an intentionally
-    conservative placeholder so the UI stays consistent.
+    Prefer real SYM-H if available via SYMH_URL; otherwise fall back to heuristic estimate.
     """
+    real = fetch_symh_proper()
+    if real is not None:
+        return int(real)
     sw = fetch_solarwind_now()
     pdyn = dyn_pressure_npa(sw["density"], sw["speed"])
     bz = sw["bz"]
-    # crude estimate: not for science, just UX-consistent gatekeeping
     est = -int(max(0, (pdyn - 1.0)*6 + max(0, -bz)*5))
     return max(-200, min(20, est))
 
@@ -105,12 +247,28 @@ def compute_dbdt_proxy(history):
     proxy = (pd_norm/2.0) * (dbz_abs/1.0)
     return float(max(0.0, proxy))
 
-# bots/magnetosphere/magnetosphere_collect.py (only the upsert helper changed)
-
+# bots/magnetosphere/magnetosphere_collect.py (upsert_supabase updated)
 def upsert_supabase(rec):
     sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    # Target the ext schema table
-    sb.table("ext.magnetosphere_pulse").upsert(rec, on_conflict="ts").execute()
+    try:
+        # Preferred: explicit schema selection
+        sb.schema("ext").table("magnetosphere_pulse").upsert(rec, on_conflict="ts").execute()
+        return
+    except Exception as e:
+        # Fallback: direct PostgREST call to /rest/v1/ext.magnetosphere_pulse
+        try:
+            url = SUPABASE_URL.rstrip("/") + "/rest/v1/ext.magnetosphere_pulse"
+            headers = {
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates"
+            }
+            r = requests.post(url, headers=headers, json=rec, timeout=15)
+            if r.status_code not in (200, 201, 204):
+                raise RuntimeError(f"REST upsert failed {r.status_code}: {r.text[:200]}")
+        except Exception as e2:
+            raise
 
 def latest_n_history(n_points=8, step_min=10):
     # Replace with your real rolling fetch; here we synthesize a short history.
@@ -154,6 +312,17 @@ def main():
     dbdt_proxy = compute_dbdt_proxy(hist)
     dbdt_tag = dbdt_tag_from_proxy(dbdt_proxy)
 
+    # Optional plasmapause proxy and Kp read
+    kp_latest = fetch_kp_latest_from_supabase()
+    lpp = plasmapause_L_carpenter_anderson(kp_latest)
+
+    # Fetch previous pulse to detect threshold crossings (state changes)
+    prev = sb_select_one("ext.magnetosphere_pulse", order="ts", desc=True, offset=1)
+    prev_r0 = prev.get("r0_re") if prev else None
+    prev_symh = prev.get("symh_est") if prev else None
+    prev_dbdt = prev.get("dbdt_proxy") if prev else None
+    prev_dbdt_tag = dbdt_tag_from_proxy(prev_dbdt) if prev_dbdt is not None else None
+
     # r0 trend
     r0_hist = []
     for p in hist:
@@ -179,9 +348,48 @@ def main():
         "dbdt_proxy": dbdt_proxy,
         "trend_r0": trend,
         "geo_risk": geo_risk,
-        "kpi_bucket": kpi_bucket
+        "kpi_bucket": kpi_bucket,
+        "lpp_re": lpp,
+        "kp_latest": kp_latest
     }
     upsert_supabase(rec)
+
+    # === Event-driven rules (edge-triggered) ===
+    alerts_fired = []
+
+    def should_fire(prev_bool, curr_bool) -> bool:
+        if prev_bool is None:
+            return curr_bool  # first run: allow fire so users see state
+        return curr_bool and not prev_bool  # only on rising edge of condition
+
+    cond_r0 = (r0 is not None and r0 < 7.0)
+    prev_cond_r0 = (prev_r0 is not None and prev_r0 < 7.0) if prev_r0 is not None else None
+    if should_fire(prev_cond_r0, cond_r0):
+        caption = f"Dayside compressed: r₀≈{r0:.1f} Rᴇ — GEO risk elevated"
+        img_html = f'<p><img src="{GEOSPACE_FRAME_URL}" alt="Geospace dayside cut" /></p>' if GEOSPACE_FRAME_URL else ""
+        html_alert = f"<p><strong>{caption}</strong></p>{img_html}"
+        alerts_fired.append({"type":"r0_lt_7", "caption": caption})
+        wp_alert_post("Magnetosphere Alert: r₀ < 7 Rᴇ", html_alert, unique_tag="magnetosphere-r0")
+        post_json_webhook(EARTHSCOPE_WEBHOOK_URL, {"kind":"magnetosphere_alert","rule":"r0_lt_7","payload":{"ts": ts}})
+        post_json_webhook(SOCIAL_WEBHOOK_URL, {"text": f"⚠️ Magnetosphere compressed: r₀≈{r0:.1f} Rᴇ. GEO risk elevated. #spaceweather #aurora"})
+
+    cond_symh = (symh is not None and symh < -50)
+    prev_cond_symh = (prev_symh is not None and prev_symh < -50) if prev_symh is not None else None
+    if should_fire(prev_cond_symh, cond_symh):
+        banner_html = f"<h3>Storm Mode</h3><p>SYM-H {symh} nT — heightened geomagnetic activity.</p>"
+        if GEOSPACE_FRAME_URL:
+            banner_html += f'<p><img src="{GEOSPACE_FRAME_URL}" alt="Geospace dayside cut" /></p>'
+        set_wp_banner("Storm Mode", banner_html, slug="storm-mode-banner")
+        alerts_fired.append({"type":"symh_lt_50", "caption": f"Storm mode: SYM-H {symh} nT"})
+        post_json_webhook(EARTHSCOPE_WEBHOOK_URL, {"kind":"magnetosphere_alert","rule":"symh_lt_50","payload":{"ts": ts}})
+
+    cond_dbdt = (dbdt_tag == "high")
+    prev_cond_dbdt = ((prev_dbdt_tag == "high") if prev_dbdt_tag is not None else None)
+    if should_fire(prev_cond_dbdt, cond_dbdt):
+        tip = "Grid stress / sensitivity tip: simplify, ground, avoid big firmware updates."
+        alerts_fired.append({"type":"dbdt_high", "caption": tip})
+        wp_alert_post("Sensitivity Tip (GIC risk)", f"<p>{tip}</p>", unique_tag="magnetosphere-dbdt")
+        post_json_webhook(EARTHSCOPE_WEBHOOK_URL, {"kind":"magnetosphere_alert","rule":"dbdt_high","payload":{"ts": ts}})
 
     # 3) Emit app JSON
     app_json = {
@@ -190,12 +398,30 @@ def main():
             "r0_re": None if r0 is None else round(r0, 1),
             "geo_risk": geo_risk,
             "storminess": kpi_bucket,
-            "dbdt": dbdt_tag
+            "dbdt": dbdt_tag,
+            "lpp_re": None if lpp is None else round(lpp, 1),
+            "kp": kp_latest
         },
         "sw": {"n_cm3": sw_now["density"], "v_kms": sw_now["speed"], "bz_nt": sw_now["bz"]},
         "trend": {"r0": trend}
     }
     print(json.dumps(app_json))
+
+    # 3b) Optionally write JSON files for the website repo
+    if MEDIA_OUT_DIR:
+        try:
+            os.makedirs(MEDIA_OUT_DIR, exist_ok=True)
+            latest_path = os.path.join(MEDIA_OUT_DIR, "magnetosphere_latest.json")
+            with open(latest_path, "w") as f:
+                json.dump(app_json, f, indent=2)
+            # also keep a timestamped snapshot (lightweight history)
+            ts_safe = ts.replace(":", "").replace("-", "")
+            snap_path = os.path.join(MEDIA_OUT_DIR, f"magnetosphere_{ts_safe}.json")
+            with open(snap_path, "w") as f:
+                json.dump(app_json, f, separators=(",", ":"))
+        except Exception as e:
+            # non-fatal: continue; the action step will handle commits if files exist
+            pass
 
     # 4) Optional WP short card (idempotent posting is in your other bot; here we just compose)
     caption = coachy_caption(r0, geo_risk, kpi_bucket, dbdt_tag)
@@ -206,9 +432,11 @@ def main():
       <li>Solar wind: n={sw_now['density']:.1f} cm⁻³, V={sw_now['speed']:.0f} km/s, Bz={sw_now['bz']:.1f} nT</li>
       <li>Dynamic pressure: {pdyn:.2f} nPa</li>
       <li>r₀ (Shue98): {r0:.1f if r0 is not None else '—'} Rᴇ ({trend})</li>
-      <li>SYM-H (est.): {symh} nT</li>
+      <li>SYM-H: {symh} nT</li>
       <li>dB/dt proxy: {dbdt_tag}</li>
+      <li>Plasmapause L (proxy): {lpp:.1f if lpp is not None else '—'} Rᴇ</li>
     </ul>
+    {"<p><img src='"+GEOSPACE_FRAME_URL+"' alt='Geospace dayside cut' /></p>" if GEOSPACE_FRAME_URL else ""}
     """
     # Uncomment if you want it to post:
     # post_to_wp("Magnetosphere Status (Auto)", html)
