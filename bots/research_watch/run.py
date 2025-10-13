@@ -41,10 +41,22 @@ def pick_items(items: List[Item]) -> List[Item]:
         print("[research_watch] forcing 1 item (no one met threshold).")
         return [pool[0]]
 
+    # Allowlist fallback: if pool is empty, try to take a fresh, trusted source
+    if FORCE_ONE and not pool:
+        trusted = {"noaa_swpc","usgs_eq","esa","agu_eos","spaceweatherlive"}
+        fresh_trusted = [i for i in items if i.source in trusted and _within_recent(i)]
+        fresh_trusted.sort(key=lambda x: x.published_at, reverse=True)
+        if fresh_trusted:
+            print("[research_watch] allowlist fallback: taking 1 fresh trusted item.")
+            return [fresh_trusted[0]]
+
     return []
 
 def main():
     items = fetch_all()
+    print(f"[research_watch] fetched: {len(items)} items total")
+    with_topics = [i for i in items if i.topics]
+    print(f"[research_watch] with topics: {len(with_topics)}")
     picked = pick_items(items)
     if not picked:
         print("[research_watch] nothing credible today.")

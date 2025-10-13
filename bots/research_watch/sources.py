@@ -57,6 +57,57 @@ def _clean(text: str) -> str:
 def _sha8(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8")).hexdigest()[:8]
 
+def _entry_text(e) -> str:
+    """
+    Build a richer summary blob from multiple possible feed fields.
+    Handles RSS/Atom variations: summary, content[], description.
+    """
+    parts = []
+    # summary/description
+    summary = e.get("summary") or e.get("description") or ""
+    if summary:
+        parts.append(str(summary))
+    # content array (common in Atom/WordPress feeds)
+    try:
+        content_list = e.get("content") or []
+        for c in content_list:
+            val = c.get("value")
+            if val:
+                parts.append(str(val))
+    except Exception:
+        pass
+    # title as last resort context (already used elsewhere)
+    title = e.get("title") or ""
+    if title:
+        parts.append(str(title))
+    blob = " ".join(parts)
+    # strip HTML tags crudely if present
+    blob = re.sub(r"&lt;/?[^&]*&gt;|<[^>]+>", " ", blob)
+    return _clean(blob)
+
+def _topics_from_tags(e) -> list[str]:
+    """
+    Extract topics/keywords from feed 'tags' if present.
+    feedparser normalizes tags as a list of dicts with 'term'.
+    """
+    hits = []
+    try:
+        tags = e.get("tags") or []
+        for t in tags:
+            term = (t.get("term") or "").strip()
+            if term:
+                term_low = term.lower()
+                # direct keyword matches
+                if term_low in KEYTERMS:
+                    hits.append(term_low)
+                # regex phrase matches via topic_hits
+                if term_low and _topic_hits(term):
+                    hits.extend(_topic_hits(term))
+    except Exception:
+        pass
+    # dedupe & sort
+    return sorted(set(hits))
+
 def _tag_topics(title: str, summary: str):
     blob = f"{title} {summary}"
     return _topic_hits(blob)
@@ -68,7 +119,8 @@ def fetch_all() -> List[Item]:
         for e in feed.entries:
             link = e.get("link") or e.get("id")
             title = _clean(e.get("title", ""))
-            summ = _clean(e.get("summary", ""))
+            # richer text aggregation from entry fields
+            summ = _entry_text(e)
             if not link or not title:
                 continue
             pub = e.get("published") or e.get("updated") or None
@@ -77,7 +129,9 @@ def fetch_all() -> List[Item]:
             except Exception:
                 published_at = datetime.now(timezone.utc)
             id_hash = _sha8(f"{source}|{link}")
-            topics = _tag_topics(title, summ)
+            topics_from_text = _tag_topics(title, summ)
+            topics_from_feed_tags = _topics_from_tags(e)
+            topics = sorted(set(topics_from_text + topics_from_feed_tags))
             items.append(Item(
                 id_hash=id_hash, url=link, title=title, summary=summ,
                 source=source, published_at=published_at, topics=topics
