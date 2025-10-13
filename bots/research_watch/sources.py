@@ -14,10 +14,42 @@ FEEDS: List[Tuple[str, str]] = [
 ]
 
 KEYTERMS = {
-  "magnetosphere", "sym-h", "kp", "bz", "solar wind", "flare", "cme",
-  "schumann", "hrv", "blood pressure", "gnss", "hf radio",
-  "geomagnetic", "aurora", "storm"
+    "magnetosphere", "sym-h", "symh", "dst", "kp", "bz", "imf", "solar wind",
+    "flare", "x-class", "m-class", "cme", "coronal mass ejection",
+    "schumann", "resonance", "hrv", "heart rate variability", "blood pressure",
+    "gnss", "gps", "hf radio", "geomagnetic", "aurora", "storm", "storm watch",
+    "aurora watch", "solar risk", "radiation storm"
 }
+
+# Regex patterns to catch formatting variants and phrases
+_PATTERNS = [
+    re.compile(r"\bSYM[-\s]?H\b", re.I),
+    re.compile(r"\bDST\b", re.I),
+    re.compile(r"\bK[\s-]?p\b", re.I),
+    re.compile(r"\bB[\s-]?z\b", re.I),
+    re.compile(r"\bIMF\b", re.I),
+    re.compile(r"\b(aurora|auroral)\s+(watch|alert|outlook)\b", re.I),
+    re.compile(r"\b(geomagnetic|solar)\s+(storm|watch|alert)\b", re.I),
+    re.compile(r"\bcoronal\s+mass\s+ejection\b", re.I),
+    re.compile(r"\bX[- ]?class\b", re.I),
+    re.compile(r"\bM[- ]?class\b", re.I),
+    re.compile(r"\bSchumann\b", re.I),
+    re.compile(r"\bheart[- ]?rate[- ]?variability\b", re.I),
+    re.compile(r"\bHRV\b", re.I),
+]
+
+def _topic_hits(blob: str) -> list[str]:
+    hits = set()
+    low = blob.lower()
+    # keyword hits
+    for kw in KEYTERMS:
+        if kw in low:
+            hits.add(kw)
+    # regex hits
+    for pat in _PATTERNS:
+        if pat.search(blob):
+            hits.add(pat.pattern)
+    return sorted(hits)
 
 def _clean(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "")).strip()
@@ -26,9 +58,8 @@ def _sha8(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8")).hexdigest()[:8]
 
 def _tag_topics(title: str, summary: str):
-    blob = f"{title} {summary}".lower()
-    hits = [k for k in KEYTERMS if k in blob]
-    return sorted(set(hits))
+    blob = f"{title} {summary}"
+    return _topic_hits(blob)
 
 def fetch_all() -> List[Item]:
     items: List[Item] = []

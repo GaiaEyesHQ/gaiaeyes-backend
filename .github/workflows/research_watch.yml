@@ -16,7 +16,9 @@ jobs:
           WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
           WP_USERNAME: ${{ secrets.WP_USERNAME }}
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
-          RESEARCH_TOP_N: "4"
-          RESEARCH_MIN_SCORE: "0.55"
+          RESEARCH_TOP_N: "3"
+          RESEARCH_MIN_SCORE: "0.45"
+          RESEARCH_RECENT_HOURS: "120"
+          RESEARCH_FORCE_ONE: "1"
           RESEARCH_RENDER_MEDIA: "1"
         run: python -m bots.research_watch.run
