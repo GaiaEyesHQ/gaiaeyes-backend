@@ -12,6 +12,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install feedparser pydantic python-dateutil requests
+      - run: pip install feedparser pydantic python-dateutil requests pillow
       - env:
           WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
           WP_USERNAME: ${{ secrets.WP_USERNAME }}
