@@ -11,8 +11,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install feedparser pydantic python-dateutil requests
-      - run: pip install feedparser pydantic python-dateutil requests pillow
+      - run: pip install feedparser pydantic python-dateutil requests pillow python-dotenv
       - env:
           WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
           WP_USERNAME: ${{ secrets.WP_USERNAME }}
