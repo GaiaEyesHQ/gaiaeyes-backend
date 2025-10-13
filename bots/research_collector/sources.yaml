@@ -72,3 +72,24 @@ api:
     url: https://services.swpc.noaa.gov/text/weekly.txt
     parser: swpc_weekly_report_txt
     tags: [swpc, weekly, report]
+
+api:
+  - id: swpc-rtsw-plasma1d
+    url: https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json
+    parser: swpc_rtsw_plasma1d
+    tags: [space-weather, solar-wind, nowcast]
+
+  - id: swpc-rtsw-mag1d
+    url: https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json
+    parser: swpc_rtsw_mag1d
+    tags: [space-weather, IMF, Bz, nowcast]
+
+  - id: swpc-geomag-3day
+    url: https://services.swpc.noaa.gov/text/3-day-geomag-forecast.txt
+    parser: swpc_geomag_3day_txt
+    tags: [forecast, geomagnetic]
+
+  - id: swpc-ovation-latest
+    url: https://services.swpc.noaa.gov/json/ovation_aurora_latest.json
+    parser: swpc_ovation_latest
+    tags: [aurora, ovation]
