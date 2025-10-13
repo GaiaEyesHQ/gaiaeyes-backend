@@ -266,28 +266,29 @@ def compute_dbdt_proxy(history):
     proxy = (pd_norm/2.0) * (dbz_abs/1.0)
     return float(max(0.0, proxy))
 
-# bots/magnetosphere/magnetosphere_collect.py (upsert_supabase updated)
+# bots/magnetosphere/magnetosphere_collect.py (upsert_supabase using RPC)
 def upsert_supabase(rec):
+    """
+    Insert/update ext.magnetosphere_pulse via a PUBLIC RPC, because PostgREST
+    is configured to expose only {public, storage, content, marts}.
+    """
     sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     try:
-        # Preferred: explicit schema selection
-        sb.schema("ext").table("magnetosphere_pulse").upsert(rec, on_conflict="ts").execute()
+        # Preferred: RPC through supabase-py
+        sb.rpc("upsert_magnetosphere_pulse", {"rec": rec}).execute()
         return
-    except Exception as e:
-        # Fallback: direct PostgREST call to /rest/v1/ext.magnetosphere_pulse
-        try:
-            url = SUPABASE_URL.rstrip("/") + "/rest/v1/ext.magnetosphere_pulse"
-            headers = {
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-                "Content-Type": "application/json",
-                "Prefer": "resolution=merge-duplicates"
-            }
-            r = requests.post(url, headers=headers, json=rec, timeout=15)
-            if r.status_code not in (200, 201, 204):
-                raise RuntimeError(f"REST upsert failed {r.status_code}: {r.text[:200]}")
-        except Exception as e2:
-            raise
+    except Exception:
+        # Fallback: direct REST RPC
+        url = SUPABASE_URL.rstrip("/") + "/rest/v1/rpc/upsert_magnetosphere_pulse"
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "tx=commit"
+        }
+        r = requests.post(url, headers=headers, json={"rec": rec}, timeout=15)
+        if r.status_code not in (200, 204):
+            raise RuntimeError(f"RPC upsert failed {r.status_code}: {r.text[:200]}")
 
 def latest_n_history(n_points=8, step_min=10):
     # Replace with your real rolling fetch; here we synthesize a short history.
