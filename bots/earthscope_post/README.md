@@ -1,3 +1,32 @@
+# Codebase overview written by Codex:
+Overview
+The primary backend is a FastAPI application defined in app/main.py, which wires together CORS, health checks, bearer-token auth, feature/space-weather routers, and HMAC-protected webhooks.
+Authentication & middleware: /v1/* endpoints depend on require_auth, which validates a Bearer token from settings.DEV_BEARER and optionally propagates a UUID user id from X-Dev-UserId. /hooks/* routes skip bearer auth but are wrapped in WebhookSigMiddleware to enforce an x-signature HMAC using WEBHOOK_SECRET.
+Ingestion: app/routers/ingest.py exposes /samples/batch, accepting either {samples:[...]} or a raw array. It validates physiological ranges, allows a dev header override for user IDs, inserts records into gaia.samples, and returns structured counts plus sampled errors instead of failing the whole batch.
+Summaries: app/routers/summary.py powers the frontend cards:
+/v1/features/today pulls the latest marts.daily_features, augments it with sleep-stage rollups, real-time space-weather readings, Earthscope content, and optional media URLs derived from MEDIA_BASE_URL.
+/v1/space/forecast/summary cleans the latest SWPC forecast into headline/bullets.
+/v1/space/series returns 30-day (clamped) series for space weather, Schumann resonance, and—when authenticated with a user id—heart rate daily metrics and 5-minute buckets.
+Webhooks: /hooks/earthscope and /hooks/social accept alert and social payloads (currently stubbed with TODOs) and share the same HMAC secret for verification, complementing the middleware.
+Health: /health gives a build marker and UTC timestamp, which is useful for deployments and uptime monitors.
+Data access & configuration
+app/db.py centralizes configuration via pydantic_settings, creating a PgBouncer-friendly AsyncConnectionPool and providing FastAPI dependencies to yield psycopg3 connections.
+The service leans on domain-specific rule and constant files—gaia_rules.yaml describes alert conditions and recommended practices, while gaia_guide_constants.py captures thresholds, vocabulary, and helper utilities for EarthScope content—worth skimming to understand the product context.
+Supabase configuration and migrations are organized under supabase/, reflecting how schema changes are tracked alongside code.
+Background jobs & automations
+Worker scripts in workers/ (e.g., aggregate.py) recompute daily summaries per user, aggregating heart rate, HRV, SpO2, blood pressure, and sleep-stage metrics, then upserting into gaia.daily_summary. Running these requires DATABASE_URL in the environment and AsyncPG access.
+The bots/ directory houses specialized automation agents (Earthscope posts, magnetosphere tracking, research collectors, etc.); familiarize yourself with the relevant bot before extending it.
+Key things to know on day one
+Set up .env values for DATABASE_URL, DEV_BEARER, and WEBHOOK_SECRET before running the API; these control authentication and database access paths.
+Authenticated requests can supply X-Dev-UserId to scope data queries, especially for personalized HR charts—vital for reproducing user-specific issues.
+Webhook consumers should keep HMAC secrets in sync with the deployment environment; mismatches manifest as 401 responses from the middleware before hitting your handlers.
+Next steps for deeper understanding
+Run the stack locally with a sample .env, seed the database (check supabase/migrations), and explore responses from /v1/features/today and /v1/space/series to see the data model in practice.
+Inspect data pipelines by reading other worker scripts (e.g., aggregate_range.py, backfill_last_7_days.py) and how they orchestrate aggregation windows across users.
+Dive into domain rules via gaia_rules.yaml and gaia_guide_constants.py to understand how EarthScope messaging is generated; this informs both backend logic and bot content.
+Review automation bots relevant to your focus area (e.g., bots/earthscope_post or bots/space_news_collector) to see how downstream communications consume the backend data.
+Plan observability by deciding how to monitor worker runs and webhook deliveries; consider adding logging around TODO sections in api/webhooks.py once actual integrations are introduced.
+
 # Earthscope Post Bot (LLM)
 
 - Reads `marts.space_weather_daily` (+ optional `ext.donki_event`)
