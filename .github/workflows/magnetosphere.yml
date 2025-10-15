@@ -8,6 +8,8 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,6 +20,15 @@ jobs:
           repository: ${{ github.repository_owner }}/gaiaeyes-media
           token: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
           path: media
+      - name: Configure PAT for media remote
+        run: |
+          set -euo pipefail
+          cd media
+          git remote set-url origin "https://x-access-token:${GAIAEYES_MEDIA_TOKEN}@github.com/${{ github.repository_owner }}/gaiaeyes-media.git"
+          echo "Media repo remotes:"
+          git remote -v
+        env:
+          GAIAEYES_MEDIA_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
       - run: pip install supabase requests numpy typing-extensions
       - env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -36,12 +47,26 @@ jobs:
         if: always()
         working-directory: media
         run: |
-          git config user.name "github-actions[bot]"
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/*.json || true
           if git diff --cached --quiet; then
             echo "No JSON changes to commit."
-          else
-            git commit -m "chore(magnetosphere): update latest JSON [skip ci]"
-            git push
+            exit 0
           fi
+          git commit -m "chore(magnetosphere): update latest JSON [skip ci]"
+          # Robust push with rebase (no force) and bounded retries for concurrent writers
+          for attempt in 1 2 3; do
+            echo "Push attempt ${attempt}..."
+            # Ensure we are up to date with origin/main and replay our commit
+            git pull --rebase --autostash origin main || true
+            if git push origin HEAD:main; then
+              echo "Push succeeded on attempt ${attempt}."
+              exit 0
+            fi
+            echo "::warning title=Push failed::Attempt ${attempt} failed; retrying shortly…"
+            sleep $((2 + (RANDOM % 4)))
+          done
+          echo "::error title=Push failed::Could not push after 3 attempts. If a ruleset blocks direct pushes, add a bypass for this token or switch to a PR workflow."
+          exit 1
