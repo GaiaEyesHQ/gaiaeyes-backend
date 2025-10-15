@@ -62,6 +62,14 @@ jobs:
           fi
           echo "Git remotes for media repo:"
           git -C gaiaeyes-media remote -v
+      - name: Configure PAT for media repo remote
+        run: |
+          set -euo pipefail
+          cd gaiaeyes-media
+          # Ensure pushes use the GAIAEYES_MEDIA_TOKEN instead of falling back to a user credential
+          git remote set-url origin "https://x-access-token:${GAIAEYES_MEDIA_TOKEN}@github.com/${{ env.MEDIA_REPO_OWNER }}/${{ env.MEDIA_REPO_NAME }}.git"
+          echo "New media repo remote:"
+          git remote -v
       - name: (Optional) Validate flares_cmes.json
         run: |
           FILE="${OUTPUT_JSON_PATH}"
@@ -93,19 +101,20 @@ jobs:
           fi
           ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           git commit -m "chore(donki): update flares_cmes.json ${ts} [skip ci]"
-          # Robust push with rebase + lease and bounded retries (handles concurrent pushes)
+          # Robust push with rebase and bounded retries (no force push)
           for attempt in 1 2 3; do
             echo "Push attempt ${attempt}..."
+            # Rebase on latest remote to avoid non-fast-forward
             git pull --rebase --autostash origin main || true
-            if git push --force-with-lease origin HEAD:main; then
+            if git push origin HEAD:main; then
               echo "Push succeeded on attempt ${attempt}."
               if [ -n "${MEDIA_CDN_BASE}" ]; then
                 echo "Published: ${MEDIA_CDN_BASE%/}/flares_cmes.json"
               fi
               exit 0
             fi
-            echo "Push failed on attempt ${attempt}, retrying..."
+            echo "::warning title=Push failed::Attempt ${attempt} failed; will retry shortly."
             sleep $((2 + (RANDOM % 4)))
           done
-          echo "ERROR: Could not push after 3 attempts."
+          echo "::error title=Push failed::Could not push after 3 attempts. If branch protection requires PRs, allow a bypass for this token or switch to the PR-based flow."
           exit 1
