@@ -29,7 +29,7 @@ jobs:
       - name: Checkout media repo
         uses: actions/checkout@v4
         with:
-          repository: gennwu/gaiaeyes-media
+          repository: GaiaEyesHQ/gaiaeyes-media
           path: ${{ env.MEDIA_DIR }}
           token: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
           persist-credentials: true
