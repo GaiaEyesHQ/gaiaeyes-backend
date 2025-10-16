@@ -194,6 +194,45 @@ def fetch_last24_for_chart() -> List[Dict[str, Any]]:
     except Exception:
         return []
 
+def color_level(level: str) -> str:
+    # Suggested hex colors; frontend can ignore/override
+    return {
+        "success": "#2e7d32",  # green
+        "info":    "#0277bd",  # blue
+        "warning": "#ef6c00",  # amber
+        "danger":  "#c62828",  # red
+        "muted":   "#546e7a"   # gray
+    }.get(level, "#546e7a")
+
+def badge(label: str, value: str, level: str) -> Dict[str, Any]:
+    return {"label": label, "value": value, "level": level, "color": color_level(level)}
+
+def badge_from_r0(r0: Optional[float]) -> Dict[str, Any]:
+    if r0 is None:
+        return badge("r₀", "—", "muted")
+    if r0 < 6.6:
+        return badge("r₀", f"{r0:.1f} Rᴇ", "danger")
+    if r0 < 8.0:
+        return badge("r₀", f"{r0:.1f} Rᴇ", "warning")
+    return badge("r₀", f"{r0:.1f} Rᴇ", "success")
+
+def badge_from_geo(geo_risk: str) -> Dict[str, Any]:
+    level = {"low":"success", "watch":"warning", "elevated":"danger"}.get(geo_risk, "muted")
+    return badge("GEO", geo_risk, level)
+
+def badge_from_storm(kpi_bucket: str) -> Dict[str, Any]:
+    level = {
+        "quiet":"success",
+        "active":"warning",
+        "storm":"danger",
+        "strong_storm":"danger"
+    }.get(kpi_bucket, "muted")
+    return badge("Storm", kpi_bucket.replace("_", " "), level)
+
+def badge_from_grid(dbdt_tag: str) -> Dict[str, Any]:
+    level = {"low":"success", "moderate":"warning", "high":"danger"}.get(dbdt_tag, "muted")
+    return badge("Grid", dbdt_tag, level)
+
 def build_explainer(r0, symh, dbdt_tag, kp):
     # State bucket from r0 and GEO risk
     if r0 is None:
@@ -467,6 +506,14 @@ def main():
     geo_risk = bucket_geo_risk(r0)
     kpi_bucket = bucket_kpi(symh)
 
+    # Badges for front-end (color suggestions included)
+    badges = {
+        "r0": badge_from_r0(r0),
+        "geo": badge_from_geo(geo_risk),
+        "storm": badge_from_storm(kpi_bucket),
+        "grid": badge_from_grid(dbdt_tag)
+    }
+
     ts = sw_now["timestamp"]
     rec = {
         "ts": ts,
@@ -539,7 +586,8 @@ def main():
         "images": {
             "sparkline": "data/magnetosphere_sparkline.png",
             "geospace": GEOSPACE_FRAME_URL
-        }
+        },
+        "badges": badges
     }
     print(json.dumps(app_json))
 
