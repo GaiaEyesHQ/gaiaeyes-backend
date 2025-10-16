@@ -29,7 +29,7 @@ jobs:
           git remote -v
         env:
           GAIAEYES_MEDIA_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
-      - run: pip install supabase requests numpy typing-extensions
+      - run: pip install supabase requests numpy typing-extensions matplotlib
       - env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -43,19 +43,19 @@ jobs:
           MEDIA_OUT_DIR: ${{ github.workspace }}/media/data
           WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
         run: python bots/magnetosphere/magnetosphere_collect.py
-      - name: Commit & push media JSON
+      - name: Commit & push media assets
         if: always()
         working-directory: media
         run: |
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/*.json || true
+          git add data/*.json data/*.png || true
           if git diff --cached --quiet; then
-            echo "No JSON changes to commit."
+            echo "No media changes to commit."
             exit 0
           fi
-          git commit -m "chore(magnetosphere): update latest JSON [skip ci]"
+          git commit -m "chore(magnetosphere): update latest visuals & JSON [skip ci]"
           # Robust push with rebase (no force) and bounded retries for concurrent writers
           for attempt in 1 2 3; do
             echo "Push attempt ${attempt}..."
