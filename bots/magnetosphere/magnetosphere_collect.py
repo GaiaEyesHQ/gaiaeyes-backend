@@ -242,26 +242,41 @@ def build_explainer(r0, symh, dbdt_tag, kp):
 
 def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
     """
-    Render a minimal sparkline of r0_re over the last 24h and save to out_path (PNG).
-    Uses default matplotlib styling (no explicit colors).
+    Render a compact sparkline of r0_re over the last 24h and save to out_path (PNG).
+    Visual tweaks:
+      - Fixed y-range 6–10 Rₑ for comparability and to avoid “flat” look
+      - Shaded bands for context (expanded vs compressed)
+      - GEO orbit baseline (6.6 Rₑ)
+      - Small markers to emphasize discrete points
     """
     try:
         if not rows:
             return False
+
         xs = list(range(len(rows)))
         r0s = [(row.get("r0_re") if row.get("r0_re") is not None else float("nan")) for row in rows]
 
         plt.figure(figsize=(6, 1.5))
         ax = plt.gca()
-        ax.plot(xs, r0s, linewidth=1.75)
-        finite_vals = [v for v in r0s if v == v]  # filter NaNs
-        lo = min(finite_vals) if finite_vals else 6.0
-        hi = max(finite_vals) if finite_vals else 9.0
-        ax.set_ylim(bottom=lo - 0.3, top=hi + 0.3)
+
+        # Context bands: typical (>=8), compressed (6.6–8)
+        ax.axhspan(8.0, 10.0, alpha=0.08)   # expanded / typical
+        ax.axhspan(6.6, 8.0, alpha=0.12)    # compressed / watch
+        # GEO orbit baseline
+        ax.axhline(6.6, linestyle="--", linewidth=0.8)
+
+        # Trace with small markers
+        ax.plot(xs, r0s, marker="o", markersize=2.5, linewidth=1.2)
+
+        # Fixed y-scale for readability across days
+        ax.set_ylim(6.0, 10.0)
+
+        # Minimal chrome
         for spine in ("top", "right", "left", "bottom"):
             ax.spines[spine].set_visible(False)
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
+
         plt.tight_layout()
         plt.savefig(out_path, dpi=160, bbox_inches="tight")
         plt.close()
