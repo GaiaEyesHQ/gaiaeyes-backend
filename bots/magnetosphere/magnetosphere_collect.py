@@ -283,8 +283,8 @@ def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
     """
     Render a compact sparkline of r0_re over the last 24h and save to out_path (PNG).
     Mode A (normal): absolute r0 in 6–10 Rᴇ with context bands + GEO baseline.
-    Mode B (flat):   anomaly Δr0 = r0 - mean(r0) with zero-line and filled band.
-    Always draws small markers; optional Kp overlay scaled to the active axis.
+    Mode B (flat):   anomaly Δr0 = r0 - mean(r0) (optionally amplified) with zero-line and filled band.
+    Always draws small markers; optional Kp overlay scaled INSIDE the active axis.
     Includes a minimal legend to label series.
     """
     try:
@@ -315,40 +315,58 @@ def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
             ax.axhline(6.6, linestyle="--", linewidth=0.8)  # GEO baseline (dashed)
             ln_r0, = ax.plot(xs, r0s, marker="o", markersize=2.5, linewidth=1.2)
             legend_lines.append(ln_r0); legend_labels.append("r₀ (Rᴇ)")
-            # Optional Kp overlay: map 0→6, 9→10
+            # Optional Kp overlay: map 0→6.2, 9→9.8 to stay inside frame
             if any(k is not None for k in kps):
                 kp_scaled = []
                 for k in kps:
                     if k is None: kp_scaled.append(float("nan"))
                     else:
-                        try:    kp_scaled.append(6.0 + (float(k)/9.0)*4.0)
+                        try:    kp_scaled.append(6.2 + (float(k)/9.0)*3.6)
                         except: kp_scaled.append(float("nan"))
                 ln_kp, = ax.plot(xs, kp_scaled, linewidth=0.9)
                 legend_lines.append(ln_kp); legend_labels.append("Kp (scaled)")
             ax.set_ylim(6.0, 10.0)
             ax.set_ylabel("r₀ (Rᴇ)", fontsize=7)
         else:
-            # --- Mode B: anomaly (Δr0) to amplify tiny changes ---
+            # --- Mode B: anomaly (Δr0) with amplification so tiny changes are visible ---
             dr0 = [ (v - mean) if v == v else float("nan") for v in r0s ]
-            # Fill ±0.25 Rᴇ band for context + zero baseline (dashed)
+            std = float(np.nanstd(dr0)) if len(dr0) else 0.0
+            # Amplify if std is tiny; cap amplification to avoid crazy spikes
+            amp = 1.0
+            if std < 0.005:
+                amp = min(20.0, 0.05 / (std + 1e-6))
+            dr0a = [ (d*amp if d == d else float("nan")) for d in dr0 ]
+            # Context band and zero baseline
             ax.axhspan(-0.25, 0.25, alpha=0.10)
             ax.axhline(0.0, linestyle="--", linewidth=0.8)
-            ln_r0, = ax.plot(xs, dr0, marker="o", markersize=2.5, linewidth=1.2)
-            legend_lines.append(ln_r0); legend_labels.append("Δr₀ (Rᴇ from mean)")
-            # Optional Kp overlay scaled to anomaly axis: map 0→-0.4, 9→+0.4
-            if any(k is not None for k in kps):
+            ln_r0, = ax.plot(xs, dr0a, marker="o", markersize=2.5, linewidth=1.2)
+            lbl = "Δr₀ (Rᴇ from mean)" + (f" ×{int(round(amp))}" if amp > 1.01 else "")
+            legend_lines.append(ln_r0); legend_labels.append(lbl)
+            # Kp overlay scaled to fit inside current axis later
+            has_kp = any(k is not None for k in kps)
+            # Determine axis span using 3σ (post-amplification), with a minimum
+            std_a = float(np.nanstd(dr0a)) if len(dr0a) else 0.0
+            halfspan = max(3.0*std_a, 0.05)
+            ymin, ymax = -halfspan, halfspan
+            # Keep some headroom so Kp can draw: shrink 10% if we have Kp
+            if has_kp:
+                ymin *= 1.1; ymax *= 1.1
+            ax.set_ylim(ymin, ymax)
+            # Now map Kp into 80% of visible band to guarantee visibility
+            if has_kp:
+                k_lo, k_hi = ymin*0.8, ymax*0.8
                 kp_scaled = []
                 for k in kps:
-                    if k is None: kp_scaled.append(float("nan"))
+                    if k is None:
+                        kp_scaled.append(float("nan"))
                     else:
-                        try:    kp_scaled.append(-0.4 + (float(k)/9.0)*0.8)
-                        except: kp_scaled.append(float("nan"))
+                        try:
+                            frac = float(k)/9.0
+                            kp_scaled.append(k_lo + frac*(k_hi - k_lo))
+                        except:
+                            kp_scaled.append(float("nan"))
                 ln_kp, = ax.plot(xs, kp_scaled, linewidth=0.9)
                 legend_lines.append(ln_kp); legend_labels.append("Kp (scaled)")
-            # Adaptive vertical window: ±max(3σ, 0.05)
-            std = float(np.nanstd(dr0)) if len(dr0) else 0.0
-            halfspan = max(3.0*std, 0.05)
-            ax.set_ylim(-halfspan, halfspan)
             ax.set_ylabel("Δr₀ (Rᴇ)", fontsize=7)
 
         # Minimal chrome (keep sparkline feel)
