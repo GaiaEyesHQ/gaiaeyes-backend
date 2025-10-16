@@ -282,69 +282,68 @@ def build_explainer(r0, symh, dbdt_tag, kp):
 def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
     """
     Render a compact sparkline of r0_re over the last 24h and save to out_path (PNG).
-    Improvements:
-      - Dynamic zoom when variation is tiny (ensures non-flat look)
-      - Keep 6–10 Rₑ clamp so it never zooms outside meaningful range
-      - Context bands (expanded vs compressed), GEO baseline (6.6)
-      - Optional Kp overlay scaled into 6–10 range for visual correlation
+    Mode A (normal): absolute r0 in 6–10 Rᴇ with context bands + GEO baseline.
+    Mode B (flat):   anomaly Δr0 = r0 - mean(r0) with zero-line and filled band.
+    Always draws small markers; optional Kp overlay scaled to the active axis.
     """
     try:
         if not rows:
             return False
 
-        xs = list(range(len(rows)))
+        xs  = list(range(len(rows)))
         r0s = [ (row.get("r0_re") if row.get("r0_re") is not None else float("nan")) for row in rows ]
         kps = [ row.get("kp_latest") for row in rows ]  # may be None
 
-        # Compute finite r0 stats
         finite_r0 = [v for v in r0s if v == v]
         if not finite_r0:
             return False
-        lo = min(finite_r0)
-        hi = max(finite_r0)
-        span = hi - lo
-        mean = sum(finite_r0) / len(finite_r0)
-
-        # Choose y-range:
-        # - If there's decent variation, use the fixed 6–10 frame.
-        # - If variation is tiny (<0.25 Rᴇ), zoom around the mean (±0.35) but clamp inside 6–10.
-        if span < 0.25:
-            ymin = max(6.0, mean - 0.35)
-            ymax = min(10.0, mean + 0.35)
-            if ymax - ymin < 0.5:
-                # guarantee minimum visual span
-                pad = (0.5 - (ymax - ymin)) / 2
-                ymin = max(6.0, ymin - pad)
-                ymax = min(10.0, ymax + pad)
-        else:
-            ymin, ymax = 6.0, 10.0
+        span = max(finite_r0) - min(finite_r0)
+        mean   = sum(finite_r0) / len(finite_r0)
 
         plt.figure(figsize=(6, 1.5))
         ax = plt.gca()
 
-        # Context bands and GEO baseline (will be partially visible if zoomed)
-        ax.axhspan(8.0, 10.0, alpha=0.08)   # expanded / typical
-        ax.axhspan(6.6, 8.0,  alpha=0.12)   # compressed / watch
-        ax.axhline(6.6, linestyle="--", linewidth=0.8)
-
-        # r0 trace with small markers
-        ax.plot(xs, r0s, marker="o", markersize=2.5, linewidth=1.2)
-
-        # Optional Kp overlay scaled to 6–10 range (0→6, 9→10)
-        if any(k is not None for k in kps):
-            kp_scaled = []
-            for k in kps:
-                if k is None:
-                    kp_scaled.append(float("nan"))
-                else:
-                    try:
-                        kp_scaled.append(6.0 + (float(k)/9.0)*4.0)
-                    except Exception:
+        if span >= 0.25:
+            # --- Mode A: absolute r0 with fixed 6–10 frame ---
+            ax.axhspan(8.0, 10.0, alpha=0.08)   # expanded / typical
+            ax.axhspan(6.6, 8.0,  alpha=0.12)   # compressed / watch
+            ax.axhline(6.6, linestyle="--", linewidth=0.8)
+            ax.plot(xs, r0s, marker="o", markersize=2.5, linewidth=1.2)
+            # Optional Kp overlay: map 0→6, 9→10
+            if any(k is not None for k in kps):
+                kp_scaled = []
+                for k in kps:
+                    if k is None:
                         kp_scaled.append(float("nan"))
-            ax.plot(xs, kp_scaled, linewidth=0.9)
-
-        # Apply y-limits (zoomed or fixed)
-        ax.set_ylim(ymin, ymax)
+                    else:
+                        try:
+                            kp_scaled.append(6.0 + (float(k)/9.0)*4.0)
+                        except Exception:
+                            kp_scaled.append(float("nan"))
+                ax.plot(xs, kp_scaled, linewidth=0.9)
+            ax.set_ylim(6.0, 10.0)
+        else:
+            # --- Mode B: anomaly (Δr0) to amplify tiny changes ---
+            dr0 = [ (v - mean) if v == v else float("nan") for v in r0s ]
+            # Fill ±0.25 Rᴇ band for context
+            ax.axhspan(-0.25, 0.25, alpha=0.10)
+            ax.axhline(0.0, linestyle="--", linewidth=0.8)
+            ax.plot(xs, dr0, marker="o", markersize=2.5, linewidth=1.2)
+            # Optional Kp overlay scaled to anomaly axis: map 0→-0.4, 9→+0.4
+            if any(k is not None for k in kps):
+                kp_scaled = []
+                for k in kps:
+                    if k is None:
+                        kp_scaled.append(float("nan"))
+                    else:
+                        try:
+                            kp_scaled.append(-0.4 + (float(k)/9.0)*0.8)
+                        except Exception:
+                            kp_scaled.append(float("nan"))
+                ax.plot(xs, kp_scaled, linewidth=0.9)
+            # Auto pad to show some movement even if extremely flat
+            ymin, ymax = -0.5, 0.5
+            ax.set_ylim(ymin, ymax)
 
         # Minimal chrome
         for spine in ("top", "right", "left", "bottom"):
