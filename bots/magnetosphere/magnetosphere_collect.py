@@ -3,8 +3,11 @@ import os, time, json, math, datetime as dt
 import requests
 import numpy as np
 from supabase import create_client, Client
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from urllib.parse import urljoin
+import matplotlib
+matplotlib.use("Agg")  # headless render for CI
+import matplotlib.pyplot as plt
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
@@ -175,6 +178,97 @@ def wp_alert_post(title: str, content_html: str, unique_tag: str) -> Optional[Di
     except Exception as e:
         return {"error": f"WP alert failed: {e}"}
 
+def fetch_last24_for_chart() -> List[Dict[str, Any]]:
+    """
+    Read last 24h series for r0_re and kp_latest from marts.magnetosphere_last_24h.
+    Requires the view:
+      create or replace view marts.magnetosphere_last_24h as
+      select ts, r0_re, kp_latest from ext.magnetosphere_pulse
+      where ts > now() - interval '24 hours' order by ts asc;
+    """
+    try:
+        sb = supabase_client()
+        resp = sb.schema("marts").table("magnetosphere_last_24h") \
+            .select("ts,r0_re,kp_latest").order("ts", desc=False).execute()
+        return resp.data or []
+    except Exception:
+        return []
+
+def build_explainer(r0, symh, dbdt_tag, kp):
+    # State bucket from r0 and GEO risk
+    if r0 is None:
+        state = "Unknown"
+    elif r0 < 6.6:
+        state = "Compressed (GEO-cross risk)"
+    elif r0 < 8.0:
+        state = "Moderately compressed"
+    else:
+        state = "Expanded / typical"
+
+    if symh is None:
+        storm = "unknown"
+    elif symh < -100:
+        storm = "strong storm"
+    elif symh < -50:
+        storm = "storm"
+    elif symh < -20:
+        storm = "active"
+    else:
+        storm = "quiet"
+
+    impacts = []
+    if r0 is not None and r0 < 8.0:
+        impacts.append("Dayside field compressed; aurora potential up at high latitudes.")
+    if symh is not None and symh < -50:
+        impacts.append("Geomagnetic storming may disturb GPS/HF radio.")
+    if dbdt_tag == "high":
+        impacts.append("Grid-current stress elevated; sensitive folks may feel symptoms.")
+    if not impacts:
+        impacts.append("No major impacts expected.")
+
+    tips = []
+    if storm in ("storm", "strong storm"):
+        tips += ["Expect occasional GPS/comm glitches.", "Prioritize sleep hygiene; reduce late blue-light."]
+    if dbdt_tag == "high":
+        tips += ["Delay firmware updates on critical gear.", "Ground & hydrate; keep routines simple."]
+    if not tips:
+        tips = ["Steady day; normal routines are fine."]
+
+    return {
+        "state": f"{state} • Storminess: {storm} • Grid stress: {dbdt_tag}",
+        "impacts": impacts,
+        "tips": tips
+    }
+
+def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
+    """
+    Render a minimal sparkline of r0_re over the last 24h and save to out_path (PNG).
+    Uses default matplotlib styling (no explicit colors).
+    """
+    try:
+        if not rows:
+            return False
+        xs = list(range(len(rows)))
+        r0s = [(row.get("r0_re") if row.get("r0_re") is not None else float("nan")) for row in rows]
+
+        plt.figure(figsize=(6, 1.5))
+        ax = plt.gca()
+        ax.plot(xs, r0s, linewidth=1.75)
+        finite_vals = [v for v in r0s if v == v]  # filter NaNs
+        lo = min(finite_vals) if finite_vals else 6.0
+        hi = max(finite_vals) if finite_vals else 9.0
+        ax.set_ylim(bottom=lo - 0.3, top=hi + 0.3)
+        for spine in ("top", "right", "left", "bottom"):
+            ax.spines[spine].set_visible(False)
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        plt.tight_layout()
+        plt.savefig(out_path, dpi=160, bbox_inches="tight")
+        plt.close()
+        return True
+    except Exception:
+        return False
+
 def r0_shue98(pdyn_npa, bz_nt):
     if pdyn_npa is None or bz_nt is None: return None
     term = 10.22 + 1.29 * math.tanh(0.184 * (bz_nt + 8.14))
@@ -335,6 +429,8 @@ def main():
     # Optional plasmapause proxy and Kp read
     kp_latest = fetch_kp_latest_from_supabase()
     lpp = plasmapause_L_carpenter_anderson(kp_latest)
+    # Human-friendly explainer
+    explainer = build_explainer(r0, symh, dbdt_tag, kp_latest)
 
     # Read previous from marts view (create view: marts.magnetosphere_history)
     prev = sb_select_one("marts.magnetosphere_history", order="ts", desc=True, offset=1)
@@ -411,7 +507,7 @@ def main():
         wp_alert_post("Sensitivity Tip (GIC risk)", f"<p>{tip}</p>", unique_tag="magnetosphere-dbdt")
         post_json_webhook(EARTHSCOPE_WEBHOOK_URL, {"kind":"magnetosphere_alert","rule":"dbdt_high","payload":{"ts": ts}})
 
-    # 3) Emit app JSON
+    # 3) Emit app JSON (with visuals + explainer)
     app_json = {
         "ts": ts,
         "kpis": {
@@ -423,7 +519,12 @@ def main():
             "kp": kp_latest
         },
         "sw": {"n_cm3": sw_now["density"], "v_kms": sw_now["speed"], "bz_nt": sw_now["bz"]},
-        "trend": {"r0": trend}
+        "trend": {"r0": trend},
+        "explain": explainer,
+        "images": {
+            "sparkline": "data/magnetosphere_sparkline.png",
+            "geospace": GEOSPACE_FRAME_URL
+        }
     }
     print(json.dumps(app_json))
 
@@ -436,6 +537,15 @@ def main():
                 json.dump(app_json, f, indent=2)
         except Exception:
             # non-fatal: continue; the action step will handle commits if files exist
+            pass
+
+    # 3c) Sparkline image for website
+    if MEDIA_OUT_DIR:
+        try:
+            rows24 = fetch_last24_for_chart()
+            spark_path = os.path.join(MEDIA_OUT_DIR, "magnetosphere_sparkline.png")
+            write_sparkline_png(rows24, spark_path)
+        except Exception:
             pass
 
     # 4) Optional WP short card (idempotent posting is in your other bot; here we just compose)
