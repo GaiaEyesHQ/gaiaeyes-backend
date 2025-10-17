@@ -300,10 +300,13 @@ def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
         kps = [ row.get("kp_latest") for row in rows ]
         # Parse timestamps for tick labels
         t_objs = []
+        end_stamp = None  # for watermark (UTC)
         for row in rows:
             t = row.get("ts")
             try:
-                t_objs.append(dt.datetime.fromisoformat(str(t).replace("Z","")))
+                t_parsed = dt.datetime.fromisoformat(str(t).replace("Z",""))
+                t_objs.append(t_parsed)
+                end_stamp = t_parsed
             except Exception:
                 t_objs.append(None)
 
@@ -344,7 +347,10 @@ def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
             ax.axhspan(6.6, 8.0,  alpha=0.12)     # compressed / watch
             ax.axhline(6.6, linestyle="--", linewidth=0.8, zorder=1)  # GEO
             ln_r0, = ax.plot(xs, r0s, marker="o", markersize=2.5, linewidth=1.4, zorder=3)
-            legend_lines.append(ln_r0); legend_labels.append("r₀ (Rᴇ)")
+            if mode_label == "absolute_tight":
+                legend_lines.append(ln_r0); legend_labels.append("r₀ (constant)")
+            else:
+                legend_lines.append(ln_r0); legend_labels.append("r₀ (Rᴇ)")
             # Kp overlay scaled to fit inside window
             if any(k is not None for k in kps):
                 kp_scaled = []
@@ -402,14 +408,17 @@ def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
         if any(t is not None for t in t_objs) and len(xs) >= 2:
             idxs = [0, max(1, len(xs)//4), len(xs)//2, min(len(xs)-2, 3*len(xs)//4), len(xs)-1]
             labels = []
-            for i in idxs:
+            for j, i in enumerate(idxs):
                 t = t_objs[i]
                 if t is None:
                     labels.append("")
                 else:
-                    labels.append(t.strftime("%H:%M"))
+                    if j == 0:
+                        labels.append(t.strftime("%H:%M\n%d %b UTC"))
+                    else:
+                        labels.append(t.strftime("%H:%M"))
             ax.set_xticks(idxs)
-            ax.set_xticklabels(labels, fontsize=7)
+            ax.set_xticklabels(labels, fontsize=7, linespacing=0.9)
         else:
             ax.get_xaxis().set_visible(False)
         ax.tick_params(axis="y", labelsize=6)
@@ -417,6 +426,15 @@ def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
         # Tiny legend
         if legend_lines:
             ax.legend(legend_lines, legend_labels, loc="upper left", fontsize=7, frameon=False)
+
+        # Add UTC tag and a timestamp watermark (ensures bytes differ each run)
+        try:
+            ax.text(0.01, 0.98, "UTC", transform=ax.transAxes, ha="left", va="top", fontsize=6, alpha=0.6)
+            if end_stamp:
+                ax.text(0.99, 0.02, end_stamp.strftime("%Y-%m-%d %H:%M UTC"), transform=ax.transAxes,
+                        ha="right", va="bottom", fontsize=6, alpha=0.55)
+        except Exception:
+            pass
 
         # Debug log for CI visibility into plot mode / scaling
         try:
