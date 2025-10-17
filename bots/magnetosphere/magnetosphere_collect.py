@@ -8,6 +8,7 @@ from urllib.parse import urljoin
 import matplotlib
 matplotlib.use("Agg")  # headless render for CI
 import matplotlib.pyplot as plt
+import hashlib
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
@@ -318,6 +319,7 @@ def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
 
         legend_lines = []
         legend_labels = []
+        mode_label = "absolute"
 
         use_absolute = (span >= 0.25)
 
@@ -334,8 +336,10 @@ def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
             # If it was the fallback from "all_zero", use a tight window around mean
             if span < 0.001:
                 ymin, ymax = mean - 0.15, mean + 0.15
+                mode_label = "absolute_tight"
             else:
                 ymin, ymax = 6.0, 10.0
+                mode_label = "absolute"
             ax.axhspan(8.0, 10.0, alpha=0.08)     # expanded / typical
             ax.axhspan(6.6, 8.0,  alpha=0.12)     # compressed / watch
             ax.axhline(6.6, linestyle="--", linewidth=0.8, zorder=1)  # GEO
@@ -369,6 +373,7 @@ def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
             ax.axhline(0.0, linestyle="--", linewidth=0.8, zorder=1)
             ln_r0, = ax.plot(xs, dr0a, marker="o", markersize=2.5, linewidth=1.4, zorder=3)
             legend_lines.append(ln_r0); legend_labels.append("Δr₀ (Rᴇ from mean)" + (f" ×{int(round(amp))}" if amp > 1.01 else ""))
+            mode_label = "anomaly"
             # Determine y-lims from 3σ (post-amp) with a minimum span
             std_a = float(np.nanstd(dr0a)) if len(dr0a) else 0.0
             halfspan = max(3.0*std_a, 0.05)
@@ -413,6 +418,13 @@ def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
         if legend_lines:
             ax.legend(legend_lines, legend_labels, loc="upper left", fontsize=7, frameon=False)
 
+        # Debug log for CI visibility into plot mode / scaling
+        try:
+            ymin, ymax = ax.get_ylim()
+            amp_val = locals().get("amp", 1.0)
+            print(f"[sparkline] saving -> {out_path} | mode={mode_label} amp={amp_val:.2f} rows={len(rows)} ylim=({ymin:.3f},{ymax:.3f})")
+        except Exception:
+            pass
         plt.tight_layout()
         plt.savefig(out_path, dpi=160, bbox_inches="tight")
         plt.close()
@@ -714,7 +726,7 @@ def main():
             "geo_risk": geo_risk,
             "storminess": kpi_bucket,
             "dbdt": dbdt_tag,
-            "lpp_re": None if lpp is not None else round(lpp, 1),
+            "lpp_re": None if lpp is None else round(lpp, 1),
             "kp": kp_latest
         },
         "sw": {"n_cm3": sw_now["density"], "v_kms": sw_now["speed"], "bz_nt": sw_now["bz"]},
@@ -747,7 +759,13 @@ def main():
     if MEDIA_OUT_DIR:
         try:
             spark_path = os.path.join(MEDIA_OUT_DIR, "magnetosphere_sparkline.png")
-            write_sparkline_png(rows24, spark_path)
+            if write_sparkline_png(rows24, spark_path):
+                try:
+                    with open(spark_path, "rb") as _f:
+                        sha = hashlib.sha256(_f.read()).hexdigest()[:16]
+                    print(f"[sparkline] wrote {spark_path} sha256={sha}")
+                except Exception:
+                    pass
         except Exception:
             pass
 
