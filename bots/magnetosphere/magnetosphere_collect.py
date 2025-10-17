@@ -583,6 +583,10 @@ def main():
     # Human-friendly explainer
     explainer = build_explainer(r0, symh, dbdt_tag, kp_latest)
 
+    # Prepare last-24h rows for sparkline + chart metadata
+    rows24 = fetch_last24_for_chart()
+    chart_meta = analyze_chart_mode(rows24)
+
     # Read previous from marts view (create view: marts.magnetosphere_history)
     prev = sb_select_one("marts.magnetosphere_history", order="ts", desc=True, offset=1)
     prev_r0 = prev.get("r0_re") if prev else None
@@ -674,11 +678,15 @@ def main():
             "geo_risk": geo_risk,
             "storminess": kpi_bucket,
             "dbdt": dbdt_tag,
-            "lpp_re": None if lpp is None else round(lpp, 1),
+            "lpp_re": None if lpp is not None else round(lpp, 1),
             "kp": kp_latest
         },
         "sw": {"n_cm3": sw_now["density"], "v_kms": sw_now["speed"], "bz_nt": sw_now["bz"]},
         "trend": {"r0": trend},
+        "chart": {
+            "mode": chart_meta.get("mode"),
+            "amp": chart_meta.get("amp")
+        },
         "explain": explainer,
         "images": {
             "sparkline": "data/magnetosphere_sparkline.png",
@@ -699,10 +707,9 @@ def main():
             # non-fatal: continue; the action step will handle commits if files exist
             pass
 
-    # 3c) Sparkline image for website
+    # 3c) Sparkline image for website (reuse rows24)
     if MEDIA_OUT_DIR:
         try:
-            rows24 = fetch_last24_for_chart()
             spark_path = os.path.join(MEDIA_OUT_DIR, "magnetosphere_sparkline.png")
             write_sparkline_png(rows24, spark_path)
         except Exception:
