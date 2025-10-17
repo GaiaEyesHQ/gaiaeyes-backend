@@ -420,6 +420,42 @@ def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
     except Exception:
         return False
 
+
+def analyze_chart_mode(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Derive sparkline chart mode and amplification from the latest rows."""
+    out = {"mode": "absolute", "amp": 1.0}
+    if not rows:
+        return out
+    r0s: List[float] = []
+    for row in rows:
+        v = row.get("r0_re")
+        try:
+            if v is not None and not (isinstance(v, float) and math.isnan(v)):
+                r0s.append(float(v))
+        except Exception:
+            continue
+    if not r0s:
+        return out
+    lo, hi = min(r0s), max(r0s)
+    span = hi - lo
+    if span >= 0.25:
+        out["mode"] = "absolute"
+        out["amp"] = 1.0
+        return out
+    mean = float(np.nanmean(r0s))
+    dr0 = [v - mean for v in r0s]
+    if all(abs(v) < 1e-12 for v in dr0):
+        out["mode"] = "absolute_tight"
+        out["amp"] = 1.0
+        return out
+    std = float(np.nanstd(dr0)) if len(dr0) else 0.0
+    amp = 1.0
+    if std < 0.005:
+        amp = min(20.0, 0.05 / (std + 1e-6))
+    out["mode"] = "anomaly"
+    out["amp"] = float(amp)
+    return out
+
 def r0_shue98(pdyn_npa, bz_nt):
     if pdyn_npa is None or bz_nt is None: return None
     term = 10.22 + 1.29 * math.tanh(0.184 * (bz_nt + 8.14))
