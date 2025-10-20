@@ -269,6 +269,9 @@ logging.basicConfig(
 
 # HTTP session with retries
 session = requests.Session()
+
+API_BASE_URL = os.getenv("GAIA_API_BASE_URL")
+API_BEARER_TOKEN = os.getenv("GAIA_API_BEARER")
 retries = Retry(total=3, backoff_factor=0.8, status_forcelist=[429, 500, 502, 503, 504])
 session.mount("https://", HTTPAdapter(max_retries=retries))
 session.mount("http://", HTTPAdapter(max_retries=retries))
@@ -381,6 +384,32 @@ def supabase_select(table: str, params: dict, schema: Optional[str] = None) -> L
         return []
 
 
+def fetch_features_today_api() -> Optional[dict]:
+    """Fetch the consolidated features payload from the FastAPI service."""
+    if not API_BASE_URL:
+        return None
+    url = f"{API_BASE_URL.rstrip('/')}/v1/features/today"
+    headers = {"Accept": "application/json"}
+    if API_BEARER_TOKEN:
+        headers["Authorization"] = f"Bearer {API_BEARER_TOKEN}"
+    try:
+        resp = session.get(url, headers=headers, timeout=20)
+    except Exception as exc:
+        logging.warning("features/today request failed: %s", exc)
+        return None
+    if resp.status_code != 200:
+        logging.warning("features/today returned %s: %s", resp.status_code, resp.text[:200])
+        return None
+    try:
+        data = resp.json()
+    except Exception as exc:
+        logging.warning("features/today parse error: %s", exc)
+        return None
+    if isinstance(data, dict) and isinstance(data.get("data"), dict):
+        return data.get("data")
+    return data if isinstance(data, dict) else None
+
+
 # Fallback: read space weather marts directly
 def _fetch_space_weather_mart(day: dt.date) -> dict:
     params = {
@@ -466,6 +495,86 @@ def fetch_daily_features_for(day: dt.date) -> Optional[dict]:
 
     logging.warning("Supabase: no marts daily data found for day=%s", day.isoformat())
     return None
+
+
+def _coerce_float(val: Optional[Union[str, float, int]]) -> Optional[float]:
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except Exception:
+        return None
+
+
+def resolve_space_weather_metrics(
+    feats: Optional[dict],
+    overrides: Optional[dict] = None,
+) -> Tuple[Dict[str, Optional[float]], Dict[str, Optional[str]]]:
+    """Return current-ish Kp/Bz/SW values and note their origin."""
+
+    metrics: Dict[str, Optional[float]] = {"kp": None, "bz": None, "sw": None}
+    sources: Dict[str, Optional[str]] = {"kp": None, "bz": None, "sw": None}
+
+    def assign(key: str, value: Optional[Union[str, float, int]], source: str) -> None:
+        if value is None:
+            return
+        coerced = _coerce_float(value)
+        if coerced is None:
+            return
+        if metrics[key] is None:
+            metrics[key] = coerced
+            sources[key] = source
+
+    overrides = overrides or {}
+    assign("kp", overrides.get("kp"), "cli")
+    assign("bz", overrides.get("bz"), "cli")
+    assign("sw", overrides.get("sw"), "cli")
+
+    api_payload = None if all(metrics.values()) else fetch_features_today_api()
+    if isinstance(api_payload, dict):
+        space = api_payload.get("space_weather") if isinstance(api_payload.get("space_weather"), dict) else api_payload
+        assign("kp", space.get("kp_current") if isinstance(space, dict) else None, "api")
+        assign("kp", space.get("kp_now") if isinstance(space, dict) else None, "api")
+        assign("bz", space.get("bz_current") if isinstance(space, dict) else None, "api")
+        assign("bz", space.get("bz_now") if isinstance(space, dict) else None, "api")
+        assign("sw", space.get("sw_speed_current") if isinstance(space, dict) else None, "api")
+        assign("sw", space.get("sw_speed_kms") if isinstance(space, dict) else None, "api")
+
+    if isinstance(feats, dict):
+        assign("kp", feats.get("kp_current"), "daily_features")
+        assign("kp", feats.get("kp_max"), "daily_features")
+        assign("bz", feats.get("bz_current"), "daily_features")
+        assign("bz", feats.get("bz_now"), "daily_features")
+        assign("bz", feats.get("bz_min"), "daily_features")
+        assign("sw", feats.get("sw_speed_current"), "daily_features")
+        assign("sw", feats.get("sw_speed_avg"), "daily_features")
+
+    if metrics["bz"] is None and SUPABASE_REST_URL:
+        rows = supabase_select(
+            "space_weather",
+            {"select": "bz_nt", "bz_nt": "not.is.null", "order": "ts_utc.desc", "limit": "1"},
+            schema="ext",
+        )
+        if rows:
+            assign("bz", rows[0].get("bz_nt"), "supabase.ext.space_weather")
+    if metrics["sw"] is None and SUPABASE_REST_URL:
+        rows = supabase_select(
+            "space_weather",
+            {"select": "sw_speed_kms", "sw_speed_kms": "not.is.null", "order": "ts_utc.desc", "limit": "1"},
+            schema="ext",
+        )
+        if rows:
+            assign("sw", rows[0].get("sw_speed_kms"), "supabase.ext.space_weather")
+    if metrics["kp"] is None and SUPABASE_REST_URL:
+        rows = supabase_select(
+            "space_weather",
+            {"select": "kp_index", "kp_index": "not.is.null", "order": "ts_utc.desc", "limit": "1"},
+            schema="ext",
+        )
+        if rows:
+            assign("kp", rows[0].get("kp_index"), "supabase.ext.space_weather")
+
+    return metrics, sources
 
 def fetch_post_for(day: dt.date, platform: str="default") -> Optional[dict]:
     if not SUPABASE_REST_URL:
@@ -852,6 +961,101 @@ def render_card(energy_label: str, mood: str, sch: float, kp: float, kind: str =
     return im.convert("RGB")
 
 # ---------------------------------------
+# Stats helpers
+# ---------------------------------------
+def format_metric_float(val: Optional[float], nd: int = 2, unit: str = "") -> str:
+    if val is None:
+        return "—"
+    try:
+        s = f"{float(val):.{nd}f}"
+    except Exception:
+        return "—"
+    return f"{s} {unit}".strip()
+
+
+def format_metric_int(val: Optional[float]) -> str:
+    if val is None:
+        return "—"
+    try:
+        return str(int(val))
+    except Exception:
+        return "—"
+
+
+def _is_zero_or_none(val) -> bool:
+    try:
+        return val is None or int(val) == 0
+    except Exception:
+        return val in (None, 0, "0")
+
+
+def build_stats_rows(
+    feats: Optional[dict],
+    sch_label: str,
+    pulse: Optional[dict] = None,
+) -> List[Tuple[str, str, tuple[int, int, int, int], str]]:
+    feats = feats or {}
+    pulse = pulse or {}
+
+    sch_val = (
+        feats.get("sch_any_fundamental_avg_hz")
+        if feats.get("sch_any_fundamental_avg_hz") is not None
+        else (
+            feats.get("sch_fundamental_avg_hz")
+            if feats.get("sch_fundamental_avg_hz") is not None
+            else feats.get("sch_cumiana_fundamental_avg_hz")
+        )
+    )
+
+    bz_val = feats.get("bz_current")
+    if bz_val is None:
+        bz_val = feats.get("bz_now")
+    if bz_val is None:
+        bz_val = feats.get("bz_min")
+
+    sw_val = feats.get("sw_speed_current")
+    if sw_val is None:
+        sw_val = feats.get("sw_speed_avg")
+
+    rows: List[Tuple[str, str, tuple[int, int, int, int], str]] = [
+        ("Kp (max)", format_metric_float(feats.get("kp_max"), 2), (255, 180, 60, 220), "KP"),
+        (
+            "Bz (min)",
+            format_metric_float(bz_val, 1, "nT"),
+            (239, 106, 106, 220)
+            if isinstance(bz_val, (int, float)) and bz_val <= -5
+            else (100, 160, 220, 220),
+            "Bz",
+        ),
+        ("SW speed", format_metric_float(sw_val, 0, "km/s"), (80, 200, 140, 220), "SW"),
+        (
+            f"Schumann ({sch_label})",
+            format_metric_float(sch_val, 2, "Hz"),
+            (160, 120, 240, 220),
+            "Sch",
+        ),
+    ]
+
+    if not _is_zero_or_none(feats.get("flares_count")):
+        rows.append(("Flares", format_metric_int(feats.get("flares_count")), (240, 120, 120, 220), "Fl"))
+    if not _is_zero_or_none(feats.get("cmes_count")):
+        rows.append(("CMEs", format_metric_int(feats.get("cmes_count")), (240, 160, 120, 220), "CM"))
+
+    if isinstance(pulse, dict):
+        aur_head = pulse.get("aurora_headline")
+        aur_win = pulse.get("aurora_window")
+        if aur_head:
+            aur_txt = str(aur_head)
+            if aur_win:
+                aur_txt += f" — {aur_win}"
+            rows.append(("Aurora", aur_txt, (120, 200, 255, 220), "Au"))
+        if pulse.get("quakes_count"):
+            rows.append(("Earthquakes", "recent notable events logged", (255, 190, 120, 220), "Eq"))
+
+    return rows
+
+
+# ---------------------------------------
 # Stats card renderer
 # ---------------------------------------
 def render_stats_card_from_features(
@@ -903,61 +1107,7 @@ def render_stats_card_from_features(
     panel_box = (80, panel_top, W - 80, H - 140)
     _blur_panel(im, panel_box, blur_radius=6, panel_alpha=70)
 
-    # Format helpers: show em dash when missing
-    def _fmt_float(val: Optional[float], nd: int = 2, unit: str = "") -> str:
-        if val is None:
-            return "—" if not unit else f"— {unit}".strip()
-        try:
-            s = f"{float(val):.{nd}f}"
-        except Exception:
-            return "—" if not unit else f"— {unit}".strip()
-        return f"{s} {unit}".strip()
-
-    def _fmt_int(val: Optional[float]) -> str:
-        if val is None:
-            return "—"
-        try:
-            return str(int(val))
-        except Exception:
-            return "—"
-
-    # Helper: check if a value is zero or None
-    def _is_zero_or_none(val) -> bool:
-        try:
-            return val is None or int(val) == 0
-        except Exception:
-            return val in (None, 0, "0")
-
-    sch_val = (
-        feats.get("sch_any_fundamental_avg_hz")
-        if feats.get("sch_any_fundamental_avg_hz") is not None
-        else (feats.get("sch_fundamental_avg_hz") if feats.get("sch_fundamental_avg_hz") is not None
-              else (feats.get("sch_cumiana_fundamental_avg_hz") if feats.get("sch_cumiana_fundamental_avg_hz") is not None else None))
-    )
-
-    rows = [
-        ("Kp (max)", _fmt_float(feats.get("kp_max"), 2), (255,180,60,220), "KP"),
-        ("Bz (min)", _fmt_float(feats.get("bz_min"), 2, "nT"), (100,160,220,220), "Bz"),
-        ("SW speed", _fmt_float(feats.get("sw_speed_avg"), 0, "km/s"), (80,200,140,220), "SW"),
-        (f"Schumann ({label})", _fmt_float(sch_val, 2, "Hz"), (160,120,240,220), "Sch"),
-    ]
-    # Conditionally add flares/CMEs only when non-zero
-    if not _is_zero_or_none(feats.get("flares_count")):
-        rows.append(("Flares", _fmt_int(feats.get("flares_count")), (240,120,120,220), "Fl"))
-    if not _is_zero_or_none(feats.get("cmes_count")):
-        rows.append(("CMEs", _fmt_int(feats.get("cmes_count")), (240,160,120,220), "CM"))
-
-    # Inject pulse rows up with the stats (not under Did you know)
-    if isinstance(pulse, dict):
-        aur_head = pulse.get("aurora_headline")
-        aur_win  = pulse.get("aurora_window")
-        if aur_head:
-            aur_txt = str(aur_head)
-            if aur_win:
-                aur_txt += f" — {aur_win}"
-            rows.append(("Aurora", aur_txt, (120,200,255,220), "Au"))
-        if pulse.get("quakes_count"):
-            rows.append(("Earthquakes", "recent notable events logged", (255,190,120,220), "Eq"))
+    rows = build_stats_rows(feats, label, pulse=pulse)
     font_val = _load_font(["Oswald-Bold.ttf", "Oswald-Regular.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 48)
     chip_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 26)
 
@@ -1151,6 +1301,21 @@ def save_all_cards(stats_im: Image.Image, caption_im: Image.Image, affects_im: I
     logging.info("Saved 4 images into repo/images/")
     return out
 
+
+def save_stats_card(stats_im: Image.Image, outdir: Optional[Path] = None) -> Path:
+    if outdir:
+        outdir = Path(outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+        stats_path = outdir / "daily_stats.jpg"
+        stats_im.save(stats_path, "JPEG", quality=90)
+        logging.info("Saved stats image (override dir): %s", stats_path)
+        return stats_path
+    ensure_repo_paths()
+    stats_path = MEDIA_REPO_PATH / "images" / "daily_stats.jpg"
+    stats_im.save(stats_path, "JPEG", quality=90)
+    logging.info("Saved stats image into repo/images/")
+    return stats_path
+
 # -------------------------
 # GIT HELPERS
 # -------------------------
@@ -1203,7 +1368,26 @@ def build_payload(ts_iso_utc: str, kp: float, kp_time: Optional[str], sch: float
 # -------------------------
 # MAIN
 # -------------------------
-def main():
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Generate Gaia Eyes EarthScope imagery")
+    parser.add_argument("--mode", choices=["all", "stats"], default="all", help="Which assets to render")
+    parser.add_argument("--dry-run", action="store_true", help="Skip git pushes and data writes")
+    parser.add_argument("--kp", type=float, help="Override Kp index (max/current)")
+    parser.add_argument("--bz", type=float, help="Override Bz (current) in nT")
+    parser.add_argument("--sw", type=float, help="Override solar wind speed in km/s")
+    parser.add_argument("--outdir", type=Path, help="Optional directory for output images")
+    parser.add_argument(
+        "--log-level",
+        default=os.getenv("GAIA_BOT_LOG_LEVEL", "INFO"),
+        help="Logging level (default INFO)",
+    )
+    return parser.parse_args(argv)
+
+
+def main(args: Optional[argparse.Namespace] = None):
+    if args is None:
+        args = parse_args()
+    logging.getLogger().setLevel(getattr(logging, str(args.log_level).upper(), logging.INFO))
     RUN_BG_USED.clear()
     key_prefix = (SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY)[:8] if (SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY) else "(none)"
     logging.info("Supabase REST: url=%s key[0:8]=%s", SUPABASE_REST_URL or "(unset)", key_prefix)
@@ -1226,6 +1410,33 @@ def main():
         logging.info("No marts.daily_features for target day; using mirror sources")
         sch = fetch_schumann_from_repo_csv(MEDIA_REPO_PATH) or 7.83
         kp = fetch_kp_index()
+
+    overrides = {"kp": args.kp, "bz": args.bz, "sw": args.sw}
+    metrics_now, metric_sources = resolve_space_weather_metrics(feats, overrides=overrides)
+    feats = feats or {}
+    if metrics_now.get("kp") is not None:
+        feats.setdefault("kp_current", metrics_now["kp"])
+    if metrics_now.get("bz") is not None:
+        feats["bz_current"] = metrics_now["bz"]
+        if feats.get("bz_min") is None:
+            feats["bz_min"] = metrics_now["bz"]
+    if metrics_now.get("sw") is not None:
+        feats["sw_speed_current"] = metrics_now["sw"]
+        if feats.get("sw_speed_avg") is None:
+            feats["sw_speed_avg"] = metrics_now["sw"]
+
+    logging.info(
+        "Space weather metrics resolved | Kp=%s (%s) Bz=%s (%s) SW=%s (%s)",
+        metrics_now.get("kp"),
+        metric_sources.get("kp") or "n/a",
+        metrics_now.get("bz"),
+        metric_sources.get("bz") or "n/a",
+        metrics_now.get("sw"),
+        metric_sources.get("sw") or "n/a",
+    )
+    missing = [k for k, v in metrics_now.items() if v is None]
+    if missing:
+        logging.warning("Missing space weather metrics: %s", ", ".join(sorted(missing)))
 
     # Compute energy/mood/tip early so `tip` is available
     energy, mood, tip = generate_daily_forecast(sch, kp)
@@ -1486,6 +1697,16 @@ def main():
         qk = media_card.get("quakes") or {}
         if isinstance(qk, dict) and qk.get("total_24h"):
             pulse_like["quakes_count"] = int(qk.get("total_24h"))
+    if metrics_now.get("kp") is not None:
+        stats_feats.setdefault("kp_max", stats_feats.get("kp_max") or feats.get("kp_max") or metrics_now["kp"])
+        stats_feats.setdefault("kp_current", metrics_now["kp"])
+    if metrics_now.get("bz") is not None:
+        stats_feats["bz_current"] = metrics_now["bz"]
+        stats_feats.setdefault("bz_min", feats.get("bz_min"))
+    if metrics_now.get("sw") is not None:
+        stats_feats["sw_speed_current"] = metrics_now["sw"]
+        stats_feats.setdefault("sw_speed_avg", feats.get("sw_speed_avg"))
+
     # Fallback: if we didn’t assemble anything from media, reuse feats mapped from Supabase above
     base_feats = stats_feats or (feats or {})
     stats_im   = render_stats_card_from_features(day, base_feats, energy, kind="tall", pulse=pulse_like)
@@ -1518,26 +1739,35 @@ def main():
     affects_im = render_text_card("How it may feel", affects_txt, energy, kind="tall")
     play_im    = render_text_card("Care notes", playbook_txt, energy, kind="tall")
 
-    repo_paths = save_all_cards(stats_im, caption_im, affects_im, play_im)
+    if args.mode == "stats":
+        save_stats_card(stats_im, outdir=args.outdir)
+    else:
+        repo_paths = save_all_cards(stats_im, caption_im, affects_im, play_im)
 
-    try:
-        sha1 = git_commit_push(repo_paths)
-    except Exception as e:
-        logging.error(f"git push (images) failed: {e}")
+        if not args.dry_run:
+            try:
+                sha1 = git_commit_push(repo_paths)
+                logging.info("Pushed images commit %s", sha1)
+            except Exception as e:
+                logging.error(f"git push (images) failed: {e}")
 
-    ts_iso = utcnow_iso()
-    payload = build_payload(ts_iso, kp, None, sch, "")
-    write_json_csv(payload)
-    try:
-        sha2 = git_commit_push([JSON_PATH_REPO, CSV_PATH_REPO])
-    except Exception as e:
-        logging.error(f"git push (data) failed: {e}")
+        ts_iso = utcnow_iso()
+        payload = build_payload(ts_iso, kp, None, sch, "")
+        if not args.dry_run:
+            write_json_csv(payload)
+            try:
+                sha2 = git_commit_push([JSON_PATH_REPO, CSV_PATH_REPO])
+                logging.info("Pushed data commit %s", sha2)
+            except Exception as e:
+                logging.error(f"git push (data) failed: {e}")
+        else:
+            logging.info("Dry run: skipped writing JSON/CSV and git push")
 
-    logging.info("✅ Done. Generated 4 images + data artifacts.")
+    logging.info("✅ Done. Mode=%s", args.mode)
 
 if __name__ == "__main__":
     try:
-        main()
+        main(parse_args())
     except Exception:
         logging.exception("Run failed")
         sys.exit(1)
