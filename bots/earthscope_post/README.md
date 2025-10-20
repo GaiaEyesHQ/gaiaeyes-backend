@@ -48,6 +48,8 @@ Plan observability by deciding how to monitor worker runs and webhook deliveries
   renders only the stats overlay, skips git pushes/CSV writes, and pipes the JPG to `./out` for deterministic tests.
 - Bz is sourced from `/v1/features/today` when `GAIA_API_BASE_URL` is set, falling back to Supabase `ext.space_weather`
   (latest row) before resorting to historic marts; negative values automatically trigger the alert color scheme.
+- Daily stats overlays prefer `bz_min` when available, fall back to `bz_current`, then `bz_now`, and dynamically relabel
+  the card as “Bz (min)” vs “Bz (current)” so the plotted metric always matches the caption.
 
 # Gaia Eyes App
 

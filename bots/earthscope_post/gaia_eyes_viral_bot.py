@@ -39,7 +39,7 @@ import re
 import subprocess
 import datetime as dt
 from pathlib import Path
-from typing import Optional, Tuple, List, Dict, Union
+from typing import Optional, Tuple, List, Dict, Union, NamedTuple
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageFilter
 
@@ -963,11 +963,22 @@ def render_card(energy_label: str, mood: str, sch: float, kp: float, kind: str =
 # ---------------------------------------
 # Stats helpers
 # ---------------------------------------
-def format_metric_float(val: Optional[float], nd: int = 2, unit: str = "") -> str:
+class StatRow(NamedTuple):
+    label: str
+    display: str
+    color: tuple[int, int, int, int]
+    abbreviation: str
+    raw_value: Optional[float]
+
+
+def format_metric_float(
+    val: Optional[float], nd: int = 2, unit: str = "", force_sign: bool = False
+) -> str:
     if val is None:
         return "—"
     try:
-        s = f"{float(val):.{nd}f}"
+        flt = float(val)
+        s = f"{flt:+.{nd}f}" if force_sign else f"{flt:.{nd}f}"
     except Exception:
         return "—"
     return f"{s} {unit}".strip()
@@ -989,11 +1000,18 @@ def _is_zero_or_none(val) -> bool:
         return val in (None, 0, "0")
 
 
+def _safe_float(val: Optional[float]) -> Optional[float]:
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
 def build_stats_rows(
     feats: Optional[dict],
     sch_label: str,
     pulse: Optional[dict] = None,
-) -> List[Tuple[str, str, tuple[int, int, int, int], str]]:
+) -> List[StatRow]:
     feats = feats or {}
     pulse = pulse or {}
 
@@ -1007,39 +1025,82 @@ def build_stats_rows(
         )
     )
 
-    bz_val = feats.get("bz_current")
-    if bz_val is None:
-        bz_val = feats.get("bz_now")
-    if bz_val is None:
-        bz_val = feats.get("bz_min")
+    bz_source = None
+    bz_val_raw = None
+    for key in ("bz_min", "bz_current", "bz_now"):
+        if feats.get(key) is not None:
+            bz_source = key
+            bz_val_raw = feats.get(key)
+            break
+
+    bz_val = _safe_float(bz_val_raw)
+    if bz_source == "bz_min":
+        bz_label = "Bz (min)"
+    else:
+        bz_label = "Bz (current)"
+
+    if bz_source:
+        logging.info("Stats card Bz source=%s value=%s", bz_source, bz_val_raw)
+    else:
+        logging.warning("Stats card Bz missing (min/current/now unavailable)")
 
     sw_val = feats.get("sw_speed_current")
     if sw_val is None:
         sw_val = feats.get("sw_speed_avg")
 
-    rows: List[Tuple[str, str, tuple[int, int, int, int], str]] = [
-        ("Kp (max)", format_metric_float(feats.get("kp_max"), 2), (255, 180, 60, 220), "KP"),
-        (
-            "Bz (min)",
-            format_metric_float(bz_val, 1, "nT"),
+    rows: List[StatRow] = [
+        StatRow(
+            "Kp (max)",
+            format_metric_float(feats.get("kp_max"), 2),
+            (255, 180, 60, 220),
+            "KP",
+            _safe_float(feats.get("kp_max")),
+        ),
+        StatRow(
+            bz_label,
+            format_metric_float(bz_val, 1, "nT", force_sign=True),
             (239, 106, 106, 220)
             if isinstance(bz_val, (int, float)) and bz_val <= -5
             else (100, 160, 220, 220),
             "Bz",
+            bz_val,
         ),
-        ("SW speed", format_metric_float(sw_val, 0, "km/s"), (80, 200, 140, 220), "SW"),
-        (
+        StatRow(
+            "SW speed",
+            format_metric_float(sw_val, 0, "km/s"),
+            (80, 200, 140, 220),
+            "SW",
+            _safe_float(sw_val),
+        ),
+        StatRow(
             f"Schumann ({sch_label})",
             format_metric_float(sch_val, 2, "Hz"),
             (160, 120, 240, 220),
             "Sch",
+            _safe_float(sch_val),
         ),
     ]
 
     if not _is_zero_or_none(feats.get("flares_count")):
-        rows.append(("Flares", format_metric_int(feats.get("flares_count")), (240, 120, 120, 220), "Fl"))
+        rows.append(
+            StatRow(
+                "Flares",
+                format_metric_int(feats.get("flares_count")),
+                (240, 120, 120, 220),
+                "Fl",
+                _safe_float(feats.get("flares_count")),
+            )
+        )
     if not _is_zero_or_none(feats.get("cmes_count")):
-        rows.append(("CMEs", format_metric_int(feats.get("cmes_count")), (240, 160, 120, 220), "CM"))
+        rows.append(
+            StatRow(
+                "CMEs",
+                format_metric_int(feats.get("cmes_count")),
+                (240, 160, 120, 220),
+                "CM",
+                _safe_float(feats.get("cmes_count")),
+            )
+        )
 
     if isinstance(pulse, dict):
         aur_head = pulse.get("aurora_headline")
@@ -1048,9 +1109,19 @@ def build_stats_rows(
             aur_txt = str(aur_head)
             if aur_win:
                 aur_txt += f" — {aur_win}"
-            rows.append(("Aurora", aur_txt, (120, 200, 255, 220), "Au"))
+            rows.append(
+                StatRow("Aurora", aur_txt, (120, 200, 255, 220), "Au", None)
+            )
         if pulse.get("quakes_count"):
-            rows.append(("Earthquakes", "recent notable events logged", (255, 190, 120, 220), "Eq"))
+            rows.append(
+                StatRow(
+                    "Earthquakes",
+                    "recent notable events logged",
+                    (255, 190, 120, 220),
+                    "Eq",
+                    _safe_float(pulse.get("quakes_count")),
+                )
+            )
 
     return rows
 
@@ -1132,7 +1203,7 @@ def render_stats_card_from_features(
     # Set available width for value column
     max_val_w = (W - 110) - (x_val)
 
-    for lab, val, colr, abbr in rows:
+    for lab, val, colr, abbr, _ in rows:
         _chip(draw, x_label-56, y+2, colr, abbr)
         draw.text((x_label+2, y+2), lab, fill=(0,0,0,160), font=font_body)
         draw.text((x_label, y), lab, fill=fg, font=font_body)
