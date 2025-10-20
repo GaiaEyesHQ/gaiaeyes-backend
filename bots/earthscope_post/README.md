@@ -43,6 +43,12 @@ Plan observability by deciding how to monitor worker runs and webhook deliveries
 - `USER_ID` (optional UUID; empty = global)
 - (optional) `TREND_*` URLs to override default sources
 
+### CLI helpers
+- `python bots/earthscope_post/gaia_eyes_viral_bot.py --mode stats --dry-run --kp 4 --bz -6.8 --sw 650 --outdir ./out`
+  renders only the stats overlay, skips git pushes/CSV writes, and pipes the JPG to `./out` for deterministic tests.
+- Bz is sourced from `/v1/features/today` when `GAIA_API_BASE_URL` is set, falling back to Supabase `ext.space_weather`
+  (latest row) before resorting to historic marts; negative values automatically trigger the alert color scheme.
+
 # Gaia Eyes App
 
 **Decode the unseen.**
