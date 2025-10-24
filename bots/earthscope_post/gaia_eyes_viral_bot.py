@@ -1432,7 +1432,7 @@ def build_payload(ts_iso_utc: str, kp: float, kp_time: Optional[str], sch: float
         "aqi": None,
         "aqi_city": None,
         "image_path": "images/dailypost.jpg",
-        "image_url_hint": "https://cdn.jsdelivr.net/gh/gennwu/gaiaeyes-media/images/dailypost.jpg",
+        "image_url_hint": "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/images/dailypost.jpg",
         "commit_sha": commit_sha
     }
 

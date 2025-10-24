@@ -29,7 +29,7 @@ load_dotenv(HERE.parent / ".env")
 SUPABASE_REST_URL   = os.getenv("SUPABASE_REST_URL", "").rstrip("/")
 SB_KEY              = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY")
 SB_USER_ID          = os.getenv("SUPABASE_USER_ID")
-MEDIA_CDN_BASE      = os.getenv("MEDIA_CDN_BASE", "https://cdn.jsdelivr.net/gh/gennwu/gaiaeyes-media/images").rstrip("/")
+MEDIA_CDN_BASE      = os.getenv("MEDIA_CDN_BASE", "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/images").rstrip("/")
 
 FB_PAGE_ID          = os.getenv("FB_PAGE_ID")
 FB_ACCESS_TOKEN     = os.getenv("FB_ACCESS_TOKEN")
