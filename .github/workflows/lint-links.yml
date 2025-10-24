@@ -7,6 +7,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fail if old owner appears
         run: |
-          if grep -RIn --exclude-dir=.git -E "gennwu(|.github.io|/gaiaeyes-media)" .; then
+          if grep -RIn --exclude-dir=.git --exclude='.github/workflows/lint-links.yml' -E "gennwu(|.github.io|/gaiaeyes-media)" .; then
             echo "::error ::Found old owner references. Replace with GaiaEyesHQ"; exit 1;
           fi
