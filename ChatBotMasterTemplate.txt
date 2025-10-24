@@ -207,13 +207,13 @@ items = items[:limit]
 FB_ACCESS_TOKEN=EAALeprUm4HwBPDXpacqsvdr2H9dmjC3ZAbd33BzReDwI8KKMMH0Jy3Ju1lzmnit5nD20GZBGVrLa38lWBEXsZBBTrKHzIIQewbGqFfRZCaclI5UYjedrpO6wJqs4wZBJOr1oP510jiOq9dftnz9wjIDBJCbBmyRfCtUlI8UM49TvddQNtrvlzrQgsAth173ZAZBvkfxbH8z
 FB_PAGE_ID=772867052570153
 IG_USER_ID=17841476128531063
-MEDIA_CDN_BASE=https://cdn.jsdelivr.net/gh/gennwu/gaiaeyes-media/images
+MEDIA_CDN_BASE=https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/images
 SUPABASE_REST_URL=https://qadwzkwubfbfuslfxkzl.supabase.co/rest/v1
 SUPABASE_USER_ID=e20a3e9e-1fc2-41ad-b6f7-656668310d13
 GAIA_TIMEZONE=America/Chicago
 #Image hosting
-IG_STATIC_IMAGE_URL=https://gennwu.github.io/gaiaeyes-media/images/dailypost.jpg
-IG_IMAGE_BASE_URL=https://gennwu.github.io/gaiaeyes-media/images/
+IG_STATIC_IMAGE_URL=https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/images/dailypost.jpg
+IG_IMAGE_BASE_URL=https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/images/
 
 # === APIs ===
 NASA_API_KEY=aGYhKBDmeDfGFM2JkWg2lnCimJn5XgUmwM5UkB3d

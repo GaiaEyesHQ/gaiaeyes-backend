@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Ingest Schumann now JSON from gennwu/gaiaeyes-media into ext.schumann (and stations/assets).
+Ingest Schumann now JSON from GaiaEyesHQ/gaiaeyes-media into ext.schumann (and stations/assets).
 
-JSON: https://raw.githubusercontent.com/gennwu/gaiaeyes-media/data/schumann_latest.json
+JSON: https://raw.githubusercontent.com/GaiaEyesHQ/gaiaeyes-media/data/schumann_latest.json
 
 - stations: 'tomsk', 'cumiana'
 - per station we ingest:
@@ -19,8 +19,8 @@ import os, sys, json, asyncio
 from datetime import datetime, timezone
 import asyncpg, httpx
 
-RAW_JSON = "https://raw.githubusercontent.com/gennwu/gaiaeyes-media/main/data/schumann_latest.json"
-RAW_IMG_BASE = "https://raw.githubusercontent.com/gennwu/gaiaeyes-media/main/images/"
+RAW_JSON = "https://raw.githubusercontent.com/GaiaEyesHQ/gaiaeyes-media/main/data/schumann_latest.json"
+RAW_IMG_BASE = "https://raw.githubusercontent.com/GaiaEyesHQ/gaiaeyes-media/main/images/"
 
 DB = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
 if not DB:
@@ -109,7 +109,7 @@ async def main():
                 # fallback: station-specific default
                 overlay_rel = f"{station_id}_overlay.png"
             overlay_url = RAW_IMG_BASE + overlay_rel
-            assets.append((overlay_url, "image/png", f"{station_id} overlay", json.dumps({"repo":"gennwu/gaiaeyes-media"})))
+            assets.append((overlay_url, "image/png", f"{station_id} overlay", json.dumps({"repo":"GaiaEyesHQ/gaiaeyes-media"})))
 
             # Timestamp
             ts = parse_ts(src.get("timestamp_utc")) or global_ts

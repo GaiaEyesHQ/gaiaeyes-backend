@@ -47,8 +47,8 @@ def combine_schumann(sch):
             "f1_hz": round(combined,2), "primary": primary, "delta_hz": round(delta,2) if delta is not None else None
         },
         "sources": {
-            "cumiana": {"f1_hz": c_f1, "image": "https://gennwu.github.io/gaiaeyes-media/images/cumiana_latest.png"},
-            "tomsk":   {"f1_hz": t_f1, "image": "https://gennwu.github.io/gaiaeyes-media/images/tomsk_latest.png"}
+            "cumiana": {"f1_hz": c_f1, "image": "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/images/cumiana_latest.png"},
+            "tomsk":   {"f1_hz": t_f1, "image": "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/images/tomsk_latest.png"}
         }
     }
 
