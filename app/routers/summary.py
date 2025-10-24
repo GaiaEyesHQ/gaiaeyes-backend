@@ -17,11 +17,30 @@ async def features_today(request: Request, conn = Depends(get_db)):
     Schumann preference (tomsk > cumiana), and Earthscope default post. America/Chicago
     is used for daily bucketing of sleep.
     """
-    media_base = getenv("MEDIA_BASE_URL", "").rstrip("/")
+    default_media_base = "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main"
+    raw_media_base = getenv("MEDIA_BASE_URL")
+    media_base = (raw_media_base or default_media_base).rstrip("/")
+
+    user_id = getattr(request.state, "user_id", None)
+
+    pick_filter = ""
+    diag_filter = ""
+    sr_clauses = ["type in ('sleep','sleep_stage')"]
+    params: list[str] = []
+
+    if user_id:
+        pick_filter = " where user_id = %s"
+        diag_filter = " where user_id = %s"
+        sr_clauses.append("user_id = %s")
+        params = [user_id, user_id, user_id]
+
+    sr_filter = f" where {' and '.join(sr_clauses)}"
 
     sql = """
     with pick as (
-      select * from marts.daily_features order by day desc limit 1
+      select * from marts.daily_features{pick_filter}
+      order by day desc
+      limit 1
     ),
     sr as (
       select (start_time at time zone 'America/Chicago')::date as day,
@@ -30,13 +49,14 @@ async def features_today(request: Request, conn = Depends(get_db)):
              sum(case when lower(value_text)='deep' then extract(epoch from (coalesce(end_time,start_time)-start_time))/60 end) as deep_m,
              sum(case when lower(value_text)='awake'then extract(epoch from (coalesce(end_time,start_time)-start_time))/60 end) as awake_m,
              sum(case when lower(value_text) in ('inbed','in_bed') then extract(epoch from (coalesce(end_time,start_time)-start_time))/60 end) as inbed_m
-      from gaia.samples
+      from gaia.samples{sr_filter}
       group by 1
     ),
     diag as (
-      select max(day) as max_day, count(*) as total_rows from marts.daily_features
+      select max(day) as max_day, count(*) as total_rows from marts.daily_features{diag_filter}
     )
-    select p.day,
+    select p.user_id,
+           p.day,
            p.steps_total,
            p.hr_min,
            p.hr_max,
@@ -134,7 +154,8 @@ async def features_today(request: Request, conn = Depends(get_db)):
 
     try:
         async with conn.cursor(row_factory=dict_row) as cur:
-            await cur.execute(sql)
+            query = sql.format(pick_filter=pick_filter, sr_filter=sr_filter, diag_filter=diag_filter)
+            await cur.execute(query, tuple(params))
             row = await cur.fetchone()
     except Exception as e:
         return {"ok": True, "data": None, "error": f"features_today query failed: {e}"}
@@ -143,12 +164,16 @@ async def features_today(request: Request, conn = Depends(get_db)):
         return {"ok": True, "data": None}
 
     rec = dict(row)
-    rec["day"] = str(rec.get("day"))
+    rec["user_id"] = str(rec.get("user_id")) if rec.get("user_id") else None
+    day_val = rec.get("day")
+    rec["day"] = str(day_val) if day_val else None
 
     # Diagnostics (optional; used by the app for visibility)
+    max_day_val = rec.pop("max_day", None)
     diagnostics = {
-        "max_day": str(rec.pop("max_day", None)),
-        "total_rows": rec.pop("total_rows", None)
+        "max_day": str(max_day_val) if max_day_val else None,
+        "total_rows": rec.pop("total_rows", None),
+        "user_id": rec.get("user_id") or user_id,
     }
 
     # Provide Earthscope image URLs if MEDIA_BASE_URL is set

@@ -16,3 +16,4 @@ Pillow>=10.4.0
 moviepy>=1.0.3
 imageio[ffmpeg]>=2.36.0
 requests>=2.32.3
+PyJWT>=2.8.0

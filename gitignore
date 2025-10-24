@@ -11,3 +11,6 @@ venv/
 # editors
 .vscode/
 .idea/
+
+# test artifacts
+bots/earthscope_post/Output/

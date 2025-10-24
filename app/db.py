@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     DIRECT_URL: Optional[str] = None
     DEV_BEARER: Optional[str] = None
     CORS_ORIGINS: Optional[str] = "*"
+    SUPABASE_JWT_SECRET: Optional[str] = None
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
