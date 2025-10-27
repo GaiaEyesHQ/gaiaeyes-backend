@@ -233,8 +233,9 @@ async def forecast_summary(conn = Depends(get_db)):
 
 
 # -----------------------------
-# /v1/space/series
+# /v1/space/series   and   /v1/series (legacy alias)
 # -----------------------------
+@router.get("/series")
 @router.get("/space/series")
 async def space_series(request: Request, days: int = 30, conn = Depends(get_db)):
     """

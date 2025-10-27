@@ -282,28 +282,28 @@ def build_explainer(r0, symh, dbdt_tag, kp):
 
 def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
     """
-    Render a compact sparkline of r0_re over the last 24h and save to out_path (PNG).
-    Modes:
-      A) absolute r0 in 6–10 Rᴇ with context bands + GEO baseline
-      B) anomaly Δr0 = r0 - mean(r0) (amplified if tiny), zero-line dashed
-         If Δr0 is identically 0 (no variation), fall back to a tight absolute window
-         around the constant value so we don't draw on the dashed baseline.
-    Adds a tiny legend and x-axis time ticks for readability.
+    Sparkline over last 24h with:
+      • Absolute r0 view when span ≥ 0.15 Rᴇ (auto y-lims around min/max, clamped 6–10)
+      • Anomaly view when span < 0.15 Rᴇ (Δr0 with amplification if tiny)
+      • GEO baseline (light gray), UTC/date ticks, watermark
+      • Kp drawn on a RIGHT axis (0–9) so it’s legible and not mixed into r0 scale
     """
     try:
         if not rows:
             return False
 
-        # Build series
         xs  = list(range(len(rows)))
         r0s = [ (row.get("r0_re") if row.get("r0_re") is not None else float("nan")) for row in rows ]
-        kps = [ row.get("kp_latest") for row in rows ]
-        # Parse timestamps for tick labels
+        kps = [ (row.get("kp_latest") if row.get("kp_latest") is not None else float("nan")) for row in rows ]
+
+        # timestamps
         t_objs = []
+        end_stamp = None
         for row in rows:
             t = row.get("ts")
             try:
-                t_objs.append(dt.datetime.fromisoformat(str(t).replace("Z","")))
+                t_parsed = dt.datetime.fromisoformat(str(t).replace("Z",""))
+                t_objs.append(t_parsed); end_stamp = t_parsed
             except Exception:
                 t_objs.append(None)
 
@@ -314,121 +314,125 @@ def write_sparkline_png(rows: List[Dict[str, Any]], out_path: str) -> bool:
         span   = r0_hi - r0_lo
         mean   = float(np.nanmean(finite_r0))
 
-        plt.figure(figsize=(6.5, 1.8))
+        plt.figure(figsize=(6.8, 2.0))
         ax = plt.gca()
 
-        legend_lines = []
-        legend_labels = []
+        legend_lines, legend_labels = [], []
         mode_label = "absolute"
 
-        use_absolute = (span >= 0.25)
-
+        use_absolute = (span >= 0.15)
         if not use_absolute:
-            # anomaly
             dr0 = [ (v - mean) if v == v else float("nan") for v in r0s ]
             all_zero = all((abs(v) < 1e-12) for v in dr0 if v == v)
             if all_zero:
-                # Fall back: tight absolute window around constant value
                 use_absolute = True
+                span = 0.0  # force tight window
 
         if use_absolute:
-            # --- Mode A: absolute r0 ---
-            # If it was the fallback from "all_zero", use a tight window around mean
-            if span < 0.001:
+            # --- Absolute r0 view ---
+            # Auto window padded around min/max, clamped into 6–10
+            pad = max(0.03, span*0.25)
+            ymin = max(6.0, min(10.0, r0_lo - pad))
+            ymax = min(10.0, max(6.0, r0_hi + pad))
+            if span < 0.01:
+                # Truly constant → tight window around mean + highlight band
                 ymin, ymax = mean - 0.15, mean + 0.15
                 mode_label = "absolute_tight"
-                # subtle highlight around constant mean to distinguish from any baseline
                 ax.axhspan(mean - 0.05, mean + 0.05, alpha=0.08, zorder=0)
             else:
-                ymin, ymax = 6.0, 10.0
                 mode_label = "absolute"
-            ax.axhspan(8.0, 10.0, alpha=0.08)     # expanded / typical
-            ax.axhspan(6.6, 8.0,  alpha=0.12)     # compressed / watch
-            ax.axhline(6.6, color="#9e9e9e", linestyle="--", linewidth=0.8, zorder=1)  # GEO (light gray)
-            ln_r0, = ax.plot(xs, r0s, marker="o", markersize=2.5, linewidth=1.6, zorder=4)
+
+            # Context shading + GEO baseline
+            ax.axhspan(8.0, 10.0, alpha=0.08)
+            ax.axhspan(6.6, 8.0, alpha=0.12)
+            ax.axhline(6.6, color="#9e9e9e", linestyle="--", linewidth=0.8, zorder=1)
+
+            ln_r0, = ax.plot(xs, r0s, marker="o", markersize=2.5, linewidth=1.7, zorder=4)
             legend_lines.append(ln_r0); legend_labels.append("r₀ (Rᴇ)")
-            # Kp overlay scaled to fit inside window
-            if any(k is not None for k in kps):
-                kp_scaled = []
-                for k in kps:
-                    if k is None:
-                        kp_scaled.append(float("nan"))
-                    else:
-                        try:
-                            # map 0→ymin+10%, 9→ymax-10%
-                            kp_scaled.append((ymin + 0.1*(ymax-ymin)) + (float(k)/9.0)*0.8*(ymax-ymin))
-                        except:
-                            kp_scaled.append(float("nan"))
-                ln_kp, = ax.plot(xs, kp_scaled, linewidth=0.9, zorder=2)
-                legend_lines.append(ln_kp); legend_labels.append("Kp (scaled)")
             ax.set_ylim(ymin, ymax)
             ax.set_ylabel("r₀ (Rᴇ)", fontsize=7)
+
+            # Kp on the right axis (0–9)
+            if any(k == k for k in kps):
+                ax2 = ax.twinx()
+                ln_kp, = ax2.plot(xs, kps, linewidth=1.0, zorder=3)
+                legend_lines.append(ln_kp); legend_labels.append("Kp")
+                ax2.set_ylim(0, 9)
+                ax2.set_ylabel("Kp", fontsize=7)
+                ax2.tick_params(axis="y", labelsize=6)
+                # Lighten right axis spines/ticks
+                for sp in ("right",):
+                    ax2.spines[sp].set_visible(False)
         else:
-            # --- Mode B: anomaly (Δr₀) ---
+            # --- Anomaly Δr0 view ---
             dr0 = [ (v - mean) if v == v else float("nan") for v in r0s ]
             std = float(np.nanstd(dr0)) if len(dr0) else 0.0
             amp = 1.0
             if std < 0.005:
-                amp = min(20.0, 0.05 / (std + 1e-6))
+                amp = min(20.0, 0.06 / (std + 1e-6))
             dr0a = [ (d*amp if d == d else float("nan")) for d in dr0 ]
             ax.axhspan(-0.25, 0.25, alpha=0.10, zorder=1)
             ax.axhline(0.0, color="#9e9e9e", linestyle="--", linewidth=0.8, zorder=1)
-            ln_r0, = ax.plot(xs, dr0a, marker="o", markersize=2.5, linewidth=1.6, zorder=4)
+            ln_r0, = ax.plot(xs, dr0a, marker="o", markersize=2.5, linewidth=1.7, zorder=4)
             legend_lines.append(ln_r0); legend_labels.append("Δr₀ (Rᴇ from mean)" + (f" ×{int(round(amp))}" if amp > 1.01 else ""))
             mode_label = "anomaly"
-            # Determine y-lims from 3σ (post-amp) with a minimum span
+            # y from ±3σ (post-amp) min span
             std_a = float(np.nanstd(dr0a)) if len(dr0a) else 0.0
-            halfspan = max(3.0*std_a, 0.05)
-            ymin, ymax = -halfspan, halfspan
-            # Kp overlay mapped inside 80% of band
-            if any(k is not None for k in kps):
-                k_lo, k_hi = ymin*0.8, ymax*0.8
-                kp_scaled = []
-                for k in kps:
-                    if k is None:
-                        kp_scaled.append(float("nan"))
-                    else:
-                        try:
-                            kp_scaled.append(k_lo + (float(k)/9.0)*(k_hi - k_lo))
-                        except:
-                            kp_scaled.append(float("nan"))
-                ln_kp, = ax.plot(xs, kp_scaled, linewidth=0.9, zorder=2)
-                legend_lines.append(ln_kp); legend_labels.append("Kp (scaled)")
-            ax.set_ylim(ymin, ymax)
+            halfspan = max(3.0*std_a, 0.06)
+            ax.set_ylim(-halfspan, halfspan)
             ax.set_ylabel("Δr₀ (Rᴇ)", fontsize=7)
 
-        # Minimal chrome, but keep x-axis with time ticks
-        for spine in ("top", "right", "left", "bottom"):
-            ax.spines[spine].set_visible(False)
-        # Build 5 ticks: start, 25%, 50%, 75%, end (only if we have timestamps)
+            # Kp on right axis (0–9) for correlation
+            if any(k == k for k in kps):
+                ax2 = ax.twinx()
+                ln_kp, = ax2.plot(xs, kps, linewidth=1.0, zorder=3)
+                legend_lines.append(ln_kp); legend_labels.append("Kp")
+                ax2.set_ylim(0, 9)
+                ax2.set_ylabel("Kp", fontsize=7)
+                ax2.tick_params(axis="y", labelsize=6)
+                for sp in ("right",):
+                    ax2.spines[sp].set_visible(False)
+
+        # Minimal chrome + UTC ticks
+        for sp in ("top", "right", "left", "bottom"):
+            ax.spines[sp].set_visible(False)
+
         if any(t is not None for t in t_objs) and len(xs) >= 2:
             idxs = [0, max(1, len(xs)//4), len(xs)//2, min(len(xs)-2, 3*len(xs)//4), len(xs)-1]
             labels = []
-            for i in idxs:
+            for j, i in enumerate(idxs):
                 t = t_objs[i]
-                if t is None:
-                    labels.append("")
+                if t is None: labels.append("")
                 else:
-                    labels.append(t.strftime("%H:%M"))
+                    labels.append(t.strftime("%H:%M\n%d %b UTC") if j == 0 else t.strftime("%H:%M"))
             ax.set_xticks(idxs)
-            ax.set_xticklabels(labels, fontsize=7)
+            ax.set_xticklabels(labels, fontsize=7, linespacing=0.9)
         else:
             ax.get_xaxis().set_visible(False)
+
         ax.tick_params(axis="y", labelsize=6)
 
-        # Tiny legend
         if legend_lines:
             ax.legend(legend_lines, legend_labels, loc="upper left", fontsize=7, frameon=False)
 
-        # Debug log for CI visibility into plot mode / scaling
+        # Watermark for cache-busting / provenance
         try:
-            ymin, ymax = ax.get_ylim()
-            amp_val = locals().get("amp", 1.0)
-            print(f"[sparkline] saving -> {out_path} | mode={mode_label} amp={amp_val:.2f} rows={len(rows)} ylim=({ymin:.3f},{ymax:.3f})")
+            ax.text(0.01, 0.98, "UTC", transform=ax.transAxes, ha="left", va="top", fontsize=6, alpha=0.6)
+            if end_stamp:
+                ax.text(0.99, 0.02, end_stamp.strftime("%Y-%m-%d %H:%M UTC"), transform=ax.transAxes,
+                        ha="right", va="bottom", fontsize=6, alpha=0.55)
         except Exception:
             pass
+
+        # Debug
+        try:
+            yl = ax.get_ylim()
+            print(f"[sparkline] saving -> {out_path} | mode={mode_label} rows={len(rows)} ylim=({yl[0]:.3f},{yl[1]:.3f})")
+        except Exception:
+            pass
+
         plt.tight_layout()
-        plt.savefig(out_path, dpi=160, bbox_inches="tight")
+        plt.savefig(out_path, dpi=170, bbox_inches="tight")
         plt.close()
         return True
     except Exception:
@@ -452,7 +456,7 @@ def analyze_chart_mode(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         return out
     lo, hi = min(r0s), max(r0s)
     span = hi - lo
-    if span >= 0.25:
+    if span >= 0.15:
         out["mode"] = "absolute"
         out["amp"] = 1.0
         return out
