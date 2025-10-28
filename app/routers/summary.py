@@ -210,40 +210,47 @@ async def forecast_summary(conn = Depends(get_db)):
     """
     Latest SWPC 3-day forecast summary (cleaned for the card).
     """
-    async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute("set statement_timeout = 60000")
-        await cur.execute(
-            """
-            select fetched_at, body_text
-            from ext.space_forecast
-            order by fetched_at desc
-            limit 1
-            """
-        )
-        row = await cur.fetchone()
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute("set statement_timeout = 60000")
+            await cur.execute(
+                """
+                select fetched_at, body_text
+                from ext.space_forecast
+                order by fetched_at desc
+                limit 1
+                """
+            )
+            row = await cur.fetchone()
+    except Exception as e:
+        return {"ok": False, "data": None, "error": f"forecast_summary query failed: {e}"}
 
     if not row:
         return {"ok": True, "data": None}
 
-    fetched_at = row.get("fetched_at")
-    fetched_at = fetched_at.astimezone(timezone.utc).isoformat() if fetched_at else None
-    body = (row.get("body_text") or "").strip()
+    try:
+        fetched_at = row.get("fetched_at")
+        fetched_at = fetched_at.astimezone(timezone.utc).isoformat() if fetched_at else None
+        body = (row.get("body_text") or "").strip()
 
-    if not body:
-        return {"ok": True, "data": {"fetched_at": fetched_at, "headline": None, "lines": None, "body": None}}
+        if not body:
+            return {"ok": True, "data": {"fetched_at": fetched_at, "headline": None, "lines": None, "body": None}}
 
-    raw_lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
-    lines = [ln for ln in raw_lines if not ln.startswith((':', '#'))]
-    headline = lines[0] if lines else None
+        raw_lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
+        lines = [ln for ln in raw_lines if not ln.startswith((':', '#'))]
+        headline = lines[0] if lines else None
 
-    bullets = []
-    for ln in lines[1:]:
-        if ln.startswith(('-', '*', '•')) or len(ln) <= 120:
-            bullets.append(ln.lstrip('-*• ').strip())
-        if len(bullets) >= 4:
-            break
+        bullets = []
+        for ln in lines[1:]:
+            if ln.startswith(('-', '*', '•')) or len(ln) <= 120:
+                bullets.append(ln.lstrip('-*• ').strip())
+            if len(bullets) >= 4:
+                break
 
-    return {"ok": True, "data": {"fetched_at": fetched_at, "headline": headline, "lines": bullets or None, "body": None}}
+        return {"ok": True, "data": {"fetched_at": fetched_at, "headline": headline, "lines": bullets or None, "body": None}}
+    except Exception as e:
+        # Defensive: return a safe shape even if parsing fails
+        return {"ok": False, "data": None, "error": f"forecast_summary parse failed: {e}"}
 
 
 # -----------------------------
