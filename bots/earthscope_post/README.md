@@ -1,4 +1,15 @@
 # Codebase overview written by Codex:
+
+## Table of Contents
+- [Overview](#overview)
+- [Earthscope Post Bot (LLM)](#earthscope-post-bot-llm)
+- [Gaia Eyes App](#gaia-eyes-app)
+  - [Features](#features)
+  - [Trends & Insights](#trends--insights)
+  - [Fonts](#fonts)
+  - [Tech Stack](#tech-stack)
+  - [Roadmap / Next](#roadmap--next)
+
 Overview
 The primary backend is a FastAPI application defined in app/main.py, which wires together CORS, health checks, bearer-token auth, feature/space-weather routers, and HMAC-protected webhooks.
 Authentication & middleware: /v1/* endpoints depend on require_auth, which validates a Bearer token from settings.DEV_BEARER and optionally propagates a UUID user id from X-Dev-UserId. /hooks/* routes skip bearer auth but are wrapped in WebhookSigMiddleware to enforce an x-signature HMAC using WEBHOOK_SECRET.
@@ -13,6 +24,9 @@ Data access & configuration
 app/db.py centralizes configuration via pydantic_settings, creating a PgBouncer-friendly AsyncConnectionPool and providing FastAPI dependencies to yield psycopg3 connections.
 The service leans on domain-specific rule and constant files—gaia_rules.yaml describes alert conditions and recommended practices, while gaia_guide_constants.py captures thresholds, vocabulary, and helper utilities for EarthScope content—worth skimming to understand the product context.
 Supabase configuration and migrations are organized under supabase/, reflecting how schema changes are tracked alongside code.
+
+The Supabase migrations mirror model definitions referenced by worker scripts and the `/v1/*` endpoints, ensuring schema consistency across backend logic and data aggregation.
+
 Background jobs & automations
 Worker scripts in workers/ (e.g., aggregate.py) recompute daily summaries per user, aggregating heart rate, HRV, SpO2, blood pressure, and sleep-stage metrics, then upserting into gaia.daily_summary. Running these requires DATABASE_URL in the environment and AsyncPG access.
 The bots/ directory houses specialized automation agents (Earthscope posts, magnetosphere tracking, research collectors, etc.); familiarize yourself with the relevant bot before extending it.
@@ -29,11 +43,15 @@ Plan observability by deciding how to monitor worker runs and webhook deliveries
 
 # Earthscope Post Bot (LLM)
 
+The Earthscope Post Bot generates and upserts the daily Earthscope posts consumed by the Gaia Eyes app.
+
 - Reads `marts.space_weather_daily` (+ optional `ext.donki_event`)
 - Fetches 2–3 trending references (SolarHam, SpaceWeather, NASA, HeartMath)
 - Calls OpenAI to generate rich Daily Earthscope (sections + hashtags)
 - Upserts into `content.daily_posts` (idempotent)
 - Dry run: set `DRY_RUN=true`
+
+These posts feed the app’s Earthscope card through the `/v1/features/today` endpoint.
 
 ## Env
 - `SUPABASE_DB_URL` (pooled, ssl)
@@ -104,7 +122,7 @@ Gaia Eyes is an iOS app (SwiftUI) that combines **health metrics**, **space weat
 ### Space Alerts
 - Small card displays warnings prominently when solar flares count is greater than 0 or Kp index is 5 or higher, alerting users to significant space weather events.
 
-### Weekly Trends
+### Trends & Insights
 - Provides graphical representations of key metrics over the past week:
   - Heart Rate timeseries with min/max and average lines
   - Kp index trends
@@ -112,10 +130,11 @@ Gaia Eyes is an iOS app (SwiftUI) that combines **health metrics**, **space weat
   - Schumann resonance frequency f0 trends
 - Includes legends, counts, and indicators of improvements or declines for easy interpretation.
 
-### Debug / Status
-- The Status card has been removed from the main view for a cleaner interface.
-- Now accessible under the Debug panel within a DisclosureGroup labeled "Status".
-- Debug panel also contains Logs and manual sync buttons for developer use.
+## Tech Stack
+- **Backend:** FastAPI, Supabase (PostgreSQL)
+- **App:** SwiftUI (iOS)
+- **AI / Automations:** OpenAI API, GitHub Actions
+- **Hosting:** Render, GitHub Pages (for media/fonts)
 
 ---
 
@@ -126,6 +145,8 @@ Custom fonts are loaded via `/fonts/` (hosted on GitHub Pages):
 - ChangaOne-Regular.ttf
 - Oswald-VariableFont_wght.ttf
 - **Poppins-Regular.ttf** (corrected from previous typo with extra `t` in the filename)
+
+Fonts are served via GitHub Pages under `/fonts/` and are pre-cached for offline readability and consistent rendering across devices.
 
 ---
 
