@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from datetime import datetime, timezone
 
 from .routers import ingest, summary
@@ -30,6 +31,21 @@ app = FastAPI(
     version="0.1.0",
     generate_unique_id_function=custom_generate_unique_id
 )
+
+@app.exception_handler(Exception)
+async def _global_exception_handler(request: Request, exc: Exception):
+    # Always return a safe JSON envelope so the app can handle failures gracefully
+    return JSONResponse(status_code=200, content={"ok": False, "data": None, "error": str(exc)})
+
+@app.on_event("startup")
+async def _log_routes():
+    try:
+        for r in app.routes:
+            methods = list(getattr(r, "methods", []))
+            path = getattr(r, "path", "")
+            print(f"[ROUTE] {methods} {path}")
+    except Exception:
+        pass
 
 # Build marker for health checks (update per deploy or wire to your CI SHA)
 BUILD = "2025-09-20T02:45Z"
