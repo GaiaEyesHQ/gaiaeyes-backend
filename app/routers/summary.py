@@ -235,8 +235,15 @@ async def forecast_summary(conn = Depends(get_db)):
 # -----------------------------
 # /v1/space/series   and   /v1/series (legacy alias)
 # -----------------------------
+ # Accept both with/without trailing slash; support HEAD for uptime checks
 @router.get("/series")
+@router.get("/series/")
+@router.head("/series")
+@router.head("/series/")
 @router.get("/space/series")
+@router.get("/space/series/")
+@router.head("/space/series")
+@router.head("/space/series/")
 async def space_series(request: Request, days: int = 30, conn = Depends(get_db)):
     """
     Space weather (Kp/Bz/SW), Schumann daily (f0/f1/f2), HR daily (min/max),
