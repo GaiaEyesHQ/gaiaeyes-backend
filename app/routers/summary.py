@@ -376,10 +376,19 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
     except Exception as e:
         return {"ok": False, "data": None, "error": str(e)}
 
+    # Helper formatters
     def iso(ts): return ts.astimezone(timezone.utc).isoformat() if ts else None
+    def fnum(x): return float(x) if x is not None else None
 
-    def fnum(x):
-        return float(x) if x is not None else None
+    # Diagnostics to understand what the server actually fetched
+    diag = {
+        "user_id": str(user_id) if user_id else None,
+        "days": days,
+        "sw_rows": len(sw_rows or []),
+        "sch_rows": len(sch_rows or []),
+        "hr_daily_rows": len(hr_daily_rows or []),
+        "hr_ts_rows": len(hr_ts_rows or []),
+    }
 
     return {
         "ok": True,
@@ -403,5 +412,6 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
                 {"ts": iso(r.get("ts_utc")), "hr": fnum(r.get("hr"))}
                 for r in (hr_ts_rows or []) if r.get("hr") is not None
             ]
-        }
+        },
+        "diag": diag
     }
