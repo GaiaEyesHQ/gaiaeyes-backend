@@ -154,9 +154,23 @@ async def features_today(request: Request, conn = Depends(get_db)):
 
     try:
         async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute("set statement_timeout = 60000")
             query = sql.format(pick_filter=pick_filter, sr_filter=sr_filter, diag_filter=diag_filter)
             await cur.execute(query, tuple(params))
             row = await cur.fetchone()
+            # If scoped by user_id and no row found, retry unscoped so the card doesn't go blank
+            if not row and user_id:
+                # Build unscoped filters and params
+                unscoped_pick_filter = ""
+                unscoped_diag_filter = ""
+                unscoped_sr_filter = " where type in ('sleep','sleep_stage')"
+                query_unscoped = sql.format(
+                    pick_filter=unscoped_pick_filter,
+                    sr_filter=unscoped_sr_filter,
+                    diag_filter=unscoped_diag_filter,
+                )
+                await cur.execute(query_unscoped, tuple())
+                row = await cur.fetchone()
     except Exception as e:
         return {"ok": True, "data": None, "error": f"features_today query failed: {e}"}
 
