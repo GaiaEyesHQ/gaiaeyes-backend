@@ -1,4 +1,6 @@
 <?php
+
+// DEPLOY TEST: <today’s date/time>
 /**
  * Plugin Name: Gaia Eyes – Space Weather Detail
  * Description: Scientific detail page for Space Weather (Kp, Solar wind, Bz, Flares, CMEs, Aurora) using gaiaeyes-media JSON feeds.
