@@ -1,0 +1,124 @@
+name: Deploy WordPress Code to SiteGround
+
+on:
+  push:
+    branches:
+      - main     # deploy to STAGING on push to main
+      - prod     # deploy to PRODUCTION on push to prod
+  workflow_dispatch: {}
+
+jobs:
+  deploy-staging:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # Deploy MU-plugins (all files in your repo under wp-content/mu-plugins/)
+      - name: Deploy mu-plugins to STAGING
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SG_SSH_HOST }}                 # e.g. gtxm1169.siteground.biz
+          port: ${{ secrets.SG_SSH_PORT }}                 # e.g. 18765
+          username: ${{ secrets.SG_SSH_USER }}             # e.g. u2451-mhraj3thonh2
+          key: ${{ secrets.SG_SSH_KEY }}                   # your private key contents
+          passphrase: ${{ secrets.SG_SSH_PASSPHRASE }}     # leave blank if none
+          source: "wp-content/mu-plugins/*"
+          target: "${{ secrets.SG_TARGET_PATH_STAGING }}/mu-plugins"
+          overwrite: true
+          strip_components: 2    # strips "wp-content/mu-plugins" from source so files land in /mu-plugins
+
+      # Deploy only the theme file(s) you actually edited; here, just Neve's functions.php
+      - name: Deploy theme functions.php to STAGING
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SG_SSH_HOST }}
+          port: ${{ secrets.SG_SSH_PORT }}
+          username: ${{ secrets.SG_SSH_USER }}
+          key: ${{ secrets.SG_SSH_KEY }}
+          passphrase: ${{ secrets.SG_SSH_PASSPHRASE }}
+          source: "wp-content/themes/neve/functions.php"
+          target: "${{ secrets.SG_TARGET_PATH_STAGING }}/themes/neve"
+          overwrite: true
+          strip_components: 3    # strips "wp-content/themes/neve" so functions.php lands in /themes/neve
+
+      # OPTIONAL: If you later add a child theme, deploy that folder instead of touching parent theme files:
+      # - name: Deploy child theme to STAGING
+      #   uses: appleboy/scp-action@v0.1.7
+      #   with:
+      #     host: ${{ secrets.SG_SSH_HOST }}
+      #     port: ${{ secrets.SG_SSH_PORT }}
+      #     username: ${{ secrets.SG_SSH_USER }}
+      #     key: ${{ secrets.SG_SSH_KEY }}
+      #     passphrase: ${{ secrets.SG_SSH_PASSPHRASE }}
+      #     source: "wp-content/themes/gaiaeyes-child/*"
+      #     target: "${{ secrets.SG_TARGET_PATH_STAGING }}/themes/gaiaeyes-child"
+      #     overwrite: true
+      #     strip_components: 3
+
+      # OPTIONAL: Clear SiteGround cache via WP-CLI if available (best effort)
+      - name: Clear SG cache (staging)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SG_SSH_HOST }}
+          port: ${{ secrets.SG_SSH_PORT }}
+          username: ${{ secrets.SG_SSH_USER }}
+          key: ${{ secrets.SG_SSH_KEY }}
+          passphrase: ${{ secrets.SG_SSH_PASSPHRASE }}
+          script: |
+            cd ${{ secrets.SG_TARGET_PATH_STAGING }}/..
+            if command -v wp >/dev/null 2>&1; then
+              wp --path=./ cache flush || true
+              wp --path=./ sg cache purge || true
+            fi
+            echo "Deployed $(date -u +'%Y-%m-%dT%H:%M:%SZ')" > ./wp-content/version.txt
+
+  deploy-prod:
+    if: github.ref == 'refs/heads/prod'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Deploy mu-plugins to PRODUCTION
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SG_SSH_HOST }}
+          port: ${{ secrets.SG_SSH_PORT }}
+          username: ${{ secrets.SG_SSH_USER }}
+          key: ${{ secrets.SG_SSH_KEY }}
+          passphrase: ${{ secrets.SG_SSH_PASSPHRASE }}
+          source: "wp-content/mu-plugins/*"
+          target: "${{ secrets.SG_TARGET_PATH_PROD }}/mu-plugins"
+          overwrite: true
+          strip_components: 2
+
+      - name: Deploy theme functions.php to PRODUCTION
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SG_SSH_HOST }}
+          port: ${{ secrets.SG_SSH_PORT }}
+          username: ${{ secrets.SG_SSH_USER }}
+          key: ${{ secrets.SG_SSH_KEY }}
+          passphrase: ${{ secrets.SG_SSH_PASSPHRASE }}
+          source: "wp-content/themes/neve/functions.php"
+          target: "${{ secrets.SG_TARGET_PATH_PROD }}/themes/neve"
+          overwrite: true
+          strip_components: 3
+
+      - name: Clear SG cache (production)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SG_SSH_HOST }}
+          port: ${{ secrets.SG_SSH_PORT }}
+          username: ${{ secrets.SG_SSH_USER }}
+          key: ${{ secrets.SG_SSH_KEY }}
+          passphrase: ${{ secrets.SG_SSH_PASSPHRASE }}
+          script: |
+            cd ${{ secrets.SG_TARGET_PATH_PROD }}/..
+            if command -v wp >/dev/null 2>&1; then
+              wp --path=./ cache flush || true
+              wp --path=./ sg cache purge || true
+            fi
+            echo "Deployed $(date -u +'%Y-%m-%dT%H:%M:%SZ')" > ./wp-content/version.txt
