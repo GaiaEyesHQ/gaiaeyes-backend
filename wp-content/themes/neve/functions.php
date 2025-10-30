@@ -340,10 +340,12 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
   function gaia_earthscope_banner( $atts ) {
     $atts = shortcode_atts(
       [
-        'daily_url' => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope_daily.json',
-        'url'       => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json',
-        'cache'     => 5,
-        'mode'      => 'mystical',
+        'daily_url'       => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope_daily.json',
+        'url'             => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json',
+        'space_detail'    => '/space-weather/',
+        'schumann_detail' => '/schumann/',
+        'cache'           => 5,
+        'mode'            => 'mystical',
       ],
       $atts,
       'gaia_earthscope_banner'
@@ -362,6 +364,10 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
       }
       return $json ? json_decode( $json, true ) : null;
     };
+
+    // Trailing slash variables for detail links
+    $space_detail = trailingslashit( $atts['space_detail'] );
+    $sch_detail   = trailingslashit( $atts['schumann_detail'] );
 
     // Prefer daily (new schema), fallback to legacy
     $d = $fetch_json( $atts['daily_url'], 'daily' );
@@ -426,10 +432,10 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
             <span class="gaia-es__badge"><?php echo esc_html($title); ?></span>
           <?php endif; ?>
           <?php if ( $aurora_chip ): ?>
-            <span class="gaia-es__badge gaia-es__badge--aurora"><?php echo esc_html($aurora_chip); ?></span>
+            <span class="gaia-es__badge gaia-es__badge--aurora"><a class="gaia-link" href="<?php echo esc_url( $space_detail . '#aurora' ); ?>"><?php echo esc_html($aurora_chip); ?></a></span>
           <?php endif; ?>
           <?php if ( $sch_pill ): ?>
-            <span class="gaia-es__badge gaia-es__badge--sch"><?php echo esc_html($sch_pill); ?></span>
+            <span class="gaia-es__badge gaia-es__badge--sch"><a class="gaia-link" href="<?php echo esc_url( $sch_detail . '#combined' ); ?>"><?php echo esc_html($sch_pill); ?></a></span>
           <?php endif; ?>
         </div>
       </div>
