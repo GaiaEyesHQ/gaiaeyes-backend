@@ -93,7 +93,7 @@ function gaia_space_weather_detail_shortcode($atts){
     <div class="ge-sw__grid">
       <!-- Card: KP / Solar Wind / Bz -->
       <article class="ge-card">
-        <h3>Geomagnetic Conditions</h3>
+        <h3 id="kp">Geomagnetic Conditions <a class="anchor-link" href="#kp" aria-label="Link to Geomagnetic Conditions">🔗</a></h3>
         <?php
           $now = isset($sw['now']) ? $sw['now'] : [];
           $kp  = isset($now['kp']) ? (float)$now['kp'] : null;
@@ -106,15 +106,15 @@ function gaia_space_weather_detail_shortcode($atts){
 
           echo ge_row('Kp (now)', ge_val_or_dash($kp));
           if ($kpmax !== null) echo ge_row('Kp (24h max)', ge_val_or_dash($kpmax));
-          echo ge_row('Solar wind (now)', ge_val_or_dash($swk, 'km/s'));
+          echo '<div class="sw-row"><span class="sw-row__label" id="solar-wind">Solar wind (now)</span><span class="sw-row__val">' . esc_html( ge_val_or_dash($swk, 'km/s') ) . '</span></div>';
           if ($swmax !== null) echo ge_row('Solar wind (24h max)', ge_val_or_dash($swmax, 'km/s'));
-          echo ge_row('Bz (IMF)', ge_val_or_dash($bz, 'nT'));
+          echo '<div class="sw-row"><span class="sw-row__label" id="bz">Bz (IMF)</span><span class="sw-row__val">' . esc_html( ge_val_or_dash($bz, 'nT') ) . '</span></div>';
         ?>
       </article>
 
       <!-- Card: Flares -->
       <article class="ge-card">
-        <h3>Solar Flares</h3>
+        <h3 id="flares">Solar Flares <a class="anchor-link" href="#flares" aria-label="Link to Solar Flares">🔗</a></h3>
         <?php
           $flr = is_array($fc) ? ($fc['flares'] ?? []) : [];
           $max = $flr['max_24h'] ?? null;
@@ -135,7 +135,7 @@ function gaia_space_weather_detail_shortcode($atts){
 
       <!-- Card: CMEs -->
       <article class="ge-card">
-        <h3>Coronal Mass Ejections</h3>
+        <h3 id="cmes">Coronal Mass Ejections <a class="anchor-link" href="#cmes" aria-label="Link to Coronal Mass Ejections">🔗</a></h3>
         <?php
           $cme = is_array($fc) ? ($fc['cmes'] ?? []) : [];
           $headline = $cme['headline'] ?? '';
@@ -154,7 +154,7 @@ function gaia_space_weather_detail_shortcode($atts){
 
       <!-- Card: Aurora & Forecast -->
       <article class="ge-card">
-        <h3>Aurora & Forecast</h3>
+        <h3 id="aurora">Aurora & Forecast <a class="anchor-link" href="#aurora" aria-label="Link to Aurora & Forecast">🔗</a></h3>
         <?php
           $next = isset($sw['next_72h']) ? $sw['next_72h'] : [];
           $hl   = $next['headline'] ?? '';
@@ -202,6 +202,9 @@ function gaia_space_weather_detail_shortcode($atts){
       .ge-impacts ul{margin:0;padding-left:18px;line-height:1.4}
       .ge-sw__error{padding:12px;background:#331e1e;color:#ffd6d6;border:1px solid #6e3a3a;border-radius:8px}
       .ge-sparklines{margin-top:10px}
+      .anchor-link{opacity:0;margin-left:8px;font-size:.9rem;color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25);transition:opacity .2s ease}
+      .ge-card h3:hover .anchor-link{opacity:1}
+      .anchor-link:hover{border-bottom-color:rgba(255,255,255,.6)}
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha256-5l5wxg6rE6sBJP6opc0bDO3sTZ5yH5rICwW7X8P9qvo=" crossorigin="anonymous"></script>

@@ -177,6 +177,7 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
       [
         'url'        => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json',
         'flares_url' => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/flares_cmes.json',
+        'detail' => '/space-weather/',
         'cache'      => 5, // minutes
       ],
       $atts,
@@ -200,6 +201,7 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
 
     $data  = $fetch_json( $atts['url'], 'wx' );
     $fc    = $fetch_json( $atts['flares_url'], 'flr' );
+    $detail = trailingslashit( $atts['detail'] );
 
     if ( ! is_array( $data ) || empty( $data['now'] ) ) {
       return '<section class="gaia-sw"><div class="gaia-sw__card">Space Weather: unavailable</div></section>';
@@ -238,7 +240,7 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
       $chip = 'Flares (24h): ';
       if ( $flr_max )   $chip .= esc_html($flr_max) . ' peak';
       if ( $flr_total ) $chip .= ($flr_max ? ' • ' : '') . esc_html($flr_total) . ' total';
-      $chips[] = '<span class="gaia-chip" data-type="flare">'.$chip.'</span>';
+      $chips[] = '<span class="gaia-chip" data-type="flare"><a class="gaia-link" href="' . esc_url( $detail . '#flares' ) . '">' . $chip . '</a></span>';
     }
     if ( $cme_total || $cme_vmax || $cme_ed_cnt ) {
       $chip = 'CMEs: ';
@@ -247,7 +249,7 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
       if ( $cme_ed_cnt ) $parts[] = esc_html($cme_ed_cnt) . ' earth-directed';
       if ( $cme_vmax )  $parts[] = 'max ' . esc_html($cme_vmax) . ' km/s';
       $chip .= implode(' • ', $parts);
-      $chips[] = '<span class="gaia-chip" data-type="cme" data-level="'.( stripos($headline,'Fast')!==false ? 'fast' : (stripos($headline,'Moderate')!==false ? 'moderate' : '') ).'">'.$chip.'</span>';
+      $chips[] = '<span class="gaia-chip" data-type="cme" data-level="' . ( stripos($headline,'Fast')!==false ? 'fast' : (stripos($headline,'Moderate')!==false ? 'moderate' : '') ) . '"><a class="gaia-link" href="' . esc_url( $detail . '#cmes' ) . '">' . $chip . '</a></span>';
     }
 
     // Optional flare band mini-line (A/B/C/M/X with non-zero counts)
@@ -275,15 +277,15 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
       <div class="gaia-sw__row">
         <div class="gaia-sw__card">
           <div class="gaia-sw__label">Now (UTC)</div>
-          <div>Kp: <strong><?php echo esc_html( $kp ); ?></strong><?php if ($kp_max24 !== null): ?> <span class="gaia-sw__sub">(24h max <?php echo esc_html($kp_max24); ?>)</span><?php endif; ?></div>
-          <div>Solar wind: <strong><?php echo esc_html( $sw ); ?></strong> km/s<?php if ($sw_max24 !== null): ?> <span class="gaia-sw__sub">(24h max <?php echo esc_html($sw_max24); ?>)</span><?php endif; ?></div>
-          <div>Bz: <strong><?php echo esc_html( $bz ); ?> nT</strong> (<?php echo esc_html( $bzpol ); ?>)</div>
+          <div>Kp: <strong><a href="<?php echo esc_url( $detail . '#kp' ); ?>" class="gaia-link"><?php echo esc_html( $kp ); ?></a></strong><?php if ($kp_max24 !== null): ?> <span class="gaia-sw__sub">(24h max <?php echo esc_html($kp_max24); ?>)</span><?php endif; ?></div>
+          <div>Solar wind: <strong><a href="<?php echo esc_url( $detail . '#solar-wind' ); ?>" class="gaia-link"><?php echo esc_html( $sw ); ?></a></strong> km/s<?php if ($sw_max24 !== null): ?> <span class="gaia-sw__sub">(24h max <?php echo esc_html($sw_max24); ?>)</span><?php endif; ?></div>
+          <div>Bz: <strong><a href="<?php echo esc_url( $detail . '#bz' ); ?>" class="gaia-link"><?php echo esc_html( $bz ); ?></a> nT</strong> (<?php echo esc_html( $bzpol ); ?>)</div>
         </div>
 
         <div class="gaia-sw__card">
           <div class="gaia-sw__label">Next 72h</div>
           <div>
-            <?php echo esc_html( $headline ); ?>
+            <a href="<?php echo esc_url( $detail . '#aurora' ); ?>" class="gaia-link"><?php echo esc_html( $headline ); ?></a>
             <?php if ( ! empty( $confidence ) ) : ?>
               &bull; <?php echo esc_html( $confidence ); ?>
             <?php endif; ?>
@@ -325,6 +327,8 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
         .gaia-chip[data-type="cme"][data-level="fast"]{background:#3f2d12;border-color:#8a5a1a;color:#ffd089}
         .gaia-chip[data-type="cme"][data-level="moderate"]{background:#2c3515;border-color:#516b1f;color:#d2f59a}
         .gaia-chip[data-type="flare"]{background:#2a2438;border-color:#5d4c8f;color:#d9c6ff}
+        .gaia-link{color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
+        .gaia-link:hover{border-bottom-color:rgba(255,255,255,.6)}
       </style>
     </section>
     <?php
@@ -463,6 +467,8 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         .gaia-es__label{font-size:.9rem;opacity:.8;margin-bottom:6px}
         .gaia-es__caption{white-space:pre-wrap;line-height:1.4}
         .gaia-es__body{white-space:pre-wrap;line-height:1.4}
+        .gaia-link{color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
+        .gaia-link:hover{border-bottom-color:rgba(255,255,255,.6)}
       </style>
     </section>
     <?php
