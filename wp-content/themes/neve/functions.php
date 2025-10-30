@@ -268,7 +268,7 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
     ob_start(); ?>
     <section class="gaia-sw">
       <header class="gaia-sw__head">
-        <h3 class="gaia-sw__title">Space Weather Bar</h3>
+        <h3 class="gaia-sw__title"><a href="<?php echo esc_url( $detail ); ?>" class="gaia-link">Space Weather Bar</a></h3>
         <time datetime="<?php echo esc_attr( gmdate( 'c', $ts ) ); ?>">
           Updated <?php echo esc_html( gmdate( 'D, d M Y H:i', $ts ) ); ?> UTC
         </time>
