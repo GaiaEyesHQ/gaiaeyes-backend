@@ -1,0 +1,41 @@
+name: quakes-history
+on:
+  schedule:
+    - cron: "15 5 * * *"   # daily 05:15 UTC
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      MEDIA_REPO_OWNER: GaiaEyesHQ
+      MEDIA_REPO_NAME: gaiaeyes-media
+      GAIAEYES_MEDIA_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout media repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MEDIA_REPO_OWNER }}/${{ env.MEDIA_REPO_NAME }}
+          token: ${{ env.GAIAEYES_MEDIA_TOKEN }}
+          path: gaiaeyes-media
+
+      - name: Generate quakes_history.json
+        env:
+          OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/quakes_history.json
+        run: |
+          python3 scripts/ingest_usgs_history.py
+
+      - name: Commit & push
+        run: |
+          cd gaiaeyes-media
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git status --porcelain | grep -E "quakes_history\.json"; then
+            git add data/quakes_history.json
+            git commit -m "chore: update quakes_history.json [skip ci]"
+            git push
+          else
+            echo "No changes."
+          fi
