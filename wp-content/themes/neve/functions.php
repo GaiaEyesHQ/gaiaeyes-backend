@@ -344,6 +344,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         'url'             => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json',
         'space_detail'    => '/space-weather/',
         'schumann_detail' => '/schumann/',
+        'aurora_detail'   => '/aurora/',
         'cache'           => 5,
         'mode'            => 'mystical',
       ],
@@ -368,6 +369,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
     // Trailing slash variables for detail links
     $space_detail = trailingslashit( $atts['space_detail'] );
     $sch_detail   = trailingslashit( $atts['schumann_detail'] );
+    $aurora_detail = trailingslashit( $atts['aurora_detail'] );
 
     // Prefer daily (new schema), fallback to legacy
     $d = $fetch_json( $atts['daily_url'], 'daily' );
@@ -432,7 +434,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
             <span class="gaia-es__badge"><?php echo esc_html($title); ?></span>
           <?php endif; ?>
           <?php if ( $aurora_chip ): ?>
-            <span class="gaia-es__badge gaia-es__badge--aurora"><a class="gaia-link" href="<?php echo esc_url( $space_detail . '#aurora' ); ?>"><?php echo esc_html($aurora_chip); ?></a></span>
+            <span class="gaia-es__badge gaia-es__badge--aurora"><a class="gaia-link" href="<?php echo esc_url( $aurora_detail . '#map' ); ?>"><?php echo esc_html($aurora_chip); ?></a></span>
           <?php endif; ?>
           <?php if ( $sch_pill ): ?>
             <span class="gaia-es__badge gaia-es__badge--sch"><a class="gaia-link" href="<?php echo esc_url( $sch_detail . '#combined' ); ?>"><?php echo esc_html($sch_pill); ?></a></span>
