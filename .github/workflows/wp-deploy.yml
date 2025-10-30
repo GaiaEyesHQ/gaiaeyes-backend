@@ -5,11 +5,20 @@ on:
     branches:
       - main     # deploy to STAGING on push to main
       - prod     # deploy to PRODUCTION on push to prod
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Deploy target'
+        required: true
+        type: choice
+        default: 'staging'
+        options:
+          - staging
+          - production
 
 jobs:
   deploy-staging:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'staging')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -75,7 +84,7 @@ jobs:
             echo "Deployed $(date -u +'%Y-%m-%dT%H:%M:%SZ')" > ./wp-content/version.txt
 
   deploy-prod:
-    if: github.ref == 'refs/heads/prod'
+    if: github.ref == 'refs/heads/prod' || (github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'production')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
