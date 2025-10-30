@@ -87,15 +87,27 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       <h2>Earthquakes – Scientific Detail</h2>
       <div class="ge-meta">Updated <?php echo esc_html( $ts ?: '—' ); ?></div>
     </header>
-    <div class="ge-ticker" role="region" aria-label="Global earthquake stats">
-      <span class="tk tk-total"><strong>Total (all mags):</strong> <?php echo ($tot_all!==null)? intval($tot_all) : '—'; ?></span>
-      <span class="tk tk-24h"><strong>Last 24h (all mags):</strong> <?php echo ($tot24_all!==null)? intval($tot24_all) : '—'; ?></span>
-    </div>
+    <article class="ge-card ge-topstats">
+      <h3 id="stats">Global Stats (all magnitudes) <a class="anchor-link" href="#stats" aria-label="Link to Global Stats">🔗</a></h3>
+      <div class="ge-meta-row">
+        <span><strong>Total (all mags):</strong> <?php echo ($tot_all!==null)? intval($tot_all) : '—'; ?></span>
+        <span><strong>Last 24h (all mags):</strong> <?php echo ($tot24_all!==null)? intval($tot24_all) : '—'; ?></span>
+      </div>
+      <div class="ge-note">Distribution shown for all magnitudes (USGS day feed). The Recent Events list defaults to M5.0+.</div>
+      <div class="bucket-grid">
+        <?php foreach ($buckets as $label=>$count): ?>
+          <div class="bucket-item"><span class="b-lab"><?php echo esc_html($label); ?></span><span class="b-val"><?php echo intval($count); ?></span></div>
+        <?php endforeach; ?>
+      </div>
+      <div class="ge-cta">
+        <a class="gaia-link btn-compare" href="/compare/?a=m5p_daily&b=m5p_daily&range=90">Compare with Space Weather →</a>
+      </div>
+    </article>
 
     <div class="ge-grid">
       <article class="ge-card">
         <h3 id="recent">Recent Events (M5.0+) <a class="anchor-link" href="#recent" aria-label="Link to Recent Events">🔗</a></h3>
-        <div class="ge-note">Note: This list shows magnitude 5.0 and above. The ticker totals include all magnitudes.</div>
+        <div class="ge-note">Note: This list shows magnitude 5.0 and above. Global stats above include all magnitudes.</div>
         <div class="ge-filters" id="geEqFilters">
           <div class="flt-group">
             <span class="flt-label">Show:</span>
@@ -207,16 +219,6 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       </article>
 
       <article class="ge-card">
-        <h3 id="stats">Magnitude Distribution (all magnitudes) <a class="anchor-link" href="#stats" aria-label="Link to Magnitude Distribution">🔗</a></h3>
-        <div class="ge-note">Distribution shown for all magnitudes (day feed). The Recent Events list below defaults to M5.0+.</div>
-        <div class="bucket-grid">
-          <?php foreach ($buckets as $label=>$count): ?>
-            <div class="bucket-item"><span class="b-lab"><?php echo esc_html($label); ?></span><span class="b-val"><?php echo intval($count); ?></span></div>
-          <?php endforeach; ?>
-        </div>
-      </article>
-
-      <article class="ge-card">
         <h3 id="health">Health context <a class="anchor-link" href="#health" aria-label="Link to Health Context">🔗</a></h3>
         <ul class="ge-list">
           <li>Rapid pressure and ground-motion changes can challenge the vestibular system; if sensitive, pace activities on high-activity days.</li>
@@ -237,7 +239,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .ge-head h2{margin:0;font-size:1.15rem}
       .ge-meta{opacity:.8;font-size:.9rem}
       .ge-grid{display:grid;gap:12px}
-      @media(min-width:900px){.ge-grid{grid-template-columns:repeat(2,1fr)}}
+      @media(min-width:900px){.ge-grid{grid-template-columns:1fr}}
       .ge-card{background:#151a24;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px}
       .ge-list{margin:0;padding-left:18px;line-height:1.45}
       .ev-list{margin:0;padding-left:0;list-style:none}
@@ -257,12 +259,15 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .sev-low .ev-mag{color:#ffd089}
       .sev-medium .ev-mag{color:#ffb347}
       .sev-high .ev-mag{color:#ff6b6b}
-      .ge-ticker{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:#151a24;border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:8px 10px;margin-bottom:10px}
-      .ge-ticker .tk{display:inline-block;font-size:.92rem}
       .ge-note{opacity:.8;font-size:.9rem;margin:.25rem 0 .5rem 0}
       .ge-filters{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:.35rem 0 .5rem}
       .flt-group{display:flex;gap:8px;align-items:center}
       .flt-label{opacity:.85}
+      .ge-topstats{margin-bottom:12px}
+      .ge-meta-row{display:flex;gap:14px;flex-wrap:wrap;margin:.25rem 0 .5rem 0}
+      .ge-cta{margin-top:8px}
+      .btn-compare{display:inline-block;background:#1b2233;color:#cfe3ff;border:1px solid #344a72;border-radius:8px;padding:6px 10px;text-decoration:none}
+      .btn-compare:hover{border-color:#4b6aa1}
     </style>
   </section>
   <?php
