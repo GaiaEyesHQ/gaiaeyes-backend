@@ -14,11 +14,32 @@ MONTHS = int(os.getenv("HISTORY_MONTHS", "24"))
 USGS_API = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 
 def fetch_usgs(start_date: str, end_date: str):
-    # Query all magnitudes in the date range; limit by USGS default (20000). Break into windows if needed.
-    params = dict(format="geojson", starttime=start_date, endtime=end_date, minmagnitude="0")
-    url = USGS_API + "?" + urllib.parse.urlencode(params)
-    with urllib.request.urlopen(url, timeout=60) as r:
-        return json.loads(r.read().decode("utf-8"))
+    """Fetch all results between start_date and end_date using pagination."""
+    all_features = []
+    offset = 1
+    limit = 20000
+    while True:
+        params = dict(
+            format="geojson",
+            starttime=start_date,
+            endtime=end_date,
+            minmagnitude="0",
+            orderby="time-asc",
+            limit=str(limit),
+            offset=str(offset)
+        )
+        url = USGS_API + "?" + urllib.parse.urlencode(params)
+        req = urllib.request.Request(url, headers={"User-Agent":"GaiaEyes/1.0"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        feats = data.get("features", [])
+        if not feats:
+            break
+        all_features.extend(feats)
+        if len(feats) < limit:
+            break
+        offset += limit
+    return {"type":"FeatureCollection","features":all_features}
 
 def iso_date(d: dt.date) -> str:
     return d.isoformat()
@@ -34,24 +55,22 @@ def bucket_mag(m: float) -> str:
     return "≥7.0"
 
 def build():
-    today = dt.datetime.utcnow().date()
+    today = dt.datetime.now(dt.timezone.utc).date()
     start = today - dt.timedelta(days=DAYS-1)
-    # USGS endpoint supports large windows; to be safe, split into 3 chunks of ~4 months
+    # Split into ~30-day chunks to avoid USGS 400s
     chunks = []
-    span = DAYS
-    # Split into ~3 chunks
-    split_points = [start, start + dt.timedelta(days=span//3), start + dt.timedelta(days=(2*span)//3), today]
-    for i in range(3):
-        s = split_points[i]
-        e = split_points[i+1]
-        chunks.append((s, e))
+    cur = start
+    while cur <= today:
+        nxt = min(cur + dt.timedelta(days=30), today)
+        chunks.append((cur, nxt))
+        cur = nxt + dt.timedelta(days=1)
 
     daily = defaultdict(lambda: {"all":0,"m4p":0,"m5p":0,"m6p":0,"m7p":0})
     monthly = defaultdict(lambda: {"all":0,"m4p":0,"m5p":0,"m6p":0,"m7p":0})
 
     total_events = 0
     for s,e in chunks:
-        data = fetch_usgs(iso_date(s), iso_date(e + dt.timedelta(days=1)))
+        data = fetch_usgs(iso_date(s), iso_date(e))
         feats = data.get("features", [])
         total_events += len(feats)
         for f in feats:
@@ -112,7 +131,7 @@ def build():
     }
 
     out = {
-        "timestamp_utc": dt.datetime.utcnow().replace(microsecond=0).isoformat().replace("+00:00","Z"),
+        "timestamp_utc": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z"),
         "window": {"days": DAYS},
         "daily": dd,
         "monthly": mon_list,
