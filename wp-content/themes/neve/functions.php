@@ -177,7 +177,7 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
       [
         'url'        => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json',
         'flares_url' => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/flares_cmes.json',
-        'detail' => '/space-weather/',
+        'detail' => '/space-dashboard/',
         'cache'      => 5, // minutes
       ],
       $atts,
@@ -342,7 +342,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
       [
         'daily_url'       => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope_daily.json',
         'url'             => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json',
-        'space_detail'    => '/space-weather/',
+        'space_detail'    => '/space-dashboard/',
         'schumann_detail' => '/schumann/',
         'aurora_detail'   => '/aurora/',
         'cache'           => 5,

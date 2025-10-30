@@ -137,7 +137,9 @@ function gaiaeyes_schumann_detail_shortcode($atts){
         <div class="img-grid">
           <?php foreach (['tomsk','cumiana','heartmath'] as $k): if (!empty($sources[$k]['image'])): ?>
             <figure class="img-box">
-              <img src="<?php echo esc_url($sources[$k]['image']); ?>" alt="<?php echo esc_attr(ucfirst($k)); ?> latest plot" loading="lazy" />
+              <a href="<?php echo esc_url($sources[$k]['image']); ?>" class="sch-lightbox-link" data-caption="<?php echo esc_attr(ucfirst($k)); ?><?php if($sources[$k]['f1_hz']!==null) echo ' • f1 '.esc_attr(number_format((float)$sources[$k]['f1_hz'],2)).' Hz'; ?>">
+                <img src="<?php echo esc_url($sources[$k]['image']); ?>" alt="<?php echo esc_attr(ucfirst($k)); ?> latest plot" loading="lazy" />
+              </a>
               <figcaption><?php echo esc_html(ucfirst($k)); ?><?php if($sources[$k]['f1_hz']!==null) echo ' • f1 '.esc_html(number_format((float)$sources[$k]['f1_hz'],2)).' Hz'; ?></figcaption>
             </figure>
           <?php endif; endforeach; ?>
@@ -180,7 +182,47 @@ function gaiaeyes_schumann_detail_shortcode($atts){
       .anchor-link{opacity:0;margin-left:8px;font-size:.9rem;color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25);transition:opacity .2s ease}
       .ge-card h3:hover .anchor-link{opacity:1}
       .anchor-link:hover{border-bottom-color:rgba(255,255,255,.6)}
+      .sch-lightbox{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.85);z-index:9999;padding:20px}
+      .sch-lightbox__figure{margin:0;max-width:90vw;max-height:90vh;text-align:center}
+      .sch-lightbox__figure img{max-width:90vw;max-height:80vh;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+      .sch-lightbox__figure figcaption{margin-top:8px;font-size:.95rem;opacity:.9}
+      .sch-close{position:absolute;top:10px;right:14px;font-size:28px;line-height:1;background:transparent;color:#e9eef7;border:0;cursor:pointer}
+      .sch-close:hover{opacity:.85}
     </style>
+    <div class="sch-lightbox" id="schLightbox" aria-hidden="true" role="dialog" aria-label="Schumann source image">
+      <button type="button" class="sch-close" id="schLightboxClose" aria-label="Close">×</button>
+      <figure class="sch-lightbox__figure">
+        <img id="schLightboxImg" src="" alt="Expanded source image" />
+        <figcaption id="schLightboxCap"></figcaption>
+      </figure>
+    </div>
+    <script>
+      (function(){
+        const overlay = document.getElementById('schLightbox');
+        const img = document.getElementById('schLightboxImg');
+        const cap = document.getElementById('schLightboxCap');
+        const btn = document.getElementById('schLightboxClose');
+        function openLightbox(src, caption){
+          img.src = src; cap.textContent = caption || '';
+          overlay.style.display = 'flex';
+          overlay.setAttribute('aria-hidden','false');
+          document.body.style.overflow = 'hidden';
+          btn.focus();
+        }
+        function closeLightbox(){
+          overlay.style.display = 'none';
+          overlay.setAttribute('aria-hidden','true');
+          img.src = '';
+          document.body.style.overflow = '';
+        }
+        overlay.addEventListener('click', function(e){ if(e.target===overlay) closeLightbox(); });
+        btn.addEventListener('click', closeLightbox);
+        document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeLightbox(); });
+        document.querySelectorAll('.sch-lightbox-link').forEach(function(a){
+          a.addEventListener('click', function(e){ e.preventDefault(); openLightbox(this.href, this.getAttribute('data-caption')); });
+        });
+      })();
+    </script>
   </section>
   <?php
   return ob_get_clean();
