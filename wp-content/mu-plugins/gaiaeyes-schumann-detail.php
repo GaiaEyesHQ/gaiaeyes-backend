@@ -38,18 +38,23 @@ function gaiaeyes_http_json_fallback($primary, $mirror, $cache_key, $ttl){
 
 function gaiaeyes_schumann_detail_shortcode($atts){
   $a = shortcode_atts([
-    'combined_url' => GAIAEYES_SCH_COMBINED_URL,
+    'combined_url' => '',
     'latest_url'   => GAIAEYES_SCH_LATEST_URL,
     'cache'        => 10,
   ], $atts, 'gaia_schumann_detail');
 
   $ttl = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
-  $combined = gaiaeyes_http_json_fallback($a['combined_url'], GAIAEYES_SCH_COMBINED_MIRROR, 'ge_sch_combined', $ttl);
   $latest   = gaiaeyes_http_json_fallback($a['latest_url'], GAIAEYES_SCH_LATEST_MIRROR, 'ge_sch_latest', $ttl);
+  $combined = null;
+  if (!empty($a['combined_url'])) {
+    $combined = gaiaeyes_http_json_fallback($a['combined_url'], GAIAEYES_SCH_COMBINED_MIRROR, 'ge_sch_combined', $ttl);
+  }
 
-  // Extract combined block
+  // Extract/derive combined block and source images
   $f1 = $delta = null; $method = $primary = '';
   $sources = [];
+  $media_img_base = 'https://gaiaeyeshq.github.io/gaiaeyes-media/images/';
+
   if (is_array($combined)) {
     $comb = isset($combined['combined']) && is_array($combined['combined']) ? $combined['combined'] : [];
     $f1    = isset($comb['f1_hz']) ? floatval($comb['f1_hz']) : null;
@@ -59,11 +64,48 @@ function gaiaeyes_schumann_detail_shortcode($atts){
     $srcs = isset($combined['sources']) && is_array($combined['sources']) ? $combined['sources'] : [];
     foreach (['tomsk','cumiana','heartmath'] as $k){
       if (!empty($srcs[$k]) && is_array($srcs[$k])){
+        $img = isset($srcs[$k]['image']) ? esc_url($srcs[$k]['image']) : '';
+        if (!$img) {
+          // fallback to known image filenames in media repo
+          if ($k==='tomsk') $img = $media_img_base.'tomsk_latest.png';
+          if ($k==='cumiana') $img = $media_img_base.'cumiana_latest.png';
+          if ($k==='heartmath') $img = $media_img_base.'heartmath_latest.png';
+        }
         $sources[$k] = [
           'label' => ucfirst($k),
-          'image' => isset($srcs[$k]['image']) ? esc_url($srcs[$k]['image']) : '',
+          'image' => $img,
           'f1_hz' => isset($srcs[$k]['f1_hz']) ? $srcs[$k]['f1_hz'] : null,
         ];
+      }
+    }
+  }
+
+  // If combined missing or incomplete, try deriving from latest.json
+  if ((!is_array($combined) || $f1===null) && is_array($latest)) {
+    $srcs = isset($latest['sources']) && is_array($latest['sources']) ? $latest['sources'] : [];
+    $t_f1 = isset($srcs['tomsk']['fundamental_hz']) ? floatval($srcs['tomsk']['fundamental_hz']) : null;
+    $c_f1 = isset($srcs['cumiana']['fundamental_hz']) ? floatval($srcs['cumiana']['fundamental_hz']) : null;
+    // simple confidence-weighted blend (tomsk 0.7, cumiana 0.3) when both exist
+    if ($t_f1!==null && $c_f1!==null) {
+      $f1 = round(($t_f1*0.7 + $c_f1*0.3)/1.0, 2);
+      $method = 'derived_from_latest';
+      $primary = 'tomsk';
+    } elseif ($t_f1!==null) {
+      $f1 = round($t_f1, 2); $method='derived_from_latest'; $primary='tomsk';
+    } elseif ($c_f1!==null) {
+      $f1 = round($c_f1, 2); $method='derived_from_latest'; $primary='cumiana';
+    }
+    // Build sources images if not set
+    foreach (['tomsk','cumiana','heartmath'] as $k){
+      if (empty($sources[$k])) {
+        $img = '';
+        if ($k==='tomsk') $img = $media_img_base.'tomsk_latest.png';
+        if ($k==='cumiana') $img = $media_img_base.'cumiana_latest.png';
+        if ($k==='heartmath') $img = $media_img_base.'heartmath_latest.png';
+        $f1_src = null;
+        if ($k==='tomsk' && $t_f1!==null) $f1_src = $t_f1;
+        if ($k==='cumiana' && $c_f1!==null) $f1_src = $c_f1;
+        $sources[$k] = [ 'label'=>ucfirst($k), 'image'=>$img, 'f1_hz'=>$f1_src ];
       }
     }
   }
@@ -75,8 +117,8 @@ function gaiaeyes_schumann_detail_shortcode($atts){
       <div class="ge-meta">
         <?php
           $ts = '';
-          if (is_array($combined) && !empty($combined['timestamp_utc'])) $ts = $combined['timestamp_utc'];
-          elseif (is_array($latest) && !empty($latest['timestamp_utc'])) $ts = $latest['timestamp_utc'];
+          if (is_array($latest) && !empty($latest['timestamp_utc'])) $ts = $latest['timestamp_utc'];
+          elseif (is_array($combined) && !empty($combined['timestamp_utc'])) $ts = $combined['timestamp_utc'];
         ?>
         Updated <?php echo esc_html( $ts ?: '—' ); ?>
       </div>

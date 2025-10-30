@@ -64,12 +64,15 @@ function gaia_space_weather_detail_shortcode($atts){
     'sw_url' => GAIAEYES_SW_URL,
     'fc_url' => GAIAEYES_FC_URL,
     'cache'  => 10, // minutes
+    'aurora_detail' => '/aurora/#map',
   ], $atts, 'gaia_space_weather_detail');
 
   $ttl = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
 
   $sw = gaiaeyes_http_get_json_with_fallback($a['sw_url'], GAIAEYES_SW_URL_MIRROR, 'ge_sw_json', $ttl);
   $fc = gaiaeyes_http_get_json_with_fallback($a['fc_url'], GAIAEYES_FC_URL_MIRROR, 'ge_fc_json', $ttl);
+
+  $aurora_detail = isset($a['aurora_detail']) ? $a['aurora_detail'] : '/aurora/#map';
 
   ob_start();
   ?>
@@ -172,6 +175,7 @@ function gaia_space_weather_detail_shortcode($atts){
             echo "<li><strong>".esc_html($label).":</strong> ".esc_html($txt)."</li>";
           }
           echo "</ul></div>";
+          echo '<div class="ge-cta"><a class="gaia-link" href="' . esc_url( $aurora_detail ) . '">Open aurora detail →</a></div>';
         ?>
       </article>
     </div>
@@ -205,6 +209,9 @@ function gaia_space_weather_detail_shortcode($atts){
       .anchor-link{opacity:0;margin-left:8px;font-size:.9rem;color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25);transition:opacity .2s ease}
       .ge-card h3:hover .anchor-link{opacity:1}
       .anchor-link:hover{border-bottom-color:rgba(255,255,255,.6)}
+      .ge-cta{margin-top:8px}
+      .gaia-link{color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
+      .gaia-link:hover{border-bottom-color:rgba(255,255,255,.6)}
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha256-5l5wxg6rE6sBJP6opc0bDO3sTZ5yH5rICwW7X8P9qvo=" crossorigin="anonymous"></script>
