@@ -69,10 +69,15 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       <h2>Earthquakes – Scientific Detail</h2>
       <div class="ge-meta">Updated <?php echo esc_html( $ts ?: '—' ); ?></div>
     </header>
+    <div class="ge-ticker" role="region" aria-label="Global earthquake stats">
+      <span class="tk tk-total"><strong>Total (feed):</strong> <?php echo ($total!==null)? intval($total) : '—'; ?></span>
+      <span class="tk tk-24h"><strong>Last 24h:</strong> <?php echo ($total24!==null)? intval($total24) : '—'; ?></span>
+    </div>
 
     <div class="ge-grid">
       <article class="ge-card">
-        <h3 id="recent">Recent Events <a class="anchor-link" href="#recent" aria-label="Link to Recent Events">🔗</a></h3>
+        <h3 id="recent">Recent Events (M5.0+) <a class="anchor-link" href="#recent" aria-label="Link to Recent Events">🔗</a></h3>
+        <div class="ge-note">Note: This list shows magnitude 5.0 and above. The ticker totals include all magnitudes.</div>
         <?php if (!$events): ?>
           <div class="ge-empty">No recent events found.</div>
         <?php else: ?>
@@ -85,6 +90,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
                 $place = isset($ev['place']) ? $ev['place'] : '—';
                 $time = isset($ev['time_utc']) ? $ev['time_utc'] : '';
                 $url  = isset($ev['url']) ? $ev['url'] : '';
+                $depth = isset($ev['depth_km']) ? $ev['depth_km'] : null;
                 $sevClass = '';
                 $mval = isset($ev['mag']) ? floatval($ev['mag']) : 0;
                 if ($mval >= 7.0) $sevClass = 'sev-high';
@@ -95,6 +101,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               <span class="ev-mag">M<?php echo esc_html($mag); ?></span>
               <span class="ev-place"><?php echo esc_html($place); ?></span>
               <span class="ev-time"><?php echo esc_html($time); ?></span>
+              <?php if ($depth!==null): ?><span class="ev-depth"><?php echo esc_html(number_format((float)$depth,1)); ?> km</span><?php endif; ?>
               <?php if ($url): ?><a class="ev-link" href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener">USGS</a><?php endif; ?>
             </li>
             <?php } ?>
@@ -140,10 +147,11 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .ge-card{background:#151a24;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px}
       .ge-list{margin:0;padding-left:18px;line-height:1.45}
       .ev-list{margin:0;padding-left:0;list-style:none}
-      .ev{display:grid;grid-template-columns:92px 1fr auto auto;gap:8px;align-items:center;border-bottom:1px dashed rgba(255,255,255,.08);padding:6px 0}
+      .ev{display:grid;grid-template-columns:92px 1fr auto auto auto;gap:8px;align-items:center;border-bottom:1px dashed rgba(255,255,255,.08);padding:6px 0}
       .ev-mag{font-weight:700}
       .ev-place{opacity:.9}
       .ev-time{opacity:.75;font-size:.9rem}
+      .ev-depth{opacity:.75;font-size:.9rem}
       .ev-link{color:#bcd5ff;text-decoration:none;border-bottom:1px dashed #4b6aa1}
       .bucket-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:8px}
       .bucket-item{background:#1b2233;border:1px solid #344a72;border-radius:10px;padding:8px;text-align:center}
@@ -155,6 +163,9 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .sev-low .ev-mag{color:#ffd089}
       .sev-medium .ev-mag{color:#ffb347}
       .sev-high .ev-mag{color:#ff6b6b}
+      .ge-ticker{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:#151a24;border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:8px 10px;margin-bottom:10px}
+      .ge-ticker .tk{display:inline-block;font-size:.92rem}
+      .ge-note{opacity:.8;font-size:.9rem;margin:.25rem 0 .5rem 0}
     </style>
   </section>
   <?php
