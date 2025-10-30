@@ -47,6 +47,18 @@ function gaiaeyes_quakes_detail_shortcode($atts){
   $total = is_array($d) && isset($d['total']) ? intval($d['total']) : null;
   $total24 = is_array($d) && isset($d['total_24h']) ? intval($d['total_24h']) : null;
 
+  // Robust "all magnitudes" total detection
+  $tot_all = null; $tot24_all = null;
+  if (isset($d['total_all'])) { $tot_all = intval($d['total_all']); }
+  elseif (isset($d['counts']) && isset($d['counts']['all'])) { $tot_all = intval($d['counts']['all']); }
+  elseif (isset($d['stats']) && isset($d['stats']['total_all'])) { $tot_all = intval($d['stats']['total_all']); }
+  elseif ($total !== null) { $tot_all = $total; }
+
+  if (isset($d['total_24h_all'])) { $tot24_all = intval($d['total_24h_all']); }
+  elseif (isset($d['counts']) && (isset($d['counts']['24h']) || isset($d['counts']['last_24h']))) { $tot24_all = isset($d['counts']['24h']) ? intval($d['counts']['24h']) : intval($d['counts']['last_24h']); }
+  elseif (isset($d['stats']) && isset($d['stats']['total_24h_all'])) { $tot24_all = intval($d['stats']['total_24h_all']); }
+  elseif ($total24 !== null) { $tot24_all = $total24; }
+
   // Build simple magnitude buckets from events if present
   $buckets = ['<4.0'=>0,'4.0–4.9'=>0,'5.0–5.9'=>0,'6.0–6.9'=>0,'≥7.0'=>0];
   if ($events){
@@ -70,8 +82,8 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       <div class="ge-meta">Updated <?php echo esc_html( $ts ?: '—' ); ?></div>
     </header>
     <div class="ge-ticker" role="region" aria-label="Global earthquake stats">
-      <span class="tk tk-total"><strong>Total (feed):</strong> <?php echo ($total!==null)? intval($total) : '—'; ?></span>
-      <span class="tk tk-24h"><strong>Last 24h:</strong> <?php echo ($total24!==null)? intval($total24) : '—'; ?></span>
+      <span class="tk tk-total"><strong>Total (all mags):</strong> <?php echo ($tot_all!==null)? intval($tot_all) : '—'; ?></span>
+      <span class="tk tk-24h"><strong>Last 24h (all mags):</strong> <?php echo ($tot24_all!==null)? intval($tot24_all) : '—'; ?></span>
     </div>
 
     <div class="ge-grid">
@@ -110,11 +122,8 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       </article>
 
       <article class="ge-card">
-        <h3 id="stats">Global Stats <a class="anchor-link" href="#stats" aria-label="Link to Global Stats">🔗</a></h3>
-        <ul class="ge-list">
-          <li><strong>Total (feed):</strong> <?php echo ($total!==null)? intval($total) : '—'; ?></li>
-          <li><strong>Last 24h:</strong> <?php echo ($total24!==null)? intval($total24) : '—'; ?></li>
-        </ul>
+        <h3 id="stats">Magnitude Distribution (M5+ in feed) <a class="anchor-link" href="#stats" aria-label="Link to Magnitude Distribution">🔗</a></h3>
+        <div class="ge-note">Distribution shown for events listed (M5.0+). Ticker totals include all magnitudes.</div>
         <div class="bucket-grid">
           <?php foreach ($buckets as $label=>$count): ?>
             <div class="bucket-item"><span class="b-lab"><?php echo esc_html($label); ?></span><span class="b-val"><?php echo intval($count); ?></span></div>
