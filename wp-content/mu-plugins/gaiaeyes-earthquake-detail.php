@@ -59,9 +59,15 @@ function gaiaeyes_quakes_detail_shortcode($atts){
   elseif (isset($d['stats']) && isset($d['stats']['total_24h_all'])) { $tot24_all = intval($d['stats']['total_24h_all']); }
   elseif ($total24 !== null) { $tot24_all = $total24; }
 
-  // Build simple magnitude buckets from events if present
-  $buckets = ['<4.0'=>0,'4.0–4.9'=>0,'5.0–5.9'=>0,'6.0–6.9'=>0,'≥7.0'=>0];
-  if ($events){
+  // Prefer all-magnitudes buckets from the day feed if available; fallback to M5+ events distribution
+  $buckets = ['<2.5'=>0,'2.5–3.9'=>0,'4.0–4.9'=>0,'5.0–5.9'=>0,'6.0–6.9'=>0,'≥7.0'=>0];
+  if (is_array($d) && !empty($d['buckets_day']) && is_array($d['buckets_day'])) {
+    foreach (['<2.5','2.5–3.9','4.0–4.9','5.0–5.9','6.0–6.9','≥7.0'] as $key){
+      if (isset($d['buckets_day'][$key])) $buckets[$key] = intval($d['buckets_day'][$key]);
+    }
+  } else if ($events){
+    // fallback using listed (M5+) events
+    $buckets = ['<4.0'=>0,'4.0–4.9'=>0,'5.0–5.9'=>0,'6.0–6.9'=>0,'≥7.0'=>0];
     foreach($events as $ev){
       $m = isset($ev['mag']) ? floatval($ev['mag']) : null;
       if ($m===null) continue;
@@ -90,40 +96,119 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       <article class="ge-card">
         <h3 id="recent">Recent Events (M5.0+) <a class="anchor-link" href="#recent" aria-label="Link to Recent Events">🔗</a></h3>
         <div class="ge-note">Note: This list shows magnitude 5.0 and above. The ticker totals include all magnitudes.</div>
-        <?php if (!$events): ?>
-          <div class="ge-empty">No recent events found.</div>
-        <?php else: ?>
-          <ul class="ev-list">
-            <?php 
-              $i = 0;
-              foreach ($events as $ev){
-                if ($i++ >= $max_items) break;
-                $mag = isset($ev['mag']) ? number_format((float)$ev['mag'], 1) : '—';
-                $place = isset($ev['place']) ? $ev['place'] : '—';
-                $time = isset($ev['time_utc']) ? $ev['time_utc'] : '';
-                $url  = isset($ev['url']) ? $ev['url'] : '';
-                $depth = isset($ev['depth_km']) ? $ev['depth_km'] : null;
-                $sevClass = '';
-                $mval = isset($ev['mag']) ? floatval($ev['mag']) : 0;
-                if ($mval >= 7.0) $sevClass = 'sev-high';
-                elseif ($mval >= 6.0) $sevClass = 'sev-medium';
-                elseif ($mval >= 5.0) $sevClass = 'sev-low';
-            ?>
-            <li class="ev <?php echo esc_attr($sevClass); ?>">
-              <span class="ev-mag">M<?php echo esc_html($mag); ?></span>
-              <span class="ev-place"><?php echo esc_html($place); ?></span>
-              <span class="ev-time"><?php echo esc_html($time); ?></span>
-              <?php if ($depth!==null): ?><span class="ev-depth"><?php echo esc_html(number_format((float)$depth,1)); ?> km</span><?php endif; ?>
-              <?php if ($url): ?><a class="ev-link" href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener">USGS</a><?php endif; ?>
-            </li>
-            <?php } ?>
-          </ul>
-        <?php endif; ?>
+        <div class="ge-filters" id="geEqFilters">
+          <div class="flt-group">
+            <span class="flt-label">Show:</span>
+            <label><input type="radio" name="eqShow" value="m5" checked> M5+</label>
+            <label><input type="radio" name="eqShow" value="all"> All (sample)</label>
+          </div>
+          <div class="flt-group">
+            <span class="flt-label">Sort:</span>
+            <label><input type="radio" name="eqSort" value="latest" checked> Latest</label>
+            <label><input type="radio" name="eqSort" value="mag"> Magnitude</label>
+          </div>
+        </div>
+        <div id="geEqListWrap">
+          <ul class="ev-list" id="geEqList"></ul>
+          <noscript>
+            <?php if (!$events): ?>
+              <div class="ge-empty">No recent events found.</div>
+            <?php else: ?>
+              <ul class="ev-list">
+              <?php 
+                $i = 0;
+                foreach ($events as $ev){
+                  if ($i++ >= $max_items) break;
+                  $mag = isset($ev['mag']) ? number_format((float)$ev['mag'], 1) : '—';
+                  $place = isset($ev['place']) ? $ev['place'] : '—';
+                  $time = isset($ev['time_utc']) ? $ev['time_utc'] : '';
+                  $url  = isset($ev['url']) ? $ev['url'] : '';
+                  $depth = isset($ev['depth_km']) ? $ev['depth_km'] : null;
+                  $sevClass = '';
+                  $mval = isset($ev['mag']) ? floatval($ev['mag']) : 0;
+                  if ($mval >= 7.0) $sevClass = 'sev-high';
+                  elseif ($mval >= 6.0) $sevClass = 'sev-medium';
+                  elseif ($mval >= 5.0) $sevClass = 'sev-low';
+              ?>
+              <li class="ev <?php echo esc_attr($sevClass); ?>">
+                <span class="ev-mag">M<?php echo esc_html($mag); ?></span>
+                <span class="ev-place"><?php echo esc_html($place); ?></span>
+                <span class="ev-time"><?php echo esc_html($time); ?></span>
+                <?php if ($depth!==null): ?><span class="ev-depth"><?php echo esc_html(number_format((float)$depth,1)); ?> km</span><?php endif; ?>
+                <?php if ($url): ?><a class="ev-link" href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener">USGS</a><?php endif; ?>
+              </li>
+              <?php } ?>
+              </ul>
+            <?php endif; ?>
+          </noscript>
+        </div>
+
+        <script>
+          (function(){
+            const listM5 = <?php echo wp_json_encode($events); ?> || [];
+            const listAll = <?php echo wp_json_encode( isset($d['events_all_sample']) ? $d['events_all_sample'] : [] ); ?> || [];
+            const maxItems = <?php echo (int)$max_items; ?>;
+            const ul = document.getElementById('geEqList');
+            const wrap = document.getElementById('geEqListWrap');
+            const filters = document.getElementById('geEqFilters');
+
+            function fmt(n, dp){ try { return (n==null? '—' : Number(n).toFixed(dp)); } catch(e){ return '—'; } }
+            function render(items){
+              ul.innerHTML = '';
+              if (!items || !items.length){ ul.innerHTML = '<li class="ge-empty">No recent events found.</li>'; return; }
+              items.slice(0, maxItems).forEach(ev => {
+                const mag = (ev.mag!=null) ? `M${fmt(ev.mag,1)}` : 'M—';
+                const place = ev.place || '—';
+                const time = ev.time_utc || '';
+                const depth = (ev.depth_km!=null) ? `${fmt(ev.depth_km,1)} km` : '';
+                const url = ev.url || '';
+                let sev = '';
+                const mval = (typeof ev.mag==='number')? ev.mag : (parseFloat(ev.mag)||0);
+                if (mval >= 7) sev='sev-high'; else if (mval >= 6) sev='sev-medium'; else if (mval >= 5) sev='sev-low';
+                const li = document.createElement('li'); li.className = `ev ${sev}`;
+                li.innerHTML = `
+                  <span class="ev-mag">${mag}</span>
+                  <span class="ev-place">${place}</span>
+                  <span class="ev-time">${time}</span>
+                  ${depth? `<span class="ev-depth">${depth}</span>` : ''}
+                  ${url? `<a class="ev-link" href="${url}" target="_blank" rel="noopener">USGS</a>` : ''}
+                `;
+                ul.appendChild(li);
+              });
+            }
+
+            function sortLatest(a,b){
+              const ta = Date.parse(a.time_utc||'');
+              const tb = Date.parse(b.time_utc||'');
+              return (isNaN(tb)?0:tb) - (isNaN(ta)?0:ta);
+            }
+            function sortMag(a,b){
+              const ma = (typeof a.mag==='number')? a.mag : parseFloat(a.mag)||0;
+              const mb = (typeof b.mag==='number')? b.mag : parseFloat(b.mag)||0;
+              return mb - ma;
+            }
+
+            function currentList(){
+              const show = (filters.querySelector('input[name="eqShow"]:checked')||{}).value || 'm5';
+              return show==='all'? listAll.slice() : listM5.slice();
+            }
+
+            function apply(){
+              let items = currentList();
+              const sort = (filters.querySelector('input[name="eqSort"]:checked')||{}).value || 'latest';
+              items.sort(sort==='mag'? sortMag : sortLatest);
+              render(items);
+            }
+
+            filters.addEventListener('change', apply);
+            apply();
+          })();
+        </script>
       </article>
 
       <article class="ge-card">
-        <h3 id="stats">Magnitude Distribution (M5+ in feed) <a class="anchor-link" href="#stats" aria-label="Link to Magnitude Distribution">🔗</a></h3>
-        <div class="ge-note">Distribution shown for events listed (M5.0+). Ticker totals include all magnitudes.</div>
+        <h3 id="stats">Magnitude Distribution (all magnitudes) <a class="anchor-link" href="#stats" aria-label="Link to Magnitude Distribution">🔗</a></h3>
+        <div class="ge-note">Distribution shown for all magnitudes (day feed). The Recent Events list below defaults to M5.0+.</div>
         <div class="bucket-grid">
           <?php foreach ($buckets as $label=>$count): ?>
             <div class="bucket-item"><span class="b-lab"><?php echo esc_html($label); ?></span><span class="b-val"><?php echo intval($count); ?></span></div>
@@ -175,6 +260,9 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .ge-ticker{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:#151a24;border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:8px 10px;margin-bottom:10px}
       .ge-ticker .tk{display:inline-block;font-size:.92rem}
       .ge-note{opacity:.8;font-size:.9rem;margin:.25rem 0 .5rem 0}
+      .ge-filters{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:.35rem 0 .5rem}
+      .flt-group{display:flex;gap:8px;align-items:center}
+      .flt-label{opacity:.85}
     </style>
   </section>
   <?php
