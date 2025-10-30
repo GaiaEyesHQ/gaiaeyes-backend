@@ -345,6 +345,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         'space_detail'    => '/space-dashboard/',
         'schumann_detail' => '/schumann/',
         'aurora_detail'   => '/aurora/',
+        'quakes_detail'   => '/earthquakes/',
         'cache'           => 5,
         'mode'            => 'mystical',
       ],
@@ -370,6 +371,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
     $space_detail = trailingslashit( $atts['space_detail'] );
     $sch_detail   = trailingslashit( $atts['schumann_detail'] );
     $aurora_detail = trailingslashit( $atts['aurora_detail'] );
+    $quakes_detail = trailingslashit( $atts['quakes_detail'] );
 
     // Prefer daily (new schema), fallback to legacy
     $d = $fetch_json( $atts['daily_url'], 'daily' );
@@ -403,6 +405,15 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
           $aurora_chip .= ' • ' . sanitize_text_field($space['aurora_window']);
         }
       }
+      // Quakes pill from daily JSON or pass-through earthscope_json
+      $quakes_pill = '';
+      if (!empty($d['quakes']) && is_array($d['quakes'])) {
+        $q24 = $d['quakes']['total_24h'] ?? null;
+        if ($q24) { $quakes_pill = 'Quakes: ' . intval($q24) . ' in 24h'; }
+      } else if (!empty($m['earthscope_json']) && is_array($m['earthscope_json'])) {
+        $q = $m['earthscope_json']['quakes'] ?? [];
+        if (!empty($q['total_24h'])) { $quakes_pill = 'Quakes: ' . intval($q['total_24h']) . ' in 24h'; }
+      }
     } else {
       // legacy compact fallback
       $mode = strtolower($atts['mode']) === 'scientific' ? 'sci' : 'mystical';
@@ -424,6 +435,8 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         $sch_pill .= ' • Δ≈' . number_format(floatval($sch_delta), 2) . ' Hz';
       }
     }
+    // Ensure $quakes_pill is always defined
+    if (!isset($quakes_pill)) $quakes_pill = '';
 
     ob_start(); ?>
     <section class="gaia-es">
@@ -438,6 +451,9 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
           <?php endif; ?>
           <?php if ( $sch_pill ): ?>
             <span class="gaia-es__badge gaia-es__badge--sch"><a class="gaia-link" href="<?php echo esc_url( $sch_detail . '#combined' ); ?>"><?php echo esc_html($sch_pill); ?></a></span>
+          <?php endif; ?>
+          <?php if ( !empty($quakes_pill) ): ?>
+            <span class="gaia-es__badge gaia-es__badge--quakes"><a class="gaia-link" href="<?php echo esc_url( $quakes_detail . '#recent' ); ?>"><?php echo esc_html($quakes_pill); ?></a></span>
           <?php endif; ?>
         </div>
       </div>
@@ -469,6 +485,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         .gaia-es__badge{display:inline-block;margin-left:8px;padding:4px 8px;border-radius:999px;background:#1c2130;color:#cfe3ff;font-size:.75rem;border:1px solid #374a6a}
         .gaia-es__badge--aurora{background:#1b2a22;color:#9af1bb;border-color:#2d624a}
         .gaia-es__badge--sch{background:#20283b;color:#bcd5ff;border:1px solid #344a72}
+        .gaia-es__badge--quakes{background:#2a1f1f;color:#ffd6d6;border:1px solid #6e3a3a}
         .gaia-es__grid{display:grid;gap:12px}
         @media(min-width:768px){.gaia-es__grid{grid-template-columns:repeat(3,1fr)}}
         .gaia-es__card{background:#151827;border-radius:12px;padding:12px;border:1px solid rgba(255,255,255,.06)}
