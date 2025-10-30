@@ -652,3 +652,76 @@ add_shortcode('gaia_pulse_detail', function($atts){
   </article>
   <?php return ob_get_clean();
 });
+
+add_shortcode('gaia_alert_banner', function($atts){
+  $a = shortcode_atts([
+    'sw_url'     => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json',
+    'quakes_url' => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/quakes_latest.json',
+    'cache'      => 5,
+  ], $atts, 'gaia_alert_banner');
+
+  $ttl = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
+  $get = function($url,$key) use($ttl){
+    $k='ge_alert_'.$key.'_'.md5($url);
+    $c=get_transient($k); if($c!==false)return $c;
+    $r=wp_remote_get(esc_url_raw($url),['timeout'=>8,'headers'=>['Accept'=>'application/json']]);
+    if(!is_wp_error($r)&&wp_remote_retrieve_response_code($r)===200){
+      $j=json_decode(wp_remote_retrieve_body($r),true);
+      if(is_array($j)){set_transient($k,$j,$ttl);return $j;}
+    }
+    return null;
+  };
+  $sw=$get($a['sw_url'],'sw');
+  $qk=$get($a['quakes_url'],'qk');
+  $banner_sw='';$banner_qk='';
+  if(is_array($sw)){
+    $kp=$sw['now']['kp']??null;$g='';
+    if(is_numeric($kp)){
+      $k=floatval($kp);
+      if($k>=9)$g='G5';elseif($k>=8)$g='G4';elseif($k>=7)$g='G3';elseif($k>=6)$g='G2';elseif($k>=5)$g='G1';
+      if($g)$banner_sw="Geomagnetic activity: {$g} storm (Kp ".number_format($k,1).")";
+    }
+  }
+  if(is_array($qk)){
+    $events=$qk['events']??[];$m6=0;
+    foreach($events as $ev){$mag=isset($ev['mag'])?floatval($ev['mag']):0;if($mag>=6.0)$m6++;}
+    if($m6>0)$banner_qk="Significant seismic activity: {$m6} event(s) M6.0+ in the last 72h";
+  }
+  if(!$banner_sw&&!$banner_qk)return '';
+  ob_start(); ?>
+  <div class="ge-alerts" id="geAlertsWrap">
+    <?php if($banner_sw): ?><div class="ge-alert ge-alert--kp" data-key="kp"><strong><?php echo esc_html($banner_sw); ?></strong><a class="ge-alert__link" href="/space-dashboard/#kp">Details →</a><button type="button" class="ge-alert__close" aria-label="Dismiss">×</button></div><?php endif; ?>
+    <?php if($banner_qk): ?><div class="ge-alert ge-alert--eq" data-key="eq"><strong><?php echo esc_html($banner_qk); ?></strong><a class="ge-alert__link" href="/earthquakes/#recent">Details →</a><button type="button" class="ge-alert__close" aria-label="Dismiss">×</button></div><?php endif; ?>
+  </div>
+  <style>
+    .ge-alerts{margin:8px 0;display:grid;gap:8px}
+    .ge-alert{display:flex;gap:10px;align-items:center;justify-content:space-between;background:#221c1c;color:#ffd6d6;border:1px solid #6e3a3a;border-radius:10px;padding:8px 10px}
+    .ge-alert--kp{background:#1b2a22;color:#aef2c0;border-color:#2d624a}
+    .ge-alert__link{color:#bcd5ff;text-decoration:none;border-bottom:1px dashed #4b6aa1}
+    .ge-alert__close{background:transparent;border:0;color:inherit;font-size:20px;cursor:pointer}
+  </style>
+  <script>
+    (function(){
+      const wrap=document.getElementById('geAlertsWrap');if(!wrap)return;
+      const DAY=86400000;
+      wrap.querySelectorAll('.ge-alert').forEach(function(b){
+        const key='gaiaAlertDismiss_'+b.getAttribute('data-key');
+        const prev=localStorage.getItem(key);
+        if(prev&&Date.now()-parseInt(prev,10)<DAY){b.remove();return;}
+        b.querySelector('.ge-alert__close').addEventListener('click',function(){
+          localStorage.setItem(key,String(Date.now()));
+          b.remove();
+        });
+      });
+      if(!wrap.querySelector('.ge-alert'))wrap.remove();
+    })();
+  </script>
+  <?php return ob_get_clean();
+});
+
+add_filter('the_content', function($content){
+  if(is_admin() || !in_the_loop() || !is_main_query()) return $content;
+  if(!function_exists('is_front_page') || !is_front_page()) return $content;
+  if(function_exists('has_shortcode') && has_shortcode($content, 'gaia_alert_banner')) return $content;
+  return do_shortcode('[gaia_alert_banner]') . $content;
+});
