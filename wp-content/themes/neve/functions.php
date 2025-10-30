@@ -489,7 +489,10 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
 add_shortcode('gaia_pulse', function($atts){
   $a = shortcode_atts([
     'url' => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/pulse.json',
-    'cache' => 5
+    'cache' => 5,
+    'space_detail' => '/space-dashboard/',
+    'aurora_detail' => '/aurora/',
+    'quakes_detail' => '/earthquakes/'
   ], $atts, 'gaia_pulse');
 
   $key = 'gaia_pulse_' . md5($a['url']);
@@ -504,27 +507,59 @@ add_shortcode('gaia_pulse', function($atts){
   if (empty($json)) return '<section class="gaia-pulse">Pulse: unavailable</section>';
   $d = json_decode($json, true);
   if (!is_array($d)) return '<section class="gaia-pulse">Pulse: bad data</section>';
+  // Trailing slash variables for detail links
+  $space_detail = trailingslashit( $a['space_detail'] );
+  $aurora_detail = trailingslashit( $a['aurora_detail'] );
+  $quakes_detail = trailingslashit( $a['quakes_detail'] );
   $cards = $d['cards'] ?? [];
 
   ob_start(); ?>
   <section class="gaia-pulse">
     <div class="pulse-grid">
-      <?php foreach ($cards as $c): 
+      <?php foreach ($cards as $c):
         $sev = esc_attr($c['severity'] ?? 'info');
         $type= esc_attr($c['type'] ?? 'info');
         $title = esc_html($c['title'] ?? 'Update');
         $sum = esc_html($c['summary'] ?? '');
         $tw  = esc_html($c['time_window'] ?? '');
         $url = !empty($c['details_url']) ? esc_url($c['details_url']) : '';
+        $internal = '';
+        switch ($type) {
+          case 'cme':
+            $internal = $space_detail . '#cmes';
+            break;
+          case 'flare':
+            $internal = $space_detail . '#flares';
+            break;
+          case 'aurora':
+            $internal = $aurora_detail . '#map';
+            break;
+          case 'quake':
+            $internal = $quakes_detail . '#recent';
+            break;
+          case 'tips':
+            $internal = $aurora_detail . '#photo-tips';
+            break;
+          default:
+            $internal = '';
+        }
       ?>
       <article class="pulse-card pulse-<?php echo $type; ?> sev-<?php echo $sev; ?>">
         <header class="pulse-head">
+        <?php if ($internal): ?>
+          <h4 class="pulse-title"><a class="gaia-link" href="<?php echo esc_url($internal); ?>"><?php echo $title; ?></a></h4>
+        <?php else: ?>
           <h4 class="pulse-title"><?php echo $title; ?></h4>
+        <?php endif; ?>
           <span class="chip sev"><?php echo strtoupper($sev); ?></span>
         </header>
         <?php if ($tw): ?><div class="pulse-when"><?php echo $tw; ?></div><?php endif; ?>
         <p class="pulse-summary"><?php echo $sum; ?></p>
-        <?php if ($url): ?><a class="pulse-link" href="<?php echo $url; ?>">Read more</a><?php endif; ?>
+        <?php if ($url): ?>
+          <a class="pulse-link" href="<?php echo $url; ?>">Read more</a>
+        <?php elseif ($internal): ?>
+          <a class="pulse-link" href="<?php echo esc_url($internal); ?>">Read more</a>
+        <?php endif; ?>
       </article>
       <?php endforeach; ?>
     </div>
@@ -553,6 +588,8 @@ add_shortcode('gaia_pulse', function($atts){
  	    .pulse-title{font-size:.95rem}
   	    .pulse-summary{font-size:.92rem}
 	  }
+      .gaia-link{color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
+      .gaia-link:hover{border-bottom-color:rgba(255,255,255,.6)}
     </style>
   </section>
   <?php return ob_get_clean();
