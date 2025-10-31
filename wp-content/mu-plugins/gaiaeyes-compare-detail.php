@@ -107,7 +107,7 @@ function gaiaeyes_compare_detail_shortcode($atts){
 
     <article class="ge-card" id="chart">
       <h3>Overlay</h3>
-      <canvas id="cmpChart" height="140"></canvas>
+      <div class="chart-container"><canvas id="cmpChart"></canvas></div>
       <div class="ge-legend" id="cmpLegend"></div>
     </article>
 
@@ -131,8 +131,9 @@ function gaiaeyes_compare_detail_shortcode($atts){
       .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
       @media(min-width:900px){ .stats-grid{grid-template-columns:repeat(2,1fr)} }
       @media(max-width: 640px){ .ge-controls{ gap: 8px; } .ctl{ width: calc(50% - 6px); } .ctl select, .ctl input{ width: 100%; } }
-      #cmpChart{ width:100%; height:260px; }
-      .ge-legend{ margin-top:8px; opacity:.85; font-size:.9rem; }
+      .chart-container{position:relative;width:100%;max-width:100%;aspect-ratio: 2 / 1;}
+      .chart-container canvas{position:absolute;inset:0;width:100% !important;height:100% !important;}
+      @media(max-width:640px){.chart-container{aspect-ratio: 16 / 9;}}
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -223,9 +224,9 @@ function gaiaeyes_compare_detail_shortcode($atts){
               ]
             },
             options: {
-              responsive:true,
-              maintainAspectRatio:false,
-              animation:false,
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: false,
               plugins:{legend:{labels:{color:'#cfe3ff'}}},
               scales:{
                 x:{ticks:{color:'#cfe3ff'}, grid:{display:false}},
