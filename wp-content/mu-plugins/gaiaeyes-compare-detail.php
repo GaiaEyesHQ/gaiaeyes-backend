@@ -12,6 +12,18 @@ if (!defined('GAIAEYES_COMPARE_URL')) {
 if (!defined('GAIAEYES_COMPARE_MIRROR')) {
   define('GAIAEYES_COMPARE_MIRROR', 'https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/data/compare_series.json');
 }
+if (!defined('GAIAEYES_QH_URL')) {
+  define('GAIAEYES_QH_URL', 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/quakes_history.json');
+}
+if (!defined('GAIAEYES_QH_MIRROR')) {
+  define('GAIAEYES_QH_MIRROR', 'https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/data/quakes_history.json');
+}
+if (!defined('GAIAEYES_SH_URL')) {
+  define('GAIAEYES_SH_URL', 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_history.json');
+}
+if (!defined('GAIAEYES_SH_MIRROR')) {
+  define('GAIAEYES_SH_MIRROR', 'https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/data/space_history.json');
+}
 
 function gaiaeyes_compare_fetch($primary, $mirror, $cache_key, $ttl){
   $cached = get_transient($cache_key);
@@ -47,13 +59,40 @@ function gaiaeyes_compare_detail_shortcode($atts){
   $ser = is_array($d) && !empty($d['series']) ? $d['series'] : [];
   $labels = is_array($d) && !empty($d['labels']) ? $d['labels'] : [];
 
+  // Fallback: if compare_series has only one key, try to augment with quakes/space history
+  if (is_array($ser) && count($ser) <= 1) {
+    $qh = gaiaeyes_compare_fetch(GAIAEYES_QH_URL, GAIAEYES_QH_MIRROR, 'ge_qh_fallback', $ttl);
+    if (is_array($qh) && !empty($qh['series'])) {
+      $qser = $qh['series'];
+      foreach (['all_daily','m4p_daily','m5p_daily','m6p_daily','m5p_monthly','m6p_monthly'] as $k) {
+        if (!empty($qser[$k]) && empty($ser[$k])) $ser[$k] = $qser[$k];
+      }
+      if (empty($labels) && !empty($qh['labels']) && is_array($qh['labels'])) $labels = $qh['labels'];
+    }
+    $sh = gaiaeyes_compare_fetch(GAIAEYES_SH_URL, GAIAEYES_SH_MIRROR, 'ge_sh_fallback', $ttl);
+    if (is_array($sh) && !empty($sh['series'])) {
+      $sser = $sh['series'];
+      foreach (['kp_daily_max','bz_daily_min','sw_daily_avg'] as $k) {
+        if (!empty($sser[$k]) && empty($ser[$k])) $ser[$k] = $sser[$k];
+      }
+      if (empty($labels) && !empty($sh['labels']) && is_array($sh['labels'])) $labels = $sh['labels'];
+    }
+    // If still no labels, supply a minimal default map
+    if (empty($labels)) {
+      $labels = [
+        'all_daily'=>'Quakes (all, daily)', 'm4p_daily'=>'Quakes M4+ (daily)', 'm5p_daily'=>'Quakes M5+ (daily)', 'm6p_daily'=>'Quakes M6+ (daily)',
+        'm5p_monthly'=>'Quakes M5+ (monthly)', 'm6p_monthly'=>'Quakes M6+ (monthly)',
+        'kp_daily_max'=>'Kp (daily max)', 'bz_daily_min'=>'Bz (daily min, nT)', 'sw_daily_avg'=>'Solar wind (daily avg, km/s)'
+      ];
+    }
+  }
+
   // Build metric options from keys present
   $keys = array_keys($ser);
   sort($keys);
-
-  // Sanitize controls
-  $metricA = in_array($a['a'], $keys, true) ? $a['a'] : ( $keys[0] ?? 'm5p_daily' );
-  $metricB = in_array($a['b'], $keys, true) ? $a['b'] : ( $keys[0] ?? 'm5p_daily' );
+  // Sanitize controls (prefer m5p_daily and kp_daily_max when available)
+  $metricA = in_array($a['a'], $keys, true) ? $a['a'] : ( in_array('m5p_daily',$keys,true) ? 'm5p_daily' : ( $keys[0] ?? 'm5p_daily' ) );
+  $metricB = in_array($a['b'], $keys, true) ? $a['b'] : ( in_array('kp_daily_max',$keys,true) ? 'kp_daily_max' : ( $keys[0] ?? 'm5p_daily' ) );
   $range   = max(7, min(365, intval($a['range'])));
   $lag     = max(-30, min(30, intval($a['lag'])));
   $smooth  = max(0, min(14, intval($a['smooth'])));
