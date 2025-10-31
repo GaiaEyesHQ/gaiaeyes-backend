@@ -10,7 +10,7 @@ KEY = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_ANON_KEY", ""
 OUT = os.getenv("OUTPUT_JSON_PATH", "space_history.json")
 DAYS = int(os.getenv("HISTORY_DAYS", "365"))
 TABLE = os.getenv("SW_DAILY_TABLE", "marts.space_weather_daily")
-FIELDS = os.getenv("SW_DAILY_FIELDS", "day,kp_max_24h,bz_min,sw_speed_avg")
+FIELDS = os.getenv("SW_DAILY_FIELDS", "day,kp_max,bz_min,sw_speed_avg")
 
 
 def query_since(start_iso: str):
@@ -61,12 +61,23 @@ def main():
         d = r.get("day")
         if not d:
             continue
-        if r.get("kp_max_24h") is not None:
-            kp.append([d, float(r["kp_max_24h"])])
+        # kp: accept either kp_max (current schema) or kp_max_24h (older)
+        kpv = r.get("kp_max") if (r.get("kp_max") is not None) else r.get("kp_max_24h")
+        if kpv is not None:
+            try:
+                kp.append([d, float(kpv)])
+            except Exception:
+                pass
         if r.get("bz_min") is not None:
-            bz.append([d, float(r["bz_min"])])
+            try:
+                bz.append([d, float(r["bz_min"])])
+            except Exception:
+                pass
         if r.get("sw_speed_avg") is not None:
-            sw.append([d, float(r["sw_speed_avg"])])
+            try:
+                sw.append([d, float(r["sw_speed_avg"])])
+            except Exception:
+                pass
     out = {
         "timestamp_utc": dt.datetime.now(dt.timezone.utc)
         .replace(microsecond=0)
