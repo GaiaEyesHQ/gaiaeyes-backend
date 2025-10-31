@@ -165,13 +165,42 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             const filters = document.getElementById('geEqFilters');
 
             function fmt(n, dp){ try { return (n==null? '—' : Number(n).toFixed(dp)); } catch(e){ return '—'; } }
+            function fmtAgo(date){
+              if (!(date instanceof Date) || isNaN(date)) return '';
+              const diffMs = Date.now() - date.getTime();
+              const ahead = diffMs < 0;
+              const minutes = Math.round(Math.abs(diffMs) / 60000);
+              if (minutes < 60) {
+                return `${minutes} min ${ahead ? 'ahead' : 'ago'}`;
+              }
+              const hours = Math.round(minutes / 60);
+              if (hours < 48) {
+                return `${hours} hr${hours !== 1 ? 's' : ''} ${ahead ? 'ahead' : 'ago'}`;
+              }
+              const days = Math.round(hours / 24);
+              return `${days} day${days !== 1 ? 's' : ''} ${ahead ? 'ahead' : 'ago'}`;
+            }
+
+            function fmtIsoShort(iso){
+              if (!iso) return '';
+              const d = new Date(iso);
+              if (isNaN(d)) return iso;
+              const pad = (n) => String(n).padStart(2, '0');
+              const pretty = `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}Z`;
+              const rel = fmtAgo(d);
+              return { pretty, rel };
+            }
+
             function render(items){
               ul.innerHTML = '';
               if (!items || !items.length){ ul.innerHTML = '<li class="ge-empty">No recent events found.</li>'; return; }
               items.slice(0, maxItems).forEach(ev => {
                 const mag = (ev.mag!=null) ? `M${fmt(ev.mag,1)}` : 'M—';
                 const place = ev.place || '—';
-                const time = ev.time_utc || '';
+                const iso = ev.time_utc || '';
+                const t = fmtIsoShort(iso);
+                const prettyTime = t && typeof t === 'object' ? t.pretty : (t || iso || '—');
+                const relTime = t && typeof t === 'object' ? t.rel : '';
                 const depth = (ev.depth_km!=null) ? `${fmt(ev.depth_km,1)} km` : '';
                 const url = ev.url || '';
                 let sev = '';
@@ -181,7 +210,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
                 li.innerHTML = `
                   <span class="ev-mag">${mag}</span>
                   <span class="ev-place">${place}</span>
-                  <span class="ev-time">${time}</span>
+                  <span class="ev-time">${prettyTime}${relTime ? `<br><small>${relTime}</small>` : ''}</span>
                   ${depth? `<span class="ev-depth">${depth}</span>` : ''}
                   ${url? `<a class="ev-link" href="${url}" target="_blank" rel="noopener">USGS</a>` : ''}
                 `;
@@ -268,6 +297,22 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .ge-cta{margin-top:8px}
       .btn-compare{display:inline-block;background:#1b2233;color:#cfe3ff;border:1px solid #344a72;border-radius:8px;padding:6px 10px;text-decoration:none}
       .btn-compare:hover{border-color:#4b6aa1}
+      @media(max-width: 640px){
+        .ev{
+          grid-template-columns: 84px 1fr;
+          grid-template-areas:
+            "mag time"
+            "place place"
+            "depth link";
+          align-items: start;
+        }
+        .ev-mag{ grid-area: mag; }
+        .ev-time{ grid-area: time; text-align: right; font-size: .9rem; opacity: .85; }
+        .ev-place{ grid-area: place; white-space: normal; line-height: 1.3; overflow-wrap: anywhere; }
+        .ev-depth{ grid-area: depth; font-size: .9rem; opacity: .8; }
+        .ev-link{ grid-area: link; justify-self: end; }
+      }
+      .ev-time small{ opacity: .8; }
     </style>
   </section>
   <?php
