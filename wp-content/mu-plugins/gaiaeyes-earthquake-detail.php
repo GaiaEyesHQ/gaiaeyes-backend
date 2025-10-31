@@ -34,13 +34,20 @@ function gaiaeyes_quakes_fetch($primary, $mirror, $cache_key, $ttl){
  */
 function gaiaeyes_quakes_detail_shortcode($atts){
   $a = shortcode_atts([
-    'quakes_url' => GAIAEYES_QUAKES_URL,
-    'cache'      => 10,
-    'max'        => 10,
+    'quakes_url'  => GAIAEYES_QUAKES_URL,
+    'history_url' => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/quakes_history.json',
+    'cache'       => 10,
+    'max'         => 10,
   ], $atts, 'gaia_quakes_detail');
 
   $ttl = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
   $d = gaiaeyes_quakes_fetch($a['quakes_url'], GAIAEYES_QUAKES_MIRROR, 'ge_quakes_latest', $ttl);
+  $hist = gaiaeyes_quakes_fetch(
+    $a['history_url'],
+    str_replace('github.io','cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main',$a['history_url']),
+    'ge_quakes_history',
+    $ttl
+  );
 
   $ts = is_array($d) && !empty($d['timestamp_utc']) ? $d['timestamp_utc'] : '';
   $events = is_array($d) && !empty($d['events']) && is_array($d['events']) ? $d['events'] : [];
@@ -76,6 +83,20 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       elseif ($m < 6.0) $buckets['5.0–5.9']++;
       elseif ($m < 7.0) $buckets['6.0–6.9']++;
       else $buckets['≥7.0']++;
+    }
+  }
+
+  // Monthly summary (last 6 months) from quakes_history.json (if present)
+  $monthly_rows = [];
+  if (is_array($hist) && !empty($hist['monthly']) && is_array($hist['monthly'])) {
+    $months = $hist['monthly'];
+    // keep last 6 entries
+    $tail = array_slice($months, -6);
+    foreach ($tail as $row) {
+      $mon = $row['month'] ?? '';
+      $m5  = isset($row['m5p']) ? intval($row['m5p']) : (isset($row['m5p_daily']) ? intval($row['m5p_daily']) : null);
+      $all = isset($row['all']) ? intval($row['all']) : null;
+      $monthly_rows[] = [ 'month' => $mon, 'm5p' => $m5, 'all' => $all ];
     }
   }
 
@@ -154,12 +175,18 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             <?php endif; ?>
           </noscript>
         </div>
+        <div class="ge-more" id="geEqMoreCtl">
+          <button type="button" class="btn-more" id="eqMoreBtn">Show more</button>
+          <button type="button" class="btn-more" id="eqAllBtn">Show all</button>
+        </div>
 
         <script>
           (function(){
             const listM5 = <?php echo wp_json_encode($events); ?> || [];
             const listAll = <?php echo wp_json_encode( isset($d['events_all_sample']) ? $d['events_all_sample'] : [] ); ?> || [];
             const maxItems = <?php echo (int)$max_items; ?>;
+            let pageSize = maxItems; // default page size
+            let shown = maxItems;     // how many items currently shown
             const ul = document.getElementById('geEqList');
             const wrap = document.getElementById('geEqListWrap');
             const filters = document.getElementById('geEqFilters');
@@ -194,7 +221,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             function render(items){
               ul.innerHTML = '';
               if (!items || !items.length){ ul.innerHTML = '<li class="ge-empty">No recent events found.</li>'; return; }
-              items.slice(0, maxItems).forEach(ev => {
+              items.slice(0, shown).forEach(ev => {
                 const mag = (ev.mag!=null) ? `M${fmt(ev.mag,1)}` : 'M—';
                 const place = ev.place || '—';
                 const iso = ev.time_utc || '';
@@ -234,17 +261,45 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               return show==='all'? listAll.slice() : listM5.slice();
             }
 
-            function apply(){
-              let items = currentList();
+            const moreCtl = document.getElementById('geEqMoreCtl');
+            const btnMore = document.getElementById('eqMoreBtn');
+            const btnAll  = document.getElementById('eqAllBtn');
+            function updateButtons(items){
+              if (!items || items.length <= shown) { moreCtl.style.display = 'none'; }
+              else { moreCtl.style.display = 'flex'; }
+            }
+            function applyAndButtons(){
+              const items = currentList();
               const sort = (filters.querySelector('input[name="eqSort"]:checked')||{}).value || 'latest';
               items.sort(sort==='mag'? sortMag : sortLatest);
               render(items);
+              updateButtons(items);
             }
-
-            filters.addEventListener('change', apply);
-            apply();
+            btnMore.addEventListener('click', function(){ shown += pageSize; applyAndButtons(); });
+            btnAll.addEventListener('click', function(){ shown = 1000; applyAndButtons(); });
+            // replace original apply binding
+            filters.removeEventListener && filters.removeEventListener('change', apply);
+            filters.addEventListener('change', function(){ shown = pageSize; applyAndButtons(); });
+            // initial draw
+            applyAndButtons();
           })();
         </script>
+      </article>
+
+      <?php if (!empty($monthly_rows)) : ?>
+      <article class="ge-card">
+        <h3 id="monthly">Monthly & YoY <a class="anchor-link" href="#monthly" aria-label="Link to Monthly & YoY">🔗</a></h3>
+        <div class="ge-note">Last 6 months (global). M5+ counts shown; totals where available.</div>
+        <table class="ge-table">
+          <thead><tr><th>Month</th><th>M5+</th><th>All</th></tr></thead>
+          <tbody>
+            <?php foreach ($monthly_rows as $r): ?>
+              <tr><td><?php echo esc_html($r['month']); ?></td><td><?php echo esc_html( $r['m5p']!==null ? $r['m5p'] : '—'); ?></td><td><?php echo esc_html( $r['all']!==null ? $r['all'] : '—'); ?></td></tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </article>
+      <?php endif; ?>
       </article>
 
       <article class="ge-card">
@@ -260,6 +315,11 @@ function gaiaeyes_quakes_detail_shortcode($atts){
         <h3 id="about">About Earthquakes <a class="anchor-link" href="#about" aria-label="Link to About Earthquakes">🔗</a></h3>
         <p>Magnitude (M) is a logarithmic scale; each full step represents ~32× energy release. While most quakes are small, regional clustering and larger magnitudes can affect infrastructure and, indirectly, stress levels and daily routines. This page reflects a distilled feed of recent events to provide situational awareness alongside solar and Schumann metrics.</p>
       </article>
+      <div class="ge-cta" style="margin-top:10px;">
+        <a class="gaia-link btn-compare" href="/compare/?a=m5p_daily&b=kp_daily_max&range=90">Compare with Space Weather →</a>
+        <span style="margin-left:10px;"><a class="gaia-link" href="/space-dashboard/#kp">Space Dashboard →</a></span>
+        <span style="margin-left:10px;"><a class="gaia-link" href="/health-context/">Health context →</a></span>
+      </div>
     </div>
 
     <style>
@@ -297,6 +357,12 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .ge-cta{margin-top:8px}
       .btn-compare{display:inline-block;background:#1b2233;color:#cfe3ff;border:1px solid #344a72;border-radius:8px;padding:6px 10px;text-decoration:none}
       .btn-compare:hover{border-color:#4b6aa1}
+      .ge-more{display:flex;gap:8px;margin:.5rem 0}
+      .btn-more{background:#1b2233;color:#cfe3ff;border:1px solid #344a72;border-radius:8px;padding:6px 10px;cursor:pointer}
+      .btn-more:hover{border-color:#4b6aa1}
+      .ge-table{width:100%;border-collapse:collapse;margin-top:6px}
+      .ge-table th,.ge-table td{border:1px solid rgba(255,255,255,.08);padding:6px 8px;text-align:left}
+      .ge-table th{background:#1b2233}
       @media(max-width: 640px){
         .ev{
           grid-template-columns: 84px 1fr;
