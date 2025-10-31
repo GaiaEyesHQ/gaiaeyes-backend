@@ -22,18 +22,35 @@ def query_since(start_iso: str):
     if "." in TABLE:
         parts = TABLE.split(".", 1)
         schema, table = parts[0], parts[1]
-    params = {
-        "select": FIELDS,
-        "order": "day.asc",
-        "day": "gte." + start_iso,
-    }
-    url = f"{REST}/{table}?" + urllib.parse.urlencode(params)
-    headers = {"apikey": KEY, "Authorization": "Bearer " + KEY}
-    if schema and schema != "public":
-        headers["Accept-Profile"] = schema
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=45) as r:
-        return json.loads(r.read().decode("utf-8"))
+    def do_query(select_fields: str):
+        params = {"select": select_fields, "order": "day.asc", "day": "gte." + start_iso}
+        url = f"{REST}/{table}?" + urllib.parse.urlencode(params)
+        headers = {"apikey": KEY, "Authorization": "Bearer " + KEY}
+        if schema and schema != "public":
+            headers["Accept-Profile"] = schema
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=45) as r:
+            return json.loads(r.read().decode("utf-8"))
+    try:
+        return do_query(FIELDS)
+    except urllib.error.HTTPError as e:
+        # Attempt to print server message for debugging
+        try:
+            body = e.read().decode("utf-8", errors="ignore")
+            print(f"[space_history] primary query failed {e.code}: {body}")
+        except Exception:
+            print(f"[space_history] primary query failed {e.code}")
+        # Fallback: try selecting all columns in case field names differ
+        try:
+            print("[space_history] retrying with select=* ...")
+            return do_query("*")
+        except urllib.error.HTTPError as e2:
+            try:
+                body2 = e2.read().decode("utf-8", errors="ignore")
+                print(f"[space_history] fallback query failed {e2.code}: {body2}")
+            except Exception:
+                print(f"[space_history] fallback query failed {e2.code}")
+            return []
 
 
 def main():
