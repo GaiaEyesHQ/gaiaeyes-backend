@@ -34,10 +34,26 @@ jobs:
           cd gaiaeyes-media
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config pull.rebase true
+          # Always sync with remote main to avoid non-fast-forward rejections
+          git fetch origin main || true
+          # Rebase local changes atop remote
+          git rebase origin/main || true
+          # Stage if changed
           if git status --porcelain | grep -E "quakes_history\.json"; then
-            git add data/quakes_history.json
-            git commit -m "chore: update quakes_history.json [skip ci]"
-            git push
+            git add data/quakes_history.json || true
+            git commit -m "chore: update quakes_history.json [skip ci]" || true
+            # Retry push up to 3 times in case another workflow pushed between fetch and push
+            for i in 1 2 3; do
+              if git push origin HEAD:main; then
+                echo "Pushed successfully"; exit 0;
+              else
+                echo "Push failed (attempt $i), retrying..."; sleep $((2*i));
+                git fetch origin main || true
+                git rebase origin/main || true
+              fi
+            done
+            echo "Failed to push after retries"; exit 1
           else
             echo "No changes."
           fi
