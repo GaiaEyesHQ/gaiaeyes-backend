@@ -12,6 +12,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: GaiaEyesHQ/gaiaeyes-media
+          ref: main
           token: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
           path: gaiaeyes-media
       - name: Build news (30-day backfill)
