@@ -85,6 +85,15 @@ function gaiaeyes_aurora_detail_shortcode($atts){
           </figure>
           <?php endif; ?>
         </div>
+        <div class="care-box">
+          <h4>Region tips</h4>
+          <ul>
+            <li><strong>High lat:</strong> KP 2–4 frequent windows. Protect sleep on active nights.</li>
+            <li><strong>Mid lat:</strong> KP 5–7 episodic. Use alerts and plan flexible viewing.</li>
+            <li><strong>Low lat:</strong> KP ≥8 rare. Manage expectations; allow eye adaptation.</li>
+          </ul>
+          <div class="care-cta"><a href="/aurora/#alerts" class="gaia-link">Get aurora alerts →</a></div>
+        </div>
       </article>
 
       <article class="ge-card">
@@ -128,6 +137,12 @@ function gaiaeyes_aurora_detail_shortcode($atts){
       .ov-box{margin:0}
       .ov-box img{width:100%;height:auto;border-radius:8px;border:1px solid rgba(255,255,255,.08)}
       .ov-box figcaption{font-size:.85rem;opacity:.85;margin-top:4px}
+      .care-box{margin-top:8px}
+      .care-box h4{margin:.25rem 0}
+      .care-box ul{margin:0;padding-left:18px;line-height:1.4}
+      .care-cta{margin-top:6px;font-size:.9rem}
+      .gaia-link{color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
+      .gaia-link:hover{border-bottom-color:rgba(255,255,255,.6)}
       .anchor-link{opacity:0;margin-left:8px;font-size:.9rem;color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25);transition:opacity .2s ease}
       .ge-card h3:hover .anchor-link{opacity:1}
       .anchor-link:hover{border-bottom-color:rgba(255,255,255,.6)}
