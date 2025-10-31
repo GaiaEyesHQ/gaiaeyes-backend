@@ -21,6 +21,17 @@ jobs:
           token: ${{ env.GAIAEYES_MEDIA_TOKEN }}
           path: gaiaeyes-media
 
+      - name: Build space_history.json
+        env:
+          SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/space_history.json
+          HISTORY_DAYS: "365"
+          SW_DAILY_TABLE: "marts.space_weather_daily"
+          SW_DAILY_FIELDS: "day,kp_max_24h,bz_min,sw_speed_avg"
+        run: |
+          python3 scripts/build_space_history.py
+
       - name: Build compare_series.json
         env:
           MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media

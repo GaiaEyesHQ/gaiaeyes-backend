@@ -35,8 +35,8 @@ function gaiaeyes_compare_detail_shortcode($atts){
   $a = shortcode_atts([
     'url'    => GAIAEYES_COMPARE_URL,
     'a'      => 'm5p_daily',
-    'b'      => 'm5p_daily',
-    'range'  => 30,   // 7, 30, 90, 180, 365
+    'b'      => 'kp_daily_max',
+    'range'  => 90,   // 7, 30, 90, 180, 365
     'lag'    => 0,    // shift B by N days vs A
     'smooth' => 0,    // 0, 3, 7 rolling avg
     'cache'  => 10
@@ -45,6 +45,7 @@ function gaiaeyes_compare_detail_shortcode($atts){
   $ttl = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
   $d = gaiaeyes_compare_fetch($a['url'], GAIAEYES_COMPARE_MIRROR, 'ge_compare_series', $ttl);
   $ser = is_array($d) && !empty($d['series']) ? $d['series'] : [];
+  $labels = is_array($d) && !empty($d['labels']) ? $d['labels'] : [];
 
   // Build metric options from keys present
   $keys = array_keys($ser);
@@ -69,7 +70,7 @@ function gaiaeyes_compare_detail_shortcode($atts){
         <label>Metric A</label>
         <select id="cmpA">
           <?php foreach ($keys as $k): ?>
-            <option value="<?php echo esc_attr($k); ?>" <?php selected($k, $metricA); ?>><?php echo esc_html($k); ?></option>
+            <option value="<?php echo esc_attr($k); ?>" <?php selected($k, $metricA); ?>><?php echo esc_html( $labels[$k] ?? $k ); ?></option>
           <?php endforeach; ?>
         </select>
       </div>
@@ -77,7 +78,7 @@ function gaiaeyes_compare_detail_shortcode($atts){
         <label>Metric B</label>
         <select id="cmpB">
           <?php foreach ($keys as $k): ?>
-            <option value="<?php echo esc_attr($k); ?>" <?php selected($k, $metricB); ?>><?php echo esc_html($k); ?></option>
+            <option value="<?php echo esc_attr($k); ?>" <?php selected($k, $metricB); ?>><?php echo esc_html( $labels[$k] ?? $k ); ?></option>
           <?php endforeach; ?>
         </select>
       </div>
@@ -107,6 +108,7 @@ function gaiaeyes_compare_detail_shortcode($atts){
     <article class="ge-card" id="chart">
       <h3>Overlay</h3>
       <canvas id="cmpChart" height="140"></canvas>
+      <div class="ge-legend" id="cmpLegend"></div>
     </article>
 
     <article class="ge-card" id="stats">
@@ -128,20 +130,16 @@ function gaiaeyes_compare_detail_shortcode($atts){
       .ge-card{background:#151a24;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px;margin-top:10px}
       .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
       @media(min-width:900px){ .stats-grid{grid-template-columns:repeat(2,1fr)} }
+      @media(max-width: 640px){ .ge-controls{ gap: 8px; } .ctl{ width: calc(50% - 6px); } .ctl select, .ctl input{ width: 100%; } }
+      #cmpChart{ width:100%; height:260px; }
+      .ge-legend{ margin-top:8px; opacity:.85; font-size:.9rem; }
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
       (function(){
         const data = <?php echo wp_json_encode($ser); ?>;
-        const init = {
-          a: "<?php echo esc_js($metricA); ?>",
-          b: "<?php echo esc_js($metricB); ?>",
-          range: <?php echo (int)$range; ?>,
-          lag: <?php echo (int)$lag; ?>,
-          smooth: <?php echo (int)$smooth; ?>
-        };
-
+        const LABELS = <?php echo wp_json_encode($labels ?: []); ?>;
         function parseSeries(k){ return Array.isArray(data[k]) ? data[k].slice() : []; }
 
         function rolling(arr, win){
@@ -200,6 +198,8 @@ function gaiaeyes_compare_detail_shortcode($atts){
           const range = parseInt(document.getElementById('cmpRange').value,10);
           const lag = parseInt(document.getElementById('cmpLag').value,10);
           const smooth = parseInt(document.getElementById('cmpSmooth').value,10);
+          const nmA = (LABELS || {})[Akey] || Akey;
+          const nmB = (LABELS || {})[Bkey] || Bkey;
 
           let A = parseSeries(Akey);
           let B = parseSeries(Bkey);
@@ -218,12 +218,13 @@ function gaiaeyes_compare_detail_shortcode($atts){
             data: {
               labels: dates.slice(-range),
               datasets: [
-                {label: Akey, data: outA.slice(-range), borderColor:'#7fc8ff', tension:0.25, pointRadius:0},
-                {label: Bkey, data: outB.slice(-range), borderColor:'#ffd089', tension:0.25, pointRadius:0}
+                {label: nmA, data: outA.slice(-range), borderColor:'#7fc8ff', tension:0.25, pointRadius:0},
+                {label: nmB, data: outB.slice(-range), borderColor:'#ffd089', tension:0.25, pointRadius:0}
               ]
             },
             options: {
               responsive:true,
+              maintainAspectRatio:false,
               animation:false,
               plugins:{legend:{labels:{color:'#cfe3ff'}}},
               scales:{
@@ -232,6 +233,10 @@ function gaiaeyes_compare_detail_shortcode($atts){
               }
             }
           });
+          const legend = document.getElementById('cmpLegend');
+          if (legend){
+            legend.textContent = `A = ${nmA}   |   B = ${nmB}`;
+          }
         }
 
         document.getElementById('cmpApply').addEventListener('click', draw);
