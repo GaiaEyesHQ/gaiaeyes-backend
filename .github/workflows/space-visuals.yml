@@ -1,0 +1,34 @@
+name: space-visuals
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout media repo
+        uses: actions/checkout@v4
+        with:
+          repository: GaiaEyesHQ/gaiaeyes-media
+          token: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
+          path: gaiaeyes-media
+      - name: Run space visuals ingest
+        env:
+          OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/space_live.json
+          MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
+        run: |
+          python3 scripts/space_visuals_ingest.py
+      - name: Commit & push (images + space_live.json)
+        run: |
+          cd gaiaeyes-media
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add images/space/* data/space_live.json || true
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "chore: update space visuals & space_live.json [skip ci]"
+            git push
+          fi
