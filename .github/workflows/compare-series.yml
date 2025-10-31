@@ -28,7 +28,7 @@ jobs:
           OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/space_history.json
           HISTORY_DAYS: "365"
           SW_DAILY_TABLE: "marts.space_weather_daily"
-          SW_DAILY_FIELDS: "day,kp_max_24h,bz_min,sw_speed_avg"
+          SW_DAILY_FIELDS: "day,kp_max,bz_min,sw_speed_avg"
         run: |
           python3 scripts/build_space_history.py
 
@@ -44,9 +44,9 @@ jobs:
           cd gaiaeyes-media
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git status --porcelain | grep -E "compare_series\.json"; then
-            git add data/compare_series.json
-            git commit -m "chore: update compare_series.json [skip ci]"
+          if git status --porcelain | grep -E "(space_history|compare_series)\.json"; then
+            git add data/space_history.json data/compare_series.json || true
+            git commit -m "chore: update space_history.json and compare_series.json [skip ci]"
             git push
           else
             echo "No changes."
