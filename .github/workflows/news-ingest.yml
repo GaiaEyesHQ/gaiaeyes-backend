@@ -1,0 +1,30 @@
+name: news-ingest
+on:
+  schedule:
+    - cron: "25 5 * * *"
+  workflow_dispatch: {}
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout media repo
+        uses: actions/checkout@v4
+        with:
+          repository: GaiaEyesHQ/gaiaeyes-media
+          token: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
+          path: gaiaeyes-media
+      - name: Build news (30-day backfill)
+        env:
+          MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
+          OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/news_latest.json
+          LOOKBACK_DAYS: "30"
+        run: |
+          python3 scripts/ingest_space_news.py
+      - name: Commit & push
+        run: |
+          cd gaiaeyes-media
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/news_latest.json
+          if git diff --cached --quiet; then echo "No changes."; else git commit -m "chore: news_latest.json [skip ci]" && git push; fi
