@@ -107,7 +107,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
   $monthly_rows = [];
   if (is_array($hist) && !empty($hist['monthly']) && is_array($hist['monthly'])) {
     $months = $hist['monthly'];
-    // Build index of month -> values for YoY lookup
+    // Build index of month -> values for YoY/MoM lookup
     $mon_idx = [];
     foreach ($months as $row) {
       $mk = $row['month'] ?? '';
@@ -123,21 +123,28 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       $mon = $row['month'] ?? '';
       $m5  = isset($row['m5p']) ? intval($row['m5p']) : (isset($row['m5p_daily']) ? intval($row['m5p_daily']) : null);
       $all = isset($row['all']) ? intval($row['all']) : null;
-      // Compute YoY delta for M5+: current month minus same month last year
-      $yoy = null;
+      // Compute YoY delta for M5+: current month minus same month last year; fallback to MoM if YoY missing
+      $yoy = null; $mom = null;
       if ($mon !== '' && $m5 !== null) {
         try {
-          $dtm = DateTime::createFromFormat('Y-m-d', $mon . '-01', new DateTimeZone('UTC'));
-          if ($dtm instanceof DateTime) {
-            $dtm->sub(new DateInterval('P1Y'));
-            $prev_key = $dtm->format('Y-m');
-            if (isset($mon_idx[$prev_key]) && isset($mon_idx[$prev_key]['m5p'])) {
-              $yoy = $m5 - intval($mon_idx[$prev_key]['m5p']);
+          $dtmCur = DateTime::createFromFormat('Y-m-d', $mon . '-01', new DateTimeZone('UTC'));
+          if ($dtmCur instanceof DateTime) {
+            // YoY
+            $dtmYoY = clone $dtmCur; $dtmYoY->sub(new DateInterval('P1Y'));
+            $prev_year_key = $dtmYoY->format('Y-m');
+            if (isset($mon_idx[$prev_year_key]) && isset($mon_idx[$prev_year_key]['m5p'])) {
+              $yoy = $m5 - intval($mon_idx[$prev_year_key]['m5p']);
+            }
+            // MoM (fallback when YoY is not available)
+            $dtmMoM = clone $dtmCur; $dtmMoM->sub(new DateInterval('P1M'));
+            $prev_mon_key = $dtmMoM->format('Y-m');
+            if (isset($mon_idx[$prev_mon_key]) && isset($mon_idx[$prev_mon_key]['m5p'])) {
+              $mom = $m5 - intval($mon_idx[$prev_mon_key]['m5p']);
             }
           }
         } catch (Exception $e) { /* ignore */ }
       }
-      $monthly_rows[] = [ 'month' => $mon, 'm5p' => $m5, 'all' => $all, 'yoy_m5p' => $yoy ];
+      $monthly_rows[] = [ 'month' => $mon, 'm5p' => $m5, 'all' => $all, 'yoy_m5p' => $yoy, 'mom_m5p' => $mom ];
     }
   }
 
@@ -365,13 +372,20 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               <tr>
                 <td><?php echo esc_html($r['month']); ?></td>
                 <td><?php echo esc_html( $r['m5p']!==null ? $r['m5p'] : '—'); ?></td>
-                <td><?php
-                  if ($r['yoy_m5p'] === null) { echo '—'; }
-                  else {
-                    $cls = ($r['yoy_m5p'] > 0) ? 'delta-pos' : (($r['yoy_m5p'] < 0) ? 'delta-neg' : '');
-                    echo '<span class="'.esc_attr($cls).'">'.(($r['yoy_m5p']>0?'+':'').intval($r['yoy_m5p'])).'</span>';
-                  }
-                ?></td>
+                <td>
+                  <?php
+                    if ($r['yoy_m5p'] === null) {
+                      if ($r['mom_m5p'] === null) { echo '—'; }
+                      else {
+                        $cls = ($r['mom_m5p'] > 0) ? 'delta-pos' : (($r['mom_m5p'] < 0) ? 'delta-neg' : '');
+                        echo '<span class="'.esc_attr($cls).'">'.(($r['mom_m5p']>0?'+':'').intval($r['mom_m5p'])).'</span> <small class="delta-tag">(MoM)</small>';
+                      }
+                    } else {
+                      $cls = ($r['yoy_m5p'] > 0) ? 'delta-pos' : (($r['yoy_m5p'] < 0) ? 'delta-neg' : '');
+                      echo '<span class="'.esc_attr($cls).'">'.(($r['yoy_m5p']>0?'+':'').intval($r['yoy_m5p'])).'</span>';
+                    }
+                  ?>
+                </td>
                 <td><?php echo esc_html( $r['all']!==null ? $r['all'] : '—'); ?></td>
               </tr>
             <?php endforeach; ?>
@@ -461,6 +475,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .ev-time small{ opacity: .8; }
     .delta-pos{ color:#aef2c0; }
     .delta-neg{ color:#ffb3b3; }
+    .delta-tag{ opacity:.8; font-size:.8rem; margin-left:4px }
     </style>
   </section>
   <?php
