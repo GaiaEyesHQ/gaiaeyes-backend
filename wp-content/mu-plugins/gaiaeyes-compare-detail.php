@@ -59,8 +59,11 @@ function gaiaeyes_compare_detail_shortcode($atts){
   $ser = is_array($d) && !empty($d['series']) ? $d['series'] : [];
   $labels = is_array($d) && !empty($d['labels']) ? $d['labels'] : [];
 
-  // Fallback: if compare_series has only one key, try to augment with quakes/space history
-  if (is_array($ser) && count($ser) <= 1) {
+  // Augment missing series from quakes/space histories if not present in compare_series
+  $need_sh = !(isset($ser['kp_daily_max']) && isset($ser['bz_daily_min']) && isset($ser['sw_daily_avg']));
+  $need_qh = !(isset($ser['m5p_daily']) && (isset($ser['all_daily']) || isset($ser['m4p_daily']) || isset($ser['m6p_daily'])));
+
+  if ($need_qh) {
     $qh = gaiaeyes_compare_fetch(GAIAEYES_QH_URL, GAIAEYES_QH_MIRROR, 'ge_qh_fallback', $ttl);
     if (is_array($qh) && !empty($qh['series'])) {
       $qser = $qh['series'];
@@ -69,6 +72,9 @@ function gaiaeyes_compare_detail_shortcode($atts){
       }
       if (empty($labels) && !empty($qh['labels']) && is_array($qh['labels'])) $labels = $qh['labels'];
     }
+  }
+
+  if ($need_sh) {
     $sh = gaiaeyes_compare_fetch(GAIAEYES_SH_URL, GAIAEYES_SH_MIRROR, 'ge_sh_fallback', $ttl);
     if (is_array($sh) && !empty($sh['series'])) {
       $sser = $sh['series'];
@@ -77,14 +83,15 @@ function gaiaeyes_compare_detail_shortcode($atts){
       }
       if (empty($labels) && !empty($sh['labels']) && is_array($sh['labels'])) $labels = $sh['labels'];
     }
-    // If still no labels, supply a minimal default map
-    if (empty($labels)) {
-      $labels = [
-        'all_daily'=>'Quakes (all, daily)', 'm4p_daily'=>'Quakes M4+ (daily)', 'm5p_daily'=>'Quakes M5+ (daily)', 'm6p_daily'=>'Quakes M6+ (daily)',
-        'm5p_monthly'=>'Quakes M5+ (monthly)', 'm6p_monthly'=>'Quakes M6+ (monthly)',
-        'kp_daily_max'=>'Kp (daily max)', 'bz_daily_min'=>'Bz (daily min, nT)', 'sw_daily_avg'=>'Solar wind (daily avg, km/s)'
-      ];
-    }
+  }
+
+  // If still no labels, supply a minimal default map
+  if (empty($labels)) {
+    $labels = [
+      'all_daily'=>'Quakes (all, daily)', 'm4p_daily'=>'Quakes M4+ (daily)', 'm5p_daily'=>'Quakes M5+ (daily)', 'm6p_daily'=>'Quakes M6+ (daily)',
+      'm5p_monthly'=>'Quakes M5+ (monthly)', 'm6p_monthly'=>'Quakes M6+ (monthly)',
+      'kp_daily_max'=>'Kp (daily max)', 'bz_daily_min'=>'Bz (daily min, nT)', 'sw_daily_avg'=>'Solar wind (daily avg, km/s)'
+    ];
   }
 
   // Build metric options from keys present
