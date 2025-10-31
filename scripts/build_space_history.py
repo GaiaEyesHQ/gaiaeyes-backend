@@ -16,20 +16,28 @@ FIELDS = os.getenv("SW_DAILY_FIELDS", "day,kp_max_24h,bz_min,sw_speed_avg")
 def query_since(start_iso: str):
     if not (REST and KEY):
         return []
-    url = f"{REST}/{TABLE}?" + urllib.parse.urlencode({
+    # Support schema-qualified tables: schema.table
+    schema = None
+    table = TABLE
+    if "." in TABLE:
+        parts = TABLE.split(".", 1)
+        schema, table = parts[0], parts[1]
+    params = {
         "select": FIELDS,
         "order": "day.asc",
         "day": "gte." + start_iso,
-    })
-    req = urllib.request.Request(
-        url, headers={"apikey": KEY, "Authorization": "Bearer " + KEY}
-    )
+    }
+    url = f"{REST}/{table}?" + urllib.parse.urlencode(params)
+    headers = {"apikey": KEY, "Authorization": "Bearer " + KEY}
+    if schema and schema != "public":
+        headers["Accept-Profile"] = schema
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=45) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
 def main():
-    since = (dt.datetime.utcnow().date() - dt.timedelta(days=DAYS - 1)).isoformat()
+    since = (dt.datetime.now(dt.timezone.utc).date() - dt.timedelta(days=DAYS - 1)).isoformat()
     rows = query_since(since)
     kp, bz, sw = [], [], []
     for r in rows:
@@ -43,7 +51,7 @@ def main():
         if r.get("sw_speed_avg") is not None:
             sw.append([d, float(r["sw_speed_avg"])])
     out = {
-        "timestamp_utc": dt.datetime.utcnow()
+        "timestamp_utc": dt.datetime.now(dt.timezone.utc)
         .replace(microsecond=0)
         .isoformat()
         .replace("+00:00", "Z"),
