@@ -103,17 +103,41 @@ function gaiaeyes_quakes_detail_shortcode($atts){
     }
   }
 
-  // Monthly summary (last 6 months) from quakes_history.json (if present)
+  // Monthly summary (last 6 months) + YoY delta for M5+ from quakes_history.json (if present)
   $monthly_rows = [];
   if (is_array($hist) && !empty($hist['monthly']) && is_array($hist['monthly'])) {
     $months = $hist['monthly'];
+    // Build index of month -> values for YoY lookup
+    $mon_idx = [];
+    foreach ($months as $row) {
+      $mk = $row['month'] ?? '';
+      if ($mk === '') continue;
+      $mon_idx[$mk] = [
+        'm5p' => isset($row['m5p']) ? intval($row['m5p']) : (isset($row['m5p_daily']) ? intval($row['m5p_daily']) : null),
+        'all' => isset($row['all']) ? intval($row['all']) : null,
+      ];
+    }
     // keep last 6 entries
     $tail = array_slice($months, -6);
     foreach ($tail as $row) {
       $mon = $row['month'] ?? '';
       $m5  = isset($row['m5p']) ? intval($row['m5p']) : (isset($row['m5p_daily']) ? intval($row['m5p_daily']) : null);
       $all = isset($row['all']) ? intval($row['all']) : null;
-      $monthly_rows[] = [ 'month' => $mon, 'm5p' => $m5, 'all' => $all ];
+      // Compute YoY delta for M5+: current month minus same month last year
+      $yoy = null;
+      if ($mon !== '' && $m5 !== null) {
+        try {
+          $dtm = DateTime::createFromFormat('Y-m-d', $mon . '-01', new DateTimeZone('UTC'));
+          if ($dtm instanceof DateTime) {
+            $dtm->sub(new DateInterval('P1Y'));
+            $prev_key = $dtm->format('Y-m');
+            if (isset($mon_idx[$prev_key]) && isset($mon_idx[$prev_key]['m5p'])) {
+              $yoy = $m5 - intval($mon_idx[$prev_key]['m5p']);
+            }
+          }
+        } catch (Exception $e) { /* ignore */ }
+      }
+      $monthly_rows[] = [ 'month' => $mon, 'm5p' => $m5, 'all' => $all, 'yoy_m5p' => $yoy ];
     }
   }
 
@@ -335,10 +359,21 @@ function gaiaeyes_quakes_detail_shortcode($atts){
         <h3 id="monthly">Monthly & YoY <a class="anchor-link" href="#monthly" aria-label="Link to Monthly & YoY">🔗</a></h3>
         <div class="ge-note">Last 6 months (global). M5+ counts shown; totals where available.</div>
         <table class="ge-table">
-          <thead><tr><th>Month</th><th>M5+</th><th>All</th></tr></thead>
+          <thead><tr><th>Month</th><th>M5+</th><th>YoY Δ (M5+)</th><th>All</th></tr></thead>
           <tbody>
             <?php foreach ($monthly_rows as $r): ?>
-              <tr><td><?php echo esc_html($r['month']); ?></td><td><?php echo esc_html( $r['m5p']!==null ? $r['m5p'] : '—'); ?></td><td><?php echo esc_html( $r['all']!==null ? $r['all'] : '—'); ?></td></tr>
+              <tr>
+                <td><?php echo esc_html($r['month']); ?></td>
+                <td><?php echo esc_html( $r['m5p']!==null ? $r['m5p'] : '—'); ?></td>
+                <td><?php
+                  if ($r['yoy_m5p'] === null) { echo '—'; }
+                  else {
+                    $cls = ($r['yoy_m5p'] > 0) ? 'delta-pos' : (($r['yoy_m5p'] < 0) ? 'delta-neg' : '');
+                    echo '<span class="'.esc_attr($cls).'">'.(($r['yoy_m5p']>0?'+':'').intval($r['yoy_m5p'])).'</span>';
+                  }
+                ?></td>
+                <td><?php echo esc_html( $r['all']!==null ? $r['all'] : '—'); ?></td>
+              </tr>
             <?php endforeach; ?>
           </tbody>
         </table>
@@ -424,6 +459,8 @@ function gaiaeyes_quakes_detail_shortcode($atts){
         .ev-link{ grid-area: link; justify-self: end; }
       }
       .ev-time small{ opacity: .8; }
+    .delta-pos{ color:#aef2c0; }
+    .delta-neg{ color:#ffb3b3; }
     </style>
   </section>
   <?php
