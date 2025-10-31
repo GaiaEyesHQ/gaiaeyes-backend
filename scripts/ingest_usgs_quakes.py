@@ -100,7 +100,8 @@ def main():
         events_all.append(pick(f))
     events_all = [e for e in events_all if e.get("time_utc")]  # keep only parsed
     events_all.sort(key=lambda x: x.get("time_utc",""), reverse=True)
-    events_all = events_all[:100]
+    SAMPLE_MAX = int(os.getenv("EQ_SAMPLE_MAX", "300"))
+    events_all = events_all[:SAMPLE_MAX]
 
     total_all = len(day_features)
     total_24h_m5p = sum(1 for f in day_features if ((f.get("properties") or {}).get("mag") or 0) >= 5.0)

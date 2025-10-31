@@ -24,6 +24,7 @@ jobs:
       - name: Generate quakes_history.json
         env:
           OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/quakes_history.json
+          HISTORY_MONTHS: "24"
         run: |
           python3 scripts/ingest_usgs_history.py
 

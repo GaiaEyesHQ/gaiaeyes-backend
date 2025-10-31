@@ -85,6 +85,23 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       else $buckets['≥7.0']++;
     }
   }
+  // If day-feed buckets show zero high-magnitude counts but recent samples include them, patch those buckets
+  $sample = (is_array($d) && !empty($d['events_all_sample']) && is_array($d['events_all_sample'])) ? $d['events_all_sample'] : [];
+  if ($sample) {
+    $over = ['5.0–5.9'=>0,'6.0–6.9'=>0,'≥7.0'=>0];
+    foreach ($sample as $evsmp) {
+      $m = isset($evsmp['mag']) ? floatval($evsmp['mag']) : null;
+      if ($m === null) continue;
+      if ($m >= 7.0) $over['≥7.0']++;
+      elseif ($m >= 6.0) $over['6.0–6.9']++;
+      elseif ($m >= 5.0) $over['5.0–5.9']++;
+    }
+    foreach ($over as $k => $cnt) {
+      if ($cnt > 0 && isset($buckets[$k]) && intval($buckets[$k]) === 0) {
+        $buckets[$k] = $cnt;
+      }
+    }
+  }
 
   // Monthly summary (last 6 months) from quakes_history.json (if present)
   $monthly_rows = [];
@@ -112,7 +129,6 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       <h3 id="stats">Global Stats (all magnitudes) <a class="anchor-link" href="#stats" aria-label="Link to Global Stats">🔗</a></h3>
       <div class="ge-meta-row">
         <span><strong>Total (all mags):</strong> <?php echo ($tot_all!==null)? intval($tot_all) : '—'; ?></span>
-        <span><strong>Last 24h (all mags):</strong> <?php echo ($tot24_all!==null)? intval($tot24_all) : '—'; ?></span>
       </div>
       <div class="ge-note">Distribution shown for all magnitudes (USGS day feed). The Recent Events list defaults to M5.0+.</div>
       <div class="bucket-grid">
@@ -178,6 +194,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
         <div class="ge-more" id="geEqMoreCtl">
           <button type="button" class="btn-more" id="eqMoreBtn">Show more</button>
           <button type="button" class="btn-more" id="eqAllBtn">Show all</button>
+          <button type="button" class="btn-more" id="eqLessBtn">Show less</button>
         </div>
 
         <script>
@@ -264,21 +281,48 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             const moreCtl = document.getElementById('geEqMoreCtl');
             const btnMore = document.getElementById('eqMoreBtn');
             const btnAll  = document.getElementById('eqAllBtn');
+            const btnLess = document.getElementById('eqLessBtn');
+
             function updateButtons(items){
-              if (!items || items.length <= shown) { moreCtl.style.display = 'none'; }
-              else { moreCtl.style.display = 'flex'; }
+              if (!items || items.length <= pageSize){
+                // Not enough items to paginate
+                moreCtl.style.display = 'none';
+                return;
+              }
+              moreCtl.style.display = 'flex';
+              // Toggle visibility per state
+              btnMore.style.display = (shown < items.length) ? 'inline-block' : 'none';
+              btnAll.style.display  = (shown < items.length) ? 'inline-block' : 'none';
+              btnLess.style.display = (shown > pageSize) ? 'inline-block' : 'none';
             }
+
+            function renderHintIfCapped(items){
+              // If user chose All (sample) but we only have a small number of items, show a subtle hint
+              const show = (filters.querySelector('input[name="eqShow"]:checked')||{}).value || 'm5';
+              const hintId = 'geEqHint';
+              let hint = document.getElementById(hintId);
+              if (show === 'all' && items && items.length <= pageSize){
+                if (!hint){
+                  hint = document.createElement('div');
+                  hint.id = hintId; hint.className = 'ge-note';
+                  hint.textContent = 'Showing all available from today\'s sample. More history may need to be ingested to display additional events.';
+                  wrap.appendChild(hint);
+                }
+              } else if (hint){ hint.remove(); }
+            }
+
             function applyAndButtons(){
               const items = currentList();
               const sort = (filters.querySelector('input[name="eqSort"]:checked')||{}).value || 'latest';
               items.sort(sort==='mag'? sortMag : sortLatest);
               render(items);
               updateButtons(items);
+              renderHintIfCapped(items);
             }
+
             btnMore.addEventListener('click', function(){ shown += pageSize; applyAndButtons(); });
             btnAll.addEventListener('click', function(){ shown = 1000; applyAndButtons(); });
-            // replace original apply binding
-            filters.removeEventListener && filters.removeEventListener('change', apply);
+            btnLess.addEventListener('click', function(){ shown = pageSize; applyAndButtons(); });
             filters.addEventListener('change', function(){ shown = pageSize; applyAndButtons(); });
             // initial draw
             applyAndButtons();
@@ -358,6 +402,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .btn-compare{display:inline-block;background:#1b2233;color:#cfe3ff;border:1px solid #344a72;border-radius:8px;padding:6px 10px;text-decoration:none}
       .btn-compare:hover{border-color:#4b6aa1}
       .ge-more{display:flex;gap:8px;margin:.5rem 0}
+      .ge-note#geEqHint{ margin-top:.25rem }
       .btn-more{background:#1b2233;color:#cfe3ff;border:1px solid #344a72;border-radius:8px;padding:6px 10px;cursor:pointer}
       .btn-more:hover{border-color:#4b6aa1}
       .ge-table{width:100%;border-collapse:collapse;margin-top:6px}
