@@ -10,17 +10,16 @@ MEDIA_DIR = os.getenv("MEDIA_DIR", "gaiaeyes-media")
 LOOKBACK = int(os.getenv("LOOKBACK_DAYS", "30"))
 
 SOURCES = [
-  # RSS/ATOM feeds
   ("NASA Breaking", "https://www.nasa.gov/rss/dyn/breaking_news.rss", "space_activity", "rss"),
-  ("SpaceWeatherLive News", "https://www.spaceweatherlive.com/en/news.rss", "space_weather", "rss"),
-  # JSON alerts (SWPC)
   ("SWPC Alerts", "https://services.swpc.noaa.gov/products/alerts.json", "space_weather", "swpc_alerts_json"),
+  ("NASA DONKI", "donki", "space_weather", "donki_api")
 ]
 
 
 def fetch(url: str) -> str:
   try:
-    with urllib.request.urlopen(url, timeout=20) as r:
+    req = urllib.request.Request(url, headers={"User-Agent":"GaiaEyes/1.0 (+https://gaiaeyes.com)"})
+    with urllib.request.urlopen(req, timeout=20) as r:
       return r.read().decode("utf-8", "ignore")
   except Exception as e:  # pragma: no cover - network resiliency
     print("[news]", url, e)
@@ -96,6 +95,46 @@ def parse_swpc_alerts_json(obj, cutoff):
   return items
 
 
+def donki_fetch(kind: str, start_iso: str, api_key: str):
+  base = "https://api.nasa.gov/DONKI/" + kind
+  qs = {"startDate": start_iso, "api_key": api_key}
+  url = base + "?" + urllib.parse.urlencode(qs)
+  try:
+    req = urllib.request.Request(url, headers={"User-Agent":"GaiaEyes/1.0"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+      return json.loads(r.read().decode("utf-8"))
+  except Exception as e:
+    print("[news][donki]", kind, e)
+    return []
+
+def donki_items(cutoff: dt.datetime, api_key: str):
+  items = []
+  start_iso = (cutoff.date()).isoformat()
+  # Flares
+  flrs = donki_fetch("FLR", start_iso, api_key)
+  for f in flrs or []:
+    peak = f.get("peakTime") or f.get("beginTime") or ""
+    pub_dt = parse_pubdate(peak)
+    if pub_dt and pub_dt < cutoff: continue
+    cls = f.get("classType") or "Flare"
+    ar  = f.get("sourceLocation") or ""
+    t   = f"Solar flare {cls} {('at '+ar) if ar else ''}"
+    items.append({"title": t.strip(), "link": "https://www.swpc.noaa.gov/products/solar-and-geophysical-event-reports", "published_at": pub_dt.replace(microsecond=0).isoformat().replace("+00:00","Z") if pub_dt else "", "_dt": pub_dt or cutoff})
+  # CMEs
+  cmes = donki_fetch("CME", start_iso, api_key)
+  for c in cmes or []:
+    pub_dt = parse_pubdate(c.get("startTime") or c.get("time21_5") or "")
+    if pub_dt and pub_dt < cutoff: continue
+    spd = None
+    try:
+      if c.get("cmeAnalyses"): spd = c["cmeAnalyses"][0].get("speed")
+    except Exception:
+      pass
+    t = f"CME detected{(' speed '+str(spd)+' km/s') if spd else ''}"
+    items.append({"title": t, "link": "https://ccmc.gsfc.nasa.gov/donki/", "published_at": pub_dt.replace(microsecond=0).isoformat().replace("+00:00","Z") if pub_dt else "", "_dt": pub_dt or cutoff})
+  return items
+
+
 def main():
   now = dt.datetime.now(dt.timezone.utc)
   cutoff = now - dt.timedelta(days=max(0, LOOKBACK))
@@ -105,10 +144,10 @@ def main():
       name, url, cat, kind = entry
     else:
       name, url, cat = entry; kind = "rss"
-    data = fetch(url)
-    if not data:
-      continue
     if kind == "rss":
+      data = fetch(url)
+      if not data:
+        continue
       for it in rss_items(data):
         it["source"] = name
         it["category"] = cat
@@ -119,11 +158,17 @@ def main():
         it["_dt"] = parsed or now
         items.append(it)
     elif kind == "swpc_alerts_json":
+      data = fetch(url)
+      if not data:
+        continue
       try:
         obj = json.loads(data)
       except Exception:
         obj = None
       items.extend(parse_swpc_alerts_json(obj, cutoff))
+    elif kind == "donki_api":
+      api_key = os.getenv("NASA_API_KEY", "DEMO_KEY")
+      items.extend(donki_items(cutoff, api_key))
 
   seen = set()
   deduped = []
