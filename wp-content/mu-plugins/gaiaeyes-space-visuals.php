@@ -72,6 +72,14 @@ add_shortcode('gaia_space_detail', function($atts){
           <canvas id="sparkProtons" height="60"></canvas>
           <div class="spark-cap">GOES Protons (7d)</div>
         </div>
+        <div class="spark-wrap">
+          <canvas id="sparkBz" height="60"></canvas>
+          <div class="spark-cap">IMF Bz (last 24h)</div>
+        </div>
+        <div class="spark-wrap">
+          <canvas id="sparkSw" height="60"></canvas>
+          <div class="spark-cap">Solar wind speed (last 24h)</div>
+        </div>
       </article>
 
       <article class="ge-card"><h3>Sunspots / HMI</h3>
@@ -132,6 +140,34 @@ add_shortcode('gaia_space_detail', function($atts){
           drawSpark('sparkXrs', toSeriesXrs(ser.xrs_7d), '#7fc8ff');
           drawSpark('sparkProtons', toSeriesProtons(ser.protons_7d), '#ffd089');
         }catch(e){}
+
+        // Fetch SWPC 1-day JSON for Bz and plasma speed and render sparks
+        function fetchJson(url){ return fetch(url, {cache:'no-store'}).then(r=>r.json()); }
+        function toSeriesBz(rows){
+          // mag-1-day.json rows: [time_tag, bx, by, bz, bt, lat, lon]
+          const out=[]; (rows||[]).slice(-300).forEach(r=>{ try{
+            const t = r[0]; const bz = parseFloat(r[3]);
+            if (t && isFinite(bz)) out.push({x:new Date(t), y:bz});
+          }catch(e){} }); return out;
+        }
+        function toSeriesSw(rows){
+          // plasma-1-day.json rows: [time_tag, density, speed, temperature]
+          const out=[]; (rows||[]).slice(-300).forEach(r=>{ try{
+            const t = r[0]; const spd = parseFloat(r[2]);
+            if (t && isFinite(spd)) out.push({x:new Date(t), y:spd});
+          }catch(e){} }); return out;
+        }
+        Promise.all([
+          fetchJson('https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json').catch(()=>null),
+          fetchJson('https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json').catch(()=>null)
+        ]).then(([mag,plasma])=>{
+          try{
+            const magRows = Array.isArray(mag)? mag.slice(1) : [];
+            const plaRows = Array.isArray(plasma)? plasma.slice(1) : [];
+            drawSpark('sparkBz', toSeriesBz(magRows), '#a7d3ff');
+            drawSpark('sparkSw', toSeriesSw(plaRows), '#ffd089');
+          }catch(e){}
+        });
       })();
     </script>
   </section>
