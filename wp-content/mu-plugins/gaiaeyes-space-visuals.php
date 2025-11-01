@@ -62,21 +62,12 @@ add_shortcode('gaia_space_detail', function($atts){
         <?php if(!empty($img['lasco_c3'])): ?><figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['lasco_c3']); ?>" alt="SOHO LASCO C3 latest" /><figcaption>LASCO C3</figcaption></figure><?php endif; ?>
       </div></article>
 
-      <article class="ge-card"><h3>Magnetometers</h3><div class="ov-grid">
-        <?php 
-          $mags = [
-            'geomag_global' => 'Global 1‑minute',
-            'geomag_boulder' => 'Boulder',
-            'geomag_fredericksburg' => 'Fredericksburg',
-            'geomag_college' => 'College'
-          ];
-          $hasMag = false;
-          foreach ($mags as $k=>$cap):
-            if (!empty($img[$k])) { $hasMag = true; ?>
-              <figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img[$k]); ?>" alt="Magnetometer <?php echo esc_attr($cap); ?>" /><figcaption><?php echo esc_html($cap); ?></figcaption></figure>
-        <?php } endforeach; ?>
-        <?php if (!$hasMag): ?><div class="ge-note">Magnetometer plots unavailable.</div><?php endif; ?>
-      </div>
+      <article class="ge-card"><h3>Geomagnetic Indices (Kp)</h3>
+        <?php if(!empty($img['kp_plot'])): ?>
+          <img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['kp_plot']); ?>" alt="Planetary K-index plot" />
+        <?php else: ?>
+          <div class="ge-note">K-index plot unavailable.</div>
+        <?php endif; ?>
         <div class="spark-wrap">
           <canvas id="sparkProtons" height="60"></canvas>
           <div class="spark-cap">GOES Protons (7d)</div>
