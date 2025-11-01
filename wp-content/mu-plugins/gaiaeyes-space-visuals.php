@@ -57,10 +57,25 @@ add_shortcode('gaia_space_detail', function($atts){
         </div>
       </article>
 
-      <article class="ge-card"><h3>Coronagraph / CMEs</h3><div class="ov-grid">
-        <?php if(!empty($img['soho_c2'])): ?><figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['soho_c2']); ?>" alt="SOHO C2 latest" /><figcaption>SOHO C2</figcaption></figure><?php endif; ?>
-        <?php if(!empty($img['lasco_c3'])): ?><figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['lasco_c3']); ?>" alt="SOHO LASCO C3 latest" /><figcaption>LASCO C3</figcaption></figure><?php endif; ?>
-      </div></article>
+      <article class="ge-card"><h3>Coronagraph / CMEs</h3>
+        <div class="ov-grid">
+          <?php if(!empty($img['soho_c2'])): ?>
+            <figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['soho_c2']); ?>" alt="SOHO C2 latest" /><figcaption>SOHO C2</figcaption></figure>
+          <?php endif; ?>
+          <?php if(!empty($img['lasco_c3'])): ?>
+            <figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['lasco_c3']); ?>" alt="SOHO LASCO C3 latest" /><figcaption>LASCO C3</figcaption></figure>
+          <?php endif; ?>
+          <?php if(!empty($img['ccor1_jpeg'])): ?>
+            <figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['ccor1_jpeg']); ?>" alt="GOES CCOR‑1 latest" /><figcaption>CCOR‑1</figcaption></figure>
+          <?php endif; ?>
+        </div>
+        <?php if (!empty($j['video']['ccor1_mp4'])): ?>
+          <video controls style="width:100%;margin-top:8px" preload="metadata">
+            <source src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($j['video']['ccor1_mp4']); ?>" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        <?php endif; ?>
+      </article>
 
       <article class="ge-card"><h3>Geomagnetic Indices (Kp)</h3>
         <?php if(!empty($img['kp_plot'])): ?>
@@ -80,6 +95,17 @@ add_shortcode('gaia_space_detail', function($atts){
           <canvas id="sparkSw" height="60"></canvas>
           <div class="spark-cap">Solar wind speed (last 24h)</div>
         </div>
+      </article>
+
+      <article class="ge-card"><h3>GEOSPACE Plots</h3>
+        <div class="ov-grid">
+          <?php foreach (['geospace_1d'=>'1 day','geospace_3h'=>'3 hours','geospace_7d'=>'7 days'] as $k=>$cap): if(!empty($img[$k])): ?>
+            <figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img[$k]); ?>" alt="Geospace <?php echo esc_attr($cap); ?>" /><figcaption><?php echo esc_html($cap); ?></figcaption></figure>
+          <?php endif; endforeach; ?>
+        </div>
+        <?php if (empty($img['geospace_1d']) && empty($img['geospace_3h']) && empty($img['geospace_7d'])): ?>
+          <div class="ge-note">Geospace plots unavailable.</div>
+        <?php endif; ?>
       </article>
 
       <article class="ge-card"><h3>Sunspots / HMI</h3>
