@@ -25,12 +25,17 @@ add_shortcode('gaia_space_detail', function($atts){
   $j = ge_json_cached($a['url'], $a['cache']);
   if (!$j) return '<div class="ge-card">Space dashboard unavailable.</div>';
   $img = $j['images'] ?? []; $ser = $j['series'] ?? ['xrs_7d'=>[],'protons_7d'=>[]];
+  $missing = $j['missing'] ?? [];
   ob_start(); ?>
   <section class="ge-panel ge-space">
     <div class="ge-grid">
-      <article class="ge-card"><h3>Solar disc (SUVI 131Å)</h3>
-        <?php if(!empty($img['suvi_131_latest'])): ?>
-          <img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['suvi_131_latest']); ?>" alt="GOES SUVI 131 latest" />
+      <article class="ge-card"><h3>Solar disc (AIA 193/304 Å)</h3>
+        <?php if(!empty($img['aia_primary'])): ?>
+          <img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['aia_primary']); ?>" alt="SDO AIA latest" />
+        <?php elseif(!empty($img['suvi_131_latest'])): ?>
+          <img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['suvi_131_latest']); ?>" alt="GOES SUVI latest" />
+        <?php else: ?>
+          <div class="ge-note">Latest solar disc image unavailable.</div>
         <?php endif; ?>
         <div class="spark-wrap">
           <canvas id="sparkXrs" height="60"></canvas>
@@ -54,13 +59,23 @@ add_shortcode('gaia_space_detail', function($atts){
 
       <article class="ge-card"><h3>Coronagraph / CMEs</h3><div class="ov-grid">
         <?php if(!empty($img['soho_c2'])): ?><figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['soho_c2']); ?>" alt="SOHO C2 latest" /><figcaption>SOHO C2</figcaption></figure><?php endif; ?>
-        <?php if(!empty($img['goes_ccor1'])): ?><figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['goes_ccor1']); ?>" alt="GOES CCOR-1 latest" /><figcaption>GOES CCOR-1</figcaption></figure><?php endif; ?>
+        <?php if(!empty($img['lasco_c3'])): ?><figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['lasco_c3']); ?>" alt="SOHO LASCO C3 latest" /><figcaption>LASCO C3</figcaption></figure><?php endif; ?>
       </div></article>
 
       <article class="ge-card"><h3>Magnetometers</h3><div class="ov-grid">
-        <?php foreach (['mag_kiruna'=>'Kiruna','mag_canmos'=>'CANMOS','mag_hobart'=>'Hobart'] as $k=>$cap): if(!empty($img[$k])): ?>
-          <figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img[$k]); ?>" alt="Magnetometer <?php echo esc_attr($cap); ?>" /><figcaption><?php echo esc_html($cap); ?></figcaption></figure>
-        <?php endif; endforeach; ?>
+        <?php 
+          $mags = [
+            'geomag_global' => 'Global 1‑minute',
+            'geomag_boulder' => 'Boulder',
+            'geomag_fredericksburg' => 'Fredericksburg',
+            'geomag_college' => 'College'
+          ];
+          $hasMag = false;
+          foreach ($mags as $k=>$cap):
+            if (!empty($img[$k])) { $hasMag = true; ?>
+              <figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img[$k]); ?>" alt="Magnetometer <?php echo esc_attr($cap); ?>" /><figcaption><?php echo esc_html($cap); ?></figcaption></figure>
+        <?php } endforeach; ?>
+        <?php if (!$hasMag): ?><div class="ge-note">Magnetometer plots unavailable.</div><?php endif; ?>
       </div>
         <div class="spark-wrap">
           <canvas id="sparkProtons" height="60"></canvas>
@@ -83,6 +98,7 @@ add_shortcode('gaia_space_detail', function($atts){
       .cta-row{ margin-top:8px }
       .gaia-link{ color:inherit; text-decoration:none; border-bottom:1px dotted rgba(255,255,255,.25) }
       .gaia-link:hover{ border-bottom-color: rgba(255,255,255,.6) }
+      .ge-note{ opacity:.85; font-size:.9rem; margin-top:6px }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
