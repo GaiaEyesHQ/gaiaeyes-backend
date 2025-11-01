@@ -3,6 +3,7 @@ import os
 import json
 import datetime as dt
 import urllib.request
+import urllib.parse
 
 
 # Helper to read env overrides and split by comma
@@ -45,6 +46,36 @@ def fetch_json(url):
         return None
 
 
+def http_get(url, as_json=False, ua="GaiaEyes/1.0 (+https://gaiaeyes.com)"):
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": ua})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = r.read()
+        return json.loads(data.decode("utf-8")) if as_json else data
+    except Exception as e:
+        print(f"[get] {url} -> {e}")
+        return None
+
+def latest_from_manifest(base, manifest_json_name):
+    """
+    Read a manifest (e.g. /products/ccor1/jpegs.json) containing a list of items with 'name'/'modified'.
+    Return the absolute URL of the newest asset, or None.
+    """
+    man_url = urllib.parse.urljoin(base.rstrip('/') + '/', manifest_json_name)
+    j = http_get(man_url, as_json=True)
+    if not isinstance(j, list) or not j:
+        return None
+    try:
+        j_sorted = sorted(j, key=lambda x: x.get('modified') or x.get('name') or '', reverse=True)
+        latest = j_sorted[0]
+    except Exception:
+        latest = j[-1]
+    name = latest.get('name') or latest.get('file') or ''
+    if not name:
+        return None
+    return urllib.parse.urljoin(base.rstrip('/') + '/', name)
+
+
 def main():
     # 1) Solar imagery + Solar flares (XRS) + Proton flux (GOES)
     suvi_latest = env_urls("SUVI_URLS", [
@@ -64,22 +95,25 @@ def main():
         "https://soho.nascom.nasa.gov/data/realtime/c3/1024/latest.jpg"
     ])
 
+    # CCOR-1 manifests for JPEG and MP4
+    ccor_base = "https://services.swpc.noaa.gov/products/ccor1"
+    ccor1_jpeg_url = latest_from_manifest(ccor_base + "/jpegs", "jpegs.json")
+    ccor1_mp4_url  = latest_from_manifest(ccor_base + "/mp4s",  "mp4s.json")
+
     # 4) HMI intensitygram (sunspot context). If you prefer SDO AIA 193Å (coronal holes), swap a stable endpoint later.
     hmi_img = "https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_HMIIC.jpg"
 
-    # Magnetometers (global and three US stations via SWPC)
-    geomag_global = env_urls("GEOMAG_GLOBAL_URLS", [
-        "https://services.swpc.noaa.gov/images/geomag/1-minute.png"
-    ])
-    geomag_boulder = env_urls("GEOMAG_BOULDER_URLS", [
-        "https://services.swpc.noaa.gov/images/geomag/Boulder_mag_1m.png"
-    ])
-    geomag_fredericksburg = env_urls("GEOMAG_FRED_URLS", [
-        "https://services.swpc.noaa.gov/images/geomag/Fredericksburg_mag_1m.png"
-    ])
-    geomag_college = env_urls("GEOMAG_COLLEGE_URLS", [
-        "https://services.swpc.noaa.gov/images/geomag/College_mag_1m.png"
-    ])
+    # GEOSPACE plots and station indices / DRAP / synoptic / overview
+    geospace_1d = "https://services.swpc.noaa.gov/images/geospace/geospace_1_day.png"
+    geospace_3h = "https://services.swpc.noaa.gov/images/geospace/geospace_3_hour.png"
+    geospace_7d = "https://services.swpc.noaa.gov/images/geospace/geospace_7_day.png"
+    kp_station  = "https://services.swpc.noaa.gov/images/station-k-index.png"
+    a_station   = "https://services.swpc.noaa.gov/images/station-a-index.png"
+    drap_global = "https://services.swpc.noaa.gov/images/drap_global.png"
+    drap_npole  = "https://services.swpc.noaa.gov/images/drap_n-pole.png"
+    drap_spole  = "https://services.swpc.noaa.gov/images/drap_s-pole.png"
+    synoptic_map = "https://services.swpc.noaa.gov/images/synoptic-map.jpg"
+    swx_small    = "https://services.swpc.noaa.gov/images/swx-overview-small.gif"
 
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     imgs = {
@@ -88,11 +122,18 @@ def main():
         "ovation_sh": (f"ovation_sh_{stamp}.jpg", ov_sh),
         "soho_c2": (f"soho_c2_{stamp}.jpg", soho_c2),
         "lasco_c3": (f"lasco_c3_{stamp}.jpg", lasco_c3),
+        "ccor1_jpeg": (f"ccor1_{stamp}.jpg", [ccor1_jpeg_url] if ccor1_jpeg_url else []),
         "hmi_intensity": (f"hmi_intensity_{stamp}.jpg", hmi_img),
-        "geomag_global": (f"geomag_global_{stamp}.png", geomag_global),
-        "geomag_boulder": (f"geomag_boulder_{stamp}.png", geomag_boulder),
-        "geomag_fredericksburg": (f"geomag_fredericksburg_{stamp}.png", geomag_fredericksburg),
-        "geomag_college": (f"geomag_college_{stamp}.png", geomag_college)
+        "geospace_1d": (f"geospace_1d_{stamp}.png", geospace_1d),
+        "geospace_3h": (f"geospace_3h_{stamp}.png", geospace_3h),
+        "geospace_7d": (f"geospace_7d_{stamp}.png", geospace_7d),
+        "kp_station": (f"kp_station_{stamp}.png", kp_station),
+        "a_station": (f"a_station_{stamp}.png", a_station),
+        "drap_global": (f"drap_global_{stamp}.png", drap_global),
+        "drap_n_pole": (f"drap_n_pole_{stamp}.png", drap_npole),
+        "drap_s_pole": (f"drap_s_pole_{stamp}.png", drap_spole),
+        "synoptic_map": (f"synoptic_map_{stamp}.jpg", synoptic_map),
+        "swx_overview_small": (f"swx_overview_small_{stamp}.gif", swx_small)
     }
     saved = {}
     missing = []
@@ -103,12 +144,29 @@ def main():
         else:
             missing.append(key)
 
+    # Download CCOR-1 MP4 video if available
+    video = {}
+    if ccor1_mp4_url:
+        try:
+            mp4_name = f"ccor1_{stamp}.mp4"
+            mp4_dest = os.path.join(IMG_DIR, mp4_name)
+            if dl([ccor1_mp4_url], mp4_dest):
+                video["ccor1_mp4"] = f"images/space/{mp4_name}"
+            else:
+                missing.append("ccor1_mp4")
+        except Exception as e:
+            print("[dl] ccor1 mp4 ->", e)
+            missing.append("ccor1_mp4")
+    else:
+        missing.append("ccor1_mp4")
+
     xrs = fetch_json(xrs_7d) or []
     p7d = fetch_json(protons_7d) or []
 
     out = {
         "timestamp_utc": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "images": saved,
+        "video": video,
         "missing": missing,
         "series": {
             "xrs_7d": xrs,
