@@ -7,9 +7,10 @@ if (!defined('ABSPATH')) {
   exit;
 }
 
-function ge_news_cached($url, $cache_min) {
+function ge_news_cached($url, $cache_min, $refresh = false) {
   $ttl = max(1, intval($cache_min)) * MINUTE_IN_SECONDS;
   $cache_key = 'ge_news_' . md5($url);
+  if ($refresh) { delete_transient($cache_key); }
   $payload = get_transient($cache_key);
   if ($payload === false) {
     $response = wp_remote_get(esc_url_raw($url), [
@@ -31,15 +32,20 @@ add_shortcode('gaia_news', function ($atts) {
     'url' => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/news_latest.json',
     'cache' => 30,
     'limit' => 12,
+    'refresh' => 0,
   ], $atts, 'gaia_news');
 
-  $json = ge_news_cached($atts['url'], $atts['cache']);
+  $url = $atts['url'];
+  if (!empty($atts['refresh'])) { $url = add_query_arg('v', time(), $url); }
+
+  $json = ge_news_cached($url, $atts['cache'], !empty($atts['refresh']));
   if (!$json || empty($json['items']) || !is_array($json['items'])) {
     return '<div class="ge-card">No news.</div>';
   }
 
   $limit = max(1, intval($atts['limit']));
   $items = array_slice($json['items'], 0, $limit);
+  if (empty($items)) { return '<div class="ge-card">No news.</div>'; }
   ob_start();
   ?>
   <section class="ge-panel ge-news">
