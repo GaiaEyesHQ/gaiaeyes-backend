@@ -10,8 +10,11 @@ MEDIA_DIR = os.getenv("MEDIA_DIR", "gaiaeyes-media")
 LOOKBACK = int(os.getenv("LOOKBACK_DAYS", "30"))
 
 SOURCES = [
-  ("NOAA SWPC News", "https://services.swpc.noaa.gov/news/notifications.rss", "space_weather"),
-  ("NASA Heliophysics", "https://www.nasa.gov/rss/dyn/solar_system.rss", "solar_activity"),
+  # RSS/ATOM feeds
+  ("NASA Breaking", "https://www.nasa.gov/rss/dyn/breaking_news.rss", "space_activity", "rss"),
+  ("SpaceWeatherLive News", "https://www.spaceweatherlive.com/en/news.rss", "space_weather", "rss"),
+  # JSON alerts (SWPC)
+  ("SWPC Alerts", "https://services.swpc.noaa.gov/products/alerts.json", "space_weather", "swpc_alerts_json"),
 ]
 
 
@@ -59,25 +62,68 @@ def output_path() -> str:
   return os.path.join(MEDIA_DIR, "data", OUT_JSON)
 
 
+def parse_swpc_alerts_json(obj, cutoff):
+  """SWPC alerts.json is a list-of-lists; first row is header. We convert rows into news items if within LOOKBACK window."""
+  items = []
+  if not isinstance(obj, list) or not obj:
+    return items
+  header = obj[0] if isinstance(obj[0], list) else []
+  # Expect keys like: "issue_datetime", "message", "product_id", "type", "begin_time", "source"
+  def idx(k):
+    try:
+      return header.index(k)
+    except ValueError:
+      return -1
+  i_issue = idx("issue_datetime")
+  i_msg   = idx("message")
+  i_type  = idx("product_id") if idx("product_id")!=-1 else idx("type")
+  for row in obj[1:]:
+    if not isinstance(row, list):
+      continue
+    pub_str = row[i_issue] if (i_issue!=-1 and i_issue < len(row)) else ""
+    msg = row[i_msg] if (i_msg!=-1 and i_msg < len(row)) else "SWPC Alert"
+    cat = row[i_type] if (i_type!=-1 and i_type < len(row)) else "SWPC"
+    pub_dt = parse_pubdate(pub_str)
+    if pub_dt and pub_dt < cutoff:
+      continue
+    publ = pub_dt.replace(microsecond=0).isoformat().replace("+00:00","Z") if pub_dt else ""
+    items.append({
+      "title": msg,
+      "link": "https://www.swpc.noaa.gov/products/alerts-watches-and-warnings",
+      "published_at": publ,
+      "_dt": pub_dt or cutoff  # ensure sortability
+    })
+  return items
+
+
 def main():
-  now = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
+  now = dt.datetime.now(dt.timezone.utc)
   cutoff = now - dt.timedelta(days=max(0, LOOKBACK))
   items = []
-  for name, url, cat in SOURCES:
-    raw = fetch(url)
-    for it in rss_items(raw):
-      it["source"] = name
-      it["category"] = cat
-      parsed = parse_pubdate(it.get("published_at"))
-      if parsed:
-        if parsed < cutoff:
+  for entry in SOURCES:
+    if len(entry) == 4:
+      name, url, cat, kind = entry
+    else:
+      name, url, cat = entry; kind = "rss"
+    data = fetch(url)
+    if not data:
+      continue
+    if kind == "rss":
+      for it in rss_items(data):
+        it["source"] = name
+        it["category"] = cat
+        parsed = parse_pubdate(it.get("published_at"))
+        if parsed and parsed < cutoff:
           continue
-        it["published_at"] = parsed.replace(microsecond=0).isoformat().replace("+00:00", "Z")
-        it["_dt"] = parsed
-      else:
-        it["published_at"] = ""
-        it["_dt"] = now
-      items.append(it)
+        it["published_at"] = parsed.replace(microsecond=0).isoformat().replace("+00:00", "Z") if parsed else ""
+        it["_dt"] = parsed or now
+        items.append(it)
+    elif kind == "swpc_alerts_json":
+      try:
+        obj = json.loads(data)
+      except Exception:
+        obj = None
+      items.extend(parse_swpc_alerts_json(obj, cutoff))
 
   seen = set()
   deduped = []
