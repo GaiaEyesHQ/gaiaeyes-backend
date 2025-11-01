@@ -12,20 +12,25 @@ os.makedirs(IMG_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
 
 
-def dl(url, dest):
-    try:
-        with urllib.request.urlopen(url, timeout=30) as r:
-            with open(dest, "wb") as f:
-                f.write(r.read())
-        return True
-    except Exception as e:
-        print(f"[dl] {url} -> {e}")
-        return False
+def dl(url_or_urls, dest):
+    """Download first successful URL into dest. url_or_urls can be str or list[str]."""
+    urls = url_or_urls if isinstance(url_or_urls, (list, tuple)) else [url_or_urls]
+    for url in urls:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent":"GaiaEyes/1.0 (+https://gaiaeyes.com)"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                with open(dest, "wb") as f:
+                    f.write(r.read())
+            return True
+        except Exception as e:
+            print(f"[dl] {url} -> {e}")
+    return False
 
 
 def fetch_json(url):
     try:
-        with urllib.request.urlopen(url, timeout=30) as r:
+        req = urllib.request.Request(url, headers={"User-Agent":"GaiaEyes/1.0 (+https://gaiaeyes.com)"})
+        with urllib.request.urlopen(req, timeout=30) as r:
             return json.loads(r.read().decode("utf-8"))
     except Exception as e:
         print(f"[json] {url} -> {e}")
@@ -34,7 +39,10 @@ def fetch_json(url):
 
 def main():
     # 1) GOES SUVI (131Å) + Solar flares (XRS) + Proton flux (GOES)
-    suvi_latest = "https://services.swpc.noaa.gov/images/animations/suvi/primary/131/latest.jpg"
+    suvi_latest = [
+        "https://services.swpc.noaa.gov/images/animations/suvi/primary/131/latest.jpg",
+        "https://services.swpc.noaa.gov/images/suvi/primary/131/latest.jpg"
+    ]
     xrs_7d = "https://services.swpc.noaa.gov/json/goes/primary/xrays-7-day.json"
     protons_7d = "https://services.swpc.noaa.gov/json/goes/primary/integral-protons-7-day.json"
 
@@ -44,17 +52,26 @@ def main():
 
     # 3) CME coronagraph imagery (SOHO C2 & GOES CCOR-1)
     soho_c2 = "https://soho.nascom.nasa.gov/data/realtime/c2/1024/latest.jpg"
-    goes_cc1 = "https://services.swpc.noaa.gov/images/goes-ccor1/latest.jpg"
+    goes_cc1 = [
+        "https://services.swpc.noaa.gov/images/goes-ccor1/latest.jpg",
+        "https://services.swpc.noaa.gov/images/animations/goes-ccor1/latest.jpg"
+    ]
 
     # 4) HMI intensitygram (sunspot context). If you prefer SDO AIA 193Å (coronal holes), swap a stable endpoint later.
     hmi_img = "https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_HMIIC.jpg"
 
     # 5) Magnetometer plots (Kiruna/CANMOS/Hobart) — replace with your preferred latest endpoints if you have better sources
     kiruna = "https://www.irf.se/Observatory/?download=magplot&site=kir"
-    canmos = "https://www.spaceweather.gc.ca/auto_generated_products/magnetometers/013.png"
-    hobart = "https://www.sws.bom.gov.au/Images/HF%20Systems/IPS%20Magnetometer%20Data/Hobart.png"
+    canmos = [
+        "https://www.spaceweather.gc.ca/auto_generated_products/magnetometers/013.png",
+        "https://www.spaceweather.gc.ca/auto_generated_products/magnetometers/000.png"
+    ]
+    hobart = [
+        "https://www.sws.bom.gov.au/Images/HF%20Systems/IPS%20Magnetometer%20Data/Hobart.png",
+        "https://www.sws.bom.gov.au/Images/HF%20Systems/IPS%20Magnetometer%20Data/hobart.png"
+    ]
 
-    stamp = dt.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     imgs = {
         "suvi_131_latest": ("suvi_131_latest.jpg", suvi_latest),
         "ovation_nh": (f"ovation_nh_{stamp}.jpg", ov_nh),
@@ -76,7 +93,7 @@ def main():
     p7d = fetch_json(protons_7d) or []
 
     out = {
-        "timestamp_utc": dt.datetime.utcnow().replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "timestamp_utc": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "images": saved,
         "series": {
             "xrs_7d": xrs,
