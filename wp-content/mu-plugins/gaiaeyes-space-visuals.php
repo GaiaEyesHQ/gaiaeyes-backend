@@ -86,6 +86,35 @@ add_shortcode('gaia_space_detail', function($atts){
         <?php if(!empty($img['hmi_intensity'])): ?><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['hmi_intensity']); ?>" alt="HMI Intensitygram latest" /><?php endif; ?>
         <div class="cta-row"><a class="gaia-link" href="/aurora/#map">Aurora forecast →</a> <a class="gaia-link" href="/news/?category=solar_activity" style="margin-left:12px;">News →</a></div>
       </article>
+      <article class="ge-card"><h3>HF/DRAP & Indices</h3>
+        <div class="ov-grid">
+          <?php if(!empty($img['drap_global'])): ?>
+            <figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['drap_global']); ?>" alt="DRAP Global" /><figcaption>DRAP global</figcaption></figure>
+          <?php endif; ?>
+          <?php if(!empty($img['kp_station'])): ?>
+            <figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['kp_station']); ?>" alt="Station K-index" /><figcaption>Station K-index</figcaption></figure>
+          <?php endif; ?>
+          <?php if(!empty($img['a_station'])): ?>
+            <figure><img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['a_station']); ?>" alt="Station A-index" /><figcaption>Station A-index</figcaption></figure>
+          <?php endif; ?>
+        </div>
+      </article>
+
+      <article class="ge-card"><h3>SWx Overview</h3>
+        <?php if(!empty($img['swx_overview_small'])): ?>
+          <img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['swx_overview_small']); ?>" alt="Space Weather Overview" />
+        <?php else: ?>
+          <div class="ge-note">SWx overview unavailable.</div>
+        <?php endif; ?>
+      </article>
+
+      <article class="ge-card"><h3>Synoptic Map</h3>
+        <?php if(!empty($img['synoptic_map'])): ?>
+          <img src="https://gaiaeyeshq.github.io/gaiaeyes-media/<?php echo esc_attr($img['synoptic_map']); ?>" alt="Synoptic Map" />
+        <?php else: ?>
+          <div class="ge-note">Synoptic map unavailable.</div>
+        <?php endif; ?>
+      </article>
     </div>
     <style>
       .ge-space .ge-grid{ display:grid; gap:12px }
