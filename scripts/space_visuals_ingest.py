@@ -56,24 +56,27 @@ def http_get(url, as_json=False, ua="GaiaEyes/1.0 (+https://gaiaeyes.com)"):
         print(f"[get] {url} -> {e}")
         return None
 
-def latest_from_manifest(base, manifest_json_name):
+def latest_from_dir(base_url: str, suffix_filter: str = ".jpg", contains: str = "ccor1"):
+    """Scrape a simple directory index and return the latest matching file URL by name sort.
+    base_url should end with '/'. We match links containing `contains` and ending with `suffix_filter`.
     """
-    Read a manifest (e.g. /products/ccor1/jpegs.json) containing a list of items with 'name'/'modified'.
-    Return the absolute URL of the newest asset, or None.
-    """
-    man_url = urllib.parse.urljoin(base.rstrip('/') + '/', manifest_json_name)
-    j = http_get(man_url, as_json=True)
-    if not isinstance(j, list) or not j:
+    html = http_get(base_url, as_json=False)
+    if not html:
         return None
     try:
-        j_sorted = sorted(j, key=lambda x: x.get('modified') or x.get('name') or '', reverse=True)
-        latest = j_sorted[0]
+        text = html.decode("utf-8", "ignore") if isinstance(html, (bytes, bytearray)) else str(html)
     except Exception:
-        latest = j[-1]
-    name = latest.get('name') or latest.get('file') or ''
-    if not name:
+        text = str(html)
+    import re
+    hrefs = re.findall(r'href=["\']([^"\']+)["\']', text, flags=re.IGNORECASE)
+    cands = [h for h in hrefs if h.lower().endswith(suffix_filter) and contains in h]
+    if not cands:
         return None
-    return urllib.parse.urljoin(base.rstrip('/') + '/', name)
+    cands = sorted(set(cands))
+    last = cands[-1]
+    if not last.startswith("http"):
+        return urllib.parse.urljoin(base_url.rstrip('/') + '/', last)
+    return last
 
 
 def main():
@@ -95,10 +98,16 @@ def main():
         "https://soho.nascom.nasa.gov/data/realtime/c3/1024/latest.jpg"
     ])
 
-    # CCOR-1 manifests for JPEG and MP4
-    ccor_base = "https://services.swpc.noaa.gov/products/ccor1"
-    ccor1_jpeg_url = latest_from_manifest(ccor_base + "/jpegs", "jpegs.json")
-    ccor1_mp4_url  = latest_from_manifest(ccor_base + "/mp4s",  "mp4s.json")
+    # CCOR-1 directory scrape for latest JPEG, and pick known MP4 names
+    ccor_jpegs_dir = "https://services.swpc.noaa.gov/products/ccor1/jpegs/"
+    ccor_mp4s_dir  = "https://services.swpc.noaa.gov/products/ccor1/mp4s/"
+    ccor1_jpeg_url = latest_from_dir(ccor_jpegs_dir, suffix_filter=".jpg", contains="ccor1")
+    ccor1_mp4_url = None
+    for name in [os.getenv("CCOR1_MP4_NAME", "ccor1_last_24hrs.mp4"), "ccor1_last_7_days.mp4", "ccor1_last_27_days.mp4"]:
+        test = ccor_mp4s_dir.rstrip('/') + '/' + name
+        if http_get(test, as_json=False):
+            ccor1_mp4_url = test
+            break
 
     # 4) HMI intensitygram (sunspot context). If you prefer SDO AIA 193Å (coronal holes), swap a stable endpoint later.
     hmi_img = "https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_HMIIC.jpg"
