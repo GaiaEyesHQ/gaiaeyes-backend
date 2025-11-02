@@ -58,9 +58,8 @@ add_shortcode('gaia_space_detail', function($atts){
         <?php endif; ?>
 
         <div class="spark-wrap">
-          <div class="spark-box">
-            <canvas id="sparkXrs" class="spark-canvas"></canvas>
-          </div>
+          <div class="spark-head"><span id="sparkXrsVal">—</span></div>
+          <div class="spark-box"><canvas id="sparkXrs" class="spark-canvas"></canvas></div>
           <div class="spark-cap">GOES X-ray (7d)</div>
         </div>
       </article>
@@ -152,21 +151,18 @@ add_shortcode('gaia_space_detail', function($atts){
         </div>
 
         <div class="spark-wrap">
-          <div class="spark-box">
-            <canvas id="sparkProtons" class="spark-canvas"></canvas>
-          </div>
+          <div class="spark-head"><span id="sparkProtonsVal">—</span></div>
+          <div class="spark-box"><canvas id="sparkProtons" class="spark-canvas"></canvas></div>
           <div class="spark-cap">GOES Protons (7d)</div>
         </div>
         <div class="spark-wrap">
-          <div class="spark-box">
-            <canvas id="sparkBz" class="spark-canvas"></canvas>
-          </div>
+          <div class="spark-head"><span id="sparkBzVal">—</span></div>
+          <div class="spark-box"><canvas id="sparkBz" class="spark-canvas"></canvas></div>
           <div class="spark-cap">IMF Bz (last 24h)</div>
         </div>
         <div class="spark-wrap">
-          <div class="spark-box">
-            <canvas id="sparkSw" class="spark-canvas"></canvas>
-          </div>
+          <div class="spark-head"><span id="sparkSwVal">—</span></div>
+          <div class="spark-box"><canvas id="sparkSw" class="spark-canvas"></canvas></div>
           <div class="spark-cap">Solar wind speed (last 24h)</div>
         </div>
       </article>
@@ -258,17 +254,18 @@ add_shortcode('gaia_space_detail', function($atts){
       .kp-box{ display:inline-block; width:14px; height:14px; border-radius:3px; margin-right:6px; vertical-align:-2px }
       .kp-g0{ background:#3a9a5d } .kp-g1{ background:#b3e67a } .kp-g2{ background:#ffd166 } .kp-g3{ background:#ff9f1c } .kp-g4{ background:#ff6b6b } .kp-g5{ background:#a40000 }
 
-      /* Spark charts: fixed height and containment */
-      .spark-box{ position:relative; width:100%; height:72px }
-      .spark-canvas{ display:block; width:100% !important; height:100% !important }
-      /* Cap tall images and videos on mobile */
+      /* Spark charts: fixed height; add head row for latest value */
+      .spark-box{ position:relative; width:100%; height:84px; }
+      .spark-canvas{ display:block; width:100% !important; height:100% !important; }
+      .spark-head{ font-size:.9rem; opacity:.9; margin-bottom:4px; display:flex; justify-content:flex-end; }
+      /* Cap very tall media on mobile/desktop (kept from previous fix) */
       @media(max-width:640px){
         .ge-space img,
-        .ge-space video{ max-height:360px; object-fit:contain }
+        .ge-space video{ max-height:360px; object-fit:contain; }
       }
       @media(min-width:641px){
         .ge-space img,
-        .ge-space video{ max-height:560px; object-fit:contain }
+        .ge-space video{ max-height:560px; object-fit:contain; }
       }
     </style>
 
@@ -278,64 +275,100 @@ add_shortcode('gaia_space_detail', function($atts){
     <script>
       (function(){
         const ser = <?php echo wp_json_encode($ser); ?> || {};
-        function drawSpark(id, data, color){
-          const el = document.getElementById(id);
-          if(!el) return;
+        function drawSpark(id, data, color, opts={}){
+          const el = document.getElementById(id); if(!el) return null;
           const box = el.parentElement;
           const w = box.clientWidth || 300;
-          const h = box.clientHeight || 72;
-          el.width = w;
-          el.height = h;
-          const ctx = el.getContext('2d');
-          new Chart(ctx, {
-            type: 'line',
-            data: { datasets: [{ data: data, borderColor: color, borderWidth: 1.6, tension: .2, pointRadius: 0 }] },
-            options: {
-              parsing: false,
-              responsive: true,
-              maintainAspectRatio: false,
-              animation: false,
-              scales: {
-                x: { type: 'time', time: { unit: 'hour' }, display: false },
-                y: { display: false }
-              },
-              plugins: { legend: { display: false }, tooltip: { enabled: false } }
+          const h = box.clientHeight || 84;
+          el.width = w; el.height = h;
+
+          // plugin: optional zero baseline (for Bz)
+          const zeroLine = {
+            id: 'zeroLine',
+            afterDraw(chart, args, pluginOptions) {
+              if (!opts.zero) return;
+              const {ctx, scales} = chart;
+              const y = scales.y.getPixelForValue(0);
+              ctx.save();
+              ctx.strokeStyle = 'rgba(255,255,255,.35)';
+              ctx.setLineDash([4,4]);
+              ctx.beginPath(); ctx.moveTo(scales.x.left, y); ctx.lineTo(scales.x.right, y); ctx.stroke();
+              ctx.restore();
             }
+          };
+
+          return new Chart(el.getContext('2d'), {
+            type:'line',
+            data:{ datasets:[{ data:data, borderColor:color, borderWidth:1.6, tension:.25, pointRadius:0 }]},
+            options:{
+              parsing:false, responsive:true, maintainAspectRatio:false, animation:false,
+              scales:{ x:{ type:'time', time:{ unit:'hour' }, display:false }, y:{ display:false } },
+              plugins:{ legend:{display:false}, tooltip:{enabled:false} }
+            },
+            plugins: [zeroLine]
           });
         }
-        function toSeriesXrs(rows){
-          const out=[]; (rows||[]).forEach(r=>{
-            const t = r.time_tag || r.time || r.timestamp || null;
-            const c1 = parseFloat(r.xray_flux_1 || r.short || 0);
-            const c2 = parseFloat(r.xray_flux_2 || r.long  || 0);
-            const v  = Math.max(isFinite(c1)?c1:0, isFinite(c2)?c2:0);
-            if (t) out.push({x:new Date(t), y:v});
-          }); return out.slice(-240);
+        
+        function latestPoint(arr){ if(!arr || !arr.length) return null; return arr[arr.length-1]; }
+        function fmtXray(value){
+          // value in W/m^2 (XRS). Convert to class (A/B/C/M/X) with magnitude.
+          const v = Number(value||0);
+          if (!isFinite(v) || v<=0) return '—';
+          const logv = Math.log10(v);
+          // thresholds: A=1e-8.., B=1e-7.., C=1e-6.., M=1e-5.., X=1e-4..
+          const cls = (logv>=-4)?'X':(logv>=-5)?'M':(logv>=-6)?'C':(logv>=-7)?'B':'A';
+          // magnitude within class (e.g., 1.3C)
+          const scale = {'A':1e-8,'B':1e-7,'C':1e-6,'M':1e-5,'X':1e-4}[cls];
+          const mag = (v/scale).toFixed(1);
+          return `${mag}${cls} (${v.toExponential(1)} W/m²)`;
         }
-        function fetchJson(url){ return fetch(url, {cache:'no-store'}).then(r=>r.json()).catch(()=>null); }
-        function toSeriesBz(rows){
-          const out=[]; (rows||[]).slice(1).slice(-300).forEach(r=>{
-            try{ const t=r[0]; const bz=parseFloat(r[3]); if(t&&isFinite(bz)) out.push({x:new Date(t), y:bz}); }catch(e){}
-          }); return out;
-        }
-        function toSeriesSw(rows){
-          const out=[]; (rows||[]).slice(1).slice(-300).forEach(r=>{
-            try{ const t=r[0]; const spd=parseFloat(r[2]); if(t&&isFinite(spd)) out.push({x:new Date(t), y:spd}); }catch(e){}
-          }); return out;
-        }
+        function setVal(id, text){ const el=document.getElementById(id); if(el) el.textContent=text; }
         // Sparks: XRS from JSON, Protons from JSON, Bz/Speed from SWPC 1-day
-        try{ drawSpark('sparkXrs', toSeriesXrs(ser.xrs_7d), '#7fc8ff'); }catch(e){}
-        try{ // Protons (7d)
+        // XRS (7d)
+        try {
+          const xrs = ser.xrs_7d || [];
+          const out = [];
+          (xrs||[]).forEach(r=>{
+            const t=r.time_tag||r.time||r.timestamp||null;
+            const c1=parseFloat(r.xray_flux_1||r.short||0);
+            const c2=parseFloat(r.xray_flux_2||r.long ||0);
+            const v=Math.max(isFinite(c1)?c1:0, isFinite(c2)?c2:0);
+            if(t) out.push({x:new Date(t), y:v});
+          });
+          const sliced = out.slice(-240);
+          drawSpark('sparkXrs', sliced, '#7fc8ff');
+          const lp = latestPoint(sliced);
+          setVal('sparkXrsVal', lp ? fmtXray(lp.y) : '—');
+        } catch(e){}
+
+        // Protons (7d)
+        try {
           const p = ser.protons_7d || [];
-          const out=[]; (p||[]).forEach(r=>{ const t=r.time_tag||r.time||null; const v=parseFloat(r.integral_protons_10MeV||r.flux||0); if(t&&isFinite(v)) out.push({x:new Date(t), y:v}); });
-          drawSpark('sparkProtons', out.slice(-240), '#ffd089');
-        }catch(e){}
+          const out=[];
+          (p||[]).forEach(r=>{ const t=r.time_tag||r.time||null; const v=parseFloat(r.integral_protons_10MeV||r.flux||0); if(t&&isFinite(v)) out.push({x:new Date(t), y:v}); });
+          const sliced = out.slice(-240);
+          drawSpark('sparkProtons', sliced, '#ffd089');
+          const lp = latestPoint(sliced);
+          setVal('sparkProtonsVal', lp ? (lp.y.toFixed(0)+' pfu') : '—');
+        } catch(e){}
+
+        // Bz & SW from SWPC 1-day
         Promise.all([
-          fetchJson('https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json'),
-          fetchJson('https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json')
+          fetch('https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json',{cache:'no-store'}).then(r=>r.json()).catch(()=>null),
+          fetch('https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json',{cache:'no-store'}).then(r=>r.json()).catch(()=>null)
         ]).then(([mag,plasma])=>{
-          try{ drawSpark('sparkBz', toSeriesBz(mag||[]), '#a7d3ff'); }catch(e){}
-          try{ drawSpark('sparkSw', toSeriesSw(plasma||[]), '#ffd089'); }catch(e){}
+          try{
+            const mRows = Array.isArray(mag)? mag.slice(1):[];
+            const bz = []; mRows.slice(-300).forEach(r=>{ const t=r[0], v=parseFloat(r[3]); if(t&&isFinite(v)) bz.push({x:new Date(t), y:v}); });
+            drawSpark('sparkBz', bz, '#a7d3ff', {zero:true});
+            const lp = latestPoint(bz); setVal('sparkBzVal', lp ? (lp.y.toFixed(1)+' nT') : '—');
+          }catch(e){}
+          try{
+            const pRows = Array.isArray(plasma)? plasma.slice(1):[];
+            const sw = []; pRows.slice(-300).forEach(r=>{ const t=r[0], v=parseFloat(r[2]); if(t&&isFinite(v)) sw.push({x:new Date(t), y:v}); });
+            drawSpark('sparkSw', sw, '#ffd089');
+            const lp = latestPoint(sw); setVal('sparkSwVal', lp ? (lp.y.toFixed(0)+' km/s') : '—');
+          }catch(e){}
         });
       })();
     </script>
