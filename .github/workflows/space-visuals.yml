@@ -22,13 +22,38 @@ jobs:
           python3 scripts/space_visuals_ingest.py
       - name: Commit & push (images + space_live.json)
         run: |
+          set -euo pipefail
           cd gaiaeyes-media
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config pull.rebase true
+
+          # Stage changes (tolerate no matches)
           git add images/space/* data/space_live.json || true
+
+          # No-op if nothing to commit
           if git diff --cached --quiet; then
             echo "No changes."
-          else
-            git commit -m "chore: update space visuals & space_live.json [skip ci]"
-            git push
+            exit 0
           fi
+
+          git commit -m "chore: update space visuals & space_live.json [skip ci]"
+
+          # Make sure we're up to date with remote main before pushing
+          git fetch origin main || true
+          git pull --rebase origin main || true
+
+          # Retry push up to 3 times in case remote advanced between runs
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "Push succeeded on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push failed on attempt ${attempt}; rebasing and retrying…"
+            git fetch origin main || true
+            git pull --rebase origin main || true
+            sleep $((RANDOM % 4 + 2))
+          done
+
+          echo "ERROR: Could not push after 3 attempts."
+          exit 1
