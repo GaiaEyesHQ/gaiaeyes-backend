@@ -322,24 +322,77 @@ add_shortcode('gaia_space_detail', function($atts){
           const mag = (v/scale).toFixed(1);
           return `${mag}${cls} (${v.toExponential(1)} W/m²)`;
         }
+        function toSeriesXrs(rows){
+          // Accepts array of objects (time_tag, short/long) OR array-of-arrays with header
+          if (!Array.isArray(rows) || rows.length === 0) return [];
+          // Case 1: rows are objects
+          if (rows.length && typeof rows[0] === 'object' && !Array.isArray(rows[0])) {
+            const out = [];
+            rows.forEach(r=>{
+              const t = r.time_tag || r.time || r.timestamp || null;
+              const c1 = parseFloat(r.xray_flux_1 || r.short || r['flux_short'] || 0);
+              const c2 = parseFloat(r.xray_flux_2 || r.long  || r['flux_long']  || 0);
+              const v  = Math.max(isFinite(c1)?c1:0, isFinite(c2)?c2:0);
+              if (t) out.push({x:new Date(t), y:v});
+            });
+            return out;
+          }
+          // Case 2: rows are arrays, maybe with a header row at [0]
+          // Common SWPC order: [time_tag, short, long]
+          let start = 0, timeIdx = 0, sIdx = 1, lIdx = 2;
+          if (Array.isArray(rows[0]) && rows[0].length && typeof rows[0][0] === 'string') {
+            // If first row looks like header strings, shift start to 1
+            const maybeHeader = rows[0].join(',').toLowerCase();
+            if (maybeHeader.includes('time') || maybeHeader.includes('short') || maybeHeader.includes('long')) start = 1;
+          }
+          const out = [];
+          for (let i = start; i < rows.length; i++) {
+            const r = rows[i]; if (!Array.isArray(r)) continue;
+            const t = r[timeIdx];
+            const c1 = parseFloat(r[sIdx]);
+            const c2 = parseFloat(r[lIdx]);
+            const v  = Math.max(isFinite(c1)?c1:0, isFinite(c2)?c2:0);
+            if (t) out.push({x:new Date(t), y:v});
+          }
+          return out;
+        }
         function setVal(id, text){ const el=document.getElementById(id); if(el) el.textContent=text; }
         // Sparks: XRS from JSON, Protons from JSON, Bz/Speed from SWPC 1-day
-        // XRS (7d)
-        try {
-          const xrs = ser.xrs_7d || [];
-          const out = [];
-          (xrs||[]).forEach(r=>{
-            const t=r.time_tag||r.time||r.timestamp||null;
-            const c1=parseFloat(r.xray_flux_1||r.short||0);
-            const c2=parseFloat(r.xray_flux_2||r.long ||0);
-            const v=Math.max(isFinite(c1)?c1:0, isFinite(c2)?c2:0);
-            if(t) out.push({x:new Date(t), y:v});
-          });
-          const sliced = out.slice(-240);
-          drawSpark('sparkXrs', sliced, '#7fc8ff');
-          const lp = latestPoint(sliced);
-          setVal('sparkXrsVal', lp ? fmtXray(lp.y) : '—');
-        } catch(e){}
+        // XRS (7d) — use embedded series if present else live fetch
+        (async function(){
+          try {
+            let xrsRaw = ser.xrs_7d || [];
+            // If the embedded series is empty, fetch live JSON from SWPC
+            if (!Array.isArray(xrsRaw) || xrsRaw.length === 0) {
+              try {
+                const live = await fetch('https://services.swpc.noaa.gov/json/goes/primary/xrays-7-day.json', {cache:'no-store'});
+                if (live.ok) xrsRaw = await live.json();
+              } catch(e) {}
+            }
+            // Some SWPC payloads are array-of-arrays with a header row
+            // If so, trim to last ~240 points for the spark
+            let arr = toSeriesXrs(xrsRaw);
+            if (arr.length > 240) arr = arr.slice(-240);
+            const chart = drawSpark('sparkXrs', arr, '#7fc8ff');
+            // Update latest value header (with class)
+            const lp = (arr.length ? arr[arr.length-1] : null);
+            if (lp) {
+              const v = Number(lp.y||0);
+              const txt = (function fmtXray(value){
+                const vv = Number(value||0);
+                if (!isFinite(vv) || vv<=0) return '—';
+                const logv = Math.log10(vv);
+                const cls = (logv>=-4)?'X':(logv>=-5)?'M':(logv>=-6)?'C':(logv>=-7)?'B':'A';
+                const scale = {'A':1e-8,'B':1e-7,'C':1e-6,'M':1e-5,'X':1e-4}[cls];
+                const mag = (vv/scale).toFixed(1);
+                return `${mag}${cls} (${vv.toExponential(1)} W/m²)`;
+              })(v);
+              const el = document.getElementById('sparkXrsVal'); if (el) el.textContent = txt;
+            } else {
+              const el = document.getElementById('sparkXrsVal'); if (el) el.textContent = '—';
+            }
+          } catch(e){}
+        })();
 
         // Protons (7d)
         try {
