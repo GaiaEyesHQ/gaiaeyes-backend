@@ -2,7 +2,7 @@ name: space-weather-daily-rollup
 
 on:
   schedule:
-    - cron: "45 * * * *"   # daily at 03:15 UTC
+    - cron: "15 * * * *"   # daily at 03:15 UTC
   workflow_dispatch: {}
 
 jobs:
