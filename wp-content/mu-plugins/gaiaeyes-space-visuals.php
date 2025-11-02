@@ -58,7 +58,9 @@ add_shortcode('gaia_space_detail', function($atts){
         <?php endif; ?>
 
         <div class="spark-wrap">
-          <canvas id="sparkXrs" height="60"></canvas>
+          <div class="spark-box">
+            <canvas id="sparkXrs" class="spark-canvas"></canvas>
+          </div>
           <div class="spark-cap">GOES X-ray (7d)</div>
         </div>
       </article>
@@ -150,15 +152,21 @@ add_shortcode('gaia_space_detail', function($atts){
         </div>
 
         <div class="spark-wrap">
-          <canvas id="sparkProtons" height="60"></canvas>
+          <div class="spark-box">
+            <canvas id="sparkProtons" class="spark-canvas"></canvas>
+          </div>
           <div class="spark-cap">GOES Protons (7d)</div>
         </div>
         <div class="spark-wrap">
-          <canvas id="sparkBz" height="60"></canvas>
+          <div class="spark-box">
+            <canvas id="sparkBz" class="spark-canvas"></canvas>
+          </div>
           <div class="spark-cap">IMF Bz (last 24h)</div>
         </div>
         <div class="spark-wrap">
-          <canvas id="sparkSw" height="60"></canvas>
+          <div class="spark-box">
+            <canvas id="sparkSw" class="spark-canvas"></canvas>
+          </div>
           <div class="spark-cap">Solar wind speed (last 24h)</div>
         </div>
       </article>
@@ -249,6 +257,19 @@ add_shortcode('gaia_space_detail', function($atts){
       .kp-legend{ display:grid; grid-template-columns:repeat(2,1fr); gap:6px; margin:8px 0 }
       .kp-box{ display:inline-block; width:14px; height:14px; border-radius:3px; margin-right:6px; vertical-align:-2px }
       .kp-g0{ background:#3a9a5d } .kp-g1{ background:#b3e67a } .kp-g2{ background:#ffd166 } .kp-g3{ background:#ff9f1c } .kp-g4{ background:#ff6b6b } .kp-g5{ background:#a40000 }
+
+      /* Spark charts: fixed height and containment */
+      .spark-box{ position:relative; width:100%; height:72px }
+      .spark-canvas{ display:block; width:100% !important; height:100% !important }
+      /* Cap tall images and videos on mobile */
+      @media(max-width:640px){
+        .ge-space img,
+        .ge-space video{ max-height:360px; object-fit:contain }
+      }
+      @media(min-width:641px){
+        .ge-space img,
+        .ge-space video{ max-height:560px; object-fit:contain }
+      }
     </style>
 
     <!-- Chart.js + date adapter for time-series sparks -->
@@ -258,14 +279,27 @@ add_shortcode('gaia_space_detail', function($atts){
       (function(){
         const ser = <?php echo wp_json_encode($ser); ?> || {};
         function drawSpark(id, data, color){
-          const el = document.getElementById(id); if(!el) return;
+          const el = document.getElementById(id);
+          if(!el) return;
+          const box = el.parentElement;
+          const w = box.clientWidth || 300;
+          const h = box.clientHeight || 72;
+          el.width = w;
+          el.height = h;
           const ctx = el.getContext('2d');
           new Chart(ctx, {
-            type:'line',
-            data:{ datasets:[{ data:data, borderColor:color, borderWidth:1.6, tension:.2, pointRadius:0 }]},
-            options:{ parsing:false, responsive:true, maintainAspectRatio:false, animation:false,
-              scales:{ x:{ type:'time', time:{ unit:'hour' }, display:false }, y:{ display:false } },
-              plugins:{ legend:{display:false}, tooltip:{enabled:false} }
+            type: 'line',
+            data: { datasets: [{ data: data, borderColor: color, borderWidth: 1.6, tension: .2, pointRadius: 0 }] },
+            options: {
+              parsing: false,
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: false,
+              scales: {
+                x: { type: 'time', time: { unit: 'hour' }, display: false },
+                y: { display: false }
+              },
+              plugins: { legend: { display: false }, tooltip: { enabled: false } }
             }
           });
         }
