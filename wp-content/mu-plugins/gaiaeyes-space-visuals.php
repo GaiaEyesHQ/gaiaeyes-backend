@@ -245,7 +245,8 @@ add_shortcode('gaia_space_detail', function($atts){
       .ov-grid{ display:grid; gap:8px } @media(min-width:640px){ .ov-grid{ grid-template-columns:repeat(2,1fr) } }
       figure{ margin:0 } figcaption{ text-align:center; font-size:.85rem; opacity:.85; margin-top:4px }
       .care-box{ margin-top:8px } .care-box h4{ margin:.25rem 0 } .care-box ul{ margin:0; padding-left:18px; line-height:1.4 }
-      .spark-wrap{ margin-top:8px } .spark-cap{ font-size:.85rem; opacity:.85; margin-top:2px }
+      .spark-wrap{ margin-top:8px }
+      .spark-cap{ font-size:.85rem; opacity:.85; margin-top:4px }
       .cta-row{ margin-top:8px }
       .gaia-link{ color:inherit; text-decoration:none; border-bottom:1px dotted rgba(255,255,255,.25) }
       .gaia-link:hover{ border-bottom-color: rgba(255,255,255,.6) }
@@ -255,9 +256,9 @@ add_shortcode('gaia_space_detail', function($atts){
       .kp-g0{ background:#3a9a5d } .kp-g1{ background:#b3e67a } .kp-g2{ background:#ffd166 } .kp-g3{ background:#ff9f1c } .kp-g4{ background:#ff6b6b } .kp-g5{ background:#a40000 }
 
       /* Spark charts: fixed height; add head row for latest value */
-      .spark-box{ position:relative; width:100%; height:84px; }
+      .spark-box{ position:relative; width:100%; height:120px; min-height:120px; }
       .spark-canvas{ display:block; width:100% !important; height:100% !important; }
-      .spark-head{ font-size:.9rem; opacity:.9; margin-bottom:4px; display:flex; justify-content:flex-end; }
+      .spark-head{ font-size:.9rem; opacity:.9; margin-bottom:6px; display:flex; justify-content:flex-end; }
       /* Cap very tall media on mobile/desktop (kept from previous fix) */
       @media(max-width:640px){
         .ge-space img,
@@ -275,40 +276,27 @@ add_shortcode('gaia_space_detail', function($atts){
     <script>
       (function(){
         const ser = <?php echo wp_json_encode($ser); ?> || {};
-        function drawSpark(id, data, color, opts={}){
-          const el = document.getElementById(id); if(!el) return null;
-          const box = el.parentElement;
-          const w = box.clientWidth || 300;
-          const h = box.clientHeight || 84;
-          el.width = w; el.height = h;
 
-          // plugin: optional zero baseline (for Bz)
-          const zeroLine = {
-            id: 'zeroLine',
-            afterDraw(chart, args, pluginOptions) {
-              if (!opts.zero) return;
-              const {ctx, scales} = chart;
-              const y = scales.y.getPixelForValue(0);
-              ctx.save();
-              ctx.strokeStyle = 'rgba(255,255,255,.35)';
-              ctx.setLineDash([4,4]);
-              ctx.beginPath(); ctx.moveTo(scales.x.left, y); ctx.lineTo(scales.x.right, y); ctx.stroke();
-              ctx.restore();
+        function whenSparkReady(cb){
+          if (window.GaiaSpark && window.GaiaSpark.renderSpark) {
+            cb(window.GaiaSpark);
+            return;
+          }
+          const handler = () => {
+            window.removeEventListener('gaiaSparkReady', handler);
+            if (window.GaiaSpark && window.GaiaSpark.renderSpark) {
+              cb(window.GaiaSpark);
             }
           };
+          window.addEventListener('gaiaSparkReady', handler, { once:true });
+        }
 
-          return new Chart(el.getContext('2d'), {
-            type:'line',
-            data:{ datasets:[{ data:data, borderColor:color, borderWidth:1.6, tension:.25, pointRadius:0 }]},
-            options:{
-              parsing:false, responsive:true, maintainAspectRatio:false, animation:false,
-              scales:{ x:{ type:'time', time:{ unit:'hour' }, display:false }, y:{ display:false } },
-              plugins:{ legend:{display:false}, tooltip:{enabled:false} }
-            },
-            plugins: [zeroLine]
+        function renderSpark(id, data, options){
+          whenSparkReady((spark) => {
+            spark.renderSpark(id, data, options);
           });
         }
-        
+
         function latestPoint(arr){ if(!arr || !arr.length) return null; return arr[arr.length-1]; }
         function fmtXray(value){
           // value in W/m^2 (XRS). Convert to class (A/B/C/M/X) with magnitude.
@@ -373,7 +361,7 @@ add_shortcode('gaia_space_detail', function($atts){
             // If so, trim to last ~240 points for the spark
             let arr = toSeriesXrs(xrsRaw);
             if (arr.length > 240) arr = arr.slice(-240);
-            const chart = drawSpark('sparkXrs', arr, '#7fc8ff');
+            renderSpark('sparkXrs', arr, { xLabel:'UTC time', yLabel:'GOES X-ray flux', units:'W/m²', yMin:0, color:'#7fc8ff' });
             // Update latest value header (with class)
             const lp = (arr.length ? arr[arr.length-1] : null);
             if (lp) {
@@ -400,7 +388,7 @@ add_shortcode('gaia_space_detail', function($atts){
           const out=[];
           (p||[]).forEach(r=>{ const t=r.time_tag||r.time||null; const v=parseFloat(r.integral_protons_10MeV||r.flux||0); if(t&&isFinite(v)) out.push({x:new Date(t), y:v}); });
           const sliced = out.slice(-240);
-          drawSpark('sparkProtons', sliced, '#ffd089');
+          renderSpark('sparkProtons', sliced, { xLabel:'UTC time', yLabel:'Proton flux', units:'pfu', yMin:0, color:'#ffd089' });
           const lp = latestPoint(sliced);
           setVal('sparkProtonsVal', lp ? (lp.y.toFixed(0)+' pfu') : '—');
         } catch(e){}
@@ -413,13 +401,13 @@ add_shortcode('gaia_space_detail', function($atts){
           try{
             const mRows = Array.isArray(mag)? mag.slice(1):[];
             const bz = []; mRows.slice(-300).forEach(r=>{ const t=r[0], v=parseFloat(r[3]); if(t&&isFinite(v)) bz.push({x:new Date(t), y:v}); });
-            drawSpark('sparkBz', bz, '#a7d3ff', {zero:true});
+            renderSpark('sparkBz', bz, { xLabel:'UTC time', yLabel:'IMF Bz', units:'nT', zeroLine:true, color:'#a7d3ff' });
             const lp = latestPoint(bz); setVal('sparkBzVal', lp ? (lp.y.toFixed(1)+' nT') : '—');
           }catch(e){}
           try{
             const pRows = Array.isArray(plasma)? plasma.slice(1):[];
             const sw = []; pRows.slice(-300).forEach(r=>{ const t=r[0], v=parseFloat(r[2]); if(t&&isFinite(v)) sw.push({x:new Date(t), y:v}); });
-            drawSpark('sparkSw', sw, '#ffd089');
+            renderSpark('sparkSw', sw, { xLabel:'UTC time', yLabel:'Solar wind speed', units:'km/s', yMin:0, color:'#ffd089' });
             const lp = latestPoint(sw); setVal('sparkSwVal', lp ? (lp.y.toFixed(0)+' km/s') : '—');
           }catch(e){}
         });
