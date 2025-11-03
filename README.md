@@ -10,6 +10,7 @@ uvicorn app.main:app --reload
 ## Tooling
 
 - [GitHub Actions audit playbook](./docs/github-actions-audit.md)
+- [Web site overview & maintenance guide](./docs/web/SITE_OVERVIEW.md)
 - [Supabase Migration Guide](./supabase/README.md)
 
 ### GitHub Actions audit helpers

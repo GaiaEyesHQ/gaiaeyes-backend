@@ -1,0 +1,1029 @@
+{
+  "space-detail": {
+    "page_url": "https://staging2.gaiaeyes.com/space-dashboard/",
+    "selector": "section.ge-space",
+    "assets": [
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/aia_primary_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 147701,
+        "ttfb_ms": 112.92,
+        "dimensions": {
+          "width": 1024,
+          "height": 1024
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/ovation_nh_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 258526,
+        "ttfb_ms": 24.23,
+        "dimensions": {
+          "width": 800,
+          "height": 800
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/ovation_sh_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 202353,
+        "ttfb_ms": 21.56,
+        "dimensions": {
+          "width": 800,
+          "height": 800
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/soho_c2_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 374535,
+        "ttfb_ms": 20.44,
+        "dimensions": {
+          "width": 1024,
+          "height": 1024
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/lasco_c3_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 812913,
+        "ttfb_ms": 26.7,
+        "dimensions": {
+          "width": 1024,
+          "height": 1024
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/ccor1_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 129237,
+        "ttfb_ms": 21.27,
+        "dimensions": {
+          "width": 1204,
+          "height": 1205
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/ccor1_20251102T203604Z.mp4",
+        "type": "video",
+        "status": 200,
+        "content_type": "video/mp4",
+        "size_bytes": 6159063,
+        "ttfb_ms": 90.31,
+        "dimensions": {
+          "width": null,
+          "height": null
+        },
+        "notes": [
+          "oversized"
+        ]
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/kp_station_20251102T203604Z.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 9407,
+        "ttfb_ms": 19.42,
+        "dimensions": {
+          "width": 600,
+          "height": 510
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/geospace_1d_20251102T203604Z.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 125490,
+        "ttfb_ms": 20.37,
+        "dimensions": {
+          "width": 1280,
+          "height": 900
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/geospace_3h_20251102T203604Z.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 104183,
+        "ttfb_ms": 19.65,
+        "dimensions": {
+          "width": 1280,
+          "height": 900
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/geospace_7d_20251102T203604Z.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 137791,
+        "ttfb_ms": 18.65,
+        "dimensions": {
+          "width": 1280,
+          "height": 900
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/drap_global_20251102T203604Z.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 19842,
+        "ttfb_ms": 23.72,
+        "dimensions": {
+          "width": 850,
+          "height": 475
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/a_station_20251102T203604Z.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 8607,
+        "ttfb_ms": 18.96,
+        "dimensions": {
+          "width": 600,
+          "height": 510
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/hmi_intensity_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 203680,
+        "ttfb_ms": 18.65,
+        "dimensions": {
+          "width": 1024,
+          "height": 1024
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/swx_overview_small_20251102T203604Z.gif",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/gif",
+        "size_bytes": 38793,
+        "ttfb_ms": 19.23,
+        "dimensions": {
+          "width": 640,
+          "height": 650
+        },
+        "notes": []
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js",
+        "type": "other",
+        "status": 200,
+        "content_type": "application/javascript; charset=utf-8",
+        "size_bytes": 70713,
+        "ttfb_ms": 95.57,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns",
+        "type": "other",
+        "status": 200,
+        "content_type": "application/javascript; charset=utf-8",
+        "size_bytes": 11703,
+        "ttfb_ms": 36.39,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json",
+        "size_bytes": 0,
+        "ttfb_ms": 167.05,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json",
+        "size_bytes": 0,
+        "ttfb_ms": 198.01,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json?v=1762117916093",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 567,
+        "ttfb_ms": 27.01,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json?v=1762117916093",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 356,
+        "ttfb_ms": 25.26,
+        "dimensions": null,
+        "notes": []
+      }
+    ]
+  },
+  "space-weather-detail": {
+    "page_url": "https://staging2.gaiaeyes.com/space-dashboard/",
+    "selector": "section.ge-sw",
+    "assets": [
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/aia_primary_20251102T203604Z.jpg",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 147701,
+        "ttfb_ms": 18.74,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/ovation_nh_20251102T203604Z.jpg",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 258526,
+        "ttfb_ms": 16.91,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/ovation_sh_20251102T203604Z.jpg",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 202353,
+        "ttfb_ms": 17.24,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js",
+        "type": "other",
+        "status": 200,
+        "content_type": "application/javascript; charset=utf-8",
+        "size_bytes": 70713,
+        "ttfb_ms": 51.68,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns",
+        "type": "other",
+        "status": 200,
+        "content_type": "application/javascript; charset=utf-8",
+        "size_bytes": 11703,
+        "ttfb_ms": 41.93,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/soho_c2_20251102T203604Z.jpg",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 374535,
+        "ttfb_ms": 17.27,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/lasco_c3_20251102T203604Z.jpg",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 812913,
+        "ttfb_ms": 16.31,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/ccor1_20251102T203604Z.jpg",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 129237,
+        "ttfb_ms": 17.67,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/kp_station_20251102T203604Z.png",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 9407,
+        "ttfb_ms": 17.43,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/geospace_1d_20251102T203604Z.png",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 125490,
+        "ttfb_ms": 18.41,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/geospace_3h_20251102T203604Z.png",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 104183,
+        "ttfb_ms": 16.66,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/geospace_7d_20251102T203604Z.png",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 137791,
+        "ttfb_ms": 17.55,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/drap_global_20251102T203604Z.png",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 19842,
+        "ttfb_ms": 18.76,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/a_station_20251102T203604Z.png",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 8607,
+        "ttfb_ms": 17.15,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/hmi_intensity_20251102T203604Z.jpg",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 203680,
+        "ttfb_ms": 16.69,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/swx_overview_small_20251102T203604Z.gif",
+        "type": "other",
+        "status": 200,
+        "content_type": "image/gif",
+        "size_bytes": 38793,
+        "ttfb_ms": 17.1,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/ccor1_20251102T203604Z.mp4",
+        "type": "video",
+        "status": 200,
+        "content_type": "video/mp4",
+        "size_bytes": 6159063,
+        "ttfb_ms": 34.13,
+        "dimensions": null,
+        "notes": [
+          "oversized"
+        ]
+      },
+      {
+        "url": "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json",
+        "size_bytes": 0,
+        "ttfb_ms": 201.93,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json",
+        "size_bytes": 0,
+        "ttfb_ms": 233.57,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json?v=1762117923852",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 567,
+        "ttfb_ms": 18.38,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json?v=1762117923852",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 356,
+        "ttfb_ms": 18.19,
+        "dimensions": null,
+        "notes": []
+      }
+    ]
+  },
+  "space-visuals": {
+    "page_url": "https://staging2.gaiaeyes.com/space-dashboard/",
+    "selector": "section.ge-space",
+    "assets": [
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/aia_primary_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 147701,
+        "ttfb_ms": 17.52,
+        "dimensions": {
+          "width": 1024,
+          "height": 1024
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/ovation_nh_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 258526,
+        "ttfb_ms": 17.08,
+        "dimensions": {
+          "width": 800,
+          "height": 800
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/ovation_sh_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 202353,
+        "ttfb_ms": 24.18,
+        "dimensions": {
+          "width": 800,
+          "height": 800
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/soho_c2_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 374535,
+        "ttfb_ms": 18.5,
+        "dimensions": {
+          "width": 1024,
+          "height": 1024
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/lasco_c3_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 812913,
+        "ttfb_ms": 46.76,
+        "dimensions": {
+          "width": 1024,
+          "height": 1024
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/ccor1_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 129237,
+        "ttfb_ms": 18.41,
+        "dimensions": {
+          "width": 1204,
+          "height": 1205
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/ccor1_20251102T203604Z.mp4",
+        "type": "video",
+        "status": 200,
+        "content_type": "video/mp4",
+        "size_bytes": 6159063,
+        "ttfb_ms": 16.47,
+        "dimensions": {
+          "width": null,
+          "height": null
+        },
+        "notes": [
+          "oversized"
+        ]
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/kp_station_20251102T203604Z.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 9407,
+        "ttfb_ms": 18.02,
+        "dimensions": {
+          "width": 600,
+          "height": 510
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/geospace_1d_20251102T203604Z.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 125490,
+        "ttfb_ms": 16.93,
+        "dimensions": {
+          "width": 1280,
+          "height": 900
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/geospace_3h_20251102T203604Z.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 104183,
+        "ttfb_ms": 16.0,
+        "dimensions": {
+          "width": 1280,
+          "height": 900
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/geospace_7d_20251102T203604Z.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 137791,
+        "ttfb_ms": 16.88,
+        "dimensions": {
+          "width": 1280,
+          "height": 900
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/drap_global_20251102T203604Z.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 19842,
+        "ttfb_ms": 16.62,
+        "dimensions": {
+          "width": 850,
+          "height": 475
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/a_station_20251102T203604Z.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 8607,
+        "ttfb_ms": 16.19,
+        "dimensions": {
+          "width": 600,
+          "height": 510
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/hmi_intensity_20251102T203604Z.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 203680,
+        "ttfb_ms": 16.04,
+        "dimensions": {
+          "width": 1024,
+          "height": 1024
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/space/swx_overview_small_20251102T203604Z.gif",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/gif",
+        "size_bytes": 38793,
+        "ttfb_ms": 16.89,
+        "dimensions": {
+          "width": 640,
+          "height": 650
+        },
+        "notes": []
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js",
+        "type": "other",
+        "status": 200,
+        "content_type": "application/javascript; charset=utf-8",
+        "size_bytes": 70713,
+        "ttfb_ms": 39.05,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns",
+        "type": "other",
+        "status": 200,
+        "content_type": "application/javascript; charset=utf-8",
+        "size_bytes": 11703,
+        "ttfb_ms": 31.27,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json",
+        "size_bytes": 0,
+        "ttfb_ms": 319.16,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json",
+        "size_bytes": 0,
+        "ttfb_ms": 185.18,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json?v=1762117931259",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 356,
+        "ttfb_ms": 19.41,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json?v=1762117931259",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 567,
+        "ttfb_ms": 16.94,
+        "dimensions": null,
+        "notes": []
+      }
+    ]
+  },
+  "aurora-detail": {
+    "page_url": "https://staging2.gaiaeyes.com/aurora-tracker/",
+    "selector": "section.ge-aur",
+    "assets": [
+      {
+        "url": "https://services.swpc.noaa.gov/images/aurora-forecast-northern-hemisphere.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 257808,
+        "ttfb_ms": 134.2,
+        "dimensions": {
+          "width": 800,
+          "height": 800
+        },
+        "notes": []
+      },
+      {
+        "url": "https://services.swpc.noaa.gov/images/aurora-forecast-southern-hemisphere.jpg",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/jpeg",
+        "size_bytes": 201453,
+        "ttfb_ms": 15.1,
+        "dimensions": {
+          "width": 800,
+          "height": 800
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json?v=1762117935318",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 356,
+        "ttfb_ms": 19.2,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json?v=1762117935320",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 567,
+        "ttfb_ms": 18.74,
+        "dimensions": null,
+        "notes": []
+      }
+    ]
+  },
+  "schumann-detail": {
+    "page_url": "https://staging2.gaiaeyes.com/schumann-resonance/",
+    "selector": "section.ge-sch",
+    "assets": [
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/tomsk_latest.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 1053759,
+        "ttfb_ms": 21.78,
+        "dimensions": {
+          "width": 1540,
+          "height": 460
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/cumiana_latest.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 278258,
+        "ttfb_ms": 20.56,
+        "dimensions": {
+          "width": 957,
+          "height": 357
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/images/heartmath_latest.png",
+        "type": "image",
+        "status": 404,
+        "content_type": "text/html; charset=utf-8",
+        "size_bytes": 5254,
+        "ttfb_ms": 20.43,
+        "dimensions": {
+          "width": 166,
+          "height": 61
+        },
+        "notes": []
+      },
+      {
+        "url": "https://staging2.gaiaeyes.com/schumann-resonance/",
+        "type": "image",
+        "status": 200,
+        "content_type": "text/html; charset=UTF-8",
+        "size_bytes": 0,
+        "ttfb_ms": 746.34,
+        "dimensions": {
+          "width": null,
+          "height": null
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json?v=1762117939830",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 356,
+        "ttfb_ms": 22.84,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json?v=1762117939831",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 567,
+        "ttfb_ms": 17.09,
+        "dimensions": null,
+        "notes": []
+      }
+    ]
+  },
+  "magnetosphere": {
+    "page_url": "https://staging2.gaiaeyes.com/magnetosphere/",
+    "selector": "section.ge-magneto-detail",
+    "assets": [
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json?v=1762117945033",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 356,
+        "ttfb_ms": 140.66,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json?v=1762117945033",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 567,
+        "ttfb_ms": 55.25,
+        "dimensions": null,
+        "notes": []
+      }
+    ]
+  },
+  "compare-detail": {
+    "page_url": "https://staging2.gaiaeyes.com/compare/",
+    "selector": "section.ge-compare",
+    "assets": [
+      {
+        "url": "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js",
+        "type": "other",
+        "status": 200,
+        "content_type": "application/javascript; charset=utf-8",
+        "size_bytes": 70713,
+        "ttfb_ms": 30.77,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json?v=1762117949619",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 356,
+        "ttfb_ms": 20.43,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json?v=1762117949620",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 567,
+        "ttfb_ms": 20.29,
+        "dimensions": null,
+        "notes": []
+      }
+    ]
+  },
+  "earthquake-detail": {
+    "page_url": "https://staging2.gaiaeyes.com/earthquakes/",
+    "selector": "section.ge-quakes",
+    "assets": [
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json?v=1762117954024",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 356,
+        "ttfb_ms": 18.87,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json?v=1762117954026",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 567,
+        "ttfb_ms": 18.26,
+        "dimensions": null,
+        "notes": []
+      }
+    ]
+  },
+  "kp-badge": {
+    "page_url": "https://staging2.gaiaeyes.com/",
+    "selector": "header",
+    "assets": [
+      {
+        "url": "https://staging2.gaiaeyes.com/wp-content/uploads/2025/10/cropped-Gaia-Eyes-EYE-Logo-white-1-scaled-1.png",
+        "type": "image",
+        "status": 200,
+        "content_type": "image/png",
+        "size_bytes": 9911,
+        "ttfb_ms": 108.8,
+        "dimensions": {
+          "width": 200,
+          "height": 113
+        },
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json?v=1762117959059",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 356,
+        "ttfb_ms": 17.55,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json?v=1762117959060",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 567,
+        "ttfb_ms": 22.22,
+        "dimensions": null,
+        "notes": []
+      }
+    ]
+  },
+  "news": {
+    "page_url": "https://staging2.gaiaeyes.com/news-2/",
+    "selector": "section.ge-news",
+    "assets": [
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json?v=1762117963503",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 356,
+        "ttfb_ms": 17.7,
+        "dimensions": null,
+        "notes": []
+      },
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json?v=1762117963503",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 567,
+        "ttfb_ms": 17.29,
+        "dimensions": null,
+        "notes": []
+      }
+    ]
+  }
+}
