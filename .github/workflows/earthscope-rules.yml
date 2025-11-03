@@ -38,15 +38,40 @@ jobs:
 
       - name: Commit & push updated earthscope.json
         run: |
-          set -e
+          set -euo pipefail
           cd gaiaeyes-media
           mkdir -p data
-          git config user.name "github-actions[bot]"
+
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git status --porcelain | grep -E "^\s*M\s+data/earthscope\.json|^\?\?\s+data/earthscope\.json"; then
-            git add data/earthscope.json
-            git commit -m "chore(earthscope): update earthscope.json [skip ci]"
-            git push
-          else
+          git config pull.rebase true
+
+          # Stage target file (tolerate when missing)
+          git add data/earthscope.json || true
+
+          # Exit early if nothing staged
+          if git diff --cached --quiet; then
             echo "No JSON changes to commit."
+            exit 0
           fi
+
+          git commit -m "chore(earthscope): update earthscope.json [skip ci]"
+
+          # Ensure we're up to date before pushing
+          git fetch origin main || true
+          git pull --rebase origin main || true
+
+          # Retry push up to 3 times in case remote moved
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "Push succeeded on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push failed on attempt ${attempt}; rebasing and retrying…"
+            git fetch origin main || true
+            git pull --rebase origin main || true
+            sleep $((RANDOM % 4 + 2))
+          done
+
+          echo "ERROR: Could not push after 3 attempts."
+          exit 1
