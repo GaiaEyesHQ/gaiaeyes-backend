@@ -206,6 +206,7 @@ function gaia_space_weather_detail_shortcode($atts){
       .ge-impacts ul{margin:0;padding-left:18px;line-height:1.4}
       .ge-sw__error{padding:12px;background:#331e1e;color:#ffd6d6;border:1px solid #6e3a3a;border-radius:8px}
       .ge-sparklines{margin-top:10px}
+      .ge-sparklines canvas{width:100%;height:120px;max-width:100%;margin-top:6px}
       .anchor-link{opacity:0;margin-left:8px;font-size:.9rem;color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25);transition:opacity .2s ease}
       .ge-card h3:hover .anchor-link{opacity:1}
       .anchor-link:hover{border-bottom-color:rgba(255,255,255,.6)}
@@ -215,32 +216,88 @@ function gaia_space_weather_detail_shortcode($atts){
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha256-5l5wxg6rE6sBJP6opc0bDO3sTZ5yH5rICwW7X8P9qvo=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script>
       (function(){
-        // Optional sparkline support if future series arrays are added to JSON
         try {
           const sw = <?php echo wp_json_encode($sw); ?>;
-          let hasSeries = false;
+          const wrap = document.getElementById('ge-spark-wrap');
+          let rendered = 0;
 
-          function draw(id, label, arr){
-            const el = document.getElementById(id);
-            if (!el || !Array.isArray(arr) || arr.length === 0) return;
-            const ctx = el.getContext('2d');
-            new Chart(ctx, {
-              type: 'line',
-              data: { labels: arr.map((_,i)=>i+1), datasets: [{ label, data: arr, borderColor:'#7fc8ff', tension:0.25, pointRadius:0 }]},
-              options: { responsive:true, plugins:{legend:{display:false}}, scales:{x:{display:false},y:{display:false}} }
+          function whenSparkReady(cb){
+            if (window.GaiaSpark && window.GaiaSpark.renderSpark) {
+              cb(window.GaiaSpark);
+              return;
+            }
+            const handler = () => {
+              window.removeEventListener('gaiaSparkReady', handler);
+              if (window.GaiaSpark && window.GaiaSpark.renderSpark) {
+                cb(window.GaiaSpark);
+              }
+            };
+            window.addEventListener('gaiaSparkReady', handler, { once:true });
+          }
+
+          function toSeries(raw){
+            if (!Array.isArray(raw)) return [];
+            const out = [];
+            raw.forEach((entry, idx) => {
+              if (entry == null) return;
+              if (typeof entry === 'number') {
+                if (isFinite(entry)) out.push({ x: idx, y: entry });
+                return;
+              }
+              if (Array.isArray(entry)) {
+                const time = entry.length > 1 ? entry[0] : idx;
+                const val = entry.length > 1 ? entry[1] : entry[0];
+                let x = idx;
+                if (time !== undefined && time !== null) {
+                  const d = new Date(time);
+                  if (!isNaN(+d)) {
+                    x = d;
+                  } else if (typeof time === 'number' && isFinite(time)) {
+                    x = time;
+                  }
+                }
+                const y = Number(val);
+                if (isFinite(y)) out.push({ x, y });
+                return;
+              }
+              if (typeof entry === 'object') {
+                const time = entry.time ?? entry.timestamp ?? entry.x ?? entry.t ?? entry.date ?? entry[0];
+                const val = entry.value ?? entry.y ?? entry.v ?? entry.kp ?? entry.sw ?? entry.bz ?? entry[1];
+                let x = idx;
+                if (time !== undefined && time !== null) {
+                  const d = new Date(time);
+                  if (!isNaN(+d)) {
+                    x = d;
+                  } else if (typeof time === 'number' && isFinite(time)) {
+                    x = time;
+                  }
+                }
+                const y = Number(val);
+                if (isFinite(y)) out.push({ x, y });
+              }
             });
-            hasSeries = true;
+            return out;
           }
 
-          // If you later add sw.series24 = { kp:[...], sw:[...], bz:[...] } this will plot them:
-          if (sw && sw.series24){
-            draw('ge-spark-kp', 'Kp', sw.series24.kp || []);
-            draw('ge-spark-sw', 'SW', sw.series24.sw || []);
-            draw('ge-spark-bz', 'Bz', sw.series24.bz || []);
+          function renderSpark(id, raw, options){
+            const data = toSeries(raw);
+            if (!data.length) return false;
+            const trimmed = data.length > 240 ? data.slice(-240) : data;
+            whenSparkReady((spark) => {
+              spark.renderSpark(id, trimmed, options);
+            });
+            return true;
           }
-          if (hasSeries) document.getElementById('ge-spark-wrap').style.display = 'block';
+
+          if (sw && sw.series24){
+            if (renderSpark('ge-spark-kp', sw.series24.kp || [], { xLabel:'Sample', yLabel:'Planetary Kp', units:'index', yMin:0, yMax:9, color:'#7fc8ff' })) rendered++;
+            if (renderSpark('ge-spark-sw', sw.series24.sw || [], { xLabel:'Sample', yLabel:'Solar wind speed', units:'km/s', yMin:0, color:'#ffd089' })) rendered++;
+            if (renderSpark('ge-spark-bz', sw.series24.bz || [], { xLabel:'Sample', yLabel:'IMF Bz', units:'nT', zeroLine:true, color:'#a7d3ff' })) rendered++;
+          }
+          if (rendered && wrap) wrap.style.display = 'block';
         } catch(e){}
       })();
     </script>
