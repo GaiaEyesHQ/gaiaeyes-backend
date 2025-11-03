@@ -2,6 +2,7 @@ name: space-weather
 
 permissions:
   contents: write
+  issues: write
 
 on:
   schedule:
@@ -78,39 +79,63 @@ jobs:
 
       - name: Commit & push updated JSON
         run: |
-          set -e
+          set -euo pipefail
           cd gaiaeyes-media
-          # Destination root (supports Pages 'docs' or custom), default to repo root
+
+          # Destination root (supports Pages 'docs' or root)
           if [ -n "${MEDIA_ROOT}" ]; then
             DEST_DIR="${MEDIA_ROOT%/}/data"
           else
             DEST_DIR="data"
           fi
-          # Guard MEDIA_ROOT to only 'docs' or root
           if [ -n "${MEDIA_ROOT}" ] && [ "${MEDIA_ROOT}" != "docs" ]; then
             echo "WARN: Unsupported MEDIA_ROOT='${MEDIA_ROOT}', falling back to repo root."
             DEST_DIR="data"
           fi
-          # Ensure DEST_DIR has the latest file (copy from fixed emitter location)
+
           SRC_JSON="${{ github.workspace }}/gaiaeyes-media/data/space_weather.json"
+          mkdir -p "${DEST_DIR}"
           if [ -f "${SRC_JSON}" ] && [ "${DEST_DIR}" != "data" ]; then
-            mkdir -p "${DEST_DIR}"
             cp -f "${SRC_JSON}" "${DEST_DIR}/space_weather.json"
           fi
-          mkdir -p "${DEST_DIR}"
+
           echo "DEBUG checking git status under ${DEST_DIR}"
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git status --porcelain | grep -E "^\s*M\s+${DEST_DIR}/space_weather\.json|^\?\?\s+${DEST_DIR}/space_weather\.json"; then
-            git add ${DEST_DIR}/space_weather.json
-            git commit -m "chore(space-weather): update dashboard JSON [skip ci]"
-            git push
-            if [ -n "${MEDIA_CDN_BASE}" ]; then
-              echo "Published: ${MEDIA_CDN_BASE%/}/space_weather.json"
-            fi
-          else
+          git config pull.rebase true
+
+          # Stage target file; tolerate if missing
+          git add "${DEST_DIR}/space_weather.json" || true
+
+          # Exit if nothing staged
+          if git diff --cached --quiet; then
             echo "No JSON changes to commit."
+            exit 0
           fi
+
+          git commit -m "chore(space-weather): update dashboard JSON [skip ci]"
+
+          # Ensure we're up to date before pushing
+          git fetch origin main || true
+          git pull --rebase origin main || true
+
+          # Retry push up to 3 times
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "Push succeeded on attempt ${attempt}."
+              if [ -n "${MEDIA_CDN_BASE}" ]; then
+                echo "Published: ${MEDIA_CDN_BASE%/}/space_weather.json"
+              fi
+              exit 0
+            fi
+            echo "Push failed on attempt ${attempt}; rebasing and retrying…"
+            git fetch origin main || true
+            git pull --rebase origin main || true
+            sleep $((RANDOM % 4 + 2))
+          done
+
+          echo "ERROR: Could not push after 3 attempts."
+          exit 1
 
       - name: Create issue on failure
         if: failure()

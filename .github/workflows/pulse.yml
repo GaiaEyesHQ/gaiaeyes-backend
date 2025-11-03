@@ -41,14 +41,39 @@ jobs:
 
       - name: Commit & push updates
         run: |
-          set -e
+          set -euo pipefail
           cd gaiaeyes-media
-          git config user.name "github-actions[bot]"
+
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git status --porcelain | grep -E "^\?\? |^\s*M\s+"; then
-            git add data/quakes_latest.json data/alerts_us_latest.json data/gdacs_latest.json data/pulse.json
-            git commit -m "chore(pulse): update pulse + sources [skip ci]"
-            git push
-          else
+          git config pull.rebase true
+
+          # Stage only expected files
+          git add data/quakes_latest.json data/alerts_us_latest.json data/gdacs_latest.json data/pulse.json || true
+
+          # Exit if nothing staged
+          if git diff --cached --quiet; then
             echo "No changes."
+            exit 0
           fi
+
+          git commit -m "chore(pulse): update pulse + sources [skip ci]"
+
+          # Ensure we're up to date before pushing
+          git fetch origin main || true
+          git pull --rebase origin main || true
+
+          # Retry push up to 3 times to avoid non-fast-forward failures
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "Push succeeded on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push failed on attempt ${attempt}; rebasing and retrying…"
+            git fetch origin main || true
+            git pull --rebase origin main || true
+            sleep $((RANDOM % 4 + 2))
+          done
+
+          echo "ERROR: Could not push after 3 attempts."
+          exit 1
