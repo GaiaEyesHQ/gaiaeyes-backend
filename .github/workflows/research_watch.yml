@@ -1,4 +1,7 @@
 name: research-watch
+permissions:
+  contents: write
+  issues: write
 on:
   schedule: [{cron: "20 12,18 * * *"}]  # 7:20am & 1:20pm CT (adjust)
   workflow_dispatch:

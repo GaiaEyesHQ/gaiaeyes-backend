@@ -1,6 +1,7 @@
 name: pulse
 permissions:
   contents: write
+  issues: write
 
 on:
   schedule:

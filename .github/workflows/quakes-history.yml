@@ -1,4 +1,7 @@
 name: quakes-history
+permissions:
+  contents: write
+  issues: write
 on:
   schedule:
     - cron: "15 5 * * *"   # daily 05:15 UTC
@@ -7,6 +10,9 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
     env:
       MEDIA_REPO_OWNER: GaiaEyesHQ
       MEDIA_REPO_NAME: gaiaeyes-media
@@ -29,31 +35,35 @@ jobs:
         run: |
           python3 scripts/ingest_usgs_history.py
 
-      - name: Commit & push
-        run: |
-          cd gaiaeyes-media
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config pull.rebase true
-          # Always sync with remote main to avoid non-fast-forward rejections
-          git fetch origin main || true
-          # Rebase local changes atop remote
-          git rebase origin/main || true
-          # Stage if changed
-          if git status --porcelain | grep -E "quakes_history\.json"; then
-            git add data/quakes_history.json || true
-            git commit -m "chore: update quakes_history.json [skip ci]" || true
-            # Retry push up to 3 times in case another workflow pushed between fetch and push
-            for i in 1 2 3; do
+        - name: Commit & push
+          run: |
+            set -euo pipefail
+            cd gaiaeyes-media
+            git config user.name  "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git config pull.rebase true
+            if git status --porcelain | grep -E "quakes_history\.json" > /dev/null; then
+              git add data/quakes_history.json || true
+            else
+              echo "No changes."
+              exit 0
+            fi
+            if git diff --cached --quiet; then
+              echo "No changes."
+              exit 0
+            fi
+            git commit -m "chore: update quakes_history.json [skip ci]"
+            git fetch origin main || true
+            git pull --rebase origin main || true
+            for attempt in 1 2 3; do
               if git push origin HEAD:main; then
-                echo "Pushed successfully"; exit 0;
-              else
-                echo "Push failed (attempt $i), retrying..."; sleep $((2*i));
-                git fetch origin main || true
-                git rebase origin/main || true
+                echo "Push succeeded on attempt ${attempt}."
+                exit 0
               fi
+              echo "Push failed on attempt ${attempt}; rebasing and retrying…"
+              git fetch origin main || true
+              git pull --rebase origin main || true
+              sleep $((RANDOM % 4 + 2))
             done
-            echo "Failed to push after retries"; exit 1
-          else
-            echo "No changes."
-          fi
+            echo "ERROR: Could not push after 3 attempts."
+            exit 1

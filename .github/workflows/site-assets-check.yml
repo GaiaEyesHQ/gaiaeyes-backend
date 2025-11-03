@@ -1,12 +1,12 @@
 name: Site asset availability
+permissions:
+  contents: write
+  issues: write
 
 on:
   schedule:
     - cron: '0 7 * * *'
   workflow_dispatch:
-
-permissions:
-  contents: read
 
 jobs:
   verify-assets:

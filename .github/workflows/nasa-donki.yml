@@ -1,6 +1,7 @@
 name: nasa-donki
 permissions:
   contents: write
+  issues: write
 
 on:
   schedule:
@@ -83,10 +84,10 @@ jobs:
         run: |
           set -euo pipefail
           cd gaiaeyes-media
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Ensure we're on latest main before committing (avoid non-fast-forward)
-          git fetch origin main
+          git config pull.rebase true
+          git fetch origin main || true
           git checkout -B main origin/main
           # Stage only the target file
           DEST_DIR="data"
@@ -101,11 +102,9 @@ jobs:
           fi
           ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           git commit -m "chore(donki): update flares_cmes.json ${ts} [skip ci]"
-          # Robust push with rebase and bounded retries (no force push)
+          git fetch origin main || true
+          git pull --rebase origin main || true
           for attempt in 1 2 3; do
-            echo "Push attempt ${attempt}..."
-            # Rebase on latest remote to avoid non-fast-forward
-            git pull --rebase --autostash origin main || true
             if git push origin HEAD:main; then
               echo "Push succeeded on attempt ${attempt}."
               if [ -n "${MEDIA_CDN_BASE}" ]; then
@@ -113,8 +112,10 @@ jobs:
               fi
               exit 0
             fi
-            echo "::warning title=Push failed::Attempt ${attempt} failed; will retry shortly."
-            sleep $((2 + (RANDOM % 4)))
+            echo "Push failed on attempt ${attempt}; rebasing and retrying…"
+            git fetch origin main || true
+            git pull --rebase origin main || true
+            sleep $((RANDOM % 4 + 2))
           done
-          echo "::error title=Push failed::Could not push after 3 attempts. If branch protection requires PRs, allow a bypass for this token or switch to the PR-based flow."
+          echo "ERROR: Could not push after 3 attempts. If branch protection requires PRs, allow a bypass for this token or switch to the PR-based flow."
           exit 1
