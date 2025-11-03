@@ -1,6 +1,7 @@
 name: schumann-ingest
 permissions:
   contents: write
+  issues: write
 on:
   schedule:
     - cron: "*/15 * * * *"
@@ -35,30 +36,27 @@ jobs:
         run: |
           set -euo pipefail
           cd gaiaeyes-media
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Make sure we're on main and up-to-date
-          git fetch origin main
-          git checkout -B main origin/main
-          # Stage any changes produced by the ingester
+          git config pull.rebase true
           git add -A
           if git diff --cached --quiet; then
-            echo "No changes to commit."
+            echo "No changes."
             exit 0
           fi
           ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           git commit -m "schumann update ${ts} [skip ci]"
-          # Robust push with rebase + lease, retrying on race conditions
+          git fetch origin main || true
+          git pull --rebase origin main || true
           for attempt in 1 2 3; do
-            echo "Push attempt ${attempt}..."
-            # Rebase on latest remote and autostash local changes if any hooks touched files
-            git pull --rebase --autostash origin main || true
-            if git push --force-with-lease origin HEAD:main; then
+            if git push origin HEAD:main; then
               echo "Push succeeded on attempt ${attempt}."
               exit 0
             fi
-            echo "Push failed on attempt ${attempt}, retrying..."
-            sleep $((2 + (RANDOM % 4)))
+            echo "Push failed on attempt ${attempt}; rebasing and retrying…"
+            git fetch origin main || true
+            git pull --rebase origin main || true
+            sleep $((RANDOM % 4 + 2))
           done
           echo "ERROR: Could not push after 3 attempts."
           exit 1

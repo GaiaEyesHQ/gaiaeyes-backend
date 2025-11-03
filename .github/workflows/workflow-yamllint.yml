@@ -1,0 +1,18 @@
+name: Workflow YAML lint
+permissions:
+  contents: write
+  issues: write
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint workflow YAMLs
+        uses: actionshub/yamllint@v1

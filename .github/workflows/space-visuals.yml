@@ -1,4 +1,7 @@
 name: space-visuals
+permissions:
+  contents: write
+  issues: write
 on:
   schedule:
     - cron: "*/30 * * * *"
@@ -6,6 +9,9 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
       - name: Checkout media repo

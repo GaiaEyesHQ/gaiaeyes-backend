@@ -1,4 +1,7 @@
 name: Gaia Eyes — Daily Pipeline
+permissions:
+  contents: write
+  issues: write
 
 on:
   schedule:
@@ -19,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
@@ -81,30 +85,44 @@ jobs:
       - name: Commit & push earthscope_daily.json
         if: always()
         run: |
-          set -e
+          set -euo pipefail
           cd "${MEDIA_REPO_PATH}"
           git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config pull.rebase true
           # Stage JSON if present
           if [ -f "data/earthscope_daily.json" ]; then
             git add data/earthscope_daily.json
           fi
           # Commit only if there are changes
-          if ! git diff --cached --quiet; then
-            ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            git commit -m "earthscope daily card ${ts} [skip ci]"
-            # Safe push with rebase in case of races
-            git push origin main || { git pull --rebase --autostash origin main && git push origin main; }
-          else
+          if git diff --cached --quiet; then
             echo "No earthscope_daily.json changes to commit."
+            exit 0
           fi
+          ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          git commit -m "earthscope daily card ${ts} [skip ci]"
+          git fetch origin main || true
+          git pull --rebase origin main || true
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "Push succeeded on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push failed on attempt ${attempt}; rebasing and retrying…"
+            git fetch origin main || true
+            git pull --rebase origin main || true
+            sleep $((RANDOM % 4 + 2))
+          done
+          echo "ERROR: Could not push after 3 attempts."
+          exit 1
 
   render:
     name: Render Images → Media Repo
     runs-on: ubuntu-latest
     needs: generate
     permissions:
-      contents: read
+      contents: write
+      issues: write
     outputs:
       media_sha: ${{ steps.media_sha.outputs.sha }}
     env:
@@ -175,7 +193,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: render
     permissions:
-      contents: read
+      contents: write
+      issues: write
     env:
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

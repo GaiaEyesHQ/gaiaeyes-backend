@@ -1,4 +1,7 @@
 name: compare-series
+permissions:
+  contents: write
+  issues: write
 on:
   schedule:
     - cron: "20 5 * * *"
@@ -41,13 +44,33 @@ jobs:
 
       - name: Commit & push
         run: |
+          set -euo pipefail
           cd gaiaeyes-media
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git status --porcelain | grep -E "(space_history|compare_series)\.json"; then
+          git config pull.rebase true
+          if git status --porcelain | grep -E "(space_history|compare_series)\.json" > /dev/null; then
             git add data/space_history.json data/compare_series.json || true
-            git commit -m "chore: update space_history.json and compare_series.json [skip ci]"
-            git push
           else
             echo "No changes."
+            exit 0
           fi
+          if git diff --cached --quiet; then
+            echo "No changes."
+            exit 0
+          fi
+          git commit -m "chore: update space_history.json and compare_series.json [skip ci]"
+          git fetch origin main || true
+          git pull --rebase origin main || true
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "Push succeeded on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push failed on attempt ${attempt}; rebasing and retrying…"
+            git fetch origin main || true
+            git pull --rebase origin main || true
+            sleep $((RANDOM % 4 + 2))
+          done
+          echo "ERROR: Could not push after 3 attempts."
+          exit 1

@@ -1,4 +1,7 @@
 name: Space News Daily
+permissions:
+  contents: write
+  issues: write
 on:
   schedule:
     - cron: "15 12 * * *"   # ~morning CT

@@ -1,4 +1,7 @@
 name: WP — Publish Daily
+permissions:
+  contents: write
+  issues: write
 
 on:
   workflow_dispatch:

@@ -1,4 +1,7 @@
 name: Earthscope Daily Post
+permissions:
+  contents: write
+  issues: write
 on:
   schedule:
     - cron: "5 15 * * *"   # 09:15 UTC
