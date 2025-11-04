@@ -44,9 +44,13 @@ class SymptomTodayOut(BaseModel):
     free_text: Optional[str] = None
 
 
-class SymptomTodayResponse(BaseModel):
+class SymptomEnvelope(BaseModel):
     ok: bool = True
-    data: List[SymptomTodayOut]
+    error: Optional[str] = None
+
+
+class SymptomTodayResponse(SymptomEnvelope):
+    data: List[SymptomTodayOut] = Field(default_factory=list)
 
 
 class SymptomDailyRow(BaseModel):
@@ -57,9 +61,8 @@ class SymptomDailyRow(BaseModel):
     last_ts: Optional[str] = None
 
 
-class SymptomDailyResponse(BaseModel):
-    ok: bool = True
-    data: List[SymptomDailyRow]
+class SymptomDailyResponse(SymptomEnvelope):
+    data: List[SymptomDailyRow] = Field(default_factory=list)
 
 
 class SymptomDiagRow(BaseModel):
@@ -68,9 +71,8 @@ class SymptomDiagRow(BaseModel):
     last_ts: Optional[str] = None
 
 
-class SymptomDiagResponse(BaseModel):
-    ok: bool = True
-    data: List[SymptomDiagRow]
+class SymptomDiagResponse(SymptomEnvelope):
+    data: List[SymptomDiagRow] = Field(default_factory=list)
 
 
 class SymptomCodeRow(BaseModel):
@@ -99,8 +101,12 @@ async def create_symptom_event(
 
     try:
         code_rows = await symptoms_db.fetch_symptom_codes(conn)
-    except Exception as exc:  # pragma: no cover - defensive
-        raise HTTPException(status_code=500, detail="Failed to load symptom codes") from exc
+    except Exception:  # pragma: no cover - exercised via tests
+        logger.exception("failed to load codes for symptom post", extra={"user_id": user_id})
+        return JSONResponse(
+            status_code=200,
+            content={"ok": False, "data": None, "error": "Failed to load symptom codes"},
+        )
 
     lookup = {
         _normalize_symptom_code(row["symptom_code"]): row
@@ -136,26 +142,47 @@ async def create_symptom_event(
         },
     )
 
-    result = await symptoms_db.insert_symptom_event(
-        conn,
-        user_id,
-        symptom_code=normalized_code,
-        ts_utc=payload.ts_utc,
-        severity=payload.severity,
-        free_text=payload.free_text,
-        tags=payload.tags,
-    )
+    try:
+        result = await symptoms_db.insert_symptom_event(
+            conn,
+            user_id,
+            symptom_code=normalized_code,
+            ts_utc=payload.ts_utc,
+            severity=payload.severity,
+            free_text=payload.free_text,
+            tags=payload.tags,
+        )
+    except Exception:  # pragma: no cover - exercised via tests
+        logger.exception("failed to insert symptom event", extra={"user_id": user_id, "symptom_code": normalized_code})
+        return JSONResponse(
+            status_code=200,
+            content={"ok": False, "data": None, "error": "Failed to record symptom event"},
+        )
     if not result.get("id") or not result.get("ts_utc"):
         raise HTTPException(status_code=500, detail="Failed to persist symptom event")
     return SymptomEventOut(id=result["id"], ts_utc=result["ts_utc"])
 
 
+def _success(payload: SymptomEnvelope) -> dict:
+    return payload.model_dump()
+
+
+def _failure(payload: SymptomEnvelope) -> JSONResponse:
+    return JSONResponse(status_code=200, content=payload.model_dump())
+
+
 @router.get("/today", response_model=SymptomTodayResponse)
 async def get_symptoms_today(request: Request, conn=Depends(get_db)):
     user_id = _require_user_id(request)
-    rows = await symptoms_db.fetch_symptoms_today(conn, user_id)
+    try:
+        rows = await symptoms_db.fetch_symptoms_today(conn, user_id)
+    except Exception:  # pragma: no cover - exercised via tests
+        logger.exception("failed to load todays symptoms", extra={"user_id": user_id})
+        return _failure(
+            SymptomTodayResponse(ok=False, data=[], error="Failed to load today's symptoms")
+        )
     data = [SymptomTodayOut(**row) for row in rows]
-    return SymptomTodayResponse(data=data)
+    return _success(SymptomTodayResponse(data=data))
 
 
 @router.get("/daily", response_model=SymptomDailyResponse)
@@ -165,9 +192,15 @@ async def get_symptoms_daily(
     days: int = Query(30, ge=1, le=365),
 ):
     user_id = _require_user_id(request)
-    rows = await symptoms_db.fetch_daily_summary(conn, user_id, days)
+    try:
+        rows = await symptoms_db.fetch_daily_summary(conn, user_id, days)
+    except Exception:  # pragma: no cover - exercised via tests
+        logger.exception("failed to load daily symptoms", extra={"user_id": user_id, "days": days})
+        return _failure(
+            SymptomDailyResponse(ok=False, data=[], error="Failed to load daily symptom summary")
+        )
     data = [SymptomDailyRow(**row) for row in rows]
-    return SymptomDailyResponse(data=data)
+    return _success(SymptomDailyResponse(data=data))
 
 
 @router.get("/diag", response_model=SymptomDiagResponse)
@@ -177,18 +210,35 @@ async def get_symptom_diag(
     days: int = Query(30, ge=1, le=365),
 ):
     user_id = _require_user_id(request)
-    rows = await symptoms_db.fetch_diagnostics(conn, user_id, days)
+    try:
+        rows = await symptoms_db.fetch_diagnostics(conn, user_id, days)
+    except Exception:  # pragma: no cover - exercised via tests
+        logger.exception("failed to load diagnostic summary", extra={"user_id": user_id, "days": days})
+        return _failure(
+            SymptomDiagResponse(ok=False, data=[], error="Failed to load diagnostic summary")
+        )
     data = [SymptomDiagRow(**row) for row in rows]
-    return SymptomDiagResponse(data=data)
+    return _success(SymptomDiagResponse(data=data))
 
 
-@router.get("/codes", response_model=List[SymptomCodeRow])
+class SymptomCodeResponse(SymptomEnvelope):
+    data: List[SymptomCodeRow] = Field(default_factory=list)
+
+
+@router.get("/codes", response_model=SymptomCodeResponse)
 async def list_symptom_codes(
     response: Response,
     conn=Depends(get_db),
     include_inactive: bool = Query(False, description="Return inactive codes as well"),
 ):
-    rows = await symptoms_db.fetch_symptom_codes(conn, include_inactive=include_inactive)
+    try:
+        rows = await symptoms_db.fetch_symptom_codes(conn, include_inactive=include_inactive)
+    except Exception:  # pragma: no cover - exercised via tests
+        logger.exception("failed to load symptom codes", extra={"include_inactive": include_inactive})
+        return _failure(
+            SymptomCodeResponse(ok=False, data=[], error="Failed to load symptom codes")
+        )
+
     response.headers["Cache-Control"] = "public, max-age=300"
 
     normalized_rows: List[SymptomCodeRow] = []
@@ -201,4 +251,4 @@ async def list_symptom_codes(
                 is_active=bool(row.get("is_active", False)),
             )
         )
-    return normalized_rows
+    return _success(SymptomCodeResponse(data=normalized_rows))
