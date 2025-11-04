@@ -1,12 +1,20 @@
 # app/routers/summary.py
 import logging
-from datetime import datetime, date, timezone
-from typing import Any, Dict, Optional, Tuple
+from datetime import date, datetime, time, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Request
 from os import getenv
 from psycopg.rows import dict_row
 from app.db import get_db, get_pool
+
+DEFAULT_TIMEZONE = "America/Chicago"
+STATEMENT_TIMEOUT_MS = 60000
+FRESHEN_TIMEOUT_MS = 3000
+
+DEBUG_FEATURES_DIAG = getenv("DEBUG_FEATURES_DIAG", "1").lower() not in {"0", "false", "no"}
 
 logger = logging.getLogger(__name__)
 
@@ -27,183 +35,416 @@ def _iso_date(value: Optional[date]) -> Optional[str]:
     return value.isoformat()
 
 
-async def _fetch_features_today(
+def _normalize_timezone(tz_name: Optional[str]) -> Tuple[str, ZoneInfo]:
+    if not tz_name:
+        return DEFAULT_TIMEZONE, ZoneInfo(DEFAULT_TIMEZONE)
+    try:
+        return tz_name, ZoneInfo(tz_name)
+    except Exception:
+        logger.warning("[features] invalid tz=%s; falling back to %s", tz_name, DEFAULT_TIMEZONE)
+        return DEFAULT_TIMEZONE, ZoneInfo(DEFAULT_TIMEZONE)
+
+
+async def _current_day_local(conn, tz_name: str) -> date:
+    async with conn.cursor() as cur:
+        await cur.execute("select (now() at time zone %s)::date as day_local", (tz_name,))
+        row = await cur.fetchone()
+    if row and row[0]:
+        return row[0]
+    return datetime.now(ZoneInfo(tz_name)).date()
+
+
+def _local_bounds(day_local: date, tzinfo: ZoneInfo) -> Tuple[datetime, datetime]:
+    start_local = datetime.combine(day_local, time.min).replace(tzinfo=tzinfo)
+    end_local = start_local + timedelta(days=1)
+    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
+
+async def _fetch_mart_row(conn, user_id: str, day_local: date) -> Optional[Dict[str, Any]]:
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select *
+            from marts.daily_features
+            where user_id = %s and day = %s
+            limit 1
+            """,
+            (user_id, day_local),
+        )
+        return await cur.fetchone()
+
+
+async def _fetch_sleep_aggregate(
+    conn,
+    user_id: str,
+    start_utc: datetime,
+    end_utc: datetime,
+) -> Dict[str, Optional[float]]:
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            with rows as (
+              select lower(coalesce(value_text,'')) as stage,
+                     extract(epoch from (coalesce(end_time,start_time) - start_time))/60.0 as minutes
+              from gaia.samples
+              where user_id = %s
+                and type in ('sleep','sleep_stage')
+                and start_time >= %s
+                and start_time < %s
+            )
+            select
+              coalesce(sum(minutes) filter (where stage = 'rem'), 0) as rem_m,
+              coalesce(sum(minutes) filter (where stage in ('core','light')), 0) as core_m,
+              coalesce(sum(minutes) filter (where stage = 'deep'), 0) as deep_m,
+              coalesce(sum(minutes) filter (where stage = 'awake'), 0) as awake_m,
+              coalesce(sum(minutes) filter (where stage in ('inbed','in_bed')), 0) as inbed_m
+            from rows
+            """,
+            (user_id, start_utc, end_utc),
+        )
+        res = await cur.fetchone() or {}
+    return {
+        "rem_m": float(res.get("rem_m") or 0),
+        "core_m": float(res.get("core_m") or 0),
+        "deep_m": float(res.get("deep_m") or 0),
+        "awake_m": float(res.get("awake_m") or 0),
+        "inbed_m": float(res.get("inbed_m") or 0),
+    }
+
+
+async def _fetch_daily_summary(conn, user_id: str, day_local: date) -> Optional[Dict[str, Any]]:
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select
+              date::date as day,
+              steps_total,
+              hr_min,
+              hr_max,
+              hrv_avg,
+              spo2_avg,
+              bp_sys_avg,
+              bp_dia_avg,
+              sleep_total_minutes,
+              sleep_rem_minutes,
+              sleep_core_minutes,
+              sleep_deep_minutes,
+              sleep_awake_minutes,
+              sleep_efficiency
+            from gaia.daily_summary
+            where user_id = %s and date::date = %s
+            limit 1
+            """,
+            (user_id, day_local),
+        )
+        return await cur.fetchone()
+
+
+async def _fetch_space_weather_daily(conn, day_local: date) -> Dict[str, Optional[float]]:
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select kp_max, bz_min, sw_speed_avg, flares_count, cmes_count
+            from marts.space_weather_daily
+            where day = %s
+            limit 1
+            """,
+            (day_local,),
+        )
+        res = await cur.fetchone() or {}
+    return {
+        "kp_max": res.get("kp_max"),
+        "bz_min": res.get("bz_min"),
+        "sw_speed_avg": res.get("sw_speed_avg"),
+        "flares_count": res.get("flares_count"),
+        "cmes_count": res.get("cmes_count"),
+    }
+
+
+async def _fetch_current_space_weather(conn) -> Dict[str, Optional[float]]:
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select kp_index as kp_current
+            from ext.space_weather
+            where ts_utc <= now() and kp_index is not null
+            order by ts_utc desc
+            limit 1
+            """,
+        )
+        kp_row = await cur.fetchone() or {}
+        await cur.execute(
+            """
+            select bz_nt as bz_current
+            from ext.space_weather
+            where ts_utc <= now() and bz_nt is not null
+            order by ts_utc desc
+            limit 1
+            """,
+        )
+        bz_row = await cur.fetchone() or {}
+        await cur.execute(
+            """
+            select sw_speed_kms as sw_speed_current
+            from ext.space_weather
+            where ts_utc <= now() and sw_speed_kms is not null
+            order by ts_utc desc
+            limit 1
+            """,
+        )
+        sw_row = await cur.fetchone() or {}
+    return {
+        "kp_current": kp_row.get("kp_current"),
+        "bz_current": bz_row.get("bz_current"),
+        "sw_speed_current": sw_row.get("sw_speed_current"),
+    }
+
+
+async def _fetch_schumann_row(conn, day_local: date) -> Dict[str, Any]:
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select station_id, f0_avg_hz, f1_avg_hz, f2_avg_hz, f3_avg_hz, f4_avg_hz
+            from marts.schumann_daily
+            where station_id in ('tomsk','cumiana') and day <= %s
+            order by day desc,
+                     case when station_id='tomsk' then 0 when station_id='cumiana' then 1 else 2 end
+            limit 1
+            """,
+            (day_local,),
+        )
+        row = await cur.fetchone() or {}
+    return {
+        "sch_station": row.get("station_id"),
+        "sch_f0_hz": row.get("f0_avg_hz"),
+        "sch_f1_hz": row.get("f1_avg_hz"),
+        "sch_f2_hz": row.get("f2_avg_hz"),
+        "sch_f3_hz": row.get("f3_avg_hz"),
+        "sch_f4_hz": row.get("f4_avg_hz"),
+    }
+
+
+async def _fetch_daily_post(conn, day_local: date) -> Dict[str, Optional[str]]:
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select p0.title as post_title,
+                   p0.caption as post_caption,
+                   p0.body_markdown as post_body,
+                   p0.hashtags as post_hashtags
+            from content.daily_posts p0
+            where p0.platform = 'default' and p0.day <= %s
+            order by p0.day desc, p0.updated_at desc
+            limit 1
+            """,
+            (day_local,),
+        )
+        row = await cur.fetchone() or {}
+    return {
+        "post_title": row.get("post_title"),
+        "post_caption": row.get("post_caption"),
+        "post_body": row.get("post_body"),
+        "post_hashtags": row.get("post_hashtags"),
+    }
+
+
+def _compose_sleep_payload(base: Dict[str, Any], sleep: Dict[str, Optional[float]]) -> Dict[str, Any]:
+    rem_m = sleep.get("rem_m") or base.get("sleep_rem_minutes") or base.get("rem_m") or 0
+    core_m = sleep.get("core_m") or base.get("sleep_core_minutes") or base.get("core_m") or 0
+    deep_m = sleep.get("deep_m") or base.get("sleep_deep_minutes") or base.get("deep_m") or 0
+    awake_m = sleep.get("awake_m") or base.get("sleep_awake_minutes") or base.get("awake_m") or 0
+    inbed_m = sleep.get("inbed_m") or base.get("inbed_m") or 0
+    sleep_total = (
+        base.get("sleep_total_minutes")
+        or (rem_m or 0) + (core_m or 0) + (deep_m or 0)
+    )
+    efficiency = base.get("sleep_efficiency")
+    if not efficiency and inbed_m:
+        try:
+            efficiency = round(((rem_m + core_m + deep_m) / inbed_m), 3)
+        except ZeroDivisionError:
+            efficiency = None
+    return {
+        "sleep_total_minutes": int(sleep_total) if sleep_total is not None else None,
+        "rem_m": round(rem_m, 0) if rem_m is not None else None,
+        "core_m": round(core_m, 0) if core_m is not None else None,
+        "deep_m": round(deep_m, 0) if deep_m is not None else None,
+        "awake_m": round(awake_m, 0) if awake_m is not None else None,
+        "inbed_m": round(inbed_m, 0) if inbed_m is not None else None,
+        "sleep_efficiency": efficiency,
+    }
+
+
+def _compose_space_weather_payload(base: Dict[str, Any], daily: Dict[str, Any], current: Dict[str, Any]) -> Dict[str, Any]:
+    kp_max = base.get("kp_max") if base else None
+    if daily.get("kp_max") is not None:
+        kp_max = daily["kp_max"]
+    bz_min = daily.get("bz_min") if daily.get("bz_min") is not None else base.get("bz_min") if base else None
+    sw_speed_avg = daily.get("sw_speed_avg") if daily.get("sw_speed_avg") is not None else base.get("sw_speed_avg") if base else None
+    flares_count = daily.get("flares_count") if daily.get("flares_count") is not None else base.get("flares_count") if base else None
+    cmes_count = daily.get("cmes_count") if daily.get("cmes_count") is not None else base.get("cmes_count") if base else None
+    kp_alert = bool(kp_max and kp_max >= 5)
+    flare_alert = bool(flares_count and flares_count > 0)
+    return {
+        "kp_max": kp_max,
+        "bz_min": bz_min,
+        "sw_speed_avg": sw_speed_avg,
+        "flares_count": flares_count,
+        "cmes_count": cmes_count,
+        "kp_alert": kp_alert,
+        "flare_alert": flare_alert,
+        "kp_current": current.get("kp_current"),
+        "bz_current": current.get("bz_current"),
+        "sw_speed_current": current.get("sw_speed_current"),
+    }
+
+
+async def _freshen_features(
+    conn,
+    user_id: str,
+    day_local: date,
+    tzinfo: ZoneInfo,
+) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
+    summary = await _fetch_daily_summary(conn, user_id, day_local)
+    if not summary:
+        return None
+    start_utc, end_utc = _local_bounds(day_local, tzinfo)
+    sleep = await _fetch_sleep_aggregate(conn, user_id, start_utc, end_utc)
+    daily_wx = await _fetch_space_weather_daily(conn, day_local)
+    current_wx = await _fetch_current_space_weather(conn)
+    sch = await _fetch_schumann_row(conn, day_local)
+    post = await _fetch_daily_post(conn, day_local)
+
+    payload: Dict[str, Any] = {
+        "user_id": user_id,
+        "day": day_local,
+        "steps_total": summary.get("steps_total"),
+        "hr_min": summary.get("hr_min"),
+        "hr_max": summary.get("hr_max"),
+        "hrv_avg": summary.get("hrv_avg"),
+        "spo2_avg": summary.get("spo2_avg"),
+        "bp_sys_avg": summary.get("bp_sys_avg"),
+        "bp_dia_avg": summary.get("bp_dia_avg"),
+        "updated_at": datetime.now(timezone.utc),
+    }
+    payload.update(_compose_sleep_payload(summary, sleep))
+    payload.update(_compose_space_weather_payload(summary, daily_wx, current_wx))
+    payload.update(sch)
+    payload.update(post)
+    context = {
+        "sleep": sleep,
+        "daily_wx": daily_wx,
+        "current_wx": current_wx,
+        "sch": sch,
+        "post": post,
+    }
+    return payload, context
+
+
+async def _collect_features(
     conn,
     user_id: Optional[str],
-) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
-    pick_filter = ""
-    diag_filter = ""
-    sr_clauses = ["type in ('sleep','sleep_stage')"]
-    params: list[Any] = []
-
-    if user_id:
-        pick_filter = " where user_id = %s"
-        diag_filter = " where user_id = %s"
-        sr_clauses.append("user_id = %s")
-        params = [user_id, user_id, user_id]
-
-    sr_filter = f" where {' and '.join(sr_clauses)}"
-
-    sql = """
-    with pick as (
-      select * from marts.daily_features{pick_filter}
-      order by day desc
-      limit 1
-    ),
-    sr as (
-      select (start_time at time zone 'America/Chicago')::date as day,
-             sum(case when lower(value_text)='rem'  then extract(epoch from (coalesce(end_time,start_time)-start_time))/60 end) as rem_m,
-             sum(case when lower(value_text)='core' then extract(epoch from (coalesce(end_time,start_time)-start_time))/60 end) as core_m,
-             sum(case when lower(value_text)='deep' then extract(epoch from (coalesce(end_time,start_time)-start_time))/60 end) as deep_m,
-             sum(case when lower(value_text)='awake'then extract(epoch from (coalesce(end_time,start_time)-start_time))/60 end) as awake_m,
-             sum(case when lower(value_text) in ('inbed','in_bed') then extract(epoch from (coalesce(end_time,start_time)-start_time))/60 end) as inbed_m
-      from gaia.samples{sr_filter}
-      group by 1
-    ),
-    diag as (
-      select max(day) as max_day, count(*) as total_rows from marts.daily_features{diag_filter}
-    )
-    select p.user_id,
-           p.day,
-           p.steps_total,
-           p.hr_min,
-           p.hr_max,
-           p.hrv_avg,
-           p.spo2_avg,
-           p.bp_sys_avg,
-           p.bp_dia_avg,
-           (coalesce(sr2.rem_m,0)+coalesce(sr2.core_m,0)+coalesce(sr2.deep_m,0))::int as sleep_total_minutes,
-           round(coalesce(sr2.rem_m,0)::numeric,0)  as rem_m,
-           round(coalesce(sr2.core_m,0)::numeric,0) as core_m,
-           round(coalesce(sr2.deep_m,0)::numeric,0) as deep_m,
-           round(coalesce(sr2.awake_m,0)::numeric,0) as awake_m,
-           round(coalesce(sr2.inbed_m,0)::numeric,0) as inbed_m,
-           case when coalesce(sr2.inbed_m,0) > 0
-                then round(((coalesce(sr2.rem_m,0)+coalesce(sr2.core_m,0)+coalesce(sr2.deep_m,0)) / sr2.inbed_m)::numeric, 3)
-                else null end as sleep_efficiency,
-           cur_kp.kp_current,
-           cur_bz.bz_current,
-           cur_sw.sw_speed_current,
-           (case when p.kp_max >= 5 then true else false end) as kp_alert,
-           (case when p.flares_count > 0 then true else false end) as flare_alert,
-           p.kp_max,
-           p.bz_min,
-           p.sw_speed_avg,
-           p.flares_count,
-           p.cmes_count,
-           p.updated_at,
-           sch.station_id  as sch_station,
-           sch.f0_avg_hz   as sch_f0_hz,
-           sch.f1_avg_hz   as sch_f1_hz,
-           sch.f2_avg_hz   as sch_f2_hz,
-           sch.f3_avg_hz   as sch_h3_hz,
-           sch.f4_avg_hz   as sch_f4_hz,
-           dp.post_title,
-           dp.post_caption,
-           dp.post_body,
-           dp.post_hashtags,
-           d.max_day,
-           d.total_rows
-    from pick p
-    left join sr   sr2 on sr2.day = p.day
-
-    -- latest Kp row (independent)
-    left join LATERAL (
-      select kp_index as kp_current
-      from ext.space_weather
-      where ts_utc <= now() and kp_index is not null
-      order by ts_utc desc
-      limit 1
-    ) cur_kp on true
-
-    -- latest Bz row (independent)
-    left join LATERAL (
-      select bz_nt as bz_current
-      from ext.space_weather
-      where ts_utc <= now() and bz_nt is not null
-      order by ts_utc desc
-      limit 1
-    ) cur_bz on true
-
-    -- latest Solar Wind speed row (independent)
-    left join LATERAL (
-      select sw_speed_kms as sw_speed_current
-      from ext.space_weather
-      where ts_utc <= now() and sw_speed_kms is not null
-      order by ts_utc desc
-      limit 1
-    ) cur_sw on true
-
-    -- latest Schumann row on or before picked day, prefer tomsk over cumiana
-    left join LATERAL (
-      select s.station_id,
-             s.f0_avg_hz, s.f1_avg_hz, s.f2_avg_hz, s.f3_avg_hz, s.f4_avg_hz
-      from marts.schumann_daily s
-      where s.station_id in ('tomsk','cumiana') and s.day <= p.day
-      order by s.day desc,
-               case when s.station_id='tomsk' then 0 when s.station_id='cumiana' then 1 else 2 end
-      limit 1
-    ) sch on true
-
-    -- latest Earthscope default post on or before picked day
-    left join LATERAL (
-      select p0.title as post_title,
-             p0.caption as post_caption,
-             p0.body_markdown as post_body,
-             p0.hashtags as post_hashtags
-      from content.daily_posts p0
-      where p0.platform = 'default' and p0.day <= p.day
-      order by p0.day desc, p0.updated_at desc
-      limit 1
-    ) dp on true
-
-    cross join diag d
-    """
-
-    branch = "scoped" if user_id else "unscoped"
+    tz_name: str,
+    tzinfo: ZoneInfo,
+) -> Tuple[Dict[str, Any], Dict[str, Any], Optional[str]]:
     diag_info: Dict[str, Any] = {
-        "branch": branch,
+        "branch": "scoped" if user_id else "anonymous",
         "statement_timeout_ms": STATEMENT_TIMEOUT_MS,
         "requested_user_id": str(user_id) if user_id else None,
         "user_id": str(user_id) if user_id else None,
         "day": None,
+        "day_used": None,
         "updated_at": None,
+        "source": "empty",
+        "mart_row": False,
+        "freshened": False,
         "max_day": None,
         "total_rows": None,
+        "tz": tz_name,
     }
 
-    async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute(f"set statement_timeout = {STATEMENT_TIMEOUT_MS}")
-        query = sql.format(pick_filter=pick_filter, sr_filter=sr_filter, diag_filter=diag_filter)
-        await cur.execute(query, tuple(params))
-        row = await cur.fetchone()
-        if not row and user_id:
-            diag_info["branch"] = "fallback"
-            unscoped_query = sql.format(
-                pick_filter="",
-                sr_filter=" where type in ('sleep','sleep_stage')",
-                diag_filter="",
-            )
-            await cur.execute(unscoped_query, tuple())
-            row = await cur.fetchone()
+    response_payload: Dict[str, Any] = {}
+    error_text: Optional[str] = None
 
-    if not row:
-        return None, diag_info
+    try:
+        today_local = await _current_day_local(conn, tz_name)
+        diag_info["day"] = today_local
+        diag_info["day_used"] = today_local
 
-    rec = dict(row)
-    diag_info["max_day"] = rec.get("max_day")
-    diag_info["total_rows"] = rec.get("total_rows")
-    if rec.get("user_id"):
-        diag_info["user_id"] = str(rec.get("user_id"))
-    diag_info["day"] = rec.get("day")
-    diag_info["updated_at"] = rec.get("updated_at")
+        if not user_id:
+            logger.info("[features_today] anonymous request tz=%s", tz_name)
+        else:
+            mart_row = await _fetch_mart_row(conn, user_id, today_local)
+            context: Dict[str, Any] = {}
+            if mart_row:
+                diag_info["mart_row"] = True
+                diag_info["source"] = "today"
+                diag_info["updated_at"] = mart_row.get("updated_at")
+                response_payload = dict(mart_row)
+            else:
+                freshened = await _freshen_features(conn, user_id, today_local, tzinfo)
+                if freshened:
+                    response_payload, context = freshened
+                    diag_info["source"] = "freshened"
+                    diag_info["freshened"] = True
+                    diag_info["mart_row"] = False
+                    diag_info["updated_at"] = response_payload.get("updated_at")
+                else:
+                    yesterday = today_local - timedelta(days=1)
+                    diag_info["day_used"] = yesterday
+                    mart_row = await _fetch_mart_row(conn, user_id, yesterday)
+                    if mart_row:
+                        response_payload = dict(mart_row)
+                        diag_info["mart_row"] = True
+                        diag_info["source"] = "yesterday"
+                        diag_info["updated_at"] = mart_row.get("updated_at")
+                    else:
+                        diag_info["source"] = "empty"
+                        response_payload = {}
 
-    rec.pop("max_day", None)
-    rec.pop("total_rows", None)
+            if user_id:
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute(
+                        """
+                        select max(day) as max_day, count(*) as total_rows
+                        from marts.daily_features
+                        where user_id = %s
+                        """,
+                        (user_id,),
+                    )
+                    stats_row = await cur.fetchone() or {}
+                    diag_info["max_day"] = stats_row.get("max_day")
+                    diag_info["total_rows"] = stats_row.get("total_rows")
 
-    return rec, diag_info
+            if response_payload:
+                target_day = diag_info.get("day_used") or today_local
+                if user_id:
+                    response_payload.setdefault("user_id", user_id)
+                response_payload.setdefault("day", target_day)
+                start_utc, end_utc = _local_bounds(target_day, tzinfo)
 
-router = APIRouter(prefix="/v1")
+                if not diag_info.get("freshened"):
+                    sleep = await _fetch_sleep_aggregate(conn, user_id, start_utc, end_utc)
+                    daily_wx = await _fetch_space_weather_daily(conn, target_day)
+                    current_wx = await _fetch_current_space_weather(conn)
+                    sch = await _fetch_schumann_row(conn, target_day)
+                    post = await _fetch_daily_post(conn, target_day)
+                else:
+                    sleep = context.get("sleep", {})
+                    daily_wx = context.get("daily_wx", {})
+                    current_wx = context.get("current_wx", {})
+                    sch = context.get("sch", {})
+                    post = context.get("post", {})
+
+                response_payload.update(_compose_sleep_payload(response_payload, sleep))
+                response_payload.update(_compose_space_weather_payload(response_payload, daily_wx, current_wx))
+                response_payload.update(sch)
+                response_payload.update(post)
+    except Exception as exc:  # pragma: no cover - exercised via integration tests
+        logger.exception("features_today failed: %s", exc)
+        error_text = str(exc) or exc.__class__.__name__
+
+    return response_payload, diag_info, error_text
 
 
 def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
@@ -213,205 +454,174 @@ def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
         "requested_user_id": diag_info.get("requested_user_id"),
         "user_id": diag_info.get("user_id"),
         "day": _iso_date(diag_info.get("day")),
+        "day_used": _iso_date(diag_info.get("day_used")),
         "updated_at": _iso_dt(diag_info.get("updated_at")),
+        "source": diag_info.get("source"),
+        "mart_row": bool(diag_info.get("mart_row")),
+        "freshened": bool(diag_info.get("freshened")),
         "max_day": _iso_date(diag_info.get("max_day")),
         "total_rows": diag_info.get("total_rows"),
-        "has_row": diag_info.get("day") is not None,
+        "tz": diag_info.get("tz"),
     }
+
+router = APIRouter(prefix="/v1")
 
 # -----------------------------
 # /v1/features/today (full)
 # -----------------------------
 @router.get("/features/today")
 async def features_today(request: Request, diag: int = 0, conn = Depends(get_db)):
-    """
-    Return today's (latest) features row including derived sleep, current Kp/Bz/SW,
-    Schumann preference (tomsk > cumiana), and Earthscope default post. America/Chicago
-    is used for daily bucketing of sleep.
-    """
+    """Return the daily features snapshot for the caller, honoring timezone overrides."""
+
     default_media_base = "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main"
     raw_media_base = getenv("MEDIA_BASE_URL")
     media_base = (raw_media_base or default_media_base).rstrip("/")
 
+    tz_param = request.query_params.get("tz", DEFAULT_TIMEZONE)
+    tz_name, tzinfo = _normalize_timezone(tz_param)
+
     user_id = getattr(request.state, "user_id", None)
-
-    try:
-        row, diag_info = await _fetch_features_today(conn, user_id)
-    except Exception as exc:
-        logger.exception("features_today query failed: %s", exc)
-        error_text = str(exc) or exc.__class__.__name__
-        response: Dict[str, Any] = {"ok": False, "data": {}, "error": error_text}
-        if diag:
-            response["diagnostics"] = _format_diag_payload({
-                "branch": None,
-                "statement_timeout_ms": STATEMENT_TIMEOUT_MS,
-                "user_id": str(user_id) if user_id else None,
-                "day": None,
-                "updated_at": None,
-                "max_day": None,
-                "total_rows": None,
-            })
-        return response
-
-    rec = row or {}
-    if not row:
-        logger.info(
-            "[features_today] user=%s branch=%s day=%s updated_at=%s",
-            diag_info.get("user_id") or (str(user_id) if user_id else None),
-            diag_info.get("branch"),
-            _iso_date(diag_info.get("day")),
-            _iso_dt(diag_info.get("updated_at")),
-        )
-        response = {"ok": True, "data": {}, "error": None}
-        if diag:
-            response["diagnostics"] = _format_diag_payload(diag_info)
-        return response
-
-    rec["user_id"] = str(rec.get("user_id")) if rec.get("user_id") else None
-    day_val = rec.get("day")
-    rec["day"] = str(day_val) if day_val else None
-
-    diag_info["day"] = day_val
-    diag_info["updated_at"] = rec.get("updated_at")
-
-    logger.info(
-        "[features_today] user=%s branch=%s day=%s updated_at=%s",
-        diag_info.get("user_id") or (str(user_id) if user_id else None),
-        diag_info.get("branch"),
-        _iso_date(diag_info.get("day")),
-        _iso_dt(diag_info.get("updated_at")),
-    )
-
-    if media_base:
-        rec["earthscope_images"] = {
-            "caption": f"{media_base}/images/daily_caption.jpg",
-            "stats": f"{media_base}/images/daily_stats.jpg",
-            "affects": f"{media_base}/images/daily_affects.jpg",
-            "playbook": f"{media_base}/images/daily_playbook.jpg",
-        }
-
-    response = {"ok": True, "data": rec, "error": None}
     if diag:
-        response["diagnostics"] = _format_diag_payload(diag_info)
+        logger.debug("[features_today] diagnostics requested tz=%s user=%s", tz_name, user_id)
+    response_payload, diag_info, error_text = await _collect_features(conn, user_id, tz_name, tzinfo)
+
+    if error_text:
+        response: Dict[str, Any] = {"ok": False, "data": {}, "error": error_text}
+    else:
+        payload = response_payload or {}
+        if payload.get("user_id"):
+            payload["user_id"] = str(payload.get("user_id"))
+        day_val = payload.get("day")
+        if isinstance(day_val, date):
+            payload["day"] = day_val.isoformat()
+        diag_info["day_used"] = diag_info.get("day_used") or day_val
+        response = {"ok": True, "data": payload, "error": None}
+
+    diag_block = _format_diag_payload(diag_info)
+    response["diagnostics"] = diag_block
+
+    if not error_text and response_payload and media_base:
+        response["data"].setdefault(
+            "earthscope_images",
+            {
+                "caption": f"{media_base}/images/daily_caption.jpg",
+                "stats": f"{media_base}/images/daily_stats.jpg",
+                "affects": f"{media_base}/images/daily_affects.jpg",
+                "playbook": f"{media_base}/images/daily_playbook.jpg",
+            },
+        )
+
     return response
 
 # -----------------------------
 # /v1/diag/features
 # -----------------------------
 @router.get("/diag/features")
-async def diag_features(request: Request, conn = Depends(get_db)):
-    user_id = getattr(request.state, "user_id", None)
+async def diag_features(
+    request: Request,
+    tz: str = DEFAULT_TIMEZONE,
+    user_id: Optional[str] = None,
+    conn = Depends(get_db),
+):
+    if not DEBUG_FEATURES_DIAG:
+        return {"ok": False, "data": {}, "error": "diag disabled"}
 
-    try:
-        row, diag_info = await _fetch_features_today(conn, user_id)
-    except Exception as e:
-        logger.exception("/v1/diag/features base query failed: %s", e)
-        row = None
+    tz_name, tzinfo = _normalize_timezone(tz)
+    effective_user = user_id or getattr(request.state, "user_id", None)
+
+    features_payload: Dict[str, Any] = {}
+    diag_info: Dict[str, Any]
+    error_text: Optional[str] = None
+
+    if effective_user:
+        features_payload, diag_info, error_text = await _collect_features(conn, effective_user, tz_name, tzinfo)
+    else:
         diag_info = {
-            "branch": None,
+            "branch": "anonymous",
             "statement_timeout_ms": STATEMENT_TIMEOUT_MS,
-            "requested_user_id": str(user_id) if user_id else None,
-            "user_id": str(user_id) if user_id else None,
+            "requested_user_id": None,
+            "user_id": None,
             "day": None,
+            "day_used": None,
             "updated_at": None,
+            "source": "empty",
+            "mart_row": False,
+            "freshened": False,
             "max_day": None,
             "total_rows": None,
+            "tz": tz_name,
         }
 
-    tables: Dict[str, Any] = {}
-    sanity_checks: Dict[str, Any] = {}
+    mart_rows: List[Dict[str, Any]] = []
+    samples_window: Dict[str, Any] = {}
+    space_weather_diag: Dict[str, Any] = {}
 
-    try:
-        async with conn.cursor(row_factory=dict_row) as cur:
-            await cur.execute(f"set statement_timeout = {STATEMENT_TIMEOUT_MS}")
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(f"set statement_timeout = {STATEMENT_TIMEOUT_MS}")
+
+        if effective_user:
+            await cur.execute(
+                """
+                select day, updated_at, steps_total, hr_min, hr_max, kp_max, bz_min, sw_speed_avg
+                from marts.daily_features
+                where user_id = %s
+                order by day desc
+                limit 5
+                """,
+                (effective_user,),
+            )
+            mart_rows = [
+                {
+                    "day": _iso_date(row.get("day")),
+                    "updated_at": _iso_dt(row.get("updated_at")),
+                    "steps_total": row.get("steps_total"),
+                    "hr_min": row.get("hr_min"),
+                    "hr_max": row.get("hr_max"),
+                    "kp_max": row.get("kp_max"),
+                    "bz_min": row.get("bz_min"),
+                    "sw_speed_avg": row.get("sw_speed_avg"),
+                }
+                for row in await cur.fetchall()
+            ]
 
             await cur.execute(
-                "select count(*) as row_count, max(updated_at) as max_updated_at, max(day) as max_day from marts.daily_features"
+                """
+                select type, max(start_time) as max_start_time
+                from gaia.samples
+                where user_id = %s
+                  and start_time >= now() - interval '24 hours'
+                group by type
+                order by type
+                """,
+                (effective_user,),
             )
-            res = await cur.fetchone() or {}
-            tables["marts.daily_features"] = {
-                "rows": int(res.get("row_count") or 0),
-                "max_day": _iso_date(res.get("max_day")),
-                "max_updated_at": _iso_dt(res.get("max_updated_at")),
+            samples_window = {
+                row.get("type"): _iso_dt(row.get("max_start_time"))
+                for row in await cur.fetchall()
             }
 
-            await cur.execute("select count(*) as row_count, max(day) as max_day from marts.schumann_daily")
-            res = await cur.fetchone() or {}
-            tables["marts.schumann_daily"] = {
-                "rows": int(res.get("row_count") or 0),
-                "max_day": _iso_date(res.get("max_day")),
-            }
+        await cur.execute("select max(ts_utc) as max_ts from ext.space_weather")
+        sw_row = await cur.fetchone() or {}
+        space_weather_diag = {"max_ts": _iso_dt(sw_row.get("max_ts"))}
 
-            await cur.execute("select count(*) as row_count, max(ts_utc) as max_ts from ext.space_weather")
-            res = await cur.fetchone() or {}
-            tables["ext.space_weather"] = {
-                "rows": int(res.get("row_count") or 0),
-                "max_ts": _iso_dt(res.get("max_ts")),
-            }
-
-            if user_id:
-                await cur.execute(
-                    "select count(*) as row_count, max(date) as max_date from gaia.daily_summary where user_id = %s",
-                    (user_id,),
-                )
-                res = await cur.fetchone() or {}
-                tables["gaia.daily_summary"] = {
-                    "rows": int(res.get("row_count") or 0),
-                    "max_date": _iso_date(res.get("max_date")),
-                }
-
-                await cur.execute(
-                    """
-                    select count(*) as row_count,
-                           min(start_time) as min_start_time,
-                           max(start_time) as max_start_time
-                    from gaia.samples
-                    where user_id = %s
-                      and start_time >= now() - interval '24 hours'
-                    """,
-                    (user_id,),
-                )
-                res = await cur.fetchone() or {}
-                tables["gaia.samples_last_24h"] = {
-                    "rows": int(res.get("row_count") or 0),
-                    "earliest_start_time": _iso_dt(res.get("min_start_time")),
-                    "latest_start_time": _iso_dt(res.get("max_start_time")),
-                }
-
-            await cur.execute("select max(day) as max_day from marts.daily_features")
-            res = await cur.fetchone() or {}
-            sanity_checks["marts.daily_features.max_day"] = _iso_date(res.get("max_day"))
-
-            if user_id:
-                await cur.execute(
-                    "select max(date) as max_date from gaia.daily_summary where user_id = %s",
-                    (user_id,),
-                )
-                res = await cur.fetchone() or {}
-                sanity_checks["gaia.daily_summary.max_date"] = _iso_date(res.get("max_date"))
-
-                await cur.execute(
-                    """
-                    select max(start_time) as max_start_time
-                    from gaia.samples
-                    where user_id = %s
-                      and type in ('heart_rate','heart_rate_variability_sdnn')
-                    """,
-                    (user_id,),
-                )
-                res = await cur.fetchone() or {}
-                sanity_checks["gaia.samples.max_start_time"] = _iso_dt(res.get("max_start_time"))
-    except Exception as e:
-        logger.exception("/v1/diag/features stats failed: %s", e)
-        tables["error"] = {"message": str(e)}
+    formatted_features = dict(features_payload or {})
+    if formatted_features.get("user_id"):
+        formatted_features["user_id"] = str(formatted_features.get("user_id"))
+    day_val = formatted_features.get("day")
+    if isinstance(day_val, date):
+        formatted_features["day"] = day_val.isoformat()
 
     payload: Dict[str, Any] = {
-        "features": _format_diag_payload(diag_info),
-        "tables": tables,
-        "sanity_checks": sanity_checks,
+        "features": formatted_features,
+        "diagnostics": _format_diag_payload(diag_info),
+        "mart_recent": mart_rows,
+        "samples_last_24h": samples_window,
+        "space_weather": space_weather_diag,
     }
 
-    return {"ok": True, "data": payload}
+    if error_text:
+        return {"ok": False, "data": payload, "error": error_text}
+    return {"ok": True, "data": payload, "error": None}
 
 
 @router.get("/diag/db")
