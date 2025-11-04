@@ -245,8 +245,10 @@ async def test_daily_aggregation_flow(client: AsyncClient, fake_store: FakeSympt
         assert response.status_code == 200
         data = response.json()
         assert data["ok"] is True
-        assert "id" in data
-        assert data["ts_utc"].endswith("Z") or data["ts_utc"].endswith("+00:00")
+        assert data.get("error") is None
+        assert data.get("data") is not None
+        assert "id" in data["data"]
+        assert data["data"]["ts_utc"].endswith("Z") or data["data"]["ts_utc"].endswith("+00:00")
 
     today = await client.get("/v1/symptoms/today", headers=headers)
     assert today.status_code == 200

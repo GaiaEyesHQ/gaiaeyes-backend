@@ -31,10 +31,18 @@ class SymptomEventIn(BaseModel):
     tags: Optional[List[str]] = None
 
 
-class SymptomEventOut(BaseModel):
+class SymptomEnvelope(BaseModel):
     ok: bool = True
+    error: Optional[str] = None
+
+
+class SymptomEventData(BaseModel):
     id: str
     ts_utc: str
+
+
+class SymptomEventResponse(SymptomEnvelope):
+    data: Optional[SymptomEventData] = None
 
 
 class SymptomTodayOut(BaseModel):
@@ -42,11 +50,6 @@ class SymptomTodayOut(BaseModel):
     ts_utc: str
     severity: Optional[int] = None
     free_text: Optional[str] = None
-
-
-class SymptomEnvelope(BaseModel):
-    ok: bool = True
-    error: Optional[str] = None
 
 
 class SymptomTodayResponse(SymptomEnvelope):
@@ -86,7 +89,7 @@ def _normalize_symptom_code(value: str) -> str:
     return value.strip().replace(" ", "_").replace("-", "_").upper()
 
 
-@router.post("", response_model=SymptomEventOut)
+@router.post("", response_model=SymptomEventResponse)
 async def create_symptom_event(
     payload: SymptomEventIn,
     request: Request,
@@ -101,11 +104,12 @@ async def create_symptom_event(
 
     try:
         code_rows = await symptoms_db.fetch_symptom_codes(conn)
-    except Exception:  # pragma: no cover - exercised via tests
+    except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to load codes for symptom post", extra={"user_id": user_id})
+        error_text = str(exc) or exc.__class__.__name__
         return JSONResponse(
             status_code=200,
-            content={"ok": False, "data": None, "error": "Failed to load symptom codes"},
+            content={"ok": False, "data": None, "error": error_text},
         )
 
     lookup = {
@@ -125,6 +129,7 @@ async def create_symptom_event(
                 status_code=400,
                 content={
                     "ok": False,
+                    "data": None,
                     "error": "unknown symptom_code",
                     "valid": valid_codes,
                 },
@@ -152,15 +157,17 @@ async def create_symptom_event(
             free_text=payload.free_text,
             tags=payload.tags,
         )
-    except Exception:  # pragma: no cover - exercised via tests
+    except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to insert symptom event", extra={"user_id": user_id, "symptom_code": normalized_code})
+        error_text = str(exc) or exc.__class__.__name__
         return JSONResponse(
             status_code=200,
-            content={"ok": False, "data": None, "error": "Failed to record symptom event"},
+            content={"ok": False, "data": None, "error": error_text},
         )
     if not result.get("id") or not result.get("ts_utc"):
         raise HTTPException(status_code=500, detail="Failed to persist symptom event")
-    return SymptomEventOut(id=result["id"], ts_utc=result["ts_utc"])
+    data = SymptomEventData(id=result["id"], ts_utc=result["ts_utc"])
+    return SymptomEventResponse(data=data, error=None)
 
 
 def _success(payload: SymptomEnvelope) -> dict:
@@ -176,10 +183,11 @@ async def get_symptoms_today(request: Request, conn=Depends(get_db)):
     user_id = _require_user_id(request)
     try:
         rows = await symptoms_db.fetch_symptoms_today(conn, user_id)
-    except Exception:  # pragma: no cover - exercised via tests
+    except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to load todays symptoms", extra={"user_id": user_id})
+        error_text = str(exc) or exc.__class__.__name__
         return _failure(
-            SymptomTodayResponse(ok=False, data=[], error="Failed to load today's symptoms")
+            SymptomTodayResponse(ok=False, data=[], error=error_text)
         )
     data = [SymptomTodayOut(**row) for row in rows]
     return _success(SymptomTodayResponse(data=data))
@@ -194,10 +202,11 @@ async def get_symptoms_daily(
     user_id = _require_user_id(request)
     try:
         rows = await symptoms_db.fetch_daily_summary(conn, user_id, days)
-    except Exception:  # pragma: no cover - exercised via tests
+    except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to load daily symptoms", extra={"user_id": user_id, "days": days})
+        error_text = str(exc) or exc.__class__.__name__
         return _failure(
-            SymptomDailyResponse(ok=False, data=[], error="Failed to load daily symptom summary")
+            SymptomDailyResponse(ok=False, data=[], error=error_text)
         )
     data = [SymptomDailyRow(**row) for row in rows]
     return _success(SymptomDailyResponse(data=data))
@@ -212,10 +221,11 @@ async def get_symptom_diag(
     user_id = _require_user_id(request)
     try:
         rows = await symptoms_db.fetch_diagnostics(conn, user_id, days)
-    except Exception:  # pragma: no cover - exercised via tests
+    except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to load diagnostic summary", extra={"user_id": user_id, "days": days})
+        error_text = str(exc) or exc.__class__.__name__
         return _failure(
-            SymptomDiagResponse(ok=False, data=[], error="Failed to load diagnostic summary")
+            SymptomDiagResponse(ok=False, data=[], error=error_text)
         )
     data = [SymptomDiagRow(**row) for row in rows]
     return _success(SymptomDiagResponse(data=data))
@@ -233,10 +243,11 @@ async def list_symptom_codes(
 ):
     try:
         rows = await symptoms_db.fetch_symptom_codes(conn, include_inactive=include_inactive)
-    except Exception:  # pragma: no cover - exercised via tests
+    except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to load symptom codes", extra={"include_inactive": include_inactive})
+        error_text = str(exc) or exc.__class__.__name__
         return _failure(
-            SymptomCodeResponse(ok=False, data=[], error="Failed to load symptom codes")
+            SymptomCodeResponse(ok=False, data=[], error=error_text)
         )
 
     response.headers["Cache-Control"] = "public, max-age=300"

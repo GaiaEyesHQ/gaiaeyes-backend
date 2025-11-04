@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, Tuple
 from fastapi import APIRouter, Depends, Request
 from os import getenv
 from psycopg.rows import dict_row
-from app.db import get_db
+from app.db import get_db, get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -237,9 +237,10 @@ async def features_today(request: Request, diag: int = 0, conn = Depends(get_db)
 
     try:
         row, diag_info = await _fetch_features_today(conn, user_id)
-    except Exception as e:
-        logger.exception("features_today query failed: %s", e)
-        response: Dict[str, Any] = {"ok": True, "data": None, "error": f"features_today query failed: {e}"}
+    except Exception as exc:
+        logger.exception("features_today query failed: %s", exc)
+        error_text = str(exc) or exc.__class__.__name__
+        response: Dict[str, Any] = {"ok": False, "data": {}, "error": error_text}
         if diag:
             response["diagnostics"] = _format_diag_payload({
                 "branch": None,
@@ -252,8 +253,8 @@ async def features_today(request: Request, diag: int = 0, conn = Depends(get_db)
             })
         return response
 
-    rec = row
-    if not rec:
+    rec = row or {}
+    if not row:
         logger.info(
             "[features_today] user=%s branch=%s day=%s updated_at=%s",
             diag_info.get("user_id") or (str(user_id) if user_id else None),
@@ -261,7 +262,7 @@ async def features_today(request: Request, diag: int = 0, conn = Depends(get_db)
             _iso_date(diag_info.get("day")),
             _iso_dt(diag_info.get("updated_at")),
         )
-        response: Dict[str, Any] = {"ok": True, "data": None}
+        response = {"ok": True, "data": {}, "error": None}
         if diag:
             response["diagnostics"] = _format_diag_payload(diag_info)
         return response
@@ -289,7 +290,7 @@ async def features_today(request: Request, diag: int = 0, conn = Depends(get_db)
             "playbook": f"{media_base}/images/daily_playbook.jpg",
         }
 
-    response = {"ok": True, "data": rec}
+    response = {"ok": True, "data": rec, "error": None}
     if diag:
         response["diagnostics"] = _format_diag_payload(diag_info)
     return response
@@ -411,6 +412,36 @@ async def diag_features(request: Request, conn = Depends(get_db)):
     }
 
     return {"ok": True, "data": payload}
+
+
+@router.get("/diag/db")
+async def diag_db():
+    pool = await get_pool()
+    stats_dict: Dict[str, Any] = {}
+    try:
+        stats = pool.get_stats()
+        if isinstance(stats, dict):
+            stats_dict = stats
+    except Exception:  # pragma: no cover - depends on psycopg version
+        stats_dict = {}
+
+    pool_min = int(stats_dict.get("pool_min", 0))
+    pool_max = int(stats_dict.get("pool_max", 0))
+    pool_size = int(stats_dict.get("pool_size", 0))
+    pool_available = int(stats_dict.get("pool_available", 0))
+
+    in_use = max(pool_size - pool_available, 0)
+    free = max(pool_available, 0)
+
+    return {
+        "ok": True,
+        "pool": {
+            "min": pool_min,
+            "max": pool_max,
+            "in_use": in_use,
+            "free": free,
+        },
+    }
 
 # -----------------------------
 # /v1/space/forecast/summary

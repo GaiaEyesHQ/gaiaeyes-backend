@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from fastapi import FastAPI, Depends, Request
@@ -23,7 +24,7 @@ except ModuleNotFoundError:
     except ModuleNotFoundError:
         webhooks_router = None
 from .utils.auth import require_auth as ensure_authenticated
-from .db import get_pool
+from .db import get_pool, open_pool, close_pool
 
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,11 @@ async def _log_routes():
 
 
 @app.on_event("startup")
+async def _open_pool():
+    await open_pool()
+
+
+@app.on_event("startup")
 async def _check_db_ready():
     try:
         pool = await get_pool()
@@ -65,6 +71,11 @@ async def _check_db_ready():
         logger.info("[DB] ready")
     except Exception as exc:  # pragma: no cover - startup diagnostics
         logger.exception("[DB] startup check failed: %s", exc)
+
+
+@app.on_event("shutdown")
+async def _close_pool():
+    await close_pool()
 
 # Build marker for health checks (update per deploy or wire to your CI SHA)
 BUILD = "2025-09-20T02:45Z"
@@ -82,13 +93,29 @@ if WebhookSigMiddleware is not None:
     app.add_middleware(WebhookSigMiddleware)
 
 
+async def _health_db_probe() -> bool:
+    try:
+        async def _probe() -> bool:
+            pool = await get_pool()
+            async with pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute("select 1;")
+                    await cur.fetchone()
+            return True
+
+        return await asyncio.wait_for(_probe(), timeout=0.3)
+    except Exception:
+        return False
+
+
 @app.get("/health")
 async def health():
     return {
         "ok": True,
         "service": "gaiaeyes-backend",
         "build": BUILD,
-        "time": datetime.now(timezone.utc).isoformat()
+        "time": datetime.now(timezone.utc).isoformat(),
+        "db": await _health_db_probe(),
     }
 
 # ---- Simple bearer auth for /v1/*

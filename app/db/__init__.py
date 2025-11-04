@@ -1,6 +1,7 @@
 # app/db.py
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Optional, AsyncGenerator
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
@@ -27,6 +28,8 @@ class Settings(BaseSettings):
 settings = Settings()
 
 _pool: AsyncConnectionPool | None = None
+_pool_lock = asyncio.Lock()
+_pool_open = False
 
 
 def _rebuild_netloc(u) -> str:
@@ -67,45 +70,86 @@ def _sanitize_conninfo(dsn: str) -> str:
     return urlunparse((u.scheme, netloc, u.path, u.params, new_q, u.fragment))
 
 
-async def get_pool() -> AsyncConnectionPool:
+def _get_or_create_pool() -> AsyncConnectionPool:
     global _pool
     if _pool is None:
         conninfo = _sanitize_conninfo(settings.DATABASE_URL)
         _pool = AsyncConnectionPool(
             conninfo=conninfo,
             min_size=1,
-            max_size=3,
-            timeout=30,
-            max_idle=90,
-            max_lifetime=300,
-            open=False,  # lazy
+            max_size=4,
+            timeout=5,
+            open=False,
             kwargs={
-                # Disable server-side prepared statements.
-                # Psycopg interprets ``prepare_threshold=None`` as "never prepare",
-                # whereas ``0`` actually forces immediate preparation and can trigger
-                # DuplicatePreparedStatement errors when connections are pooled.
+                "sslmode": "require",
                 "prepare_threshold": None,
-                "connect_timeout": 10,
                 "autocommit": True,
-                "keepalives": 1,
-                "keepalives_idle": 30,
-                "keepalives_interval": 10,
-                "keepalives_count": 3,
+                "connect_timeout": 10,
             },
         )
-        await _pool.open()
-        logger.info("[DB] async pool opened against pgBouncer transaction mode on port %s", _PGBOUNCER_PORT)
+        logger.info(
+            "[DB] async pool configured for pgBouncer transaction mode on port %s", _PGBOUNCER_PORT
+        )
     return _pool
+
+
+async def open_pool() -> AsyncConnectionPool:
+    global _pool_open
+    async with _pool_lock:
+        pool = _get_or_create_pool()
+        if not _pool_open:
+            await pool.open()
+            _pool_open = True
+    return pool
+
+
+async def close_pool() -> None:
+    global _pool_open
+    async with _pool_lock:
+        if _pool and _pool_open:
+            await _pool.close()
+            _pool_open = False
+
+
+async def get_pool() -> AsyncConnectionPool:
+    pool = await open_pool()
+    return pool
 
 
 # ✅ FastAPI dependency: async generator that YIELDS a psycopg3 connection.
 #    Do NOT decorate with @asynccontextmanager.
+async def _pre_ping(conn) -> None:
+    async with conn.cursor() as cur:
+        await cur.execute("select 1;")
+
+
 async def get_db() -> AsyncGenerator:
     pool = await get_pool()
-    async with pool.connection() as conn:
+    attempt = 0
+    last_exc: Optional[BaseException] = None
+
+    while attempt < 2:
+        ctx = pool.connection()
+        conn = await ctx.__aenter__()
         try:
-            await conn.execute("select 1;")
-        except Exception:
-            logger.exception("[DB] connection pre-ping failed")
+            await _pre_ping(conn)
+        except Exception as exc:  # pragma: no cover - exercised under pool churn
+            last_exc = exc
+            await ctx.__aexit__(type(exc), exc, exc.__traceback__)
+            if attempt == 0:
+                logger.warning("[DB] pre_ping failed; reconnecting")
+                attempt += 1
+                continue
             raise
-        yield conn  # FastAPI injects this as `conn` in your endpoints
+
+        try:
+            yield conn  # FastAPI injects this as `conn` in your endpoints
+        except Exception as exc:  # pragma: no cover - defensive, FastAPI handles
+            await ctx.__aexit__(type(exc), exc, exc.__traceback__)
+            raise
+        else:
+            await ctx.__aexit__(None, None, None)
+        return
+
+    if last_exc:
+        raise last_exc
