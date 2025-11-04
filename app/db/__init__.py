@@ -43,7 +43,11 @@ async def get_pool() -> AsyncConnectionPool:
             timeout=30,
             open=False,  # lazy
             kwargs={
-                "prepare_threshold": 0,  # NEVER prepare (PgBouncer-safe)
+                # Disable server-side prepared statements.
+                # Psycopg interprets ``prepare_threshold=None`` as "never prepare",
+                # whereas ``0`` actually forces immediate preparation and can trigger
+                # DuplicatePreparedStatement errors when connections are pooled.
+                "prepare_threshold": None,
                 "connect_timeout": 10,
             },
         )
