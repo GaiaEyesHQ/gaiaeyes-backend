@@ -3,7 +3,7 @@ name: Global Hazards → WordPress
 on:
   schedule:
     - cron: "*/10 * * * *" # every 10 minutes
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
   run:
@@ -12,8 +12,9 @@ jobs:
       WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
       WP_USERNAME: ${{ secrets.WP_USERNAME }}
       WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -30,9 +31,8 @@ jobs:
         run: |
           python bots/hazards/hazards_bot.py run
 
-      # Optional JSON publish step
       - name: Publish latest.json to media repo
-        if: ${{ secrets.GH_PAT != '' && secrets.MEDIA_REPO != '' }}
+        if: ${{ secrets.GH_PAT && secrets.MEDIA_REPO }}
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
           MEDIA_REPO: ${{ secrets.MEDIA_REPO }}
@@ -40,24 +40,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           FILE="${GITHUB_WORKSPACE}/bots/hazards/out/latest.json"
           if [[ ! -f "$FILE" ]]; then
-            echo "::warning::No latest.json found, skipping publish"
+            echo "::warning::No latest.json found; skipping publish"
             exit 0
           fi
 
-          # Fallback branch
           BRANCH="${MEDIA_BRANCH:-main}"
-
           echo "Publishing $FILE → ${MEDIA_REPO}:${BRANCH}/public/hazards/latest.json"
 
           TMPDIR=$(mktemp -d)
           cd "$TMPDIR"
-
           git init -b "$BRANCH"
-          git remote add origin "https://x-access-token:${GH_PAT}@github.com/${MEDIA_REPO}.git"
+          git config user.email "actions@users.noreply.github.com"
+          git config user.name "GitHub Actions"
 
+          git remote add origin "https://x-access-token:${GH_PAT}@github.com/${MEDIA_REPO}.git"
           if git ls-remote --exit-code origin "refs/heads/${BRANCH}" >/dev/null 2>&1; then
             git fetch origin "$BRANCH"
             git checkout "$BRANCH"
@@ -65,15 +63,13 @@ jobs:
 
           mkdir -p public/hazards
           cp "$FILE" public/hazards/latest.json
-
           git add public/hazards/latest.json
+
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git config user.email "actions@users.noreply.github.com"
-            git config user.name "GitHub Actions"
             git commit -m "update hazards latest.json ($(date -u +'%Y-%m-%dT%H:%M:%SZ'))"
             git push origin "$BRANCH"
           fi
 
-          echo "Publish step complete."
+          echo "✅ Publish step complete."
