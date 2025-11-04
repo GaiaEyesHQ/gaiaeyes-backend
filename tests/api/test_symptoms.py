@@ -228,13 +228,15 @@ async def test_daily_aggregation_flow(client: AsyncClient, fake_store: FakeSympt
     today = await client.get("/v1/symptoms/today", headers=headers)
     assert today.status_code == 200
     today_payload = today.json()
-    assert len(today_payload) == 1
-    assert today_payload[0]["symptom_code"] == "headache"
+    assert today_payload["ok"] is True
+    assert len(today_payload["data"]) == 1
+    assert today_payload["data"][0]["symptom_code"] == "headache"
 
     daily = await client.get("/v1/symptoms/daily?days=3", headers=headers)
     assert daily.status_code == 200
     daily_rows = daily.json()
-    assert daily_rows == [
+    assert daily_rows["ok"] is True
+    assert daily_rows["data"] == [
         {
             "day": "2024-04-02",
             "symptom_code": "headache",
@@ -254,7 +256,8 @@ async def test_daily_aggregation_flow(client: AsyncClient, fake_store: FakeSympt
     diag = await client.get("/v1/symptoms/diag?days=3", headers=headers)
     assert diag.status_code == 200
     diag_rows = diag.json()
-    assert diag_rows == [
+    assert diag_rows["ok"] is True
+    assert diag_rows["data"] == [
         {
             "symptom_code": "headache",
             "events": 1,
