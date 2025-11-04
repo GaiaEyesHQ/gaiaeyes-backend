@@ -206,6 +206,67 @@ async def test_features_fallback_to_yesterday(monkeypatch, client: AsyncClient):
 
 
 @pytest.mark.anyio
+async def test_features_returns_defaults_when_empty(monkeypatch, client: AsyncClient):
+    async def _fake_db():
+        yield _FakeConn()
+
+    app.dependency_overrides[get_db] = _fake_db
+
+    today = date(2024, 4, 5)
+
+    async def _fake_current_day(conn, tz_name):  # noqa: ARG001
+        return today
+
+    async def _fake_query_mart(conn, user_id: str, day_local: date):  # noqa: ARG001
+        return None, None
+
+    async def _fake_fetch_mart(conn, user_id: str, day_local: date):  # noqa: ARG001
+        return None
+
+    async def _fake_snapshot(conn, user_id: str):  # noqa: ARG001
+        return None
+
+    async def _fake_freshen(conn, user_id: str, day_local: date, tzinfo):  # noqa: ARG001
+        return None
+
+    async def _fake_get_last_good(user_id: str):  # noqa: ARG001
+        return None
+
+    async def _fake_set_last_good(user_id: str, payload):  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(summary, "_current_day_local", _fake_current_day)
+    monkeypatch.setattr(summary, "_query_mart_with_retry", _fake_query_mart)
+    monkeypatch.setattr(summary, "_fetch_mart_row", _fake_fetch_mart)
+    monkeypatch.setattr(summary, "_fetch_snapshot_row", _fake_snapshot)
+    monkeypatch.setattr(summary, "_freshen_features", _fake_freshen)
+    monkeypatch.setattr(summary, "get_last_good", _fake_get_last_good)
+    monkeypatch.setattr(summary, "set_last_good", _fake_set_last_good)
+
+    user_id = str(uuid4())
+
+    try:
+        resp = await client.get(
+            "/v1/features/today",
+            headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
+            params={"tz": "UTC"},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["ok"] is True
+        data = payload["data"]
+        assert data["user_id"] == user_id
+        assert data["day"] == today.isoformat()
+        assert data["steps_total"] == 0
+        assert data["sleep_total_minutes"] == 0
+        assert data["flares_count"] == 0
+        assert data["kp_alert"] is False
+        assert data["source"] in {"snapshot", "empty"}
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.anyio
 async def test_features_error_envelope(monkeypatch, client: AsyncClient):
     async def _fake_db():
         yield _FakeConn()

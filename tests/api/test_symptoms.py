@@ -294,3 +294,43 @@ async def test_daily_aggregation_flow(client: AsyncClient, fake_store: FakeSympt
             "last_ts": "2024-04-01T15:30:00+00:00",
         },
     ]
+
+
+@pytest.mark.anyio
+async def test_symptom_endpoints_return_ok_for_empty(monkeypatch, client: AsyncClient):
+    user_id = str(uuid4())
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Dev-UserId": user_id,
+    }
+
+    async def _none_today(conn, user):  # noqa: ARG001
+        return None
+
+    async def _none_daily(conn, user, days):  # noqa: ARG001
+        return None
+
+    async def _none_diag(conn, user, days):  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(symptoms_db, "fetch_symptoms_today", _none_today)
+    monkeypatch.setattr(symptoms_db, "fetch_daily_summary", _none_daily)
+    monkeypatch.setattr(symptoms_db, "fetch_diagnostics", _none_diag)
+
+    today_resp = await client.get("/v1/symptoms/today", headers=headers)
+    assert today_resp.status_code == 200
+    today_payload = today_resp.json()
+    assert today_payload["ok"] is True
+    assert today_payload["data"] == []
+
+    daily_resp = await client.get("/v1/symptoms/daily", headers=headers)
+    assert daily_resp.status_code == 200
+    daily_payload = daily_resp.json()
+    assert daily_payload["ok"] is True
+    assert daily_payload["data"] == []
+
+    diag_resp = await client.get("/v1/symptoms/diag", headers=headers)
+    assert diag_resp.status_code == 200
+    diag_payload = diag_resp.json()
+    assert diag_payload["ok"] is True
+    assert diag_payload["data"] == []
