@@ -2,8 +2,8 @@ name: Global Hazards → WordPress
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # every 10 minutes
-  workflow_dispatch: {}
+    - cron: "*/10 * * * *" # every 10 minutes
+  workflow_dispatch:
 
 jobs:
   run:
@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
           python -m pip install -U pip
           pip install -r bots/hazards/requirements.txt
@@ -30,57 +30,50 @@ jobs:
         run: |
           python bots/hazards/hazards_bot.py run
 
-      # OPTIONAL: Publish latest.json to media repo for homepage brief
+      # Optional JSON publish step
       - name: Publish latest.json to media repo
-        if: ${{ secrets.GH_PAT && secrets.MEDIA_REPO }}
+        if: ${{ secrets.GH_PAT != '' && secrets.MEDIA_REPO != '' }}
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
           MEDIA_REPO: ${{ secrets.MEDIA_REPO }}
           MEDIA_BRANCH: ${{ secrets.MEDIA_BRANCH }}
+        shell: bash
         run: |
           set -euo pipefail
 
-          echo "==> Starting publish step"
-          FILE_PATH="${GITHUB_WORKSPACE}/bots/hazards/out/latest.json"
-          if [ ! -f "$FILE_PATH" ]; then
-            echo "latest.json not found, skipping publish."
+          FILE="${GITHUB_WORKSPACE}/bots/hazards/out/latest.json"
+          if [[ ! -f "$FILE" ]]; then
+            echo "::warning::No latest.json found, skipping publish"
             exit 0
           fi
 
-          # Default branch fallback
-          MEDIA_BRANCH="${MEDIA_BRANCH:-main}"
+          # Fallback branch
+          BRANCH="${MEDIA_BRANCH:-main}"
 
-          echo "Publishing $FILE_PATH to ${MEDIA_REPO}:${MEDIA_BRANCH}/public/hazards/latest.json"
+          echo "Publishing $FILE → ${MEDIA_REPO}:${BRANCH}/public/hazards/latest.json"
 
-          # Fresh clone to /tmp
-          WORKDIR="/tmp/media"
-          rm -rf "$WORKDIR"
-          mkdir -p "$WORKDIR"
-          git -c init.defaultBranch="${MEDIA_BRANCH}" init "$WORKDIR"
-          cd "$WORKDIR"
+          TMPDIR=$(mktemp -d)
+          cd "$TMPDIR"
 
+          git init -b "$BRANCH"
           git remote add origin "https://x-access-token:${GH_PAT}@github.com/${MEDIA_REPO}.git"
 
-          # Fetch branch if it exists
-          if git ls-remote --exit-code origin "refs/heads/${MEDIA_BRANCH}" >/dev/null 2>&1; then
-            git fetch origin "${MEDIA_BRANCH}"
-            git checkout "${MEDIA_BRANCH}"
-          else
-            git checkout -b "${MEDIA_BRANCH}"
+          if git ls-remote --exit-code origin "refs/heads/${BRANCH}" >/dev/null 2>&1; then
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
           fi
 
           mkdir -p public/hazards
-          cp "$FILE_PATH" public/hazards/latest.json
+          cp "$FILE" public/hazards/latest.json
 
-          git add public/hazards/latest.json || true
-
+          git add public/hazards/latest.json
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
             git config user.email "actions@users.noreply.github.com"
             git config user.name "GitHub Actions"
-            git commit -m "chore: update hazards latest.json ($(date -u +'%Y-%m-%dT%H:%M:%SZ'))"
-            git push origin "${MEDIA_BRANCH}"
+            git commit -m "update hazards latest.json ($(date -u +'%Y-%m-%dT%H:%M:%SZ'))"
+            git push origin "$BRANCH"
           fi
 
-          echo "==> Publish complete"
+          echo "Publish step complete."
