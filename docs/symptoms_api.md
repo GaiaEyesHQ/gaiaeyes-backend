@@ -1,0 +1,121 @@
+# Symptoms API
+
+This document outlines the REST endpoints that power the Gaia Eyes symptom logging
+experience. The routes live under the `/v1/symptoms` prefix and require a valid
+Bearer token. During development you can supply the `DEV_BEARER` token together
+with an `X-Dev-UserId` header to impersonate a user.
+
+## Authentication headers
+
+```
+Authorization: Bearer <token>
+X-Dev-UserId: <uuid>  # optional helper for the dev bearer path
+```
+
+## POST `/v1/symptoms`
+
+Create a new symptom event for the authenticated user. When `ts_utc` is omitted
+the service automatically stamps the current UTC time.
+
+**Request body**
+
+```json
+{
+  "symptom_code": "nerve_pain",
+  "ts_utc": "2024-04-02T14:18:00Z",
+  "severity": 4,
+  "free_text": "Left arm tingling",
+  "tags": ["flare", "post-run"]
+}
+```
+
+**Successful response**
+
+```json
+{
+  "ok": true,
+  "id": "7f3e85b1-67d6-4f83-9d63-2a0f1c0e7f6e",
+  "ts_utc": "2024-04-02T14:18:00+00:00"
+}
+```
+
+## GET `/v1/symptoms/today`
+
+Return the events recorded for the signed-in user on the current UTC day. Events
+are sorted by most recent first.
+
+**Response**
+
+```json
+[
+  {
+    "symptom_code": "nerve_pain",
+    "ts_utc": "2024-04-02T14:18:00+00:00",
+    "severity": 4,
+    "free_text": "Left arm tingling"
+  },
+  {
+    "symptom_code": "headache",
+    "ts_utc": "2024-04-02T07:10:00+00:00",
+    "severity": 2,
+    "free_text": null
+  }
+]
+```
+
+## GET `/v1/symptoms/daily?days=30`
+
+Return aggregated counts for the last `days` worth of data (defaults to 30). Each
+row represents a day/symptom-code tuple with the number of events, mean severity,
+and the most recent timestamp.
+
+**Response**
+
+```json
+[
+  {
+    "day": "2024-04-02",
+    "symptom_code": "nerve_pain",
+    "events": 2,
+    "mean_severity": 3.5,
+    "last_ts": "2024-04-02T14:18:00+00:00"
+  },
+  {
+    "day": "2024-04-01",
+    "symptom_code": "insomnia",
+    "events": 1,
+    "mean_severity": null,
+    "last_ts": "2024-04-01T05:55:00+00:00"
+  }
+]
+```
+
+## GET `/v1/symptoms/diag?days=30`
+
+Diagnostic endpoint that mirrors the daily aggregation but only returns row counts
+per code together with the most recent timestamp. Use this route during QA to verify
+which symptom codes have data available.
+
+**Response**
+
+```json
+[
+  {
+    "symptom_code": "nerve_pain",
+    "events": 14,
+    "last_ts": "2024-04-02T14:18:00+00:00"
+  },
+  {
+    "symptom_code": "insomnia",
+    "events": 6,
+    "last_ts": "2024-03-30T05:55:00+00:00"
+  }
+]
+```
+
+## Nightly refresh
+
+A Render cron (or equivalent scheduler) should invoke the
+`scripts/refresh_symptom_marts.py` helper each night. The script runs the
+`marts.refresh_symptom_marts()` stored procedure to rebuild
+`marts.symptom_daily` and related marts from the raw event table.
