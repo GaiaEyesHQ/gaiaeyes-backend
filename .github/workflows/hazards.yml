@@ -30,55 +30,57 @@ jobs:
         run: |
           python bots/hazards/hazards_bot.py run
 
-      # OPTIONAL publish of latest.json to public media repo for the homepage brief.
-      # Common failure reasons (fixed below):
-      #  - Do NOT use "|| 'main'" inside expressions; default in bash instead.
-      #  - Avoid comparing secrets to ''; rely on truthiness in `if:`.
-      - name: Publish latest.json to media repo (optional)
+      # OPTIONAL: Publish latest.json to media repo for homepage brief
+      - name: Publish latest.json to media repo
         if: ${{ secrets.GH_PAT && secrets.MEDIA_REPO }}
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
-          MEDIA_REPO: ${{ secrets.MEDIA_REPO }}          # e.g. gaiaeyeshq/gaiaeyes-media
-          MEDIA_BRANCH: ${{ secrets.MEDIA_BRANCH }}      # optional; defaults to main in script
+          MEDIA_REPO: ${{ secrets.MEDIA_REPO }}
+          MEDIA_BRANCH: ${{ secrets.MEDIA_BRANCH }}
         run: |
           set -euo pipefail
 
-          # Ensure the bot wrote the snapshot
-          if [ ! -f "${GITHUB_WORKSPACE}/bots/hazards/out/latest.json" ]; then
-            echo "latest.json not found; skipping publish."
+          echo "==> Starting publish step"
+          FILE_PATH="${GITHUB_WORKSPACE}/bots/hazards/out/latest.json"
+          if [ ! -f "$FILE_PATH" ]; then
+            echo "latest.json not found, skipping publish."
             exit 0
           fi
 
-          # Default branch fallback handled here (not in expression)
+          # Default branch fallback
           MEDIA_BRANCH="${MEDIA_BRANCH:-main}"
 
-          echo "Publishing bots/hazards/out/latest.json to ${MEDIA_REPO}:${MEDIA_BRANCH}/public/hazards/latest.json"
+          echo "Publishing $FILE_PATH to ${MEDIA_REPO}:${MEDIA_BRANCH}/public/hazards/latest.json"
 
-          mkdir -p /tmp/media
-          git -c init.defaultBranch="${MEDIA_BRANCH}" init /tmp/media
-          cd /tmp/media
+          # Fresh clone to /tmp
+          WORKDIR="/tmp/media"
+          rm -rf "$WORKDIR"
+          mkdir -p "$WORKDIR"
+          git -c init.defaultBranch="${MEDIA_BRANCH}" init "$WORKDIR"
+          cd "$WORKDIR"
 
           git remote add origin "https://x-access-token:${GH_PAT}@github.com/${MEDIA_REPO}.git"
-          # Fetch if branch exists; ignore error if first push
-          git fetch origin "${MEDIA_BRANCH}" || true
 
-          # Create or switch to the branch
-          if git rev-parse --verify "refs/remotes/origin/${MEDIA_BRANCH}" >/dev/null 2>&1; then
-            git checkout -B "${MEDIA_BRANCH}" --track "origin/${MEDIA_BRANCH}"
+          # Fetch branch if it exists
+          if git ls-remote --exit-code origin "refs/heads/${MEDIA_BRANCH}" >/dev/null 2>&1; then
+            git fetch origin "${MEDIA_BRANCH}"
+            git checkout "${MEDIA_BRANCH}"
           else
-            git checkout -B "${MEDIA_BRANCH}"
+            git checkout -b "${MEDIA_BRANCH}"
           fi
 
           mkdir -p public/hazards
-          cp "${GITHUB_WORKSPACE}/bots/hazards/out/latest.json" public/hazards/latest.json
+          cp "$FILE_PATH" public/hazards/latest.json
 
-          git add public/hazards/latest.json
+          git add public/hazards/latest.json || true
 
           if git diff --cached --quiet; then
-            echo "No changes to latest.json"
+            echo "No changes to commit."
           else
             git config user.email "actions@users.noreply.github.com"
-            git config user.name  "GitHub Actions"
+            git config user.name "GitHub Actions"
             git commit -m "chore: update hazards latest.json ($(date -u +'%Y-%m-%dT%H:%M:%SZ'))"
             git push origin "${MEDIA_BRANCH}"
           fi
+
+          echo "==> Publish complete"
