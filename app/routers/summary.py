@@ -3,12 +3,13 @@ import asyncio
 import logging
 from datetime import date, datetime, time, timedelta, timezone
 from time import perf_counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Request
 from os import getenv
+from psycopg import errors as pg_errors
 from psycopg.rows import dict_row
 from app.cache import get_last_good, set_last_good
 from app.db import get_db, get_pool, get_pool_metrics
@@ -23,6 +24,66 @@ DEBUG_FEATURES_DIAG = getenv("DEBUG_FEATURES_DIAG", "1").lower() not in {"0", "f
 logger = logging.getLogger(__name__)
 
 STATEMENT_TIMEOUT_MS = 60000
+
+MART_REFRESH_DEBOUNCE_SECONDS = 180.0
+
+
+_refresh_registry: Dict[str, float] = {}
+_refresh_lock = asyncio.Lock()
+_refresh_task_factory: Callable[[Awaitable[None]], asyncio.Task] = asyncio.create_task
+
+
+async def _execute_mart_refresh(user_id: str, day_local: date) -> None:
+    try:
+        pool = await get_pool()
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "select marts.refresh_daily_features_user(%s, %s::date)",
+                    (user_id, day_local),
+                )
+    except Exception as exc:  # pragma: no cover - diagnostic logging
+        logger.warning(
+            "[MART] refresh failed user=%s day=%s error=%s",
+            user_id,
+            day_local,
+            exc,
+        )
+
+
+async def mart_refresh(user_id: str, day_local: date) -> bool:
+    if not user_id:
+        return False
+    loop = asyncio.get_running_loop()
+    async with _refresh_lock:
+        last = _refresh_registry.get(user_id)
+        now = loop.time()
+        if last and now - last < MART_REFRESH_DEBOUNCE_SECONDS:
+            logger.debug(
+                "[MART] refresh skipped user=%s (debounce %.0fs)",
+                user_id,
+                MART_REFRESH_DEBOUNCE_SECONDS,
+            )
+            return False
+        _refresh_registry[user_id] = now
+
+    try:
+        from . import ingest as ingest_module  # type: ignore circular import
+    except Exception:  # pragma: no cover - import guard for early startup
+        ingest_module = None
+
+    task_factory = _refresh_task_factory
+    execute_fn = _execute_mart_refresh
+    if ingest_module is not None:
+        task_factory = getattr(ingest_module, "_refresh_task_factory", task_factory)
+        execute_fn = getattr(ingest_module, "_execute_refresh", execute_fn)
+
+    async def _runner() -> None:
+        await execute_fn(user_id, day_local)
+
+    task_factory(_runner())
+    logger.info("[MART] scheduled refresh user=%s day=%s", user_id, day_local)
+    return True
 
 
 _MART_COLUMNS = [
@@ -130,6 +191,10 @@ async def _query_mart_with_retry(conn, user_id: str, day_local: date) -> Tuple[O
             if isinstance(exc, asyncio.CancelledError):
                 raise
             last_exc = exc
+            if isinstance(exc, pg_errors.QueryCanceled):
+                logger.warning(
+                    "[MART] query timeout user=%s day=%s", user_id, day_local
+                )
             attempts += 1
             if attempts < 2:
                 await asyncio.sleep(0.2)
@@ -445,41 +510,51 @@ async def _collect_features(
             mart_row, mart_error = await _query_mart_with_retry(conn, user_id, today_local)
             if mart_error:
                 logger.warning(
-                    "[MART] fallback: using last-known snapshot (user=%s day=%s): %s",
+                    "[MART] fallback: using cached data (user=%s day=%s): %s",
                     user_id,
                     today_local,
                     mart_error,
                 )
                 should_enrich = False
-                fallback_row = await _fetch_snapshot_row(conn, user_id)
-                if fallback_row:
-                    response_payload = dict(fallback_row)
+                yesterday = today_local - timedelta(days=1)
+                yesterday_row = await _fetch_mart_row(conn, user_id, yesterday)
+                if yesterday_row:
+                    response_payload = dict(yesterday_row)
                     diag_info["mart_row"] = True
-                    diag_info["source"] = "snapshot"
-                    diag_info["updated_at"] = fallback_row.get("updated_at")
-                    fallback_day = fallback_row.get("day")
-                    if isinstance(fallback_day, str):
-                        try:
-                            fallback_day = date.fromisoformat(fallback_day)
-                        except ValueError:
-                            pass
-                    diag_info["day_used"] = fallback_day or diag_info.get("day_used")
+                    diag_info["source"] = "yesterday"
+                    diag_info["updated_at"] = yesterday_row.get("updated_at")
+                    diag_info["day_used"] = yesterday
                 else:
-                    cached_payload = await get_last_good(user_id)
-                    if cached_payload:
-                        response_payload = dict(cached_payload)
-                        diag_info["mart_row"] = bool(response_payload)
-                        diag_info["source"] = "cache"
-                        diag_info["updated_at"] = response_payload.get("updated_at")
-                        cached_day = response_payload.get("day")
-                        if isinstance(cached_day, str):
+                    fallback_row = await _fetch_snapshot_row(conn, user_id)
+                    if fallback_row:
+                        response_payload = dict(fallback_row)
+                        diag_info["mart_row"] = True
+                        diag_info["source"] = "snapshot"
+                        diag_info["updated_at"] = fallback_row.get("updated_at")
+                        fallback_day = fallback_row.get("day")
+                        if isinstance(fallback_day, str):
                             try:
-                                cached_day = date.fromisoformat(cached_day)
+                                fallback_day = date.fromisoformat(fallback_day)
                             except ValueError:
-                                pass
-                        diag_info["day_used"] = cached_day or diag_info.get("day_used")
+                                fallback_day = None
+                        diag_info["day_used"] = fallback_day or diag_info.get("day_used")
                     else:
-                        diag_info["source"] = "empty"
+                        cached_payload = await get_last_good(user_id)
+                        if cached_payload:
+                            response_payload = dict(cached_payload)
+                            diag_info["mart_row"] = bool(response_payload)
+                            diag_info["source"] = cached_payload.get("source") or "snapshot"
+                            diag_info["updated_at"] = response_payload.get("updated_at")
+                            cached_day = response_payload.get("day")
+                            if isinstance(cached_day, str):
+                                try:
+                                    cached_day = date.fromisoformat(cached_day)
+                                except ValueError:
+                                    cached_day = None
+                            diag_info["day_used"] = cached_day or diag_info.get("day_used")
+                        else:
+                            diag_info["source"] = "snapshot"
+                            response_payload = {"source": "snapshot"}
             elif mart_row:
                 diag_info["mart_row"] = True
                 diag_info["source"] = "today"
@@ -546,8 +621,17 @@ async def _collect_features(
                     response_payload.update(sch)
                     response_payload.update(post)
 
-                if user_id and response_payload and diag_info.get("source") not in {"cache", "empty"}:
+                cacheable_keys = {k for k in response_payload.keys() if k != "source"}
+                if (
+                    user_id
+                    and response_payload
+                    and diag_info.get("source") not in {"cache", "empty"}
+                    and cacheable_keys
+                ):
                     await set_last_good(user_id, response_payload)
+                response_payload.setdefault("source", diag_info.get("source") or "snapshot")
+            else:
+                response_payload = {"source": diag_info.get("source") or "snapshot"}
     except Exception as exc:  # pragma: no cover - exercised via integration tests
         logger.exception("features_today failed: %s", exc)
         error_text = str(exc) or exc.__class__.__name__
@@ -597,11 +681,14 @@ async def features_today(request: Request, diag: int = 0, conn = Depends(get_db)
         response: Dict[str, Any] = {"ok": False, "data": {}, "error": error_text}
     else:
         payload = response_payload or {}
+        if not payload:
+            payload = {"source": diag_info.get("source") or "snapshot"}
         if payload.get("user_id"):
             payload["user_id"] = str(payload.get("user_id"))
         day_val = payload.get("day")
         if isinstance(day_val, date):
             payload["day"] = day_val.isoformat()
+        payload.setdefault("source", diag_info.get("source") or "snapshot")
         diag_info["day_used"] = diag_info.get("day_used") or day_val
         response = {"ok": True, "data": payload, "error": None}
 
@@ -764,7 +851,29 @@ async def diag_db():
 
 @router.get("/diag/dbpool")
 async def diag_dbpool(_admin: None = Depends(require_admin)):
-    return get_pool_metrics()
+    metrics = get_pool_metrics()
+    return {
+        "open": metrics.get("open"),
+        "used": metrics.get("used"),
+        "waiting": metrics.get("waiting"),
+        "last_refresh": metrics.get("last_refresh"),
+        "ok": bool(metrics.get("ok")),
+        "free": metrics.get("free"),
+    }
+
+
+@router.get("/db/ping")
+async def db_ping():
+    try:
+        pool = await get_pool()
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("select 1;")
+                await cur.fetchone()
+    except Exception as exc:
+        logger.warning("[DB] ping failed: %s", exc)
+        return {"ok": False, "db": False, "error": "db_unavailable"}
+    return {"ok": True, "db": True}
 
 # -----------------------------
 # /v1/space/forecast/summary

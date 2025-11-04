@@ -28,7 +28,7 @@ except Exception:  # pragma: no cover - redis package may be optional
 logger = logging.getLogger(__name__)
 
 _CACHE_KEY_PREFIX = "features_last_good:"
-_CACHE_TTL_SECONDS = 24 * 60 * 60
+_DEFAULT_CACHE_TTL_SECONDS = 6 * 60 * 60
 
 
 class _LRUCache:
@@ -58,9 +58,6 @@ class _LRUCache:
             self._data.popitem(last=False)
         self._data[key] = (expires_at, value)
 
-
-_memory_cache = _LRUCache(maxsize=512)
-_memory_lock = asyncio.Lock()
 
 _redis_client: Optional["Redis"] = None
 _redis_lock = asyncio.Lock()
@@ -113,48 +110,59 @@ async def _get_redis_client() -> Optional["Redis"]:
         return _redis_client
 
 
+class FeatureCache:
+    def __init__(self, ttl: int = _DEFAULT_CACHE_TTL_SECONDS, maxsize: int = 512) -> None:
+        self.ttl = ttl
+        self._memory_cache = _LRUCache(maxsize=maxsize)
+        self._memory_lock = asyncio.Lock()
+
+    async def get(self, user_id: Optional[str]) -> Optional[Dict[str, Any]]:
+        if not user_id:
+            return None
+        key = f"{_CACHE_KEY_PREFIX}{user_id}"
+
+        client = await _get_redis_client()
+        if client is not None:
+            try:
+                raw = await client.get(key)
+            except RedisError as exc:  # pragma: no cover - network failure
+                logger.warning("[CACHE] redis get failed: %s", exc)
+            else:
+                if raw:
+                    try:
+                        return json.loads(raw)
+                    except json.JSONDecodeError:  # pragma: no cover - corrupted entry
+                        logger.warning("[CACHE] redis payload corrupted for %s", key)
+
+        async with self._memory_lock:
+            return self._memory_cache.get(key)
+
+    async def set(self, user_id: Optional[str], payload: Dict[str, Any]) -> None:
+        if not user_id:
+            return
+
+        key = f"{_CACHE_KEY_PREFIX}{user_id}"
+        safe_payload = json.loads(json.dumps(payload, default=_json_default))
+
+        client = await _get_redis_client()
+        if client is not None:
+            try:
+                await client.set(key, json.dumps(safe_payload), ex=self.ttl)
+            except RedisError as exc:  # pragma: no cover - network failure
+                logger.warning("[CACHE] redis set failed: %s", exc)
+
+        async with self._memory_lock:
+            self._memory_cache.set(key, safe_payload, self.ttl)
+
+        logger.info("[CACHE] updated features:%s", user_id)
+
+
+_feature_cache = FeatureCache()
+
+
 async def get_last_good(user_id: Optional[str]) -> Optional[Dict[str, Any]]:
-    """Return the last cached payload for *user_id* if available."""
-
-    if not user_id:
-        return None
-    key = f"{_CACHE_KEY_PREFIX}{user_id}"
-
-    client = await _get_redis_client()
-    if client is not None:
-        try:
-            raw = await client.get(key)
-        except RedisError as exc:  # pragma: no cover - network failure
-            logger.warning("[CACHE] redis get failed: %s", exc)
-        else:
-            if raw:
-                try:
-                    return json.loads(raw)
-                except json.JSONDecodeError:  # pragma: no cover - corrupted entry
-                    logger.warning("[CACHE] redis payload corrupted for %s", key)
-
-    async with _memory_lock:
-        cached = _memory_cache.get(key)
-    return cached
+    return await _feature_cache.get(user_id)
 
 
 async def set_last_good(user_id: Optional[str], payload: Dict[str, Any]) -> None:
-    """Persist *payload* for *user_id* in the best available backend."""
-
-    if not user_id:
-        return
-
-    key = f"{_CACHE_KEY_PREFIX}{user_id}"
-    # Avoid mutating caller payload in-place
-    safe_payload = json.loads(json.dumps(payload, default=_json_default))
-
-    client = await _get_redis_client()
-    if client is not None:
-        try:
-            await client.set(key, json.dumps(safe_payload), ex=_CACHE_TTL_SECONDS)
-        except RedisError as exc:  # pragma: no cover - network failure
-            logger.warning("[CACHE] redis set failed: %s", exc)
-
-    async with _memory_lock:
-        _memory_cache.set(key, safe_payload, _CACHE_TTL_SECONDS)
-
+    await _feature_cache.set(user_id, payload)
