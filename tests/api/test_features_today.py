@@ -302,8 +302,37 @@ async def test_features_error_envelope(monkeypatch, client: AsyncClient):
         assert resp.status_code == 200
         payload = resp.json()
         assert payload["ok"] is False
-        assert payload["data"] == {}
+        assert payload["data"] is None
         assert payload["error"] == "boom"
+        assert payload["diagnostics"]["source"] == "empty"
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.anyio
+async def test_features_db_error_envelope(monkeypatch, client: AsyncClient):
+    async def _fake_db():
+        yield _FakeConn()
+
+    app.dependency_overrides[get_db] = _fake_db
+
+    async def _boom_current_day(conn, tz_name):  # noqa: ARG001
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(summary, "_current_day_local", _boom_current_day)
+
+    user_id = str(uuid4())
+    try:
+        resp = await client.get(
+            "/v1/features/today",
+            headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
+            params={"tz": "UTC"},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["ok"] is False
+        assert payload["data"] is None
+        assert payload["error"] == "database unavailable"
         assert payload["diagnostics"]["source"] == "empty"
     finally:
         app.dependency_overrides.pop(get_db, None)

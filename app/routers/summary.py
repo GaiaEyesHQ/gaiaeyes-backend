@@ -838,7 +838,7 @@ async def features_today(request: Request, diag: int = 0, conn = Depends(get_db)
     response_payload, diag_info, error_text = await _collect_features(conn, user_id, tz_name, tzinfo)
 
     if error_text:
-        response: Dict[str, Any] = {"ok": False, "data": {}, "error": error_text}
+        response: Dict[str, Any] = {"ok": False, "data": None, "error": error_text}
     else:
         payload = _normalize_features_payload(response_payload, diag_info, user_id)
         response = {"ok": True, "data": payload, "error": None}
