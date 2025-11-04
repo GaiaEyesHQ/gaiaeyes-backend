@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -21,6 +23,10 @@ except ModuleNotFoundError:
     except ModuleNotFoundError:
         webhooks_router = None
 from .utils.auth import require_auth as ensure_authenticated
+from .db import get_pool
+
+
+logger = logging.getLogger(__name__)
 
 def custom_generate_unique_id(route):
     # method + path is always unique
@@ -46,6 +52,19 @@ async def _log_routes():
             print(f"[ROUTE] {methods} {path}")
     except Exception:
         pass
+
+
+@app.on_event("startup")
+async def _check_db_ready():
+    try:
+        pool = await get_pool()
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("select 1;")
+                await cur.fetchone()
+        logger.info("[DB] ready")
+    except Exception as exc:  # pragma: no cover - startup diagnostics
+        logger.exception("[DB] startup check failed: %s", exc)
 
 # Build marker for health checks (update per deploy or wire to your CI SHA)
 BUILD = "2025-09-20T02:45Z"

@@ -12,6 +12,36 @@ Authorization: Bearer <token>
 X-Dev-UserId: <uuid>  # optional helper for the dev bearer path
 ```
 
+## Response envelope
+
+All symptom routes respond with a predictable JSON envelope:
+
+```json
+{
+  "ok": true,
+  "data": [],
+  "error": null
+}
+```
+
+- `ok` is `true` when the request succeeded and `false` on failures.
+- `data` is always present. Collection endpoints return an array (possibly empty). The
+  POST route returns either the created event payload or `null` on errors.
+- `error` contains a short, user-facing message when something goes wrong. Even on
+  database failures the service replies with HTTP 200 so the iOS client can decode the
+  body without throwing transport-level exceptions.
+
+When the database is unreachable the backend logs the stack trace but returns a safe
+payload such as:
+
+```json
+{
+  "ok": false,
+  "data": [],
+  "error": "Failed to load today's symptoms"
+}
+```
+
 ## POST `/v1/symptoms`
 
 Create a new symptom event for the authenticated user. When `ts_utc` is omitted
@@ -56,6 +86,16 @@ the service automatically stamps the current UTC time.
 }
 ```
 
+**Database error response**
+
+```json
+{
+  "ok": false,
+  "data": null,
+  "error": "Failed to record symptom event"
+}
+```
+
 ## GET `/v1/symptoms/codes`
 
 Returns the catalog of symptom codes from `dim.symptom_codes` ordered by label.
@@ -66,20 +106,34 @@ can reuse them directly when posting events. Responses include a short cache hea
 **Response**
 
 ```json
-[
-  {
-    "symptom_code": "HEADACHE",
-    "label": "Headache",
-    "description": "Headache or migraine",
-    "is_active": true
-  },
-  {
-    "symptom_code": "NERVE_PAIN",
-    "label": "Nerve pain",
-    "description": "Pins/needles, burning, or nerve pain",
-    "is_active": true
-  }
-]
+{
+  "ok": true,
+  "data": [
+    {
+      "symptom_code": "HEADACHE",
+      "label": "Headache",
+      "description": "Headache or migraine",
+      "is_active": true
+    },
+    {
+      "symptom_code": "NERVE_PAIN",
+      "label": "Nerve pain",
+      "description": "Pins/needles, burning, or nerve pain",
+      "is_active": true
+    }
+  ],
+  "error": null
+}
+```
+
+On transient database errors the endpoint still returns HTTP 200 with:
+
+```json
+{
+  "ok": false,
+  "data": [],
+  "error": "Failed to load symptom codes"
+}
 ```
 
 ## GET `/v1/symptoms/today`
@@ -106,6 +160,17 @@ are sorted by most recent first.
       "free_text": null
     }
   ]
+}
+}
+```
+
+If the query cannot reach the database the response becomes:
+
+```json
+{
+  "ok": false,
+  "data": [],
+  "error": "Failed to load today's symptoms"
 }
 ```
 
@@ -137,6 +202,18 @@ and the most recent timestamp.
     }
   ]
 }
+}
+```
+
+Failures respond with an empty list and a descriptive error string while keeping the
+HTTP status at 200:
+
+```json
+{
+  "ok": false,
+  "data": [],
+  "error": "Failed to load daily symptom summary"
+}
 ```
 
 ## GET `/v1/symptoms/diag?days=30`
@@ -162,6 +239,17 @@ which symptom codes have data available.
       "last_ts": "2024-03-30T05:55:00+00:00"
     }
   ]
+}
+}
+```
+
+In case of a database outage:
+
+```json
+{
+  "ok": false,
+  "data": [],
+  "error": "Failed to load diagnostic summary"
 }
 ```
 

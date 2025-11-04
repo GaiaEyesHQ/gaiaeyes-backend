@@ -168,3 +168,58 @@ async def test_unknown_strict_vs_default(client: AsyncClient, recording_store: R
     relaxed_data = relaxed_response.json()
     assert relaxed_data["ok"] is True
     assert recording_store.events[0]["symptom_code"] == "OTHER"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "path, attr, expected_error",
+    [
+        ("/v1/symptoms/codes", "fetch_symptom_codes", "Failed to load symptom codes"),
+        ("/v1/symptoms/today", "fetch_symptoms_today", "Failed to load today's symptoms"),
+        ("/v1/symptoms/daily", "fetch_daily_summary", "Failed to load daily symptom summary"),
+        ("/v1/symptoms/diag", "fetch_diagnostics", "Failed to load diagnostic summary"),
+    ],
+)
+async def test_symptom_routes_wrap_db_errors(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    path: str,
+    attr: str,
+    expected_error: str,
+):
+    async def _boom(*args, **kwargs):  # noqa: ARG001
+        raise RuntimeError("db boom")
+
+    monkeypatch.setattr(symptoms_db, attr, _boom)
+
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Dev-UserId": "00000000-0000-0000-0000-000000000123",
+    }
+
+    response = await client.get(path, headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    assert payload["data"] == []
+    assert payload["error"] == expected_error
+
+
+@pytest.mark.anyio
+async def test_post_symptom_returns_normalized_error(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Dev-UserId": "00000000-0000-0000-0000-000000000001",
+    }
+
+    async def _codes(*args, **kwargs):  # noqa: ARG001
+        raise RuntimeError("no db")
+
+    monkeypatch.setattr(symptoms_db, "fetch_symptom_codes", _codes)
+
+    response = await client.post("/v1/symptoms", json={"symptom_code": "nerve_pain"}, headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    assert payload["data"] is None
+    assert payload["error"] == "Failed to load symptom codes"
