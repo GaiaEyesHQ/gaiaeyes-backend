@@ -189,7 +189,7 @@ async def get_symptoms_today(request: Request, conn=Depends(get_db)):
         return _failure(
             SymptomTodayResponse(ok=False, data=[], error=error_text)
         )
-    data = [SymptomTodayOut(**row) for row in rows]
+    data = [SymptomTodayOut(**row) for row in rows or []]
     return _success(SymptomTodayResponse(data=data))
 
 
@@ -208,7 +208,7 @@ async def get_symptoms_daily(
         return _failure(
             SymptomDailyResponse(ok=False, data=[], error=error_text)
         )
-    data = [SymptomDailyRow(**row) for row in rows]
+    data = [SymptomDailyRow(**row) for row in rows or []]
     return _success(SymptomDailyResponse(data=data))
 
 
@@ -227,7 +227,7 @@ async def get_symptom_diag(
         return _failure(
             SymptomDiagResponse(ok=False, data=[], error=error_text)
         )
-    data = [SymptomDiagRow(**row) for row in rows]
+    data = [SymptomDiagRow(**row) for row in rows or []]
     return _success(SymptomDiagResponse(data=data))
 
 

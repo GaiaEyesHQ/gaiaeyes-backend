@@ -2,6 +2,7 @@
 import asyncio
 import logging
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
 from time import perf_counter
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
@@ -428,6 +429,165 @@ def _compose_space_weather_payload(base: Dict[str, Any], daily: Dict[str, Any], 
     }
 
 
+_FEATURE_DEFAULTS: Dict[str, Any] = {
+    "user_id": None,
+    "day": None,
+    "steps_total": 0,
+    "hr_min": None,
+    "hr_max": None,
+    "hrv_avg": None,
+    "spo2_avg": None,
+    "bp_sys_avg": None,
+    "bp_dia_avg": None,
+    "sleep_total_minutes": 0,
+    "rem_m": 0,
+    "core_m": 0,
+    "deep_m": 0,
+    "awake_m": 0,
+    "inbed_m": 0,
+    "sleep_efficiency": None,
+    "kp_max": None,
+    "bz_min": None,
+    "sw_speed_avg": None,
+    "flares_count": 0,
+    "cmes_count": 0,
+    "kp_alert": False,
+    "flare_alert": False,
+    "kp_current": None,
+    "bz_current": None,
+    "sw_speed_current": None,
+    "sch_station": None,
+    "sch_f0_hz": None,
+    "sch_f1_hz": None,
+    "sch_f2_hz": None,
+    "sch_f3_hz": None,
+    "sch_f4_hz": None,
+    "post_title": None,
+    "post_caption": None,
+    "post_body": None,
+    "post_hashtags": None,
+    "updated_at": None,
+    "source": "snapshot",
+}
+
+_INT_FIELDS = {
+    "steps_total",
+    "sleep_total_minutes",
+    "rem_m",
+    "core_m",
+    "deep_m",
+    "awake_m",
+    "inbed_m",
+    "flares_count",
+    "cmes_count",
+}
+
+_FLOAT_FIELDS = {
+    "hr_min",
+    "hr_max",
+    "hrv_avg",
+    "spo2_avg",
+    "bp_sys_avg",
+    "bp_dia_avg",
+    "kp_max",
+    "bz_min",
+    "sw_speed_avg",
+    "kp_current",
+    "bz_current",
+    "sw_speed_current",
+    "sch_f0_hz",
+    "sch_f1_hz",
+    "sch_f2_hz",
+    "sch_f3_hz",
+    "sch_f4_hz",
+    "sleep_efficiency",
+}
+
+
+def _coerce_decimal(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        if value.is_nan():
+            return None
+        return float(value)
+    return value
+
+
+def _coerce_int_value(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    coerced = _coerce_decimal(value)
+    try:
+        return int(round(coerced))
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_float_value(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    coerced = _coerce_decimal(value)
+    try:
+        return float(coerced)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_features_payload(
+    payload: Optional[Dict[str, Any]],
+    diag_info: Dict[str, Any],
+    user_id: Optional[str],
+) -> Dict[str, Any]:
+    normalized: Dict[str, Any] = dict(_FEATURE_DEFAULTS)
+    if payload:
+        normalized.update(payload)
+
+    effective_user = normalized.get("user_id") or user_id
+    normalized["user_id"] = str(effective_user) if effective_user else None
+
+    original_day = payload.get("day") if payload else None
+    source_hint = (payload.get("source") if payload else None) or diag_info.get("source")
+    if original_day is not None:
+        candidate_day = original_day
+        update_diag_day = False
+    elif source_hint == "empty":
+        candidate_day = diag_info.get("day") or diag_info.get("day_used")
+        update_diag_day = False
+    else:
+        candidate_day = diag_info.get("day_used") or diag_info.get("day")
+        update_diag_day = diag_info.get("day_used") is None
+    parsed_day: Optional[date] = None
+    if isinstance(candidate_day, date):
+        parsed_day = candidate_day
+    elif isinstance(candidate_day, str):
+        try:
+            parsed_day = date.fromisoformat(candidate_day)
+        except ValueError:
+            parsed_day = None
+    if parsed_day:
+        normalized["day"] = parsed_day.isoformat()
+        if update_diag_day and not diag_info.get("day_used"):
+            diag_info["day_used"] = parsed_day
+    else:
+        normalized["day"] = candidate_day
+
+    normalized["updated_at"] = _iso_dt(normalized.get("updated_at"))
+
+    for key in _INT_FIELDS:
+        normalized[key] = _coerce_int_value(normalized.get(key))
+        if normalized[key] is None:
+            normalized[key] = _FEATURE_DEFAULTS.get(key)
+
+    for key in _FLOAT_FIELDS:
+        normalized[key] = _coerce_float_value(normalized.get(key))
+
+    normalized["kp_alert"] = bool(normalized.get("kp_alert"))
+    normalized["flare_alert"] = bool(normalized.get("flare_alert"))
+
+    normalized["source"] = normalized.get("source") or source_hint or "snapshot"
+
+    return normalized
+
+
 async def _freshen_features(
     conn,
     user_id: str,
@@ -680,16 +840,7 @@ async def features_today(request: Request, diag: int = 0, conn = Depends(get_db)
     if error_text:
         response: Dict[str, Any] = {"ok": False, "data": {}, "error": error_text}
     else:
-        payload = response_payload or {}
-        if not payload:
-            payload = {"source": diag_info.get("source") or "snapshot"}
-        if payload.get("user_id"):
-            payload["user_id"] = str(payload.get("user_id"))
-        day_val = payload.get("day")
-        if isinstance(day_val, date):
-            payload["day"] = day_val.isoformat()
-        payload.setdefault("source", diag_info.get("source") or "snapshot")
-        diag_info["day_used"] = diag_info.get("day_used") or day_val
+        payload = _normalize_features_payload(response_payload, diag_info, user_id)
         response = {"ok": True, "data": payload, "error": None}
 
     diag_block = _format_diag_payload(diag_info)
