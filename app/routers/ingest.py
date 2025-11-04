@@ -1,21 +1,92 @@
 # app/routers/ingest.py
 from __future__ import annotations
 
-from datetime import datetime
-from typing import List, Optional, Union, Annotated
+import asyncio
+from datetime import date, datetime
+from typing import Annotated, Awaitable, Dict, List, Optional, Union, Callable
 
 import math
 from psycopg import errors as pg_errors
 
-from fastapi import APIRouter, Body, Depends, Request, Header, HTTPException, status
+from fastapi import APIRouter, Body, Depends, Request, Header, HTTPException, status, Query
 from pydantic import BaseModel
 
 from ..db import get_pool, settings  # settings.DEV_BEARER, async pg pool
+
+from zoneinfo import ZoneInfo
+from os import getenv
 
 import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["ingest"])
+
+DEFAULT_TIMEZONE = "America/Chicago"
+REFRESH_DEBOUNCE_SECONDS = 60.0
+REFRESH_DISABLED = getenv("MART_REFRESH_DISABLE", "0").lower() in {"1", "true", "yes", "on"}
+
+_refresh_registry: Dict[str, float] = {}
+_refresh_lock = asyncio.Lock()
+_refresh_task_factory: Callable[[Awaitable[None]], asyncio.Task] = asyncio.create_task
+
+
+def _resolve_timezone(value: Optional[str]) -> tuple[str, ZoneInfo]:
+    if not value:
+        return DEFAULT_TIMEZONE, ZoneInfo(DEFAULT_TIMEZONE)
+    try:
+        return value, ZoneInfo(value)
+    except Exception:
+        logger.warning("[ingest] invalid tz=%s; defaulting to %s", value, DEFAULT_TIMEZONE)
+        return DEFAULT_TIMEZONE, ZoneInfo(DEFAULT_TIMEZONE)
+
+
+def _today_local(tzinfo: ZoneInfo) -> date:
+    return datetime.now(tzinfo).date()
+
+
+async def _execute_refresh(user_id: str, day_local: date) -> None:
+    try:
+        pool = await get_pool()
+        async with pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "select marts.refresh_daily_features_user(%s, %s::date)",
+                    (user_id, day_local),
+                )
+    except Exception as exc:  # pragma: no cover - diagnostic logging
+        logger.warning(
+            "[MART] refresh failed user=%s day=%s error=%s",
+            user_id,
+            day_local,
+            exc,
+        )
+
+
+async def _schedule_refresh(user_id: str, day_local: date, tz_name: str) -> bool:
+    if REFRESH_DISABLED:
+        logger.info(
+            "[MART] refresh disabled; skipping user=%s day=%s tz=%s",
+            user_id,
+            day_local,
+            tz_name,
+        )
+        return False
+    if not user_id:
+        return False
+    loop = asyncio.get_running_loop()
+    async with _refresh_lock:
+        last = _refresh_registry.get(user_id)
+        now = loop.time()
+        if last and now - last < REFRESH_DEBOUNCE_SECONDS:
+            return False
+        _refresh_registry[user_id] = now
+
+    async def _runner() -> None:
+        await _execute_refresh(user_id, day_local)
+
+    _refresh_task_factory(_runner())
+    logger.info("[MART] scheduled refresh user=%s day=%s tz=%s", user_id, day_local, tz_name)
+    return True
 
 
 # ---------- Models ----------
@@ -99,6 +170,7 @@ async def samples_batch(
     payload: Payload,
     request: Request,
     _auth: None = Depends(require_bearer),
+    tz: str = Query(DEFAULT_TIMEZONE, description="IANA timezone for mart refresh scheduling"),
 ):
     # Normalize payload to list
     items = payload.samples if isinstance(payload, SamplesWrapper) else (payload or [])
@@ -140,6 +212,8 @@ async def samples_batch(
     inserted = 0
     skipped = 0
     errors: list[dict] = []
+
+    tz_name, tzinfo = _resolve_timezone(tz)
 
     try:
         async with pool.connection() as conn:
@@ -194,6 +268,15 @@ async def samples_batch(
             batch_start_iso or "?",
             batch_end_iso or "?",
         )
+        refresh_user = None
+        if dev_uid:
+            refresh_user = dev_uid
+        elif batch_user_id and batch_user_id not in {"<mixed>", "<unknown>"}:
+            refresh_user = batch_user_id
+
+        if inserted > 0 and refresh_user:
+            day_local = _today_local(tzinfo)
+            await _schedule_refresh(refresh_user, day_local, tz_name)
     except Exception as e:
         # Return structured response instead of 500 on unexpected failures
         logger.exception("/samples/batch fatal error: %s", e)
