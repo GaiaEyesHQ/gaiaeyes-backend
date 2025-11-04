@@ -1,32 +1,40 @@
 # app/routers/summary.py
+import logging
+from datetime import datetime, date, timezone
+from typing import Any, Dict, Optional, Tuple
+
 from fastapi import APIRouter, Depends, Request
-from datetime import timezone
 from os import getenv
 from psycopg.rows import dict_row
 from app.db import get_db
 
-router = APIRouter(prefix="/v1")
+logger = logging.getLogger(__name__)
 
-# -----------------------------
-# /v1/features/today (full)
-# -----------------------------
-@router.get("/features/today")
-async def features_today(request: Request, conn = Depends(get_db)):
-    """
-    Return today's (latest) features row including derived sleep, current Kp/Bz/SW,
-    Schumann preference (tomsk > cumiana), and Earthscope default post. America/Chicago
-    is used for daily bucketing of sleep.
-    """
-    default_media_base = "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main"
-    raw_media_base = getenv("MEDIA_BASE_URL")
-    media_base = (raw_media_base or default_media_base).rstrip("/")
+STATEMENT_TIMEOUT_MS = 60000
 
-    user_id = getattr(request.state, "user_id", None)
 
+def _iso_dt(value: Optional[datetime]) -> Optional[str]:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc).isoformat()
+    return value.astimezone(timezone.utc).isoformat()
+
+
+def _iso_date(value: Optional[date]) -> Optional[str]:
+    if value is None:
+        return None
+    return value.isoformat()
+
+
+async def _fetch_features_today(
+    conn,
+    user_id: Optional[str],
+) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
     pick_filter = ""
     diag_filter = ""
     sr_clauses = ["type in ('sleep','sleep_stage')"]
-    params: list[str] = []
+    params: list[Any] = []
 
     if user_id:
         pick_filter = " where user_id = %s"
@@ -152,45 +160,127 @@ async def features_today(request: Request, conn = Depends(get_db)):
     cross join diag d
     """
 
-    try:
-        async with conn.cursor(row_factory=dict_row) as cur:
-            await cur.execute("set statement_timeout = 60000")
-            query = sql.format(pick_filter=pick_filter, sr_filter=sr_filter, diag_filter=diag_filter)
-            await cur.execute(query, tuple(params))
+    branch = "scoped" if user_id else "unscoped"
+    diag_info: Dict[str, Any] = {
+        "branch": branch,
+        "statement_timeout_ms": STATEMENT_TIMEOUT_MS,
+        "requested_user_id": str(user_id) if user_id else None,
+        "user_id": str(user_id) if user_id else None,
+        "day": None,
+        "updated_at": None,
+        "max_day": None,
+        "total_rows": None,
+    }
+
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(f"set statement_timeout = {STATEMENT_TIMEOUT_MS}")
+        query = sql.format(pick_filter=pick_filter, sr_filter=sr_filter, diag_filter=diag_filter)
+        await cur.execute(query, tuple(params))
+        row = await cur.fetchone()
+        if not row and user_id:
+            diag_info["branch"] = "fallback"
+            unscoped_query = sql.format(
+                pick_filter="",
+                sr_filter=" where type in ('sleep','sleep_stage')",
+                diag_filter="",
+            )
+            await cur.execute(unscoped_query, tuple())
             row = await cur.fetchone()
-            # If scoped by user_id and no row found, retry unscoped so the card doesn't go blank
-            if not row and user_id:
-                # Build unscoped filters and params
-                unscoped_pick_filter = ""
-                unscoped_diag_filter = ""
-                unscoped_sr_filter = " where type in ('sleep','sleep_stage')"
-                query_unscoped = sql.format(
-                    pick_filter=unscoped_pick_filter,
-                    sr_filter=unscoped_sr_filter,
-                    diag_filter=unscoped_diag_filter,
-                )
-                await cur.execute(query_unscoped, tuple())
-                row = await cur.fetchone()
-    except Exception as e:
-        return {"ok": True, "data": None, "error": f"features_today query failed: {e}"}
 
     if not row:
-        return {"ok": True, "data": None}
+        return None, diag_info
 
     rec = dict(row)
+    diag_info["max_day"] = rec.get("max_day")
+    diag_info["total_rows"] = rec.get("total_rows")
+    if rec.get("user_id"):
+        diag_info["user_id"] = str(rec.get("user_id"))
+    diag_info["day"] = rec.get("day")
+    diag_info["updated_at"] = rec.get("updated_at")
+
+    rec.pop("max_day", None)
+    rec.pop("total_rows", None)
+
+    return rec, diag_info
+
+router = APIRouter(prefix="/v1")
+
+
+def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "branch": diag_info.get("branch"),
+        "statement_timeout_ms": diag_info.get("statement_timeout_ms"),
+        "requested_user_id": diag_info.get("requested_user_id"),
+        "user_id": diag_info.get("user_id"),
+        "day": _iso_date(diag_info.get("day")),
+        "updated_at": _iso_dt(diag_info.get("updated_at")),
+        "max_day": _iso_date(diag_info.get("max_day")),
+        "total_rows": diag_info.get("total_rows"),
+        "has_row": diag_info.get("day") is not None,
+    }
+
+# -----------------------------
+# /v1/features/today (full)
+# -----------------------------
+@router.get("/features/today")
+async def features_today(request: Request, diag: int = 0, conn = Depends(get_db)):
+    """
+    Return today's (latest) features row including derived sleep, current Kp/Bz/SW,
+    Schumann preference (tomsk > cumiana), and Earthscope default post. America/Chicago
+    is used for daily bucketing of sleep.
+    """
+    default_media_base = "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main"
+    raw_media_base = getenv("MEDIA_BASE_URL")
+    media_base = (raw_media_base or default_media_base).rstrip("/")
+
+    user_id = getattr(request.state, "user_id", None)
+
+    try:
+        row, diag_info = await _fetch_features_today(conn, user_id)
+    except Exception as e:
+        logger.exception("features_today query failed: %s", e)
+        response: Dict[str, Any] = {"ok": True, "data": None, "error": f"features_today query failed: {e}"}
+        if diag:
+            response["diagnostics"] = _format_diag_payload({
+                "branch": None,
+                "statement_timeout_ms": STATEMENT_TIMEOUT_MS,
+                "user_id": str(user_id) if user_id else None,
+                "day": None,
+                "updated_at": None,
+                "max_day": None,
+                "total_rows": None,
+            })
+        return response
+
+    rec = row
+    if not rec:
+        logger.info(
+            "[features_today] user=%s branch=%s day=%s updated_at=%s",
+            diag_info.get("user_id") or (str(user_id) if user_id else None),
+            diag_info.get("branch"),
+            _iso_date(diag_info.get("day")),
+            _iso_dt(diag_info.get("updated_at")),
+        )
+        response: Dict[str, Any] = {"ok": True, "data": None}
+        if diag:
+            response["diagnostics"] = _format_diag_payload(diag_info)
+        return response
+
     rec["user_id"] = str(rec.get("user_id")) if rec.get("user_id") else None
     day_val = rec.get("day")
     rec["day"] = str(day_val) if day_val else None
 
-    # Diagnostics (optional; used by the app for visibility)
-    max_day_val = rec.pop("max_day", None)
-    diagnostics = {
-        "max_day": str(max_day_val) if max_day_val else None,
-        "total_rows": rec.pop("total_rows", None),
-        "user_id": rec.get("user_id") or user_id,
-    }
+    diag_info["day"] = day_val
+    diag_info["updated_at"] = rec.get("updated_at")
 
-    # Provide Earthscope image URLs if MEDIA_BASE_URL is set
+    logger.info(
+        "[features_today] user=%s branch=%s day=%s updated_at=%s",
+        diag_info.get("user_id") or (str(user_id) if user_id else None),
+        diag_info.get("branch"),
+        _iso_date(diag_info.get("day")),
+        _iso_dt(diag_info.get("updated_at")),
+    )
+
     if media_base:
         rec["earthscope_images"] = {
             "caption": f"{media_base}/images/daily_caption.jpg",
@@ -199,8 +289,128 @@ async def features_today(request: Request, conn = Depends(get_db)):
             "playbook": f"{media_base}/images/daily_playbook.jpg",
         }
 
-    return {"ok": True, "data": rec, "diagnostics": diagnostics}
+    response = {"ok": True, "data": rec}
+    if diag:
+        response["diagnostics"] = _format_diag_payload(diag_info)
+    return response
 
+# -----------------------------
+# /v1/diag/features
+# -----------------------------
+@router.get("/diag/features")
+async def diag_features(request: Request, conn = Depends(get_db)):
+    user_id = getattr(request.state, "user_id", None)
+
+    try:
+        row, diag_info = await _fetch_features_today(conn, user_id)
+    except Exception as e:
+        logger.exception("/v1/diag/features base query failed: %s", e)
+        row = None
+        diag_info = {
+            "branch": None,
+            "statement_timeout_ms": STATEMENT_TIMEOUT_MS,
+            "requested_user_id": str(user_id) if user_id else None,
+            "user_id": str(user_id) if user_id else None,
+            "day": None,
+            "updated_at": None,
+            "max_day": None,
+            "total_rows": None,
+        }
+
+    tables: Dict[str, Any] = {}
+    sanity_checks: Dict[str, Any] = {}
+
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(f"set statement_timeout = {STATEMENT_TIMEOUT_MS}")
+
+            await cur.execute(
+                "select count(*) as row_count, max(updated_at) as max_updated_at, max(day) as max_day from marts.daily_features"
+            )
+            res = await cur.fetchone() or {}
+            tables["marts.daily_features"] = {
+                "rows": int(res.get("row_count") or 0),
+                "max_day": _iso_date(res.get("max_day")),
+                "max_updated_at": _iso_dt(res.get("max_updated_at")),
+            }
+
+            await cur.execute("select count(*) as row_count, max(day) as max_day from marts.schumann_daily")
+            res = await cur.fetchone() or {}
+            tables["marts.schumann_daily"] = {
+                "rows": int(res.get("row_count") or 0),
+                "max_day": _iso_date(res.get("max_day")),
+            }
+
+            await cur.execute("select count(*) as row_count, max(ts_utc) as max_ts from ext.space_weather")
+            res = await cur.fetchone() or {}
+            tables["ext.space_weather"] = {
+                "rows": int(res.get("row_count") or 0),
+                "max_ts": _iso_dt(res.get("max_ts")),
+            }
+
+            if user_id:
+                await cur.execute(
+                    "select count(*) as row_count, max(date) as max_date from gaia.daily_summary where user_id = %s",
+                    (user_id,),
+                )
+                res = await cur.fetchone() or {}
+                tables["gaia.daily_summary"] = {
+                    "rows": int(res.get("row_count") or 0),
+                    "max_date": _iso_date(res.get("max_date")),
+                }
+
+                await cur.execute(
+                    """
+                    select count(*) as row_count,
+                           min(start_time) as min_start_time,
+                           max(start_time) as max_start_time
+                    from gaia.samples
+                    where user_id = %s
+                      and start_time >= now() - interval '24 hours'
+                    """,
+                    (user_id,),
+                )
+                res = await cur.fetchone() or {}
+                tables["gaia.samples_last_24h"] = {
+                    "rows": int(res.get("row_count") or 0),
+                    "earliest_start_time": _iso_dt(res.get("min_start_time")),
+                    "latest_start_time": _iso_dt(res.get("max_start_time")),
+                }
+
+            await cur.execute("select max(day) as max_day from marts.daily_features")
+            res = await cur.fetchone() or {}
+            sanity_checks["marts.daily_features.max_day"] = _iso_date(res.get("max_day"))
+
+            if user_id:
+                await cur.execute(
+                    "select max(date) as max_date from gaia.daily_summary where user_id = %s",
+                    (user_id,),
+                )
+                res = await cur.fetchone() or {}
+                sanity_checks["gaia.daily_summary.max_date"] = _iso_date(res.get("max_date"))
+
+                await cur.execute(
+                    """
+                    select max(start_time) as max_start_time
+                    from gaia.samples
+                    where user_id = %s
+                      and type in ('heart_rate','heart_rate_variability_sdnn')
+                    """,
+                    (user_id,),
+                )
+                res = await cur.fetchone() or {}
+                sanity_checks["gaia.samples.max_start_time"] = _iso_dt(res.get("max_start_time"))
+    except Exception as e:
+        logger.exception("/v1/diag/features stats failed: %s", e)
+        tables["error"] = {"message": str(e)}
+
+    payload: Dict[str, Any] = {
+        "features": _format_diag_payload(diag_info),
+        "tables": tables,
+        "sanity_checks": sanity_checks,
+    }
+
+    return {"ok": True, "data": payload}
 
 # -----------------------------
 # /v1/space/forecast/summary
