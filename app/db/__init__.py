@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional, AsyncGenerator
+from datetime import datetime, timezone
+from typing import Optional, AsyncGenerator, Dict, Any
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from psycopg_pool import AsyncConnectionPool
+from psycopg_pool.errors import PoolTimeout
 
 
 logger = logging.getLogger(__name__)
@@ -22,6 +24,7 @@ class Settings(BaseSettings):
     DEV_BEARER: Optional[str] = None
     CORS_ORIGINS: Optional[str] = "*"
     SUPABASE_JWT_SECRET: Optional[str] = None
+    REDIS_URL: Optional[str] = None
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
@@ -30,6 +33,7 @@ settings = Settings()
 _pool: AsyncConnectionPool | None = None
 _pool_lock = asyncio.Lock()
 _pool_open = False
+_pool_last_refresh: Optional[datetime] = None
 
 
 def _rebuild_netloc(u) -> str:
@@ -70,21 +74,36 @@ def _sanitize_conninfo(dsn: str) -> str:
     return urlunparse((u.scheme, netloc, u.path, u.params, new_q, u.fragment))
 
 
+async def _check_on_acquire(conn) -> None:
+    async with conn.cursor() as cur:
+        await cur.execute("select 1;")
+
+
+def _log_pool_diag(pool: AsyncConnectionPool) -> None:
+    try:
+        stats = pool.get_stats()
+    except Exception:  # pragma: no cover - depends on psycopg internals
+        return
+    open_count = int(stats.get("pool_size", 0))
+    free_count = int(stats.get("pool_available", 0))
+    waiting = int(stats.get("requests_waiting", 0))
+    logger.info("[DB] diag: open=%s free=%s waiting=%s", open_count, free_count, waiting)
+
+
 def _get_or_create_pool() -> AsyncConnectionPool:
     global _pool
     if _pool is None:
         conninfo = _sanitize_conninfo(settings.DATABASE_URL)
         _pool = AsyncConnectionPool(
             conninfo=conninfo,
-            min_size=1,
-            max_size=4,
-            timeout=5,
+            min_size=2,
+            max_size=10,
+            timeout=10,
+            max_idle=300,
             open=False,
+            check=_check_on_acquire,
             kwargs={
                 "sslmode": "require",
-                "prepare_threshold": None,
-                "autocommit": True,
-                "connect_timeout": 10,
             },
         )
         logger.info(
@@ -94,12 +113,14 @@ def _get_or_create_pool() -> AsyncConnectionPool:
 
 
 async def open_pool() -> AsyncConnectionPool:
-    global _pool_open
+    global _pool_open, _pool_last_refresh
     async with _pool_lock:
         pool = _get_or_create_pool()
         if not _pool_open:
             await pool.open()
+            _pool_last_refresh = datetime.now(timezone.utc)
             _pool_open = True
+            _log_pool_diag(pool)
     return pool
 
 
@@ -116,13 +137,6 @@ async def get_pool() -> AsyncConnectionPool:
     return pool
 
 
-# ✅ FastAPI dependency: async generator that YIELDS a psycopg3 connection.
-#    Do NOT decorate with @asynccontextmanager.
-async def _pre_ping(conn) -> None:
-    async with conn.cursor() as cur:
-        await cur.execute("select 1;")
-
-
 async def get_db() -> AsyncGenerator:
     pool = await get_pool()
     attempt = 0
@@ -130,18 +144,17 @@ async def get_db() -> AsyncGenerator:
 
     while attempt < 2:
         ctx = pool.connection()
-        conn = await ctx.__aenter__()
         try:
-            await _pre_ping(conn)
-        except Exception as exc:  # pragma: no cover - exercised under pool churn
+            conn = await ctx.__aenter__()
+        except PoolTimeout as exc:
             last_exc = exc
-            await ctx.__aexit__(type(exc), exc, exc.__traceback__)
+            _log_pool_diag(pool)
             if attempt == 0:
-                logger.warning("[DB] pre_ping failed; reconnecting")
+                logger.warning("[DB] pool timeout; retrying after backoff")
                 attempt += 1
+                await asyncio.sleep(1.5)
                 continue
             raise
-
         try:
             yield conn  # FastAPI injects this as `conn` in your endpoints
         except Exception as exc:  # pragma: no cover - defensive, FastAPI handles
@@ -153,3 +166,21 @@ async def get_db() -> AsyncGenerator:
 
     if last_exc:
         raise last_exc
+
+
+def get_pool_metrics() -> Dict[str, Any]:
+    pool = _get_or_create_pool()
+    try:
+        stats = pool.get_stats()
+    except Exception:  # pragma: no cover - depends on psycopg internals
+        stats = {}
+    open_count = int(stats.get("pool_size", 0))
+    free_count = int(stats.get("pool_available", 0))
+    waiting = int(stats.get("requests_waiting", 0))
+    last_refresh_iso = _pool_last_refresh.isoformat() if _pool_last_refresh else None
+    return {
+        "open": open_count,
+        "free": free_count,
+        "waiting": waiting,
+        "last_refresh": last_refresh_iso,
+    }
