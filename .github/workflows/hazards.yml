@@ -33,11 +33,6 @@ jobs:
 
       - name: Publish latest.json to media repo
         if: ${{ secrets.GH_PAT && secrets.MEDIA_REPO }}
-          repository: ${{ env.MEDIA_REPO_OWNER }}/${{ env.MEDIA_REPO_NAME }}
-          token: ${{ env.GAIAEYES_MEDIA_TOKEN }}
-          path: gaiaeyes-media
-          
-      - name: Generate quakes_history.json
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
           MEDIA_REPO: ${{ secrets.MEDIA_REPO }}
@@ -78,35 +73,3 @@ jobs:
           fi
 
           echo "✅ Publish step complete."
-      - name: Commit & push
-        run: |
-          set -euo pipefail
-          cd gaiaeyes-media
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config pull.rebase true
-          if git status --porcelain | grep -E "quakes_history\.json" > /dev/null; then
-            git add data/quakes_history.json || true
-          else
-            echo "No changes."
-            exit 0
-          fi
-          if git diff --cached --quiet; then
-            echo "No changes."
-            exit 0
-          fi
-          git commit -m "chore: update quakes_history.json [skip ci]"
-          git fetch origin main || true
-          git pull --rebase origin main || true
-          for attempt in 1 2 3; do
-            if git push origin HEAD:main; then
-              echo "Push succeeded on attempt ${attempt}."
-              exit 0
-            fi
-            echo "Push failed on attempt ${attempt}; rebasing and retrying…"
-            git fetch origin main || true
-            git pull --rebase origin main || true
-            sleep $((RANDOM % 4 + 2))
-          done
-          echo "ERROR: Could not push after 3 attempts."
-          exit 1
