@@ -47,20 +47,23 @@ are sorted by most recent first.
 **Response**
 
 ```json
-[
-  {
-    "symptom_code": "nerve_pain",
-    "ts_utc": "2024-04-02T14:18:00+00:00",
-    "severity": 4,
-    "free_text": "Left arm tingling"
-  },
-  {
-    "symptom_code": "headache",
-    "ts_utc": "2024-04-02T07:10:00+00:00",
-    "severity": 2,
-    "free_text": null
-  }
-]
+{
+  "ok": true,
+  "data": [
+    {
+      "symptom_code": "nerve_pain",
+      "ts_utc": "2024-04-02T14:18:00+00:00",
+      "severity": 4,
+      "free_text": "Left arm tingling"
+    },
+    {
+      "symptom_code": "headache",
+      "ts_utc": "2024-04-02T07:10:00+00:00",
+      "severity": 2,
+      "free_text": null
+    }
+  ]
+}
 ```
 
 ## GET `/v1/symptoms/daily?days=30`
@@ -72,22 +75,25 @@ and the most recent timestamp.
 **Response**
 
 ```json
-[
-  {
-    "day": "2024-04-02",
-    "symptom_code": "nerve_pain",
-    "events": 2,
-    "mean_severity": 3.5,
-    "last_ts": "2024-04-02T14:18:00+00:00"
-  },
-  {
-    "day": "2024-04-01",
-    "symptom_code": "insomnia",
-    "events": 1,
-    "mean_severity": null,
-    "last_ts": "2024-04-01T05:55:00+00:00"
-  }
-]
+{
+  "ok": true,
+  "data": [
+    {
+      "day": "2024-04-02",
+      "symptom_code": "nerve_pain",
+      "events": 2,
+      "mean_severity": 3.5,
+      "last_ts": "2024-04-02T14:18:00+00:00"
+    },
+    {
+      "day": "2024-04-01",
+      "symptom_code": "insomnia",
+      "events": 1,
+      "mean_severity": null,
+      "last_ts": "2024-04-01T05:55:00+00:00"
+    }
+  ]
+}
 ```
 
 ## GET `/v1/symptoms/diag?days=30`
@@ -99,18 +105,21 @@ which symptom codes have data available.
 **Response**
 
 ```json
-[
-  {
-    "symptom_code": "nerve_pain",
-    "events": 14,
-    "last_ts": "2024-04-02T14:18:00+00:00"
-  },
-  {
-    "symptom_code": "insomnia",
-    "events": 6,
-    "last_ts": "2024-03-30T05:55:00+00:00"
-  }
-]
+{
+  "ok": true,
+  "data": [
+    {
+      "symptom_code": "nerve_pain",
+      "events": 14,
+      "last_ts": "2024-04-02T14:18:00+00:00"
+    },
+    {
+      "symptom_code": "insomnia",
+      "events": 6,
+      "last_ts": "2024-03-30T05:55:00+00:00"
+    }
+  ]
+}
 ```
 
 ## Nightly refresh

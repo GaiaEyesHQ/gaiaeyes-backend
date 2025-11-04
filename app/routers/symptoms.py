@@ -40,6 +40,11 @@ class SymptomTodayOut(BaseModel):
     free_text: Optional[str] = None
 
 
+class SymptomTodayResponse(BaseModel):
+    ok: bool = True
+    data: List[SymptomTodayOut]
+
+
 class SymptomDailyRow(BaseModel):
     day: str
     symptom_code: str
@@ -48,10 +53,20 @@ class SymptomDailyRow(BaseModel):
     last_ts: Optional[str] = None
 
 
+class SymptomDailyResponse(BaseModel):
+    ok: bool = True
+    data: List[SymptomDailyRow]
+
+
 class SymptomDiagRow(BaseModel):
     symptom_code: str
     events: int
     last_ts: Optional[str] = None
+
+
+class SymptomDiagResponse(BaseModel):
+    ok: bool = True
+    data: List[SymptomDiagRow]
 
 
 @router.post("", response_model=SymptomEventOut)
@@ -75,14 +90,15 @@ async def create_symptom_event(
     return SymptomEventOut(id=result["id"], ts_utc=result["ts_utc"])
 
 
-@router.get("/today", response_model=List[SymptomTodayOut])
+@router.get("/today", response_model=SymptomTodayResponse)
 async def get_symptoms_today(request: Request, conn=Depends(get_db)):
     user_id = _require_user_id(request)
     rows = await symptoms_db.fetch_symptoms_today(conn, user_id)
-    return [SymptomTodayOut(**row) for row in rows]
+    data = [SymptomTodayOut(**row) for row in rows]
+    return SymptomTodayResponse(data=data)
 
 
-@router.get("/daily", response_model=List[SymptomDailyRow])
+@router.get("/daily", response_model=SymptomDailyResponse)
 async def get_symptoms_daily(
     request: Request,
     conn=Depends(get_db),
@@ -90,10 +106,11 @@ async def get_symptoms_daily(
 ):
     user_id = _require_user_id(request)
     rows = await symptoms_db.fetch_daily_summary(conn, user_id, days)
-    return [SymptomDailyRow(**row) for row in rows]
+    data = [SymptomDailyRow(**row) for row in rows]
+    return SymptomDailyResponse(data=data)
 
 
-@router.get("/diag", response_model=List[SymptomDiagRow])
+@router.get("/diag", response_model=SymptomDiagResponse)
 async def get_symptom_diag(
     request: Request,
     conn=Depends(get_db),
@@ -101,4 +118,5 @@ async def get_symptom_diag(
 ):
     user_id = _require_user_id(request)
     rows = await symptoms_db.fetch_diagnostics(conn, user_id, days)
-    return [SymptomDiagRow(**row) for row in rows]
+    data = [SymptomDiagRow(**row) for row in rows]
+    return SymptomDiagResponse(data=data)
