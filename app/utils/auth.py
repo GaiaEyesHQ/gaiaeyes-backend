@@ -70,3 +70,18 @@ async def require_auth(request: Request) -> None:
         return
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bearer token")
+
+
+async def require_admin(request: Request) -> None:
+    """Ensure the caller presents the developer bearer token."""
+
+    auth_header = request.headers.get("Authorization", "") or ""
+    if not auth_header.lower().startswith("bearer "):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin token required")
+
+    token = auth_header.split(" ", 1)[1].strip()
+    settings = db.settings
+    if settings.DEV_BEARER and token == settings.DEV_BEARER:
+        return
+
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin token required")

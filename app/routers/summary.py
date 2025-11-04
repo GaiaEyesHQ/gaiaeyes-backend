@@ -1,6 +1,8 @@
 # app/routers/summary.py
+import asyncio
 import logging
 from datetime import date, datetime, time, timedelta, timezone
+from time import perf_counter
 from typing import Any, Dict, List, Optional, Tuple
 
 from zoneinfo import ZoneInfo
@@ -8,7 +10,9 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Request
 from os import getenv
 from psycopg.rows import dict_row
-from app.db import get_db, get_pool
+from app.cache import get_last_good, set_last_good
+from app.db import get_db, get_pool, get_pool_metrics
+from app.utils.auth import require_admin
 
 DEFAULT_TIMEZONE = "America/Chicago"
 STATEMENT_TIMEOUT_MS = 60000
@@ -19,6 +23,24 @@ DEBUG_FEATURES_DIAG = getenv("DEBUG_FEATURES_DIAG", "1").lower() not in {"0", "f
 logger = logging.getLogger(__name__)
 
 STATEMENT_TIMEOUT_MS = 60000
+
+
+_MART_COLUMNS = [
+    "day",
+    "updated_at",
+    "steps_total",
+    "hr_min",
+    "hr_max",
+    "hrv_avg",
+    "kp_max",
+    "bz_min",
+    "sw_speed_avg",
+    "sch_f0_hz",
+    "sch_f1_hz",
+    "sch_f2_hz",
+    "sch_f3_hz",
+]
+_MART_SELECT = ", ".join(_MART_COLUMNS)
 
 
 def _iso_dt(value: Optional[datetime]) -> Optional[str]:
@@ -62,16 +84,58 @@ def _local_bounds(day_local: date, tzinfo: ZoneInfo) -> Tuple[datetime, datetime
 
 async def _fetch_mart_row(conn, user_id: str, day_local: date) -> Optional[Dict[str, Any]]:
     async with conn.cursor(row_factory=dict_row) as cur:
+        started = perf_counter()
         await cur.execute(
-            """
-            select *
+            f"""
+            select {_MART_SELECT}
             from marts.daily_features
             where user_id = %s and day = %s
             limit 1
             """,
             (user_id, day_local),
         )
+        row = await cur.fetchone()
+    elapsed_ms = int((perf_counter() - started) * 1000)
+    logger.info(
+        "[MART] refresh completed (elapsed=%sms) user=%s day=%s",
+        elapsed_ms,
+        user_id,
+        day_local,
+    )
+    return row
+
+
+async def _fetch_snapshot_row(conn, user_id: str) -> Optional[Dict[str, Any]]:
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            f"""
+            select {_MART_SELECT}
+            from marts.daily_features
+            where user_id = %s and day is not null
+            order by updated_at desc
+            limit 1
+            """,
+            (user_id,),
+        )
         return await cur.fetchone()
+
+
+async def _query_mart_with_retry(conn, user_id: str, day_local: date) -> Tuple[Optional[Dict[str, Any]], Optional[BaseException]]:
+    attempts = 0
+    last_exc: Optional[BaseException] = None
+    while attempts < 2:
+        try:
+            row = await _fetch_mart_row(conn, user_id, day_local)
+        except Exception as exc:  # pragma: no cover - safety for transient db errors
+            if isinstance(exc, asyncio.CancelledError):
+                raise
+            last_exc = exc
+            attempts += 1
+            if attempts < 2:
+                await asyncio.sleep(0.2)
+            continue
+        return row, None
+    return None, last_exc
 
 
 async def _fetch_sleep_aggregate(
@@ -374,9 +438,49 @@ async def _collect_features(
         if not user_id:
             logger.info("[features_today] anonymous request tz=%s", tz_name)
         else:
-            mart_row = await _fetch_mart_row(conn, user_id, today_local)
             context: Dict[str, Any] = {}
-            if mart_row:
+            should_enrich = True
+            response_payload = {}
+
+            mart_row, mart_error = await _query_mart_with_retry(conn, user_id, today_local)
+            if mart_error:
+                logger.warning(
+                    "[MART] fallback: using last-known snapshot (user=%s day=%s): %s",
+                    user_id,
+                    today_local,
+                    mart_error,
+                )
+                should_enrich = False
+                fallback_row = await _fetch_snapshot_row(conn, user_id)
+                if fallback_row:
+                    response_payload = dict(fallback_row)
+                    diag_info["mart_row"] = True
+                    diag_info["source"] = "snapshot"
+                    diag_info["updated_at"] = fallback_row.get("updated_at")
+                    fallback_day = fallback_row.get("day")
+                    if isinstance(fallback_day, str):
+                        try:
+                            fallback_day = date.fromisoformat(fallback_day)
+                        except ValueError:
+                            pass
+                    diag_info["day_used"] = fallback_day or diag_info.get("day_used")
+                else:
+                    cached_payload = await get_last_good(user_id)
+                    if cached_payload:
+                        response_payload = dict(cached_payload)
+                        diag_info["mart_row"] = bool(response_payload)
+                        diag_info["source"] = "cache"
+                        diag_info["updated_at"] = response_payload.get("updated_at")
+                        cached_day = response_payload.get("day")
+                        if isinstance(cached_day, str):
+                            try:
+                                cached_day = date.fromisoformat(cached_day)
+                            except ValueError:
+                                pass
+                        diag_info["day_used"] = cached_day or diag_info.get("day_used")
+                    else:
+                        diag_info["source"] = "empty"
+            elif mart_row:
                 diag_info["mart_row"] = True
                 diag_info["source"] = "today"
                 diag_info["updated_at"] = mart_row.get("updated_at")
@@ -421,25 +525,29 @@ async def _collect_features(
                 if user_id:
                     response_payload.setdefault("user_id", user_id)
                 response_payload.setdefault("day", target_day)
-                start_utc, end_utc = _local_bounds(target_day, tzinfo)
+                if should_enrich:
+                    start_utc, end_utc = _local_bounds(target_day, tzinfo)
 
-                if not diag_info.get("freshened"):
-                    sleep = await _fetch_sleep_aggregate(conn, user_id, start_utc, end_utc)
-                    daily_wx = await _fetch_space_weather_daily(conn, target_day)
-                    current_wx = await _fetch_current_space_weather(conn)
-                    sch = await _fetch_schumann_row(conn, target_day)
-                    post = await _fetch_daily_post(conn, target_day)
-                else:
-                    sleep = context.get("sleep", {})
-                    daily_wx = context.get("daily_wx", {})
-                    current_wx = context.get("current_wx", {})
-                    sch = context.get("sch", {})
-                    post = context.get("post", {})
+                    if not diag_info.get("freshened"):
+                        sleep = await _fetch_sleep_aggregate(conn, user_id, start_utc, end_utc)
+                        daily_wx = await _fetch_space_weather_daily(conn, target_day)
+                        current_wx = await _fetch_current_space_weather(conn)
+                        sch = await _fetch_schumann_row(conn, target_day)
+                        post = await _fetch_daily_post(conn, target_day)
+                    else:
+                        sleep = context.get("sleep", {})
+                        daily_wx = context.get("daily_wx", {})
+                        current_wx = context.get("current_wx", {})
+                        sch = context.get("sch", {})
+                        post = context.get("post", {})
 
-                response_payload.update(_compose_sleep_payload(response_payload, sleep))
-                response_payload.update(_compose_space_weather_payload(response_payload, daily_wx, current_wx))
-                response_payload.update(sch)
-                response_payload.update(post)
+                    response_payload.update(_compose_sleep_payload(response_payload, sleep))
+                    response_payload.update(_compose_space_weather_payload(response_payload, daily_wx, current_wx))
+                    response_payload.update(sch)
+                    response_payload.update(post)
+
+                if user_id and response_payload and diag_info.get("source") not in {"cache", "empty"}:
+                    await set_last_good(user_id, response_payload)
     except Exception as exc:  # pragma: no cover - exercised via integration tests
         logger.exception("features_today failed: %s", exc)
         error_text = str(exc) or exc.__class__.__name__
@@ -652,6 +760,11 @@ async def diag_db():
             "free": free,
         },
     }
+
+
+@router.get("/diag/dbpool")
+async def diag_dbpool(_admin: None = Depends(require_admin)):
+    return get_pool_metrics()
 
 # -----------------------------
 # /v1/space/forecast/summary
