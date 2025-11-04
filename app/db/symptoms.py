@@ -91,6 +91,41 @@ async def insert_symptom_event(
     }
 
 
+async def fetch_symptom_codes(conn, *, include_inactive: bool = True) -> List[dict]:
+    sql = """
+    select
+        symptom_code,
+        label,
+        description,
+        is_active
+    from dim.symptom_codes
+    {where_clause}
+    order by label
+    """
+
+    where_clause = ""
+    if not include_inactive:
+        where_clause = "where is_active"
+
+    query = sql.format(where_clause=where_clause)
+
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(query)
+        rows = await cur.fetchall()
+
+    result: List[dict] = []
+    for row in rows or []:
+        result.append(
+            {
+                "symptom_code": row.get("symptom_code"),
+                "label": row.get("label"),
+                "description": row.get("description"),
+                "is_active": bool(row.get("is_active", False)),
+            }
+        )
+    return result
+
+
 async def fetch_symptoms_today(conn, user_id: str) -> List[dict]:
     sql = """
     select

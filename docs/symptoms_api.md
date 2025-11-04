@@ -29,6 +29,23 @@ the service automatically stamps the current UTC time.
 }
 ```
 
+**Normalization rules**
+
+- Incoming codes are normalized before insert: trim whitespace, replace spaces/dashes
+  with underscores, and uppercase the result (e.g., `"nerve pain" → "NERVE_PAIN"`).
+- If the normalized value does not exist in `dim.symptom_codes`, the service maps it
+  to `OTHER` (assuming the catalog contains an `OTHER` entry).
+- Opt-in validation: pass `?strict=1` to reject unknown codes instead of mapping.
+  The server responds with HTTP 400 and a payload of the form:
+
+  ```json
+  {
+    "ok": false,
+    "error": "unknown symptom_code",
+    "valid": ["HEADACHE", "NERVE_PAIN", "OTHER", ...]
+  }
+  ```
+
 **Successful response**
 
 ```json
@@ -37,6 +54,32 @@ the service automatically stamps the current UTC time.
   "id": "7f3e85b1-67d6-4f83-9d63-2a0f1c0e7f6e",
   "ts_utc": "2024-04-02T14:18:00+00:00"
 }
+```
+
+## GET `/v1/symptoms/codes`
+
+Returns the catalog of symptom codes from `dim.symptom_codes` ordered by label.
+Codes in the response are normalized to the uppercase underscore format so clients
+can reuse them directly when posting events. Responses include a short cache header
+(`Cache-Control: public, max-age=300`).
+
+**Response**
+
+```json
+[
+  {
+    "symptom_code": "HEADACHE",
+    "label": "Headache",
+    "description": "Headache or migraine",
+    "is_active": true
+  },
+  {
+    "symptom_code": "NERVE_PAIN",
+    "label": "Nerve pain",
+    "description": "Pins/needles, burning, or nerve pain",
+    "is_active": true
+  }
+]
 ```
 
 ## GET `/v1/symptoms/today`

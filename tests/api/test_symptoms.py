@@ -172,10 +172,33 @@ def fake_store(monkeypatch):
     async def _diag(conn, user_id, days):
         return store.diag(user_id, days)
 
+    async def _codes(conn, include_inactive=True):  # noqa: ARG001
+        return [
+            {
+                "symptom_code": "NERVE_PAIN",
+                "label": "Nerve pain",
+                "description": "Pins/needles, burning, or nerve pain",
+                "is_active": True,
+            },
+            {
+                "symptom_code": "HEADACHE",
+                "label": "Headache",
+                "description": "Headache or migraine",
+                "is_active": True,
+            },
+            {
+                "symptom_code": "OTHER",
+                "label": "Other",
+                "description": "Other symptom (use notes)",
+                "is_active": True,
+            },
+        ]
+
     monkeypatch.setattr(symptoms_db, "insert_symptom_event", _insert)
     monkeypatch.setattr(symptoms_db, "fetch_symptoms_today", _today)
     monkeypatch.setattr(symptoms_db, "fetch_daily_summary", _daily)
     monkeypatch.setattr(symptoms_db, "fetch_diagnostics", _diag)
+    monkeypatch.setattr(symptoms_db, "fetch_symptom_codes", _codes)
 
     return store
 
@@ -230,7 +253,7 @@ async def test_daily_aggregation_flow(client: AsyncClient, fake_store: FakeSympt
     today_payload = today.json()
     assert today_payload["ok"] is True
     assert len(today_payload["data"]) == 1
-    assert today_payload["data"][0]["symptom_code"] == "headache"
+    assert today_payload["data"][0]["symptom_code"] == "HEADACHE"
 
     daily = await client.get("/v1/symptoms/daily?days=3", headers=headers)
     assert daily.status_code == 200
@@ -239,14 +262,14 @@ async def test_daily_aggregation_flow(client: AsyncClient, fake_store: FakeSympt
     assert daily_rows["data"] == [
         {
             "day": "2024-04-02",
-            "symptom_code": "headache",
+            "symptom_code": "HEADACHE",
             "events": 1,
             "mean_severity": None,
             "last_ts": "2024-04-02T07:45:00+00:00",
         },
         {
             "day": "2024-04-01",
-            "symptom_code": "nerve_pain",
+            "symptom_code": "NERVE_PAIN",
             "events": 2,
             "mean_severity": 3.5,
             "last_ts": "2024-04-01T15:30:00+00:00",
@@ -259,12 +282,12 @@ async def test_daily_aggregation_flow(client: AsyncClient, fake_store: FakeSympt
     assert diag_rows["ok"] is True
     assert diag_rows["data"] == [
         {
-            "symptom_code": "headache",
+            "symptom_code": "HEADACHE",
             "events": 1,
             "last_ts": "2024-04-02T07:45:00+00:00",
         },
         {
-            "symptom_code": "nerve_pain",
+            "symptom_code": "NERVE_PAIN",
             "events": 2,
             "last_ts": "2024-04-01T15:30:00+00:00",
         },
