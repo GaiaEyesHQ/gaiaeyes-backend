@@ -105,12 +105,29 @@ async def samples_batch(
     if not items:
         return {"ok": True, "received": 0, "inserted": 0, "skipped": 0}
 
+    batch_start_iso: str | None = None
+    batch_end_iso: str | None = None
+    batch_user_id: str | None = None
+
     # Debug summary of this batch (types and time window)
     try:
         _types = sorted({s.type for s in items})
-        _start = min(s.start_time for s in items).isoformat()
-        _end = max(s.start_time for s in items).isoformat()
-        logger.info("/samples/batch received=%d types=%s window=[%s..%s]", len(items), _types, _start, _end)
+        batch_start_iso = min(s.start_time for s in items).isoformat()
+        batch_end_iso = max(s.start_time for s in items).isoformat()
+        uid_candidates = {s.user_id for s in items if s.user_id}
+        batch_user_id = None
+        if uid_candidates:
+            if len(uid_candidates) == 1:
+                batch_user_id = str(next(iter(uid_candidates)))
+            else:
+                batch_user_id = "<mixed>"
+        logger.info(
+            "/samples/batch received=%d types=%s window=[%s..%s]",
+            len(items),
+            _types,
+            batch_start_iso,
+            batch_end_iso,
+        )
     except Exception:
         # best-effort only
         pass
@@ -168,6 +185,15 @@ async def samples_batch(
                                 "message": str(e)[:200],
                             })
                 await conn.commit()
+        effective_user = dev_uid or batch_user_id or "<unknown>"
+        logger.info(
+            "/samples/batch committed user=%s received=%d inserted=%d window=[%s..%s]",
+            effective_user,
+            len(items),
+            inserted,
+            batch_start_iso or "?",
+            batch_end_iso or "?",
+        )
     except Exception as e:
         # Return structured response instead of 500 on unexpected failures
         logger.exception("/samples/batch fatal error: %s", e)
