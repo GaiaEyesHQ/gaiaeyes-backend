@@ -34,6 +34,8 @@ _pool: AsyncConnectionPool | None = None
 _pool_lock = asyncio.Lock()
 _pool_open = False
 _pool_last_refresh: Optional[datetime] = None
+_pool_watchdog_task: Optional[asyncio.Task] = None
+_pool_metrics_task: Optional[asyncio.Task] = None
 
 
 def _rebuild_netloc(u) -> str:
@@ -90,15 +92,73 @@ def _log_pool_diag(pool: AsyncConnectionPool) -> None:
     logger.info("[DB] diag: open=%s free=%s waiting=%s", open_count, free_count, waiting)
 
 
+async def _pool_watchdog_loop(pool: AsyncConnectionPool) -> None:
+    global _pool_last_refresh
+    try:
+        while True:
+            await asyncio.sleep(300)
+            if not _pool_open:
+                continue
+            try:
+                await pool.refresh()
+                _pool_last_refresh = datetime.now(timezone.utc)
+                logger.info("[DB] watchdog refresh completed at %s", _pool_last_refresh.isoformat())
+            except Exception as exc:  # pragma: no cover - depends on driver state
+                logger.warning("[DB] watchdog refresh failed: %s", exc)
+    except asyncio.CancelledError:  # pragma: no cover - cooperative shutdown
+        raise
+
+
+async def _pool_metrics_loop(pool: AsyncConnectionPool) -> None:
+    try:
+        while True:
+            await asyncio.sleep(60)
+            if not _pool_open:
+                continue
+            metrics = get_pool_metrics()
+            logger.info(
+                "[DB] pool metrics open=%s used=%s waiting=%s",  # logged to stdout
+                metrics.get("open"),
+                metrics.get("used"),
+                metrics.get("waiting"),
+            )
+    except asyncio.CancelledError:  # pragma: no cover - cooperative shutdown
+        raise
+
+
+def _start_pool_monitors(pool: AsyncConnectionPool) -> None:
+    global _pool_watchdog_task, _pool_metrics_task
+    loop = asyncio.get_running_loop()
+    if _pool_watchdog_task is None or _pool_watchdog_task.done():
+        _pool_watchdog_task = loop.create_task(_pool_watchdog_loop(pool))
+    if _pool_metrics_task is None or _pool_metrics_task.done():
+        _pool_metrics_task = loop.create_task(_pool_metrics_loop(pool))
+
+
+async def _stop_pool_monitors() -> None:
+    global _pool_watchdog_task, _pool_metrics_task
+    for task in (_pool_watchdog_task, _pool_metrics_task):
+        if task is not None:
+            task.cancel()
+    for task in (_pool_watchdog_task, _pool_metrics_task):
+        if task is not None:
+            try:
+                await task
+            except asyncio.CancelledError:  # pragma: no cover - expected on cancel
+                pass
+    _pool_watchdog_task = None
+    _pool_metrics_task = None
+
+
 def _get_or_create_pool() -> AsyncConnectionPool:
     global _pool
     if _pool is None:
         conninfo = _sanitize_conninfo(settings.DATABASE_URL)
         _pool = AsyncConnectionPool(
             conninfo=conninfo,
-            min_size=2,
-            max_size=10,
-            timeout=10,
+            min_size=3,
+            max_size=20,
+            timeout=20,
             max_idle=300,
             open=False,
             check=_check_on_acquire,
@@ -121,6 +181,7 @@ async def open_pool() -> AsyncConnectionPool:
             _pool_last_refresh = datetime.now(timezone.utc)
             _pool_open = True
             _log_pool_diag(pool)
+            _start_pool_monitors(pool)
     return pool
 
 
@@ -128,6 +189,7 @@ async def close_pool() -> None:
     global _pool_open
     async with _pool_lock:
         if _pool and _pool_open:
+            await _stop_pool_monitors()
             await _pool.close()
             _pool_open = False
 
@@ -142,17 +204,18 @@ async def get_db() -> AsyncGenerator:
     attempt = 0
     last_exc: Optional[BaseException] = None
 
-    while attempt < 2:
+    while attempt < 3:
         ctx = pool.connection()
         try:
             conn = await ctx.__aenter__()
         except PoolTimeout as exc:
             last_exc = exc
             _log_pool_diag(pool)
-            if attempt == 0:
-                logger.warning("[DB] pool timeout; retrying after backoff")
-                attempt += 1
-                await asyncio.sleep(1.5)
+            attempt += 1
+            if attempt < 3:
+                backoff = 1.5 * attempt
+                logger.warning("[DB] pool timeout; retrying after %.1fs", backoff)
+                await asyncio.sleep(backoff)
                 continue
             raise
         try:
@@ -177,10 +240,14 @@ def get_pool_metrics() -> Dict[str, Any]:
     open_count = int(stats.get("pool_size", 0))
     free_count = int(stats.get("pool_available", 0))
     waiting = int(stats.get("requests_waiting", 0))
+    used = max(open_count - free_count, 0)
     last_refresh_iso = _pool_last_refresh.isoformat() if _pool_last_refresh else None
+    db_ok = bool(_pool_open)
     return {
         "open": open_count,
         "free": free_count,
+        "used": used,
         "waiting": waiting,
         "last_refresh": last_refresh_iso,
+        "ok": db_ok,
     }
