@@ -172,12 +172,12 @@ async def test_unknown_strict_vs_default(client: AsyncClient, recording_store: R
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    "path, attr, expected_error",
+    "path, attr",
     [
-        ("/v1/symptoms/codes", "fetch_symptom_codes", "Failed to load symptom codes"),
-        ("/v1/symptoms/today", "fetch_symptoms_today", "Failed to load today's symptoms"),
-        ("/v1/symptoms/daily", "fetch_daily_summary", "Failed to load daily symptom summary"),
-        ("/v1/symptoms/diag", "fetch_diagnostics", "Failed to load diagnostic summary"),
+        ("/v1/symptoms/codes", "fetch_symptom_codes"),
+        ("/v1/symptoms/today", "fetch_symptoms_today"),
+        ("/v1/symptoms/daily", "fetch_daily_summary"),
+        ("/v1/symptoms/diag", "fetch_diagnostics"),
     ],
 )
 async def test_symptom_routes_wrap_db_errors(
@@ -185,7 +185,6 @@ async def test_symptom_routes_wrap_db_errors(
     monkeypatch: pytest.MonkeyPatch,
     path: str,
     attr: str,
-    expected_error: str,
 ):
     async def _boom(*args, **kwargs):  # noqa: ARG001
         raise RuntimeError("db boom")
@@ -202,7 +201,7 @@ async def test_symptom_routes_wrap_db_errors(
     payload = response.json()
     assert payload["ok"] is False
     assert payload["data"] == []
-    assert payload["error"] == expected_error
+    assert payload["error"] == "db boom"
 
 
 @pytest.mark.anyio
@@ -222,4 +221,4 @@ async def test_post_symptom_returns_normalized_error(client: AsyncClient, monkey
     payload = response.json()
     assert payload["ok"] is False
     assert payload["data"] is None
-    assert payload["error"] == "Failed to load symptom codes"
+    assert payload["error"] == "no db"
