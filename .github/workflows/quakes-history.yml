@@ -1,69 +1,75 @@
-name: quakes-history
-permissions:
-  contents: write
-  issues: write
+name: Global Hazards → WordPress
+
 on:
   schedule:
-    - cron: "15 5 * * *"   # daily 05:15 UTC
+    - cron: "*/10 * * * *" # every 10 minutes
   workflow_dispatch: {}
 
 jobs:
   run:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      issues: write
     env:
-      MEDIA_REPO_OWNER: GaiaEyesHQ
-      MEDIA_REPO_NAME: gaiaeyes-media
-      GAIAEYES_MEDIA_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
+      WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
+      WP_USERNAME: ${{ secrets.WP_USERNAME }}
+      WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Checkout media repo
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          repository: ${{ env.MEDIA_REPO_OWNER }}/${{ env.MEDIA_REPO_NAME }}
-          token: ${{ env.GAIAEYES_MEDIA_TOKEN }}
-          path: gaiaeyes-media
+          python-version: "3.11"
 
-      - name: Generate quakes_history.json
-        env:
-          OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/quakes_history.json
-          HISTORY_MONTHS: "24"
-          HISTORY_DAYS: "730"
+      - name: Install dependencies
         run: |
-          python3 scripts/ingest_usgs_history.py
+          python -m pip install -U pip
+          pip install -r bots/hazards/requirements.txt
 
-        - name: Commit & push
-          run: |
-            set -euo pipefail
-            cd gaiaeyes-media
-            git config user.name  "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git config pull.rebase true
-            if git status --porcelain | grep -E "quakes_history\.json" > /dev/null; then
-              git add data/quakes_history.json || true
-            else
-              echo "No changes."
-              exit 0
-            fi
-            if git diff --cached --quiet; then
-              echo "No changes."
-              exit 0
-            fi
-            git commit -m "chore: update quakes_history.json [skip ci]"
-            git fetch origin main || true
-            git pull --rebase origin main || true
-            for attempt in 1 2 3; do
-              if git push origin HEAD:main; then
-                echo "Push succeeded on attempt ${attempt}."
-                exit 0
-              fi
-              echo "Push failed on attempt ${attempt}; rebasing and retrying…"
-              git fetch origin main || true
-              git pull --rebase origin main || true
-              sleep $((RANDOM % 4 + 2))
-            done
-            echo "ERROR: Could not push after 3 attempts."
-            exit 1
+      - name: Run Hazards Bot
+        run: |
+          python bots/hazards/hazards_bot.py run
+
+      - name: Publish latest.json to media repo
+        if: ${{ secrets.GH_PAT && secrets.MEDIA_REPO }}
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          MEDIA_REPO: ${{ secrets.MEDIA_REPO }}
+          MEDIA_BRANCH: ${{ secrets.MEDIA_BRANCH }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="${GITHUB_WORKSPACE}/bots/hazards/out/latest.json"
+          if [[ ! -f "$FILE" ]]; then
+            echo "::warning::No latest.json found; skipping publish"
+            exit 0
+          fi
+
+          BRANCH="${MEDIA_BRANCH:-main}"
+          echo "Publishing $FILE → ${MEDIA_REPO}:${BRANCH}/public/hazards/latest.json"
+
+          TMPDIR=$(mktemp -d)
+          cd "$TMPDIR"
+          git init -b "$BRANCH"
+          git config user.email "actions@users.noreply.github.com"
+          git config user.name "GitHub Actions"
+
+          git remote add origin "https://x-access-token:${GH_PAT}@github.com/${MEDIA_REPO}.git"
+          if git ls-remote --exit-code origin "refs/heads/${BRANCH}" >/dev/null 2>&1; then
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+          fi
+
+          mkdir -p public/hazards
+          cp "$FILE" public/hazards/latest.json
+          git add public/hazards/latest.json
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "update hazards latest.json ($(date -u +'%Y-%m-%dT%H:%M:%SZ'))"
+            git push origin "$BRANCH"
+          fi
+
+          echo "✅ Publish step complete."
