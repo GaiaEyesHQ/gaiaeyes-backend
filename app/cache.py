@@ -15,6 +15,9 @@ import time
 from collections import OrderedDict
 from typing import Any, Dict, Optional
 
+from decimal import Decimal
+from uuid import UUID
+
 from .db import settings
 
 try:  # pragma: no cover - exercised in environments with Redis available
@@ -65,6 +68,11 @@ _redis_attempted = False
 
 
 def _json_default(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        # Preserve numeric semantics while ensuring JSON compatibility
+        return float(value)
+    if isinstance(value, UUID):
+        return str(value)
     if hasattr(value, "isoformat"):
         try:
             return value.isoformat()
