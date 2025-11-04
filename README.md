@@ -7,6 +7,14 @@ pip install -r requirements.txt
 cp .env.example .env  # then edit values
 uvicorn app.main:app --reload
 
+## Symptoms pipeline
+
+The `/v1/symptoms` FastAPI routes expose the complete symptom logging workflow.
+Clients can POST new events, fetch the current day's entries, and retrieve
+aggregated daily counts. A nightly Render cron (or equivalent scheduler) should
+invoke `scripts/refresh_symptom_marts.py` to refresh the Supabase marts backing
+the analytics endpoints.
+
 ## Tooling
 
 - [GitHub Actions audit playbook](./docs/github-actions-audit.md)
