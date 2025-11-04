@@ -1,0 +1,58 @@
+name: Global Hazards → WordPress
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
+      WP_USERNAME: ${{ secrets.WP_USERNAME }}
+      WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          pip install -r bots/hazards/requirements.txt
+
+      - name: Run Hazards Bot
+        run: |
+          python bots/hazards/hazards_bot.py run
+
+      - name: Publish latest.json to media repo (optional)
+        if: ${{ secrets.GH_PAT != '' && secrets.MEDIA_REPO != '' }}
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          MEDIA_REPO: ${{ secrets.MEDIA_REPO }}
+          MEDIA_BRANCH: ${{ secrets.MEDIA_BRANCH || 'main' }}
+        run: |
+          set -euo pipefail
+          echo "Publishing bots/hazards/out/latest.json to ${MEDIA_REPO}:/public/hazards/latest.json"
+          mkdir -p /tmp/media
+          git -c init.defaultBranch="${MEDIA_BRANCH}" init /tmp/media
+          cd /tmp/media
+          git remote add origin "https://x-access-token:${GH_PAT}@github.com/${MEDIA_REPO}.git"
+          git fetch origin "${MEDIA_BRANCH}" || true
+          git checkout -B "${MEDIA_BRANCH}" || git checkout "${MEDIA_BRANCH}"
+          mkdir -p public/hazards
+          cp "${GITHUB_WORKSPACE}/bots/hazards/out/latest.json" public/hazards/latest.json
+          git add public/hazards/latest.json
+          if git diff --cached --quiet; then
+            echo "No changes to latest.json"
+          else
+            git config user.email "actions@users.noreply.github.com"
+            git config user.name  "GitHub Actions"
+            git commit -m "chore: update hazards latest.json ($(date -u +'%Y-%m-%dT%H:%M:%SZ'))"
+            git push origin "${MEDIA_BRANCH}"
+          fi
