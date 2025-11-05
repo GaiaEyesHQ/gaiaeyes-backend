@@ -24,10 +24,48 @@ UTC = timezone.utc
 
 DB_PATH = os.path.join(SCRIPT_DIR, "hazards.sqlite")
 
-USGS_URLS = {
-    "M5_week": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/5.0_week.geojson",
-}
-GDACS_EVENTLIST = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/JSON"
+# Candidate endpoints (providers sometimes rotate or rate-limit)
+USGS_ENDPOINTS = [
+    # User-preferred: only significant events
+    "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_hour.geojson",
+    "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.geojson",
+    "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_week.geojson",
+    # Fallback (48h window via FDSN)
+    "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&minmagnitude=5&starttime={start}",
+]
+GDACS_ENDPOINTS = [
+    # User-preferred: last 100 latest events
+    "https://www.gdacs.org/gdacsapi/api/events/geteventlist/latest",
+    # Fallbacks
+    "https://www.gdacs.org/gdacsapi/api/events/geteventlist/JSON",
+    "https://www.gdacs.org/gdacsapi/api/events/geteventlist/Json",
+    "https://www.gdacs.org/gdacsapi/api/events/geteventlist/json",
+    "https://www.gdacs.org/gdacsapi/api/events/geteventlist",
+]
+
+
+# Helper to try multiple endpoints with fallback and friendly User-Agent
+def fetch_json_any(urls: List[str], *, params: Optional[dict]=None, timeout: int=20) -> Optional[dict]:
+    headers = {
+        "Accept": "application/json, application/*+json",
+        "User-Agent": "GaiaEyes-HazardsBot/1.0 (+https://gaiaeyes.com)"
+    }
+    last_exc = None
+    for raw in urls:
+        url = raw
+        try:
+            resp = requests.get(url, headers=headers, params=params, timeout=timeout)
+            if resp.status_code == 404 or resp.status_code == 403:
+                last_exc = Exception(f"{resp.status_code} for {url}")
+                continue
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            last_exc = e
+            continue
+    if last_exc:
+        raise last_exc
+    return None
 
 
 def now_utc() -> datetime:
@@ -208,9 +246,16 @@ def severity_from_gdacs_color(color: str) -> str:
 
 
 def fetch_usgs() -> List[dict]:
-    response = requests.get(USGS_URLS["M5_week"], timeout=15)
-    response.raise_for_status()
-    geojson = response.json()
+    # try USGS GeoJSON summary feeds first; fallback to FDSN query for the last 48h
+    start_iso = (now_utc() - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%S")
+    geojson = None
+    try:
+        geojson = fetch_json_any(USGS_ENDPOINTS[:2], timeout=20)
+    except Exception:
+        # fallback to FDSN query form
+        geojson = fetch_json_any([USGS_ENDPOINTS[2].format(start=start_iso)], timeout=25)
+    if not geojson:
+        return []
     items: List[dict] = []
     for feature in geojson.get("features", []):
         properties = feature.get("properties", {}) or {}
@@ -253,9 +298,9 @@ def fetch_usgs() -> List[dict]:
 
 
 def fetch_gdacs() -> List[dict]:
-    response = requests.get(GDACS_EVENTLIST, timeout=20)
-    response.raise_for_status()
-    data = response.json()
+    data = fetch_json_any(GDACS_ENDPOINTS, timeout=25)
+    if not data:
+        return []
     results: List[dict] = []
     for event in data.get("features", []):
         properties = event.get("properties", {}) or {}
@@ -467,7 +512,7 @@ def run_once() -> None:
         print("[warn] VAAC fetch failed:", exc, file=sys.stderr)
 
     if not items:
-        print("[info] No items fetched.")
+        print("[info] No items fetched (all upstream candidates returned no data or 4xx).")
         return
 
     items = dedupe(items)
