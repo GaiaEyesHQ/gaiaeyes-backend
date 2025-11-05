@@ -438,10 +438,13 @@ def fetch_media_quakes() -> List[dict]:
             })
         return items
 
-    # Case 2: Wrapped list under "items"
+    # Case 2: Wrapped list under "items" (generic)
     if isinstance(data, dict) and isinstance(data.get("items"), list):
         data_list = data["items"]
-    # Case 3: Already a list
+    # Case 3: Wrapped list under "events" (media schema)
+    elif isinstance(data, dict) and isinstance(data.get("events"), list):
+        data_list = data["events"]
+    # Case 4: Already a list
     elif isinstance(data, list):
         data_list = data
     else:
@@ -452,7 +455,7 @@ def fetch_media_quakes() -> List[dict]:
             continue
         mag = q.get("mag") or q.get("magnitude")
         # time can be ISO string, unix ms, or present under ts
-        ts_val = q.get("time") or q.get("ts")
+        ts_val = q.get("time") or q.get("ts") or q.get("time_utc")
         ts = None
         if isinstance(ts_val, (int, float)):
             # heuristics: treat large values as ms
@@ -466,7 +469,7 @@ def fetch_media_quakes() -> List[dict]:
             continue
         lat = q.get("lat") or q.get("latitude")
         lon = q.get("lon") or q.get("longitude")
-        src_id = str(q.get("id") or q.get("code") or f"{lat},{lon},{iso(ts)}")
+        src_id = str(q.get("id") or q.get("code") or q.get("usgs_id") or f"{lat},{lon},{iso(ts)}")
         title = q.get("title") or q.get("place") or "Earthquake"
         url = q.get("url")
         sev = severity_quake_usgs(float(mag) if isinstance(mag, (int, float)) else 0.0)
