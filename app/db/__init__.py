@@ -79,6 +79,8 @@ def _sanitize_conninfo(dsn: str) -> str:
 
 
 async def _check_on_acquire(conn) -> None:
+    # Ensure a per-connection statement timeout and a quick ping
+    await conn.execute(f"set statement_timeout = {_STATEMENT_TIMEOUT_MS}")
     async with conn.cursor() as cur:
         await cur.execute("select 1;")
 
@@ -156,11 +158,14 @@ def _get_or_create_pool() -> AsyncConnectionPool:
     global _pool
     if _pool is None:
         conninfo = _sanitize_conninfo(settings.DATABASE_URL)
+        # NOTE: Supabase + pgBouncer (transaction mode) favors a small client pool.
+        # Large client pools can cause churn and apparent flapping. Keep min small,
+        # cap max to single digits, and use short acquire timeout to fail fast.
         _pool = AsyncConnectionPool(
             conninfo=conninfo,
-            min_size=3,
-            max_size=20,
-            timeout=20,
+            min_size=2,
+            max_size=8,
+            timeout=8,
             max_idle=300,
             open=False,
             check=_check_on_acquire,
