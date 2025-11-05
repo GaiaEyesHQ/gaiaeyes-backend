@@ -1,5 +1,6 @@
 name: Global Hazards → WordPress
-
+permissions:
+  contents: write
 on:
   schedule:
     - cron: "*/10 * * * *" # every 10 minutes
@@ -8,13 +9,15 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
       WP_USERNAME: ${{ secrets.WP_USERNAME }}
       WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout backend repo
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -27,49 +30,64 @@ jobs:
           python -m pip install -U pip
           pip install -r bots/hazards/requirements.txt
 
-      - name: Run Hazards Bot
+      - name: Run Hazards Bot (builds bots/hazards/out/latest.json)
         run: |
           python bots/hazards/hazards_bot.py run
 
-      - name: Publish latest.json to media repo
-        if: ${{ secrets.GH_PAT && secrets.MEDIA_REPO }}
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-          MEDIA_REPO: ${{ secrets.MEDIA_REPO }}
-          MEDIA_BRANCH: ${{ secrets.MEDIA_BRANCH }}
+      # === Publish to media repo using GAIAEYES_MEDIA_TOKEN (same pattern as space-visuals) ===
+      - name: Checkout media repo
+        uses: actions/checkout@v4
+        with:
+          repository: GaiaEyesHQ/gaiaeyes-media
+          token: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
+          path: gaiaeyes-media
+
+      - name: Copy latest.json into media repo
         shell: bash
         run: |
           set -euo pipefail
-          FILE="${GITHUB_WORKSPACE}/bots/hazards/out/latest.json"
-          if [[ ! -f "$FILE" ]]; then
-            echo "::warning::No latest.json found; skipping publish"
+          SRC="${GITHUB_WORKSPACE}/bots/hazards/out/latest.json"
+          DEST_DIR="${GITHUB_WORKSPACE}/gaiaeyes-media/public/hazards"
+          if [[ ! -f "$SRC" ]]; then
+            echo "::warning::No latest.json produced; skipping publish."
+            exit 0
+          fi
+          mkdir -p "$DEST_DIR"
+          cp "$SRC" "$DEST_DIR/latest.json"
+
+      - name: Commit & push latest.json to media repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd gaiaeyes-media
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config pull.rebase true
+
+          git add public/hazards/latest.json || true
+
+          if git diff --cached --quiet; then
+            echo "No changes."
             exit 0
           fi
 
-          BRANCH="${MEDIA_BRANCH:-main}"
-          echo "Publishing $FILE → ${MEDIA_REPO}:${BRANCH}/public/hazards/latest.json"
+          git commit -m "chore: update hazards latest.json [skip ci]"
 
-          TMPDIR=$(mktemp -d)
-          cd "$TMPDIR"
-          git init -b "$BRANCH"
-          git config user.email "actions@users.noreply.github.com"
-          git config user.name "GitHub Actions"
+          # Ensure we're up to date with remote main before pushing
+          git fetch origin main || true
+          git pull --rebase origin main || true
 
-          git remote add origin "https://x-access-token:${GH_PAT}@github.com/${MEDIA_REPO}.git"
-          if git ls-remote --exit-code origin "refs/heads/${BRANCH}" >/dev/null 2>&1; then
-            git fetch origin "$BRANCH"
-            git checkout "$BRANCH"
-          fi
+          # Retry push up to 3 times
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "Push succeeded on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push failed on attempt ${attempt}; rebasing and retrying…"
+            git fetch origin main || true
+            git pull --rebase origin main || true
+            sleep $((RANDOM % 4 + 2))
+          done
 
-          mkdir -p public/hazards
-          cp "$FILE" public/hazards/latest.json
-          git add public/hazards/latest.json
-
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "update hazards latest.json ($(date -u +'%Y-%m-%dT%H:%M:%SZ'))"
-            git push origin "$BRANCH"
-          fi
-
-          echo "✅ Publish step complete."
+          echo "ERROR: Could not push after 3 attempts."
+          exit 1
