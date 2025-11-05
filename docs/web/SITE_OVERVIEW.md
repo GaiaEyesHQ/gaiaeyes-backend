@@ -6,8 +6,8 @@ This guide maps the Gaia Eyes WordPress front-end (staging: https://staging2.gai
 
 | Item | Value |
 | --- | --- |
-| Sections covered | 10 major dashboards & widgets |
-| External assets tracked | 85 unique URLs (see `ASSET_INVENTORY.json`) |
+| Sections covered | 11 major dashboards & widgets (new Hazards Brief) |
+| External assets tracked | 86 unique URLs (see `ASSET_INVENTORY.json`) |
 | Sparkline helper adoption | Space Dashboard & Space Weather sections now use `GaiaSpark.renderSpark` |
 | Nightly asset audit | `.github/workflows/site-assets-check.yml` runs HEAD checks for every URL in the inventory |
 
@@ -15,6 +15,7 @@ This guide maps the Gaia Eyes WordPress front-end (staging: https://staging2.gai
 
 ```mermaid
 graph TD
+  RootHome["Homepage (/)"] --> HazardsBrief[["[gaia_hazards_brief]"\nmu-plugins/gaia-hazards-brief.php]]
   RootSpaceDashboard["Space Dashboard (/space-dashboard/)"] --> SWDetail[["[gaia_space_weather_detail]"\nmu-plugins/gaiaeyes-space-weather-detail.php]]
   RootSpaceDashboard --> SpaceDetail[["[gaia_space_detail]"\nmu-plugins/gaiaeyes-space-visuals.php]]
   RootSpaceDashboard --> KPBadge[["gaiaeyes-kp-badge.php"\nHeader badge injector]]
@@ -82,6 +83,40 @@ GaiaSpark.renderSpark(canvasOrId, data, {
 ---
 
 ## Section Guides
+
+### Hazards Brief (Homepage snapshot)
+
+* Location: Homepage hero region (auto-injected ahead of content via `the_content` filter).
+* Shortcode: `[gaia_hazards_brief url="https://gaiaeyeshq.github.io/gaiaeyes-media/public/hazards/latest.json" cache="5"]`
+* PHP: `wp-content/mu-plugins/gaia-hazards-brief.php`
+
+**DOM outline**
+
+```
+- section.gaia-hazards-brief
+  - header.ghb-head (title + timestamp)
+  - div.ghb-row
+    - div.ghb-card (severity counts)
+    - div.ghb-card (type counts)
+    - div.ghb-card (top highlights + digest link)
+```
+
+**Data flow & caching**
+
+* Fetches `public/hazards/latest.json` with a configurable 5-minute transient.
+* `hazards.yml` GitHub Action runs every 10 minutes to rebuild and publish `latest.json`.
+* If the hazards digest category has published posts, the card links to the newest article.
+
+**Presentation notes**
+
+* CSS lives inline inside the shortcode for self-containment; cards stack on mobile and switch to 3-column ≥768 px.
+* Severity badges map to `red`, `orange`, `yellow`, `info`; add new severities in the `$severity_counts` map.
+* Auto-injection is skipped when the shortcode already appears in the page content.
+
+**Maintenance notes**
+
+* Extend the `$type_counts` map to surface new hazard types (e.g., `flood`).
+* Update copy or layout inside the shortcode—no separate template file.
 
 ### Space Detail (Space Dashboard visuals)
 
@@ -397,5 +432,6 @@ This section focuses on the spark helper usage inside the Space Dashboard.
 
 * `docs/web/ASSET_INVENTORY.json` – generated inventory with status, size, and timing for every external asset per section. Update after adding/removing assets.
 * `.github/workflows/site-assets-check.yml` – nightly (07:00 UTC) HEAD check over inventory; fails on 404/5xx so broken feeds surface quickly.
+* `.github/workflows/hazards.yml` – builds the Global Hazards snapshot every 10 minutes and publishes to the media repo for the homepage brief.
 * Use the asset inventory to flag new oversized downloads (>2 MB) and annotate them in the TODO table above.
 
