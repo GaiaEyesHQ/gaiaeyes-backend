@@ -34,7 +34,7 @@ _backlog_drain_lock = asyncio.Lock()
 _backlog_task_factory: Callable[[Awaitable[None]], asyncio.Task] = asyncio.create_task
 _recent_refresh_requests: Dict[str, float] = {}
 _recent_refresh_lock = asyncio.Lock()
-_INGEST_REFRESH_DEBOUNCE_SECONDS = 60.0
+_INGEST_REFRESH_DEBOUNCE_SECONDS = 20.0
 
 # Legacy compatibility for tests expecting direct access to the refresh registry
 _refresh_registry = _summary_module._refresh_registry
@@ -375,6 +375,9 @@ async def samples_batch(
     elif batch_user_id and batch_user_id not in {"<mixed>", "<unknown>"}:
         refresh_user = batch_user_id
 
+    if REFRESH_DISABLED:
+        logger.warning("[MART] refresh disabled by env (MART_REFRESH_DISABLE)")
+
     buffer_entry = {
         "samples": [_sample_to_dict(sample) for sample, _ in valid_rows],
         "dev_uid": dev_uid,
@@ -477,6 +480,20 @@ async def samples_batch(
     }
 
 
+
+# Run mart_refresh in the background after a small delay
+async def _delayed_mart_refresh(user_id: str, day_local: date, inserted: int) -> None:
+    try:
+        await asyncio.sleep(2.0)
+        scheduled = await mart_refresh(user_id, day_local)
+        if scheduled:
+            logger.info("[MART] scheduled refresh (delayed) user=%s inserted=%d", user_id, inserted)
+        else:
+            logger.debug("[MART] refresh not scheduled (debounced) user=%s", user_id)
+    except Exception as exc:
+        logger.warning("[MART] delayed refresh error user=%s: %s", user_id, exc)
+
+
 async def _maybe_schedule_refresh(user_id: str, day_local: date, inserted: int) -> bool:
     loop = asyncio.get_running_loop()
     now = loop.time()
@@ -489,9 +506,8 @@ async def _maybe_schedule_refresh(user_id: str, day_local: date, inserted: int) 
                 _INGEST_REFRESH_DEBOUNCE_SECONDS,
             )
             return False
-    scheduled = await mart_refresh(user_id, day_local)
-    if scheduled:
-        async with _recent_refresh_lock:
-            _recent_refresh_requests[user_id] = loop.time()
-        logger.info("[MART] scheduled refresh user=%s inserted=%d", user_id, inserted)
-    return scheduled
+    # Run refresh in the background after a short delay; do not block the request path
+    _refresh_task_factory(_delayed_mart_refresh(user_id, day_local, inserted))
+    async with _recent_refresh_lock:
+        _recent_refresh_requests[user_id] = loop.time()
+    return True
