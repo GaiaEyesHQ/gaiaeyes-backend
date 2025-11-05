@@ -13,9 +13,9 @@ from psycopg_pool.errors import PoolTimeout
 from fastapi import APIRouter, Body, Depends, Request, Header, HTTPException, status, Query
 from pydantic import BaseModel
 
-from ..db import get_pool, settings, get_db_health_cached, register_health_listener
+from ..db import get_pool, settings  # settings.DEV_BEARER, async pg pool
 from . import summary as _summary_module
-from .summary import enqueue_refresh_today
+from .summary import mart_refresh
 
 from zoneinfo import ZoneInfo
 from os import getenv
@@ -141,46 +141,30 @@ def _start_backlog_drain(pool) -> None:
     _backlog_task_factory(_drain_backlog(pool))
 
 
-async def _on_db_health_change(status: bool) -> None:
-    if not status:
-        return
-    try:
-        pool = await get_pool()
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.debug("[BATCH] backlog drain skipped on health flip: %s", exc)
-        return
-    _start_backlog_drain(pool)
-
-
-register_health_listener(_on_db_health_change)
-
-
 async def safe_insert_batch(
     pool,
     rows: List[Tuple[SampleIn, int]],
     dev_uid: Optional[str],
 ) -> Tuple[int, int, List[Dict[str, Any]]]:
-    retry_delays = [0.5, 1.0]
     attempt = 0
-    while True:
+    delay = 0.5
+    last_exc: Optional[BaseException] = None
+    while attempt < 3:
         try:
             return await _insert_batch_once(pool, rows, dev_uid)
-        except (PoolTimeout, OperationalError) as exc:
-            if attempt >= len(retry_delays):
-                logger.error("[BATCH] insert failed after retries: %s", exc)
-                raise BatchInsertError("db_timeout", exc)
-            delay = retry_delays[attempt]
-            attempt += 1
-            logger.warning(
-                "[BATCH] retrying insert attempt=%d delay=%.1fs error=%s",
-                attempt + 1,
-                delay,
-                exc,
-            )
-            await asyncio.sleep(delay)
-            continue
-        except Exception as exc:
+        except PoolTimeout as exc:
             raise BatchInsertError("db_timeout", exc)
+        except OperationalError as exc:
+            last_exc = exc
+            attempt += 1
+            if attempt >= 3:
+                logger.error("[BATCH] insert failed after retries: %s", exc)
+                raise BatchInsertError("db_unavailable", exc)
+            logger.warning("[BATCH] retrying insert... attempt=%d error=%s", attempt, exc)
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 5.0)
+
+    raise BatchInsertError("db_unavailable", last_exc)
 
 
 async def _insert_batch_once(
@@ -401,25 +385,7 @@ async def samples_batch(
     inserted = 0
     db_skipped = 0
     db_errors: List[Dict[str, Any]] = []
-
-    db_status, sticky_age_ms = get_db_health_cached()
-    if not db_status:
-        if valid_rows:
-            await _enqueue_backlog(buffer_entry)
-        errors = list(validation_errors)
-        errors.append({"reason": "db_unavailable"})
-        skipped_total = received
-        _log_batch_summary(effective_user or "<unknown>", received, 0, skipped_total, False)
-        return {
-            "ok": False,
-            "received": received,
-            "inserted": 0,
-            "skipped": skipped_total,
-            "db": False,
-            "errors": errors,
-            "error": "db_unavailable",
-            "db_sticky_age": sticky_age_ms,
-        }
+    db_healthy = True
 
     try:
         pool = await get_pool()
@@ -428,14 +394,14 @@ async def samples_batch(
         if valid_rows:
             await _enqueue_backlog(buffer_entry)
         errors = list(validation_errors)
-        errors.append({"reason": "db_timeout"})
-        skipped_total = validation_skipped + len(valid_rows)
-        _log_batch_summary(effective_user or "<unknown>", received, 0, skipped_total, False)
+        if not errors:
+            errors = [{"reason": "db_timeout"}]
+        _log_batch_summary(effective_user or "<unknown>", received, 0, validation_skipped + len(valid_rows), False)
         return {
             "ok": False,
             "received": received,
             "inserted": 0,
-            "skipped": skipped_total,
+            "skipped": validation_skipped + len(valid_rows),
             "db": False,
             "errors": errors,
             "error": "db_timeout",
@@ -443,7 +409,8 @@ async def samples_batch(
     except Exception as exc:
         logger.exception("/samples/batch unexpected pool error: %s", exc)
         errors = list(validation_errors)
-        errors.append({"reason": "server_error", "message": str(exc)[:200]})
+        if not errors:
+            errors = [{"reason": "server_error", "message": str(exc)[:200]}]
         _log_batch_summary(effective_user or "<unknown>", received, 0, received, False)
         return {
             "ok": False,
@@ -455,25 +422,22 @@ async def samples_batch(
             "error": "server_error",
         }
 
-    if _backlog:
-        _start_backlog_drain(pool)
-
     if valid_rows:
         try:
             inserted, db_skipped, db_errors = await safe_insert_batch(pool, valid_rows, dev_uid)
         except BatchInsertError as exc:
+            db_healthy = False
             if valid_rows:
                 await _enqueue_backlog(buffer_entry)
             combined_errors = validation_errors + (db_errors or [])
             if not combined_errors:
                 combined_errors = [{"reason": exc.reason}]
-            skipped_total = validation_skipped + len(valid_rows)
-            _log_batch_summary(effective_user or "<unknown>", received, 0, skipped_total, False)
+            _log_batch_summary(effective_user or "<unknown>", received, 0, validation_skipped + len(valid_rows), False)
             return {
                 "ok": False,
                 "received": received,
                 "inserted": 0,
-                "skipped": skipped_total,
+                "skipped": validation_skipped + len(valid_rows),
                 "db": False,
                 "errors": combined_errors,
                 "error": exc.reason,
@@ -493,21 +457,21 @@ async def samples_batch(
         batch_end_iso or "?",
     )
 
-    if valid_rows and inserted > 0 and refresh_user and not REFRESH_DISABLED:
-        day_local = _today_local(tzinfo)
-        await _maybe_schedule_refresh(refresh_user, day_local, inserted)
+    if db_healthy:
+        if valid_rows and inserted > 0 and refresh_user and not REFRESH_DISABLED:
+            day_local = _today_local(tzinfo)
+            await _maybe_schedule_refresh(refresh_user, day_local, inserted)
+        if valid_rows or _backlog:
+            _start_backlog_drain(pool)
 
-    if valid_rows and inserted > 0:
-        _start_backlog_drain(pool)
-
-    _log_batch_summary(effective_user, received, inserted, total_skipped, True)
+    _log_batch_summary(effective_user, received, inserted, total_skipped, db_healthy)
 
     return {
-        "ok": True,
+        "ok": db_healthy,
         "received": received,
         "inserted": inserted,
         "skipped": total_skipped,
-        "db": True,
+        "db": db_healthy,
         "errors": combined_errors,
         "error": None,
     }
@@ -525,7 +489,7 @@ async def _maybe_schedule_refresh(user_id: str, day_local: date, inserted: int) 
                 _INGEST_REFRESH_DEBOUNCE_SECONDS,
             )
             return False
-    scheduled = await enqueue_refresh_today(user_id, day_local)
+    scheduled = await mart_refresh(user_id, day_local)
     if scheduled:
         async with _recent_refresh_lock:
             _recent_refresh_requests[user_id] = loop.time()
