@@ -32,6 +32,9 @@ _backlog = deque()
 _backlog_lock = asyncio.Lock()
 _backlog_drain_lock = asyncio.Lock()
 _backlog_task_factory: Callable[[Awaitable[None]], asyncio.Task] = asyncio.create_task
+_recent_refresh_requests: Dict[str, float] = {}
+_recent_refresh_lock = asyncio.Lock()
+_INGEST_REFRESH_DEBOUNCE_SECONDS = 60.0
 
 # Legacy compatibility for tests expecting direct access to the refresh registry
 _refresh_registry = _summary_module._refresh_registry
@@ -114,10 +117,11 @@ async def _drain_backlog(pool) -> None:
                     _backlog.appendleft(entry)
                 break
 
+            scheduled_refresh = False
             if inserted > 0 and refresh_user and not REFRESH_DISABLED:
                 tz_resolved, tzinfo = _resolve_timezone(tz_name)
                 day_local = _today_local(tzinfo)
-                await mart_refresh(refresh_user, day_local)
+                scheduled_refresh = await _maybe_schedule_refresh(refresh_user, day_local, inserted)
                 logger.info(
                     "[BATCH] drained backlog for user=%s tz=%s inserted=%d skipped=%d",
                     refresh_user,
@@ -125,6 +129,8 @@ async def _drain_backlog(pool) -> None:
                     inserted,
                     skipped,
                 )
+                if scheduled_refresh:
+                    logger.debug("[BATCH] backlog refresh scheduled user=%s", refresh_user)
 
 
 def _start_backlog_drain(pool) -> None:
@@ -284,6 +290,17 @@ on conflict (user_id, type, start_time, end_time) do nothing
 """
 
 
+def _log_batch_summary(user: str, received: int, inserted: int, skipped: int, db_ok: bool) -> None:
+    logger.info(
+        "[BATCH] result user=%s received=%d inserted=%d skipped=%d db=%s",
+        user,
+        received,
+        inserted,
+        skipped,
+        db_ok,
+    )
+
+
 @router.post("/samples/batch")
 @router.post("/v1/samples/batch")  # compatibility path so clients using /v1/... also hit this handler
 async def samples_batch(
@@ -295,6 +312,7 @@ async def samples_batch(
     # Normalize payload to list
     items = payload.samples if isinstance(payload, SamplesWrapper) else (payload or [])
     if not items:
+        _log_batch_summary("<empty>", 0, 0, 0, True)
         return {"ok": True, "received": 0, "inserted": 0, "skipped": 0, "db": True, "errors": [], "error": None}
 
     batch_start_iso: str | None = None
@@ -327,6 +345,7 @@ async def samples_batch(
     # Optional header override of user_id (useful for dev/testing)
     x_uid = request.headers.get("X-Dev-UserId", "").strip() or None
     dev_uid = x_uid
+    effective_user = dev_uid or "<unknown>"
 
     tz_name, tzinfo = _resolve_timezone(tz)
     received = len(items)
@@ -377,6 +396,7 @@ async def samples_batch(
         errors = list(validation_errors)
         if not errors:
             errors = [{"reason": "db_timeout"}]
+        _log_batch_summary(effective_user or "<unknown>", received, 0, validation_skipped + len(valid_rows), False)
         return {
             "ok": False,
             "received": received,
@@ -391,6 +411,7 @@ async def samples_batch(
         errors = list(validation_errors)
         if not errors:
             errors = [{"reason": "server_error", "message": str(exc)[:200]}]
+        _log_batch_summary(effective_user or "<unknown>", received, 0, received, False)
         return {
             "ok": False,
             "received": received,
@@ -411,6 +432,7 @@ async def samples_batch(
             combined_errors = validation_errors + (db_errors or [])
             if not combined_errors:
                 combined_errors = [{"reason": exc.reason}]
+            _log_batch_summary(effective_user or "<unknown>", received, 0, validation_skipped + len(valid_rows), False)
             return {
                 "ok": False,
                 "received": received,
@@ -424,7 +446,7 @@ async def samples_batch(
     total_skipped = validation_skipped + db_skipped
     combined_errors = validation_errors + db_errors
 
-    effective_user = dev_uid or batch_user_id or "<unknown>"
+    effective_user = dev_uid or batch_user_id or effective_user
     logger.info(
         "/samples/batch committed user=%s received=%d inserted=%d skipped=%d window=[%s..%s]",
         effective_user,
@@ -438,9 +460,11 @@ async def samples_batch(
     if db_healthy:
         if valid_rows and inserted > 0 and refresh_user and not REFRESH_DISABLED:
             day_local = _today_local(tzinfo)
-            await mart_refresh(refresh_user, day_local)
+            await _maybe_schedule_refresh(refresh_user, day_local, inserted)
         if valid_rows or _backlog:
             _start_backlog_drain(pool)
+
+    _log_batch_summary(effective_user, received, inserted, total_skipped, db_healthy)
 
     return {
         "ok": db_healthy,
@@ -451,3 +475,23 @@ async def samples_batch(
         "errors": combined_errors,
         "error": None,
     }
+
+
+async def _maybe_schedule_refresh(user_id: str, day_local: date, inserted: int) -> bool:
+    loop = asyncio.get_running_loop()
+    now = loop.time()
+    async with _recent_refresh_lock:
+        last = _recent_refresh_requests.get(user_id)
+        if last and now - last < _INGEST_REFRESH_DEBOUNCE_SECONDS:
+            logger.debug(
+                "[MART] refresh skipped user=%s (ingest debounce %.0fs)",
+                user_id,
+                _INGEST_REFRESH_DEBOUNCE_SECONDS,
+            )
+            return False
+    scheduled = await mart_refresh(user_id, day_local)
+    if scheduled:
+        async with _recent_refresh_lock:
+            _recent_refresh_requests[user_id] = loop.time()
+        logger.info("[MART] scheduled refresh user=%s inserted=%d", user_id, inserted)
+    return scheduled

@@ -84,6 +84,8 @@ def anyio_backend():
 @pytest.mark.anyio
 async def test_refresh_scheduled_on_ingest(monkeypatch, client: AsyncClient):
     ingest._refresh_registry.clear()
+    ingest._recent_refresh_requests.clear()
+    monkeypatch.setattr(summary, "_REFRESH_DELAY_RANGE", (0.0, 0.0))
 
     fake_pool = _FakePool()
 
@@ -130,6 +132,7 @@ async def test_refresh_scheduled_on_ingest(monkeypatch, client: AsyncClient):
     body = resp.json()
     assert body["ok"] is True
     await asyncio.sleep(0)
+    await asyncio.sleep(0.01)
     assert scheduled, "refresh task should be scheduled"
     scheduled_user, scheduled_day = scheduled[0]
     assert scheduled_user == user_id

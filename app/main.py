@@ -1,10 +1,11 @@
 import asyncio
 import logging
+from datetime import datetime, timezone
+from time import monotonic
 
 from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from datetime import datetime, timezone
 
 from .routers import ingest, summary, symptoms
  # Resilient imports for optional/relocated modules
@@ -93,7 +94,16 @@ if WebhookSigMiddleware is not None:
     app.add_middleware(WebhookSigMiddleware)
 
 
-async def _health_db_probe() -> bool:
+_DB_PROBE_TIMEOUT = 0.28
+_DB_STICKY_GRACE_SECONDS = 10.0
+_last_db_status: bool = True
+_last_db_status_ts: float = monotonic()
+
+
+async def _health_db_probe() -> tuple[bool, int]:
+    global _last_db_status, _last_db_status_ts
+
+    probe_ok = False
     try:
         async def _probe() -> bool:
             pool = await get_pool()
@@ -103,19 +113,41 @@ async def _health_db_probe() -> bool:
                     await cur.fetchone()
             return True
 
-        return await asyncio.wait_for(_probe(), timeout=0.3)
+        probe_ok = await asyncio.wait_for(_probe(), timeout=_DB_PROBE_TIMEOUT)
     except Exception:
-        return False
+        probe_ok = False
+
+    now = monotonic()
+    if probe_ok:
+        _last_db_status = True
+        _last_db_status_ts = now
+        sticky_age_ms = 0
+        result = True
+    else:
+        age_seconds = now - _last_db_status_ts
+        if age_seconds > _DB_STICKY_GRACE_SECONDS:
+            _last_db_status = False
+            _last_db_status_ts = now
+            sticky_age_ms = 0
+            result = False
+        else:
+            result = _last_db_status
+            sticky_age_ms = int(age_seconds * 1000)
+
+    logger.info("[HEALTH] db=%s sticky_age=%d", result, sticky_age_ms)
+    return result, sticky_age_ms
 
 
 @app.get("/health")
 async def health():
+    db_status, sticky_age_ms = await _health_db_probe()
     return {
         "ok": True,
         "service": "gaiaeyes-backend",
         "build": BUILD,
         "time": datetime.now(timezone.utc).isoformat(),
-        "db": await _health_db_probe(),
+        "db": db_status,
+        "db_sticky_age": sticky_age_ms,
     }
 
 # ---- Simple bearer auth for /v1/*
