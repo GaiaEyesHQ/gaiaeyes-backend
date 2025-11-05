@@ -37,6 +37,8 @@ _pool_last_refresh: Optional[datetime] = None
 _pool_watchdog_task: Optional[asyncio.Task] = None
 _pool_metrics_task: Optional[asyncio.Task] = None
 
+_STATEMENT_TIMEOUT_MS = 60000
+
 
 def _rebuild_netloc(u) -> str:
     username = u.username or ""
@@ -96,15 +98,15 @@ async def _pool_watchdog_loop(pool: AsyncConnectionPool) -> None:
     global _pool_last_refresh
     try:
         while True:
-            await asyncio.sleep(300)
+            await asyncio.sleep(60)
             if not _pool_open:
                 continue
             try:
-                await pool.refresh()
+                async with pool.connection() as conn:
+                    await conn.execute("select 1;")
                 _pool_last_refresh = datetime.now(timezone.utc)
-                logger.info("[DB] watchdog refresh completed at %s", _pool_last_refresh.isoformat())
             except Exception as exc:  # pragma: no cover - depends on driver state
-                logger.warning("[DB] watchdog refresh failed: %s", exc)
+                logger.warning("[DB] watchdog ping failed: %s", exc)
     except asyncio.CancelledError:  # pragma: no cover - cooperative shutdown
         raise
 
@@ -201,23 +203,28 @@ async def get_pool() -> AsyncConnectionPool:
 
 async def get_db() -> AsyncGenerator:
     pool = await get_pool()
-    attempt = 0
-    last_exc: Optional[BaseException] = None
-
-    while attempt < 3:
+    attempts = 0
+    ctx = None
+    while attempts < 2:
+        attempts += 1
         ctx = pool.connection()
         try:
             conn = await ctx.__aenter__()
-        except PoolTimeout as exc:
-            last_exc = exc
+        except PoolTimeout:
             _log_pool_diag(pool)
-            attempt += 1
-            if attempt < 3:
-                backoff = 1.5 * attempt
+            if attempts < 2:
+                backoff = 1.5
                 logger.warning("[DB] pool timeout; retrying after %.1fs", backoff)
                 await asyncio.sleep(backoff)
                 continue
             raise
+
+        try:
+            await conn.execute(f"set statement_timeout = {_STATEMENT_TIMEOUT_MS}")
+        except Exception as exc:
+            await ctx.__aexit__(type(exc), exc, exc.__traceback__)
+            raise
+
         try:
             yield conn  # FastAPI injects this as `conn` in your endpoints
         except Exception as exc:  # pragma: no cover - defensive, FastAPI handles
@@ -227,8 +234,7 @@ async def get_db() -> AsyncGenerator:
             await ctx.__aexit__(None, None, None)
         return
 
-    if last_exc:
-        raise last_exc
+    raise RuntimeError("DB connection acquisition failed")
 
 
 def get_pool_metrics() -> Dict[str, Any]:
