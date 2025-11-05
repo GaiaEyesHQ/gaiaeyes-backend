@@ -1,83 +1,40 @@
-name: Global Hazards → WordPress
-
+name: quakes-history
+permissions:
+  contents: write
+  issues: write
 on:
   schedule:
-    - cron: "*/10 * * * *" # every 10 minutes
+    - cron: "15 5 * * *"   # daily 05:15 UTC
   workflow_dispatch: {}
 
 jobs:
   run:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
     env:
-      WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
-      WP_USERNAME: ${{ secrets.WP_USERNAME }}
-      WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
-
+      MEDIA_REPO_OWNER: GaiaEyesHQ
+      MEDIA_REPO_NAME: gaiaeyes-media
+      GAIAEYES_MEDIA_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
     steps:
-      - name: Checkout repository
+      - uses: actions/checkout@v4
+
+      - name: Checkout media repo
         uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install -U pip
-          pip install -r bots/hazards/requirements.txt
-
-      - name: Run Hazards Bot
-        run: |
-          python bots/hazards/hazards_bot.py run
-
-      - name: Publish latest.json to media repo
-        if: ${{ secrets.GH_PAT && secrets.MEDIA_REPO }}
           repository: ${{ env.MEDIA_REPO_OWNER }}/${{ env.MEDIA_REPO_NAME }}
           token: ${{ env.GAIAEYES_MEDIA_TOKEN }}
           path: gaiaeyes-media
           
       - name: Generate quakes_history.json
         env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-          MEDIA_REPO: ${{ secrets.MEDIA_REPO }}
-          MEDIA_BRANCH: ${{ secrets.MEDIA_BRANCH }}
-        shell: bash
+          OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/quakes_history.json
+          HISTORY_MONTHS: "24"
+          HISTORY_DAYS: "730"
         run: |
-          set -euo pipefail
-          FILE="${GITHUB_WORKSPACE}/bots/hazards/out/latest.json"
-          if [[ ! -f "$FILE" ]]; then
-            echo "::warning::No latest.json found; skipping publish"
-            exit 0
-          fi
+          python3 scripts/ingest_usgs_history.py
 
-          BRANCH="${MEDIA_BRANCH:-main}"
-          echo "Publishing $FILE → ${MEDIA_REPO}:${BRANCH}/public/hazards/latest.json"
-
-          TMPDIR=$(mktemp -d)
-          cd "$TMPDIR"
-          git init -b "$BRANCH"
-          git config user.email "actions@users.noreply.github.com"
-          git config user.name "GitHub Actions"
-
-          git remote add origin "https://x-access-token:${GH_PAT}@github.com/${MEDIA_REPO}.git"
-          if git ls-remote --exit-code origin "refs/heads/${BRANCH}" >/dev/null 2>&1; then
-            git fetch origin "$BRANCH"
-            git checkout "$BRANCH"
-          fi
-
-          mkdir -p public/hazards
-          cp "$FILE" public/hazards/latest.json
-          git add public/hazards/latest.json
-
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "update hazards latest.json ($(date -u +'%Y-%m-%dT%H:%M:%SZ'))"
-            git push origin "$BRANCH"
-          fi
-
-          echo "✅ Publish step complete."
       - name: Commit & push
         run: |
           set -euo pipefail
