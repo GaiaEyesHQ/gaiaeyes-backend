@@ -674,12 +674,21 @@ add_shortcode('gaia_alert_banner', function($atts){
   $sw=$get($a['sw_url'],'sw');
   $qk=$get($a['quakes_url'],'qk');
   $banner_sw='';$banner_qk='';
-  if(is_array($sw)){
-    $kp=$sw['now']['kp']??null;$g='';
-    if(is_numeric($kp)){
-      $k=floatval($kp);
-      if($k>=9)$g='G5';elseif($k>=8)$g='G4';elseif($k>=7)$g='G3';elseif($k>=6)$g='G2';elseif($k>=5)$g='G1';
-      if($g)$banner_sw="Geomagnetic activity: {$g} storm (Kp ".number_format($k,1).")";
+  if ( is_array( $sw ) ) {
+    $kp = $sw['now']['kp'] ?? null; $g = '';
+    if ( is_numeric( $kp ) ) {
+      $k = floatval( $kp );
+      if ( $k >= 9 ) { $g = 'G5'; }
+      elseif ( $k >= 8 ) { $g = 'G4'; }
+      elseif ( $k >= 7 ) { $g = 'G3'; }
+      elseif ( $k >= 6 ) { $g = 'G2'; }
+      elseif ( $k >= 5 ) { $g = 'G1'; }
+      if ( $g ) {
+        $banner_sw = "Geomagnetic activity: {$g} storm (Kp " . number_format( $k, 1 ) . ")";
+      } elseif ( $k >= 4.0 ) {
+        // New: alert for Kp ≥ 4 as "Active geomagnetic conditions"
+        $banner_sw = "Active geomagnetic conditions (Kp " . number_format( $k, 1 ) . ")";
+      }
     }
   }
   if(is_array($qk)){
