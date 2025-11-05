@@ -15,4 +15,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Lint workflow YAMLs
-        uses: actionshub/yamllint@v1
+        uses: ibiqlik/action-yamllint@v3
