@@ -31,6 +31,8 @@ MEDIA_QUAKES_CANDIDATE_PATHS = [
     os.path.join(os.getcwd(), "gaiaeyes-media", "data", "quakes_latest.json"),
 ]
 MEDIA_QUAKES_RAW_URL = "https://raw.githubusercontent.com/GaiaEyesHQ/gaiaeyes-media/main/data/quakes_latest.json"
+# Optional override URL for media quakes (set in ENV to force a specific URL)
+MEDIA_QUAKES_URL = os.environ.get("MEDIA_QUAKES_URL", "").strip()
 def load_json_file(path: str) -> Optional[dict]:
     try:
         with open(path, "r", encoding="utf-8") as handle:
@@ -382,12 +384,19 @@ def fetch_media_quakes() -> List[dict]:
       - Wrapped list: {"items":[ ... as above ... ]}
     """
     data = None
+    # ENV override: try explicit URL first if provided
+    if MEDIA_QUAKES_URL:
+        try:
+            data = fetch_json_any([MEDIA_QUAKES_URL], timeout=15)
+        except Exception:
+            data = None
     # Try local file candidates
-    for p in MEDIA_QUAKES_CANDIDATE_PATHS:
-        if p and os.path.isfile(p):
-            data = load_json_file(p)
-            if data:
-                break
+    if data is None:
+        for p in MEDIA_QUAKES_CANDIDATE_PATHS:
+            if p and os.path.isfile(p):
+                data = load_json_file(p)
+                if data:
+                    break
     # Fallback to raw GitHub
     if data is None:
         try:
@@ -436,6 +445,7 @@ def fetch_media_quakes() -> List[dict]:
                 "lon": lon,
                 "links": [url] if url else [],
             })
+        print(f"[info] media quakes parsed: {len(items)}", file=sys.stderr)
         return items
 
     # Case 2: Wrapped list under "items" (generic)
@@ -486,6 +496,7 @@ def fetch_media_quakes() -> List[dict]:
             "lon": lon,
             "links": [url] if url else [],
         })
+    print(f"[info] media quakes parsed: {len(items)}", file=sys.stderr)
     return items
 
 
@@ -637,7 +648,10 @@ def run_once() -> None:
     except Exception as exc:  # pragma: no cover - network handling
         print("[warn] GDACS fetch failed:", exc, file=sys.stderr)
     try:
-        items.extend(fetch_media_quakes())
+        media_items = fetch_media_quakes()
+        if media_items:
+            print(f"[info] media quakes added: {len(media_items)}", file=sys.stderr)
+            items.extend(media_items)
     except Exception as exc:  # pragma: no cover - best-effort local/remote media
         print("[warn] Media quakes fetch failed:", exc, file=sys.stderr)
     try:
