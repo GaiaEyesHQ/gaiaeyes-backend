@@ -92,6 +92,7 @@ def db_init() -> None:
     con.close()
 
 
+def cache_upsert_seen(source: str, src_id: str, content_hash: str) -> tuple[bool, Optional[int]]:
     con = sqlite3.connect(DB_PATH)
     cur = con.cursor()
     cur.execute(
