@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import random
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from time import perf_counter
@@ -11,10 +12,17 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Request
 from os import getenv
-from psycopg import errors as pg_errors
+from psycopg import errors as pg_errors, OperationalError
+from psycopg_pool.errors import PoolTimeout
 from psycopg.rows import dict_row
 from app.cache import get_last_good, set_last_good
-from app.db import get_db, get_pool, get_pool_metrics
+from app.db import (
+    get_db,
+    get_pool,
+    get_pool_metrics,
+    get_db_health_cached,
+    probe_db_health,
+)
 from app.utils.auth import require_admin
 
 DEFAULT_TIMEZONE = "America/Chicago"
@@ -27,25 +35,41 @@ logger = logging.getLogger(__name__)
 
 STATEMENT_TIMEOUT_MS = 60000
 
-MART_REFRESH_DEBOUNCE_SECONDS = 180.0
+MART_REFRESH_DEBOUNCE_SECONDS = 60.0
 _REFRESH_DELAY_RANGE = (1.5, 2.0)
+_REFRESH_RETRY_DELAY = 30.0
+_REFRESH_MAX_ATTEMPTS = 3
 
 
 _refresh_registry: Dict[str, float] = {}
-_refresh_inflight: Dict[Tuple[str, date], asyncio.Task] = {}
 _refresh_lock = asyncio.Lock()
 _refresh_task_factory: Callable[[Awaitable[None]], asyncio.Task] = asyncio.create_task
+_refresh_queue: "asyncio.Queue[RefreshJob]"  # forward declaration
+_refresh_queue = asyncio.Queue()
+_refresh_worker_lock = asyncio.Lock()
+_refresh_worker_task: Optional[asyncio.Task] = None
 
 
-async def _execute_mart_refresh(user_id: str, day_local: date) -> None:
+@dataclass
+class RefreshJob:
+    user_id: str
+    day_local: date
+    attempt: int = 0
+
+
+async def _execute_mart_refresh(user_id: str, day_local: date) -> int:
+    inserted = 0
     try:
         pool = await get_pool()
         async with pool.connection() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(
-                    "select marts.refresh_daily_features_user(%s, %s::date)",
+                    "select coalesce(marts.refresh_daily_features_user(%s, %s::date), 0)",
                     (user_id, day_local),
                 )
+                row = await cur.fetchone()
+                if row:
+                    inserted = int(row[0] or 0)
     except Exception as exc:  # pragma: no cover - diagnostic logging
         logger.warning(
             "[MART] refresh failed user=%s day=%s error=%s",
@@ -53,9 +77,20 @@ async def _execute_mart_refresh(user_id: str, day_local: date) -> None:
             day_local,
             exc,
         )
+        return 0
+    return inserted
 
 
-async def mart_refresh(user_id: str, day_local: date) -> bool:
+async def _ensure_refresh_worker() -> None:
+    global _refresh_worker_task
+    async with _refresh_worker_lock:
+        task = _refresh_worker_task
+        if task is None or task.done():
+            task_factory = _resolve_task_factory()
+            _refresh_worker_task = task_factory(_refresh_worker_loop())
+
+
+async def enqueue_refresh_today(user_id: str, day_local: date) -> bool:
     if not user_id:
         return False
     loop = asyncio.get_running_loop()
@@ -69,40 +104,126 @@ async def mart_refresh(user_id: str, day_local: date) -> bool:
                 MART_REFRESH_DEBOUNCE_SECONDS,
             )
             return False
-        key = (user_id, day_local)
-        existing = _refresh_inflight.get(key)
-        if existing and not existing.done():
-            logger.debug("[MART] refresh already running user=%s day=%s", user_id, day_local)
-            return False
         _refresh_registry[user_id] = now
 
-    try:
-        from . import ingest as ingest_module  # type: ignore circular import
-    except Exception:  # pragma: no cover - import guard for early startup
-        ingest_module = None
-
-    task_factory = _refresh_task_factory
-    execute_fn = _execute_mart_refresh
-    if ingest_module is not None:
-        task_factory = getattr(ingest_module, "_refresh_task_factory", task_factory)
-        execute_fn = getattr(ingest_module, "_execute_refresh", execute_fn)
-
-    delay_seconds = random.uniform(*_REFRESH_DELAY_RANGE)
-
-    async def _runner() -> None:
-        try:
-            await asyncio.sleep(delay_seconds)
-            await execute_fn(user_id, day_local)
-        finally:
-            async with _refresh_lock:
-                task = _refresh_inflight.get(key)
-                if task is not None and task is asyncio.current_task():
-                    _refresh_inflight.pop(key, None)
-
-    task = task_factory(_runner())
-    async with _refresh_lock:
-        _refresh_inflight[(user_id, day_local)] = task
+    await _ensure_refresh_worker()
+    await _refresh_queue.put(RefreshJob(user_id=user_id, day_local=day_local))
     return True
+
+
+async def mart_refresh(user_id: str, day_local: date) -> bool:
+    return await enqueue_refresh_today(user_id, day_local)
+
+
+def _schedule_retry(job: RefreshJob) -> None:
+    if job.attempt + 1 >= _REFRESH_MAX_ATTEMPTS:
+        logger.warning(
+            "[MART] dropping refresh job user=%s day=%s after %d attempts",
+            job.user_id,
+            job.day_local,
+            job.attempt + 1,
+        )
+        return
+
+    async def _delayed_enqueue() -> None:
+        await asyncio.sleep(_REFRESH_RETRY_DELAY)
+        await _refresh_queue.put(
+            RefreshJob(user_id=job.user_id, day_local=job.day_local, attempt=job.attempt + 1)
+        )
+
+    logger.info(
+        "[MART] requeue refresh user=%s day=%s attempt=%d", job.user_id, job.day_local, job.attempt + 1
+    )
+    task_factory = _resolve_task_factory()
+    task_factory(_delayed_enqueue())
+
+
+def _resolve_task_factory() -> Callable[[Awaitable[None]], asyncio.Task]:
+    task_factory = _refresh_task_factory
+    try:  # pragma: no cover - import guard for startup
+        from . import ingest as ingest_module  # type: ignore circular import
+    except Exception:
+        return task_factory
+    return getattr(ingest_module, "_refresh_task_factory", task_factory)
+
+
+def _resolve_execute_fn() -> Callable[[str, date], Awaitable[Any]]:
+    try:  # pragma: no cover - import guard for startup
+        from . import ingest as ingest_module  # type: ignore circular import
+    except Exception:
+        return _execute_mart_refresh
+    return getattr(ingest_module, "_execute_refresh", _execute_mart_refresh)
+
+
+async def _refresh_worker_loop() -> None:
+    try:
+        while True:
+            job = await _refresh_queue.get()
+            try:
+                status, _ = get_db_health_cached()
+                if not status:
+                    status, _ = await probe_db_health()
+                if not status:
+                    _schedule_retry(job)
+                    continue
+
+                await asyncio.sleep(random.uniform(*_REFRESH_DELAY_RANGE))
+
+                status, _ = get_db_health_cached()
+                if not status:
+                    status, _ = await probe_db_health()
+                if not status:
+                    _schedule_retry(job)
+                    continue
+
+                execute_fn = _resolve_execute_fn()
+                started = perf_counter()
+                try:
+                    result = await execute_fn(job.user_id, job.day_local)
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.warning(
+                        "[MART] refresh execution failed user=%s day=%s error=%s",
+                        job.user_id,
+                        job.day_local,
+                        exc,
+                    )
+                    result = 0
+                inserted = 0
+                if result is not None:
+                    try:
+                        inserted = int(result)
+                    except (TypeError, ValueError):
+                        inserted = 0
+                elapsed_ms = int((perf_counter() - started) * 1000)
+                logger.info(
+                    "[MART] refreshed user=%s day=%s inserted=%s elapsed=%sms",
+                    job.user_id,
+                    job.day_local,
+                    inserted,
+                    elapsed_ms,
+                )
+            finally:
+                _refresh_queue.task_done()
+    except asyncio.CancelledError:  # pragma: no cover - cooperative shutdown
+        raise
+
+
+async def start_refresh_worker() -> None:
+    await _ensure_refresh_worker()
+
+
+async def stop_refresh_worker() -> None:
+    global _refresh_worker_task
+    async with _refresh_worker_lock:
+        task = _refresh_worker_task
+        if task is None:
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:  # pragma: no cover - cooperative shutdown
+            pass
+        _refresh_worker_task = None
 
 
 _MART_COLUMNS = [
@@ -810,9 +931,21 @@ async def _collect_features(
                 response_payload.setdefault("source", diag_info.get("source") or "snapshot")
             else:
                 response_payload = {"source": diag_info.get("source") or "snapshot"}
+    except PoolTimeout:
+        logger.warning("features_today db timeout user=%s", user_id)
+        error_text = "db_timeout"
+        diag_info["error_code"] = "db_timeout"
+    except OperationalError:
+        logger.warning("features_today db unavailable user=%s", user_id)
+        error_text = "db_unavailable"
+        diag_info["error_code"] = "db_unavailable"
     except Exception as exc:  # pragma: no cover - exercised via integration tests
         logger.exception("features_today failed: %s", exc)
         error_text = str(exc) or exc.__class__.__name__
+        diag_info["error_code"] = "query_failed"
+
+    if error_text:
+        diag_info["error"] = error_text
 
     return response_payload, diag_info, error_text
 
@@ -832,6 +965,8 @@ def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
         "max_day": _iso_date(diag_info.get("max_day")),
         "total_rows": diag_info.get("total_rows"),
         "tz": diag_info.get("tz"),
+        "error": diag_info.get("error"),
+        "error_code": diag_info.get("error_code"),
     }
 
 router = APIRouter(prefix="/v1")
@@ -862,6 +997,9 @@ async def features_today(request: Request, diag: int = 0, conn = Depends(get_db)
         response = {"ok": True, "data": payload, "error": None}
 
     diag_block = _format_diag_payload(diag_info)
+    db_status, sticky_age_ms = get_db_health_cached()
+    diag_block["db"] = db_status
+    diag_block["db_sticky_age_ms"] = sticky_age_ms
     response["diagnostics"] = diag_block
 
     if not error_text and response_payload and media_base:
@@ -876,6 +1014,21 @@ async def features_today(request: Request, diag: int = 0, conn = Depends(get_db)
         )
 
     return response
+
+# -----------------------------
+# /v1/diag/db
+# -----------------------------
+@router.get("/diag/db")
+async def diag_db():
+    metrics = get_pool_metrics()
+    status, sticky_age_ms = get_db_health_cached()
+    return {
+        "open": metrics.get("open"),
+        "waiting": metrics.get("waiting"),
+        "in_use": metrics.get("used"),
+        "db": status,
+        "sticky_age": sticky_age_ms,
+    }
 
 # -----------------------------
 # /v1/diag/features
