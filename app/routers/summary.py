@@ -1,6 +1,7 @@
 # app/routers/summary.py
 import asyncio
 import logging
+import random
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from time import perf_counter
@@ -27,9 +28,11 @@ logger = logging.getLogger(__name__)
 STATEMENT_TIMEOUT_MS = 60000
 
 MART_REFRESH_DEBOUNCE_SECONDS = 180.0
+_REFRESH_DELAY_RANGE = (1.5, 2.0)
 
 
 _refresh_registry: Dict[str, float] = {}
+_refresh_inflight: Dict[Tuple[str, date], asyncio.Task] = {}
 _refresh_lock = asyncio.Lock()
 _refresh_task_factory: Callable[[Awaitable[None]], asyncio.Task] = asyncio.create_task
 
@@ -66,6 +69,11 @@ async def mart_refresh(user_id: str, day_local: date) -> bool:
                 MART_REFRESH_DEBOUNCE_SECONDS,
             )
             return False
+        key = (user_id, day_local)
+        existing = _refresh_inflight.get(key)
+        if existing and not existing.done():
+            logger.debug("[MART] refresh already running user=%s day=%s", user_id, day_local)
+            return False
         _refresh_registry[user_id] = now
 
     try:
@@ -79,11 +87,21 @@ async def mart_refresh(user_id: str, day_local: date) -> bool:
         task_factory = getattr(ingest_module, "_refresh_task_factory", task_factory)
         execute_fn = getattr(ingest_module, "_execute_refresh", execute_fn)
 
-    async def _runner() -> None:
-        await execute_fn(user_id, day_local)
+    delay_seconds = random.uniform(*_REFRESH_DELAY_RANGE)
 
-    task_factory(_runner())
-    logger.info("[MART] scheduled refresh user=%s day=%s", user_id, day_local)
+    async def _runner() -> None:
+        try:
+            await asyncio.sleep(delay_seconds)
+            await execute_fn(user_id, day_local)
+        finally:
+            async with _refresh_lock:
+                task = _refresh_inflight.get(key)
+                if task is not None and task is asyncio.current_task():
+                    _refresh_inflight.pop(key, None)
+
+    task = task_factory(_runner())
+    async with _refresh_lock:
+        _refresh_inflight[(user_id, day_local)] = task
     return True
 
 
