@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from datetime import datetime, timezone
-from typing import Optional, AsyncGenerator, Dict, Any
+from time import monotonic
+from typing import Optional, AsyncGenerator, Dict, Any, Callable, Awaitable, Tuple
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -36,6 +38,22 @@ _pool_open = False
 _pool_last_refresh: Optional[datetime] = None
 _pool_watchdog_task: Optional[asyncio.Task] = None
 _pool_metrics_task: Optional[asyncio.Task] = None
+
+_health_lock = asyncio.Lock()
+_health_monitor_task: Optional[asyncio.Task] = None
+_health_listeners: list[Callable[[bool], Awaitable[None] | None]] = []
+_health_monitor_interval = 3.0
+
+_health_sticky_flag = True
+_health_last_flip = monotonic()
+_health_last_probe_ts = 0.0
+_health_last_result = True
+_health_pending_target = True
+_health_pending_since = monotonic()
+
+_HEALTH_PROBE_TIMEOUT = 0.28
+_HEALTH_MIN_INTERVAL = 0.75
+_HEALTH_STICKY_WINDOW = 7.5
 
 _STATEMENT_TIMEOUT_MS = 60000
 
@@ -152,18 +170,130 @@ async def _stop_pool_monitors() -> None:
     _pool_metrics_task = None
 
 
+def register_health_listener(callback: Callable[[bool], Awaitable[None] | None]) -> None:
+    """Register a callback that is invoked when the sticky DB status flips."""
+
+    _health_listeners.append(callback)
+
+
+def _notify_health_listeners(status: bool) -> None:
+    for callback in list(_health_listeners):
+        try:
+            result = callback(status)
+        except Exception:  # pragma: no cover - defensive logging
+            logger.exception("[DB] health listener failed", exc_info=True)
+            continue
+        if inspect.isawaitable(result):
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:  # pragma: no cover - during startup/shutdown
+                continue
+            loop.create_task(result)
+
+
+async def _apply_health_result(ok: bool, now: Optional[float] = None) -> Tuple[bool, int]:
+    global _health_sticky_flag, _health_last_flip, _health_last_probe_ts
+    global _health_last_result, _health_pending_target, _health_pending_since
+
+    async with _health_lock:
+        now = now or monotonic()
+        _health_last_probe_ts = now
+        _health_last_result = ok
+
+        changed = False
+        if ok == _health_sticky_flag:
+            _health_pending_target = ok
+            _health_pending_since = now
+        else:
+            if _health_pending_target != ok:
+                _health_pending_target = ok
+                _health_pending_since = now
+            elif now - _health_pending_since >= _HEALTH_STICKY_WINDOW:
+                _health_sticky_flag = ok
+                _health_last_flip = now
+                changed = True
+
+        sticky_age_ms = int((now - _health_last_flip) * 1000)
+        flag = _health_sticky_flag
+
+    if changed:
+        _notify_health_listeners(flag)
+
+    return flag, sticky_age_ms
+
+
+def get_db_health_cached() -> Tuple[bool, int]:
+    now = monotonic()
+    sticky_age_ms = int((now - _health_last_flip) * 1000)
+    return _health_sticky_flag, sticky_age_ms
+
+
+async def probe_db_health(force: bool = False) -> Tuple[bool, int]:
+    now = monotonic()
+    async with _health_lock:
+        if not force and now - _health_last_probe_ts < _HEALTH_MIN_INTERVAL:
+            flag = _health_sticky_flag
+            sticky_age_ms = int((now - _health_last_flip) * 1000)
+            return flag, sticky_age_ms
+
+    async def _probe() -> bool:
+        try:
+            pool = await open_pool()
+            async with pool.connection() as conn:
+                await conn.execute("select 1;")
+            return True
+        except Exception:
+            return False
+
+    try:
+        ok = await asyncio.wait_for(_probe(), timeout=_HEALTH_PROBE_TIMEOUT)
+    except asyncio.TimeoutError:
+        ok = False
+
+    return await _apply_health_result(ok)
+
+
+async def _health_monitor_loop() -> None:
+    try:
+        while True:
+            await asyncio.sleep(_health_monitor_interval)
+            await probe_db_health(force=True)
+    except asyncio.CancelledError:  # pragma: no cover - cooperative shutdown
+        raise
+
+
+async def start_health_monitor() -> None:
+    global _health_monitor_task
+    async with _health_lock:
+        if _health_monitor_task is None or _health_monitor_task.done():
+            loop = asyncio.get_running_loop()
+            _health_monitor_task = loop.create_task(_health_monitor_loop())
+
+
+async def stop_health_monitor() -> None:
+    global _health_monitor_task
+    task = _health_monitor_task
+    if task is None:
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:  # pragma: no cover - cooperative shutdown
+        pass
+    _health_monitor_task = None
+
+
 def _get_or_create_pool() -> AsyncConnectionPool:
     global _pool
     if _pool is None:
         conninfo = _sanitize_conninfo(settings.DATABASE_URL)
         _pool = AsyncConnectionPool(
             conninfo=conninfo,
-            min_size=3,
-            max_size=20,
-            timeout=20,
+            min_size=2,
+            max_size=8,
+            timeout=8,
             max_idle=300,
             open=False,
-            check=_check_on_acquire,
             kwargs={
                 "sslmode": "require",
             },
@@ -211,13 +341,26 @@ async def get_db() -> AsyncGenerator:
         try:
             conn = await ctx.__aenter__()
         except PoolTimeout:
+            await _apply_health_result(False)
             _log_pool_diag(pool)
             if attempts < 2:
-                backoff = 1.5
-                logger.warning("[DB] pool timeout; retrying after %.1fs", backoff)
-                await asyncio.sleep(backoff)
+                logger.warning("[DB] pool timeout; retrying after 1.0s")
+                await asyncio.sleep(1.0)
                 continue
             raise
+
+        try:
+            await conn.execute("select 1;")
+        except Exception as exc:
+            await ctx.__aexit__(type(exc), exc, exc.__traceback__)
+            await _apply_health_result(False)
+            if attempts < 2:
+                logger.warning("[DB] pre-ping failed; retrying after 1.0s: %s", exc)
+                await asyncio.sleep(1.0)
+                continue
+            raise
+
+        await _apply_health_result(True)
 
         try:
             await conn.execute(f"set statement_timeout = {_STATEMENT_TIMEOUT_MS}")
@@ -226,7 +369,7 @@ async def get_db() -> AsyncGenerator:
             raise
 
         try:
-            yield conn  # FastAPI injects this as `conn` in your endpoints
+            yield conn
         except Exception as exc:  # pragma: no cover - defensive, FastAPI handles
             await ctx.__aexit__(type(exc), exc, exc.__traceback__)
             raise
@@ -249,6 +392,7 @@ def get_pool_metrics() -> Dict[str, Any]:
     used = max(open_count - free_count, 0)
     last_refresh_iso = _pool_last_refresh.isoformat() if _pool_last_refresh else None
     db_ok = bool(_pool_open)
+    sticky_flag, sticky_age_ms = get_db_health_cached()
     return {
         "open": open_count,
         "free": free_count,
@@ -256,4 +400,6 @@ def get_pool_metrics() -> Dict[str, Any]:
         "waiting": waiting,
         "last_refresh": last_refresh_iso,
         "ok": db_ok,
+        "db": sticky_flag,
+        "sticky_age_ms": sticky_age_ms,
     }
