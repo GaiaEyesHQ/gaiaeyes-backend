@@ -24,6 +24,20 @@ UTC = timezone.utc
 
 DB_PATH = os.path.join(SCRIPT_DIR, "hazards.sqlite")
 
+# Optional local/remote media quakes feed (GaiaEyes media repo)
+MEDIA_QUAKES_CANDIDATE_PATHS = [
+    os.path.join(os.environ.get("GITHUB_WORKSPACE", ""), "gaiaeyes-media", "data", "quakes_latest.json"),
+    os.path.join(SCRIPT_DIR, "..", "..", "gaiaeyes-media", "data", "quakes_latest.json"),
+    os.path.join(os.getcwd(), "gaiaeyes-media", "data", "quakes_latest.json"),
+]
+MEDIA_QUAKES_RAW_URL = "https://raw.githubusercontent.com/GaiaEyesHQ/gaiaeyes-media/main/data/quakes_latest.json"
+def load_json_file(path: str) -> Optional[dict]:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except Exception:
+        return None
+
 # Candidate endpoints (providers sometimes rotate or rate-limit)
 USGS_ENDPOINTS = [
     # User-preferred: only significant events
@@ -359,6 +373,119 @@ def fetch_gdacs() -> List[dict]:
     return results
 
 
+def fetch_media_quakes() -> List[dict]:
+    """
+    Pull quakes from the gaiaeyes-media repo's data/quakes_latest.json.
+    Accept flexible schemas:
+      - USGS-like: {"features":[{properties:{mag,time,title,place,code,id,url}, geometry:{coordinates:[lon,lat]}}]}
+      - Flat list: [{"mag":..,"time" or "ts":..,"lat":..,"lon":..,"id":..,"title"/"place":..,"url":..}]
+      - Wrapped list: {"items":[ ... as above ... ]}
+    """
+    data = None
+    # Try local file candidates
+    for p in MEDIA_QUAKES_CANDIDATE_PATHS:
+        if p and os.path.isfile(p):
+            data = load_json_file(p)
+            if data:
+                break
+    # Fallback to raw GitHub
+    if data is None:
+        try:
+            data = fetch_json_any([MEDIA_QUAKES_RAW_URL], timeout=15)
+        except Exception:
+            data = None
+    if not data:
+        return []
+
+    items: List[dict] = []
+    now_cut = now_utc() - timedelta(hours=48)
+
+    # Case 1: USGS-like features
+    if isinstance(data, dict) and isinstance(data.get("features"), list):
+        for f in data["features"]:
+            props = f.get("properties", {}) or {}
+            geom = f.get("geometry", {}) or {}
+            coords = geom.get("coordinates", [None, None])
+            lon, lat = coords[0], coords[1]
+            mag = props.get("mag")
+            t = props.get("time")
+            ts = None
+            if isinstance(t, (int, float)):
+                ts = datetime.fromtimestamp(float(t) / 1000.0, tz=UTC)
+            elif isinstance(t, str):
+                try:
+                    ts = dtparse.parse(t).astimezone(UTC)
+                except Exception:
+                    ts = None
+            if ts is None or ts < now_cut:
+                continue
+            src_id = str(props.get("code") or props.get("id") or f.get("id") or props.get("title") or f"{lat},{lon},{iso(ts)}")
+            title = props.get("title") or props.get("place") or "Earthquake"
+            url = props.get("url")
+            sev = severity_quake_usgs(float(mag) if isinstance(mag, (int, float)) else 0.0)
+            items.append({
+                "source": "media",
+                "id": src_id,
+                "ts": iso(ts),
+                "type": "quake",
+                "severity": sev,
+                "title": title,
+                "body": props.get("place") or "",
+                "mag": mag,
+                "lat": lat,
+                "lon": lon,
+                "links": [url] if url else [],
+            })
+        return items
+
+    # Case 2: Wrapped list under "items"
+    if isinstance(data, dict) and isinstance(data.get("items"), list):
+        data_list = data["items"]
+    # Case 3: Already a list
+    elif isinstance(data, list):
+        data_list = data
+    else:
+        return []
+
+    for q in data_list:
+        if not isinstance(q, dict):
+            continue
+        mag = q.get("mag") or q.get("magnitude")
+        # time can be ISO string, unix ms, or present under ts
+        ts_val = q.get("time") or q.get("ts")
+        ts = None
+        if isinstance(ts_val, (int, float)):
+            # heuristics: treat large values as ms
+            ts = datetime.fromtimestamp(float(ts_val) / (1000.0 if float(ts_val) > 10_000_000_000 else 1.0), tz=UTC)
+        elif isinstance(ts_val, str):
+            try:
+                ts = dtparse.parse(ts_val).astimezone(UTC)
+            except Exception:
+                ts = None
+        if ts is None or ts < now_cut:
+            continue
+        lat = q.get("lat") or q.get("latitude")
+        lon = q.get("lon") or q.get("longitude")
+        src_id = str(q.get("id") or q.get("code") or f"{lat},{lon},{iso(ts)}")
+        title = q.get("title") or q.get("place") or "Earthquake"
+        url = q.get("url")
+        sev = severity_quake_usgs(float(mag) if isinstance(mag, (int, float)) else 0.0)
+        items.append({
+            "source": "media",
+            "id": src_id,
+            "ts": iso(ts),
+            "type": "quake",
+            "severity": sev,
+            "title": title,
+            "body": q.get("place") or "",
+            "mag": mag,
+            "lat": lat,
+            "lon": lon,
+            "links": [url] if url else [],
+        })
+    return items
+
+
 def fetch_vaac() -> List[dict]:
     return []
 
@@ -506,6 +633,10 @@ def run_once() -> None:
         items.extend(fetch_gdacs())
     except Exception as exc:  # pragma: no cover - network handling
         print("[warn] GDACS fetch failed:", exc, file=sys.stderr)
+    try:
+        items.extend(fetch_media_quakes())
+    except Exception as exc:  # pragma: no cover - best-effort local/remote media
+        print("[warn] Media quakes fetch failed:", exc, file=sys.stderr)
     try:
         items.extend(fetch_vaac())
     except Exception as exc:  # pragma: no cover - network handling
