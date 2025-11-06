@@ -18,8 +18,9 @@ if str(ROOT) not in sys.path:
 pytestmark = pytest.mark.anyio("asyncio")
 
 from app.main import app
-from app.db import get_db, settings
+from app.db import settings
 from app.routers import ingest, summary
+from psycopg_pool import PoolTimeout
 
 
 @pytest.fixture(autouse=True)
@@ -60,6 +61,9 @@ class _FakeConn:
         return _FakeCursor()
 
     async def commit(self):
+        return None
+
+    async def execute(self, *args, **kwargs):  # noqa: ARG002
         return None
 
 
@@ -141,10 +145,10 @@ async def test_refresh_scheduled_on_ingest(monkeypatch, client: AsyncClient):
 
 @pytest.mark.anyio
 async def test_features_fallback_to_yesterday(monkeypatch, client: AsyncClient):
-    async def _fake_db():
-        yield _FakeConn()
+    def _fake_acquire():
+        return _FakeConnContext()
 
-    app.dependency_overrides[get_db] = _fake_db
+    monkeypatch.setattr(summary, "_acquire_features_conn", _fake_acquire)
 
     today = date(2024, 4, 3)
     yesterday = date(2024, 4, 2)
@@ -192,28 +196,25 @@ async def test_features_fallback_to_yesterday(monkeypatch, client: AsyncClient):
     monkeypatch.setattr(summary, "_fetch_daily_post", _fake_post)
 
     user_id = str(uuid4())
-    try:
-        resp = await client.get(
-            "/v1/features/today",
-            headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
-            params={"tz": "UTC"},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["ok"] is True
-        assert data["data"]["day"] == yesterday.isoformat()
-        assert data["diagnostics"]["source"] == "yesterday"
-        assert data["diagnostics"]["day_used"] == yesterday.isoformat()
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+    resp = await client.get(
+        "/v1/features/today",
+        headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
+        params={"tz": "UTC"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is True
+    assert data["data"]["day"] == yesterday.isoformat()
+    assert data["diagnostics"]["source"] == "yesterday"
+    assert data["diagnostics"]["day_used"] == yesterday.isoformat()
 
 
 @pytest.mark.anyio
 async def test_features_returns_defaults_when_empty(monkeypatch, client: AsyncClient):
-    async def _fake_db():
-        yield _FakeConn()
+    def _fake_acquire():
+        return _FakeConnContext()
 
-    app.dependency_overrides[get_db] = _fake_db
+    monkeypatch.setattr(summary, "_acquire_features_conn", _fake_acquire)
 
     today = date(2024, 4, 5)
 
@@ -248,33 +249,30 @@ async def test_features_returns_defaults_when_empty(monkeypatch, client: AsyncCl
 
     user_id = str(uuid4())
 
-    try:
-        resp = await client.get(
-            "/v1/features/today",
-            headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
-            params={"tz": "UTC"},
-        )
-        assert resp.status_code == 200
-        payload = resp.json()
-        assert payload["ok"] is True
-        data = payload["data"]
-        assert data["user_id"] == user_id
-        assert data["day"] == today.isoformat()
-        assert data["steps_total"] == 0
-        assert data["sleep_total_minutes"] == 0
-        assert data["flares_count"] == 0
-        assert data["kp_alert"] is False
-        assert data["source"] in {"snapshot", "empty"}
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+    resp = await client.get(
+        "/v1/features/today",
+        headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
+        params={"tz": "UTC"},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert data["user_id"] == user_id
+    assert data["day"] == today.isoformat()
+    assert data["steps_total"] == 0
+    assert data["sleep_total_minutes"] == 0
+    assert data["flares_count"] == 0
+    assert data["kp_alert"] is False
+    assert data["source"] in {"snapshot", "empty"}
 
 
 @pytest.mark.anyio
 async def test_features_error_envelope(monkeypatch, client: AsyncClient):
-    async def _fake_db():
-        yield _FakeConn()
+    def _fake_acquire():
+        return _FakeConnContext()
 
-    app.dependency_overrides[get_db] = _fake_db
+    monkeypatch.setattr(summary, "_acquire_features_conn", _fake_acquire)
 
     async def _fake_collect(conn, user_id, tz_name, tzinfo):  # noqa: ARG001
         return {}, {
@@ -295,47 +293,166 @@ async def test_features_error_envelope(monkeypatch, client: AsyncClient):
 
     monkeypatch.setattr(summary, "_collect_features", _fake_collect)
 
+    cached_updated_at = "2024-04-05T12:34:56.123456+00:00"
+
+    async def _fake_get_last_good(user_id: str):  # noqa: ARG001
+        return {
+            "user_id": user_id,
+            "day": "2024-04-05",
+            "source": "snapshot",
+            "steps_total": 3210,
+            "updated_at": cached_updated_at,
+        }
+
+    async def _noop_set_last_good(user_id: str, payload):  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(summary, "get_last_good", _fake_get_last_good)
+    monkeypatch.setattr(summary, "set_last_good", _noop_set_last_good)
+
     user_id = str(uuid4())
-    try:
-        resp = await client.get(
-            "/v1/features/today",
-            headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
-            params={"tz": "UTC"},
-        )
-        assert resp.status_code == 200
-        payload = resp.json()
-        assert payload["ok"] is False
-        assert payload["data"] is None
-        assert payload["error"] == "boom"
-        assert payload["diagnostics"]["source"] == "empty"
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+    resp = await client.get(
+        "/v1/features/today",
+        headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
+        params={"tz": "UTC"},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["error"] is None
+    data = payload["data"]
+    assert data["steps_total"] == 3210
+    assert data["day"] == "2024-04-05"
+    assert data["updated_at"] == cached_updated_at
+    diag = payload["diagnostics"]
+    assert diag["cache_fallback"] is True
+    assert diag["error"] == "boom"
+    assert diag["updated_at"] == cached_updated_at
 
 
 @pytest.mark.anyio
 async def test_features_db_error_envelope(monkeypatch, client: AsyncClient):
-    async def _fake_db():
-        yield _FakeConn()
+    def _fake_acquire():
+        return _FakeConnContext()
 
-    app.dependency_overrides[get_db] = _fake_db
+    monkeypatch.setattr(summary, "_acquire_features_conn", _fake_acquire)
 
     async def _boom_current_day(conn, tz_name):  # noqa: ARG001
         raise RuntimeError("database unavailable")
 
     monkeypatch.setattr(summary, "_current_day_local", _boom_current_day)
 
+    async def _fake_get_last_good(user_id: str):  # noqa: ARG001
+        return {
+            "user_id": user_id,
+            "day": "2024-04-06",
+            "source": "snapshot",
+            "steps_total": 1111,
+        }
+
+    async def _noop_set_last_good(user_id: str, payload):  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(summary, "get_last_good", _fake_get_last_good)
+    monkeypatch.setattr(summary, "set_last_good", _noop_set_last_good)
+
     user_id = str(uuid4())
-    try:
-        resp = await client.get(
-            "/v1/features/today",
-            headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
-            params={"tz": "UTC"},
-        )
-        assert resp.status_code == 200
-        payload = resp.json()
-        assert payload["ok"] is False
-        assert payload["data"] is None
-        assert payload["error"] == "database unavailable"
-        assert payload["diagnostics"]["source"] == "empty"
-    finally:
-        app.dependency_overrides.pop(get_db, None)
+    resp = await client.get(
+        "/v1/features/today",
+        headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
+        params={"tz": "UTC"},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["error"] is None
+    data = payload["data"]
+    assert data["steps_total"] == 1111
+    assert data["day"] == "2024-04-06"
+    diag = payload["diagnostics"]
+    assert diag["cache_fallback"] is True
+    assert diag["error"] == "database unavailable"
+
+
+@pytest.mark.anyio
+async def test_features_cache_miss_still_marks_ok(monkeypatch, client: AsyncClient):
+    class _FailCtx:
+        async def __aenter__(self):
+            raise PoolTimeout("timeout")
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    def _boom_acquire():
+        return _FailCtx()
+
+    async def _fake_get_last_good(user_id: str):  # noqa: ARG001
+        return None
+
+    async def _noop_set_last_good(user_id: str, payload):  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(summary, "_acquire_features_conn", _boom_acquire)
+    monkeypatch.setattr(summary, "get_last_good", _fake_get_last_good)
+    monkeypatch.setattr(summary, "set_last_good", _noop_set_last_good)
+
+    user_id = str(uuid4())
+
+    resp = await client.get(
+        "/v1/features/today",
+        headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
+        params={"tz": "UTC"},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["error"] is None
+    data = payload["data"]
+    assert data["user_id"] == user_id
+    # defaults are applied even without cache
+    assert data["steps_total"] == 0
+    assert payload["diagnostics"]["cache_fallback"] is True
+
+
+@pytest.mark.anyio
+async def test_features_pool_timeout_uses_cache(monkeypatch, client: AsyncClient):
+    class _FailCtx:
+        async def __aenter__(self):
+            raise PoolTimeout("timeout")
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    def _boom_acquire():
+        return _FailCtx()
+
+    async def _fake_get_last_good(user_id: str):  # noqa: ARG001
+        return {
+            "user_id": user_id,
+            "day": "2024-04-05",
+            "source": "snapshot",
+            "steps_total": 3210,
+        }
+
+    async def _noop_set_last_good(user_id: str, payload):  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(summary, "_acquire_features_conn", _boom_acquire)
+    monkeypatch.setattr(summary, "get_last_good", _fake_get_last_good)
+    monkeypatch.setattr(summary, "set_last_good", _noop_set_last_good)
+
+    user_id = str(uuid4())
+
+    resp = await client.get(
+        "/v1/features/today",
+        headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
+        params={"tz": "UTC"},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert data["steps_total"] == 3210
+    assert data["day"] == "2024-04-05"
+    assert payload["diagnostics"]["cache_fallback"] is True
+    assert payload["diagnostics"]["pool_timeout"] is True
