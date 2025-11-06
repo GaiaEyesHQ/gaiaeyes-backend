@@ -39,23 +39,21 @@ async def _acquire_features_conn():
 
     pool = await get_pool()
     ctx = pool.connection()
-    conn = await ctx.__aenter__()
-    exit_type = exit_exc = exit_tb = None
+    try:
+        conn = await ctx.__aenter__()
+    except Exception:
+        raise
 
     try:
         await conn.execute(f"set statement_timeout = {STATEMENT_TIMEOUT_MS}")
-
-        try:
-            yield conn
-        except BaseException as exc:
-            exit_type, exit_exc, exit_tb = type(exc), exc, exc.__traceback__
-            raise
-    except BaseException as exc:
-        if exit_exc is None:
-            exit_type, exit_exc, exit_tb = type(exc), exc, exc.__traceback__
+    except Exception as exc:
+        await ctx.__aexit__(type(exc), exc, exc.__traceback__)
         raise
+
+    try:
+        yield conn
     finally:
-        await ctx.__aexit__(exit_type, exit_exc, exit_tb)
+        await ctx.__aexit__(None, None, None)
 
 
 _refresh_registry: Dict[str, float] = {}
