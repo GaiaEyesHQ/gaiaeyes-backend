@@ -2,6 +2,15 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2024-04-10 — Restore raw symptom errors with friendly fallbacks
+
+- Bring back the database-provided error strings in the `error` field so existing
+  clients stop looping during backend outages.
+- Add a `friendly_error` companion field that carries the documented message for
+  analytics/localization while keeping the envelope stable.
+- Updated the Symptoms API docs and regression tests to cover the dual-error
+  contract. No front-end work is required.
+
 ## 2024-04-09 — Stabilize symptom error envelopes
 
 - Replace raw database exception messages across the symptom API with documented, user-facing strings so the mobile client receives consistent fallback payloads.
