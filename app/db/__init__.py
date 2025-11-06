@@ -106,10 +106,12 @@ def _prepare_conninfo() -> None:
         primary_conninfo = _make_conninfo(cleaned, port=_PGBOUNCER_PORT)
         primary_label = "pgbouncer"
         logger.info("[DB] pgBouncer mode requested; primary port=%s", _PGBOUNCER_PORT)
+
         direct_source = settings.DIRECT_URL or _make_conninfo(cleaned)
-        if direct_source:
-            direct_cleaned, _ = _clean_database_url(direct_source)
-            fallback_conninfo = _make_conninfo(direct_cleaned)
+        direct_cleaned, _ = _clean_database_url(direct_source)
+        candidate = _make_conninfo(direct_cleaned)
+        if candidate != primary_conninfo:
+            fallback_conninfo = candidate
             fallback_label = "direct"
     elif settings.DIRECT_URL:
         direct_cleaned, _ = _clean_database_url(settings.DIRECT_URL)
