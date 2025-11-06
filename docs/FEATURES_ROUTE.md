@@ -36,7 +36,7 @@ The `/v1/features/today` endpoint returns a consolidated “daily features” sn
 }
 ```
 
-`data` is never `null`. When a snapshot is unavailable the handler returns `{}` with `ok:true` so tiles can remain filled with the last-good content.
+`data` is never `null`. When a snapshot is unavailable the handler returns `{}` with `ok:true` so tiles can remain filled with the last-good content. During cache fallbacks the top-level `error` remains `null`; clients should read `diagnostics.error` to surface operator-friendly messaging while still treating the payload as usable.
 
 ## Source selection
 

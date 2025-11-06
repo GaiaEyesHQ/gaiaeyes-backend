@@ -293,6 +293,20 @@ async def test_features_error_envelope(monkeypatch, client: AsyncClient):
 
     monkeypatch.setattr(summary, "_collect_features", _fake_collect)
 
+    async def _fake_get_last_good(user_id: str):  # noqa: ARG001
+        return {
+            "user_id": user_id,
+            "day": "2024-04-05",
+            "source": "snapshot",
+            "steps_total": 3210,
+        }
+
+    async def _noop_set_last_good(user_id: str, payload):  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(summary, "get_last_good", _fake_get_last_good)
+    monkeypatch.setattr(summary, "set_last_good", _noop_set_last_good)
+
     user_id = str(uuid4())
     resp = await client.get(
         "/v1/features/today",
@@ -318,6 +332,20 @@ async def test_features_db_error_envelope(monkeypatch, client: AsyncClient):
         raise RuntimeError("database unavailable")
 
     monkeypatch.setattr(summary, "_current_day_local", _boom_current_day)
+
+    async def _fake_get_last_good(user_id: str):  # noqa: ARG001
+        return {
+            "user_id": user_id,
+            "day": "2024-04-06",
+            "source": "snapshot",
+            "steps_total": 1111,
+        }
+
+    async def _noop_set_last_good(user_id: str, payload):  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(summary, "get_last_good", _fake_get_last_good)
+    monkeypatch.setattr(summary, "set_last_good", _noop_set_last_good)
 
     user_id = str(uuid4())
     resp = await client.get(
