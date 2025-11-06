@@ -39,23 +39,21 @@ async def _acquire_features_conn():
 
     pool = await get_pool()
     ctx = pool.connection()
-    conn = await ctx.__aenter__()
-    exit_type = exit_exc = exit_tb = None
+    try:
+        conn = await ctx.__aenter__()
+    except Exception:
+        raise
 
     try:
         await conn.execute(f"set statement_timeout = {STATEMENT_TIMEOUT_MS}")
-
-        try:
-            yield conn
-        except BaseException as exc:
-            exit_type, exit_exc, exit_tb = type(exc), exc, exc.__traceback__
-            raise
-    except BaseException as exc:
-        if exit_exc is None:
-            exit_type, exit_exc, exit_tb = type(exc), exc, exc.__traceback__
+    except Exception as exc:
+        await ctx.__aexit__(type(exc), exc, exc.__traceback__)
         raise
+
+    try:
+        yield conn
     finally:
-        await ctx.__aexit__(exit_type, exit_exc, exit_tb)
+        await ctx.__aexit__(None, None, None)
 
 
 _refresh_registry: Dict[str, float] = {}
@@ -901,7 +899,7 @@ async def _fallback_from_cache(
         user_id,
         fallback_error,
     )
-    return payload, diag_info, None
+    return payload, diag_info, fallback_error
 
 
 def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
@@ -974,20 +972,6 @@ async def features_today(request: Request, diag: int = 0):
             user_id,
             tzinfo,
             reason=reason,
-        )
-
-    if error_text:
-        logger.warning(
-            "[features_today] primary query failed tz=%s user=%s: %s",
-            tz_name,
-            user_id,
-            error_text,
-        )
-        response_payload, diag_info, error_text = await _fallback_from_cache(
-            diag_info,
-            user_id,
-            tzinfo,
-            reason=error_text,
         )
 
     if error_text:
