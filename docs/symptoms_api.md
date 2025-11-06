@@ -34,6 +34,11 @@ All symptom routes respond with a predictable JSON envelope:
   clients transition to the new contract.
 - `friendly_error` contains the documented fallback string appropriate for end-user
   presentation.
+- `error` is the raw database/driver message on failures. This preserves historic
+  behavior so existing clients can surface the original reason codes (for example,
+  `"backend DB unavailable"`).
+- `friendly_error` contains a stable, documented string that downstream callers can use
+  for localization or analytics without depending on low-level driver errors.
 - Even on database failures the service replies with HTTP 200 so the iOS client can
   decode the body without throwing transport-level exceptions.
 
@@ -188,6 +193,12 @@ If the query cannot reach the database the response becomes:
     "raw_error": "backend DB unavailable",
     "friendly_error": "Failed to load today's symptoms"
   }
+{
+  "ok": false,
+  "data": [],
+  "error": "backend DB unavailable",
+  "friendly_error": "Failed to load today's symptoms"
+}
 ```
 
 ## GET `/v1/symptoms/daily?days=30`

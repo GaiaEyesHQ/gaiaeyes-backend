@@ -113,7 +113,7 @@ async def create_symptom_event(
 
     try:
         code_rows = await symptoms_db.fetch_symptom_codes(conn)
-    except Exception as exc:  # pragma: no cover - exercised via tests
+    except Exception:  # pragma: no cover - exercised via tests
         logger.exception("failed to load codes for symptom post", extra={"user_id": user_id})
         raw_error = _error_text(exc)
         return JSONResponse(
@@ -123,6 +123,7 @@ async def create_symptom_event(
                 "data": None,
                 "error": raw_error,
                 "raw_error": raw_error,
+                "error": _error_text(exc),
                 "friendly_error": _ERR_LOAD_CODES,
             },
         )
@@ -172,7 +173,7 @@ async def create_symptom_event(
             free_text=payload.free_text,
             tags=payload.tags,
         )
-    except Exception as exc:  # pragma: no cover - exercised via tests
+    except Exception:  # pragma: no cover - exercised via tests
         logger.exception("failed to insert symptom event", extra={"user_id": user_id, "symptom_code": normalized_code})
         raw_error = _error_text(exc)
         return JSONResponse(
@@ -182,6 +183,7 @@ async def create_symptom_event(
                 "data": None,
                 "error": raw_error,
                 "raw_error": raw_error,
+                "error": _error_text(exc),
                 "friendly_error": _ERR_RECORD_EVENT,
             },
         )
@@ -209,7 +211,7 @@ async def get_symptoms_today(request: Request, conn=Depends(get_db)):
     user_id = _require_user_id(request)
     try:
         rows = await symptoms_db.fetch_symptoms_today(conn, user_id)
-    except Exception as exc:  # pragma: no cover - exercised via tests
+    except Exception:  # pragma: no cover - exercised via tests
         logger.exception("failed to load todays symptoms", extra={"user_id": user_id})
         raw_error = _error_text(exc)
         return _failure(
@@ -218,6 +220,7 @@ async def get_symptoms_today(request: Request, conn=Depends(get_db)):
                 data=[],
                 error=raw_error,
                 raw_error=raw_error,
+                error=_error_text(exc),
                 friendly_error=_ERR_LOAD_TODAY,
             )
         )
@@ -234,7 +237,7 @@ async def get_symptoms_daily(
     user_id = _require_user_id(request)
     try:
         rows = await symptoms_db.fetch_daily_summary(conn, user_id, days)
-    except Exception as exc:  # pragma: no cover - exercised via tests
+    except Exception:  # pragma: no cover - exercised via tests
         logger.exception("failed to load daily symptoms", extra={"user_id": user_id, "days": days})
         raw_error = _error_text(exc)
         return _failure(
@@ -243,6 +246,7 @@ async def get_symptoms_daily(
                 data=[],
                 error=raw_error,
                 raw_error=raw_error,
+                error=_error_text(exc),
                 friendly_error=_ERR_LOAD_DAILY,
             )
         )
@@ -259,7 +263,7 @@ async def get_symptom_diag(
     user_id = _require_user_id(request)
     try:
         rows = await symptoms_db.fetch_diagnostics(conn, user_id, days)
-    except Exception as exc:  # pragma: no cover - exercised via tests
+    except Exception:  # pragma: no cover - exercised via tests
         logger.exception("failed to load diagnostic summary", extra={"user_id": user_id, "days": days})
         raw_error = _error_text(exc)
         return _failure(
@@ -268,6 +272,7 @@ async def get_symptom_diag(
                 data=[],
                 error=raw_error,
                 raw_error=raw_error,
+                error=_error_text(exc),
                 friendly_error=_ERR_LOAD_DIAG,
             )
         )
@@ -287,7 +292,7 @@ async def list_symptom_codes(
 ):
     try:
         rows = await symptoms_db.fetch_symptom_codes(conn, include_inactive=include_inactive)
-    except Exception as exc:  # pragma: no cover - exercised via tests
+    except Exception:  # pragma: no cover - exercised via tests
         logger.exception("failed to load symptom codes", extra={"include_inactive": include_inactive})
         raw_error = _error_text(exc)
         return _failure(
@@ -296,6 +301,7 @@ async def list_symptom_codes(
                 data=[],
                 error=raw_error,
                 raw_error=raw_error,
+                error=_error_text(exc),
                 friendly_error=_ERR_LOAD_CODES,
             )
         )
