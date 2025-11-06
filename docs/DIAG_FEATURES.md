@@ -13,7 +13,8 @@ The response includes:
 
 - `features`: metadata about the most recent `/v1/features/today` query, including the requested user id, which branch (scoped vs. fallback) was used, and the latest `day`/`updated_at` timestamps.
   - `cache_fallback` and `pool_timeout` highlight when the handler served cached data because the database pool was saturated.
-  - `error` carries the most recent connection or query error (if any) that triggered the fallback path.
+  - `error` reflects the error message when the endpoint itself returned `ok:false`.
+  - `last_error` captures the most recent failure that triggered a fallback so clients can log the cause without treating cached data as an outage.
 - `tables`: row counts and latest timestamps for the tables that feed the feature rollup.
   - `marts.daily_features` shows the global feature mart freshness (`max_day` and `max_updated_at`).
   - `marts.schumann_daily` reports the latest Schumann resonance day available.
@@ -39,7 +40,8 @@ Example fragment:
     "statement_timeout_ms": 60000,
     "cache_fallback": false,
     "pool_timeout": false,
-    "error": null
+    "error": null,
+    "last_error": null
   },
   "tables": {
     "marts.daily_features": {

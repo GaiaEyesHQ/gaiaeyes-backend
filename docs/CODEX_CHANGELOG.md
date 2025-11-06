@@ -2,6 +2,12 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2024-04-08 — Persist fallback errors without tripping the UI
+
+- Added `diagnostics.last_error` and now clear `diagnostics.error` whenever cached/yesterday data is served successfully so existing clients stop treating fallbacks as hard failures.
+- Updated the `/v1/features/today` docs and iOS follow-up checklist to consume the new field while keeping banners/debug copy informative.
+- Extended the regression suite to lock in the adjusted diagnostics contract.
+
 ## 2024-04-07 — Cache fallback diagnostics
 
 - Flag mart query failures as cache fallbacks so mobile clients throttle refreshes while still showing cached tiles.

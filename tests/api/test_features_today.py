@@ -326,7 +326,8 @@ async def test_features_error_envelope(monkeypatch, client: AsyncClient):
     assert data["updated_at"] == cached_updated_at
     diag = payload["diagnostics"]
     assert diag["cache_fallback"] is True
-    assert diag["error"] == "boom"
+    assert diag["error"] is None
+    assert diag["last_error"] == "boom"
     assert diag["updated_at"] == cached_updated_at
 
 
@@ -371,7 +372,8 @@ async def test_features_db_error_envelope(monkeypatch, client: AsyncClient):
     assert data["day"] == "2024-04-06"
     diag = payload["diagnostics"]
     assert diag["cache_fallback"] is True
-    assert diag["error"] == "database unavailable"
+    assert diag["error"] is None
+    assert diag["last_error"] == "database unavailable"
 
 
 @pytest.mark.anyio
@@ -437,7 +439,8 @@ async def test_features_mart_query_error_marks_cache(monkeypatch, client: AsyncC
     diag = payload["diagnostics"]
     assert diag["cache_fallback"] is True
     assert diag["pool_timeout"] is True
-    assert diag["error"] == "db_timeout"
+    assert diag["error"] is None
+    assert diag["last_error"] == "db_timeout"
     assert diag["day_used"] == "2024-04-05"
 
 

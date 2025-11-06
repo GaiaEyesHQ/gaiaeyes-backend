@@ -964,7 +964,28 @@ def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
         "cache_fallback": bool(diag_info.get("cache_fallback")),
         "pool_timeout": bool(diag_info.get("pool_timeout")),
         "error": diag_info.get("error"),
+        "last_error": diag_info.get("last_error"),
     }
+
+
+def _finalize_diag_info(
+    diag_info: Dict[str, Any],
+    *,
+    final_error: Optional[str],
+) -> Dict[str, Any]:
+    """Normalize diagnostic error fields for the response payload."""
+
+    if final_error:
+        diag_info.setdefault("last_error", final_error)
+        diag_info["error"] = final_error
+        return diag_info
+
+    diag_error = diag_info.get("error")
+    if diag_error:
+        diag_info.setdefault("last_error", diag_error)
+        diag_info["error"] = None
+
+    return diag_info
 
 router = APIRouter(prefix="/v1")
 
@@ -1032,6 +1053,8 @@ async def features_today(request: Request, diag: int = 0):
             reason=error_text,
         )
 
+    diag_info = _finalize_diag_info(diag_info, final_error=error_text)
+
     if error_text:
         response: Dict[str, Any] = {"ok": False, "data": None, "error": error_text}
     else:
@@ -1076,6 +1099,7 @@ async def diag_features(
 
     if effective_user:
         features_payload, diag_info, error_text = await _collect_features(conn, effective_user, tz_name, tzinfo)
+        diag_info = _finalize_diag_info(diag_info, final_error=error_text)
     else:
         diag_info = _init_diag_info(None, tz_name)
 
