@@ -21,6 +21,7 @@ All symptom routes respond with a predictable JSON envelope:
   "ok": true,
   "data": [],
   "error": null,
+  "raw_error": null,
   "friendly_error": null
 }
 ```
@@ -28,6 +29,11 @@ All symptom routes respond with a predictable JSON envelope:
 - `ok` is `true` when the request succeeded and `false` on failures.
 - `data` is always present. Collection endpoints return an array (possibly empty). The
   POST route returns either the created event payload or `null` on errors.
+- `error` carries the original database/driver message (for example, `"db_timeout"`).
+- `raw_error` mirrors `error` so internal tooling can rely on a stable key while
+  clients transition to the new contract.
+- `friendly_error` contains the documented fallback string appropriate for end-user
+  presentation.
 - `error` is the raw database/driver message on failures. This preserves historic
   behavior so existing clients can surface the original reason codes (for example,
   `"backend DB unavailable"`).
@@ -44,6 +50,7 @@ payload such as:
   "ok": false,
   "data": [],
   "error": "backend DB unavailable",
+  "raw_error": "backend DB unavailable",
   "friendly_error": "Failed to load today's symptoms"
 }
 ```
@@ -99,6 +106,7 @@ the service automatically stamps the current UTC time.
   "ok": false,
   "data": null,
   "error": "backend DB unavailable",
+  "raw_error": "backend DB unavailable",
   "friendly_error": "Failed to record symptom event"
 }
 ```
@@ -130,6 +138,7 @@ can reuse them directly when posting events. Responses include a short cache hea
     }
   ],
   "error": null,
+  "raw_error": null,
   "friendly_error": null
 }
 ```
@@ -141,6 +150,7 @@ On transient database errors the endpoint still returns HTTP 200 with:
   "ok": false,
   "data": [],
   "error": "backend DB unavailable",
+  "raw_error": "backend DB unavailable",
   "friendly_error": "Failed to load symptom codes"
 }
 ```
@@ -176,6 +186,13 @@ are sorted by most recent first.
 If the query cannot reach the database the response becomes:
 
 ```json
+  {
+    "ok": false,
+    "data": [],
+    "error": "backend DB unavailable",
+    "raw_error": "backend DB unavailable",
+    "friendly_error": "Failed to load today's symptoms"
+  }
 {
   "ok": false,
   "data": [],
@@ -223,6 +240,7 @@ HTTP status at 200:
   "ok": false,
   "data": [],
   "error": "backend DB unavailable",
+  "raw_error": "backend DB unavailable",
   "friendly_error": "Failed to load daily symptom summary"
 }
 ```
@@ -261,6 +279,7 @@ In case of a database outage:
   "ok": false,
   "data": [],
   "error": "backend DB unavailable",
+  "raw_error": "backend DB unavailable",
   "friendly_error": "Failed to load diagnostic summary"
 }
 ```
