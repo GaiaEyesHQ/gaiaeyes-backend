@@ -293,12 +293,15 @@ async def test_features_error_envelope(monkeypatch, client: AsyncClient):
 
     monkeypatch.setattr(summary, "_collect_features", _fake_collect)
 
+    cached_updated_at = "2024-04-05T12:34:56.123456+00:00"
+
     async def _fake_get_last_good(user_id: str):  # noqa: ARG001
         return {
             "user_id": user_id,
             "day": "2024-04-05",
             "source": "snapshot",
             "steps_total": 3210,
+            "updated_at": cached_updated_at,
         }
 
     async def _noop_set_last_good(user_id: str, payload):  # noqa: ARG001
@@ -315,10 +318,16 @@ async def test_features_error_envelope(monkeypatch, client: AsyncClient):
     )
     assert resp.status_code == 200
     payload = resp.json()
-    assert payload["ok"] is False
-    assert payload["data"] is None
-    assert payload["error"] == "boom"
-    assert payload["diagnostics"]["source"] == "empty"
+    assert payload["ok"] is True
+    assert payload["error"] is None
+    data = payload["data"]
+    assert data["steps_total"] == 3210
+    assert data["day"] == "2024-04-05"
+    assert data["updated_at"] == cached_updated_at
+    diag = payload["diagnostics"]
+    assert diag["cache_fallback"] is True
+    assert diag["error"] == "boom"
+    assert diag["updated_at"] == cached_updated_at
 
 
 @pytest.mark.anyio
@@ -355,10 +364,54 @@ async def test_features_db_error_envelope(monkeypatch, client: AsyncClient):
     )
     assert resp.status_code == 200
     payload = resp.json()
-    assert payload["ok"] is False
-    assert payload["data"] is None
-    assert payload["error"] == "database unavailable"
-    assert payload["diagnostics"]["source"] == "empty"
+    assert payload["ok"] is True
+    assert payload["error"] is None
+    data = payload["data"]
+    assert data["steps_total"] == 1111
+    assert data["day"] == "2024-04-06"
+    diag = payload["diagnostics"]
+    assert diag["cache_fallback"] is True
+    assert diag["error"] == "database unavailable"
+
+
+@pytest.mark.anyio
+async def test_features_cache_miss_still_marks_ok(monkeypatch, client: AsyncClient):
+    class _FailCtx:
+        async def __aenter__(self):
+            raise PoolTimeout("timeout")
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    def _boom_acquire():
+        return _FailCtx()
+
+    async def _fake_get_last_good(user_id: str):  # noqa: ARG001
+        return None
+
+    async def _noop_set_last_good(user_id: str, payload):  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(summary, "_acquire_features_conn", _boom_acquire)
+    monkeypatch.setattr(summary, "get_last_good", _fake_get_last_good)
+    monkeypatch.setattr(summary, "set_last_good", _noop_set_last_good)
+
+    user_id = str(uuid4())
+
+    resp = await client.get(
+        "/v1/features/today",
+        headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
+        params={"tz": "UTC"},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["error"] is None
+    data = payload["data"]
+    assert data["user_id"] == user_id
+    # defaults are applied even without cache
+    assert data["steps_total"] == 0
+    assert payload["diagnostics"]["cache_fallback"] is True
 
 
 @pytest.mark.anyio

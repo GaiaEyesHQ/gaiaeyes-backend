@@ -39,21 +39,23 @@ async def _acquire_features_conn():
 
     pool = await get_pool()
     ctx = pool.connection()
-    try:
-        conn = await ctx.__aenter__()
-    except Exception:
-        raise
+    conn = await ctx.__aenter__()
+    exit_type = exit_exc = exit_tb = None
 
     try:
         await conn.execute(f"set statement_timeout = {STATEMENT_TIMEOUT_MS}")
-    except Exception as exc:
-        await ctx.__aexit__(type(exc), exc, exc.__traceback__)
-        raise
 
-    try:
-        yield conn
+        try:
+            yield conn
+        except BaseException as exc:
+            exit_type, exit_exc, exit_tb = type(exc), exc, exc.__traceback__
+            raise
+    except BaseException as exc:
+        if exit_exc is None:
+            exit_type, exit_exc, exit_tb = type(exc), exc, exc.__traceback__
+        raise
     finally:
-        await ctx.__aexit__(None, None, None)
+        await ctx.__aexit__(exit_type, exit_exc, exit_tb)
 
 
 _refresh_registry: Dict[str, float] = {}
@@ -178,6 +180,25 @@ def _iso_date(value: Optional[date]) -> Optional[str]:
     if value is None:
         return None
     return value.isoformat()
+
+
+def _coerce_datetime(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        if text.endswith("Z"):
+            text = f"{text[:-1]}+00:00"
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed
+    return None
 
 
 def _coerce_day(value: Any) -> Optional[date]:
@@ -642,7 +663,9 @@ def _normalize_features_payload(
     else:
         normalized["day"] = candidate_day
 
-    normalized["updated_at"] = _iso_dt(normalized.get("updated_at"))
+    normalized["updated_at"] = _iso_dt(
+        _coerce_datetime(normalized.get("updated_at"))
+    )
 
     for key in _INT_FIELDS:
         normalized[key] = _coerce_int_value(normalized.get(key))
@@ -740,7 +763,9 @@ async def _collect_features(
                     response_payload = dict(yesterday_row)
                     diag_info["mart_row"] = True
                     diag_info["source"] = "yesterday"
-                    diag_info["updated_at"] = yesterday_row.get("updated_at")
+                    diag_info["updated_at"] = _coerce_datetime(
+                        yesterday_row.get("updated_at")
+                    )
                     diag_info["day_used"] = yesterday
                 else:
                     fallback_row = await _fetch_snapshot_row(conn, user_id)
@@ -748,7 +773,9 @@ async def _collect_features(
                         response_payload = dict(fallback_row)
                         diag_info["mart_row"] = True
                         diag_info["source"] = "snapshot"
-                        diag_info["updated_at"] = fallback_row.get("updated_at")
+                        diag_info["updated_at"] = _coerce_datetime(
+                            fallback_row.get("updated_at")
+                        )
                         fallback_day = fallback_row.get("day")
                         if isinstance(fallback_day, str):
                             try:
@@ -762,7 +789,9 @@ async def _collect_features(
                             response_payload = dict(cached_payload)
                             diag_info["mart_row"] = bool(response_payload)
                             diag_info["source"] = cached_payload.get("source") or "snapshot"
-                            diag_info["updated_at"] = response_payload.get("updated_at")
+                            diag_info["updated_at"] = _coerce_datetime(
+                                response_payload.get("updated_at")
+                            )
                             cached_day = response_payload.get("day")
                             if isinstance(cached_day, str):
                                 try:
@@ -776,7 +805,9 @@ async def _collect_features(
             elif mart_row:
                 diag_info["mart_row"] = True
                 diag_info["source"] = "today"
-                diag_info["updated_at"] = mart_row.get("updated_at")
+                diag_info["updated_at"] = _coerce_datetime(
+                    mart_row.get("updated_at")
+                )
                 response_payload = dict(mart_row)
             else:
                 freshened = await _freshen_features(conn, user_id, today_local, tzinfo)
@@ -785,7 +816,9 @@ async def _collect_features(
                     diag_info["source"] = "freshened"
                     diag_info["freshened"] = True
                     diag_info["mart_row"] = False
-                    diag_info["updated_at"] = response_payload.get("updated_at")
+                    diag_info["updated_at"] = _coerce_datetime(
+                        response_payload.get("updated_at")
+                    )
                 else:
                     yesterday = today_local - timedelta(days=1)
                     diag_info["day_used"] = yesterday
@@ -794,7 +827,9 @@ async def _collect_features(
                         response_payload = dict(mart_row)
                         diag_info["mart_row"] = True
                         diag_info["source"] = "yesterday"
-                        diag_info["updated_at"] = mart_row.get("updated_at")
+                        diag_info["updated_at"] = _coerce_datetime(
+                            mart_row.get("updated_at")
+                        )
                     else:
                         diag_info["source"] = "empty"
                         response_payload = {}
@@ -880,7 +915,7 @@ async def _fallback_from_cache(
         payload = dict(cached_payload)
         diag_info["mart_row"] = bool(payload)
         diag_info["source"] = payload.get("source") or diag_info.get("source") or "cache"
-        diag_info["updated_at"] = payload.get("updated_at")
+        diag_info["updated_at"] = _coerce_datetime(payload.get("updated_at"))
         cached_day = _coerce_day(payload.get("day"))
         if cached_day:
             diag_info["day_used"] = cached_day
@@ -899,7 +934,7 @@ async def _fallback_from_cache(
         user_id,
         fallback_error,
     )
-    return payload, diag_info, fallback_error
+    return payload, diag_info, None
 
 
 def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
@@ -972,6 +1007,20 @@ async def features_today(request: Request, diag: int = 0):
             user_id,
             tzinfo,
             reason=reason,
+        )
+
+    if error_text:
+        logger.warning(
+            "[features_today] primary query failed tz=%s user=%s: %s",
+            tz_name,
+            user_id,
+            error_text,
+        )
+        response_payload, diag_info, error_text = await _fallback_from_cache(
+            diag_info,
+            user_id,
+            tzinfo,
+            reason=error_text,
         )
 
     if error_text:

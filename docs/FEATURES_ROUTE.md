@@ -44,6 +44,6 @@ The `/v1/features/today` endpoint returns a consolidated “daily features” sn
 2. **Freshen** – if today’s row is missing, the handler performs a short “freshen” by combining `gaia.daily_summary`, raw sleep samples, and space-weather feeds. The response is annotated with `source:"freshened"` and `freshened:true`.
 3. **Yesterday fallback** – when neither of the above produce data, the handler loads yesterday’s mart row and marks `source:"yesterday"`.
 4. **Cache fallback** – when the service cannot obtain a database connection (for example when pgBouncer is saturated), the handler serves the last-good payload from the in-memory/Redis cache, marks `cache_fallback:true`, and sets `pool_timeout:true`. Clients continue to receive populated tiles even while the database is briefly unavailable.
-5. **Empty** – if no data or cache entry exists, the response is `{}` with `source:"empty"` (and `ok:false` when a hard error occurs).
+5. **Empty** – if no data or cache entry exists, the response is `{}` with `source:"empty"`. Even in this case the handler now returns `ok:true` so dashboards keep rendering defaults while diagnostics report the outage reason.
 
 Because diagnostics are always returned, client teams can inspect `diagnostics.day_used`, `source`, and `mart_row` to understand which branch served the payload.
