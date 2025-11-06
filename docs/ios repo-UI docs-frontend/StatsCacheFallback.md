@@ -2,9 +2,9 @@
 
 The backend now surfaces two new diagnostics on `/v1/features/today` to indicate when cached data was returned instead of a fresh mart snapshot:
 
-- `diagnostics.cache_fallback` — `true` when the handler served the last good payload from Redis / in-memory cache.
+- `diagnostics.cache_fallback` — `true` whenever the handler served the last good payload from Redis / in-memory cache, whether the trigger was a pool timeout *or* a mart query failure.
 - `diagnostics.pool_timeout` — `true` when the cache fallback was triggered because the database pool was saturated (pgBouncer timeout).
-- `diagnostics.error` — populated with the last connection/query error so the UI can display an actionable banner.
+- `diagnostics.error` — populated with the last connection or query error so the UI can display an actionable banner.
 
 To keep the iOS dashboard stable and avoid the refresh loop that was observed, please queue the following Codex task for the SwiftUI repo:
 

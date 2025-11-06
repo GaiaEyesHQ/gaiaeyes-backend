@@ -756,6 +756,9 @@ async def _collect_features(
                     today_local,
                     mart_error,
                 )
+                diag_info["error"] = str(mart_error) or mart_error.__class__.__name__
+                if isinstance(mart_error, PoolTimeout):
+                    diag_info["pool_timeout"] = True
                 should_enrich = False
                 yesterday = today_local - timedelta(days=1)
                 yesterday_row = await _fetch_mart_row(conn, user_id, yesterday)
@@ -792,6 +795,7 @@ async def _collect_features(
                             diag_info["updated_at"] = _coerce_datetime(
                                 response_payload.get("updated_at")
                             )
+                            diag_info["cache_fallback"] = True
                             cached_day = response_payload.get("day")
                             if isinstance(cached_day, str):
                                 try:

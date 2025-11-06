@@ -375,6 +375,73 @@ async def test_features_db_error_envelope(monkeypatch, client: AsyncClient):
 
 
 @pytest.mark.anyio
+async def test_features_mart_query_error_marks_cache(monkeypatch, client: AsyncClient):
+    def _fake_acquire():
+        return _FakeConnContext()
+
+    monkeypatch.setattr(summary, "_acquire_features_conn", _fake_acquire)
+
+    today = date(2024, 4, 6)
+
+    async def _fake_current_day(conn, tz_name):  # noqa: ARG001
+        return today
+
+    async def _fake_query_mart(conn, user_id, day_local):  # noqa: ARG001
+        return None, PoolTimeout("db_timeout")
+
+    async def _fake_fetch_mart(conn, user_id, day_local):  # noqa: ARG001
+        return None
+
+    async def _fake_fetch_snapshot(conn, user_id):  # noqa: ARG001
+        return None
+
+    cached_updated_at = "2024-04-05T07:30:00+00:00"
+
+    async def _fake_get_last_good(user_id: str):  # noqa: ARG001
+        return {
+            "user_id": user_id,
+            "day": "2024-04-05",
+            "source": "snapshot",
+            "steps_total": 4321,
+            "updated_at": cached_updated_at,
+        }
+
+    async def _noop_set_last_good(user_id: str, payload):  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(summary, "_current_day_local", _fake_current_day)
+    monkeypatch.setattr(summary, "_query_mart_with_retry", _fake_query_mart)
+    monkeypatch.setattr(summary, "_fetch_mart_row", _fake_fetch_mart)
+    monkeypatch.setattr(summary, "_fetch_snapshot_row", _fake_fetch_snapshot)
+    monkeypatch.setattr(summary, "get_last_good", _fake_get_last_good)
+    monkeypatch.setattr(summary, "set_last_good", _noop_set_last_good)
+
+    user_id = str(uuid4())
+    resp = await client.get(
+        "/v1/features/today",
+        headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
+        params={"tz": "UTC"},
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["error"] is None
+
+    data = payload["data"]
+    assert data["steps_total"] == 4321
+    assert data["day"] == "2024-04-05"
+    assert data["source"] == "snapshot"
+    assert data["updated_at"] == cached_updated_at
+
+    diag = payload["diagnostics"]
+    assert diag["cache_fallback"] is True
+    assert diag["pool_timeout"] is True
+    assert diag["error"] == "db_timeout"
+    assert diag["day_used"] == "2024-04-05"
+
+
+@pytest.mark.anyio
 async def test_features_cache_miss_still_marks_ok(monkeypatch, client: AsyncClient):
     class _FailCtx:
         async def __aenter__(self):

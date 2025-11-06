@@ -2,6 +2,12 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2024-04-07 — Cache fallback diagnostics
+
+- Flag mart query failures as cache fallbacks so mobile clients throttle refreshes while still showing cached tiles.
+- Ensure the diagnostics payload carries the triggering error (and pool timeout flag when relevant) when cached data is returned.
+- Document the updated behavior for the iOS Codex assignee.
+
 ## 2024-04-06 — Cache fallback envelope tweaks
 
 - Updated `/v1/features/today` to always return a populated data block (with defaults when necessary) while surfacing outage causes via `diagnostics.error`, preventing the iOS dashboard from entering a refresh loop during database timeouts.
