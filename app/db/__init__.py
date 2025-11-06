@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 _PGBOUNCER_PORT = 6543
+_DIRECT_PORT = 5432
 
 
 class Settings(BaseSettings):
@@ -96,21 +97,36 @@ def _prepare_conninfo() -> None:
     global _pool_conninfo_primary, _pool_conninfo_fallback
     global _pool_primary_label, _pool_fallback_label, _pool_active_label
 
-    cleaned, use_pgbouncer = _clean_database_url(settings.DATABASE_URL)
+    cleaned, use_pgbouncer_flag = _clean_database_url(settings.DATABASE_URL)
+    original_port = cleaned.port
+    inferred_pgbouncer = bool(original_port and original_port == _PGBOUNCER_PORT)
+
     primary_conninfo = _make_conninfo(cleaned)
     primary_label = "direct"
     fallback_conninfo: Optional[str] = None
     fallback_label: Optional[str] = None
 
-    if use_pgbouncer:
+    if use_pgbouncer_flag or inferred_pgbouncer:
         primary_conninfo = _make_conninfo(cleaned, port=_PGBOUNCER_PORT)
         primary_label = "pgbouncer"
-        logger.info("[DB] pgBouncer mode requested; primary port=%s", _PGBOUNCER_PORT)
-        direct_source = settings.DIRECT_URL or _make_conninfo(cleaned)
+        if use_pgbouncer_flag:
+            logger.info("[DB] pgBouncer mode requested; primary port=%s", _PGBOUNCER_PORT)
+        else:  # inferred from port
+            logger.info("[DB] pgBouncer mode inferred from port=%s", _PGBOUNCER_PORT)
+
+        direct_source = settings.DIRECT_URL
+        if not direct_source:
+            fallback_port = original_port
+            if not fallback_port or fallback_port == _PGBOUNCER_PORT:
+                fallback_port = _DIRECT_PORT
+            direct_source = _make_conninfo(cleaned, port=fallback_port)
+
         if direct_source:
             direct_cleaned, _ = _clean_database_url(direct_source)
-            fallback_conninfo = _make_conninfo(direct_cleaned)
-            fallback_label = "direct"
+            candidate = _make_conninfo(direct_cleaned)
+            if candidate != primary_conninfo:
+                fallback_conninfo = candidate
+                fallback_label = "direct"
     elif settings.DIRECT_URL:
         direct_cleaned, _ = _clean_database_url(settings.DIRECT_URL)
         candidate = _make_conninfo(direct_cleaned)
