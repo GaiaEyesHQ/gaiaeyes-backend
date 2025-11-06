@@ -2,6 +2,21 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2024-04-10 — Restore raw symptom errors with friendly fallbacks
+
+- Bring back the database-provided error strings in the `error` field so existing
+  clients stop looping during backend outages.
+- Add a `friendly_error` companion field that carries the documented message for
+  analytics/localization while keeping the envelope stable.
+- Updated the Symptoms API docs and regression tests to cover the dual-error
+  contract. No front-end work is required.
+
+## 2024-04-09 — Stabilize symptom error envelopes
+
+- Replace raw database exception messages across the symptom API with documented, user-facing strings so the mobile client receives consistent fallback payloads.
+- Expand the symptom normalization regression tests to assert the safe errors for both read and write failures.
+- No front-end updates required because the iOS app already expects the documented strings in `/docs/symptoms_api.md`.
+
 ## 2024-04-08 — Persist fallback errors without tripping the UI
 
 - Added `diagnostics.last_error` and now clear `diagnostics.error` whenever cached/yesterday data is served successfully so existing clients stop treating fallbacks as hard failures.

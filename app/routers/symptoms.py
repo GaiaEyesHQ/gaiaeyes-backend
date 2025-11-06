@@ -16,6 +16,13 @@ router = APIRouter(prefix="/symptoms", tags=["symptoms"])
 logger = logging.getLogger(__name__)
 
 
+_ERR_LOAD_CODES = "Failed to load symptom codes"
+_ERR_RECORD_EVENT = "Failed to record symptom event"
+_ERR_LOAD_TODAY = "Failed to load today's symptoms"
+_ERR_LOAD_DAILY = "Failed to load daily symptom summary"
+_ERR_LOAD_DIAG = "Failed to load diagnostic summary"
+
+
 def _require_user_id(request: Request) -> str:
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
@@ -34,6 +41,7 @@ class SymptomEventIn(BaseModel):
 class SymptomEnvelope(BaseModel):
     ok: bool = True
     error: Optional[str] = None
+    friendly_error: Optional[str] = None
 
 
 class SymptomEventData(BaseModel):
@@ -106,10 +114,14 @@ async def create_symptom_event(
         code_rows = await symptoms_db.fetch_symptom_codes(conn)
     except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to load codes for symptom post", extra={"user_id": user_id})
-        error_text = str(exc) or exc.__class__.__name__
         return JSONResponse(
             status_code=200,
-            content={"ok": False, "data": None, "error": error_text},
+            content={
+                "ok": False,
+                "data": None,
+                "error": _error_text(exc),
+                "friendly_error": _ERR_LOAD_CODES,
+            },
         )
 
     lookup = {
@@ -159,10 +171,14 @@ async def create_symptom_event(
         )
     except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to insert symptom event", extra={"user_id": user_id, "symptom_code": normalized_code})
-        error_text = str(exc) or exc.__class__.__name__
         return JSONResponse(
             status_code=200,
-            content={"ok": False, "data": None, "error": error_text},
+            content={
+                "ok": False,
+                "data": None,
+                "error": _error_text(exc),
+                "friendly_error": _ERR_RECORD_EVENT,
+            },
         )
     if not result.get("id") or not result.get("ts_utc"):
         raise HTTPException(status_code=500, detail="Failed to persist symptom event")
@@ -178,6 +194,11 @@ def _failure(payload: SymptomEnvelope) -> JSONResponse:
     return JSONResponse(status_code=200, content=payload.model_dump())
 
 
+def _error_text(exc: Exception) -> str:
+    text = str(exc)
+    return text if text else exc.__class__.__name__
+
+
 @router.get("/today", response_model=SymptomTodayResponse)
 async def get_symptoms_today(request: Request, conn=Depends(get_db)):
     user_id = _require_user_id(request)
@@ -185,9 +206,13 @@ async def get_symptoms_today(request: Request, conn=Depends(get_db)):
         rows = await symptoms_db.fetch_symptoms_today(conn, user_id)
     except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to load todays symptoms", extra={"user_id": user_id})
-        error_text = str(exc) or exc.__class__.__name__
         return _failure(
-            SymptomTodayResponse(ok=False, data=[], error=error_text)
+            SymptomTodayResponse(
+                ok=False,
+                data=[],
+                error=_error_text(exc),
+                friendly_error=_ERR_LOAD_TODAY,
+            )
         )
     data = [SymptomTodayOut(**row) for row in rows or []]
     return _success(SymptomTodayResponse(data=data))
@@ -204,9 +229,13 @@ async def get_symptoms_daily(
         rows = await symptoms_db.fetch_daily_summary(conn, user_id, days)
     except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to load daily symptoms", extra={"user_id": user_id, "days": days})
-        error_text = str(exc) or exc.__class__.__name__
         return _failure(
-            SymptomDailyResponse(ok=False, data=[], error=error_text)
+            SymptomDailyResponse(
+                ok=False,
+                data=[],
+                error=_error_text(exc),
+                friendly_error=_ERR_LOAD_DAILY,
+            )
         )
     data = [SymptomDailyRow(**row) for row in rows or []]
     return _success(SymptomDailyResponse(data=data))
@@ -223,9 +252,13 @@ async def get_symptom_diag(
         rows = await symptoms_db.fetch_diagnostics(conn, user_id, days)
     except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to load diagnostic summary", extra={"user_id": user_id, "days": days})
-        error_text = str(exc) or exc.__class__.__name__
         return _failure(
-            SymptomDiagResponse(ok=False, data=[], error=error_text)
+            SymptomDiagResponse(
+                ok=False,
+                data=[],
+                error=_error_text(exc),
+                friendly_error=_ERR_LOAD_DIAG,
+            )
         )
     data = [SymptomDiagRow(**row) for row in rows or []]
     return _success(SymptomDiagResponse(data=data))
@@ -245,9 +278,13 @@ async def list_symptom_codes(
         rows = await symptoms_db.fetch_symptom_codes(conn, include_inactive=include_inactive)
     except Exception as exc:  # pragma: no cover - exercised via tests
         logger.exception("failed to load symptom codes", extra={"include_inactive": include_inactive})
-        error_text = str(exc) or exc.__class__.__name__
         return _failure(
-            SymptomCodeResponse(ok=False, data=[], error=error_text)
+            SymptomCodeResponse(
+                ok=False,
+                data=[],
+                error=_error_text(exc),
+                friendly_error=_ERR_LOAD_CODES,
+            )
         )
 
     response.headers["Cache-Control"] = "public, max-age=300"
