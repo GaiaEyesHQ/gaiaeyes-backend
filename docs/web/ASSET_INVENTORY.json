@@ -1000,6 +1000,22 @@
       }
     ]
   },
+  "hazards-brief": {
+    "page_url": "https://staging2.gaiaeyes.com/",
+    "selector": "section.gaia-hazards-brief",
+    "assets": [
+      {
+        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/public/hazards/latest.json",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "size_bytes": 1824,
+        "ttfb_ms": 24.5,
+        "dimensions": null,
+        "notes": []
+      }
+    ]
+  },
   "news": {
     "page_url": "https://staging2.gaiaeyes.com/news-2/",
     "selector": "section.ge-news",
