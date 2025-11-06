@@ -770,6 +770,7 @@ async def _collect_features(
                         yesterday_row.get("updated_at")
                     )
                     diag_info["day_used"] = yesterday
+                    should_enrich = True
                 else:
                     fallback_row = await _fetch_snapshot_row(conn, user_id)
                     if fallback_row:
@@ -786,6 +787,7 @@ async def _collect_features(
                             except ValueError:
                                 fallback_day = None
                         diag_info["day_used"] = fallback_day or diag_info.get("day_used")
+                        should_enrich = True
                     else:
                         cached_payload = await get_last_good(user_id)
                         if cached_payload:
@@ -803,9 +805,12 @@ async def _collect_features(
                                 except ValueError:
                                     cached_day = None
                             diag_info["day_used"] = cached_day or diag_info.get("day_used")
+                            # cached payloads already contain enriched fields
+                            should_enrich = False
                         else:
                             diag_info["source"] = "snapshot"
                             response_payload = {"source": "snapshot"}
+                            should_enrich = False
             elif mart_row:
                 diag_info["mart_row"] = True
                 diag_info["source"] = "today"

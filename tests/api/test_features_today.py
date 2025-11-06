@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import List
 from uuid import uuid4
 
@@ -439,6 +439,128 @@ async def test_features_mart_query_error_marks_cache(monkeypatch, client: AsyncC
     assert diag["pool_timeout"] is True
     assert diag["error"] == "db_timeout"
     assert diag["day_used"] == "2024-04-05"
+
+
+@pytest.mark.anyio
+async def test_features_mart_error_yesterday_enriched(monkeypatch, client: AsyncClient):
+    def _fake_acquire():
+        return _FakeConnContext()
+
+    monkeypatch.setattr(summary, "_acquire_features_conn", _fake_acquire)
+
+    today = date(2024, 4, 7)
+    yesterday = date(2024, 4, 6)
+
+    async def _fake_current_day(conn, tz_name):  # noqa: ARG001
+        return today
+
+    async def _fake_query_mart(conn, user_id, day_local):  # noqa: ARG001
+        return None, PoolTimeout("timeout")
+
+    async def _fake_fetch_mart(conn, user_id: str, day_local: date):  # noqa: ARG001
+        if day_local == yesterday:
+            return {
+                "user_id": user_id,
+                "day": yesterday,
+                "steps_total": 2222,
+                "hr_min": 50,
+                "hr_max": 105,
+                "updated_at": datetime(2024, 4, 6, 12, 0, tzinfo=timezone.utc),
+            }
+        return None
+
+    async def _fake_snapshot(conn, user_id):  # noqa: ARG001
+        return None
+
+    async def _fake_sleep(conn, user_id, start_utc, end_utc):  # noqa: ARG001
+        return {
+            "rem_m": 40,
+            "core_m": 60,
+            "deep_m": 50,
+            "awake_m": 10,
+            "inbed_m": 180,
+        }
+
+    async def _fake_daily_wx(conn, day_local):  # noqa: ARG001
+        return {
+            "kp_max": 6,
+            "bz_min": -4.5,
+            "sw_speed_avg": 500,
+            "flares_count": 2,
+            "cmes_count": 1,
+        }
+
+    async def _fake_current_wx(conn):  # noqa: ARG001
+        return {
+            "kp_current": 5,
+            "bz_current": -3,
+            "sw_speed_current": 480,
+        }
+
+    async def _fake_sch(conn, day_local):  # noqa: ARG001
+        return {
+            "sch_station": "tomsk",
+            "sch_f0_hz": 7.9,
+            "sch_f1_hz": 14.2,
+            "sch_f2_hz": 20.4,
+            "sch_f3_hz": 26.5,
+            "sch_f4_hz": 32.6,
+        }
+
+    async def _fake_post(conn, day_local):  # noqa: ARG001
+        return {
+            "post_title": "Yesterday",
+            "post_caption": "Cached",
+            "post_body": "Body",
+            "post_hashtags": "#fallback",
+        }
+
+    async def _fake_get_last_good(user_id: str):  # noqa: ARG001
+        return None
+
+    async def _noop_set_last_good(user_id: str, payload):  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(summary, "_current_day_local", _fake_current_day)
+    monkeypatch.setattr(summary, "_query_mart_with_retry", _fake_query_mart)
+    monkeypatch.setattr(summary, "_fetch_mart_row", _fake_fetch_mart)
+    monkeypatch.setattr(summary, "_fetch_snapshot_row", _fake_snapshot)
+    monkeypatch.setattr(summary, "_fetch_sleep_aggregate", _fake_sleep)
+    monkeypatch.setattr(summary, "_fetch_space_weather_daily", _fake_daily_wx)
+    monkeypatch.setattr(summary, "_fetch_current_space_weather", _fake_current_wx)
+    monkeypatch.setattr(summary, "_fetch_schumann_row", _fake_sch)
+    monkeypatch.setattr(summary, "_fetch_daily_post", _fake_post)
+    monkeypatch.setattr(summary, "get_last_good", _fake_get_last_good)
+    monkeypatch.setattr(summary, "set_last_good", _noop_set_last_good)
+
+    user_id = str(uuid4())
+    resp = await client.get(
+        "/v1/features/today",
+        headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
+        params={"tz": "UTC"},
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    data = payload["data"]
+
+    assert data["day"] == yesterday.isoformat()
+    assert data["steps_total"] == 2222
+    # Aggregated fields should be populated despite the mart error
+    assert data["sleep_total_minutes"] == 150
+    assert data["rem_m"] == 40
+    assert data["core_m"] == 60
+    assert data["deep_m"] == 50
+    assert data["kp_max"] == 6
+    assert data["kp_alert"] is True
+    assert data["post_title"] == "Yesterday"
+
+    diag = payload["diagnostics"]
+    assert diag["source"] == "yesterday"
+    assert diag["day_used"] == yesterday.isoformat()
+    assert diag["cache_fallback"] is False
+    assert diag["pool_timeout"] is True
 
 
 @pytest.mark.anyio
