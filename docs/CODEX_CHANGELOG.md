@@ -2,6 +2,16 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2024-04-11 — Harden database connectivity and symptom fallbacks
+
+- Update the async pool bootstrapper to respect the original `DATABASE_URL` port, only switch to pgBouncer when explicitly
+  requested, and automatically fall back to a direct connection when the pgBouncer endpoint is unreachable. Diagnostics now
+  expose the active backend and whether a fallback is available so the mobile client can make informed refresh decisions.
+- Keep optional direct connection strings sanitized and reusable, ensuring refresh tasks and cache warmers share a single,
+  self-healing pool configuration without fighting the front end.
+- Fix the symptom tracker endpoints to capture the raised exception objects so error envelopes remain populated instead of
+  crashing with `NameError`, restoring friendly errors in the iOS debug console.
+
 ## 2024-04-10 — Restore raw symptom errors with friendly fallbacks
 
 - Bring back the database-provided error strings in the `error` field so existing
