@@ -5,7 +5,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional, AsyncGenerator, Dict, Any
-from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse, ParseResult
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from psycopg_pool import AsyncConnectionPool
@@ -36,11 +36,25 @@ _pool_open = False
 _pool_last_refresh: Optional[datetime] = None
 _pool_watchdog_task: Optional[asyncio.Task] = None
 _pool_metrics_task: Optional[asyncio.Task] = None
+_pool_conninfo_primary: Optional[str] = None
+_pool_conninfo_fallback: Optional[str] = None
+_pool_primary_label: str = "unknown"
+_pool_fallback_label: Optional[str] = None
+_pool_active_label: str = "unknown"
 
 _STATEMENT_TIMEOUT_MS = 60000
 
 
-def _rebuild_netloc(u) -> str:
+def _parse_bool(value: Optional[str]) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    return text in {"1", "true", "t", "yes", "y", "on"}
+
+
+def _rebuild_netloc(u: ParseResult, port: int) -> str:
     username = u.username or ""
     password = u.password or ""
     host = u.hostname or ""
@@ -58,24 +72,57 @@ def _rebuild_netloc(u) -> str:
     if host and ":" in host and not host.startswith("["):
         host = f"[{host}]"
 
-    return f"{userinfo}{host}:{_PGBOUNCER_PORT}"
+    return f"{userinfo}{host}:{port}"
 
 
-def _sanitize_conninfo(dsn: str) -> str:
-    u = urlparse(dsn)
-    qs = dict(parse_qsl(u.query, keep_blank_values=True))
-    qs.pop("pgbouncer", None)
+def _clean_database_url(dsn: str) -> tuple[ParseResult, bool]:
+    parsed = urlparse(dsn)
+    qs = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    raw_pgbouncer = qs.pop("pgbouncer", None)
+    use_pgbouncer = _parse_bool(raw_pgbouncer)
     qs.pop("prepare_threshold", None)
     qs.setdefault("sslmode", "require")
-    new_q = urlencode(qs)
-    netloc = u.netloc
-    if (u.port or _PGBOUNCER_PORT) != _PGBOUNCER_PORT:
-        logger.info("[DB] forcing pgBouncer port %s (was %s)", _PGBOUNCER_PORT, u.port)
-        netloc = _rebuild_netloc(u)
-    elif u.port is None:
-        logger.info("[DB] applying pgBouncer default port %s", _PGBOUNCER_PORT)
-        netloc = _rebuild_netloc(u)
-    return urlunparse((u.scheme, netloc, u.path, u.params, new_q, u.fragment))
+    cleaned = parsed._replace(query=urlencode(qs))
+    return cleaned, use_pgbouncer
+
+
+def _make_conninfo(parsed: ParseResult, *, port: Optional[int] = None) -> str:
+    if port is None:
+        return urlunparse(parsed)
+    return urlunparse(parsed._replace(netloc=_rebuild_netloc(parsed, port)))
+
+
+def _prepare_conninfo() -> None:
+    global _pool_conninfo_primary, _pool_conninfo_fallback
+    global _pool_primary_label, _pool_fallback_label, _pool_active_label
+
+    cleaned, use_pgbouncer = _clean_database_url(settings.DATABASE_URL)
+    primary_conninfo = _make_conninfo(cleaned)
+    primary_label = "direct"
+    fallback_conninfo: Optional[str] = None
+    fallback_label: Optional[str] = None
+
+    if use_pgbouncer:
+        primary_conninfo = _make_conninfo(cleaned, port=_PGBOUNCER_PORT)
+        primary_label = "pgbouncer"
+        logger.info("[DB] pgBouncer mode requested; primary port=%s", _PGBOUNCER_PORT)
+        direct_source = settings.DIRECT_URL or _make_conninfo(cleaned)
+        if direct_source:
+            direct_cleaned, _ = _clean_database_url(direct_source)
+            fallback_conninfo = _make_conninfo(direct_cleaned)
+            fallback_label = "direct"
+    elif settings.DIRECT_URL:
+        direct_cleaned, _ = _clean_database_url(settings.DIRECT_URL)
+        candidate = _make_conninfo(direct_cleaned)
+        if candidate != primary_conninfo:
+            fallback_conninfo = candidate
+            fallback_label = "direct"
+
+    _pool_conninfo_primary = primary_conninfo
+    _pool_conninfo_fallback = fallback_conninfo
+    _pool_primary_label = primary_label
+    _pool_fallback_label = fallback_label
+    _pool_active_label = primary_label
 
 
 async def _check_on_acquire(conn) -> None:
@@ -157,7 +204,8 @@ async def _stop_pool_monitors() -> None:
 def _get_or_create_pool() -> AsyncConnectionPool:
     global _pool
     if _pool is None:
-        conninfo = _sanitize_conninfo(settings.DATABASE_URL)
+        _prepare_conninfo()
+        conninfo = _pool_conninfo_primary or settings.DATABASE_URL
         # NOTE: Supabase + pgBouncer (transaction mode) favors a small client pool.
         # Large client pools can cause churn and apparent flapping. Keep min small,
         # cap max to single digits, and use short acquire timeout to fail fast.
@@ -174,17 +222,50 @@ def _get_or_create_pool() -> AsyncConnectionPool:
             },
         )
         logger.info(
-            "[DB] async pool configured for pgBouncer transaction mode on port %s", _PGBOUNCER_PORT
+            "[DB] async pool configured backend=%s", _pool_active_label
         )
     return _pool
 
 
 async def open_pool() -> AsyncConnectionPool:
-    global _pool_open, _pool_last_refresh
+    global _pool_open, _pool_last_refresh, _pool_active_label
     async with _pool_lock:
         pool = _get_or_create_pool()
         if not _pool_open:
-            await pool.open()
+            try:
+                await pool.open()
+            except Exception as exc:
+                if (
+                    _pool_conninfo_fallback
+                    and _pool_fallback_label
+                    and _pool_active_label == _pool_primary_label
+                ):
+                    logger.warning(
+                        "[DB] primary pool open failed (%s); retrying with %s backend",
+                        exc,
+                        _pool_fallback_label,
+                    )
+                    try:
+                        await pool.close()
+                    except Exception:
+                        pass
+                    _pool = AsyncConnectionPool(
+                        conninfo=_pool_conninfo_fallback,
+                        min_size=2,
+                        max_size=8,
+                        timeout=8,
+                        max_idle=300,
+                        open=False,
+                        check=_check_on_acquire,
+                        kwargs={
+                            "sslmode": "require",
+                        },
+                    )
+                    pool = _pool
+                    _pool_active_label = _pool_fallback_label
+                    await pool.open()
+                else:
+                    raise
             _pool_last_refresh = datetime.now(timezone.utc)
             _pool_open = True
             _log_pool_diag(pool)
@@ -261,4 +342,6 @@ def get_pool_metrics() -> Dict[str, Any]:
         "waiting": waiting,
         "last_refresh": last_refresh_iso,
         "ok": db_ok,
+        "backend": _pool_active_label,
+        "fallback_available": bool(_pool_conninfo_fallback),
     }
