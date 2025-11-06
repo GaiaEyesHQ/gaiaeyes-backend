@@ -2,6 +2,40 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2024-04-12 — Reinstate raw symptom errors for client heuristics
+
+- Restore the original database/driver message in the `error` field so the mobile
+  apps continue detecting outages via `db_timeout` and similar markers.
+- Keep the documented fallback copy in `friendly_error` for UI messaging while
+  mirroring the raw value in `raw_error` for instrumentation.
+- Updated the Symptoms API guide and regression tests accordingly. No front-end
+  changes are required—clients should continue reading `error` for logic and
+  `friendly_error` for presentation.
+
+## 2024-04-11 — Restore friendly symptom errors while exposing raw details
+
+- Revert the `error` field to the documented friendly strings so the Gaia Eyes app
+  can safely display outage messaging without looping on raw driver codes.
+- Preserve the low-level exception text in a new `raw_error` attribute and keep
+  `friendly_error` as a backwards-compatible alias during the migration.
+- Updated the Symptoms API docs and regression tests to cover the new envelope.
+  No front-end follow-up is required beyond continuing to read `error`.
+
+## 2024-04-10 — Restore raw symptom errors with friendly fallbacks
+
+- Bring back the database-provided error strings in the `error` field so existing
+  clients stop looping during backend outages.
+- Add a `friendly_error` companion field that carries the documented message for
+  analytics/localization while keeping the envelope stable.
+- Updated the Symptoms API docs and regression tests to cover the dual-error
+  contract. No front-end work is required.
+
+## 2024-04-09 — Stabilize symptom error envelopes
+
+- Replace raw database exception messages across the symptom API with documented, user-facing strings so the mobile client receives consistent fallback payloads.
+- Expand the symptom normalization regression tests to assert the safe errors for both read and write failures.
+- No front-end updates required because the iOS app already expects the documented strings in `/docs/symptoms_api.md`.
+
 ## 2024-04-08 — Persist fallback errors without tripping the UI
 
 - Added `diagnostics.last_error` and now clear `diagnostics.error` whenever cached/yesterday data is served successfully so existing clients stop treating fallbacks as hard failures.

@@ -20,16 +20,22 @@ All symptom routes respond with a predictable JSON envelope:
 {
   "ok": true,
   "data": [],
-  "error": null
+  "error": null,
+  "raw_error": null,
+  "friendly_error": null
 }
 ```
 
 - `ok` is `true` when the request succeeded and `false` on failures.
 - `data` is always present. Collection endpoints return an array (possibly empty). The
   POST route returns either the created event payload or `null` on errors.
-- `error` contains a short, user-facing message when something goes wrong. Even on
-  database failures the service replies with HTTP 200 so the iOS client can decode the
-  body without throwing transport-level exceptions.
+- `error` carries the original database/driver message (for example, `"db_timeout"`).
+- `raw_error` mirrors `error` so internal tooling can rely on a stable key while
+  clients transition to the new contract.
+- `friendly_error` contains the documented fallback string appropriate for end-user
+  presentation.
+- Even on database failures the service replies with HTTP 200 so the iOS client can
+  decode the body without throwing transport-level exceptions.
 
 When the database is unreachable the backend logs the stack trace but returns a safe
 payload such as:
@@ -38,7 +44,9 @@ payload such as:
 {
   "ok": false,
   "data": [],
-  "error": "Failed to load today's symptoms"
+  "error": "backend DB unavailable",
+  "raw_error": "backend DB unavailable",
+  "friendly_error": "Failed to load today's symptoms"
 }
 ```
 
@@ -92,7 +100,9 @@ the service automatically stamps the current UTC time.
 {
   "ok": false,
   "data": null,
-  "error": "Failed to record symptom event"
+  "error": "backend DB unavailable",
+  "raw_error": "backend DB unavailable",
+  "friendly_error": "Failed to record symptom event"
 }
 ```
 
@@ -122,7 +132,9 @@ can reuse them directly when posting events. Responses include a short cache hea
       "is_active": true
     }
   ],
-  "error": null
+  "error": null,
+  "raw_error": null,
+  "friendly_error": null
 }
 ```
 
@@ -132,7 +144,9 @@ On transient database errors the endpoint still returns HTTP 200 with:
 {
   "ok": false,
   "data": [],
-  "error": "Failed to load symptom codes"
+  "error": "backend DB unavailable",
+  "raw_error": "backend DB unavailable",
+  "friendly_error": "Failed to load symptom codes"
 }
 ```
 
@@ -167,11 +181,13 @@ are sorted by most recent first.
 If the query cannot reach the database the response becomes:
 
 ```json
-{
-  "ok": false,
-  "data": [],
-  "error": "Failed to load today's symptoms"
-}
+  {
+    "ok": false,
+    "data": [],
+    "error": "backend DB unavailable",
+    "raw_error": "backend DB unavailable",
+    "friendly_error": "Failed to load today's symptoms"
+  }
 ```
 
 ## GET `/v1/symptoms/daily?days=30`
@@ -212,7 +228,9 @@ HTTP status at 200:
 {
   "ok": false,
   "data": [],
-  "error": "Failed to load daily symptom summary"
+  "error": "backend DB unavailable",
+  "raw_error": "backend DB unavailable",
+  "friendly_error": "Failed to load daily symptom summary"
 }
 ```
 
@@ -249,7 +267,9 @@ In case of a database outage:
 {
   "ok": false,
   "data": [],
-  "error": "Failed to load diagnostic summary"
+  "error": "backend DB unavailable",
+  "raw_error": "backend DB unavailable",
+  "friendly_error": "Failed to load diagnostic summary"
 }
 ```
 

@@ -172,12 +172,12 @@ async def test_unknown_strict_vs_default(client: AsyncClient, recording_store: R
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    "path, attr",
+    "path, attr, expected_friendly",
     [
-        ("/v1/symptoms/codes", "fetch_symptom_codes"),
-        ("/v1/symptoms/today", "fetch_symptoms_today"),
-        ("/v1/symptoms/daily", "fetch_daily_summary"),
-        ("/v1/symptoms/diag", "fetch_diagnostics"),
+        ("/v1/symptoms/codes", "fetch_symptom_codes", "Failed to load symptom codes"),
+        ("/v1/symptoms/today", "fetch_symptoms_today", "Failed to load today's symptoms"),
+        ("/v1/symptoms/daily", "fetch_daily_summary", "Failed to load daily symptom summary"),
+        ("/v1/symptoms/diag", "fetch_diagnostics", "Failed to load diagnostic summary"),
     ],
 )
 async def test_symptom_routes_wrap_db_errors(
@@ -185,6 +185,7 @@ async def test_symptom_routes_wrap_db_errors(
     monkeypatch: pytest.MonkeyPatch,
     path: str,
     attr: str,
+    expected_friendly: str,
 ):
     async def _boom(*args, **kwargs):  # noqa: ARG001
         raise RuntimeError("db boom")
@@ -202,6 +203,8 @@ async def test_symptom_routes_wrap_db_errors(
     assert payload["ok"] is False
     assert payload["data"] == []
     assert payload["error"] == "db boom"
+    assert payload["raw_error"] == "db boom"
+    assert payload["friendly_error"] == expected_friendly
 
 
 @pytest.mark.anyio
@@ -222,3 +225,44 @@ async def test_post_symptom_returns_normalized_error(client: AsyncClient, monkey
     assert payload["ok"] is False
     assert payload["data"] is None
     assert payload["error"] == "no db"
+    assert payload["raw_error"] == "no db"
+    assert payload["friendly_error"] == "Failed to load symptom codes"
+
+
+@pytest.mark.anyio
+async def test_post_symptom_insert_failure_returns_safe_error(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+):
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Dev-UserId": "00000000-0000-0000-0000-000000000001",
+    }
+
+    async def _codes(*args, **kwargs):  # noqa: ARG001
+        return [
+            {
+                "symptom_code": "HEADACHE",
+                "label": "Headache",
+                "description": "",
+                "is_active": True,
+            }
+        ]
+
+    async def _boom(*args, **kwargs):  # noqa: ARG001
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(symptoms_db, "fetch_symptom_codes", _codes)
+    monkeypatch.setattr(symptoms_db, "insert_symptom_event", _boom)
+
+    response = await client.post(
+        "/v1/symptoms",
+        json={"symptom_code": "headache"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    assert payload["data"] is None
+    assert payload["error"] == "db down"
+    assert payload["raw_error"] == "db down"
+    assert payload["friendly_error"] == "Failed to record symptom event"
