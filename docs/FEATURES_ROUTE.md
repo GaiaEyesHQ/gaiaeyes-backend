@@ -19,7 +19,7 @@ The `/v1/features/today` endpoint returns a consolidated “daily features” sn
     "branch": "scoped" | "anonymous",
     "day": "YYYY-MM-DD" | null,
     "day_used": "YYYY-MM-DD" | null,
-    "source": "today" | "freshened" | "yesterday" | "empty",
+    "source": "today" | "freshened" | "yesterday" | "empty" | "cache",
     "mart_row": true|false,
     "freshened": true|false,
     "statement_timeout_ms": int,
@@ -28,18 +28,23 @@ The `/v1/features/today` endpoint returns a consolidated “daily features” sn
     "updated_at": ISO8601|null,
     "max_day": "YYYY-MM-DD" | null,
     "total_rows": int|null,
-    "tz": string
+    "tz": string,
+    "cache_fallback": true|false,
+    "pool_timeout": true|false,
+    "error": string|null,
+    "last_error": string|null
   }
 }
 ```
 
-`data` is never `null`. When a snapshot is unavailable the handler returns `{}` with `ok:true` so tiles can remain filled with the last-good content.
+`data` is never `null`. When a snapshot is unavailable the handler returns `{}` with `ok:true` so tiles can remain filled with the last-good content. During cache fallbacks the top-level `error` remains `null`. `diagnostics.error` is only populated when the endpoint itself returns `ok:false`, while `diagnostics.last_error` preserves the most recent failure message that triggered a fallback so clients can surface an informational banner without disabling cached data.
 
 ## Source selection
 
 1. **Today’s mart row** – if `marts.daily_features` already contains `(user_id, today_local)` the handler hydrates it with live sleep and space weather context.
 2. **Freshen** – if today’s row is missing, the handler performs a short “freshen” by combining `gaia.daily_summary`, raw sleep samples, and space-weather feeds. The response is annotated with `source:"freshened"` and `freshened:true`.
 3. **Yesterday fallback** – when neither of the above produce data, the handler loads yesterday’s mart row and marks `source:"yesterday"`.
-4. **Empty** – if no data exists, the response is `{}` with `source:"empty"`.
+4. **Cache fallback** – when the service cannot obtain a database connection (for example when pgBouncer is saturated) *or* when the mart query itself errors, the handler serves the last-good payload from the in-memory/Redis cache, marks `cache_fallback:true`, and records the failure inside `diagnostics.last_error`. Pool saturation also toggles `pool_timeout:true`. Clients continue to receive populated tiles even while the database is briefly unavailable.
+5. **Empty** – if no data or cache entry exists, the response is `{}` with `source:"empty"`. Even in this case the handler now returns `ok:true` so dashboards keep rendering defaults while diagnostics report the outage reason.
 
 Because diagnostics are always returned, client teams can inspect `diagnostics.day_used`, `source`, and `mart_row` to understand which branch served the payload.
