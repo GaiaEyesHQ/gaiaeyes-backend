@@ -1,0 +1,68 @@
+# Scripts Guide
+
+This guide documents the maintenance and data-processing scripts located in [`/scripts`](../scripts). Each entry summarizes the script's purpose, primary outputs, and required environment variables so you can run or automate them confidently.
+
+## Running scripts
+
+* All Python scripts target Python 3.10+ and assume dependencies from `requirements.txt` (notably `httpx`, `asyncpg`, and `requests`). Activate the project virtual environment before running any script.
+* Invoke scripts directly with `python scripts/<name>.py`. Most scripts also include a shebang and executable bit, so you can run them via `./scripts/<name>.py` on Unix-like systems.
+* Several scripts interact with Supabase. Provide the pooled Postgres connection string via `SUPABASE_DB_URL` (include `sslmode=require` and `pgbouncer=true` when available).
+* Scripts that write JSON or image artifacts default to the sibling [`gaiaeyes-media`](../gaiaeyes-media) checkout. Override paths with `MEDIA_DIR` or `OUTPUT_JSON_PATH` when running locally.
+
+## Data ingestion jobs
+
+| Script | Purpose & Outputs | Key environment variables |
+| --- | --- | --- |
+| `ingest_alerts_us.py` | Pulls active severe-weather alerts from the NWS API and emits `alerts_us_latest.json`. | `MEDIA_DIR`, `OUTPUT_JSON_PATH` |
+| `ingest_gdacs.py` | Parses the GDACS RSS feed for global hazard alerts and writes `gdacs_latest.json`. | `MEDIA_DIR`, `OUTPUT_JSON_PATH`, `GDACS_RSS` |
+| `ingest_nasa_donki.py` | Fetches NASA DONKI flare and CME events (plus GOES flux summaries), upserts them into `ext.donki_event`, and optionally emits `flares_cmes.json`. | `SUPABASE_DB_URL`, `NASA_API_KEY` (required); `START_DAYS_AGO`, `OUTPUT_JSON_PATH`, `OUTPUT_JSON_GZIP`, retry tuning vars |
+| `ingest_schumann_github.py` | Pulls Schumann resonance telemetry from the `gaiaeyes-media` GitHub repo and upserts station readings into `ext.schumann_*`. | `SUPABASE_DB_URL` or `DATABASE_URL` |
+| `ingest_space_news.py` | Aggregates space-weather RSS/JSON feeds (NASA, SWPC, DONKI) into a news digest JSON file. | `OUTPUT_JSON_PATH`, `MEDIA_DIR`, `LOOKBACK_DAYS`, plus DONKI API key via `NASA_API_KEY` when provided |
+| `ingest_space_weather_custom.py` | Streams high-resolution Kp, solar-wind plasma, and magnetometer data into `ext.space_weather`. | `SUPABASE_DB_URL` (required); optional overrides for `KP_URL`, `SW_URL`, `MAG_URL`, `HTTP_USER_AGENT`, `SINCE_HOURS` |
+| `ingest_space_weather_swpc.py` | Fetches SWPC summary feeds (Kp, speed, Bz), merges timestamps, upserts into `ext.space_weather`, and can emit a dashboard JSON snapshot. | `SUPABASE_DB_URL` (required); `SINCE_HOURS`, `OUTPUT_JSON_PATH`, `OUTPUT_JSON_GZIP`, `NEXT72_DEFAULT`, `HTTP_USER_AGENT` |
+| `ingest_usgs_quakes.py` | Collects USGS day/week feeds, curates recent M5+ events, optional PostgREST upserts, and writes `quakes_latest.json`. | `MEDIA_DIR`, `OUTPUT_JSON_PATH`; optional `SUPABASE_REST_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY` |
+| `ingest_usgs_history.py` | Builds historical quake trend series (daily/monthly) and emits `quakes_history.json`. | `OUTPUT_JSON_PATH`, `HISTORY_DAYS`, `HISTORY_MONTHS` |
+| `space_visuals_ingest.py` | Downloads imagery for the live “Space Weather” section (SUVI, aurora, LASCO, CCOR, geospace plots) plus GOES JSON traces. Assets land under `gaiaeyes-media/images/space` and `space_live.json`. | `MEDIA_DIR`, `OUTPUT_JSON_PATH`, plus numerous URL overrides such as `SUVI_URLS`, `LASCO_C3_URLS`, `CCOR1_MP4_NAME` |
+
+## Rollups and marts
+
+| Script | Purpose & Outputs | Key environment variables |
+| --- | --- | --- |
+| `rollup_space_weather_daily.py` | Aggregates `ext.space_weather` telemetry and DONKI counts into `marts.space_weather_daily`. | `SUPABASE_DB_URL`; `DAYS_BACK` |
+| `rollup_health_daily.py` | Summarizes Gaia health samples into `gaia.daily_summary` using a configurable timezone. | `SUPABASE_DB_URL`; `DAYS_BACK`; `USER_TZ` |
+| `rollup_daily_features.py` | Joins health summaries with space-weather and Schumann mart data into `marts.daily_features`. | `SUPABASE_DB_URL`; `DAYS_BACK` |
+| `refresh_symptom_marts.py` | Invokes the `marts.refresh_symptom_marts()` stored procedure. | `SUPABASE_DB_URL` |
+
+## Publishing & derived artifacts
+
+| Script | Purpose & Outputs | Key environment variables |
+| --- | --- | --- |
+| `build_compare_series.py` | Combines quake and space-weather history into `compare_series.json` for overlay charts. | `MEDIA_DIR`, `OUTPUT_JSON_PATH` |
+| `build_space_history.py` | Queries Supabase REST for `marts.space_weather_daily` records and emits `space_history.json`. | `SUPABASE_REST_URL`, `SUPABASE_SERVICE_KEY`/`SUPABASE_ANON_KEY`; `OUTPUT_JSON_PATH`, `HISTORY_DAYS`, `SW_DAILY_TABLE`, `SW_DAILY_FIELDS` |
+| `earthscope_rules_emit.py` | Blends ingest outputs into `earthscope.json`, providing guidance strings and combined Schumann insights. | `MEDIA_DIR`, `OUTPUT_JSON_PATH` |
+| `pulse_emit.py` | Produces the `pulse.json` card deck summarizing flares, CMEs, aurora outlooks, quakes, and alerts. | `MEDIA_DIR`, `OUTPUT_JSON_PATH` |
+| `space_visuals_ingest.py` | (See ingestion table) feeds dashboard imagery and telemetry. | Same as above |
+
+## Auditing & maintenance
+
+| Script | Purpose & Outputs | Key environment variables |
+| --- | --- | --- |
+| `audit_workflows.py` | Audits GitHub Actions workflows for configured repos, reporting latest runs, failures, and secret references. | `GITHUB_TOKEN` (repo + workflow scopes) |
+| `check_site_assets.py` | HEAD/GET checks third-party assets listed in `docs/web/ASSET_INVENTORY.json` and reports failures. | `inventory` CLI arg (defaults internally) |
+| `scan-secrets.sh` | Greps workflow files (or supplied paths) for `${{ secrets.* }}`/`${{ vars.* }}` references using `rg`. | None (requires `rg` in PATH) |
+
+## Scheduling notes
+
+* Long-running ingestion jobs (DONKI, SWPC, Schumann, USGS) are designed to be idempotent and tolerate reruns; set `DAYS_BACK`/`SINCE_HOURS` conservatively when backfilling.
+* Publishing scripts expect the latest ingestion JSON files in `gaiaeyes-media/data`. Run ingestors first or point `MEDIA_DIR` to a directory containing fresh source files.
+* Shell out `scan-secrets.sh` as part of workflow reviews, and run `check_site_assets.py` periodically to catch stale vendor URLs.
+
+## Adding new scripts
+
+When adding to `/scripts`:
+
+1. Include a module docstring summarizing the script, expected outputs, and key environment variables.
+2. Prefer async `httpx`/`asyncpg` clients for network and database work to keep tooling consistent.
+3. Emit machine-readable JSON or database updates only after a successful run; log errors to stderr.
+4. Update this guide so teammates know how to operate the new script.
+
