@@ -202,8 +202,7 @@ async def test_symptom_routes_wrap_db_errors(
     payload = response.json()
     assert payload["ok"] is False
     assert payload["data"] == []
-    assert payload["error"] == expected_friendly
-    assert payload["raw_error"] == "db boom"
+    assert payload["error"] == "db boom"
     assert payload["friendly_error"] == expected_friendly
 
 
@@ -224,8 +223,7 @@ async def test_post_symptom_returns_normalized_error(client: AsyncClient, monkey
     payload = response.json()
     assert payload["ok"] is False
     assert payload["data"] is None
-    assert payload["error"] == "Failed to load symptom codes"
-    assert payload["raw_error"] == "no db"
+    assert payload["error"] == "no db"
     assert payload["friendly_error"] == "Failed to load symptom codes"
 
 
@@ -263,6 +261,5 @@ async def test_post_symptom_insert_failure_returns_safe_error(
     payload = response.json()
     assert payload["ok"] is False
     assert payload["data"] is None
-    assert payload["error"] == "Failed to record symptom event"
-    assert payload["raw_error"] == "db down"
+    assert payload["error"] == "db down"
     assert payload["friendly_error"] == "Failed to record symptom event"

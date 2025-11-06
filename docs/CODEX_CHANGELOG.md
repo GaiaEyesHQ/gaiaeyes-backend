@@ -2,15 +2,6 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
-## 2024-04-11 — Restore friendly symptom errors while exposing raw details
-
-- Revert the `error` field to the documented friendly strings so the Gaia Eyes app
-  can safely display outage messaging without looping on raw driver codes.
-- Preserve the low-level exception text in a new `raw_error` attribute and keep
-  `friendly_error` as a backwards-compatible alias during the migration.
-- Updated the Symptoms API docs and regression tests to cover the new envelope.
-  No front-end follow-up is required beyond continuing to read `error`.
-
 ## 2024-04-10 — Restore raw symptom errors with friendly fallbacks
 
 - Bring back the database-provided error strings in the `error` field so existing

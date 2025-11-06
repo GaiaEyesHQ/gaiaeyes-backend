@@ -41,7 +41,6 @@ class SymptomEventIn(BaseModel):
 class SymptomEnvelope(BaseModel):
     ok: bool = True
     error: Optional[str] = None
-    raw_error: Optional[str] = None
     friendly_error: Optional[str] = None
 
 
@@ -113,15 +112,14 @@ async def create_symptom_event(
 
     try:
         code_rows = await symptoms_db.fetch_symptom_codes(conn)
-    except Exception as exc:  # pragma: no cover - exercised via tests
+    except Exception:  # pragma: no cover - exercised via tests
         logger.exception("failed to load codes for symptom post", extra={"user_id": user_id})
         return JSONResponse(
             status_code=200,
             content={
                 "ok": False,
                 "data": None,
-                "error": _ERR_LOAD_CODES,
-                "raw_error": _error_text(exc),
+                "error": _error_text(exc),
                 "friendly_error": _ERR_LOAD_CODES,
             },
         )
@@ -171,15 +169,14 @@ async def create_symptom_event(
             free_text=payload.free_text,
             tags=payload.tags,
         )
-    except Exception as exc:  # pragma: no cover - exercised via tests
+    except Exception:  # pragma: no cover - exercised via tests
         logger.exception("failed to insert symptom event", extra={"user_id": user_id, "symptom_code": normalized_code})
         return JSONResponse(
             status_code=200,
             content={
                 "ok": False,
                 "data": None,
-                "error": _ERR_RECORD_EVENT,
-                "raw_error": _error_text(exc),
+                "error": _error_text(exc),
                 "friendly_error": _ERR_RECORD_EVENT,
             },
         )
@@ -207,14 +204,13 @@ async def get_symptoms_today(request: Request, conn=Depends(get_db)):
     user_id = _require_user_id(request)
     try:
         rows = await symptoms_db.fetch_symptoms_today(conn, user_id)
-    except Exception as exc:  # pragma: no cover - exercised via tests
+    except Exception:  # pragma: no cover - exercised via tests
         logger.exception("failed to load todays symptoms", extra={"user_id": user_id})
         return _failure(
             SymptomTodayResponse(
                 ok=False,
                 data=[],
-                error=_ERR_LOAD_TODAY,
-                raw_error=_error_text(exc),
+                error=_error_text(exc),
                 friendly_error=_ERR_LOAD_TODAY,
             )
         )
@@ -231,14 +227,13 @@ async def get_symptoms_daily(
     user_id = _require_user_id(request)
     try:
         rows = await symptoms_db.fetch_daily_summary(conn, user_id, days)
-    except Exception as exc:  # pragma: no cover - exercised via tests
+    except Exception:  # pragma: no cover - exercised via tests
         logger.exception("failed to load daily symptoms", extra={"user_id": user_id, "days": days})
         return _failure(
             SymptomDailyResponse(
                 ok=False,
                 data=[],
-                error=_ERR_LOAD_DAILY,
-                raw_error=_error_text(exc),
+                error=_error_text(exc),
                 friendly_error=_ERR_LOAD_DAILY,
             )
         )
@@ -255,14 +250,13 @@ async def get_symptom_diag(
     user_id = _require_user_id(request)
     try:
         rows = await symptoms_db.fetch_diagnostics(conn, user_id, days)
-    except Exception as exc:  # pragma: no cover - exercised via tests
+    except Exception:  # pragma: no cover - exercised via tests
         logger.exception("failed to load diagnostic summary", extra={"user_id": user_id, "days": days})
         return _failure(
             SymptomDiagResponse(
                 ok=False,
                 data=[],
-                error=_ERR_LOAD_DIAG,
-                raw_error=_error_text(exc),
+                error=_error_text(exc),
                 friendly_error=_ERR_LOAD_DIAG,
             )
         )
@@ -282,14 +276,13 @@ async def list_symptom_codes(
 ):
     try:
         rows = await symptoms_db.fetch_symptom_codes(conn, include_inactive=include_inactive)
-    except Exception as exc:  # pragma: no cover - exercised via tests
+    except Exception:  # pragma: no cover - exercised via tests
         logger.exception("failed to load symptom codes", extra={"include_inactive": include_inactive})
         return _failure(
             SymptomCodeResponse(
                 ok=False,
                 data=[],
-                error=_ERR_LOAD_CODES,
-                raw_error=_error_text(exc),
+                error=_error_text(exc),
                 friendly_error=_ERR_LOAD_CODES,
             )
         )
