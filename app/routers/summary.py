@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import random
+from contextlib import asynccontextmanager
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from time import perf_counter
@@ -13,6 +14,7 @@ from fastapi import APIRouter, Depends, Request
 from os import getenv
 from psycopg import errors as pg_errors
 from psycopg.rows import dict_row
+from psycopg_pool import PoolTimeout
 from app.cache import get_last_good, set_last_good
 from app.db import get_db, get_pool, get_pool_metrics
 from app.utils.auth import require_admin
@@ -29,6 +31,29 @@ STATEMENT_TIMEOUT_MS = 60000
 
 MART_REFRESH_DEBOUNCE_SECONDS = 180.0
 _REFRESH_DELAY_RANGE = (1.5, 2.0)
+
+
+@asynccontextmanager
+async def _acquire_features_conn():
+    """Acquire a database connection for the features endpoint."""
+
+    pool = await get_pool()
+    ctx = pool.connection()
+    try:
+        conn = await ctx.__aenter__()
+    except Exception:
+        raise
+
+    try:
+        await conn.execute(f"set statement_timeout = {STATEMENT_TIMEOUT_MS}")
+    except Exception as exc:
+        await ctx.__aexit__(type(exc), exc, exc.__traceback__)
+        raise
+
+    try:
+        yield conn
+    finally:
+        await ctx.__aexit__(None, None, None)
 
 
 _refresh_registry: Dict[str, float] = {}
@@ -123,6 +148,24 @@ _MART_COLUMNS = [
 _MART_SELECT = ", ".join(_MART_COLUMNS)
 
 
+def _init_diag_info(user_id: Optional[str], tz_name: str) -> Dict[str, Any]:
+    return {
+        "branch": "scoped" if user_id else "anonymous",
+        "statement_timeout_ms": STATEMENT_TIMEOUT_MS,
+        "requested_user_id": str(user_id) if user_id else None,
+        "user_id": str(user_id) if user_id else None,
+        "day": None,
+        "day_used": None,
+        "updated_at": None,
+        "source": "empty",
+        "mart_row": False,
+        "freshened": False,
+        "max_day": None,
+        "total_rows": None,
+        "tz": tz_name,
+    }
+
+
 def _iso_dt(value: Optional[datetime]) -> Optional[str]:
     if value is None:
         return None
@@ -135,6 +178,17 @@ def _iso_date(value: Optional[date]) -> Optional[str]:
     if value is None:
         return None
     return value.isoformat()
+
+
+def _coerce_day(value: Any) -> Optional[date]:
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _normalize_timezone(tz_name: Optional[str]) -> Tuple[str, ZoneInfo]:
@@ -654,21 +708,7 @@ async def _collect_features(
     tz_name: str,
     tzinfo: ZoneInfo,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Optional[str]]:
-    diag_info: Dict[str, Any] = {
-        "branch": "scoped" if user_id else "anonymous",
-        "statement_timeout_ms": STATEMENT_TIMEOUT_MS,
-        "requested_user_id": str(user_id) if user_id else None,
-        "user_id": str(user_id) if user_id else None,
-        "day": None,
-        "day_used": None,
-        "updated_at": None,
-        "source": "empty",
-        "mart_row": False,
-        "freshened": False,
-        "max_day": None,
-        "total_rows": None,
-        "tz": tz_name,
-    }
+    diag_info: Dict[str, Any] = _init_diag_info(user_id, tz_name)
 
     response_payload: Dict[str, Any] = {}
     error_text: Optional[str] = None
@@ -817,6 +857,51 @@ async def _collect_features(
     return response_payload, diag_info, error_text
 
 
+async def _fallback_from_cache(
+    diag_seed: Dict[str, Any],
+    user_id: Optional[str],
+    tzinfo: ZoneInfo,
+    *,
+    reason: Optional[str] = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any], Optional[str]]:
+    diag_info = dict(diag_seed)
+    base_day = _coerce_day(diag_info.get("day"))
+    if not base_day:
+        base_day = datetime.now(tzinfo).date()
+    diag_info["day"] = base_day
+    diag_info.setdefault("day_used", base_day)
+    diag_info.setdefault("source", "cache")
+    diag_info["cache_fallback"] = True
+    if reason:
+        diag_info["error"] = reason
+
+    cached_payload = await get_last_good(user_id)
+    if cached_payload:
+        payload = dict(cached_payload)
+        diag_info["mart_row"] = bool(payload)
+        diag_info["source"] = payload.get("source") or diag_info.get("source") or "cache"
+        diag_info["updated_at"] = payload.get("updated_at")
+        cached_day = _coerce_day(payload.get("day"))
+        if cached_day:
+            diag_info["day_used"] = cached_day
+        payload.setdefault("source", diag_info["source"])
+        logger.warning(
+            "[features_today] serving cached payload user=%s source=%s",
+            user_id,
+            diag_info.get("source"),
+        )
+        return payload, diag_info, None
+
+    payload = {"source": diag_info.get("source") or "cache"}
+    fallback_error = reason or "database temporarily unavailable"
+    logger.error(
+        "[features_today] cache unavailable user=%s reason=%s",
+        user_id,
+        fallback_error,
+    )
+    return payload, diag_info, fallback_error
+
+
 def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "branch": diag_info.get("branch"),
@@ -832,6 +917,9 @@ def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
         "max_day": _iso_date(diag_info.get("max_day")),
         "total_rows": diag_info.get("total_rows"),
         "tz": diag_info.get("tz"),
+        "cache_fallback": bool(diag_info.get("cache_fallback")),
+        "pool_timeout": bool(diag_info.get("pool_timeout")),
+        "error": diag_info.get("error"),
     }
 
 router = APIRouter(prefix="/v1")
@@ -840,7 +928,7 @@ router = APIRouter(prefix="/v1")
 # /v1/features/today (full)
 # -----------------------------
 @router.get("/features/today")
-async def features_today(request: Request, diag: int = 0, conn = Depends(get_db)):
+async def features_today(request: Request, diag: int = 0):
     """Return the daily features snapshot for the caller, honoring timezone overrides."""
 
     default_media_base = "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main"
@@ -853,7 +941,38 @@ async def features_today(request: Request, diag: int = 0, conn = Depends(get_db)
     user_id = getattr(request.state, "user_id", None)
     if diag:
         logger.debug("[features_today] diagnostics requested tz=%s user=%s", tz_name, user_id)
-    response_payload, diag_info, error_text = await _collect_features(conn, user_id, tz_name, tzinfo)
+    diag_seed = _init_diag_info(user_id, tz_name)
+    diag_seed["day"] = datetime.now(tzinfo).date()
+    diag_seed["day_used"] = diag_seed["day"]
+
+    try:
+        async with _acquire_features_conn() as conn:
+            response_payload, diag_info, error_text = await _collect_features(conn, user_id, tz_name, tzinfo)
+    except PoolTimeout as exc:
+        logger.warning(
+            "[features_today] pool timeout tz=%s user=%s: %s", tz_name, user_id, exc
+        )
+        diag_seed["pool_timeout"] = True
+        response_payload, diag_info, error_text = await _fallback_from_cache(
+            diag_seed,
+            user_id,
+            tzinfo,
+            reason="database temporarily unavailable",
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        reason = str(exc) or exc.__class__.__name__
+        logger.exception(
+            "[features_today] connection acquisition failed tz=%s user=%s: %s",
+            tz_name,
+            user_id,
+            reason,
+        )
+        response_payload, diag_info, error_text = await _fallback_from_cache(
+            diag_seed,
+            user_id,
+            tzinfo,
+            reason=reason,
+        )
 
     if error_text:
         response: Dict[str, Any] = {"ok": False, "data": None, "error": error_text}
@@ -900,21 +1019,7 @@ async def diag_features(
     if effective_user:
         features_payload, diag_info, error_text = await _collect_features(conn, effective_user, tz_name, tzinfo)
     else:
-        diag_info = {
-            "branch": "anonymous",
-            "statement_timeout_ms": STATEMENT_TIMEOUT_MS,
-            "requested_user_id": None,
-            "user_id": None,
-            "day": None,
-            "day_used": None,
-            "updated_at": None,
-            "source": "empty",
-            "mart_row": False,
-            "freshened": False,
-            "max_day": None,
-            "total_rows": None,
-            "tz": tz_name,
-        }
+        diag_info = _init_diag_info(None, tz_name)
 
     mart_rows: List[Dict[str, Any]] = []
     samples_window: Dict[str, Any] = {}
