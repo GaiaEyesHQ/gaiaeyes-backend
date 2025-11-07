@@ -17,3 +17,13 @@ psql "$DATABASE_URL" -c "select now()"
 ```
 
 A successful response confirms the credentials, pgBouncer endpoint, and SSL settings are all valid.
+
+## Service health endpoint
+- `/health` now exposes `db`, `db_sticky_age`, and `db_latency_ms`. The latency field reports the
+  duration of the most recent probe (in milliseconds) so you can see when pgBouncer handshakes are
+  slowing down even if the sticky grace period keeps the service marked as healthy.
+- The backend keeps returning the last known `db` result for up to 30 seconds after a failed probe
+  to avoid flapping during transient network hiccups. Once the grace window expires the endpoint
+  flips to `db:false`, which is what the mobile client already understands for gating refreshes.
+- No front-end changes are required; the iOS client will continue to honor `db:false` while the new
+  latency metric simply adds operator visibility.

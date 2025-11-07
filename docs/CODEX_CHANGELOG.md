@@ -2,6 +2,18 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2024-04-14 — Stabilize health checks and cache fallbacks
+
+- Replaced the `/health` probe's `asyncio.wait_for` wrapper with a pool-scoped timeout so
+  pgBouncer handshakes no longer get cancelled mid-flight, eliminating the false
+  `db:false` responses that were putting the mobile app into cache-only mode while the
+  database remained healthy.
+- Extended the sticky grace window and surfaced `db_latency_ms` in the health response so
+  operators can see the most recent probe latency and avoid flapping during transient
+  slowdowns.
+- Documented the revised health contract in `docs/OPERATIONS.md`; the existing mobile
+  client can consume the new metadata without changes.
+
 ## 2024-04-13 — Clamp feature enrichment timeouts
 
 - Wrapped the feature mart lookups and enrichment queries in short asyncio timeouts so
