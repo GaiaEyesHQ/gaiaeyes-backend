@@ -209,6 +209,8 @@ def _is_connection_failure(exc: BaseException) -> bool:
 async def _activate_fallback_pool(reason: str) -> bool:
     """Switch to the configured fallback connection when possible."""
 
+    global _pool, _pool_open, _pool_active_label
+
     if not _pool_conninfo_fallback or not _pool_fallback_label:
         return False
     if _pool_active_label == _pool_fallback_label:
@@ -236,7 +238,6 @@ async def _activate_fallback_pool(reason: str) -> bool:
 
         await _stop_pool_monitors()
 
-        global _pool_open
         was_open = _pool_open
         _pool_open = False
 
@@ -362,7 +363,7 @@ def _get_or_create_pool() -> AsyncConnectionPool:
 
 
 async def open_pool() -> AsyncConnectionPool:
-    global _pool_open, _pool_last_refresh, _pool_active_label
+    global _pool, _pool_open, _pool_last_refresh, _pool_active_label
     async with _pool_lock:
         pool = _get_or_create_pool()
         if not _pool_open:
