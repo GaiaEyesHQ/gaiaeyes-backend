@@ -32,12 +32,18 @@ The `/v1/features/today` endpoint returns a consolidated “daily features” sn
     "cache_fallback": true|false,
     "pool_timeout": true|false,
     "error": string|null,
-    "last_error": string|null
+    "last_error": string|null,
+    "enrichment_errors": [string, ...]
   }
 }
 ```
 
 `data` is never `null`. When a snapshot is unavailable the handler returns `{}` with `ok:true` so tiles can remain filled with the last-good content. During cache fallbacks the top-level `error` remains `null`. `diagnostics.error` is only populated when the endpoint itself returns `ok:false`, while `diagnostics.last_error` preserves the most recent failure message that triggered a fallback so clients can surface an informational banner without disabling cached data.
+
+`diagnostics.enrichment_errors` lists any enrichment queries (sleep aggregation, space
+weather, Schumann resonance, etc.) that were skipped because they hit the short timeout.
+The handler still returns data, but these entries allow the UI to annotate partially
+freshened payloads.
 
 ## Source selection
 

@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from time import perf_counter
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple, TypeVar
 
 from zoneinfo import ZoneInfo
 
@@ -22,10 +22,64 @@ from app.utils.auth import require_admin
 DEFAULT_TIMEZONE = "America/Chicago"
 STATEMENT_TIMEOUT_MS = 60000
 FRESHEN_TIMEOUT_MS = 3000
+MART_QUERY_TIMEOUT_MS = 5000
 
 DEBUG_FEATURES_DIAG = getenv("DEBUG_FEATURES_DIAG", "1").lower() not in {"0", "false", "no"}
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+
+def _seconds(ms: int) -> float:
+    return ms / 1000.0
+
+
+async def _timed_call(
+    awaitable: Awaitable[T],
+    *,
+    label: str,
+    timeout_ms: int,
+    log_context: Optional[str] = None,
+) -> Tuple[Optional[T], Optional[BaseException]]:
+    """Run the awaitable with a timeout and normalize error reporting."""
+
+    context_suffix = f" ({log_context})" if log_context else ""
+    try:
+        result = await asyncio.wait_for(awaitable, _seconds(timeout_ms))
+        return result, None
+    except asyncio.TimeoutError:
+        message = f"{label} timed out after {timeout_ms}ms"
+        logger.warning("[features]%s %s", context_suffix, message)
+        return None, TimeoutError(message)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.warning(
+            "[features]%s %s failed: %s",
+            context_suffix,
+            label,
+            exc,
+        )
+        return None, RuntimeError(f"{label} failed: {exc}")
+
+
+def _describe_error(error: BaseException) -> str:
+    message = str(error).strip()
+    return message or error.__class__.__name__
+
+
+def _record_enrichment_errors(diag_info: Dict[str, Any], errors: List[str]) -> None:
+    if not errors:
+        return
+    existing = list(diag_info.get("enrichment_errors") or [])
+    for message in errors:
+        if message and message not in existing:
+            existing.append(message)
+    if existing:
+        diag_info["enrichment_errors"] = existing
+        diag_info.setdefault("last_error", existing[0])
+
 
 STATEMENT_TIMEOUT_MS = 60000
 
@@ -165,6 +219,7 @@ def _init_diag_info(user_id: Optional[str], tz_name: str) -> Dict[str, Any]:
         "max_day": None,
         "total_rows": None,
         "tz": tz_name,
+        "enrichment_errors": [],
     }
 
 
@@ -235,6 +290,80 @@ def _local_bounds(day_local: date, tzinfo: ZoneInfo) -> Tuple[datetime, datetime
     start_local = datetime.combine(day_local, time.min).replace(tzinfo=tzinfo)
     end_local = start_local + timedelta(days=1)
     return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
+
+async def _gather_enrichment(
+    conn,
+    user_id: str,
+    day_local: date,
+    tzinfo: ZoneInfo,
+) -> Tuple[Dict[str, Any], List[str]]:
+    """Collect enrichment components with bounded runtime."""
+
+    start_utc, end_utc = _local_bounds(day_local, tzinfo)
+    errors: List[str] = []
+
+    sleep, sleep_exc = await _timed_call(
+        _fetch_sleep_aggregate(conn, user_id, start_utc, end_utc),
+        label="sleep aggregate",
+        timeout_ms=FRESHEN_TIMEOUT_MS,
+        log_context=f"user={user_id} day={day_local.isoformat()}",
+    )
+    if sleep is None:
+        sleep = {}
+    if sleep_exc:
+        errors.append(_describe_error(sleep_exc))
+
+    daily_wx, daily_exc = await _timed_call(
+        _fetch_space_weather_daily(conn, day_local),
+        label="space weather daily",
+        timeout_ms=FRESHEN_TIMEOUT_MS,
+        log_context=f"day={day_local.isoformat()}",
+    )
+    if daily_wx is None:
+        daily_wx = {}
+    if daily_exc:
+        errors.append(_describe_error(daily_exc))
+
+    current_wx, current_exc = await _timed_call(
+        _fetch_current_space_weather(conn),
+        label="space weather current",
+        timeout_ms=FRESHEN_TIMEOUT_MS,
+    )
+    if current_wx is None:
+        current_wx = {}
+    if current_exc:
+        errors.append(_describe_error(current_exc))
+
+    sch, sch_exc = await _timed_call(
+        _fetch_schumann_row(conn, day_local),
+        label="schumann daily",
+        timeout_ms=FRESHEN_TIMEOUT_MS,
+        log_context=f"day={day_local.isoformat()}",
+    )
+    if sch is None:
+        sch = {}
+    if sch_exc:
+        errors.append(_describe_error(sch_exc))
+
+    post, post_exc = await _timed_call(
+        _fetch_daily_post(conn, day_local),
+        label="daily post",
+        timeout_ms=FRESHEN_TIMEOUT_MS,
+        log_context=f"day={day_local.isoformat()}",
+    )
+    if post is None:
+        post = {}
+    if post_exc:
+        errors.append(_describe_error(post_exc))
+
+    return {
+        "sleep": sleep,
+        "daily_wx": daily_wx,
+        "current_wx": current_wx,
+        "sch": sch,
+        "post": post,
+    }, errors
 
 
 async def _fetch_mart_row(conn, user_id: str, day_local: date) -> Optional[Dict[str, Any]]:
@@ -689,15 +818,21 @@ async def _freshen_features(
     day_local: date,
     tzinfo: ZoneInfo,
 ) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
-    summary = await _fetch_daily_summary(conn, user_id, day_local)
-    if not summary:
+    summary, summary_error = await _timed_call(
+        _fetch_daily_summary(conn, user_id, day_local),
+        label="daily summary",
+        timeout_ms=MART_QUERY_TIMEOUT_MS,
+        log_context=f"user={user_id} day={day_local.isoformat()}",
+    )
+    if summary_error or not summary:
         return None
-    start_utc, end_utc = _local_bounds(day_local, tzinfo)
-    sleep = await _fetch_sleep_aggregate(conn, user_id, start_utc, end_utc)
-    daily_wx = await _fetch_space_weather_daily(conn, day_local)
-    current_wx = await _fetch_current_space_weather(conn)
-    sch = await _fetch_schumann_row(conn, day_local)
-    post = await _fetch_daily_post(conn, day_local)
+
+    components, component_errors = await _gather_enrichment(conn, user_id, day_local, tzinfo)
+    sleep = components.get("sleep") or {}
+    daily_wx = components.get("daily_wx") or {}
+    current_wx = components.get("current_wx") or {}
+    sch = components.get("sch") or {}
+    post = components.get("post") or {}
 
     payload: Dict[str, Any] = {
         "user_id": user_id,
@@ -715,13 +850,8 @@ async def _freshen_features(
     payload.update(_compose_space_weather_payload(summary, daily_wx, current_wx))
     payload.update(sch)
     payload.update(post)
-    context = {
-        "sleep": sleep,
-        "daily_wx": daily_wx,
-        "current_wx": current_wx,
-        "sch": sch,
-        "post": post,
-    }
+    context: Dict[str, Any] = dict(components)
+    context["errors"] = component_errors
     return payload, context
 
 
@@ -761,7 +891,12 @@ async def _collect_features(
                     diag_info["pool_timeout"] = True
                 should_enrich = False
                 yesterday = today_local - timedelta(days=1)
-                yesterday_row = await _fetch_mart_row(conn, user_id, yesterday)
+                yesterday_row, yesterday_error = await _timed_call(
+                    _fetch_mart_row(conn, user_id, yesterday),
+                    label="mart row (yesterday)",
+                    timeout_ms=MART_QUERY_TIMEOUT_MS,
+                    log_context=f"user={user_id} day={yesterday.isoformat()}",
+                )
                 if yesterday_row:
                     response_payload = dict(yesterday_row)
                     diag_info["mart_row"] = True
@@ -772,7 +907,16 @@ async def _collect_features(
                     diag_info["day_used"] = yesterday
                     should_enrich = True
                 else:
-                    fallback_row = await _fetch_snapshot_row(conn, user_id)
+                    if yesterday_error:
+                        _record_enrichment_errors(
+                            diag_info, [_describe_error(yesterday_error)]
+                        )
+                    fallback_row, fallback_error = await _timed_call(
+                        _fetch_snapshot_row(conn, user_id),
+                        label="mart snapshot",
+                        timeout_ms=MART_QUERY_TIMEOUT_MS,
+                        log_context=f"user={user_id}",
+                    )
                     if fallback_row:
                         response_payload = dict(fallback_row)
                         diag_info["mart_row"] = True
@@ -789,6 +933,10 @@ async def _collect_features(
                         diag_info["day_used"] = fallback_day or diag_info.get("day_used")
                         should_enrich = True
                     else:
+                        if fallback_error:
+                            _record_enrichment_errors(
+                                diag_info, [_describe_error(fallback_error)]
+                            )
                         cached_payload = await get_last_good(user_id)
                         if cached_payload:
                             response_payload = dict(cached_payload)
@@ -828,10 +976,18 @@ async def _collect_features(
                     diag_info["updated_at"] = _coerce_datetime(
                         response_payload.get("updated_at")
                     )
+                    _record_enrichment_errors(
+                        diag_info, list(context.get("errors") or [])
+                    )
                 else:
                     yesterday = today_local - timedelta(days=1)
                     diag_info["day_used"] = yesterday
-                    mart_row = await _fetch_mart_row(conn, user_id, yesterday)
+                    mart_row, yesterday_error = await _timed_call(
+                        _fetch_mart_row(conn, user_id, yesterday),
+                        label="mart row (yesterday)",
+                        timeout_ms=MART_QUERY_TIMEOUT_MS,
+                        log_context=f"user={user_id} day={yesterday.isoformat()}",
+                    )
                     if mart_row:
                         response_payload = dict(mart_row)
                         diag_info["mart_row"] = True
@@ -840,6 +996,10 @@ async def _collect_features(
                             mart_row.get("updated_at")
                         )
                     else:
+                        if yesterday_error:
+                            _record_enrichment_errors(
+                                diag_info, [_describe_error(yesterday_error)]
+                            )
                         diag_info["source"] = "empty"
                         response_payload = {}
 
@@ -863,23 +1023,37 @@ async def _collect_features(
                     response_payload.setdefault("user_id", user_id)
                 response_payload.setdefault("day", target_day)
                 if should_enrich:
-                    start_utc, end_utc = _local_bounds(target_day, tzinfo)
-
-                    if not diag_info.get("freshened"):
-                        sleep = await _fetch_sleep_aggregate(conn, user_id, start_utc, end_utc)
-                        daily_wx = await _fetch_space_weather_daily(conn, target_day)
-                        current_wx = await _fetch_current_space_weather(conn)
-                        sch = await _fetch_schumann_row(conn, target_day)
-                        post = await _fetch_daily_post(conn, target_day)
+                    if diag_info.get("freshened"):
+                        enrich_components = {
+                            "sleep": context.get("sleep") or {},
+                            "daily_wx": context.get("daily_wx") or {},
+                            "current_wx": context.get("current_wx") or {},
+                            "sch": context.get("sch") or {},
+                            "post": context.get("post") or {},
+                        }
+                        enrich_errors = list(context.get("errors") or [])
                     else:
-                        sleep = context.get("sleep", {})
-                        daily_wx = context.get("daily_wx", {})
-                        current_wx = context.get("current_wx", {})
-                        sch = context.get("sch", {})
-                        post = context.get("post", {})
+                        enrich_components, enrich_errors = await _gather_enrichment(
+                            conn,
+                            user_id,
+                            target_day,
+                            tzinfo,
+                        )
+                    _record_enrichment_errors(diag_info, enrich_errors)
+                    sleep = enrich_components.get("sleep") or {}
+                    daily_wx = enrich_components.get("daily_wx") or {}
+                    current_wx = enrich_components.get("current_wx") or {}
+                    sch = enrich_components.get("sch") or {}
+                    post = enrich_components.get("post") or {}
 
-                    response_payload.update(_compose_sleep_payload(response_payload, sleep))
-                    response_payload.update(_compose_space_weather_payload(response_payload, daily_wx, current_wx))
+                    response_payload.update(
+                        _compose_sleep_payload(response_payload, sleep)
+                    )
+                    response_payload.update(
+                        _compose_space_weather_payload(
+                            response_payload, daily_wx, current_wx
+                        )
+                    )
                     response_payload.update(sch)
                     response_payload.update(post)
 
@@ -909,6 +1083,7 @@ async def _fallback_from_cache(
     reason: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Optional[str]]:
     diag_info = dict(diag_seed)
+    diag_info["enrichment_errors"] = list(diag_info.get("enrichment_errors") or [])
     base_day = _coerce_day(diag_info.get("day"))
     if not base_day:
         base_day = datetime.now(tzinfo).date()
@@ -965,6 +1140,7 @@ def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
         "pool_timeout": bool(diag_info.get("pool_timeout")),
         "error": diag_info.get("error"),
         "last_error": diag_info.get("last_error"),
+        "enrichment_errors": list(diag_info.get("enrichment_errors") or []),
     }
 
 
