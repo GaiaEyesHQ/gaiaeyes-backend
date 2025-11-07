@@ -30,15 +30,29 @@ The `/v1/features/today` endpoint returns a consolidated “daily features” sn
     "total_rows": int|null,
     "tz": string,
     "cache_fallback": true|false,
+    "cache_hit": true|false,
+    "cache_age_seconds": float|null,
     "pool_timeout": true|false,
     "error": string|null,
     "last_error": string|null,
-    "enrichment_errors": [string, ...]
+    "enrichment_errors": [string, ...],
+    "refresh_attempted": true|false,
+    "refresh_scheduled": true|false,
+    "refresh_reason": "interval"|"stale_cache"|"error"|null,
+    "refresh_forced": true|false
   }
 }
 ```
 
 `data` is never `null`. When a snapshot is unavailable the handler returns `{}` with `ok:true` so tiles can remain filled with the last-good content. During cache fallbacks the top-level `error` remains `null`. `diagnostics.error` is only populated when the endpoint itself returns `ok:false`, while `diagnostics.last_error` preserves the most recent failure message that triggered a fallback so clients can surface an informational banner without disabling cached data.
+
+`diagnostics.cache_hit` flags when the handler served the last-good snapshot, and
+`diagnostics.cache_age_seconds` reports how old that payload was when returned. When the
+service schedules a background refresh it records `refresh_attempted`, whether it was
+actually `refresh_scheduled`, and the `refresh_reason` (`interval` for the normal
+five-minute cadence, `stale_cache` when the snapshot is older than fifteen minutes, or
+`error` when the database query failed). `refresh_forced` indicates that the debounce was
+skipped because of staleness or an error condition.
 
 `diagnostics.enrichment_errors` lists any enrichment queries (sleep aggregation, space
 weather, Schumann resonance, etc.) that were skipped because they hit the short timeout.
@@ -54,3 +68,12 @@ freshened payloads.
 5. **Empty** – if no data or cache entry exists, the response is `{}` with `source:"empty"`. Even in this case the handler now returns `ok:true` so dashboards keep rendering defaults while diagnostics report the outage reason.
 
 Because diagnostics are always returned, client teams can inspect `diagnostics.day_used`, `source`, and `mart_row` to understand which branch served the payload.
+
+## Cache diagnostics and background refresh
+
+When the handler falls back to the cached snapshot, diagnostics now expose how old that
+payload is and whether a background mart refresh was queued. If the cached data is older
+than fifteen minutes the refresh request bypasses the debounce window so new data is
+computed as soon as possible; otherwise, refreshes run on a five-minute cadence per user.
+These fields allow the UI to surface "refreshing" indicators while still showing the last
+successful snapshot.
