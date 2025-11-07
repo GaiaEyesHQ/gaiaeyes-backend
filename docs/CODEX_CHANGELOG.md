@@ -2,6 +2,18 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2024-04-16 — Fail over when pgBouncer stalls
+
+- Treat `PoolTimeout` events during connection acquisition as connectivity failures and
+  automatically switch the async pool to the direct Postgres fallback so the backend
+  recovers instead of staying in cache-only mode when pgBouncer is saturated or stops
+  accepting connections.
+- Allow the `/health` probe, feature handler, and ingestion pipeline to request the
+  fallback proactively so mobile clients stop seeing repeated `db:false` responses and
+  ingestion resumes without manual intervention after a stall.
+- Document the new behavior in `docs/OPERATIONS.md`. No front-end changes are required
+  because diagnostics already surface `cache_fallback` and `pool_timeout` for awareness.
+
 ## 2024-04-15 — Auto-failover after pgBouncer disconnects
 
 - Detect connection-level failures ("server closed the connection unexpectedly", etc.)

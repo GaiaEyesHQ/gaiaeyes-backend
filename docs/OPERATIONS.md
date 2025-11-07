@@ -11,6 +11,9 @@
 - When pgBouncer begins terminating connections the backend now automatically fails over to
   the configured `DIRECT_URL` (if provided). Watch for `[DB] connection failure` log lines to
   confirm the switch and ensure the direct connection remains reachable.
+- Pool acquisition timeouts are also treated as connection failures; the service now
+  proactively flips to the direct backend when pgBouncer stalls so `/health` and feature
+  handlers stop reporting `db:false` after a brief outage.
 
 ## Connectivity checks
 Run the following from a Render shell or any environment that has network access to Supabase:

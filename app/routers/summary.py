@@ -16,7 +16,13 @@ from psycopg import errors as pg_errors
 from psycopg.rows import dict_row
 from psycopg_pool import PoolTimeout
 from app.cache import get_last_good, set_last_good
-from app.db import get_db, get_pool, get_pool_metrics
+from app.db import (
+    get_db,
+    get_pool,
+    get_pool_metrics,
+    handle_connection_failure,
+    handle_pool_timeout,
+)
 from app.utils.auth import require_admin
 
 DEFAULT_TIMEZONE = "America/Chicago"
@@ -1194,6 +1200,7 @@ async def features_today(request: Request, diag: int = 0):
             "[features_today] pool timeout tz=%s user=%s: %s", tz_name, user_id, exc
         )
         diag_seed["pool_timeout"] = True
+        await handle_pool_timeout("features_today connection timeout")
         response_payload, diag_info, error_text = await _fallback_from_cache(
             diag_seed,
             user_id,
@@ -1208,6 +1215,7 @@ async def features_today(request: Request, diag: int = 0):
             user_id,
             reason,
         )
+        await handle_connection_failure(exc)
         response_payload, diag_info, error_text = await _fallback_from_cache(
             diag_seed,
             user_id,
