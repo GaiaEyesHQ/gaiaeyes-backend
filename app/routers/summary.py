@@ -95,6 +95,8 @@ _REFRESH_DELAY_RANGE = (1.5, 2.0)
 _CACHE_STALE_THRESHOLD_SECONDS = 15 * 60
 _BACKGROUND_REFRESH_INTERVAL_SECONDS = 5 * 60
 
+_EMPTY_PAYLOAD_KEYS = {"source"}
+
 
 @asynccontextmanager
 async def _acquire_features_conn():
@@ -234,6 +236,7 @@ def _init_diag_info(user_id: Optional[str], tz_name: str) -> Dict[str, Any]:
         "enrichment_errors": [],
         "cache_hit": False,
         "cache_age_seconds": None,
+        "cache_rehydrated": False,
         "refresh_attempted": False,
         "refresh_scheduled": False,
         "refresh_reason": None,
@@ -283,6 +286,12 @@ def _coerce_day(value: Any) -> Optional[date]:
         except ValueError:
             return None
     return None
+
+
+def _is_effectively_empty_payload(payload: Optional[Dict[str, Any]]) -> bool:
+    if not payload:
+        return True
+    return set(payload.keys()).issubset(_EMPTY_PAYLOAD_KEYS)
 
 
 def _normalize_timezone(tz_name: Optional[str]) -> Tuple[str, ZoneInfo]:
@@ -1187,6 +1196,7 @@ def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
         "cache_fallback": bool(diag_info.get("cache_fallback")),
         "cache_hit": bool(diag_info.get("cache_hit")),
         "cache_age_seconds": diag_info.get("cache_age_seconds"),
+        "cache_rehydrated": bool(diag_info.get("cache_rehydrated")),
         "pool_timeout": bool(diag_info.get("pool_timeout")),
         "error": diag_info.get("error"),
         "last_error": diag_info.get("last_error"),
@@ -1289,6 +1299,25 @@ async def features_today(request: Request, diag: int = 0):
             user_id,
             tzinfo,
             reason=reason,
+        )
+
+    if cached_payload and _is_effectively_empty_payload(response_payload):
+        response_payload = dict(cached_payload)
+        diag_info["cache_fallback"] = True
+        diag_info["cache_hit"] = True
+        diag_info["cache_rehydrated"] = True
+        diag_info["source"] = response_payload.get("source") or diag_info.get("source") or "cache"
+        cached_updated_at = _coerce_datetime(response_payload.get("updated_at"))
+        if cached_updated_at:
+            diag_info["updated_at"] = cached_updated_at
+        cached_day = _coerce_day(response_payload.get("day"))
+        if cached_day:
+            diag_info["day_used"] = cached_day
+        response_payload.setdefault("source", diag_info.get("source"))
+        logger.info(
+            "[features_today] rehydrated empty payload with cache user=%s source=%s",
+            user_id,
+            diag_info.get("source"),
         )
 
     if error_text:

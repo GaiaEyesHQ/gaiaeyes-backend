@@ -14,6 +14,7 @@ The response includes:
 - `features`: metadata about the most recent `/v1/features/today` query, including the requested user id, which branch (scoped vs. fallback) was used, and the latest `day`/`updated_at` timestamps.
   - `cache_fallback` and `pool_timeout` highlight when the handler served cached data because the database pool was saturated.
   - `cache_hit` reports whether the cached snapshot was served immediately, while `cache_age_seconds` shows how old it was when returned.
+  - `cache_rehydrated` is `true` when the mart returned an empty payload but cached data was available and reused for the response.
   - `error` reflects the error message when the endpoint itself returned `ok:false`.
   - `last_error` captures the most recent failure that triggered a fallback so clients can log the cause without treating cached data as an outage.
   - `enrichment_errors` lists non-fatal enrichment steps (sleep, space weather, posts) that
