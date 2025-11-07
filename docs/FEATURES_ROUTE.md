@@ -33,6 +33,11 @@ The `/v1/features/today` endpoint returns a consolidated “daily features” sn
     "cache_hit": true|false,
     "cache_age_seconds": float|null,
     "cache_rehydrated": true|false,
+    "cache_updated": true|false,
+    "cache_snapshot_initial": { ... },
+    "cache_snapshot_final": { ... },
+    "payload_summary": { ... },
+    "trace": ["2025-11-09T04:12:00Z fetched mart row", ...],
     "pool_timeout": true|false,
     "error": string|null,
     "last_error": string|null,
@@ -65,6 +70,16 @@ yesterday’s data.
 weather, Schumann resonance, etc.) that were skipped because they hit the short timeout.
 The handler still returns data, but these entries allow the UI to annotate partially
 freshened payloads.
+
+`diagnostics.cache_snapshot_initial` and `diagnostics.cache_snapshot_final` provide
+lightweight summaries of the cache state before and after the request, highlighting
+whether health, sleep, space-weather, or Schumann sections contained non-null values.
+`diagnostics.payload_summary` performs the same check on the payload returned to the
+client, while `diagnostics.cache_updated` flags when the handler wrote a new snapshot to
+the cache during the request. The `diagnostics.trace` array records timestamped steps in
+the decision tree (for example when a mart row loads, when cached data is reused, or when
+a background refresh is scheduled) so engineers can copy/paste a textual log instead of
+relying on screenshots of the debug overlay.
 
 ## Source selection
 

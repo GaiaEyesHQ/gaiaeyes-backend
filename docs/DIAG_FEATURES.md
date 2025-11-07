@@ -15,6 +15,14 @@ The response includes:
   - `cache_fallback` and `pool_timeout` highlight when the handler served cached data because the database pool was saturated.
   - `cache_hit` reports whether the cached snapshot was served immediately, while `cache_age_seconds` shows how old it was when returned.
   - `cache_rehydrated` is `true` when the mart returned an empty payload but cached data was available and reused for the response.
+  - `cache_updated` flags when `/v1/features/today` wrote a new snapshot during the request and the
+    `cache_snapshot_initial` / `cache_snapshot_final` blocks summarize which sections (health,
+    sleep, space weather, Schumann, post copy) contained non-null values before and after the
+    handler ran.
+  - `payload_summary` provides the same snapshot for the payload returned to the caller so teams can
+    quickly confirm whether the health, sleep, or space-weather cards were populated.
+  - `trace` is a timestamped list of decision points (mart lookups, cache fallbacks, background
+    refreshes, etc.) that doubles as a copyable debug log in the mobile app.
   - `error` reflects the error message when the endpoint itself returned `ok:false`.
   - `last_error` captures the most recent failure that triggered a fallback so clients can log the cause without treating cached data as an outage.
   - `enrichment_errors` lists non-fatal enrichment steps (sleep, space weather, posts) that
