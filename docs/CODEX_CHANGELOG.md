@@ -2,13 +2,16 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
-## 2024-04-12 — Restore automatic direct DB fallback
+## 2024-04-12 — Stop fabricating direct DB fallbacks
 
-- Detect pgBouncer usage when the Supabase connection string already points to port 6543
-  and automatically derive a direct Postgres fallback on port 5432 when no explicit
-  `DIRECT_URL` is configured. This prevents connection loops that left the `/v1/features/today`
-  endpoint stuck on cached payloads while pgBouncer was unavailable.
-- Added regression coverage asserting the inferred fallback wiring.
+- Roll back the inferred port-5432 fallback: when pgBouncer is unreachable we now only
+  switch to a direct connection if `DIRECT_URL` (or an explicit alternate DSN) is
+  configured. This avoids hanging connection attempts to hosts that do not expose the
+  primary Postgres port.
+- Explicitly require `DIRECT_URL` to be set before wiring any fallback so pgBouncer
+  connection strings without explicit ports no longer trigger a fabricated direct DSN.
+- Added regression coverage ensuring pgBouncer mode skips the fallback when `DIRECT_URL`
+  is missing, while still honoring an explicit direct connection when provided.
 
 ## 2024-04-11 — Harden database connectivity and symptom fallbacks
 

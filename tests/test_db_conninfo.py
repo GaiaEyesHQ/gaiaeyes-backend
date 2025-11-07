@@ -19,7 +19,7 @@ def _reset_pool_state(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(db, "_pool_active_label", "unknown")
 
 
-def test_prepare_conninfo_infers_pgbouncer_port(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_prepare_conninfo_no_explicit_pgbouncer(monkeypatch: pytest.MonkeyPatch) -> None:
     _reset_pool_state(monkeypatch)
 
     monkeypatch.setattr(
@@ -31,13 +31,58 @@ def test_prepare_conninfo_infers_pgbouncer_port(monkeypatch: pytest.MonkeyPatch)
 
     db._prepare_conninfo()
 
+    assert db._pool_primary_label == "direct"
+    assert db._pool_active_label == "direct"
+    assert db._pool_conninfo_primary.endswith(":6543/postgres?sslmode=require")
+
+    # Without an explicit DIRECT_URL we should not fabricate a fallback.
+    assert db._pool_fallback_label is None
+    assert db._pool_conninfo_fallback is None
+
+
+def test_prepare_conninfo_pgbouncer_with_direct_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    _reset_pool_state(monkeypatch)
+
+    monkeypatch.setattr(
+        db.settings,
+        "DATABASE_URL",
+        "postgresql://user:pass@db.example.com:6543/postgres?sslmode=require&pgbouncer=true",
+    )
+    monkeypatch.setattr(
+        db.settings,
+        "DIRECT_URL",
+        "postgresql://user:pass@db-primary.example.com:5432/postgres?sslmode=require",
+    )
+
+    db._prepare_conninfo()
+
     assert db._pool_primary_label == "pgbouncer"
     assert db._pool_active_label == "pgbouncer"
     assert db._pool_conninfo_primary.endswith(":6543/postgres?sslmode=require")
 
-    # The fallback should automatically target the direct Postgres port.
     assert db._pool_fallback_label == "direct"
     assert db._pool_conninfo_fallback is not None
     parsed = urlparse(db._pool_conninfo_fallback)
     assert parsed.port == 5432
-    assert parsed.hostname == "db.example.com"
+    assert parsed.hostname == "db-primary.example.com"
+
+
+def test_prepare_conninfo_pgbouncer_without_direct_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    _reset_pool_state(monkeypatch)
+
+    monkeypatch.setattr(
+        db.settings,
+        "DATABASE_URL",
+        "postgresql://user:pass@db.example.com/postgres?sslmode=require&pgbouncer=true",
+    )
+    monkeypatch.setattr(db.settings, "DIRECT_URL", None)
+
+    db._prepare_conninfo()
+
+    assert db._pool_primary_label == "pgbouncer"
+    assert db._pool_active_label == "pgbouncer"
+    assert db._pool_conninfo_primary.endswith(":6543/postgres?sslmode=require")
+
+    # With pgBouncer enabled and no explicit direct DSN we must not fabricate a fallback.
+    assert db._pool_fallback_label is None
+    assert db._pool_conninfo_fallback is None
