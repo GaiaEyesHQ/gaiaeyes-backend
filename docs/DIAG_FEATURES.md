@@ -13,10 +13,12 @@ The response includes:
 
 - `features`: metadata about the most recent `/v1/features/today` query, including the requested user id, which branch (scoped vs. fallback) was used, and the latest `day`/`updated_at` timestamps.
   - `cache_fallback` and `pool_timeout` highlight when the handler served cached data because the database pool was saturated.
+  - `cache_hit` reports whether the cached snapshot was served immediately, while `cache_age_seconds` shows how old it was when returned.
   - `error` reflects the error message when the endpoint itself returned `ok:false`.
   - `last_error` captures the most recent failure that triggered a fallback so clients can log the cause without treating cached data as an outage.
   - `enrichment_errors` lists non-fatal enrichment steps (sleep, space weather, posts) that
     timed out but left the payload otherwise usable.
+  - `refresh_attempted`, `refresh_scheduled`, `refresh_reason`, and `refresh_forced` capture the background mart refresh cadence triggered by the request.
 - `tables`: row counts and latest timestamps for the tables that feed the feature rollup.
   - `marts.daily_features` shows the global feature mart freshness (`max_day` and `max_updated_at`).
   - `marts.schumann_daily` reports the latest Schumann resonance day available.

@@ -2,6 +2,16 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-07 — Cache diagnostics and scheduled refreshes for features
+
+- Track cached snapshot age inside `/v1/features/today` diagnostics so clients can see
+  exactly when the last-good payload was recorded.
+- Force a mart refresh whenever the cached data is older than 15 minutes and otherwise
+  throttle background refresh scheduling to once every five minutes per user.
+- Document the new diagnostics fields and refresh cadence in `docs/FEATURES_ROUTE.md`
+  and `docs/DIAG_FEATURES.md`. No front-end changes are required beyond optionally
+  reading the new diagnostic flags.
+
 ## 2024-04-17 — Fix fallback activation regression
 
 - Restore the global bookkeeping inside the async pool failover helper so Python

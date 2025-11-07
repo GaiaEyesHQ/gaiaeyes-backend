@@ -89,8 +89,11 @@ def _record_enrichment_errors(diag_info: Dict[str, Any], errors: List[str]) -> N
 
 STATEMENT_TIMEOUT_MS = 60000
 
-MART_REFRESH_DEBOUNCE_SECONDS = 180.0
+MART_REFRESH_DEBOUNCE_SECONDS = 300.0
 _REFRESH_DELAY_RANGE = (1.5, 2.0)
+
+_CACHE_STALE_THRESHOLD_SECONDS = 15 * 60
+_BACKGROUND_REFRESH_INTERVAL_SECONDS = 5 * 60
 
 
 @asynccontextmanager
@@ -122,6 +125,9 @@ _refresh_registry: Dict[str, float] = {}
 _refresh_inflight: Dict[Tuple[str, date], asyncio.Task] = {}
 _refresh_lock = asyncio.Lock()
 _refresh_task_factory: Callable[[Awaitable[None]], asyncio.Task] = asyncio.create_task
+
+_background_refresh_registry: Dict[str, float] = {}
+_background_refresh_lock = asyncio.Lock()
 
 
 async def _execute_mart_refresh(user_id: str, day_local: date) -> None:
@@ -226,6 +232,12 @@ def _init_diag_info(user_id: Optional[str], tz_name: str) -> Dict[str, Any]:
         "total_rows": None,
         "tz": tz_name,
         "enrichment_errors": [],
+        "cache_hit": False,
+        "cache_age_seconds": None,
+        "refresh_attempted": False,
+        "refresh_scheduled": False,
+        "refresh_reason": None,
+        "refresh_forced": False,
     }
 
 
@@ -1087,6 +1099,7 @@ async def _fallback_from_cache(
     tzinfo: ZoneInfo,
     *,
     reason: Optional[str] = None,
+    mark_fallback: bool = True,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Optional[str]]:
     diag_info = dict(diag_seed)
     diag_info["enrichment_errors"] = list(diag_info.get("enrichment_errors") or [])
@@ -1096,9 +1109,14 @@ async def _fallback_from_cache(
     diag_info["day"] = base_day
     diag_info.setdefault("day_used", base_day)
     diag_info.setdefault("source", "cache")
-    diag_info["cache_fallback"] = True
-    if reason:
-        diag_info["error"] = reason
+    if mark_fallback:
+        diag_info["cache_fallback"] = True
+        if reason:
+            diag_info["error"] = reason
+    else:
+        diag_info.setdefault("cache_fallback", False)
+        if reason and not diag_info.get("error"):
+            diag_info["error"] = reason
 
     cached_payload = await get_last_good(user_id)
     if cached_payload:
@@ -1110,7 +1128,8 @@ async def _fallback_from_cache(
         if cached_day:
             diag_info["day_used"] = cached_day
         payload.setdefault("source", diag_info["source"])
-        logger.warning(
+        log_fn = logger.warning if mark_fallback else logger.info
+        log_fn(
             "[features_today] serving cached payload user=%s source=%s",
             user_id,
             diag_info.get("source"),
@@ -1119,12 +1138,35 @@ async def _fallback_from_cache(
 
     payload = {"source": diag_info.get("source") or "cache"}
     fallback_error = reason or "database temporarily unavailable"
-    logger.error(
+    log_fn = logger.error if mark_fallback else logger.debug
+    log_fn(
         "[features_today] cache unavailable user=%s reason=%s",
         user_id,
         fallback_error,
     )
     return payload, diag_info, None
+
+
+async def _maybe_schedule_background_refresh(
+    user_id: Optional[str], day_local: Optional[date], *, force: bool = False
+) -> bool:
+    if not user_id or not day_local:
+        return False
+
+    loop = asyncio.get_running_loop()
+    now = loop.time()
+
+    if not force:
+        async with _background_refresh_lock:
+            last = _background_refresh_registry.get(user_id)
+            if last and now - last < _BACKGROUND_REFRESH_INTERVAL_SECONDS:
+                return False
+
+    scheduled = await mart_refresh(user_id, day_local)
+    if scheduled:
+        async with _background_refresh_lock:
+            _background_refresh_registry[user_id] = now
+    return scheduled
 
 
 def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
@@ -1143,10 +1185,16 @@ def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
         "total_rows": diag_info.get("total_rows"),
         "tz": diag_info.get("tz"),
         "cache_fallback": bool(diag_info.get("cache_fallback")),
+        "cache_hit": bool(diag_info.get("cache_hit")),
+        "cache_age_seconds": diag_info.get("cache_age_seconds"),
         "pool_timeout": bool(diag_info.get("pool_timeout")),
         "error": diag_info.get("error"),
         "last_error": diag_info.get("last_error"),
         "enrichment_errors": list(diag_info.get("enrichment_errors") or []),
+        "refresh_attempted": bool(diag_info.get("refresh_attempted")),
+        "refresh_scheduled": bool(diag_info.get("refresh_scheduled")),
+        "refresh_reason": diag_info.get("refresh_reason"),
+        "refresh_forced": bool(diag_info.get("refresh_forced")),
     }
 
 
@@ -1192,9 +1240,29 @@ async def features_today(request: Request, diag: int = 0):
     diag_seed["day"] = datetime.now(tzinfo).date()
     diag_seed["day_used"] = diag_seed["day"]
 
+    cached_payload: Optional[Dict[str, Any]] = None
+    cache_age_seconds: Optional[float] = None
+    if user_id:
+        cached_payload = await get_last_good(user_id)
+        cached_updated_at = _coerce_datetime((cached_payload or {}).get("updated_at")) if cached_payload else None
+        if cached_updated_at:
+            cache_age_seconds = max(
+                0.0,
+                (datetime.now(timezone.utc) - cached_updated_at).total_seconds(),
+            )
+
+    diag_seed["cache_age_seconds"] = cache_age_seconds
+    diag_seed["cache_hit"] = bool(cached_payload)
+
+    response_payload: Dict[str, Any]
+    diag_info: Dict[str, Any]
+    error_text: Optional[str] = None
+
     try:
         async with _acquire_features_conn() as conn:
-            response_payload, diag_info, error_text = await _collect_features(conn, user_id, tz_name, tzinfo)
+            response_payload, diag_info, error_text = await _collect_features(
+                conn, user_id, tz_name, tzinfo
+            )
     except PoolTimeout as exc:
         logger.warning(
             "[features_today] pool timeout tz=%s user=%s: %s", tz_name, user_id, exc
@@ -1236,6 +1304,49 @@ async def features_today(request: Request, diag: int = 0):
             tzinfo,
             reason=error_text,
         )
+
+    if diag_info.get("source") in {"cache", "snapshot"} and cached_payload:
+        diag_info["cache_hit"] = True
+    else:
+        diag_info.setdefault("cache_hit", False)
+    if cache_age_seconds is not None and diag_info.get("cache_age_seconds") is None:
+        diag_info["cache_age_seconds"] = cache_age_seconds
+
+    refresh_reason = "interval"
+    refresh_forced = False
+    if diag_info.get("error"):
+        refresh_reason = "error"
+        refresh_forced = True
+    elif cached_payload:
+        stale_cache = cache_age_seconds is None or cache_age_seconds >= _CACHE_STALE_THRESHOLD_SECONDS
+        if stale_cache:
+            refresh_reason = "stale_cache"
+            refresh_forced = True
+
+    refresh_day = _coerce_day(diag_info.get("day_used")) or _coerce_day(diag_info.get("day"))
+    if not refresh_day:
+        refresh_day = datetime.now(tzinfo).date()
+
+    refresh_attempted = False
+    refresh_scheduled = False
+    if user_id:
+        refresh_attempted = True
+        try:
+            refresh_scheduled = await _maybe_schedule_background_refresh(
+                user_id, refresh_day, force=refresh_forced
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning(
+                "[features_today] background refresh scheduling failed user=%s: %s",
+                user_id,
+                exc,
+            )
+            refresh_scheduled = False
+
+    diag_info["refresh_attempted"] = refresh_attempted
+    diag_info["refresh_scheduled"] = refresh_scheduled
+    diag_info["refresh_reason"] = refresh_reason if refresh_attempted else None
+    diag_info["refresh_forced"] = refresh_forced and refresh_attempted
 
     diag_info = _finalize_diag_info(diag_info, final_error=error_text)
 
