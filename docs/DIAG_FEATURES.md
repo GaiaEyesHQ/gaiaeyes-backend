@@ -19,7 +19,7 @@ The response includes:
   - `last_error` captures the most recent failure that triggered a fallback so clients can log the cause without treating cached data as an outage.
   - `enrichment_errors` lists non-fatal enrichment steps (sleep, space weather, posts) that
     timed out but left the payload otherwise usable.
-  - `refresh_attempted`, `refresh_scheduled`, `refresh_reason`, and `refresh_forced` capture the background mart refresh cadence triggered by the request.
+  - `refresh_attempted`, `refresh_scheduled`, `refresh_reason`, and `refresh_forced` capture the background mart refresh cadence triggered by the request. Even when `day_used` reflects a cached snapshot, the refresh scheduler targets the current local day so stale cache entries don't stall new data creation.
 - `tables`: row counts and latest timestamps for the tables that feed the feature rollup.
   - `marts.daily_features` shows the global feature mart freshness (`max_day` and `max_updated_at`).
   - `marts.schumann_daily` reports the latest Schumann resonance day available.

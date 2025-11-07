@@ -1352,9 +1352,12 @@ async def features_today(request: Request, diag: int = 0):
             refresh_reason = "stale_cache"
             refresh_forced = True
 
-    refresh_day = _coerce_day(diag_info.get("day_used")) or _coerce_day(diag_info.get("day"))
+    refresh_day = _coerce_day(diag_info.get("day_used"))
+    requested_day = _coerce_day(diag_info.get("day"))
+    if diag_info.get("cache_rehydrated") and requested_day:
+        refresh_day = requested_day
     if not refresh_day:
-        refresh_day = datetime.now(tzinfo).date()
+        refresh_day = requested_day or datetime.now(tzinfo).date()
 
     refresh_attempted = False
     refresh_scheduled = False

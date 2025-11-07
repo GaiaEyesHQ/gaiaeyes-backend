@@ -56,7 +56,10 @@ refresh it records `refresh_attempted`, whether it was actually `refresh_schedul
 the `refresh_reason` (`interval` for the normal five-minute cadence, `stale_cache` when
 the snapshot is older than fifteen minutes, or `error` when the database query failed).
 `refresh_forced` indicates that the debounce was skipped because of staleness or an error
-condition.
+condition. When an empty payload is rehydrated from cache the diagnostics keep
+`day_used` aligned with the cached snapshot for visibility, but background refreshes are
+scheduled against the current local day so a stale cache entry cannot trap the mart on
+yesterday’s data.
 
 `diagnostics.enrichment_errors` lists any enrichment queries (sleep aggregation, space
 weather, Schumann resonance, etc.) that were skipped because they hit the short timeout.
@@ -86,4 +89,5 @@ payload is and whether a background mart refresh was queued. If the cached data 
 than fifteen minutes the refresh request bypasses the debounce window so new data is
 computed as soon as possible; otherwise, refreshes run on a five-minute cadence per user.
 These fields allow the UI to surface "refreshing" indicators while still showing the last
-successful snapshot.
+successful snapshot. Even when diagnostics report a cached `day_used`, the mart refresh
+targets the current day to unblock fresh data generation.

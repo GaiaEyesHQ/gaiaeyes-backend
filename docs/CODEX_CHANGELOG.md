@@ -9,6 +9,8 @@ Document noteworthy backend/front-end changes implemented via Codex tasks. Keep 
   weather tiles keep showing the latest known values instead of resetting to zeros.
 - Surface the new `diagnostics.cache_rehydrated` flag so operators can tell when the
   handler coalesced an empty DB response with cached data.
+- Ensure the background refresh scheduler always targets the current local day after a
+  cache rehydration so a stale snapshot cannot lock refreshes onto yesterday.
 - Documented the behavior update in `docs/FEATURES_ROUTE.md` and `docs/DIAG_FEATURES.md`.
   No front-end changes are required beyond optionally reading the new diagnostic flag.
 
