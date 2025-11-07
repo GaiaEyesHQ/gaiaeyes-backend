@@ -309,15 +309,29 @@ def _start_pool_monitors(pool: AsyncConnectionPool) -> None:
 
 async def _stop_pool_monitors() -> None:
     global _pool_watchdog_task, _pool_metrics_task
-    for task in (_pool_watchdog_task, _pool_metrics_task):
-        if task is not None:
-            task.cancel()
-    for task in (_pool_watchdog_task, _pool_metrics_task):
-        if task is not None:
-            try:
-                await task
-            except asyncio.CancelledError:  # pragma: no cover - expected on cancel
-                pass
+    tasks = [task for task in (_pool_watchdog_task, _pool_metrics_task) if task is not None]
+    if not tasks:
+        _pool_watchdog_task = None
+        _pool_metrics_task = None
+        return
+
+    current = asyncio.current_task()
+
+    for task in tasks:
+        if task is current:
+            continue
+        task.cancel()
+
+    for task in tasks:
+        if task is current:
+            continue
+        try:
+            await task
+        except asyncio.CancelledError:  # pragma: no cover - expected on cancel
+            pass
+        except Exception:  # pragma: no cover - defensive logging
+            logger.debug("[DB] monitor task raised during shutdown", exc_info=True)
+
     _pool_watchdog_task = None
     _pool_metrics_task = None
 
