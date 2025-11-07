@@ -13,7 +13,12 @@ from psycopg_pool.errors import PoolTimeout
 from fastapi import APIRouter, Body, Depends, Request, Header, HTTPException, status, Query
 from pydantic import BaseModel
 
-from ..db import get_pool, settings  # settings.DEV_BEARER, async pg pool
+from ..db import (
+    get_pool,
+    settings,  # settings.DEV_BEARER, async pg pool
+    handle_connection_failure,
+    handle_pool_timeout,
+)
 from . import summary as _summary_module
 from .summary import mart_refresh
 
@@ -153,10 +158,16 @@ async def safe_insert_batch(
         try:
             return await _insert_batch_once(pool, rows, dev_uid)
         except PoolTimeout as exc:
+            if await handle_pool_timeout("ingest batch connection timeout") and attempt < 3:
+                await asyncio.sleep(0)
+                continue
             raise BatchInsertError("db_timeout", exc)
         except OperationalError as exc:
             last_exc = exc
             attempt += 1
+            if await handle_connection_failure(exc) and attempt < 3:
+                await asyncio.sleep(0)
+                continue
             if attempt >= 3:
                 logger.error("[BATCH] insert failed after retries: %s", exc)
                 raise BatchInsertError("db_unavailable", exc)
@@ -391,6 +402,7 @@ async def samples_batch(
         pool = await get_pool()
     except PoolTimeout as exc:
         logger.error("/samples/batch pool acquisition failed: %s", exc)
+        await handle_pool_timeout("ingest pool acquisition timeout")
         if valid_rows:
             await _enqueue_backlog(buffer_entry)
         errors = list(validation_errors)
@@ -408,6 +420,7 @@ async def samples_batch(
         }
     except Exception as exc:
         logger.exception("/samples/batch unexpected pool error: %s", exc)
+        await handle_connection_failure(exc)
         errors = list(validation_errors)
         if not errors:
             errors = [{"reason": "server_error", "message": str(exc)[:200]}]

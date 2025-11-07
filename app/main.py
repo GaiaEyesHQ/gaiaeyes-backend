@@ -25,7 +25,13 @@ except ModuleNotFoundError:
     except ModuleNotFoundError:
         webhooks_router = None
 from .utils.auth import require_auth as ensure_authenticated
-from .db import get_pool, open_pool, close_pool
+from .db import (
+    get_pool,
+    open_pool,
+    close_pool,
+    handle_connection_failure,
+    handle_pool_timeout,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -107,14 +113,25 @@ async def _health_db_probe() -> tuple[bool, int, int]:
     probe_ok = False
     error_detail: str | None = None
 
-    try:
-        pool = await get_pool()
-        async with pool.connection(timeout=_DB_PROBE_TIMEOUT):
-            probe_ok = True
-    except PoolTimeout:
-        error_detail = "pool timeout"
-    except Exception as exc:  # pragma: no cover - defensive logging
-        error_detail = str(exc)
+    for attempt in range(2):
+        try:
+            pool = await get_pool()
+            async with pool.connection(timeout=_DB_PROBE_TIMEOUT):
+                probe_ok = True
+                error_detail = None
+                break
+        except PoolTimeout:
+            error_detail = "pool timeout"
+            did_failover = await handle_pool_timeout("health probe pool timeout")
+            if did_failover and attempt == 0:
+                continue
+            break
+        except Exception as exc:  # pragma: no cover - defensive logging
+            error_detail = str(exc)
+            did_failover = await handle_connection_failure(exc)
+            if did_failover and attempt == 0:
+                continue
+            break
 
     duration_ms = int((monotonic() - start) * 1000)
     now = monotonic()

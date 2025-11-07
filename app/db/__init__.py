@@ -262,6 +262,18 @@ async def _maybe_failover(exc: BaseException) -> bool:
     return await _activate_fallback_pool(reason)
 
 
+async def handle_connection_failure(exc: BaseException) -> bool:
+    """Expose connection-failure handling so callers can request failover."""
+
+    return await _maybe_failover(exc)
+
+
+async def handle_pool_timeout(reason: str) -> bool:
+    """Trigger the configured fallback when the pool exhausts or stalls."""
+
+    return await _activate_fallback_pool(reason)
+
+
 async def _pool_watchdog_loop(pool: AsyncConnectionPool) -> None:
     global _pool_last_refresh
     try:
@@ -406,6 +418,9 @@ async def get_db() -> AsyncGenerator:
             conn = await ctx.__aenter__()
         except PoolTimeout:
             _log_pool_diag(pool)
+            if await handle_pool_timeout("pool timeout acquiring connection") and attempts < 3:
+                await asyncio.sleep(0)
+                continue
             if attempts < 3:
                 backoff = 1.5
                 logger.warning("[DB] pool timeout; retrying after %.1fs", backoff)
@@ -413,7 +428,7 @@ async def get_db() -> AsyncGenerator:
                 continue
             raise
         except Exception as exc:
-            if await _maybe_failover(exc) and attempts < 3:
+            if await handle_connection_failure(exc) and attempts < 3:
                 continue
             raise
 
