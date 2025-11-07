@@ -2,6 +2,16 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2024-04-15 — Auto-failover after pgBouncer disconnects
+
+- Detect connection-level failures ("server closed the connection unexpectedly", etc.)
+  and automatically swap the async pool to the configured direct Postgres fallback so
+  repeated pgBouncer outages no longer exhaust the pool or leave the service in cache-only mode.
+- Extend the watchdog probe to trigger the same failover logic and centralize pool creation
+  helpers so both startup and runtime recovery paths reuse the hardened configuration.
+- Documented the behavior updates in `docs/OPERATIONS.md`. No front-end changes are needed
+  because the `/health` envelope and diagnostics contracts remain unchanged.
+
 ## 2024-04-14 — Stabilize health checks and cache fallbacks
 
 - Replaced the `/health` probe's `asyncio.wait_for` wrapper with a pool-scoped timeout so
