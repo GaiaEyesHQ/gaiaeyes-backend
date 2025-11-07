@@ -98,6 +98,19 @@ _BACKGROUND_REFRESH_INTERVAL_SECONDS = 5 * 60
 _EMPTY_PAYLOAD_KEYS = {"source"}
 
 
+_TRACE_MAX_ENTRIES = 60
+
+
+def _diag_trace(diag_info: Dict[str, Any], message: str) -> None:
+    """Append a timestamped trace message to the diagnostics payload."""
+
+    trace = diag_info.setdefault("trace", [])
+    timestamp = datetime.now(timezone.utc).isoformat()
+    trace.append(f"{timestamp} {message}")
+    if len(trace) > _TRACE_MAX_ENTRIES:
+        del trace[: len(trace) - _TRACE_MAX_ENTRIES]
+
+
 @asynccontextmanager
 async def _acquire_features_conn():
     """Acquire a database connection for the features endpoint."""
@@ -237,6 +250,12 @@ def _init_diag_info(user_id: Optional[str], tz_name: str) -> Dict[str, Any]:
         "cache_hit": False,
         "cache_age_seconds": None,
         "cache_rehydrated": False,
+        "cache_updated": False,
+        "cache_snapshot_initial": None,
+        "cache_snapshot_final": None,
+        "mart_snapshot": None,
+        "payload_summary": None,
+        "trace": [],
         "refresh_attempted": False,
         "refresh_scheduled": False,
         "refresh_reason": None,
@@ -781,6 +800,85 @@ def _coerce_float_value(value: Any) -> Optional[float]:
         return None
 
 
+def _any_present(payload: Dict[str, Any], keys: Tuple[str, ...]) -> bool:
+    return any(payload.get(key) is not None for key in keys)
+
+
+def _summarize_feature_payload(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not payload:
+        return {"has_payload": False, "non_null_count": 0}
+
+    summary_payload = dict(payload)
+    day = _coerce_day(summary_payload.get("day"))
+    updated_at = _coerce_datetime(summary_payload.get("updated_at"))
+
+    summary = {
+        "has_payload": True,
+        "source": summary_payload.get("source"),
+        "day": _iso_date(day),
+        "updated_at": _iso_dt(updated_at),
+        "sections": {
+            "health": _any_present(
+                summary_payload,
+                (
+                    "steps_total",
+                    "hr_min",
+                    "hr_max",
+                    "hrv_avg",
+                    "spo2_avg",
+                    "bp_sys_avg",
+                    "bp_dia_avg",
+                ),
+            ),
+            "sleep": _any_present(
+                summary_payload,
+                (
+                    "sleep_total_minutes",
+                    "rem_m",
+                    "core_m",
+                    "deep_m",
+                    "awake_m",
+                    "inbed_m",
+                ),
+            ),
+            "space_daily": _any_present(
+                summary_payload,
+                ("kp_max", "bz_min", "sw_speed_avg", "flares_count", "cmes_count"),
+            ),
+            "space_current": _any_present(
+                summary_payload,
+                ("kp_current", "bz_current", "sw_speed_current"),
+            ),
+            "schumann": _any_present(
+                summary_payload,
+                ("sch_f0_hz", "sch_f1_hz", "sch_f2_hz", "sch_f3_hz", "sch_f4_hz"),
+            ),
+            "post": _any_present(
+                summary_payload,
+                ("post_title", "post_caption", "post_body"),
+            ),
+        },
+        "metrics": {
+            "steps_total": _coerce_int_value(summary_payload.get("steps_total")),
+            "sleep_total_minutes": _coerce_int_value(
+                summary_payload.get("sleep_total_minutes")
+            ),
+            "kp_max": _coerce_float_value(summary_payload.get("kp_max")),
+            "bz_min": _coerce_float_value(summary_payload.get("bz_min")),
+            "sw_speed_avg": _coerce_float_value(summary_payload.get("sw_speed_avg")),
+        },
+    }
+
+    non_null_keys = [
+        key
+        for key, value in summary_payload.items()
+        if value is not None and key != "user_id"
+    ]
+    summary["non_null_count"] = len(non_null_keys)
+    summary["non_null_keys"] = sorted(non_null_keys)[:32]
+    return summary
+
+
 def _normalize_features_payload(
     payload: Optional[Dict[str, Any]],
     diag_info: Dict[str, Any],
@@ -889,6 +987,10 @@ async def _collect_features(
     tzinfo: ZoneInfo,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Optional[str]]:
     diag_info: Dict[str, Any] = _init_diag_info(user_id, tz_name)
+    _diag_trace(
+        diag_info,
+        f"start collect user={user_id or 'anonymous'} tz={tz_name}",
+    )
 
     response_payload: Dict[str, Any] = {}
     error_text: Optional[str] = None
@@ -897,9 +999,11 @@ async def _collect_features(
         today_local = await _current_day_local(conn, tz_name)
         diag_info["day"] = today_local
         diag_info["day_used"] = today_local
+        _diag_trace(diag_info, f"resolved day={today_local.isoformat()}")
 
         if not user_id:
             logger.info("[features_today] anonymous request tz=%s", tz_name)
+            _diag_trace(diag_info, "anonymous request - skipping user scoped lookups")
         else:
             context: Dict[str, Any] = {}
             should_enrich = True
@@ -907,6 +1011,10 @@ async def _collect_features(
 
             mart_row, mart_error = await _query_mart_with_retry(conn, user_id, today_local)
             if mart_error:
+                _diag_trace(
+                    diag_info,
+                    f"mart query failed for day={today_local.isoformat()}: {mart_error}",
+                )
                 logger.warning(
                     "[MART] fallback: using cached data (user=%s day=%s): %s",
                     user_id,
@@ -918,6 +1026,10 @@ async def _collect_features(
                     diag_info["pool_timeout"] = True
                 should_enrich = False
                 yesterday = today_local - timedelta(days=1)
+                _diag_trace(
+                    diag_info,
+                    f"attempting yesterday fallback day={yesterday.isoformat()}",
+                )
                 yesterday_row, yesterday_error = await _timed_call(
                     _fetch_mart_row(conn, user_id, yesterday),
                     label="mart row (yesterday)",
@@ -932,11 +1044,24 @@ async def _collect_features(
                         yesterday_row.get("updated_at")
                     )
                     diag_info["day_used"] = yesterday
+                    summary_payload = dict(yesterday_row)
+                    summary_payload.setdefault("source", "yesterday")
+                    diag_info["mart_snapshot"] = _summarize_feature_payload(
+                        summary_payload
+                    )
+                    _diag_trace(
+                        diag_info,
+                        f"yesterday mart row loaded updated_at={diag_info['updated_at']}",
+                    )
                     should_enrich = True
                 else:
                     if yesterday_error:
                         _record_enrichment_errors(
                             diag_info, [_describe_error(yesterday_error)]
+                        )
+                        _diag_trace(
+                            diag_info,
+                            f"yesterday mart lookup failed: {yesterday_error}",
                         )
                     fallback_row, fallback_error = await _timed_call(
                         _fetch_snapshot_row(conn, user_id),
@@ -958,11 +1083,24 @@ async def _collect_features(
                             except ValueError:
                                 fallback_day = None
                         diag_info["day_used"] = fallback_day or diag_info.get("day_used")
+                        summary_payload = dict(fallback_row)
+                        summary_payload.setdefault("source", "snapshot")
+                        diag_info["mart_snapshot"] = _summarize_feature_payload(
+                            summary_payload
+                        )
+                        _diag_trace(
+                            diag_info,
+                            "using latest snapshot mart row from database",
+                        )
                         should_enrich = True
                     else:
                         if fallback_error:
                             _record_enrichment_errors(
                                 diag_info, [_describe_error(fallback_error)]
+                            )
+                            _diag_trace(
+                                diag_info,
+                                f"snapshot lookup failed: {fallback_error}",
                             )
                         cached_payload = await get_last_good(user_id)
                         if cached_payload:
@@ -980,11 +1118,23 @@ async def _collect_features(
                                 except ValueError:
                                     cached_day = None
                             diag_info["day_used"] = cached_day or diag_info.get("day_used")
+                            cache_summary = _summarize_feature_payload(response_payload)
+                            diag_info.setdefault("cache_snapshot_initial", cache_summary)
+                            diag_info["cache_snapshot_final"] = cache_summary
+                            _diag_trace(
+                                diag_info,
+                                "serving cached payload after mart failure",
+                            )
                             # cached payloads already contain enriched fields
                             should_enrich = False
                         else:
                             diag_info["source"] = "snapshot"
                             response_payload = {"source": "snapshot"}
+                            diag_info.setdefault("cache_snapshot_final", {"has_payload": False, "non_null_count": 0})
+                            _diag_trace(
+                                diag_info,
+                                "no snapshot or cache available after mart failure",
+                            )
                             should_enrich = False
             elif mart_row:
                 diag_info["mart_row"] = True
@@ -993,6 +1143,15 @@ async def _collect_features(
                     mart_row.get("updated_at")
                 )
                 response_payload = dict(mart_row)
+                summary_payload = dict(mart_row)
+                summary_payload.setdefault("source", "today")
+                diag_info["mart_snapshot"] = _summarize_feature_payload(
+                    summary_payload
+                )
+                _diag_trace(
+                    diag_info,
+                    f"today mart row loaded updated_at={diag_info['updated_at']}",
+                )
             else:
                 freshened = await _freshen_features(conn, user_id, today_local, tzinfo)
                 if freshened:
@@ -1003,12 +1162,29 @@ async def _collect_features(
                     diag_info["updated_at"] = _coerce_datetime(
                         response_payload.get("updated_at")
                     )
+                    diag_info["mart_snapshot"] = _summarize_feature_payload(
+                        response_payload
+                    )
+                    _diag_trace(
+                        diag_info,
+                        "freshened payload composed from summary + enrichment",
+                    )
                     _record_enrichment_errors(
                         diag_info, list(context.get("errors") or [])
                     )
+                    if context.get("errors"):
+                        _diag_trace(
+                            diag_info,
+                            "freshen enrichment had errors: "
+                            + ", ".join(map(str, context.get("errors") or [])),
+                        )
                 else:
                     yesterday = today_local - timedelta(days=1)
                     diag_info["day_used"] = yesterday
+                    _diag_trace(
+                        diag_info,
+                        f"freshen returned nothing; checking yesterday day={yesterday.isoformat()}",
+                    )
                     mart_row, yesterday_error = await _timed_call(
                         _fetch_mart_row(conn, user_id, yesterday),
                         label="mart row (yesterday)",
@@ -1022,13 +1198,27 @@ async def _collect_features(
                         diag_info["updated_at"] = _coerce_datetime(
                             mart_row.get("updated_at")
                         )
+                        summary_payload = dict(mart_row)
+                        summary_payload.setdefault("source", "yesterday")
+                        diag_info["mart_snapshot"] = _summarize_feature_payload(
+                            summary_payload
+                        )
+                        _diag_trace(
+                            diag_info,
+                            f"using yesterday mart row updated_at={diag_info['updated_at']}",
+                        )
                     else:
                         if yesterday_error:
                             _record_enrichment_errors(
                                 diag_info, [_describe_error(yesterday_error)]
                             )
+                            _diag_trace(
+                                diag_info,
+                                f"yesterday fallback failed: {yesterday_error}",
+                            )
                         diag_info["source"] = "empty"
                         response_payload = {}
+                        _diag_trace(diag_info, "no mart, cache, or freshen data available")
 
             if user_id:
                 async with conn.cursor(row_factory=dict_row) as cur:
@@ -1092,6 +1282,14 @@ async def _collect_features(
                     and cacheable_keys
                 ):
                     await set_last_good(user_id, response_payload)
+                    diag_info["cache_updated"] = True
+                    cache_summary = _summarize_feature_payload(response_payload)
+                    diag_info.setdefault("cache_snapshot_initial", cache_summary)
+                    diag_info["cache_snapshot_final"] = cache_summary
+                    _diag_trace(
+                        diag_info,
+                        "cache updated with current response payload",
+                    )
                 response_payload.setdefault("source", diag_info.get("source") or "snapshot")
             else:
                 response_payload = {"source": diag_info.get("source") or "snapshot"}
@@ -1118,6 +1316,10 @@ async def _fallback_from_cache(
     diag_info["day"] = base_day
     diag_info.setdefault("day_used", base_day)
     diag_info.setdefault("source", "cache")
+    _diag_trace(
+        diag_info,
+        f"fallback_from_cache reason={reason or 'unknown'} mark={mark_fallback}",
+    )
     if mark_fallback:
         diag_info["cache_fallback"] = True
         if reason:
@@ -1137,6 +1339,13 @@ async def _fallback_from_cache(
         if cached_day:
             diag_info["day_used"] = cached_day
         payload.setdefault("source", diag_info["source"])
+        cache_summary = _summarize_feature_payload(payload)
+        diag_info.setdefault("cache_snapshot_initial", cache_summary)
+        diag_info["cache_snapshot_final"] = cache_summary
+        _diag_trace(
+            diag_info,
+            "served cached payload via fallback",
+        )
         log_fn = logger.warning if mark_fallback else logger.info
         log_fn(
             "[features_today] serving cached payload user=%s source=%s",
@@ -1153,6 +1362,10 @@ async def _fallback_from_cache(
         user_id,
         fallback_error,
     )
+    diag_info.setdefault(
+        "cache_snapshot_final", {"has_payload": False, "non_null_count": 0}
+    )
+    _diag_trace(diag_info, "no cached payload available during fallback")
     return payload, diag_info, None
 
 
@@ -1197,6 +1410,12 @@ def _format_diag_payload(diag_info: Dict[str, Any]) -> Dict[str, Any]:
         "cache_hit": bool(diag_info.get("cache_hit")),
         "cache_age_seconds": diag_info.get("cache_age_seconds"),
         "cache_rehydrated": bool(diag_info.get("cache_rehydrated")),
+        "cache_updated": bool(diag_info.get("cache_updated")),
+        "cache_snapshot_initial": diag_info.get("cache_snapshot_initial"),
+        "cache_snapshot_final": diag_info.get("cache_snapshot_final"),
+        "mart_snapshot": diag_info.get("mart_snapshot"),
+        "payload_summary": diag_info.get("payload_summary"),
+        "trace": list(diag_info.get("trace") or []),
         "pool_timeout": bool(diag_info.get("pool_timeout")),
         "error": diag_info.get("error"),
         "last_error": diag_info.get("last_error"),
@@ -1263,6 +1482,17 @@ async def features_today(request: Request, diag: int = 0):
 
     diag_seed["cache_age_seconds"] = cache_age_seconds
     diag_seed["cache_hit"] = bool(cached_payload)
+    initial_cache_summary = _summarize_feature_payload(cached_payload)
+    diag_seed["cache_snapshot_initial"] = initial_cache_summary
+    initial_cache_trace = None
+    if initial_cache_summary.get("has_payload"):
+        initial_cache_trace = (
+            "initial cache snapshot "
+            f"day={initial_cache_summary.get('day')} source={initial_cache_summary.get('source')}"
+        )
+    else:
+        initial_cache_trace = "initial cache snapshot empty"
+    _diag_trace(diag_seed, initial_cache_trace)
 
     response_payload: Dict[str, Any]
     diag_info: Dict[str, Any]
@@ -1301,6 +1531,14 @@ async def features_today(request: Request, diag: int = 0):
             reason=reason,
         )
 
+    if not diag_info.get("cache_snapshot_initial"):
+        diag_info["cache_snapshot_initial"] = initial_cache_summary
+    if (
+        initial_cache_trace
+        and initial_cache_trace not in (diag_info.get("trace") or [])
+    ):
+        _diag_trace(diag_info, initial_cache_trace)
+
     if cached_payload and _is_effectively_empty_payload(response_payload):
         response_payload = dict(cached_payload)
         diag_info["cache_fallback"] = True
@@ -1314,6 +1552,10 @@ async def features_today(request: Request, diag: int = 0):
         if cached_day:
             diag_info["day_used"] = cached_day
         response_payload.setdefault("source", diag_info.get("source"))
+        cache_summary = _summarize_feature_payload(response_payload)
+        diag_info.setdefault("cache_snapshot_initial", cache_summary)
+        diag_info["cache_snapshot_final"] = cache_summary
+        _diag_trace(diag_info, "rehydrated empty payload with cached snapshot")
         logger.info(
             "[features_today] rehydrated empty payload with cache user=%s source=%s",
             user_id,
@@ -1380,13 +1622,35 @@ async def features_today(request: Request, diag: int = 0):
     diag_info["refresh_reason"] = refresh_reason if refresh_attempted else None
     diag_info["refresh_forced"] = refresh_forced and refresh_attempted
 
+    if refresh_attempted:
+        refresh_day_text = None
+        if isinstance(refresh_day, date):
+            refresh_day_text = refresh_day.isoformat()
+        elif refresh_day:
+            refresh_day_text = str(refresh_day)
+        status = "scheduled" if refresh_scheduled else "skipped"
+        _diag_trace(
+            diag_info,
+            f"background refresh {status} reason={refresh_reason} day={refresh_day_text}",
+        )
+
     diag_info = _finalize_diag_info(diag_info, final_error=error_text)
 
+    final_payload_for_summary: Optional[Dict[str, Any]] = response_payload
     if error_text:
         response: Dict[str, Any] = {"ok": False, "data": None, "error": error_text}
     else:
         payload = _normalize_features_payload(response_payload, diag_info, user_id)
         response = {"ok": True, "data": payload, "error": None}
+        final_payload_for_summary = payload
+
+    diag_info["payload_summary"] = _summarize_feature_payload(final_payload_for_summary)
+    if (
+        not diag_info.get("cache_snapshot_final")
+        and diag_info.get("cache_hit")
+        and final_payload_for_summary
+    ):
+        diag_info["cache_snapshot_final"] = diag_info["payload_summary"]
 
     diag_block = _format_diag_payload(diag_info)
     response["diagnostics"] = diag_block

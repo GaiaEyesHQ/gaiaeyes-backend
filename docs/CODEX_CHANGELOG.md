@@ -2,6 +2,17 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-09 — Trace features fallbacks and cache state
+
+- Added a timestamped `diagnostics.trace` log to `/v1/features/today` so engineers can copy
+  the execution path (mart lookups, cache fallbacks, refresh scheduling) from the mobile
+  debug console without relying on screenshots.
+- Surface lightweight `cache_snapshot_initial`, `cache_snapshot_final`, and
+  `payload_summary` blocks that call out which sections (health, sleep, space weather,
+  Schumann, posts) contained non-null data before and after the request.
+- Flag when the last-good cache is rewritten via `diagnostics.cache_updated` and update the
+  feature docs to explain the new fields.
+
 ## 2025-11-08 — Rehydrate empty feature payloads from cache
 
 - When the mart returns an empty snapshot but the last-good cache still holds data,
