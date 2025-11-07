@@ -2,6 +2,18 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-08 — Rehydrate empty feature payloads from cache
+
+- When the mart returns an empty snapshot but the last-good cache still holds data,
+  `/v1/features/today` now reuses that cached payload so the health, sleep, and space
+  weather tiles keep showing the latest known values instead of resetting to zeros.
+- Surface the new `diagnostics.cache_rehydrated` flag so operators can tell when the
+  handler coalesced an empty DB response with cached data.
+- Ensure the background refresh scheduler always targets the current local day after a
+  cache rehydration so a stale snapshot cannot lock refreshes onto yesterday.
+- Documented the behavior update in `docs/FEATURES_ROUTE.md` and `docs/DIAG_FEATURES.md`.
+  No front-end changes are required beyond optionally reading the new diagnostic flag.
+
 ## 2025-11-07 — Cache diagnostics and scheduled refreshes for features
 
 - Track cached snapshot age inside `/v1/features/today` diagnostics so clients can see

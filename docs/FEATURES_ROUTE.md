@@ -32,6 +32,7 @@ The `/v1/features/today` endpoint returns a consolidated “daily features” sn
     "cache_fallback": true|false,
     "cache_hit": true|false,
     "cache_age_seconds": float|null,
+    "cache_rehydrated": true|false,
     "pool_timeout": true|false,
     "error": string|null,
     "last_error": string|null,
@@ -47,12 +48,18 @@ The `/v1/features/today` endpoint returns a consolidated “daily features” sn
 `data` is never `null`. When a snapshot is unavailable the handler returns `{}` with `ok:true` so tiles can remain filled with the last-good content. During cache fallbacks the top-level `error` remains `null`. `diagnostics.error` is only populated when the endpoint itself returns `ok:false`, while `diagnostics.last_error` preserves the most recent failure message that triggered a fallback so clients can surface an informational banner without disabling cached data.
 
 `diagnostics.cache_hit` flags when the handler served the last-good snapshot, and
-`diagnostics.cache_age_seconds` reports how old that payload was when returned. When the
-service schedules a background refresh it records `refresh_attempted`, whether it was
-actually `refresh_scheduled`, and the `refresh_reason` (`interval` for the normal
-five-minute cadence, `stale_cache` when the snapshot is older than fifteen minutes, or
-`error` when the database query failed). `refresh_forced` indicates that the debounce was
-skipped because of staleness or an error condition.
+`diagnostics.cache_age_seconds` reports how old that payload was when returned. If the
+database returns an empty snapshot but cached data exists, the handler now rehydrates the
+response from the cache and surfaces `diagnostics.cache_rehydrated:true` so operators know
+the data was preserved from a previous call. When the service schedules a background
+refresh it records `refresh_attempted`, whether it was actually `refresh_scheduled`, and
+the `refresh_reason` (`interval` for the normal five-minute cadence, `stale_cache` when
+the snapshot is older than fifteen minutes, or `error` when the database query failed).
+`refresh_forced` indicates that the debounce was skipped because of staleness or an error
+condition. When an empty payload is rehydrated from cache the diagnostics keep
+`day_used` aligned with the cached snapshot for visibility, but background refreshes are
+scheduled against the current local day so a stale cache entry cannot trap the mart on
+yesterday’s data.
 
 `diagnostics.enrichment_errors` lists any enrichment queries (sleep aggregation, space
 weather, Schumann resonance, etc.) that were skipped because they hit the short timeout.
@@ -65,7 +72,13 @@ freshened payloads.
 2. **Freshen** – if today’s row is missing, the handler performs a short “freshen” by combining `gaia.daily_summary`, raw sleep samples, and space-weather feeds. The response is annotated with `source:"freshened"` and `freshened:true`.
 3. **Yesterday fallback** – when neither of the above produce data, the handler loads yesterday’s mart row and marks `source:"yesterday"`.
 4. **Cache fallback** – when the service cannot obtain a database connection (for example when pgBouncer is saturated) *or* when the mart query itself errors, the handler serves the last-good payload from the in-memory/Redis cache, marks `cache_fallback:true`, and records the failure inside `diagnostics.last_error`. Pool saturation also toggles `pool_timeout:true`. Clients continue to receive populated tiles even while the database is briefly unavailable.
-5. **Empty** – if no data or cache entry exists, the response is `{}` with `source:"empty"`. Even in this case the handler now returns `ok:true` so dashboards keep rendering defaults while diagnostics report the outage reason.
+5. **Rehydrate from cache** – when the mart returns an empty snapshot but the cache still
+   holds a previous payload, the handler now reuses that cached data. Diagnostics set
+   `cache_fallback:true`, `cache_hit:true`, and `cache_rehydrated:true` so the UI knows the
+   payload came from cache even though the database request technically succeeded.
+6. **Empty** – if no data or cache entry exists, the response is `{}` with `source:"empty"`.
+   Even in this case the handler now returns `ok:true` so dashboards keep rendering
+   defaults while diagnostics report the outage reason.
 
 Because diagnostics are always returned, client teams can inspect `diagnostics.day_used`, `source`, and `mart_row` to understand which branch served the payload.
 
@@ -76,4 +89,5 @@ payload is and whether a background mart refresh was queued. If the cached data 
 than fifteen minutes the refresh request bypasses the debounce window so new data is
 computed as soon as possible; otherwise, refreshes run on a five-minute cadence per user.
 These fields allow the UI to surface "refreshing" indicators while still showing the last
-successful snapshot.
+successful snapshot. Even when diagnostics report a cached `day_used`, the mart refresh
+targets the current day to unblock fresh data generation.
