@@ -2,6 +2,17 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2024-04-12 — Stop fabricating direct DB fallbacks
+
+- Roll back the inferred port-5432 fallback: when pgBouncer is unreachable we now only
+  switch to a direct connection if `DIRECT_URL` (or an explicit alternate DSN) is
+  configured. This avoids hanging connection attempts to hosts that do not expose the
+  primary Postgres port.
+- Explicitly require `DIRECT_URL` to be set before wiring any fallback so pgBouncer
+  connection strings without explicit ports no longer trigger a fabricated direct DSN.
+- Added regression coverage ensuring pgBouncer mode skips the fallback when `DIRECT_URL`
+  is missing, while still honoring an explicit direct connection when provided.
+
 ## 2024-04-11 — Harden database connectivity and symptom fallbacks
 
 - Update the async pool bootstrapper to respect the original `DATABASE_URL` port, only switch to pgBouncer when explicitly
