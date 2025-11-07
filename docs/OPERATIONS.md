@@ -8,6 +8,9 @@
 ## Render environment
 - `DATABASE_URL` should target the pgBouncer endpoint on port **6543** and include `sslmode=require` in the query string.
 - Restarting the service will automatically reopen the shared async connection pool during FastAPI startup.
+- When pgBouncer begins terminating connections the backend now automatically fails over to
+  the configured `DIRECT_URL` (if provided). Watch for `[DB] connection failure` log lines to
+  confirm the switch and ensure the direct connection remains reachable.
 
 ## Connectivity checks
 Run the following from a Render shell or any environment that has network access to Supabase:

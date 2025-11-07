@@ -8,6 +8,8 @@ from typing import Optional, AsyncGenerator, Dict, Any
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse, ParseResult
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from psycopg import InterfaceError, OperationalError
+from psycopg import errors as psycopg_errors
 from psycopg_pool import AsyncConnectionPool
 from psycopg_pool.errors import PoolTimeout
 
@@ -44,6 +46,18 @@ _pool_fallback_label: Optional[str] = None
 _pool_active_label: str = "unknown"
 
 _STATEMENT_TIMEOUT_MS = 60000
+
+ConnectionException = getattr(psycopg_errors, "ConnectionException", psycopg_errors.DatabaseError)
+
+_CONNECTION_ERROR_KEYWORDS = (
+    "server closed the connection unexpectedly",
+    "terminating connection due to administrator command",
+    "connection not open",
+    "connection failed",
+    "could not connect to server",
+    "closed the connection unexpectedly",
+    "timeout expired",
+)
 
 
 def _parse_bool(value: Optional[str]) -> bool:
@@ -129,6 +143,33 @@ def _prepare_conninfo() -> None:
     _pool_active_label = primary_label
 
 
+def _make_pool(conninfo: str) -> AsyncConnectionPool:
+    """Create a configured async connection pool for the provided conninfo."""
+
+    return AsyncConnectionPool(
+        conninfo=conninfo,
+        min_size=2,
+        max_size=8,
+        timeout=8,
+        max_idle=300,
+        open=False,
+        check=_check_on_acquire,
+        kwargs={
+            "sslmode": "require",
+        },
+    )
+
+
+def _mark_pool_open(pool: AsyncConnectionPool) -> None:
+    """Record bookkeeping for an opened pool and start monitors."""
+
+    global _pool_last_refresh, _pool_open
+    _pool_last_refresh = datetime.now(timezone.utc)
+    _pool_open = True
+    _log_pool_diag(pool)
+    _start_pool_monitors(pool)
+
+
 async def _check_on_acquire(conn) -> None:
     # Ensure a per-connection statement timeout and a quick ping
     await conn.execute(f"set statement_timeout = {_STATEMENT_TIMEOUT_MS}")
@@ -147,6 +188,80 @@ def _log_pool_diag(pool: AsyncConnectionPool) -> None:
     logger.info("[DB] diag: open=%s free=%s waiting=%s", open_count, free_count, waiting)
 
 
+def _is_connection_failure(exc: BaseException) -> bool:
+    if isinstance(
+        exc,
+        (
+            OperationalError,
+            InterfaceError,
+            ConnectionException,
+        ),
+    ):
+        return True
+
+    message = str(exc).lower()
+    if not message:
+        return False
+
+    return any(token in message for token in _CONNECTION_ERROR_KEYWORDS)
+
+
+async def _activate_fallback_pool(reason: str) -> bool:
+    """Switch to the configured fallback connection when possible."""
+
+    if not _pool_conninfo_fallback or not _pool_fallback_label:
+        return False
+    if _pool_active_label == _pool_fallback_label:
+        return False
+
+    async with _pool_lock:
+        if _pool_active_label == _pool_fallback_label:
+            return False
+
+        logger.warning(
+            "[DB] connection failure on %s backend (%s); switching to %s",
+            _pool_active_label,
+            reason,
+            _pool_fallback_label,
+        )
+
+        try:
+            new_pool = _make_pool(_pool_conninfo_fallback)
+            await new_pool.open()
+        except Exception as exc:  # pragma: no cover - depends on environment
+            logger.error(
+                "[DB] fallback pool open failed: %s", exc
+            )
+            return False
+
+        await _stop_pool_monitors()
+
+        global _pool_open
+        was_open = _pool_open
+        _pool_open = False
+
+        old_pool = _pool
+        if old_pool is not None and was_open:
+            try:
+                await old_pool.close()
+            except Exception:  # pragma: no cover - closing defensive
+                logger.debug(
+                    "[DB] closing previous pool during failover raised", exc_info=True
+                )
+
+        _pool = new_pool
+        _pool_active_label = _pool_fallback_label
+        _mark_pool_open(new_pool)
+        return True
+
+
+async def _maybe_failover(exc: BaseException) -> bool:
+    if not _is_connection_failure(exc):
+        return False
+    reason = str(exc).strip() or exc.__class__.__name__
+    return await _activate_fallback_pool(reason)
+
+
 async def _pool_watchdog_loop(pool: AsyncConnectionPool) -> None:
     global _pool_last_refresh
     try:
@@ -160,6 +275,8 @@ async def _pool_watchdog_loop(pool: AsyncConnectionPool) -> None:
                 _pool_last_refresh = datetime.now(timezone.utc)
             except Exception as exc:  # pragma: no cover - depends on driver state
                 logger.warning("[DB] watchdog ping failed: %s", exc)
+                if await _maybe_failover(exc):
+                    return
     except asyncio.CancelledError:  # pragma: no cover - cooperative shutdown
         raise
 
@@ -192,15 +309,29 @@ def _start_pool_monitors(pool: AsyncConnectionPool) -> None:
 
 async def _stop_pool_monitors() -> None:
     global _pool_watchdog_task, _pool_metrics_task
-    for task in (_pool_watchdog_task, _pool_metrics_task):
-        if task is not None:
-            task.cancel()
-    for task in (_pool_watchdog_task, _pool_metrics_task):
-        if task is not None:
-            try:
-                await task
-            except asyncio.CancelledError:  # pragma: no cover - expected on cancel
-                pass
+    tasks = [task for task in (_pool_watchdog_task, _pool_metrics_task) if task is not None]
+    if not tasks:
+        _pool_watchdog_task = None
+        _pool_metrics_task = None
+        return
+
+    current = asyncio.current_task()
+
+    for task in tasks:
+        if task is current:
+            continue
+        task.cancel()
+
+    for task in tasks:
+        if task is current:
+            continue
+        try:
+            await task
+        except asyncio.CancelledError:  # pragma: no cover - expected on cancel
+            pass
+        except Exception:  # pragma: no cover - defensive logging
+            logger.debug("[DB] monitor task raised during shutdown", exc_info=True)
+
     _pool_watchdog_task = None
     _pool_metrics_task = None
 
@@ -213,21 +344,8 @@ def _get_or_create_pool() -> AsyncConnectionPool:
         # NOTE: Supabase + pgBouncer (transaction mode) favors a small client pool.
         # Large client pools can cause churn and apparent flapping. Keep min small,
         # cap max to single digits, and use short acquire timeout to fail fast.
-        _pool = AsyncConnectionPool(
-            conninfo=conninfo,
-            min_size=2,
-            max_size=8,
-            timeout=8,
-            max_idle=300,
-            open=False,
-            check=_check_on_acquire,
-            kwargs={
-                "sslmode": "require",
-            },
-        )
-        logger.info(
-            "[DB] async pool configured backend=%s", _pool_active_label
-        )
+        _pool = _make_pool(conninfo)
+        logger.info("[DB] async pool configured backend=%s", _pool_active_label)
     return _pool
 
 
@@ -253,27 +371,13 @@ async def open_pool() -> AsyncConnectionPool:
                         await pool.close()
                     except Exception:
                         pass
-                    _pool = AsyncConnectionPool(
-                        conninfo=_pool_conninfo_fallback,
-                        min_size=2,
-                        max_size=8,
-                        timeout=8,
-                        max_idle=300,
-                        open=False,
-                        check=_check_on_acquire,
-                        kwargs={
-                            "sslmode": "require",
-                        },
-                    )
+                    _pool = _make_pool(_pool_conninfo_fallback)
                     pool = _pool
                     _pool_active_label = _pool_fallback_label
                     await pool.open()
                 else:
                     raise
-            _pool_last_refresh = datetime.now(timezone.utc)
-            _pool_open = True
-            _log_pool_diag(pool)
-            _start_pool_monitors(pool)
+            _mark_pool_open(pool)
     return pool
 
 
@@ -292,20 +396,24 @@ async def get_pool() -> AsyncConnectionPool:
 
 
 async def get_db() -> AsyncGenerator:
-    pool = await get_pool()
     attempts = 0
-    ctx = None
-    while attempts < 2:
+    while attempts < 3:
         attempts += 1
+        pool = await get_pool()
         ctx = pool.connection()
+
         try:
             conn = await ctx.__aenter__()
         except PoolTimeout:
             _log_pool_diag(pool)
-            if attempts < 2:
+            if attempts < 3:
                 backoff = 1.5
                 logger.warning("[DB] pool timeout; retrying after %.1fs", backoff)
                 await asyncio.sleep(backoff)
+                continue
+            raise
+        except Exception as exc:
+            if await _maybe_failover(exc) and attempts < 3:
                 continue
             raise
 
@@ -313,6 +421,9 @@ async def get_db() -> AsyncGenerator:
             await conn.execute(f"set statement_timeout = {_STATEMENT_TIMEOUT_MS}")
         except Exception as exc:
             await ctx.__aexit__(type(exc), exc, exc.__traceback__)
+            if await _maybe_failover(exc) and attempts < 3:
+                await asyncio.sleep(0)
+                continue
             raise
 
         try:
