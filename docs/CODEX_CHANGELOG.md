@@ -2,6 +2,19 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2024-04-17 — Fix fallback activation regression
+
+- Restore the global bookkeeping inside the async pool failover helper so Python
+  no longer treats `_pool_active_label` as a local variable. The regression was
+  preventing the watchdog, `/health`, and feature handlers from switching to the
+  configured fallback backend after connection failures, leaving the service
+  stuck in cache-only mode with `db:false` responses.
+- Ensure the primary `open_pool` helper also updates the shared `_pool`
+  reference when the fallback opens during startup retries so future
+  acquisitions use the replacement pool.
+- Documented the fix here; diagnostics and response envelopes are unchanged, so
+  no mobile/front-end updates are required.
+
 ## 2024-04-16 — Fail over when pgBouncer stalls
 
 - Treat `PoolTimeout` events during connection acquisition as connectivity failures and
