@@ -15,6 +15,8 @@ The response includes:
   - `cache_fallback` and `pool_timeout` highlight when the handler served cached data because the database pool was saturated.
   - `error` reflects the error message when the endpoint itself returned `ok:false`.
   - `last_error` captures the most recent failure that triggered a fallback so clients can log the cause without treating cached data as an outage.
+  - `enrichment_errors` lists non-fatal enrichment steps (sleep, space weather, posts) that
+    timed out but left the payload otherwise usable.
 - `tables`: row counts and latest timestamps for the tables that feed the feature rollup.
   - `marts.daily_features` shows the global feature mart freshness (`max_day` and `max_updated_at`).
   - `marts.schumann_daily` reports the latest Schumann resonance day available.

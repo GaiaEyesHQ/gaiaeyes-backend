@@ -2,6 +2,19 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2024-04-13 — Clamp feature enrichment timeouts
+
+- Wrapped the feature mart lookups and enrichment queries in short asyncio timeouts so
+  `/v1/features/today` fails over to cached data instead of stalling clients when the
+  database hangs. Diagnostics now record the timed-out components so engineers can see
+  which feeds were skipped.
+- Reused the freshened context for enrichment to avoid redundant queries and added
+  guardrails that fall back to cached or snapshot payloads after timeout events.
+- Documented the new `enrichment_errors` diagnostics field for mobile teams reviewing
+  `/v1/features/today` responses.
+- Ensured the database pool no longer infers pgBouncer mode purely from the port so
+  explicit `pgbouncer` flags remain the only trigger for that backend selection.
+
 ## 2024-04-12 — Stop fabricating direct DB fallbacks
 
 - Roll back the inferred port-5432 fallback: when pgBouncer is unreachable we now only

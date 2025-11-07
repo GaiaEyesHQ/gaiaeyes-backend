@@ -99,14 +99,12 @@ def _prepare_conninfo() -> None:
 
     cleaned, use_pgbouncer_flag = _clean_database_url(settings.DATABASE_URL)
     original_port = cleaned.port
-    inferred_pgbouncer = bool(original_port and original_port == _PGBOUNCER_PORT)
-
     primary_conninfo = _make_conninfo(cleaned)
     primary_label = "direct"
     fallback_conninfo: Optional[str] = None
     fallback_label: Optional[str] = None
 
-    if use_pgbouncer_flag or inferred_pgbouncer:
+    if use_pgbouncer_flag:
         primary_conninfo = _make_conninfo(cleaned, port=_PGBOUNCER_PORT)
         primary_label = "pgbouncer"
         logger.info("[DB] pgBouncer mode requested; primary port=%s", _PGBOUNCER_PORT)
