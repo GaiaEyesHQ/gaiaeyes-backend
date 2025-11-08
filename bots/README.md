@@ -159,7 +159,5 @@ Fonts are served via GitHub Pages under `/fonts/` and are pre-cached for offline
 ---
 
 ## Roadmap / Next
-- [ ] Sync square and tall backgrounds by matching names (e.g. `aurora_square` → `aurora_tall`).
-- [ ] Improve Markdown parser or migrate to server-side HTML generation for enhanced formatting.
 - [ ] Add pinch-zoom functionality for the Earthscope image viewer.
 - [ ] Display updated timestamps on cards to indicate data freshness.

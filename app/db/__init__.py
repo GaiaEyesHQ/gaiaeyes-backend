@@ -154,8 +154,12 @@ def _make_pool(conninfo: str) -> AsyncConnectionPool:
         max_idle=300,
         open=False,
         check=_check_on_acquire,
+        # NOTE: pgBouncer (transaction mode) cannot preserve prepared statements across
+        # transactions. Explicitly disable server-side prepare to avoid 'prepared statement
+        # "_pg3_*" does not exist' errors when connections are reused.
         kwargs={
             "sslmode": "require",
+            "prepare_threshold": 0,
         },
     )
 

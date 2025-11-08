@@ -278,7 +278,7 @@ Practice dictionary (resolve ids → copy):
 ⸻
 
 9) Tone & Style (for generators)
-	•	Voice: warm, plain‑language, non‑alarmist.
+	•	Voice: Viral, plain language
 	•	Lead with a TL;DR in one sentence.
 	•	Avoid jargon; translate numbers (e.g., “Kp reached 5 (minor storm)”).
 	•	Time clarity: use absolute dates (e.g., “Wednesday, Oct 8”).
