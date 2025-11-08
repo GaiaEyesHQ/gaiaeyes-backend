@@ -78,13 +78,13 @@ async def _start_health_monitor():
 
 
 @app.on_event("shutdown")
-async def _close_pool():
-    await close_pool()
+async def _stop_health_monitor():
+    await stop_health_monitor()
 
 
 @app.on_event("shutdown")
-async def _stop_health_monitor():
-    await stop_health_monitor()
+async def _close_pool():
+    await close_pool()
 
 app.add_middleware(
     CORSMiddleware,
