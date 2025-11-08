@@ -13,6 +13,7 @@ The response includes:
 
 - `features`: metadata about the most recent `/v1/features/today` query, including the requested user id, which branch (scoped vs. fallback) was used, and the latest `day`/`updated_at` timestamps.
   - `cache_fallback` and `pool_timeout` highlight when the handler served cached data because the database pool was saturated.
+  - `cacheFallback` mirrors `cache_fallback` using camelCase for mobile clients.
   - `cache_hit` reports whether the cached snapshot was served immediately, while `cache_age_seconds` shows how old it was when returned.
   - `cache_rehydrated` is `true` when the mart returned an empty payload but cached data was available and reused for the response.
   - `cache_updated` flags when `/v1/features/today` wrote a new snapshot during the request and the

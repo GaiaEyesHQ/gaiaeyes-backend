@@ -46,6 +46,8 @@ _pool_conninfo_fallback: Optional[str] = None
 _pool_primary_label: str = "unknown"
 _pool_fallback_label: Optional[str] = None
 _pool_active_label: str = "unknown"
+_pool_logged_label: Optional[str] = None
+_pool_timeout_consecutive: int = 0
 
 
 def _ensure_conninfo_prepared() -> None:
@@ -53,6 +55,26 @@ def _ensure_conninfo_prepared() -> None:
         _prepare_conninfo()
 
 _STATEMENT_TIMEOUT_MS = 60000
+
+
+def _reset_timeout_counter() -> None:
+    global _pool_timeout_consecutive
+    if _pool_timeout_consecutive:
+        _pool_timeout_consecutive = 0
+
+
+def _record_timeout() -> int:
+    global _pool_timeout_consecutive
+    _pool_timeout_consecutive += 1
+    return _pool_timeout_consecutive
+
+
+def _log_backend_status() -> None:
+    global _pool_logged_label
+    if _pool_logged_label == _pool_active_label:
+        return
+    _pool_logged_label = _pool_active_label
+    logger.info("[POOL] backend=%s", _pool_active_label)
 
 ConnectionException = getattr(psycopg_errors, "ConnectionException", psycopg_errors.DatabaseError)
 
@@ -177,6 +199,8 @@ def _mark_pool_open(pool: AsyncConnectionPool) -> None:
     global _pool_last_refresh, _pool_open
     _pool_last_refresh = datetime.now(timezone.utc)
     _pool_open = True
+    _reset_timeout_counter()
+    _log_backend_status()
     _log_pool_diag(pool)
     _start_pool_monitors(pool)
 
@@ -186,6 +210,7 @@ async def _check_on_acquire(conn) -> None:
     await conn.execute(f"set statement_timeout = {_STATEMENT_TIMEOUT_MS}")
     async with conn.cursor() as cur:
         await cur.execute("select 1;")
+    _reset_timeout_counter()
 
 
 def _log_pool_diag(pool: AsyncConnectionPool) -> None:
@@ -263,6 +288,7 @@ async def _activate_fallback_pool(reason: str) -> bool:
 
         _pool = new_pool
         _pool_active_label = _pool_fallback_label
+        _reset_timeout_counter()
         _mark_pool_open(new_pool)
         return True
 
@@ -283,7 +309,21 @@ async def handle_connection_failure(exc: BaseException) -> bool:
 async def handle_pool_timeout(reason: str) -> bool:
     """Trigger the configured fallback when the pool exhausts or stalls."""
 
-    return await _activate_fallback_pool(reason)
+    count = _record_timeout()
+    if (
+        _pool_conninfo_fallback
+        and _pool_fallback_label
+        and _pool_active_label != _pool_fallback_label
+        and count >= 2
+    ):
+        switched = await _activate_fallback_pool(reason)
+        if switched:
+            logger.warning(
+                "[POOL] failover → direct postgres (after %d timeouts)",
+                count,
+            )
+            return True
+    return False
 
 
 async def _pool_watchdog_loop(pool: AsyncConnectionPool) -> None:

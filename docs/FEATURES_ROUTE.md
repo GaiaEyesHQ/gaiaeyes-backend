@@ -13,7 +13,7 @@ The `/v1/features/today` endpoint returns a consolidated “daily features” sn
 ```
 {
   "ok": true|false,
-  "data": { ... },     // `{}` when no data is available
+  "data": { ... } | null,
   "error": string|null,
   "diagnostics": {
     "branch": "scoped" | "anonymous",
@@ -30,6 +30,7 @@ The `/v1/features/today` endpoint returns a consolidated “daily features” sn
     "total_rows": int|null,
     "tz": string,
     "cache_fallback": true|false,
+    "cacheFallback": true|false,   // camelCase alias for mobile clients
     "cache_hit": true|false,
     "cache_age_seconds": float|null,
     "cache_rehydrated": true|false,
@@ -50,10 +51,11 @@ The `/v1/features/today` endpoint returns a consolidated “daily features” sn
 }
 ```
 
-`data` is never `null`. When a snapshot is unavailable the handler returns `{}` with `ok:true` so tiles can remain filled with the last-good content. During cache fallbacks the top-level `error` remains `null`. `diagnostics.error` is only populated when the endpoint itself returns `ok:false`, while `diagnostics.last_error` preserves the most recent failure message that triggered a fallback so clients can surface an informational banner without disabling cached data.
+When `ok:true` the handler always returns an object in `data` (an empty `{}` when no snapshot exists) so tiles stay rendered. If the database connection is unavailable the handler now fails fast with `ok:false`, `data:null`, and `error:"db_timeout"|"db_unavailable"`. In that case diagnostics still include cache metadata and `diagnostics.cacheFallback:true` so callers can continue showing the previous payload while backing off retries.
 
 `diagnostics.cache_hit` flags when the handler served the last-good snapshot, and
-`diagnostics.cache_age_seconds` reports how old that payload was when returned. If the
+`diagnostics.cacheFallback`/`cache_fallback` show whether cached data was required because
+the primary query failed or rehydrated. `diagnostics.cache_age_seconds` reports how old that payload was when returned. If the
 database returns an empty snapshot but cached data exists, the handler now rehydrates the
 response from the cache and surfaces `diagnostics.cache_rehydrated:true` so operators know
 the data was preserved from a previous call. When the service schedules a background
