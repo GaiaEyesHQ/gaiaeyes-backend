@@ -7,6 +7,9 @@ Document noteworthy backend/front-end changes implemented via Codex tasks. Keep 
 - Updated the `/v1/features/today` connection helper to reuse the shared
   `get_db` dependency so the endpoint now benefits from the same retry and
   failover logic as the rest of the API.
+- Ensure the helper forwards normal and exceptional exit back to `get_db`
+  so connections are returned to the pool instead of leaking after a
+  successful request or handled failure.
 - Eliminated ad-hoc pool acquisition that was surfacing repeated
   `pool_timeout` diagnostics and forcing the app to serve cached data even
   while ingestion succeeded.

@@ -121,9 +121,25 @@ async def _acquire_features_conn():
             conn = await agen.__anext__()
         except StopAsyncIteration:  # pragma: no cover - defensive guard
             raise RuntimeError("database dependency yielded no connection")
-        yield conn
+
+        try:
+            yield conn
+        except BaseException as exc:
+            try:
+                await agen.athrow(type(exc), exc, exc.__traceback__)
+            except StopAsyncIteration:
+                pass
+            raise
+        else:
+            try:
+                await agen.asend(None)
+            except StopAsyncIteration:
+                pass
     finally:
-        await agen.aclose()
+        try:
+            await agen.aclose()
+        except (RuntimeError, StopAsyncIteration):
+            pass
 
 
 _refresh_registry: Dict[str, float] = {}
