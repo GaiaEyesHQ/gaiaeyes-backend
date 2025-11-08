@@ -1811,16 +1811,41 @@ async def diag_dbpool(_admin: None = Depends(require_admin)):
 
 @router.get("/db/ping")
 async def db_ping():
-    try:
-        pool = await get_pool()
-        async with pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute("select 1;")
-                await cur.fetchone()
-    except Exception as exc:
-        logger.warning("[DB] ping failed: %s", exc)
-        return {"ok": False, "db": False, "error": "db_unavailable"}
-    return {"ok": True, "db": True}
+    attempts = 0
+    last_error: Optional[str] = None
+
+    while attempts < 3:
+        attempts += 1
+        try:
+            pool = await get_pool()
+            async with pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute("select 1;")
+                    await cur.fetchone()
+        except PoolTimeout as exc:
+            last_error = "pool_timeout"
+            logger.warning("[DB] ping timeout (attempt %s): %s", attempts, exc)
+            # Switch to the fallback backend when possible and retry.
+            if await handle_pool_timeout("db_ping connection timeout"):
+                continue
+            if attempts < 3:
+                await asyncio.sleep(0)
+                continue
+            return {"ok": False, "db": False, "error": "db_timeout"}
+        except Exception as exc:
+            last_error = str(exc) or exc.__class__.__name__
+            logger.warning("[DB] ping failed (attempt %s): %s", attempts, last_error)
+            # Trigger failover to the direct backend when connection errors occur.
+            if await handle_connection_failure(exc):
+                continue
+            if attempts < 3:
+                await asyncio.sleep(0)
+                continue
+            return {"ok": False, "db": False, "error": "db_unavailable"}
+        else:
+            return {"ok": True, "db": True}
+
+    return {"ok": False, "db": False, "error": last_error or "db_unavailable"}
 
 # -----------------------------
 # /v1/space/forecast/summary

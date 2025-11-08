@@ -80,6 +80,31 @@ class _FakePool:
         return _FakeConnContext()
 
 
+class _FlakyPool:
+    def __init__(self, failures: list[str]):
+        self._failures = list(failures)
+        self.attempts = 0
+
+    def connection(self):
+        pool = self
+
+        class _Ctx:
+            async def __aenter__(self_inner):
+                pool.attempts += 1
+                if pool._failures:
+                    outcome = pool._failures.pop(0)
+                    if outcome == "timeout":
+                        raise PoolTimeout("timeout")
+                    if outcome == "error":
+                        raise RuntimeError("boom")
+                return _FakeConn()
+
+            async def __aexit__(self_inner, exc_type, exc, tb):
+                return False
+
+        return _Ctx()
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
@@ -648,3 +673,56 @@ async def test_features_pool_timeout_uses_cache(monkeypatch, client: AsyncClient
     assert data["day"] == "2024-04-05"
     assert payload["diagnostics"]["cache_fallback"] is True
     assert payload["diagnostics"]["pool_timeout"] is True
+
+
+
+@pytest.mark.anyio
+async def test_db_ping_retries_pool_timeout(monkeypatch):
+    pool = _FlakyPool(["timeout"])
+
+    async def _fake_get_pool():
+        return pool
+
+    pool_timeout_calls: list[str] = []
+
+    async def _fake_handle_pool_timeout(reason: str) -> bool:
+        pool_timeout_calls.append(reason)
+        return True
+
+    async def _fake_handle_connection_failure(exc):  # noqa: ARG001
+        pytest.fail("connection failure handler should not run")
+
+    monkeypatch.setattr(summary, "get_pool", _fake_get_pool)
+    monkeypatch.setattr(summary, "handle_pool_timeout", _fake_handle_pool_timeout)
+    monkeypatch.setattr(summary, "handle_connection_failure", _fake_handle_connection_failure)
+
+    result = await summary.db_ping()
+    assert result == {"ok": True, "db": True}
+    assert pool_timeout_calls == ["db_ping connection timeout"]
+    assert pool.attempts == 2
+
+
+@pytest.mark.anyio
+async def test_db_ping_retries_connection_failure(monkeypatch):
+    pool = _FlakyPool(["error"])
+
+    async def _fake_get_pool():
+        return pool
+
+    failure_calls: list[str] = []
+
+    async def _fake_handle_pool_timeout(reason: str) -> bool:  # noqa: ARG001
+        pytest.fail("pool timeout handler should not run")
+
+    async def _fake_handle_connection_failure(exc) -> bool:
+        failure_calls.append(str(exc))
+        return True
+
+    monkeypatch.setattr(summary, "get_pool", _fake_get_pool)
+    monkeypatch.setattr(summary, "handle_pool_timeout", _fake_handle_pool_timeout)
+    monkeypatch.setattr(summary, "handle_connection_failure", _fake_handle_connection_failure)
+
+    result = await summary.db_ping()
+    assert result == {"ok": True, "db": True}
+    assert failure_calls == ["boom"]
+    assert pool.attempts == 2
