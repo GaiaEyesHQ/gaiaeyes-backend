@@ -33,7 +33,15 @@ MART_QUERY_TIMEOUT_MS = 5000
 
 DEBUG_FEATURES_DIAG = getenv("DEBUG_FEATURES_DIAG", "1").lower() not in {"0", "false", "no"}
 
+
 logger = logging.getLogger(__name__)
+
+# Helper to rollback connection safely (ignore errors)
+async def _rollback_safely(conn) -> None:
+    try:
+        await conn.rollback()
+    except Exception:
+        pass
 
 T = TypeVar("T")
 
@@ -1040,6 +1048,7 @@ async def _collect_features(
 
             mart_row, mart_error = await _query_mart_with_retry(conn, user_id, today_local)
             if mart_error:
+                await _rollback_safely(conn)
                 _diag_trace(
                     diag_info,
                     f"mart query failed for day={today_local.isoformat()}: {mart_error}",
@@ -1092,6 +1101,7 @@ async def _collect_features(
                             diag_info,
                             f"yesterday mart lookup failed: {yesterday_error}",
                         )
+                    await _rollback_safely(conn)
                     fallback_row, fallback_error = await _timed_call(
                         _fetch_snapshot_row(conn, user_id),
                         label="mart snapshot",
@@ -1181,73 +1191,74 @@ async def _collect_features(
                     diag_info,
                     f"today mart row loaded updated_at={diag_info['updated_at']}",
                 )
-            else:
-                freshened = await _freshen_features(conn, user_id, today_local, tzinfo)
-                if freshened:
-                    response_payload, context = freshened
-                    diag_info["source"] = "freshened"
-                    diag_info["freshened"] = True
-                    diag_info["mart_row"] = False
-                    diag_info["updated_at"] = _coerce_datetime(
-                        response_payload.get("updated_at")
-                    )
-                    diag_info["mart_snapshot"] = _summarize_feature_payload(
-                        response_payload
-                    )
-                    _diag_trace(
-                        diag_info,
-                        "freshened payload composed from summary + enrichment",
-                    )
-                    _record_enrichment_errors(
-                        diag_info, list(context.get("errors") or [])
-                    )
-                    if context.get("errors"):
-                        _diag_trace(
-                            diag_info,
-                            "freshen enrichment had errors: "
-                            + ", ".join(map(str, context.get("errors") or [])),
-                        )
                 else:
-                    yesterday = today_local - timedelta(days=1)
-                    diag_info["day_used"] = yesterday
-                    _diag_trace(
-                        diag_info,
-                        f"freshen returned nothing; checking yesterday day={yesterday.isoformat()}",
-                    )
-                    mart_row, yesterday_error = await _timed_call(
-                        _fetch_mart_row(conn, user_id, yesterday),
-                        label="mart row (yesterday)",
-                        timeout_ms=MART_QUERY_TIMEOUT_MS,
-                        log_context=f"user={user_id} day={yesterday.isoformat()}",
-                    )
-                    if mart_row:
-                        response_payload = dict(mart_row)
-                        diag_info["mart_row"] = True
-                        diag_info["source"] = "yesterday"
+                    freshened = await _freshen_features(conn, user_id, today_local, tzinfo)
+                    if freshened:
+                        response_payload, context = freshened
+                        diag_info["source"] = "freshened"
+                        diag_info["freshened"] = True
+                        diag_info["mart_row"] = False
                         diag_info["updated_at"] = _coerce_datetime(
-                            mart_row.get("updated_at")
+                            response_payload.get("updated_at")
                         )
-                        summary_payload = dict(mart_row)
-                        summary_payload.setdefault("source", "yesterday")
                         diag_info["mart_snapshot"] = _summarize_feature_payload(
-                            summary_payload
+                            response_payload
                         )
                         _diag_trace(
                             diag_info,
-                            f"using yesterday mart row updated_at={diag_info['updated_at']}",
+                            "freshened payload composed from summary + enrichment",
                         )
+                        _record_enrichment_errors(
+                            diag_info, list(context.get("errors") or [])
+                        )
+                        if context.get("errors"):
+                            _diag_trace(
+                                diag_info,
+                                "freshen enrichment had errors: "
+                                + ", ".join(map(str, context.get("errors") or [])),
+                            )
                     else:
-                        if yesterday_error:
-                            _record_enrichment_errors(
-                                diag_info, [_describe_error(yesterday_error)]
+                        yesterday = today_local - timedelta(days=1)
+                        diag_info["day_used"] = yesterday
+                        _diag_trace(
+                            diag_info,
+                            f"freshen returned nothing; checking yesterday day={yesterday.isoformat()}",
+                        )
+                        mart_row, yesterday_error = await _timed_call(
+                            _fetch_mart_row(conn, user_id, yesterday),
+                            label="mart row (yesterday)",
+                            timeout_ms=MART_QUERY_TIMEOUT_MS,
+                            log_context=f"user={user_id} day={yesterday.isoformat()}",
+                        )
+                        if mart_row:
+                            response_payload = dict(mart_row)
+                            diag_info["mart_row"] = True
+                            diag_info["source"] = "yesterday"
+                            diag_info["updated_at"] = _coerce_datetime(
+                                mart_row.get("updated_at")
+                            )
+                            summary_payload = dict(mart_row)
+                            summary_payload.setdefault("source", "yesterday")
+                            diag_info["mart_snapshot"] = _summarize_feature_payload(
+                                summary_payload
                             )
                             _diag_trace(
                                 diag_info,
-                                f"yesterday fallback failed: {yesterday_error}",
+                                f"using yesterday mart row updated_at={diag_info['updated_at']}",
                             )
-                        diag_info["source"] = "empty"
-                        response_payload = {}
-                        _diag_trace(diag_info, "no mart, cache, or freshen data available")
+                        else:
+                            if yesterday_error:
+                                _record_enrichment_errors(
+                                    diag_info, [_describe_error(yesterday_error)]
+                                )
+                                _diag_trace(
+                                    diag_info,
+                                    f"yesterday fallback failed: {yesterday_error}",
+                                )
+                            await _rollback_safely(conn)
+                            diag_info["source"] = "empty"
+                            response_payload = {}
+                            _diag_trace(diag_info, "no mart, cache, or freshen data available")
 
             if user_id:
                 async with conn.cursor(row_factory=dict_row) as cur:
