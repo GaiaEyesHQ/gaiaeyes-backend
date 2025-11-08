@@ -579,7 +579,19 @@ async def get_db() -> AsyncGenerator:
         try:
             yield conn  # FastAPI injects this as `conn` in your endpoints
         except Exception as exc:  # pragma: no cover - defensive, FastAPI handles
+            # If the request code tripped a statement error mid-transaction, make sure
+            # we don't hand an "aborted" connection back to the pool. Roll back first.
+            try:
+                await conn.rollback()
+            except Exception:
+                pass
             await ctx.__aexit__(type(exc), exc, exc.__traceback__)
+            # If this was a "current transaction is aborted"-style error, allow one
+            # more acquisition attempt so the request can proceed on a clean conn.
+            if isinstance(exc, psycopg_errors.InFailedSqlTransaction) and attempts < 3:
+                logger.warning("[DB] aborted transaction detected; retrying request on a fresh connection (attempt %d)", attempts)
+                await asyncio.sleep(0)
+                continue
             raise
         else:
             await ctx.__aexit__(None, None, None)
