@@ -2,6 +2,16 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-14 — Harden `/db/ping` failover handling
+
+- Taught the `GET /db/ping` endpoint to retry connection attempts while invoking the
+  same failover helpers used by `/v1/features/today`. The ping now promotes the direct
+  Postgres fallback when pgBouncer stalls instead of returning `db:false` forever.
+- Added defensive retry logging and distinct `db_timeout` errors so operations can see
+  whether the failure was due to pool exhaustion or a deeper connectivity issue.
+- No front-end changes are required; the mobile client will automatically resume
+  refreshes once the ping reports `db:true`.
+
 ## 2025-11-13 — Add database connectivity diagnostics helper
 
 - Added a `scripts/db_diagnose.py` utility that pings both the configured
