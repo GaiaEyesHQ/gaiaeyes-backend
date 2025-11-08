@@ -19,8 +19,8 @@ from ..db import (
     handle_connection_failure,
     handle_pool_timeout,
 )
+from ..db.health import get_health_monitor
 from . import summary as _summary_module
-from .summary import mart_refresh
 
 from zoneinfo import ZoneInfo
 from os import getenv
@@ -39,7 +39,8 @@ _backlog_drain_lock = asyncio.Lock()
 _backlog_task_factory: Callable[[Awaitable[None]], asyncio.Task] = asyncio.create_task
 _recent_refresh_requests: Dict[str, float] = {}
 _recent_refresh_lock = asyncio.Lock()
-_INGEST_REFRESH_DEBOUNCE_SECONDS = 60.0
+_DELAYED_REFRESH_DELAY_SECONDS = 2.0
+_DELAYED_REFRESH_DEBOUNCE_SECONDS = 20.0
 
 # Legacy compatibility for tests expecting direct access to the refresh registry
 _refresh_registry = _summary_module._refresh_registry
@@ -151,31 +152,37 @@ async def safe_insert_batch(
     rows: List[Tuple[SampleIn, int]],
     dev_uid: Optional[str],
 ) -> Tuple[int, int, List[Dict[str, Any]]]:
-    attempt = 0
-    delay = 0.5
-    last_exc: Optional[BaseException] = None
-    while attempt < 3:
+    pool_timeouts = 0
+    operational_attempts = 0
+    backoff = 0.5
+
+    while True:
         try:
             return await _insert_batch_once(pool, rows, dev_uid)
         except PoolTimeout as exc:
-            if await handle_pool_timeout("ingest batch connection timeout") and attempt < 3:
-                await asyncio.sleep(0)
-                continue
-            raise BatchInsertError("db_timeout", exc)
+            pool_timeouts += 1
+            await handle_pool_timeout("ingest batch connection timeout")
+            if pool_timeouts >= 2:
+                logger.error("[BATCH] insert failed after consecutive pool timeouts")
+                raise BatchInsertError("db_timeout", exc)
+            logger.warning("[BATCH] pool timeout on insert; retrying once")
+            await asyncio.sleep(0.5)
         except OperationalError as exc:
-            last_exc = exc
-            attempt += 1
-            if await handle_connection_failure(exc) and attempt < 3:
-                await asyncio.sleep(0)
-                continue
-            if attempt >= 3:
+            operational_attempts += 1
+            if operational_attempts >= 3:
                 logger.error("[BATCH] insert failed after retries: %s", exc)
                 raise BatchInsertError("db_unavailable", exc)
-            logger.warning("[BATCH] retrying insert... attempt=%d error=%s", attempt, exc)
-            await asyncio.sleep(delay)
-            delay = min(delay * 2, 5.0)
-
-    raise BatchInsertError("db_unavailable", last_exc)
+            if await handle_connection_failure(exc):
+                await asyncio.sleep(0)
+            else:
+                logger.warning(
+                    "[BATCH] retrying insert after operational error attempt=%d error=%s",
+                    operational_attempts,
+                    exc,
+                )
+                await asyncio.sleep(min(backoff * (2 ** (operational_attempts - 1)), 5.0))
+        except Exception as exc:
+            raise BatchInsertError("db_unavailable", exc)
 
 
 async def _insert_batch_once(
@@ -322,9 +329,31 @@ async def samples_batch(
 ):
     # Normalize payload to list
     items = payload.samples if isinstance(payload, SamplesWrapper) else (payload or [])
+    received = len(items)
+
     if not items:
         _log_batch_summary("<empty>", 0, 0, 0, True)
         return {"ok": True, "received": 0, "inserted": 0, "skipped": 0, "db": True, "errors": [], "error": None}
+
+    x_uid = request.headers.get("X-Dev-UserId", "").strip() or None
+    dev_uid = x_uid
+    effective_user = dev_uid or "<unknown>"
+
+    monitor = get_health_monitor()
+    if monitor and not monitor.get_db_ok():
+        logger.warning(
+            "[BATCH] db unavailable; rejecting batch size=%d", received
+        )
+        _log_batch_summary(effective_user, received, 0, received, False)
+        return {
+            "ok": False,
+            "received": received,
+            "inserted": 0,
+            "skipped": received,
+            "db": False,
+            "errors": [{"reason": "db_unavailable"}],
+            "error": "db_unavailable",
+        }
 
     batch_start_iso: str | None = None
     batch_end_iso: str | None = None
@@ -354,12 +383,8 @@ async def samples_batch(
         pass
 
     # Optional header override of user_id (useful for dev/testing)
-    x_uid = request.headers.get("X-Dev-UserId", "").strip() or None
-    dev_uid = x_uid
-    effective_user = dev_uid or "<unknown>"
 
     tz_name, tzinfo = _resolve_timezone(tz)
-    received = len(items)
     validation_errors: List[Dict[str, Any]] = []
     validation_skipped = 0
     valid_rows: List[Tuple[SampleIn, int]] = []
@@ -491,20 +516,38 @@ async def samples_batch(
 
 
 async def _maybe_schedule_refresh(user_id: str, day_local: date, inserted: int) -> bool:
+    if REFRESH_DISABLED or not user_id:
+        return False
+
     loop = asyncio.get_running_loop()
     now = loop.time()
     async with _recent_refresh_lock:
         last = _recent_refresh_requests.get(user_id)
-        if last and now - last < _INGEST_REFRESH_DEBOUNCE_SECONDS:
+        if last and now - last < _DELAYED_REFRESH_DEBOUNCE_SECONDS:
             logger.debug(
-                "[MART] refresh skipped user=%s (ingest debounce %.0fs)",
+                "[MART] delayed refresh skipped user=%s (debounce %.0fs)",
                 user_id,
-                _INGEST_REFRESH_DEBOUNCE_SECONDS,
+                _DELAYED_REFRESH_DEBOUNCE_SECONDS,
             )
             return False
-    scheduled = await mart_refresh(user_id, day_local)
-    if scheduled:
-        async with _recent_refresh_lock:
-            _recent_refresh_requests[user_id] = loop.time()
-        logger.info("[MART] scheduled refresh user=%s inserted=%d", user_id, inserted)
-    return scheduled
+        _recent_refresh_requests[user_id] = now
+
+    delay = _DELAYED_REFRESH_DELAY_SECONDS
+    if getenv("PYTEST_CURRENT_TEST"):
+        delay = 0.0
+
+    async def _runner() -> None:
+        try:
+            if delay > 0:
+                await asyncio.sleep(delay)
+            await _execute_refresh(user_id, day_local)
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning(
+                "[MART] delayed refresh failed user=%s error=%s",
+                user_id,
+                exc,
+            )
+
+    _refresh_task_factory(_runner())
+    logger.info("[MART] scheduled refresh (delayed) user=%s inserted=%d", user_id, inserted)
+    return True
