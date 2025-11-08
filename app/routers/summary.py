@@ -115,25 +115,31 @@ def _diag_trace(diag_info: Dict[str, Any], message: str) -> None:
 async def _acquire_features_conn():
     """Acquire a database connection for the features endpoint."""
 
-    pool = await get_pool()
-    ctx = pool.connection()
-    conn = await ctx.__aenter__()
-    exit_type = exit_exc = exit_tb = None
-
+    agen = get_db()
     try:
-        await conn.execute(f"set statement_timeout = {STATEMENT_TIMEOUT_MS}")
+        try:
+            conn = await agen.__anext__()
+        except StopAsyncIteration:  # pragma: no cover - defensive guard
+            raise RuntimeError("database dependency yielded no connection")
 
         try:
             yield conn
         except BaseException as exc:
-            exit_type, exit_exc, exit_tb = type(exc), exc, exc.__traceback__
+            try:
+                await agen.athrow(type(exc), exc, exc.__traceback__)
+            except StopAsyncIteration:
+                pass
             raise
-    except BaseException as exc:
-        if exit_exc is None:
-            exit_type, exit_exc, exit_tb = type(exc), exc, exc.__traceback__
-        raise
+        else:
+            try:
+                await agen.asend(None)
+            except StopAsyncIteration:
+                pass
     finally:
-        await ctx.__aexit__(exit_type, exit_exc, exit_tb)
+        try:
+            await agen.aclose()
+        except (RuntimeError, StopAsyncIteration):
+            pass
 
 
 _refresh_registry: Dict[str, float] = {}
