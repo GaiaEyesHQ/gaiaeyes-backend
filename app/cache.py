@@ -34,6 +34,38 @@ _CACHE_KEY_PREFIX = "features_last_good:"
 _DEFAULT_CACHE_TTL_SECONDS = 6 * 60 * 60
 
 
+def _resolve_cache_ttl() -> int:
+    override = getattr(settings, "FEATURES_CACHE_TTL_SECONDS", None)
+    if override is None:
+        return _DEFAULT_CACHE_TTL_SECONDS
+
+    try:
+        ttl = int(override)
+    except (TypeError, ValueError):
+        logger.warning(
+            "[CACHE] invalid FEATURES_CACHE_TTL_SECONDS=%r; using default %ss",
+            override,
+            _DEFAULT_CACHE_TTL_SECONDS,
+        )
+        return _DEFAULT_CACHE_TTL_SECONDS
+
+    if ttl <= 0:
+        logger.warning(
+            "[CACHE] FEATURES_CACHE_TTL_SECONDS=%s must be positive; using default %ss",
+            ttl,
+            _DEFAULT_CACHE_TTL_SECONDS,
+        )
+        return _DEFAULT_CACHE_TTL_SECONDS
+
+    if ttl != _DEFAULT_CACHE_TTL_SECONDS:
+        logger.info("[CACHE] ttl override enabled (%ss)", ttl)
+
+    return ttl
+
+
+_CACHE_TTL_SECONDS = _resolve_cache_ttl()
+
+
 class _LRUCache:
     """Simple LRU cache with TTL semantics for async contexts."""
 
@@ -165,7 +197,7 @@ class FeatureCache:
         logger.info("[CACHE] updated features:%s", user_id)
 
 
-_feature_cache = FeatureCache()
+_feature_cache = FeatureCache(ttl=_CACHE_TTL_SECONDS)
 
 
 async def get_last_good(user_id: Optional[str]) -> Optional[Dict[str, Any]]:

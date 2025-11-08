@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: Optional[str] = "*"
     SUPABASE_JWT_SECRET: Optional[str] = None
     REDIS_URL: Optional[str] = None
+    FEATURES_CACHE_TTL_SECONDS: Optional[int] = None
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
