@@ -33,3 +33,13 @@ A successful response confirms the credentials, pgBouncer endpoint, and SSL sett
   flips to `db:false`, which is what the mobile client already understands for gating refreshes.
 - No front-end changes are required; the iOS client will continue to honor `db:false` while the new
   latency metric simply adds operator visibility.
+
+## Feature cache retention during outages
+- The `/v1/features/today` handler stores the last successful payload in Redis (and a local in-memory
+  fallback) so the app can show tiles while the marts catch up.
+- Set the optional `FEATURES_CACHE_TTL_SECONDS` environment variable to extend how long those
+  snapshots are retained. The default remains six hours; increasing the value (for example, to
+  several days) keeps the previous data available during prolonged database downtime.
+- Invalid or non-positive values are ignored and logged at startup so experiment safely. When the
+  override is active, the cache layer logs `[CACHE] ttl override enabled (...)` confirming the TTL
+  in effect.
