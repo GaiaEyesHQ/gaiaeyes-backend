@@ -24,6 +24,51 @@ psql "$DATABASE_URL" -c "select now()"
 
 A successful response confirms the credentials, pgBouncer endpoint, and SSL settings are all valid.
 
+### Automated connectivity diagnostics
+- Run `scripts/db_diagnose.py --pretty` to probe the same DSNs that the service will
+  use. The script first validates that `DATABASE_URL` resolves to pgBouncer (when
+  requested) and that a direct fallback is configured. It then times connectivity to
+  each target, returning JSON output similar to:
+
+  ```json
+  {
+    "configuration": {
+      "active_label": "pgbouncer",
+      "fallback": {
+        "conninfo": "postgres://...",
+        "label": "direct"
+      },
+      "primary": {
+        "conninfo": "postgres://...",
+        "label": "pgbouncer"
+      }
+    },
+    "results": {
+      "active_label": "pgbouncer",
+      "fallback": {
+        "error": null,
+        "label": "direct",
+        "latency_ms": 92,
+        "ok": true
+      },
+      "primary": {
+        "error": "timeout",
+        "label": "pgbouncer",
+        "latency_ms": 5000,
+        "ok": false
+      }
+    }
+  }
+  ```
+
+- Use the output to decide which component needs attention:
+  - If pgBouncer times out but the direct connection succeeds, restart pgBouncer or
+    temporarily fail the service over to the direct DSN.
+  - If both targets fail, the underlying Postgres instance or network is likely
+    unavailable and should be escalated before relying on cached data.
+- After remediation, rerun the script and `curl https://<host>/health` until `db:true`
+  is reported to confirm ingestion and feature refreshes will resume.
+
 ## Service health endpoint
 - `/health` now exposes `db`, `db_sticky_age`, and `db_latency_ms`. The latency field reports the
   duration of the most recent probe (in milliseconds) so you can see when pgBouncer handshakes are
@@ -33,3 +78,13 @@ A successful response confirms the credentials, pgBouncer endpoint, and SSL sett
   flips to `db:false`, which is what the mobile client already understands for gating refreshes.
 - No front-end changes are required; the iOS client will continue to honor `db:false` while the new
   latency metric simply adds operator visibility.
+
+## Feature cache retention during outages
+- The `/v1/features/today` handler stores the last successful payload in Redis (and a local in-memory
+  fallback) so the app can show tiles while the marts catch up.
+- Set the optional `FEATURES_CACHE_TTL_SECONDS` environment variable to extend how long those
+  snapshots are retained. The default remains six hours; increasing the value (for example, to
+  several days) keeps the previous data available during prolonged database downtime.
+- Invalid or non-positive values are ignored and logged at startup so experiment safely. When the
+  override is active, the cache layer logs `[CACHE] ttl override enabled (...)` confirming the TTL
+  in effect.
