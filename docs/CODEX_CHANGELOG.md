@@ -2,6 +2,13 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-10 — Document anonymous diagnostic troubleshooting
+
+- Added a troubleshooting note to `docs/DIAG_FEATURES.md` explaining how to interpret
+  `branch: "anonymous"` / `source: "empty"` diagnostics and pointing developers to the
+  required `X-Dev-UserId` header when using the developer bearer token. This prevents
+  confusing "empty" feature payloads when the app fails to scope requests to a user id.
+
 ## 2025-11-09 — Trace features fallbacks and cache state
 
 - Added a timestamped `diagnostics.trace` log to `/v1/features/today` so engineers can copy
