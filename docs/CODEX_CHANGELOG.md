@@ -2,6 +2,19 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-16 — Health-monitored failover and safe refresh scheduling
+
+- Introduced a background database health monitor with hysteresis so `/health`
+  and downstream routes stop flapping during transient outages while still
+  surfacing `db:false` after two consecutive probe failures.
+- Hardened the async pool by automatically failing over to the configured
+  `DIRECT_URL` after repeated `PoolTimeout` errors, logging the backend switch
+  so operators can confirm when the service is pinned to direct Postgres.
+- Gated `/v1/samples/batch` on the monitor’s status, added a single delayed
+  mart refresh (2s delay, ≥20s debounce per user) after successful inserts, and
+  documented the new diagnostics exposed by `/v1/features/today` and
+  `/v1/diag/db`.
+
 ## 2025-11-15 — Reuse resilient DB dependency for features
 
 - Updated the `/v1/features/today` connection helper to reuse the shared
