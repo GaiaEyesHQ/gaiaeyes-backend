@@ -79,3 +79,12 @@ Example fragment:
 ## Optional diagnostics from `/v1/features/today`
 
 Append `?diag=1` to the existing `/v1/features/today` request to embed the same `features` diagnostic block alongside the data payload.
+
+## Troubleshooting common diagnostics
+
+- **`branch: "anonymous"` with `source: "empty"`** – The handler never resolved a user id for the request, so it short-circuited before
+  it could touch the mart or the cache. The trace will include the line `anonymous request - skipping user scoped lookups`, which
+  comes directly from the anonymous branch inside `_collect_features`.
+  Confirm that the caller is presenting a valid Supabase JWT or, when using the developer bearer token, that an `X-Dev-UserId`
+  header with a UUID value is attached. Without a scoped user id, `/v1/features/today` intentionally returns an empty payload and
+  the cards in the app will stay frozen. 【F:app/routers/summary.py†L983-L1007】【F:app/utils/auth.py†L46-L72】
