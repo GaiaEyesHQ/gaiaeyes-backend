@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Optional, AsyncGenerator, Dict, Any
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse, ParseResult
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from psycopg import InterfaceError, OperationalError
+from psycopg import AsyncConnection, InterfaceError, OperationalError
 from psycopg import errors as psycopg_errors
 from psycopg_pool import AsyncConnectionPool
 from psycopg_pool.errors import PoolTimeout
@@ -45,6 +46,11 @@ _pool_conninfo_fallback: Optional[str] = None
 _pool_primary_label: str = "unknown"
 _pool_fallback_label: Optional[str] = None
 _pool_active_label: str = "unknown"
+
+
+def _ensure_conninfo_prepared() -> None:
+    if _pool_conninfo_primary is None:
+        _prepare_conninfo()
 
 _STATEMENT_TIMEOUT_MS = 60000
 
@@ -397,6 +403,89 @@ async def open_pool() -> AsyncConnectionPool:
                     raise
             _mark_pool_open(pool)
     return pool
+
+
+def get_pool_configuration() -> Dict[str, Any]:
+    """Expose the prepared connection targets for diagnostics."""
+
+    _ensure_conninfo_prepared()
+    return {
+        "primary": {
+            "label": _pool_primary_label,
+            "conninfo": _pool_conninfo_primary,
+        },
+        "fallback": {
+            "label": _pool_fallback_label,
+            "conninfo": _pool_conninfo_fallback,
+        }
+        if _pool_conninfo_fallback
+        else None,
+        "active_label": _pool_active_label,
+    }
+
+
+async def _probe_conninfo(label: str, conninfo: str, timeout: float) -> Dict[str, Any]:
+    start = time.monotonic()
+
+    async def _query() -> None:
+        async with await AsyncConnection.connect(conninfo) as conn:
+            async with conn.cursor() as cur:
+                await cur.execute("select 1;")
+
+    try:
+        await asyncio.wait_for(_query(), timeout=timeout)
+    except asyncio.TimeoutError:
+        return {
+            "label": label,
+            "conninfo": conninfo,
+            "ok": False,
+            "latency_ms": int(timeout * 1000),
+            "error": "timeout",
+        }
+    except Exception as exc:  # pragma: no cover - depends on network/driver
+        return {
+            "label": label,
+            "conninfo": conninfo,
+            "ok": False,
+            "latency_ms": int((time.monotonic() - start) * 1000),
+            "error": str(exc),
+        }
+
+    return {
+        "label": label,
+        "conninfo": conninfo,
+        "ok": True,
+        "latency_ms": int((time.monotonic() - start) * 1000),
+        "error": None,
+    }
+
+
+async def diagnose_connectivity(timeout: float = 5.0) -> Dict[str, Any]:
+    """Probe the configured database targets for connectivity diagnostics."""
+
+    _ensure_conninfo_prepared()
+
+    if not _pool_conninfo_primary:
+        raise RuntimeError("DATABASE_URL is not configured")
+
+    probes = [
+        _probe_conninfo(_pool_primary_label, _pool_conninfo_primary, timeout)
+    ]
+
+    if _pool_conninfo_fallback and _pool_fallback_label:
+        probes.append(
+            _probe_conninfo(_pool_fallback_label, _pool_conninfo_fallback, timeout)
+        )
+
+    results = await asyncio.gather(*probes)
+    primary_result = results[0]
+    fallback_result = results[1] if len(results) > 1 else None
+
+    return {
+        "primary": primary_result,
+        "fallback": fallback_result,
+        "active_label": _pool_active_label,
+    }
 
 
 async def close_pool() -> None:

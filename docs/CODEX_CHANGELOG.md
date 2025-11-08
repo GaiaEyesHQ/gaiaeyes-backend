@@ -2,6 +2,18 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-13 — Add database connectivity diagnostics helper
+
+- Added a `scripts/db_diagnose.py` utility that pings both the configured
+  pgBouncer endpoint and the direct fallback, mirroring the service's failover
+  logic so operators can confirm connectivity before restarting workloads.
+- Exposed the pool configuration and probe helpers inside `app.db` for reuse,
+  letting the script (and future tooling) share a single source of truth for
+  connection targets and latency measurements.
+- Documented the new troubleshooting flow in `docs/OPERATIONS.md` so on-call
+  engineers know how to verify database health before relying on cache
+  fallbacks.
+
 ## 2025-11-12 — Allow extending last-good feature cache TTL
 
 - Introduced a `FEATURES_CACHE_TTL_SECONDS` setting so operations can retain

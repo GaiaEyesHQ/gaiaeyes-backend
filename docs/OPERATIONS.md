@@ -24,6 +24,51 @@ psql "$DATABASE_URL" -c "select now()"
 
 A successful response confirms the credentials, pgBouncer endpoint, and SSL settings are all valid.
 
+### Automated connectivity diagnostics
+- Run `scripts/db_diagnose.py --pretty` to probe the same DSNs that the service will
+  use. The script first validates that `DATABASE_URL` resolves to pgBouncer (when
+  requested) and that a direct fallback is configured. It then times connectivity to
+  each target, returning JSON output similar to:
+
+  ```json
+  {
+    "configuration": {
+      "active_label": "pgbouncer",
+      "fallback": {
+        "conninfo": "postgres://...",
+        "label": "direct"
+      },
+      "primary": {
+        "conninfo": "postgres://...",
+        "label": "pgbouncer"
+      }
+    },
+    "results": {
+      "active_label": "pgbouncer",
+      "fallback": {
+        "error": null,
+        "label": "direct",
+        "latency_ms": 92,
+        "ok": true
+      },
+      "primary": {
+        "error": "timeout",
+        "label": "pgbouncer",
+        "latency_ms": 5000,
+        "ok": false
+      }
+    }
+  }
+  ```
+
+- Use the output to decide which component needs attention:
+  - If pgBouncer times out but the direct connection succeeds, restart pgBouncer or
+    temporarily fail the service over to the direct DSN.
+  - If both targets fail, the underlying Postgres instance or network is likely
+    unavailable and should be escalated before relying on cached data.
+- After remediation, rerun the script and `curl https://<host>/health` until `db:true`
+  is reported to confirm ingestion and feature refreshes will resume.
+
 ## Service health endpoint
 - `/health` now exposes `db`, `db_sticky_age`, and `db_latency_ms`. The latency field reports the
   duration of the most recent probe (in milliseconds) so you can see when pgBouncer handshakes are
