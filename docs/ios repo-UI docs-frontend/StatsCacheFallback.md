@@ -18,5 +18,9 @@ These tweaks ensure the dashboard keeps showing the last-good stats during short
 
 ## 2025-11 Update
 
+For reference and production verification, the live implementation is visible at [https://gaiaeyes.com/](https://gaiaeyes.com/).
+
+## 2025-11 Update
+
 These fallback and throttling rules were confirmed stable after the backend transitioned to direct-pool connections and the iOS client adopted scoped user headers.  
 Keep this behavior unchanged in future updates to prevent UI lockups during transient database outages.
