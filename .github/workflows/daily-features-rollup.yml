@@ -5,7 +5,7 @@ permissions:
 
 on:
   schedule:
-    - cron: "20 * * * *"   # daily at 04:00 UTC (after your other jobs)
+    - cron: "20 * * * *"   # hourly at minute 20
   workflow_dispatch: {}
 
 jobs:
