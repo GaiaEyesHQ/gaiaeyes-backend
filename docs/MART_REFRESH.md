@@ -18,3 +18,21 @@ Set the environment variable `MART_REFRESH_DISABLE=1` (accepted truthy values: `
 ## Testing hooks
 
 `app/routers/ingest.py` exposes `_refresh_task_factory` and `_execute_refresh`. Tests can monkeypatch these helpers to run synchronously or capture scheduled users, enabling deterministic assertions without touching the real database.
+
+## 2025-11 Stabilization Notes
+
+- Mart refreshes now target the **direct PostgreSQL connection** on port `5432` (no pgBouncer).  
+  This ensures `marts.refresh_daily_features_user()` runs immediately after new samples insert.
+- The refresh coroutine now includes a **1.5–2.0 second backoff** after upload completion before triggering the mart query.  
+  This gives the Supabase transaction pooler time to commit changes cleanly and avoids `pool timeout` or `transaction aborted` errors.
+- If a mart function call fails, the handler logs `[MART] refresh failed ...` but no longer aborts the ingest transaction.  
+  The app UI continues using cached or last-good snapshots, and a deferred retry is automatically queued.
+- Refresh logs now expose the user scope and day key for easier debugging:
+  ```
+  [MART] refresh user=e20a3e9e-1fc2-41ad-b6f7-656668310d13 day=2025-11-08 ok=true
+  ```
+- Developers can confirm proper operation via:
+  ```
+  curl -s "$BASE/v1/features/today" -H "Authorization: Bearer devtoken123" -H "X-Dev-UserId: $USERID" | jq '.trace'
+  ```
+  Successful traces show lines like `mart row loaded` and `refreshed features snapshot after upload`.

@@ -89,3 +89,18 @@ Append `?diag=1` to the existing `/v1/features/today` request to embed the same 
   Confirm that the caller is presenting a valid Supabase JWT or, when using the developer bearer token, that an `X-Dev-UserId`
   header with a UUID value is attached. Without a scoped user id, `/v1/features/today` intentionally returns an empty payload and
   the cards in the app will stay frozen. 【F:app/routers/summary.py†L983-L1007】【F:app/utils/auth.py†L46-L72】
+
+- **`branch: "scoped"` with stable direct pooler** — Indicates the backend is successfully authenticating and running under developer mode with `X-Dev-UserId` and `Bearer devtoken123`. This confirms the app’s `APIClient` correctly includes the scoped headers and is no longer using the anonymous path.  
+  The response’s `pool_backend` should report `"direct"`, confirming it’s using the primary PostgreSQL port (5432) and bypassing pgBouncer for connection stability.
+
+## 2025-11 Stabilization Notes
+
+- Added persistent support for `X-Dev-UserId` in mobile app requests to enforce scoped user data retrieval.
+- Backend now uses the direct pooler (`postgresql://...:5432/...`) instead of the old pgBouncer proxy on 6543 to prevent `PoolTimeout` and `Tenant not found` errors.
+- Enhanced `/v1/features/today` tracing:
+  - `branch: "scoped"` confirms correct user resolution.
+  - `pool_backend: "direct"` confirms stable DB connectivity.
+  - `cache_snapshot_initial` and `cache_snapshot_final` now show both pre- and post-refresh non-null sections.
+- Sleep and SpO₂ metrics now populate from `gaia.daily_summary` instead of `raw.user_sleep_segments`, aligning with the Supabase schema.
+- Fixed false `cacheFallback(true)` reports when the mart responded slowly but not null.
+- The app’s background refresh throttling (guard interval ~120s) ensures smoother UI behavior without repeated hangs or forced refetches.

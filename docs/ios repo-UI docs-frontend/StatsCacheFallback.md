@@ -15,3 +15,8 @@ To keep the iOS dashboard stable and avoid the refresh loop that was observed, p
 4. **Protect the pull-to-refresh gesture.** Update the pull-to-refresh handler to respect the new cooldown when `cacheFallback` is active so manual refreshes still work but do not queue multiple simultaneous fetches. 【F:ios/GaiaExporter/Views/ContentView.swift†L1015-L1094】
 
 These tweaks ensure the dashboard keeps showing the last-good stats during short outages instead of repeatedly refreshing and freezing the UI.
+
+## 2025-11 Update
+
+These fallback and throttling rules were confirmed stable after the backend transitioned to direct-pool connections and the iOS client adopted scoped user headers.  
+Keep this behavior unchanged in future updates to prevent UI lockups during transient database outages.

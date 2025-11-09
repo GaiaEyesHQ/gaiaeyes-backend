@@ -35,3 +35,11 @@
 ## Extending the dashboard
 - New cards should follow the existing pattern: bind to cached feature or series models, wrap layout inside `GroupBox`/`DisclosureGroup` for consistent styling, and update cached JSON keys to keep offline restores functional via the shared `@AppStorage` bindings. 【F:ios/GaiaExporter/Views/ContentView.swift†L821-L937】【F:ios/GaiaExporter/Views/ContentView.swift†L1007-L1023】
 - Additional backend controls can be slotted into the Tools disclosure by extending `ActionsSection` or adding sibling sections observing `AppState`, ensuring persistence through `UserDefaults` and the background sync timers already in place. 【F:ios/GaiaExporter/Views/ContentView.swift†L938-L973】【F:ios/GaiaExporter/Views/ContentView.swift†L1454-L1536】【F:ios/GaiaExporter/ViewModels/AppState.swift†L35-L146】
+
+## 2025-11 Stability and Behavior Updates
+
+- The app now explicitly includes the `X-Dev-UserId` header in `APIClient` requests, ensuring all backend calls run under the correct scoped user.
+- Fallback handling in `ContentView` now prevents UI blanking when features or series endpoints return empty or stale cache data.
+- Debounce and throttling improvements in `.featuresShouldRefresh` and background sync tasks significantly reduce hanging or repeated fetch loops.
+- The debug log view now uses indexed identifiers instead of raw strings to eliminate SwiftUI diffing stalls when duplicate messages occur.
+- HealthKit uploads now introduce a brief backoff before calling `fetchFeaturesToday()`, stabilizing mart refresh timing and avoiding transaction conflicts.

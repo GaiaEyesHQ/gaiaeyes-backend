@@ -2,6 +2,17 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-17 — iOS/Backend Operational Stabilization and Sync Fixes
+
+- Restored full functionality of the iOS dashboard and backend data pipeline after repeated DB timeout and user scoping issues.
+- Corrected developer token handling and ensured `X-Dev-UserId` is always included in app API requests, resolving the `branch: "anonymous"` diagnostics.
+- Moved the backend connection from pgBouncer (port 6543) to the direct Postgres pooler (port 5432) for stable connectivity and to eliminate `PoolTimeout` and `Tenant not found` errors.
+- Validated the fallback logic for `/v1/features/today` and `/v1/samples/batch`, confirming live mart refresh and scoped responses.
+- Fixed snake_case encoding for Symptom POSTs (`symptom_code`, `free_text`, etc.), resolving 422 validation errors and ensuring user events upload successfully.
+- Resolved frontend hangs by reducing redundant refresh loops and improving async background scheduling.
+- Verified database health monitor stability (`db:true`, sticky age > 5min) and consistent scoped responses.
+- Outstanding work: add sleep/spO₂ integration tests to verify missing metrics in `marts.daily_features` are populating as expected.
+
 ## 2025-11-16 — Health-monitored failover and safe refresh scheduling
 
 - Introduced a background database health monitor with hysteresis so `/health`

@@ -108,3 +108,14 @@ computed as soon as possible; otherwise, refreshes run on a five-minute cadence 
 These fields allow the UI to surface "refreshing" indicators while still showing the last
 successful snapshot. Even when diagnostics report a cached `day_used`, the mart refresh
 targets the current day to unblock fresh data generation.
+
+## 2025-11 Stabilization Notes
+
+- The `/v1/features/today` route now confirms **scoped user context** via `X-Dev-UserId` and `Authorization: Bearer devtoken123`.  
+  When diagnostics show `branch:"scoped"`, the handler is executing under the correct developer session.
+- All direct database access now uses the **primary PostgreSQL pooler** at port `5432` instead of `6543`.  
+  `diagnostics.pool_backend:"direct"` confirms that connections bypass pgBouncer for stability.
+- Background refresh scheduling has been throttled to a 120-second guard interval to prevent UI freezes and redundant updates.
+- Fallbacks now read from Redis or in-memory cache only when `ok:false` or when enrichment queries (sleep, Schumann, space weather) hit the short timeout.
+- HealthKit metrics for Sleep and SpO₂ are sourced from `gaia.daily_summary` rather than a non-existent `raw.user_sleep_segments` table, ensuring full alignment with Supabase schema.
+- The handler logs `trace` entries such as `cache updated`, `freshened row`, and `sleep sync complete` to simplify debugging through `diagnostics.trace`.

@@ -104,3 +104,20 @@ A successful response confirms the credentials, pgBouncer endpoint, and SSL sett
 - Successful inserts trigger at most one mart refresh per user every ~20 seconds. The refresh runs
   via a background task after a 2-second delay (`[MART] scheduled refresh (delayed) ...`), ensuring
   bursts of batches do not flood Postgres while allowing fresh features shortly after recovery.
+
+## 2025-11 Stabilization Updates
+
+- Render now uses the **direct Supabase host on port 5432** for all background refreshes and health probes.  
+  PgBouncer endpoints (`aws-1-us-east-2.pooler.supabase.com:6543`) remain defined but are no longer primary.
+- `DATABASE_URL` continues to point to the pooler, while `DIRECT_URL` provides the direct fallback — confirmed via:
+  ```
+  curl -s "$BASE/health" | jq '.monitor.pool_backend'
+  ```
+  Expect `"direct"` when running stable.
+- The watchdog now self-recovers after connectivity interruptions, using `[POOL] backend=direct` until pgBouncer recovers.
+- A lightweight deferred backoff (`1.5–2.0s`) was added between inserts and `marts.refresh_daily_features_user()` calls.
+  This stabilizes commits from HealthKit uploads and prevents transient transaction-aborted errors.
+- Redis cache behavior remains unchanged; stale features are served when `db:false`, and automatic refresh resumes once
+  connectivity is restored.
+- Do **not** revert `sslmode=require` or the connection parameters on port 5432; those are verified stable in Render’s
+  direct-connection mode.
