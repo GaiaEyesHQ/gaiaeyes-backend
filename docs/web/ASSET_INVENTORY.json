@@ -748,50 +748,84 @@
     "selector": "section.ge-aur",
     "assets": [
       {
-        "url": "https://services.swpc.noaa.gov/images/aurora-forecast-northern-hemisphere.jpg",
+        "url": "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg",
         "type": "image",
         "status": 200,
         "content_type": "image/jpeg",
-        "size_bytes": 257808,
-        "ttfb_ms": 134.2,
-        "dimensions": {
-          "width": 800,
-          "height": 800
-        },
-        "notes": []
+        "size_bytes": null,
+        "ttfb_ms": null,
+        "dimensions": null,
+        "notes": ["Live OVATION NH image – consumed client-side"]
       },
       {
-        "url": "https://services.swpc.noaa.gov/images/aurora-forecast-southern-hemisphere.jpg",
+        "url": "https://services.swpc.noaa.gov/images/animations/ovation/south/latest.jpg",
         "type": "image",
         "status": 200,
         "content_type": "image/jpeg",
-        "size_bytes": 201453,
-        "ttfb_ms": 15.1,
-        "dimensions": {
-          "width": 800,
-          "height": 800
-        },
-        "notes": []
+        "size_bytes": null,
+        "ttfb_ms": null,
+        "dimensions": null,
+        "notes": ["Live OVATION SH image – consumed client-side"]
       },
       {
-        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json?v=1762117935318",
+        "url": "/wp-json/gaia/v1/aurora/nowcast?hemi=north",
         "type": "json",
         "status": 200,
-        "content_type": "application/json; charset=utf-8",
-        "size_bytes": 356,
-        "ttfb_ms": 19.2,
+        "content_type": "application/json",
+        "size_bytes": null,
+        "ttfb_ms": null,
+        "dimensions": null,
+        "notes": ["REST payload with viewline coords, metrics, diagnostics"]
+      },
+      {
+        "url": "/wp-json/gaia/v1/aurora/nowcast?hemi=south",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json",
+        "size_bytes": null,
+        "ttfb_ms": null,
         "dimensions": null,
         "notes": []
       },
       {
-        "url": "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json?v=1762117935320",
+        "url": "/wp-json/gaia/v1/aurora/viewline/tonight",
         "type": "json",
         "status": 200,
-        "content_type": "application/json; charset=utf-8",
-        "size_bytes": 567,
-        "ttfb_ms": 18.74,
+        "content_type": "application/json",
+        "size_bytes": null,
+        "ttfb_ms": null,
+        "dimensions": null,
+        "notes": ["ETag + timestamp for experimental PNG"]
+      },
+      {
+        "url": "/wp-json/gaia/v1/aurora/viewline/tomorrow",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json",
+        "size_bytes": null,
+        "ttfb_ms": null,
         "dimensions": null,
         "notes": []
+      },
+      {
+        "url": "public/aurora/nowcast/latest_north.json",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json",
+        "size_bytes": null,
+        "ttfb_ms": null,
+        "dimensions": null,
+        "notes": ["Media repo mirror"]
+      },
+      {
+        "url": "public/aurora/viewline/tonight.json",
+        "type": "json",
+        "status": 200,
+        "content_type": "application/json",
+        "size_bytes": null,
+        "ttfb_ms": null,
+        "dimensions": null,
+        "notes": ["Media repo mirror"]
       }
     ]
   },
