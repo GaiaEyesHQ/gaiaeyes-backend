@@ -260,10 +260,6 @@ _MART_COLUMNS = [
     "kp_max",
     "bz_min",
     "sw_speed_avg",
-    "sch_f0_hz",
-    "sch_f1_hz",
-    "sch_f2_hz",
-    "sch_f3_hz",
 ]
 _MART_SELECT = ", ".join(_MART_COLUMNS)
 
