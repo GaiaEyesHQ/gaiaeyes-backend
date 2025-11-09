@@ -83,6 +83,13 @@ the decision tree (for example when a mart row loads, when cached data is reused
 a background refresh is scheduled) so engineers can copy/paste a textual log instead of
 relying on screenshots of the debug overlay.
 
+Aurora ingestion hooks into the same diagnostics envelope. The WordPress
+nowcast fetcher populates `diagnostics.aurora.cache_snapshot_initial`,
+`diagnostics.aurora.cache_snapshot_final`, and `diagnostics.aurora.cache_updated` while
+mirroring a concise `payload_summary.aurora` block. This allows clients to confirm
+whether the `/wp-json/gaia/v1/aurora/nowcast` responses and SVG viewline coordinates
+originated from a fresh fetch or a cached fallback.
+
 ## Source selection
 
 1. **Today’s mart row** – if `marts.daily_features` already contains `(user_id, today_local)` the handler hydrates it with live sleep and space weather context.

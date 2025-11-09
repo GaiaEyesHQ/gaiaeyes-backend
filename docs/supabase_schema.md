@@ -147,6 +147,48 @@ Projection of the `gaia.daily_summary` table limited to the core metrics:
 
 ## `marts` Schema
 
+### Tables
+
+#### `marts.aurora_nowcast_samples`
+- **Primary Key**: composite (`ts`, `hemisphere`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `ts` | `timestamptz` | Timestamp of the OVATION fetch (UTC). |
+  | `hemisphere` | `text` | Hemisphere flag (`north` or `south`). |
+  | `grid_width` | `int` | Width of the probability grid (lon samples). |
+  | `grid_height` | `int` | Height of the probability grid (lat samples). |
+  | `probabilities` | `jsonb` | Array-of-arrays representation of the probability grid (0–100). |
+  | `kp` | `numeric` | Latest Kp index paired with the fetch. |
+  | `kp_obs_time` | `timestamptz` | Observation time for the Kp sample. |
+  | `viewline_p` | `numeric` | Probability threshold used to derive the viewline (default 0.10). |
+  | `viewline_coords` | `jsonb` | Ordered `[{"lon":..,"lat":..}, …]` viewline coordinates. |
+  | `source` | `text` | Origin identifier (defaults to `SWPC_OVATION`). |
+  | `fetch_ms` | `int` | Duration of the NOAA fetch (milliseconds). |
+  | `created_at` | `timestamptz` | Insert timestamp (default `now()`). |
+
+#### `marts.aurora_viewline_forecast`
+- **Primary Key**: `ts` (`date`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `ts` | `date` | UTC day corresponding to the "tonight" asset. |
+  | `tonight_url` | `text` | Source URL for tonight’s experimental PNG. |
+  | `tomorrow_url` | `text` | Source URL for tomorrow night’s experimental PNG. |
+  | `tonight_etag` | `text` | Last seen ETag for the tonight asset. |
+  | `tomorrow_etag` | `text` | Last seen ETag for the tomorrow asset. |
+  | `fetch_ms` | `int` | Fetch duration in milliseconds. |
+  | `updated_at` | `timestamptz` | Last refresh timestamp (default `now()`). |
+
+#### `marts.kp_obs`
+- **Primary Key**: `kp_time` (`timestamptz`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `kp_time` | `timestamptz` | Observation time of the Kp sample. |
+  | `kp` | `numeric` | Planetary Kp index value. |
+  | `raw` | `jsonb` | Raw NOAA payload slice preserved for provenance. |
+
 ### Views
 
 #### `marts.magnetosphere_last_24h`
