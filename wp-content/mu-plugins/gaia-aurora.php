@@ -295,6 +295,13 @@ function gaia_aurora_refresh_nowcast()
     $etag_key = 'gaia_aurora_nowcast_etag';
     $stored_etag = get_option($etag_key);
     $grid_resp = gaia_aurora_http_get(GAIA_AURORA_NOWCAST_URL, ['etag' => $stored_etag]);
+    // Debug: log top-level keys and coordinates info to diagnose parse shape
+    error_log('[gaia_aurora] ovation status=' . $grid_resp['status']
+        . ' keys=' . (is_array($grid_resp['body']) ? implode(',', array_slice(array_keys($grid_resp['body']), 0, 10)) : 'non-array')
+        . (isset($grid_resp['body']['coordinates'])
+            ? (' coords_type=' . gettype($grid_resp['body']['coordinates']) . ' len=' . (is_array($grid_resp['body']['coordinates']) ? count($grid_resp['body']['coordinates']) : 0))
+            : '')
+    );
 
     $latest_payloads = [
         'north' => gaia_aurora_get_cached_payload('north'),
@@ -469,44 +476,74 @@ function gaia_aurora_reconstruct_from_coordinates($coords)
     $north = [];
     $south = [];
     $timestamp = null;
+
     foreach ($coords as $entry) {
         if (!is_array($entry)) {
             continue;
         }
-        $hemi = strtolower((string) ($entry['hemisphere'] ?? ''));
-        $lat = isset($entry['latitude']) ? (float) $entry['latitude'] : (isset($entry['magnetic_latitude']) ? (float) $entry['magnetic_latitude'] : null);
-        $lon = isset($entry['longitude']) ? (float) $entry['longitude'] : (isset($entry['magnetic_longitude']) ? (float) $entry['magnetic_longitude'] : null);
-        $prob = isset($entry['probability']) ? (float) $entry['probability'] : (isset($entry['oval_prob']) ? (float) $entry['oval_prob'] : null);
-        if ($lat === null || $lon === null || $prob === null) {
+
+        $hemi = null; $lat = null; $lon = null; $prob = null; $time = null;
+
+        // Case A: associative object (has string keys, not a pure list)
+        $is_assoc = array_keys($entry) !== range(0, count($entry) - 1);
+        if ($is_assoc) {
+            // normalize keys to lowercase
+            $norm = [];
+            foreach ($entry as $k => $v) {
+                $norm[strtolower((string) $k)] = $v;
+            }
+            $hemi = $norm['hemisphere'] ?? ($norm['hemi'] ?? null);
+            if (is_string($hemi) && strlen($hemi) === 1) {
+                $hemi = ($hemi === 'N' || $hemi === 'n') ? 'north' : (($hemi === 'S' || $hemi === 's') ? 'south' : $hemi);
+            } elseif (is_string($hemi)) {
+                $hemi = strtolower($hemi);
+            }
+            $lat = $norm['latitude'] ?? ($norm['lat'] ?? ($norm['magnetic_latitude'] ?? ($norm['mlat'] ?? null)));
+            $lon = $norm['longitude'] ?? ($norm['lon'] ?? ($norm['magnetic_longitude'] ?? ($norm['mlon'] ?? null)));
+            $prob = $norm['probability'] ?? ($norm['oval_prob'] ?? ($norm['prob'] ?? ($norm['value'] ?? null)));
+            $time = $norm['time'] ?? null;
+
+        // Case B: positional array, commonly [lon, lat, prob, hemi?]
+        } else {
+            $lon  = isset($entry[0]) ? (float) $entry[0] : null;
+            $lat  = isset($entry[1]) ? (float) $entry[1] : null;
+            $prob = isset($entry[2]) ? (float) $entry[2] : null;
+            $hraw = isset($entry[3]) ? $entry[3] : null;
+            if (is_string($hraw) && strlen($hraw) === 1) {
+                $hemi = ($hraw === 'N' || $hraw === 'n') ? 'north' : (($hraw === 'S' || $hraw === 's') ? 'south' : null);
+            } elseif (is_string($hraw)) {
+                $hemi = strtolower($hraw);
+            }
+        }
+
+        if ($lat === null || $lon === null || $prob === null || !$hemi) {
             continue;
         }
-        $lon_index = (int) round(($lon + 180) % 360);
-        $lat_index = (int) round(90 - $lat);
+
+        // Normalize indices:
+        // lon in [-180,180] → col in [0..359]; be robust with negative values
+        $col = (int) round(fmod(($lon + 540.0), 360.0) - 180.0 + 180.0);
+        // lat in [+90..-90] → row in [0..180]
+        $row = (int) round(90 - $lat);
+
         if ($hemi === 'north') {
-            if (!isset($north[$lat_index])) {
-                $north[$lat_index] = [];
-            }
-            $north[$lat_index][$lon_index] = $prob;
+            if (!isset($north[$row])) $north[$row] = [];
+            $north[$row][$col] = $prob;
         } elseif ($hemi === 'south') {
-            if (!isset($south[$lat_index])) {
-                $south[$lat_index] = [];
-            }
-            $south[$lat_index][$lon_index] = $prob;
+            if (!isset($south[$row])) $south[$row] = [];
+            $south[$row][$col] = $prob;
         }
-        if (!$timestamp && !empty($entry['time'])) {
-            $timestamp = (string) $entry['time'];
+
+        if (!$timestamp && $time) {
+            $timestamp = (string) $time;
         }
     }
-    ksort($north);
-    ksort($south);
-    foreach ($north as &$row) {
-        ksort($row);
-        $row = array_values($row);
-    }
-    foreach ($south as &$row) {
-        ksort($row);
-        $row = array_values($row);
-    }
+
+    // Sort rows/cols and convert to dense arrays
+    ksort($north); ksort($south);
+    foreach ($north as &$r) { ksort($r); $r = array_values($r); }
+    foreach ($south as &$r) { ksort($r); $r = array_values($r); }
+
     return [
         'north'     => array_values($north),
         'south'     => array_values($south),
