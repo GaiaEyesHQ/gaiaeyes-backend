@@ -1022,6 +1022,13 @@ function gaia_aurora_register_rest_routes()
         'callback'            => 'gaia_aurora_rest_cron_run',
         'permission_callback' => '__return_true',
     ]);
+
+    // Diagnostic: summarize the raw OVATION payload shape for parser adaptation
+    register_rest_route('gaia/v1', '/aurora/ovation-sample', [
+        'methods'             => 'GET',
+        'callback'            => 'gaia_aurora_rest_ovation_sample',
+        'permission_callback' => '__return_true',
+    ]);
 }
 
 function gaia_aurora_rest_nowcast($request)
@@ -1096,6 +1103,7 @@ function gaia_aurora_rest_fetch_now(WP_REST_Request $request)
     return rest_ensure_response($resp);
 }
 
+
 function gaia_aurora_rest_cron_run(WP_REST_Request $request)
 {
     $started = microtime(true);
@@ -1115,5 +1123,60 @@ function gaia_aurora_rest_cron_run(WP_REST_Request $request)
             'tomorrow'=> gaia_aurora_read_viewline_json('tomorrow'),
         ],
     ]);
+}
+
+/**
+ * Diagnostic: fetch the raw OVATION payload and summarize its structure.
+ */
+function gaia_aurora_rest_ovation_sample(WP_REST_Request $request)
+{
+    $resp = gaia_aurora_http_get(GAIA_AURORA_NOWCAST_URL, ['timeout' => 10]);
+    $out = [
+        'status'  => $resp['status'],
+        'ms'      => $resp['duration_ms'],
+        'has_body'=> is_array($resp['body']),
+        'keys'    => is_array($resp['body']) ? array_slice(array_keys($resp['body']), 0, 12) : null,
+    ];
+
+    if (is_array($resp['body'])) {
+        // Try to expose common shapes without dumping huge payloads
+        if (isset($resp['body']['coordinates']) && is_array($resp['body']['coordinates'])) {
+            $coords = $resp['body']['coordinates'];
+            $out['coordinates'] = [
+                'type'   => gettype($coords),
+                'length' => is_array($coords) ? count($coords) : null,
+                'sample' => array_slice($coords, 0, 5),
+            ];
+        } elseif (isset($resp['body']['north']) && isset($resp['body']['south'])) {
+            $out['north_rows'] = is_array($resp['body']['north']) ? count($resp['body']['north']) : null;
+            $out['south_rows'] = is_array($resp['body']['south']) ? count($resp['body']['south']) : null;
+        } elseif (isset($resp['body']['Data']) && is_array($resp['body']['Data'])) {
+            $slice = $resp['body']['Data'][0] ?? null;
+            if (is_array($slice)) {
+                $out['Data_keys'] = array_slice(array_keys($slice), 0, 12);
+                $out['North_rows'] = isset($slice['North']) && is_array($slice['North']) ? count($slice['North']) : null;
+                $out['South_rows'] = isset($slice['South']) && is_array($slice['South']) ? count($slice['South']) : null;
+            }
+        } elseif (array_keys($resp['body']) === range(0, count($resp['body']) - 1)) {
+            // Root is a list/array — include first element's keys
+            $first = $resp['body'][0] ?? null;
+            if (is_array($first)) {
+                $out['root_array'] = [
+                    'length' => count($resp['body']),
+                    'first_keys' => array_keys($first),
+                    'first_sample' => (is_array($first) ? array_slice($first, 0, 1) : $first),
+                ];
+                if (isset($first['coordinates']) && is_array($first['coordinates'])) {
+                    $out['root_array_coordinates'] = [
+                        'length' => count($first['coordinates']),
+                        'sample' => array_slice($first['coordinates'], 0, 5),
+                    ];
+                }
+            }
+        }
+    } else {
+        $out['note'] = 'non-array body';
+    }
+    return rest_ensure_response($out);
 }
 
