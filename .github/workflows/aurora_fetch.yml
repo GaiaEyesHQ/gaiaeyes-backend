@@ -1,0 +1,81 @@
+name: Aurora Fetch (Staging)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"   # run every 15 minutes (adjust as you like)
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    env:
+      AURORA_BASE: https://staging2.gaiaeyes.com
+      # Optional: fill these if you want the workflow to also verify that rows landed in Supabase
+      SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+    steps:
+      - name: Create out dir
+        run: mkdir -p out
+
+      - name: Trigger both collectors (nowcast + viewline)
+        run: |
+          set -euo pipefail
+          curl -fsSL -X POST "$AURORA_BASE/wp-json/gaia/v1/aurora/cron-run" \
+            -H "Accept: application/json" \
+            -o out/cron_run.json
+          jq . out/cron_run.json || true
+
+      - name: Pull diagnostics
+        run: |
+          set -euo pipefail
+          curl -fsSL "$AURORA_BASE/wp-json/gaia/v1/aurora/diagnostics" \
+            -H "Accept: application/json" \
+            -o out/diagnostics.json
+          jq . out/diagnostics.json || true
+
+      - name: Pull nowcast (north & south)
+        run: |
+          set -euo pipefail
+          curl -fsSL "$AURORA_BASE/wp-json/gaia/v1/aurora/nowcast?hemi=north" \
+            -H "Accept: application/json" \
+            -o out/nowcast_north.json || true
+          curl -fsSL "$AURORA_BASE/wp-json/gaia/v1/aurora/nowcast?hemi=south" \
+            -H "Accept: application/json" \
+            -o out/nowcast_south.json || true
+          jq . out/nowcast_north.json || true
+          jq . out/nowcast_south.json || true
+
+      - name: Basic assertions (fail if no TS)
+        run: |
+          set -e
+          if ! jq -e '.ts' out/nowcast_north.json > /dev/null; then
+            echo "north nowcast missing .ts — backend likely not writing cache"; exit 1;
+          fi
+          if ! jq -e '.ts' out/nowcast_south.json > /dev/null; then
+            echo "south nowcast missing .ts — backend likely not writing cache"; exit 1;
+          fi
+
+      - name: (Optional) Verify Supabase rows landed
+        if: env.SUPABASE_REST_URL != '' && env.SUPABASE_SERVICE_KEY != ''
+        run: |
+          set -euo pipefail
+          curl -fsSL "$SUPABASE_REST_URL/marts.aurora_nowcast_samples?select=ts,hemisphere,kp&order=ts.desc.nullslast&limit=6" \
+            -H "apikey: $SUPABASE_SERVICE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_KEY" \
+            -H "Accept: application/json" \
+            -o out/supabase_nowcast_rows.json
+          jq . out/supabase_nowcast_rows.json || true
+
+          curl -fsSL "$SUPABASE_REST_URL/marts.kp_obs?select=kp_time,kp&order=kp_time.desc.nullslast&limit=6" \
+            -H "apikey: $SUPABASE_SERVICE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_KEY" \
+            -H "Accept: application/json" \
+            -o out/supabase_kp_rows.json
+          jq . out/supabase_kp_rows.json || true
+
+      - name: Upload artifacts (capture everything)
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-debug-${{ github.run_id }}
+          path: out/
