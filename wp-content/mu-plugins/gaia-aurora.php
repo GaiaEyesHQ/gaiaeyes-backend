@@ -202,6 +202,33 @@ function gaia_aurora_supabase_post($path, $payload, $params = [])
     return null;
 }
 
+// -----------------------------------------------------------------------------
+// Temporary health endpoint for debugging
+// -----------------------------------------------------------------------------
+
+add_action('rest_api_init', function () {
+    register_rest_route('gaia/v1', '/aurora/health', [
+        'methods'  => 'GET',
+        'permission_callback' => '__return_true',
+        'callback' => function () {
+            $root = gaia_aurora_media_root();
+            $probe = gaia_aurora_http_get(GAIA_AURORA_NOWCAST_URL, ['timeout' => 6]);
+            return [
+                'env' => [
+                    'media_root' => $root,
+                    'exists'     => is_dir($root),
+                    'writable'   => is_writable($root),
+                    'supabase'   => (bool) gaia_aurora_env('SUPABASE_REST_URL'),
+                ],
+                'noaa' => [
+                    'status' => $probe['status'],
+                    'ms'     => $probe['duration_ms'],
+                    'error'  => $probe['error'],
+                ],
+            ];
+        }
+    ]);
+});
 /**
  * Record diagnostics for REST surface.
  */
