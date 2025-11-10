@@ -231,6 +231,7 @@ function gaia_aurora_bootstrap()
     add_action('gaia_aurora_refresh_nowcast', 'gaia_aurora_refresh_nowcast');
     add_action('gaia_aurora_refresh_viewline', 'gaia_aurora_refresh_viewline');
     add_action('rest_api_init', 'gaia_aurora_register_rest_routes');
+    error_log('[gaia_aurora] bootstrap loaded');
 
     // Ensure schedules exist when WordPress finishes loading.
     add_action('init', 'gaia_aurora_ensure_schedules');
@@ -935,6 +936,28 @@ function gaia_aurora_register_rest_routes()
         'callback'            => 'gaia_aurora_rest_diagnostics',
         'permission_callback' => '__return_true',
     ]);
+
+    register_rest_route('gaia/v1', '/aurora/fetch-now', [
+        'methods'             => 'POST',
+        'callback'            => 'gaia_aurora_rest_fetch_now',
+        'permission_callback' => '__return_true',
+        'args'                => [
+            'hemi' => [
+                'type'              => 'string',
+                'required'          => false,
+                'validate_callback' => function ($value) {
+                    $value = strtolower((string) $value);
+                    return in_array($value, ['north', 'south', 'both'], true);
+                },
+            ],
+        ],
+    ]);
+
+    register_rest_route('gaia/v1', '/aurora/cron-run', [
+        'methods'             => 'POST',
+        'callback'            => 'gaia_aurora_rest_cron_run',
+        'permission_callback' => '__return_true',
+    ]);
 }
 
 function gaia_aurora_rest_nowcast($request)
@@ -987,5 +1010,46 @@ function gaia_aurora_rest_diagnostics()
         'run_started_at'         => $diag['run_started_at'] ?? null,
     ];
     return rest_ensure_response($diag);
+}
+
+function gaia_aurora_rest_fetch_now(WP_REST_Request $request)
+{
+    $hemi = strtolower($request->get_param('hemi') ?: 'both');
+    $started = microtime(true);
+
+    // If a specific hemisphere is requested, we can reuse the main function and then filter the cache read.
+    // Simpler: just run the full refresh; it computes both hemispheres in one pass.
+    gaia_aurora_refresh_nowcast();
+
+    $resp = [
+        'ran'        => true,
+        'duration_ms'=> (int) round((microtime(true) - $started) * 1000),
+        'hemi'       => $hemi,
+        'north'      => gaia_aurora_get_cached_payload('north'),
+        'south'      => gaia_aurora_get_cached_payload('south'),
+        'diagnostics'=> gaia_aurora_get_diagnostics(),
+    ];
+    return rest_ensure_response($resp);
+}
+
+function gaia_aurora_rest_cron_run(WP_REST_Request $request)
+{
+    $started = microtime(true);
+    gaia_aurora_refresh_nowcast();
+    gaia_aurora_refresh_viewline();
+    $diag = gaia_aurora_get_diagnostics();
+    return rest_ensure_response([
+        'ran'         => true,
+        'duration_ms' => (int) round((microtime(true) - $started) * 1000),
+        'diagnostics' => $diag,
+        'nowcast'     => [
+            'north' => gaia_aurora_get_cached_payload('north'),
+            'south' => gaia_aurora_get_cached_payload('south'),
+        ],
+        'viewline'    => [
+            'tonight' => gaia_aurora_read_viewline_json('tonight'),
+            'tomorrow'=> gaia_aurora_read_viewline_json('tomorrow'),
+        ],
+    ]);
 }
 
