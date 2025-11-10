@@ -376,6 +376,16 @@ function gaia_aurora_refresh_nowcast()
 function gaia_aurora_apply_fallback($diagnostics)
 {
     $diagnostics['fallback'] = true;
+    foreach (['north', 'south'] as $hemi) {
+        $payload = gaia_aurora_get_cached_payload($hemi);
+        if (is_array($payload)) {
+            if (empty($payload['diagnostics']) || !is_array($payload['diagnostics'])) {
+                $payload['diagnostics'] = [];
+            }
+            $payload['diagnostics']['fallback'] = true;
+            gaia_aurora_store_payload($hemi, $payload);
+        }
+    }
     if (empty($diagnostics['cache_snapshot_final'])) {
         $diagnostics['cache_snapshot_final'] = $diagnostics['cache_snapshot_initial'];
     }

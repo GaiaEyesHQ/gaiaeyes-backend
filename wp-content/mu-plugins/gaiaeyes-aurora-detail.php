@@ -36,9 +36,14 @@ if (!function_exists('gaia_aurora_render_detail')) {
 
         $context = shortcode_atts($defaults, $atts, 'gaia_aurora_detail');
         $template = locate_template('partials/gaiaeyes-aurora-detail.php');
+        $fallback = WP_CONTENT_DIR . '/mu-plugins/templates/gaiaeyes-aurora-detail.php';
 
         if (!$template) {
-            return '<div class="gaia-aurora__error">Aurora detail template missing.</div>';
+            if (file_exists($fallback)) {
+                $template = $fallback;
+            } else {
+                return '<div class="gaia-aurora__error">Aurora detail template missing.</div>';
+            }
         }
 
         $context = apply_filters('gaia_aurora_detail_context', $context, $atts);
