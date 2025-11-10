@@ -233,27 +233,38 @@ This section focuses on the spark helper usage inside the Space Dashboard.
 
 **Shortcodes & templates**
 
-* `[gaia_aurora_detail sw_url="…space_weather.json" which="both" cache="10"]`
-* PHP: `wp-content/mu-plugins/gaiaeyes-aurora-detail.php`
+* `[gaia_aurora_detail initial_hemisphere="north" refresh_interval="300"]`
+* Theme partial: `wp-content/themes/neve/partials/gaiaeyes-aurora-detail.php`
+* MU plugin (data + cron): `wp-content/mu-plugins/gaia-aurora.php`
 
 **DOM outline**
 
 ```
-- section.ge-aur.ge-panel
-  - header.ge-head
-  - div.ge-chips (Aurora headline, confidence, alerts)
-  - div.ge-grid (Ovation maps, forecast, capture tips, about text)
+- section.ga-aurora
+  - header.ga-aurora__header (title, timestamp, Kp badge)
+  - div.ga-aurora__controls (tab buttons + hemisphere toggle)
+  - div.ga-aurora__panels
+      - section[data-panel="nowcast"] with live image + SVG viewline + metrics
+      - section[data-panel="tonight"] rendering experimental PNG + timestamp
+      - section[data-panel="tomorrow"] same as tonight
+      - section[data-panel="kp"] narrative guidance
+  - footer.ga-aurora__footer (alerts CTA + diagnostics string)
 ```
 
 **Data flow & caching**
 
-* `space_weather.json` cached for 10 minutes with jsDelivr fallback.
-* Ovation map images sourced directly from `services.swpc.noaa.gov` (northern & southern hemisphere JPGs).
-* Care notes are static HTML.
+* MU plugin polls `https://services.swpc.noaa.gov/json/ovation_aurora_latest.json` every 5 min, derives southernmost 10% viewlines, and caches per-hemisphere payloads in transients (`gaia_aurora_nowcast_{north|south}`).
+* `https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json` supplies the latest observed Kp; the last non-null value is persisted to `marts.kp_obs`.
+* Experimental PNGs (`tonights_static_viewline_forecast.png`, `tomorrow_nights_static_viewline_forecast.png`) refresh hourly with ETag-aware fetches.
+* Successful runs upsert Supabase tables (`marts.aurora_nowcast_samples`, `marts.aurora_viewline_forecast`) and emit JSON artifacts under `gaiaeyes-media/public/aurora/{nowcast,viewline}/`.
+* REST surface (`/wp-json/gaia/v1/aurora/...`) drives the UI and provides diagnostics for iOS.
 
 **Assets overview**
 
-* 4 assets monitored (two SWPC images + optional JSON).
+* `/wp-json/gaia/v1/aurora/nowcast?hemi=north|south` (live JSON payloads with SVG coordinates).
+* Media repo mirrors: `public/aurora/nowcast/latest_{north,south}.json` plus daily snapshots (`aurora-nowcast-YYYY-MM-DD.json`).
+* Experimental wrappers: `public/aurora/viewline/tonight.json`, `public/aurora/viewline/tomorrow.json`.
+* Image sources: SWPC OVATION latest JPGs + experimental PNGs (served directly from SWPC).
 
 **Responsive notes**
 
@@ -262,8 +273,10 @@ This section focuses on the spark helper usage inside the Space Dashboard.
 
 **Maintenance notes**
 
-* Use the `which` attribute (`nh`, `sh`, `both`) to scope hemispheres.
-* Add region tips within `.care-box` for consistent styling.
+* Hemisphere toggle driven by JS; shortcode `initial_hemisphere="south"` preselects the southern path.
+* Viewline smoothing controlled via `GAIA_AURORA_SMOOTH_WINDOW` env var (defaults to 5, must be odd).
+* JSON exports gated by `GAIA_AURORA_ENABLE_JSON_EXPORT` (on by default when `MEDIA_DIR` is writable).
+* Diagnostics endpoint (`/wp-json/gaia/v1/aurora/diagnostics`) mirrors cache state for debugging and powers `/docs/features_route.md` instrumentation.
 
 ### Schumann Detail
 
