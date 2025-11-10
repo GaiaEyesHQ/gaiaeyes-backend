@@ -464,8 +464,19 @@ function gaia_aurora_extract_grids($body)
         $out['south'] = $body['south'];
         $out['timestamp'] = isset($body['time']) ? (string) $body['time'] : null;
     } elseif (isset($body['coordinates']) && is_array($body['coordinates'])) {
-        // Flattened coordinates – reconstruct into grids.
-        $out = gaia_aurora_reconstruct_from_coordinates($body['coordinates']);
+        // New NOAA shape: coordinates as an array of [lon, lat, prob] without hemisphere.
+        $recon = gaia_aurora_reconstruct_from_coord_triplets($body['coordinates']);
+        $out['north'] = $recon['north'];
+        $out['south'] = $recon['south'];
+        // Prefer "Observation Time", then "Forecast Time"
+        if (!empty($body['Observation Time'])) {
+            $out['timestamp'] = (string) $body['Observation Time'];
+        } elseif (!empty($body['Forecast Time'])) {
+            $out['timestamp'] = (string) $body['Forecast Time'];
+        } else {
+            $out['timestamp'] = null;
+        }
+        $out['meta'] = $recon['meta'];
     }
 
     return $out;
@@ -549,6 +560,49 @@ function gaia_aurora_reconstruct_from_coordinates($coords)
         'south'     => array_values($south),
         'timestamp' => $timestamp,
         'meta'      => [],
+    ];
+}
+
+/**
+ * Reconstruct north/south grids from triplets [lon, lat, prob] (no hemisphere key).
+ * Assumes lon in [0..359] degrees and lat in [-90..+90] degrees at 1° resolution.
+ * Builds two 181x360 arrays (rows: lat 90..-90, cols: lon -180..+179 mapping) to match downstream logic.
+ */
+function gaia_aurora_reconstruct_from_coord_triplets($coords)
+{
+    // Initialize empty 181x360 grids with zeros
+    $height = 181; // lat rows
+    $width  = 360; // lon cols
+    $north = array_fill(0, $height, array_fill(0, $width, 0.0));
+    $south = array_fill(0, $height, array_fill(0, $width, 0.0));
+
+    $count = 0;
+    foreach ($coords as $e) {
+        if (!is_array($e) || count($e) < 3) continue;
+        $lon = (float) $e[0];
+        $lat = (float) $e[1];
+        $prob = (float) $e[2];
+
+        // Normalize indices
+        // Incoming lon appears to be 0..359. Our downstream uses -180..+179 columns,
+        // but we store as 0..359 and later compute lon via step = 360/width.
+        $col = (int) round(fmod($lon + 360.0, 360.0));
+        // Lat rows: +90 (row 0) down to -90 (row 180)
+        $row = (int) round(90 - $lat);
+        if ($row < 0 || $row >= $height || $col < 0 || $col >= $width) continue;
+
+        if ($lat >= 0) {
+            $north[$row][$col] = $prob;
+        } else {
+            $south[$row][$col] = $prob;
+        }
+        $count++;
+    }
+
+    return [
+        'north' => $north,
+        'south' => $south,
+        'meta'  => ['filled_points' => $count, 'width' => $width, 'height' => $height],
     ];
 }
 
