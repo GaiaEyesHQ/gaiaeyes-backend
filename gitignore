@@ -8,9 +8,5 @@ venv/
 # macOS
 .DS_Store
 
-# editors
-.vscode/
-.idea/
-
 # test artifacts
 bots/earthscope_post/Output/
