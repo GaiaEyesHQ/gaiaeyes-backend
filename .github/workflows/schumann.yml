@@ -69,15 +69,16 @@ jobs:
           # Tomsk (mark stale if Last-Modified > 6h)
           python tomsk_extractor.py \
             --out runs/tomsk_now.json \
-            --overlay runs/tomsk_overlay.png \
+            --overlay runs/tomsk_overlay_full.png \
             --stale-hours 6 \
             --insecure || true
 
-          # Debug: verify Tomsk overlay emitted
-          if [ -f runs/tomsk_overlay.png ]; then
-            echo "[OK] tomsk_overlay.png emitted"
+          # Debug: verify Tomsk FULL overlay emitted
+          if [ -f runs/tomsk_overlay_full.png ]; then
+            echo "[OK] tomsk_overlay_full.png emitted"
+            echo "MD5 after tomsk_extractor:"; md5sum runs/tomsk_overlay_full.png || true
           else
-            echo "[ERR] tomsk_overlay.png was not produced by tomsk_extractor.py"
+            echo "[ERR] tomsk_overlay_full.png was not produced by tomsk_extractor.py"
             ls -lah runs || true
           fi
 
@@ -111,6 +112,9 @@ jobs:
             --freq-max-hz 40 \
             --verbose || true
 
+          echo "MD5 after params extractor (present files):"
+          md5sum runs/tomsk_overlay_full.png runs/tomsk_params_*_overlay.png 2>/dev/null || true
+
           # Debug: quick listing after params extractor
           echo "Post-extract listing:"
           ls -lah runs || true
@@ -134,6 +138,12 @@ jobs:
             cp -f runs/tomsk_overlay.png   "$MEDIA_DIR/images/tomsk_latest.png" && have_any=true
           else
             echo "WARN: runs/tomsk_overlay.png not found; keeping existing images/tomsk_latest.png"
+          fi
+
+          if [ -f runs/tomsk_overlay_full.png ]; then
+            cp -f runs/tomsk_overlay_full.png "$MEDIA_DIR/images/tomsk_full_latest.png" && have_any=true
+          else
+            echo "WARN: runs/tomsk_overlay_full.png not found; keeping existing images/tomsk_full_latest.png"
           fi
 
           if [ -f runs/cumiana_overlay.png ]; then
