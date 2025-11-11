@@ -36,9 +36,10 @@ if (!function_exists('gaia_aurora_render_detail')) {
 
         $context = shortcode_atts($defaults, $atts, 'gaia_aurora_detail');
         // Provide base map images for each hemisphere (served from your media repo)
+ // In the context section, update base_map_url paths:
         $context['base_map_url'] = [
-            'north' => content_url('mu-plugins/../../gaiaeyes-media/public/aurora/nowcast/northern-hemisphere.jpg'),
-            'south' => content_url('mu-plugins/../../gaiaeyes-media/public/aurora/nowcast/southern-hemisphere.jpg'),
+            'north' => home_url('/gaiaeyes-media/public/aurora/nowcast/northern-hemisphere.jpg'),
+            'south' => home_url('/gaiaeyes-media/public/aurora/nowcast/southern-hemisphere.jpg'),
         ];
         // Feature toggles for the template/JS
         $context['enable_kp_lines_toggle'] = true;   // show KP Lines button
