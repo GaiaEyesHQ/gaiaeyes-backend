@@ -60,18 +60,25 @@ jobs:
         if: env.SUPABASE_REST_URL != '' && env.SUPABASE_SERVICE_KEY != ''
         run: |
           set -euo pipefail
-          curl -fsSL "$SUPABASE_REST_URL/aurora_nowcast_samples?select=ts,hemisphere,kp&order=ts.desc.nullslast&limit=6" \
+          mkdir -p out
+          echo "Query nowcast samples…"
+          CODE_NC=$(curl -sS -o out/supabase_nowcast_rows.json -w "%{http_code}" \
+            "$SUPABASE_REST_URL/aurora_nowcast_samples?select=ts,hemisphere,kp&order=ts.desc.nullslast&limit=6" \
             -H "apikey: $SUPABASE_SERVICE_KEY" \
             -H "Authorization: Bearer $SUPABASE_SERVICE_KEY" \
-            -H "Accept: application/json" \
-            -o out/supabase_nowcast_rows.json
+            -H "Accept-Profile: marts" \
+            -H "Accept: application/json" || true)
+          echo "nowcast HTTP: $CODE_NC"
           jq . out/supabase_nowcast_rows.json || true
 
-          curl -fsSL "$SUPABASE_REST_URL/kp_obs?select=kp_time,kp&order=kp_time.desc.nullslast&limit=6" \
+          echo "Query kp_obs…"
+          CODE_KP=$(curl -sS -o out/supabase_kp_rows.json -w "%{http_code}" \
+            "$SUPABASE_REST_URL/kp_obs?select=kp_time,kp&order=kp_time.desc.nullslast&limit=6" \
             -H "apikey: $SUPABASE_SERVICE_KEY" \
             -H "Authorization: Bearer $SUPABASE_SERVICE_KEY" \
-            -H "Accept: application/json" \
-            -o out/supabase_kp_rows.json
+            -H "Accept-Profile: marts" \
+            -H "Accept: application/json" || true)
+          echo "kp_obs HTTP: $CODE_KP"
           jq . out/supabase_kp_rows.json || true
 
       - name: Upload artifacts (capture everything)
