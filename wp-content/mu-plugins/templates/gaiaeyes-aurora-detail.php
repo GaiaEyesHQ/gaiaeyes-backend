@@ -94,9 +94,18 @@ $section_id = 'ga-aurora-' . wp_unique_id();
               <!-- central meridian -->
               <line x1="160" y1="30" x2="160" y2="290" stroke="white" stroke-opacity="0.10"/>
             </g>
+            <g id="ga-kp-lines" class="ga-kp-lines"></g>
             <!-- Live viewline path -->
-            <path data-role="viewline" d="" fill="none" stroke="rgba(92,220,160,0.9)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" filter="url(#gaAuroraGlowFx)" />
+            <path id="ga-viewline" data-role="viewline" d="" fill="none" stroke="rgba(92,220,160,0.9)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" filter="url(#gaAuroraGlowFx)" />
           </svg>
+          <div id="ga-align" style="display:none;gap:.25rem;margin:.25rem 0;align-items:center;">
+            <button id="ga-lon-minus">◀ lon0 -5°</button>
+            <span id="ga-lon-label">lon0=0</span>
+            <button id="ga-lon-plus">lon0 +5° ▶</button>
+            <button id="ga-thresh-minus">◀ p -1%</button>
+            <span id="ga-thresh-label">p=10%</span>
+            <button id="ga-thresh-plus">p +1% ▶</button>
+          </div>
           <div class="ga-aurora__metrics">
             <div><span class="ga-aurora__metric" data-role="metric-min">—</span><span>southernmost latitude</span></div>
             <div><span class="ga-aurora__metric" data-role="metric-median">—</span><span>median viewline latitude</span></div>
@@ -192,6 +201,7 @@ $section_id = 'ga-aurora-' . wp_unique_id();
   .ga-aurora__metrics span{display:block}
   .ga-aurora__metric{font-size:1.05rem;font-weight:600;color:#9bf2c7}
   .ga-aurora__note{margin:0;font-size:.75rem;opacity:.65}
+  .ga-kp-lines path{fill:none;stroke-width:2.5;opacity:.95;filter:url(#gaAuroraGlowFx)}
   .ga-aurora__forecast{background:#121a28;border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:18px;display:grid;gap:16px}
   .ga-aurora__forecast figure{margin:0}
   .ga-aurora__forecast img{width:100%;height:auto;border-radius:10px;border:1px solid rgba(255,255,255,.08)}
@@ -235,6 +245,15 @@ $section_id = 'ga-aurora-' . wp_unique_id();
   const hemiLabel = root.querySelector('[data-role="hemisphere-label"]');
   const ovationImg = root.querySelector('[data-role="ovation-image"]');
   const viewlinePath = root.querySelector('[data-role="viewline"]');
+  const kpGroup = root.querySelector('#ga-kp-lines');
+  const kpTab = root.querySelector('[data-tab="kplines"]');
+  const alignWrap = root.querySelector('#ga-align');
+  const lonMinus = root.querySelector('#ga-lon-minus');
+  const lonPlus = root.querySelector('#ga-lon-plus');
+  const lonLabel = root.querySelector('#ga-lon-label');
+  const threshMinus = root.querySelector('#ga-thresh-minus');
+  const threshPlus = root.querySelector('#ga-thresh-plus');
+  const threshLabel = root.querySelector('#ga-thresh-label');
   const metricMin = root.querySelector('[data-role="metric-min"]');
   const metricMedian = root.querySelector('[data-role="metric-median"]');
   const metricProb = root.querySelector('[data-role="metric-prob"]');
@@ -246,6 +265,7 @@ $section_id = 'ga-aurora-' . wp_unique_id();
   let activeTab = 'nowcast';
   let activeHemisphere = initialHemisphere || 'north';
   let timer = null;
+  window.GA_PROB_THRESHOLD = Number.isFinite(window.GA_PROB_THRESHOLD) ? window.GA_PROB_THRESHOLD : 0.1;
 
   // Base map images hosted on your site (fallbacks)
   const baseMap = {
@@ -255,10 +275,20 @@ $section_id = 'ga-aurora-' . wp_unique_id();
   // --- Projection constants (per hemisphere) ---
   const CX = 160, CY = 160;
   const R_SAFE = 129.5; // slightly smaller than the 130px rim to avoid stroke clipping
-  // Tune central longitude to match your base images:
-  const LON0_N = 0;     // north map center meridian (adjust ±10..20° if needed)
-  const LON0_S = 0;     // south map center meridian (adjust if your south base is rotated)
-  function centerLonFor(hemi) { return hemi === 'south' ? LON0_S : LON0_N; }
+  window.LON0_N = Number.isFinite(window.LON0_N) ? window.LON0_N : 0;
+  window.LON0_S = Number.isFinite(window.LON0_S) ? window.LON0_S : 0;
+  function centerLonFor(hemi) { return hemi === 'south' ? window.LON0_S : window.LON0_N; }
+
+  // Kp > approximate southernmost visible latitude (geographic)
+  const KP_TABLE = [
+    { kp: 3,  lat: 58.5, color: '#76C84A' },  // green
+    { kp: 4,  lat: 55.5, color: '#C6DB46' },  // yellow-green
+    { kp: 5,  lat: 52.5, color: '#F3B33A' },  // yellow-orange
+    { kp: 6,  lat: 48.5, color: '#EF6A2E' },  // orange
+    { kp: 7,  lat: 45.0, color: '#D13B2C' },  // red
+    { kp: 8,  lat: 42.0, color: '#99241D' },  // dark red
+    { kp: 9,  lat: 39.0, color: '#6E1814' },  // maroon
+  ];
 
   function projOrthographic(lonDeg, latDeg, hemi) {
     const lon0 = centerLonFor(hemi);
@@ -280,6 +310,42 @@ $section_id = 'ga-aurora-' . wp_unique_id();
     const X = CX + x, Y = CY + y;
     if (!Number.isFinite(X) || !Number.isFinite(Y)) return null;
     return [X, Y];
+  }
+
+  function latParallelToPath(latDeg, hemi) {
+    const parts = [];
+    for (let lon = -180; lon <= 180; lon += 1) {
+      const pt = projOrthographic(lon, (hemi === 'south' ? -Math.abs(latDeg) : Math.abs(latDeg)), hemi);
+      if (!pt) continue;
+      parts.push(parts.length ? `L${pt[0].toFixed(2)},${pt[1].toFixed(2)}` : `M${pt[0].toFixed(2)},${pt[1].toFixed(2)}`);
+    }
+    return parts.join(' ');
+  }
+
+  function drawKpLines(hemi) {
+    const g = kpGroup;
+    if (!g) return;
+    g.innerHTML = '';
+    for (const row of KP_TABLE) {
+      const d = latParallelToPath(row.lat, hemi);
+      if (!d) continue;
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      p.setAttribute('d', d);
+      p.setAttribute('stroke', row.color);
+      p.setAttribute('data-kp', String(row.kp));
+      g.appendChild(p);
+    }
+  }
+
+  function syncAlignmentLabels() {
+    if (lonLabel) {
+      const lon0 = activeHemisphere === 'south' ? window.LON0_S : window.LON0_N;
+      lonLabel.textContent = `lon0=${lon0}`;
+    }
+    if (threshLabel) {
+      const pct = window.GA_PROB_THRESHOLD <= 1 ? window.GA_PROB_THRESHOLD * 100 : window.GA_PROB_THRESHOLD;
+      threshLabel.textContent = `p=${pct.toFixed(0)}%`;
+    }
   }
 
   function coordsToPath(coords, hemi) {
@@ -320,6 +386,8 @@ $section_id = 'ga-aurora-' . wp_unique_id();
       hemi.setAttribute('aria-checked', match ? 'true' : 'false');
     });
     updateBaseMap(activeHemisphere);
+    drawKpLines(activeHemisphere);
+    syncAlignmentLabels();
     fetchNowcast();
   }
 
@@ -365,21 +433,13 @@ $section_id = 'ga-aurora-' . wp_unique_id();
 
   function renderMetrics(payload) {
     const m = (payload && payload.metrics) || {};
-    // Some runs return zeros for quiet Kp; ignore zeros when computing “min/median” displayed labels
-    const latMin = (typeof m.min_lat === 'number' && Math.abs(m.min_lat) > 0.05) ? m.min_lat : null;
-    const latMed = (typeof m.median_lat === 'number' && Math.abs(m.median_lat) > 0.05) ? m.median_lat : null;
-    metricMin.textContent    = (latMin !== null) ? `${latMin.toFixed(1)}°` : '—';
-    metricMedian.textContent = (latMed !== null) ? `${latMed.toFixed(1)}°` : '—';
-
-    // Probability scaling: if value ≤ 1 treat as fraction; if > 1 assume already in %
+    const show = (v) => (typeof v === 'number' && Math.abs(v) > 0.05) ? `${v.toFixed(1)}°` : '—';
+    metricMin.textContent = show(m.min_lat);
+    metricMedian.textContent = show(m.median_lat);
     const mp = (typeof m.mean_prob === 'number') ? m.mean_prob
-             : (typeof m.mean_prob_line === 'number') ? m.mean_prob_line
-             : null;
-    if (mp === null) { metricProb.textContent = '—'; }
-    else {
-      const pct = (mp <= 1 ? mp * 100 : mp);
-      metricProb.textContent = `${pct.toFixed(0)}%`;
-    }
+             : (typeof m.mean_prob_line === 'number') ? m.mean_prob_line : null;
+    if (mp == null) metricProb.textContent = '—';
+    else metricProb.textContent = `${(mp <= 1 ? mp * 100 : mp).toFixed(0)}%`;
   }
 
   function renderViewline(payload) {
@@ -446,7 +506,12 @@ $section_id = 'ga-aurora-' . wp_unique_id();
   }
 
   function fetchNowcast() {
-    fetch(`${restBase}nowcast?hemi=${activeHemisphere}`)
+    const params = new URLSearchParams({ hemi: activeHemisphere });
+    if (Number.isFinite(window.GA_PROB_THRESHOLD)) {
+      const val = window.GA_PROB_THRESHOLD <= 1 ? window.GA_PROB_THRESHOLD : window.GA_PROB_THRESHOLD / 100;
+      params.set('p', val.toFixed(2));
+    }
+    fetch(`${restBase}nowcast?${params.toString()}`)
       .then((res) => res.json())
       .then((payload) => {
         renderDiagnostics(payload);
@@ -475,6 +540,8 @@ $section_id = 'ga-aurora-' . wp_unique_id();
   setActiveTab(activeTab);
   setActiveHemisphere(activeHemisphere);
   updateBaseMap(activeHemisphere);
+  drawKpLines(activeHemisphere);
+  syncAlignmentLabels();
   fetchForecast('tonight');
   fetchForecast('tomorrow');
 
@@ -494,20 +561,56 @@ $section_id = 'ga-aurora-' . wp_unique_id();
     }
   });
 
-  const kpToggle = root.querySelector('[data-tab="kplines"], [data-role="kp-lines-toggle"]');
-  if (kpToggle) {
-    kpToggle.addEventListener('click', (e) => {
+  if (kpTab && kpGroup) {
+    kpTab.addEventListener('click', (e) => {
       e.preventDefault();
-      const cur = viewlinePath.style.display;
-      viewlinePath.style.display = (cur === 'none' ? 'inline' : 'none');
-      kpToggle.classList.toggle('is-active', viewlinePath.style.display !== 'none');
-      kpToggle.setAttribute('aria-pressed', viewlinePath.style.display !== 'none' ? 'true' : 'false');
-      kpToggle.setAttribute('aria-selected', viewlinePath.style.display !== 'none' ? 'true' : 'false');
+      const show = kpGroup.style.display !== 'inline';
+      kpGroup.style.display = show ? 'inline' : 'none';
+      kpTab.classList.toggle('is-active', show);
+      kpTab.setAttribute('aria-selected', show ? 'true' : 'false');
+      kpTab.setAttribute('aria-pressed', show ? 'true' : 'false');
     });
-    kpToggle.setAttribute('aria-pressed', viewlinePath.style.display !== 'none' ? 'true' : 'false');
-    kpToggle.setAttribute('aria-selected', viewlinePath.style.display !== 'none' ? 'true' : 'false');
-    kpToggle.classList.toggle('is-active', viewlinePath.style.display !== 'none');
+    kpGroup.style.display = 'inline';
+    kpTab.classList.toggle('is-active', true);
+    kpTab.setAttribute('aria-selected', 'true');
+    kpTab.setAttribute('aria-pressed', 'true');
   }
-  viewlinePath.style.display = 'inline';
+  if (viewlinePath) {
+    viewlinePath.style.display = 'inline';
+  }
+
+  function setLon0(delta) {
+    if (!Number.isFinite(delta)) return;
+    if (activeHemisphere === 'north') {
+      window.LON0_N += delta;
+    } else {
+      window.LON0_S += delta;
+    }
+    drawKpLines(activeHemisphere);
+    syncAlignmentLabels();
+    const path = document.getElementById('ga-viewline');
+    if (path) {
+      fetchNowcast();
+    }
+  }
+
+  function setThreshold(deltaPct) {
+    if (!Number.isFinite(deltaPct)) return;
+    const step = deltaPct / 100;
+    const current = window.GA_PROB_THRESHOLD <= 1 ? window.GA_PROB_THRESHOLD : window.GA_PROB_THRESHOLD / 100;
+    const next = Math.min(0.5, Math.max(0.02, current + step));
+    window.GA_PROB_THRESHOLD = next;
+    syncAlignmentLabels();
+    fetchNowcast();
+  }
+
+  lonMinus && lonMinus.addEventListener('click', () => setLon0(-5));
+  lonPlus && lonPlus.addEventListener('click', () => setLon0(5));
+  threshMinus && threshMinus.addEventListener('click', () => setThreshold(-1));
+  threshPlus && threshPlus.addEventListener('click', () => setThreshold(1));
+
+  if (alignWrap) {
+    syncAlignmentLabels();
+  }
 })();
 </script>
