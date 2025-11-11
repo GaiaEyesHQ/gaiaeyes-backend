@@ -51,7 +51,7 @@ $section_id = 'ga-aurora-' . wp_unique_id();
       <button class="ga-aurora__tab is-active" role="tab" data-target="nowcast" aria-selected="true">Nowcast (Live)</button>
       <button class="ga-aurora__tab" role="tab" data-target="tonight" aria-selected="false">Tonight (Forecast)</button>
       <button class="ga-aurora__tab" role="tab" data-target="tomorrow" aria-selected="false">Tomorrow (Forecast)</button>
-      <button class="ga-aurora__tab" role="tab" data-target="kp" aria-selected="false">Kp Lines (Live)</button>
+      <button class="ga-aurora__tab" role="tab" data-role="kp-lines-toggle" data-tab="kplines" aria-selected="false" aria-pressed="false">Kp Lines (Live)</button>
     </div>
     <div class="ga-aurora__hemis" role="radiogroup" aria-label="Hemisphere selector">
       <button class="ga-aurora__hemi is-active" data-hemi="north" role="radio" aria-checked="true">Northern hemisphere</button>
@@ -84,14 +84,18 @@ $section_id = 'ga-aurora-' . wp_unique_id();
             <image id="ga-base-map" href="" x="30" y="30" width="260" height="260" preserveAspectRatio="xMidYMid meet" clip-path="url(#gaAuroraMapClip)"></image>
             <!-- Globe rim -->
             <circle cx="160" cy="160" r="130" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.25" />
+            <g id="ga-polar-grid" opacity="0.25">
+              <!-- concentric rings every ~10° from the pole -->
+              <circle cx="160" cy="160" r="26"  stroke="white" stroke-opacity="0.12" fill="none" />
+              <circle cx="160" cy="160" r="52"  stroke="white" stroke-opacity="0.10" fill="none" />
+              <circle cx="160" cy="160" r="78"  stroke="white" stroke-opacity="0.10" fill="none" />
+              <circle cx="160" cy="160" r="104" stroke="white" stroke-opacity="0.08" fill="none" />
+              <circle cx="160" cy="160" r="130" stroke="white" stroke-opacity="0.06" fill="none" />
+              <!-- central meridian -->
+              <line x1="160" y1="30" x2="160" y2="290" stroke="white" stroke-opacity="0.10"/>
+            </g>
             <!-- Live viewline path -->
             <path data-role="viewline" d="" fill="none" stroke="rgba(92,220,160,0.9)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" filter="url(#gaAuroraGlowFx)" />
-            <!-- Simple latitude guides -->
-            <g class="ga-aurora__latlines">
-              <path d="M30 160 H290" stroke="rgba(255,255,255,0.08)" stroke-dasharray="4 6" />
-              <path d="M30 100 H290" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 7" />
-              <path d="M30 220 H290" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 7" />
-            </g>
           </svg>
           <div class="ga-aurora__metrics">
             <div><span class="ga-aurora__metric" data-role="metric-min">—</span><span>southernmost latitude</span></div>
@@ -248,15 +252,56 @@ $section_id = 'ga-aurora-' . wp_unique_id();
     north: '<?php echo esc_js( home_url('/gaiaeyes-media/public/aurora/nowcast/northern-hemisphere.jpg') ); ?>',
     south: '<?php echo esc_js( home_url('/gaiaeyes-media/public/aurora/nowcast/southern-hemisphere.jpg') ); ?>'
   };
-  // Projection parameters (orthographic pole view)
-  const CX = 160, CY = 160, R = 130;
-  // Center longitude tweak for coastline alignment (adjust if needed)
-  let LON0 = 0; // degrees
+  // --- Projection constants (per hemisphere) ---
+  const CX = 160, CY = 160;
+  const R_SAFE = 129.5; // slightly smaller than the 130px rim to avoid stroke clipping
+  // Tune central longitude to match your base images:
+  const LON0_N = 0;     // north map center meridian (adjust ±10..20° if needed)
+  const LON0_S = 0;     // south map center meridian (adjust if your south base is rotated)
+  function centerLonFor(hemi) { return hemi === 'south' ? LON0_S : LON0_N; }
+
+  function projOrthographic(lonDeg, latDeg, hemi) {
+    const lon0 = centerLonFor(hemi);
+    if (!Number.isFinite(lonDeg) || !Number.isFinite(latDeg)) return null;
+
+    const λ = (lonDeg - lon0) * Math.PI / 180;
+    const φ = latDeg * Math.PI / 180;
+    const cosφ = Math.cos(φ);
+
+    // Cull far side (prevents “rim spikes”); keep only the visible pole
+    if (hemi === 'north' && latDeg < 0) return null;
+    if (hemi === 'south' && latDeg > 0) return null;
+
+    const x = R_SAFE * cosφ * Math.sin(λ);
+    const y = (hemi === 'north'
+      ? -R_SAFE * cosφ * Math.cos(λ)
+      :  R_SAFE * cosφ * Math.cos(λ));
+
+    const X = CX + x, Y = CY + y;
+    if (!Number.isFinite(X) || !Number.isFinite(Y)) return null;
+    return [X, Y];
+  }
+
+  function coordsToPath(coords, hemi) {
+    const parts = [];
+    for (const p of (coords || [])) {
+      const lon = Number(p.lon), lat = Number(p.lat);
+      const pt = projOrthographic(lon, lat, hemi);
+      if (!pt) continue;
+      parts.push(parts.length ? `L${pt[0].toFixed(2)},${pt[1].toFixed(2)}`
+                              : `M${pt[0].toFixed(2)},${pt[1].toFixed(2)}`);
+    }
+    return parts.join(' ');
+  }
 
   function setActiveTab(target) {
     activeTab = target;
     tabs.forEach((tab) => {
-      const isActive = tab.getAttribute('data-target') === target;
+      const tabTarget = tab.getAttribute('data-target');
+      if (!tabTarget) {
+        return;
+      }
+      const isActive = tabTarget === target;
       tab.classList.toggle('is-active', isActive);
       tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
     });
@@ -319,45 +364,29 @@ $section_id = 'ga-aurora-' . wp_unique_id();
   }
 
   function renderMetrics(payload) {
-    const metrics = payload && payload.metrics ? payload.metrics : null;
-    metricMin.textContent = metrics && metrics.min_lat !== undefined ? `${metrics.min_lat.toFixed(1)}°` : '—';
-    metricMedian.textContent = metrics && metrics.median_lat !== undefined ? `${metrics.median_lat.toFixed(1)}°` : '—';
-    const meanProb = (metrics && (metrics.mean_prob !== undefined ? metrics.mean_prob : metrics.mean_prob_line));
-    metricProb.textContent = (typeof meanProb === 'number') ? `${(meanProb * 100).toFixed(0)}%` : '—';
+    const m = (payload && payload.metrics) || {};
+    // Some runs return zeros for quiet Kp; ignore zeros when computing “min/median” displayed labels
+    const latMin = (typeof m.min_lat === 'number' && Math.abs(m.min_lat) > 0.05) ? m.min_lat : null;
+    const latMed = (typeof m.median_lat === 'number' && Math.abs(m.median_lat) > 0.05) ? m.median_lat : null;
+    metricMin.textContent    = (latMin !== null) ? `${latMin.toFixed(1)}°` : '—';
+    metricMedian.textContent = (latMed !== null) ? `${latMed.toFixed(1)}°` : '—';
+
+    // Probability scaling: if value ≤ 1 treat as fraction; if > 1 assume already in %
+    const mp = (typeof m.mean_prob === 'number') ? m.mean_prob
+             : (typeof m.mean_prob_line === 'number') ? m.mean_prob_line
+             : null;
+    if (mp === null) { metricProb.textContent = '—'; }
+    else {
+      const pct = (mp <= 1 ? mp * 100 : mp);
+      metricProb.textContent = `${pct.toFixed(0)}%`;
+    }
   }
 
   function renderViewline(payload) {
-    if (!payload || !Array.isArray(payload.viewline_coords)) {
-      viewlinePath.setAttribute('d', '');
-      return;
-    }
-    const coords = payload.viewline_coords;
-    // Orthographic projection from pole; cull far-side points
-    function proj(lonDeg, latDeg, hemi) {
-      const λ = (lonDeg - LON0) * Math.PI/180;
-      const φ = latDeg * Math.PI/180;
-      const cosφ = Math.cos(φ), sinφ = Math.sin(φ);
-      if (hemi === 'south') {
-        if (latDeg > 0) return null; // far side
-        const x = R * cosφ * Math.sin(λ);
-        const y = R * cosφ * Math.cos(λ);
-        return [CX + x, CY + y];
-      } else {
-        if (latDeg < 0) return null; // far side
-        const x = R * cosφ * Math.sin(λ);
-        const y = -R * cosφ * Math.cos(λ);
-        return [CX + x, CY + y];
-      }
-    }
-    const hemi = payload.hemisphere === 'south' ? 'south' : 'north';
-    const parts = [];
-    for (const {lon, lat} of coords) {
-      const p = proj(lon, lat, hemi);
-      if (!p) continue;
-      parts.push(parts.length ? `L${p[0].toFixed(2)},${p[1].toFixed(2)}` : `M${p[0].toFixed(2)},${p[1].toFixed(2)}`);
-    }
-    viewlinePath.setAttribute('d', parts.length ? parts.join(' ') : '');
-    if (payload.kp !== undefined) {
+    const hemi = (payload && payload.hemisphere === 'south') ? 'south' : 'north';
+    const coords = (payload && Array.isArray(payload.viewline_coords)) ? payload.viewline_coords : [];
+    viewlinePath.setAttribute('d', coordsToPath(coords, hemi));
+    if (payload && payload.kp !== undefined) {
       const kpVal = Number(payload.kp);
       const className = kpClass(kpVal);
       kpBadge.className = `ga-aurora__badge ${className}`;
@@ -366,20 +395,21 @@ $section_id = 'ga-aurora-' . wp_unique_id();
       kpBadge.className = 'ga-aurora__badge ga-aurora__badge--unknown';
       kpBadge.textContent = 'Kp —';
     }
-    if (payload.kp_obs_time) {
+    if (payload && payload.kp_obs_time) {
       timestamp.textContent = `Updated ${new Date(payload.kp_obs_time).toLocaleString()}`;
-    } else if (payload.ts) {
+    } else if (payload && payload.ts) {
       timestamp.textContent = `Updated ${new Date(payload.ts).toLocaleString()}`;
     } else {
       timestamp.textContent = 'Updated —';
     }
     renderMetrics(payload);
-    hemiLabel.textContent = payload.hemisphere === 'south' ? 'Southern hemisphere' : 'Northern hemisphere';
+    hemiLabel.textContent = (payload && payload.hemisphere === 'south') ? 'Southern hemisphere' : 'Northern hemisphere';
   }
 
   function updateBaseMap(hemi) {
     const img = document.getElementById('ga-base-map');
-    img && (img.setAttribute('href', hemi === 'south' ? baseMap.south : baseMap.north));
+    if (!img) return;
+    img.setAttribute('href', (hemi === 'south') ? baseMap.south : baseMap.north);
   }
 
   function updateImage(payload) {
@@ -430,7 +460,12 @@ $section_id = 'ga-aurora-' . wp_unique_id();
   }
 
   tabs.forEach((tab) => {
-    tab.addEventListener('click', () => setActiveTab(tab.getAttribute('data-target')));
+    tab.addEventListener('click', (event) => {
+      const target = tab.getAttribute('data-target');
+      if (target) {
+        setActiveTab(target);
+      }
+    });
   });
 
   hemis.forEach((hemi) => {
@@ -458,5 +493,21 @@ $section_id = 'ga-aurora-' . wp_unique_id();
       timer = setInterval(fetchNowcast, refreshInterval);
     }
   });
+
+  const kpToggle = root.querySelector('[data-tab="kplines"], [data-role="kp-lines-toggle"]');
+  if (kpToggle) {
+    kpToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      const cur = viewlinePath.style.display;
+      viewlinePath.style.display = (cur === 'none' ? 'inline' : 'none');
+      kpToggle.classList.toggle('is-active', viewlinePath.style.display !== 'none');
+      kpToggle.setAttribute('aria-pressed', viewlinePath.style.display !== 'none' ? 'true' : 'false');
+      kpToggle.setAttribute('aria-selected', viewlinePath.style.display !== 'none' ? 'true' : 'false');
+    });
+    kpToggle.setAttribute('aria-pressed', viewlinePath.style.display !== 'none' ? 'true' : 'false');
+    kpToggle.setAttribute('aria-selected', viewlinePath.style.display !== 'none' ? 'true' : 'false');
+    kpToggle.classList.toggle('is-active', viewlinePath.style.display !== 'none');
+  }
+  viewlinePath.style.display = 'inline';
 })();
 </script>

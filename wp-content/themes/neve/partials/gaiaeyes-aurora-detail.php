@@ -18,7 +18,7 @@ if (file_exists($template)) {
       <button type="button" class="gaia-btn gaia-tab is-active" data-tab="nowcast">Nowcast (Live)</button>
       <button type="button" class="gaia-btn gaia-tab" data-tab="tonight">Tonight</button>
       <button type="button" class="gaia-btn gaia-tab" data-tab="tomorrow">Tomorrow</button>
-      <button type="button" class="gaia-btn gaia-tab" data-tab="kplines">KP Lines</button>
+      <button type="button" class="gaia-btn gaia-tab" data-tab="kplines" data-role="kp-lines-toggle" aria-selected="false" aria-pressed="false">KP Lines</button>
     </div>
     <div class="gaia-aurora__hemi">
       <label>Hemisphere</label>
@@ -31,12 +31,19 @@ if (file_exists($template)) {
 
   <div class="gaia-aurora__stage">
     <img id="gaia-base-map" alt="Aurora base map" />
-    <svg id="gaia-overlay" viewBox="0 0 1000 1000" role="img" aria-label="Aurora overlay">
+    <svg id="gaia-overlay" viewBox="0 0 320 320" role="img" aria-label="Aurora overlay">
       <defs>
         <filter id="glow"><feDropShadow dx="0" dy="0" stdDeviation="2" flood-opacity="0.45"/></filter>
       </defs>
-      <g id="gaia-lat-grid" class="gaia-grid"></g>
-      <path id="gaia-viewline" d="" fill="none" stroke="#ff6a3a" stroke-width="3" filter="url(#glow)"></path>
+      <g id="ga-polar-grid" opacity="0.25">
+        <circle cx="160" cy="160" r="26"  stroke="white" stroke-opacity="0.12" fill="none" />
+        <circle cx="160" cy="160" r="52"  stroke="white" stroke-opacity="0.10" fill="none" />
+        <circle cx="160" cy="160" r="78"  stroke="white" stroke-opacity="0.10" fill="none" />
+        <circle cx="160" cy="160" r="104" stroke="white" stroke-opacity="0.08" fill="none" />
+        <circle cx="160" cy="160" r="130" stroke="white" stroke-opacity="0.06" fill="none" />
+        <line x1="160" y1="30" x2="160" y2="290" stroke="white" stroke-opacity="0.10"/>
+      </g>
+      <path id="gaia-viewline" d="" fill="none" stroke="#ff6a3a" stroke-width="3" filter="url(#glow)" stroke-linejoin="round" stroke-linecap="round"></path>
     </svg>
     <div id="gaia-banner" class="gaia-aurora__banner is-hidden">Showing cached map (latest live fetch unavailable)</div>
   </div>
@@ -64,8 +71,6 @@ if (file_exists($template)) {
 .gaia-aurora__legend{display:flex;gap:.5rem;align-items:center;margin-top:.5rem}
 .chip{font-size:.8rem;background:#f2f5ff;border:1px solid var(--bd);border-radius:999px;padding:.2rem .5rem}
 .gaia-right{margin-left:auto}
-.gaia-grid line{stroke:#ffffff;stroke-opacity:.18;stroke-width:1}
-.gaia-grid text{fill:#fff;font-size:11px;paint-order:stroke;stroke:#000;stroke-width:3;stroke-linejoin:round}
 </style>
 
 <script>
@@ -78,15 +83,12 @@ if (file_exists($template)) {
       north: '<?php echo esc_js( isset($template_args['base_map_url']['north']) ? $template_args['base_map_url']['north'] : home_url('/gaiaeyes-media/public/aurora/nowcast/northern-hemisphere.jpg') ); ?>',
       south: '<?php echo esc_js( isset($template_args['base_map_url']['south']) ? $template_args['base_map_url']['south'] : home_url('/gaiaeyes-media/public/aurora/nowcast/southern-hemisphere.jpg') ); ?>',
     },
-    // projection center longitude (tweak if landmasses don't align perfectly)
-    lon0: 0,
     freshSeconds: 900 // 15 minutes window for "fresh"
   };
 
   const elBase = document.getElementById('gaia-base-map');
   const elSVG  = document.getElementById('gaia-overlay');
   const elPath = document.getElementById('gaia-viewline');
-  const elGrid = document.getElementById('gaia-lat-grid');
   const elHemi = document.getElementById('gaia-hemi');
   const elKp   = document.getElementById('gaia-kp');
   const elTs   = document.getElementById('gaia-ts');
@@ -95,9 +97,14 @@ if (file_exists($template)) {
   // Tabs (minimal – only Nowcast active visual; others placeholders for now)
   document.querySelectorAll('.gaia-tab').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.gaia-tab').forEach(b => b.classList.remove('is-active'));
-      btn.classList.add('is-active');
-      // We keep single stage; KP Lines is a toggle; Tonight/Tomorrow are handled elsewhere as needed.
+      const target = btn.getAttribute('data-tab');
+      if (target && target !== 'kplines') {
+        document.querySelectorAll('.gaia-tab').forEach(b => {
+          if (b.getAttribute('data-tab') === 'kplines') return;
+          b.classList.remove('is-active');
+        });
+        btn.classList.add('is-active');
+      }
     });
   });
 
@@ -105,50 +112,46 @@ if (file_exists($template)) {
   elHemi.value = ctx.hemi;
   elHemi.addEventListener('change', () => setHemisphere(elHemi.value));
 
-  // Projection helpers
-  const R = 480, CX = 500, CY = 500;
+  // --- Projection constants (per hemisphere) ---
+  const CX = 160, CY = 160;
+  const R_SAFE = 129.5; // slightly smaller than the 130px rim to avoid stroke clipping
+  // Tune central longitude to match your base images:
+  const LON0_N = 0;     // north map center meridian (adjust ±10..20° if needed)
+  const LON0_S = 0;     // south map center meridian (adjust if your south base is rotated)
+  function centerLonFor(hemi) { return hemi === 'south' ? LON0_S : LON0_N; }
+
   function projOrthographic(lonDeg, latDeg, hemi) {
-    const lon0 = ctx.lon0;
-    const λ = (lonDeg - lon0) * Math.PI/180;
-    const φ = latDeg * Math.PI/180;
-    const cosφ = Math.cos(φ), sinφ = Math.sin(φ);
-    if (hemi === 'north') {
-      if (latDeg < 0) return null;
-      const x = R * cosφ * Math.sin(λ);
-      const y = -R * cosφ * Math.cos(λ);
-      return [CX + x, CY + y];
-    } else {
-      if (latDeg > 0) return null;
-      const x = R * cosφ * Math.sin(λ);
-      const y =  R * cosφ * Math.cos(λ);
-      return [CX + x, CY + y];
-    }
+    const lon0 = centerLonFor(hemi);
+    if (!Number.isFinite(lonDeg) || !Number.isFinite(latDeg)) return null;
+
+    const λ = (lonDeg - lon0) * Math.PI / 180;
+    const φ = latDeg * Math.PI / 180;
+    const cosφ = Math.cos(φ);
+
+    // Cull far side (prevents “rim spikes”); keep only the visible pole
+    if (hemi === 'north' && latDeg < 0) return null;
+    if (hemi === 'south' && latDeg > 0) return null;
+
+    const x = R_SAFE * cosφ * Math.sin(λ);
+    const y = (hemi === 'north'
+      ? -R_SAFE * cosφ * Math.cos(λ)
+      :  R_SAFE * cosφ * Math.cos(λ));
+
+    const X = CX + x, Y = CY + y;
+    if (!Number.isFinite(X) || !Number.isFinite(Y)) return null;
+    return [X, Y];
   }
 
   function coordsToPath(coords, hemi) {
     const parts = [];
-    for (const p of coords) {
-      const pt = projOrthographic(p.lon, p.lat, hemi);
+    for (const p of (coords || [])) {
+      const lon = Number(p.lon), lat = Number(p.lat);
+      const pt = projOrthographic(lon, lat, hemi);
       if (!pt) continue;
-      parts.push(parts.length ? `L${pt[0]},${pt[1]}` : `M${pt[0]},${pt[1]}`);
+      parts.push(parts.length ? `L${pt[0].toFixed(2)},${pt[1].toFixed(2)}`
+                              : `M${pt[0].toFixed(2)},${pt[1].toFixed(2)}`);
     }
     return parts.join(' ');
-  }
-
-  function drawLatGrid(hemi) {
-    while (elGrid.firstChild) elGrid.firstChild.remove();
-    const step = 10;
-    for (let lat = hemi==='north' ? 10 : -10; hemi==='north' ? lat<=80 : lat>=-80; lat += (hemi==='north'?step:-step)) {
-      const pA = projOrthographic(ctx.lon0, lat, hemi);
-      if (!pA) continue;
-      // small tick + label
-      const c = document.createElementNS(elSVG.namespaceURI, 'circle');
-      c.setAttribute('cx', pA[0]); c.setAttribute('cy', pA[1]); c.setAttribute('r', 2.5);
-      const t = document.createElementNS(elSVG.namespaceURI, 'text');
-      t.setAttribute('x', pA[0] + 6); t.setAttribute('y', pA[1] + 4);
-      t.textContent = `${Math.abs(lat)}°${lat>0?'N':'S'}`;
-      elGrid.appendChild(c); elGrid.appendChild(t);
-    }
   }
 
   function setBanner(tsISO) {
@@ -180,12 +183,32 @@ if (file_exists($template)) {
 
   async function setHemisphere(hemi) {
     ctx.hemi = hemi;
-    elBase.src = (hemi === 'north') ? ctx.baseMap.north : ctx.baseMap.south;
-    drawLatGrid(hemi);
+    updateBaseMap(hemi);
     try { await loadNowcast(hemi); } catch (e) { console.error(e); elBanner.classList.remove('is-hidden'); }
+  }
+
+  function updateBaseMap(hemi) {
+    if (!elBase) return;
+    elBase.src = (hemi === 'south') ? ctx.baseMap.south : ctx.baseMap.north;
   }
 
   // Initialize
   setHemisphere(ctx.hemi);
+
+  const kpToggle = document.querySelector('[data-tab="kplines"], [data-role="kp-lines-toggle"]');
+  if (kpToggle) {
+    kpToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      const cur = elPath.style.display;
+      elPath.style.display = (cur === 'none' ? 'inline' : 'none');
+      kpToggle.classList.toggle('is-active', elPath.style.display !== 'none');
+      kpToggle.setAttribute('aria-pressed', elPath.style.display !== 'none' ? 'true' : 'false');
+      kpToggle.setAttribute('aria-selected', elPath.style.display !== 'none' ? 'true' : 'false');
+    });
+    kpToggle.setAttribute('aria-pressed', elPath.style.display !== 'none' ? 'true' : 'false');
+    kpToggle.setAttribute('aria-selected', elPath.style.display !== 'none' ? 'true' : 'false');
+    kpToggle.classList.toggle('is-active', elPath.style.display !== 'none');
+  }
+  elPath.style.display = 'inline';
 })();
 </script>
