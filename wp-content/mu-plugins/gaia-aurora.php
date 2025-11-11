@@ -184,11 +184,13 @@ function gaia_aurora_supabase_post($path, $payload, $params = [])
     $resp = wp_remote_post($url, [
         'timeout' => 12,
         'headers' => [
-            'Content-Type' => 'application/json',
-            'Accept'       => 'application/json',
-            'apikey'       => $key,
-            'Authorization'=> 'Bearer ' . $key,
-            'Prefer'       => 'resolution=merge-duplicates',
+            'Content-Type'    => 'application/json',
+            'Accept'          => 'application/json',
+            'apikey'          => $key,
+            'Authorization'   => 'Bearer ' . $key,
+            'Prefer'          => 'resolution=merge-duplicates',
+            'Content-Profile' => 'marts',
+            'Accept-Profile'  => 'marts',
         ],
         'body'    => wp_json_encode($payload),
     ]);
@@ -880,7 +882,7 @@ function gaia_aurora_persist_supabase($payload, $grid_raw, $kp_raw)
         'fetch_ms'       => $payload['diagnostics']['duration_ms'] ?? null,
     ];
     // Store the compact grid only when small enough; skip to keep payload manageable.
-    $err = gaia_aurora_supabase_post('marts.aurora_nowcast_samples', $row, ['on_conflict' => 'ts,hemisphere']);
+    $err = gaia_aurora_supabase_post('aurora_nowcast_samples', $row, ['on_conflict' => 'ts,hemisphere']);
     if ($err) {
         error_log('[gaia_aurora] supabase nowcast error: ' . $err);
     }
@@ -891,7 +893,7 @@ function gaia_aurora_persist_supabase($payload, $grid_raw, $kp_raw)
             'kp'      => $payload['kp'],
             'raw'     => $kp_raw,
         ];
-        $err = gaia_aurora_supabase_post('marts.kp_obs', $kp_row, ['on_conflict' => 'kp_time']);
+        $err = gaia_aurora_supabase_post('kp_obs', $kp_row, ['on_conflict' => 'kp_time']);
         if ($err) {
             error_log('[gaia_aurora] supabase kp error: ' . $err);
         }
@@ -955,7 +957,7 @@ function gaia_aurora_refresh_viewline()
         'fetch_ms'       => max($tonight['duration_ms'] ?? 0, $tomorrow['duration_ms'] ?? 0),
         'updated_at'     => gmdate('c'),
     ];
-    $err = gaia_aurora_supabase_post('marts.aurora_viewline_forecast', $row, ['on_conflict' => 'ts']);
+    $err = gaia_aurora_supabase_post('aurora_viewline_forecast', $row, ['on_conflict' => 'ts']);
     if ($err) {
         error_log('[gaia_aurora] supabase viewline error: ' . $err);
     }

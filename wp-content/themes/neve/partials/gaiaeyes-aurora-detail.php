@@ -75,8 +75,8 @@ if (file_exists($template)) {
     restBase: '<?php echo esc_js( isset($template_args['rest_base']) ? $template_args['rest_base'] : '/wp-json/gaia/v1/aurora' ); ?>',
     hemi:     '<?php echo esc_js( isset($template_args['initial_hemisphere']) ? $template_args['initial_hemisphere'] : 'north' ); ?>',
     baseMap: {
-      north: '<?php echo esc_js( isset($template_args['base_map_url']['north']) ? $template_args['base_map_url']['north'] : content_url('mu-plugins/../../gaiaeyes-media/public/aurora/nowcast/northern-hemisphere.jpg') ); ?>',
-      south: '<?php echo esc_js( isset($template_args['base_map_url']['south']) ? $template_args['base_map_url']['south'] : content_url('mu-plugins/../../gaiaeyes-media/public/aurora/nowcast/southern-hemisphere.jpg') ); ?>',
+      north: '<?php echo esc_js( isset($template_args['base_map_url']['north']) ? $template_args['base_map_url']['north'] : home_url('/gaiaeyes-media/public/aurora/nowcast/northern-hemisphere.jpg') ); ?>',
+      south: '<?php echo esc_js( isset($template_args['base_map_url']['south']) ? $template_args['base_map_url']['south'] : home_url('/gaiaeyes-media/public/aurora/nowcast/southern-hemisphere.jpg') ); ?>',
     },
     // projection center longitude (tweak if landmasses don't align perfectly)
     lon0: 0,
