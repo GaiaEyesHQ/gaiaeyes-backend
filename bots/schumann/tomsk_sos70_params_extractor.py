@@ -171,6 +171,36 @@ def detect_tick_pph(img_bgr, roi, verbose=False):
     if verbose: print(f"[ticks] count={tick_count} pph_tick={pph_tick:.3f} quality={quality:.2f}")
     return pph_tick, tick_count, quality
 
+# Helper: find explicit tick columns (hour lines) in ROI
+def find_tick_columns(img_bgr, roi):
+    """
+    Return sorted pixel x-positions of hour tick lines within roi.
+    Uses the same strip/sobel logic as detect_tick_pph but retains peaks.
+    """
+    x0,y0,x1,y1 = roi
+    if x1 - x0 < 10:
+        return []
+    y_top = max(y0, y1 - (TICK_STRIP_H + 2))
+    strip = img_bgr[y_top:y1-2, x0:x1]
+    if strip.size == 0:
+        return []
+    gray = cv2.cvtColor(strip, cv2.COLOR_BGR2GRAY)
+    sob = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+    col_energy = np.abs(sob).mean(axis=0)
+    k = max(3, (x1-x0)//600)
+    col_energy = cv2.blur(col_energy.reshape(1,-1), (1, 2*k+1)).ravel()
+    col_energy = (col_energy - col_energy.min()) / (np.ptp(col_energy) + 1e-6)
+    thr = max(0.25, float(np.median(col_energy)) + 0.35*float(np.std(col_energy)))
+    peaks = []
+    for i in range(2, len(col_energy)-2):
+        if col_energy[i] > thr and col_energy[i] == max(col_energy[i-2:i+3]):
+            if peaks and (i - peaks[-1]) < TICK_MIN_SEP:
+                if col_energy[i] > col_energy[peaks[-1]]:
+                    peaks[-1] = i
+            else:
+                peaks.append(i)
+    return [x0 + int(p) for p in peaks]
+
 def estimate_day_boundaries(img_bgr, roi):
     x0,y0,x1,y1 = sanitize_roi(img_bgr, roi)
     gray = cv2.cvtColor(img_bgr[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
@@ -253,6 +283,32 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
     x_frontier = detect_frontier(img_bgr, roi_trim)
     guard_px = max(MIN_GUARD_PX, int(round(pph * (guard_minutes/60.0))))
 
+    # Phase-align using explicit tick columns near the frontier (refines @now)
+    x_now = None
+    tick_cols = find_tick_columns(img_bgr, roi_trim)
+    if tick_cols:
+        # Keep ticks inside day 3 and left of the frontier guard
+        left_day3 = x_day2 + 4
+        right_guard = min(x1f - 2, x_frontier - guard_px)
+        G = [x for x in tick_cols if left_day3 <= x <= right_guard]
+        if len(G) >= 6:
+            G = np.array(G, dtype=np.float32)
+            # Consecutive hour indices, last tick nearest the frontier is floor(current hour)
+            now_hour = hour_float(now_tsst)
+            # pick the tick closest to frontier as anchor
+            anchor_idx = int(np.argmax(G))  # rightmost in G
+            # Assign integer hours decreasing to the left
+            hours = np.arange(len(G), dtype=np.float32)
+            hours = (now_hour - (hours.max() - hours))[::-1]
+            # Fit hour = a*x + b (robust linear model via least squares)
+            A = np.vstack([G, np.ones_like(G)]).T
+            sol, _, _, _ = np.linalg.lstsq(A, hours, rcond=None)
+            a, b = float(sol[0]), float(sol[1])
+            # Invert to get x at current hour
+            x_now_lin = a and int(round((now_hour - b) / a)) or right_guard
+            # Clamp into guards
+            x_now = int(np.clip(x_now_lin, left_day3, right_guard))
+
     # Compute time in Tomsk local and map to x within day3 (full ROI geometry)
     now_tsst = tsst_now()
     hour_now = hour_float(now_tsst)
@@ -277,7 +333,9 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
             bias_minutes_applied = float(measured_bias_minutes)
 
     x_ideal = int(round(x_time + (bias_minutes_applied/60.0)*pph))
-    x_now = int(np.clip(x_ideal, left_guard, right_guard))
+    if x_now is None:
+        right_guard = min(x1f - 2, x_frontier - guard_px)
+        x_now = int(np.clip(x_ideal, left_guard, right_guard))
 
     age_hours = None
     if last_modified is not None:
@@ -294,7 +352,8 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
         "status": status,
         "rebuild_from_ticks": rebuild_from_ticks,
         "pph_tick": pph_tick,
-        "tick_pph": pph_tick, "tick_count": tick_count
+        "tick_pph": pph_tick, "tick_count": tick_count,
+        "x_now_method": ("ticks_phase" if tick_cols and x_now is not None else "pph_guard"),
     }
     return x_now, dbg
 
