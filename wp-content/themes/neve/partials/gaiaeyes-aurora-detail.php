@@ -275,20 +275,21 @@ $section_id = 'ga-aurora-' . wp_unique_id();
   // --- Projection constants (per hemisphere) ---
   const CX = 160, CY = 160;
   const R_SAFE = 129.5; // slightly smaller than the 130px rim to avoid stroke clipping
-  window.LON0_N = Number.isFinite(window.LON0_N) ? window.LON0_N : 0;
-  window.LON0_S = Number.isFinite(window.LON0_S) ? window.LON0_S : 0;
-  function centerLonFor(hemi) { return hemi === 'south' ? window.LON0_S : window.LON0_N; }
+  const serverLon0 = { north: 0, south: 0 };
+  const clientLonAdjust = {
+    north: Number.isFinite(window.LON0_N) ? window.LON0_N : 0,
+    south: Number.isFinite(window.LON0_S) ? window.LON0_S : 0,
+  };
+  window.LON0_N = clientLonAdjust.north;
+  window.LON0_S = clientLonAdjust.south;
+  const latestPayload = { north: null, south: null };
+  function currentLon0(hemi) {
+    return (hemi === 'south' ? serverLon0.south : serverLon0.north)
+         + (hemi === 'south' ? clientLonAdjust.south : clientLonAdjust.north);
+  }
+  function centerLonFor(hemi) { return currentLon0(hemi); }
 
-  // Kp > approximate southernmost visible latitude (geographic)
-  const KP_TABLE = [
-    { kp: 3,  lat: 58.5, color: '#76C84A' },  // green
-    { kp: 4,  lat: 55.5, color: '#C6DB46' },  // yellow-green
-    { kp: 5,  lat: 52.5, color: '#F3B33A' },  // yellow-orange
-    { kp: 6,  lat: 48.5, color: '#EF6A2E' },  // orange
-    { kp: 7,  lat: 45.0, color: '#D13B2C' },  // red
-    { kp: 8,  lat: 42.0, color: '#99241D' },  // dark red
-    { kp: 9,  lat: 39.0, color: '#6E1814' },  // maroon
-  ];
+  const KP_PALETTE = ['#76C84A','#C6DB46','#F3B33A','#EF6A2E','#D13B2C','#99241D','#6E1814'];
 
   function projOrthographic(lonDeg, latDeg, hemi) {
     const lon0 = centerLonFor(hemi);
@@ -312,52 +313,73 @@ $section_id = 'ga-aurora-' . wp_unique_id();
     return [X, Y];
   }
 
-  function latParallelToPath(latDeg, hemi) {
-    const parts = [];
-    for (let lon = -180; lon <= 180; lon += 1) {
-      const pt = projOrthographic(lon, (hemi === 'south' ? -Math.abs(latDeg) : Math.abs(latDeg)), hemi);
-      if (!pt) continue;
-      parts.push(parts.length ? `L${pt[0].toFixed(2)},${pt[1].toFixed(2)}` : `M${pt[0].toFixed(2)},${pt[1].toFixed(2)}`);
+  function coordsToMultiPath(coords, hemi) {
+    const segments = [];
+    let current = null;
+    for (const point of (coords || [])) {
+      const lon = Number(point.lon);
+      const lat = Number(point.lat);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+        if (current && current.length > 1) segments.push(current);
+        current = null;
+        continue;
+      }
+      const projected = projOrthographic(lon, lat, hemi);
+      if (!projected) {
+        if (current && current.length > 1) segments.push(current);
+        current = null;
+        continue;
+      }
+      const cmd = `L${projected[0].toFixed(2)},${projected[1].toFixed(2)}`;
+      if (!current) {
+        current = [cmd];
+      } else {
+        current.push(cmd);
+      }
     }
-    return parts.join(' ');
+    if (current && current.length > 1) {
+      segments.push(current);
+    }
+    if (!segments.length) {
+      return '';
+    }
+    return segments.map((seg) => `M${seg[0].slice(1)} ${seg.slice(1).join(' ')}`).join(' ');
   }
 
-  function drawKpLines(hemi) {
-    const g = kpGroup;
-    if (!g) return;
-    g.innerHTML = '';
-    for (const row of KP_TABLE) {
-      const d = latParallelToPath(row.lat, hemi);
-      if (!d) continue;
-      const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      p.setAttribute('d', d);
-      p.setAttribute('stroke', row.color);
-      p.setAttribute('data-kp', String(row.kp));
-      g.appendChild(p);
+  function renderKpLines(payload) {
+    if (!kpGroup) return;
+    kpGroup.innerHTML = '';
+    if (!payload || !Array.isArray(payload.kp_lines)) {
+      return;
     }
+    const hemi = payload.hemisphere === 'south' ? 'south' : 'north';
+    payload.kp_lines.forEach((band, idx) => {
+      if (!band || !Array.isArray(band.coords)) return;
+      const d = coordsToMultiPath(band.coords, hemi);
+      if (!d) return;
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('stroke', KP_PALETTE[idx % KP_PALETTE.length]);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke-width', '2.5');
+      if (typeof band.p === 'number') {
+        path.setAttribute('data-prob', `${band.p}`);
+      }
+      kpGroup.appendChild(path);
+    });
   }
 
   function syncAlignmentLabels() {
     if (lonLabel) {
-      const lon0 = activeHemisphere === 'south' ? window.LON0_S : window.LON0_N;
-      lonLabel.textContent = `lon0=${lon0}`;
+      const lon0 = activeHemisphere === 'south' ? currentLon0('south') : currentLon0('north');
+      lonLabel.textContent = `lon0=${lon0.toFixed(1)}`;
     }
     if (threshLabel) {
       const pct = window.GA_PROB_THRESHOLD <= 1 ? window.GA_PROB_THRESHOLD * 100 : window.GA_PROB_THRESHOLD;
       threshLabel.textContent = `p=${pct.toFixed(0)}%`;
     }
-  }
-
-  function coordsToPath(coords, hemi) {
-    const parts = [];
-    for (const p of (coords || [])) {
-      const lon = Number(p.lon), lat = Number(p.lat);
-      const pt = projOrthographic(lon, lat, hemi);
-      if (!pt) continue;
-      parts.push(parts.length ? `L${pt[0].toFixed(2)},${pt[1].toFixed(2)}`
-                              : `M${pt[0].toFixed(2)},${pt[1].toFixed(2)}`);
-    }
-    return parts.join(' ');
+    window.LON0_N = currentLon0('north');
+    window.LON0_S = currentLon0('south');
   }
 
   function setActiveTab(target) {
@@ -386,7 +408,16 @@ $section_id = 'ga-aurora-' . wp_unique_id();
       hemi.setAttribute('aria-checked', match ? 'true' : 'false');
     });
     updateBaseMap(activeHemisphere);
-    drawKpLines(activeHemisphere);
+    const stored = latestPayload[target];
+    const displayPayload = stored || { hemisphere: target, viewline_coords: [], kp_lines: [] };
+    renderViewline(displayPayload);
+    if (stored) {
+      renderDiagnostics(stored);
+      updateImage(stored);
+    } else {
+      renderDiagnostics(null);
+      updateImage(null);
+    }
     syncAlignmentLabels();
     fetchNowcast();
   }
@@ -445,8 +476,12 @@ $section_id = 'ga-aurora-' . wp_unique_id();
   function renderViewline(payload) {
     const hemi = (payload && payload.hemisphere === 'south') ? 'south' : 'north';
     const coords = (payload && Array.isArray(payload.viewline_coords)) ? payload.viewline_coords : [];
-    viewlinePath.setAttribute('d', coordsToPath(coords, hemi));
-    if (payload && payload.kp !== undefined) {
+    const pathData = coordsToMultiPath(coords, hemi);
+    if (viewlinePath) {
+      viewlinePath.setAttribute('d', pathData);
+    }
+    renderKpLines(payload);
+    if (payload && payload.kp !== undefined && Number.isFinite(Number(payload.kp))) {
       const kpVal = Number(payload.kp);
       const className = kpClass(kpVal);
       kpBadge.className = `ga-aurora__badge ${className}`;
@@ -463,7 +498,7 @@ $section_id = 'ga-aurora-' . wp_unique_id();
       timestamp.textContent = 'Updated —';
     }
     renderMetrics(payload);
-    hemiLabel.textContent = (payload && payload.hemisphere === 'south') ? 'Southern hemisphere' : 'Northern hemisphere';
+    hemiLabel.textContent = hemi === 'south' ? 'Southern hemisphere' : 'Northern hemisphere';
   }
 
   function updateBaseMap(hemi) {
@@ -514,9 +549,20 @@ $section_id = 'ga-aurora-' . wp_unique_id();
     fetch(`${restBase}nowcast?${params.toString()}`)
       .then((res) => res.json())
       .then((payload) => {
-        renderDiagnostics(payload);
-        renderViewline(payload);
-        updateImage(payload);
+        const hemi = (payload && payload.hemisphere === 'south') ? 'south' : 'north';
+        if (payload && typeof payload.lon0 !== 'undefined') {
+          const lonVal = Number(payload.lon0);
+          serverLon0[hemi] = Number.isFinite(lonVal) ? lonVal : 0;
+        } else {
+          serverLon0[hemi] = 0;
+        }
+        latestPayload[hemi] = payload || null;
+        if (hemi === activeHemisphere) {
+          renderDiagnostics(payload);
+          renderViewline(payload);
+          updateImage(payload);
+        }
+        syncAlignmentLabels();
       })
       .catch(() => {
         diagnostics.textContent = 'Failed to load nowcast data.';
@@ -539,8 +585,6 @@ $section_id = 'ga-aurora-' . wp_unique_id();
 
   setActiveTab(activeTab);
   setActiveHemisphere(activeHemisphere);
-  updateBaseMap(activeHemisphere);
-  drawKpLines(activeHemisphere);
   syncAlignmentLabels();
   fetchForecast('tonight');
   fetchForecast('tomorrow');
@@ -581,17 +625,11 @@ $section_id = 'ga-aurora-' . wp_unique_id();
 
   function setLon0(delta) {
     if (!Number.isFinite(delta)) return;
-    if (activeHemisphere === 'north') {
-      window.LON0_N += delta;
-    } else {
-      window.LON0_S += delta;
-    }
-    drawKpLines(activeHemisphere);
+    const key = activeHemisphere === 'south' ? 'south' : 'north';
+    clientLonAdjust[key] += delta;
     syncAlignmentLabels();
-    const path = document.getElementById('ga-viewline');
-    if (path) {
-      fetchNowcast();
-    }
+    const payload = latestPayload[key];
+    renderViewline(payload || { hemisphere: key, viewline_coords: [], kp_lines: [] });
   }
 
   function setThreshold(deltaPct) {
