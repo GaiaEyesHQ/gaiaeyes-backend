@@ -74,14 +74,23 @@ $section_id = 'ga-aurora-' . wp_unique_id();
                 <stop offset="0%" stop-color="rgba(41,64,90,0.9)" />
                 <stop offset="100%" stop-color="rgba(16,22,32,0.95)" />
               </radialGradient>
+              <clipPath id="gaAuroraMapClip">
+                <circle cx="160" cy="160" r="130"></circle>
+              </clipPath>
+              <filter id="gaAuroraGlowFx"><feDropShadow dx="0" dy="0" stdDeviation="2" flood-opacity="0.45"/></filter>
             </defs>
             <rect x="0" y="0" width="320" height="320" fill="url(#gaAuroraGlow)" rx="18" />
-            <circle cx="160" cy="160" r="130" fill="rgba(0,0,0,0.35)" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
-            <path data-role="viewline" d="" fill="none" stroke="rgba(92,220,160,0.9)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
+            <!-- Base map image (hemisphere-specific), constrained to the circular globe -->
+            <image id="ga-base-map" href="" x="30" y="30" width="260" height="260" preserveAspectRatio="xMidYMid meet" clip-path="url(#gaAuroraMapClip)"></image>
+            <!-- Globe rim -->
+            <circle cx="160" cy="160" r="130" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.25" />
+            <!-- Live viewline path -->
+            <path data-role="viewline" d="" fill="none" stroke="rgba(92,220,160,0.9)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" filter="url(#gaAuroraGlowFx)" />
+            <!-- Simple latitude guides -->
             <g class="ga-aurora__latlines">
-              <path d="M20 160 H300" stroke="rgba(255,255,255,0.08)" stroke-dasharray="4 6" />
-              <path d="M20 100 H300" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 7" />
-              <path d="M20 220 H300" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 7" />
+              <path d="M30 160 H290" stroke="rgba(255,255,255,0.08)" stroke-dasharray="4 6" />
+              <path d="M30 100 H290" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 7" />
+              <path d="M30 220 H290" stroke="rgba(255,255,255,0.05)" stroke-dasharray="3 7" />
             </g>
           </svg>
           <div class="ga-aurora__metrics">
@@ -234,6 +243,16 @@ $section_id = 'ga-aurora-' . wp_unique_id();
   let activeHemisphere = initialHemisphere || 'north';
   let timer = null;
 
+  // Base map images hosted on your site (fallbacks)
+  const baseMap = {
+    north: '<?php echo esc_js( home_url('/gaiaeyes-media/public/aurora/nowcast/northern-hemisphere.jpg') ); ?>',
+    south: '<?php echo esc_js( home_url('/gaiaeyes-media/public/aurora/nowcast/southern-hemisphere.jpg') ); ?>'
+  };
+  // Projection parameters (orthographic pole view)
+  const CX = 160, CY = 160, R = 130;
+  // Center longitude tweak for coastline alignment (adjust if needed)
+  let LON0 = 0; // degrees
+
   function setActiveTab(target) {
     activeTab = target;
     tabs.forEach((tab) => {
@@ -255,6 +274,7 @@ $section_id = 'ga-aurora-' . wp_unique_id();
       hemi.classList.toggle('is-active', match);
       hemi.setAttribute('aria-checked', match ? 'true' : 'false');
     });
+    updateBaseMap(activeHemisphere);
     fetchNowcast();
   }
 
@@ -302,7 +322,8 @@ $section_id = 'ga-aurora-' . wp_unique_id();
     const metrics = payload && payload.metrics ? payload.metrics : null;
     metricMin.textContent = metrics && metrics.min_lat !== undefined ? `${metrics.min_lat.toFixed(1)}°` : '—';
     metricMedian.textContent = metrics && metrics.median_lat !== undefined ? `${metrics.median_lat.toFixed(1)}°` : '—';
-    metricProb.textContent = metrics && metrics.mean_prob !== undefined ? `${(metrics.mean_prob * 100).toFixed(0)}%` : '—';
+    const meanProb = (metrics && (metrics.mean_prob !== undefined ? metrics.mean_prob : metrics.mean_prob_line));
+    metricProb.textContent = (typeof meanProb === 'number') ? `${(meanProb * 100).toFixed(0)}%` : '—';
   }
 
   function renderViewline(payload) {
@@ -311,17 +332,31 @@ $section_id = 'ga-aurora-' . wp_unique_id();
       return;
     }
     const coords = payload.viewline_coords;
-    const radius = 130;
-    const centerX = 160;
-    const centerY = 160;
-    const points = coords.map(({ lon, lat }) => {
-      const theta = (lon * Math.PI) / 180;
-      const phi = (lat * Math.PI) / 180;
-      const x = centerX + radius * Math.sin(theta) * Math.cos(phi);
-      const y = centerY - radius * Math.sin(phi);
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    });
-    viewlinePath.setAttribute('d', points.length ? `M${points.join(' L')}` : '');
+    // Orthographic projection from pole; cull far-side points
+    function proj(lonDeg, latDeg, hemi) {
+      const λ = (lonDeg - LON0) * Math.PI/180;
+      const φ = latDeg * Math.PI/180;
+      const cosφ = Math.cos(φ), sinφ = Math.sin(φ);
+      if (hemi === 'south') {
+        if (latDeg > 0) return null; // far side
+        const x = R * cosφ * Math.sin(λ);
+        const y = R * cosφ * Math.cos(λ);
+        return [CX + x, CY + y];
+      } else {
+        if (latDeg < 0) return null; // far side
+        const x = R * cosφ * Math.sin(λ);
+        const y = -R * cosφ * Math.cos(λ);
+        return [CX + x, CY + y];
+      }
+    }
+    const hemi = payload.hemisphere === 'south' ? 'south' : 'north';
+    const parts = [];
+    for (const {lon, lat} of coords) {
+      const p = proj(lon, lat, hemi);
+      if (!p) continue;
+      parts.push(parts.length ? `L${p[0].toFixed(2)},${p[1].toFixed(2)}` : `M${p[0].toFixed(2)},${p[1].toFixed(2)}`);
+    }
+    viewlinePath.setAttribute('d', parts.length ? parts.join(' ') : '');
     if (payload.kp !== undefined) {
       const kpVal = Number(payload.kp);
       const className = kpClass(kpVal);
@@ -340,6 +375,11 @@ $section_id = 'ga-aurora-' . wp_unique_id();
     }
     renderMetrics(payload);
     hemiLabel.textContent = payload.hemisphere === 'south' ? 'Southern hemisphere' : 'Northern hemisphere';
+  }
+
+  function updateBaseMap(hemi) {
+    const img = document.getElementById('ga-base-map');
+    img && (img.setAttribute('href', hemi === 'south' ? baseMap.south : baseMap.north));
   }
 
   function updateImage(payload) {
@@ -399,6 +439,7 @@ $section_id = 'ga-aurora-' . wp_unique_id();
 
   setActiveTab(activeTab);
   setActiveHemisphere(activeHemisphere);
+  updateBaseMap(activeHemisphere);
   fetchForecast('tonight');
   fetchForecast('tomorrow');
 
