@@ -2,6 +2,13 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-20 — Step 1 predictive datasets & outlook API
+
+- Delivered the Step 1 ingestion orchestrator (`ingest_space_forecasts_step1.py`) covering Enlil CME runs, SEP/radiation belts, aurora power, coronal holes, D-RAP, solar-cycle forecasts, and magnetometer indices with Supabase upserts.
+- Added Supabase schema migrations for the new `ext.*` landing tables and `marts.*` rollups (CME arrivals, radiation belts, aurora outlook, D-RAP, solar cycle, regional magnetometers).
+- Exposed `/v1/space/forecast/outlook` so clients can query consolidated predictive datasets alongside the existing forecast summary card.
+- Documented cron guidance and dataset details inside `docs/SCRIPTS_GUIDE.md`.
+
 ## 2025-11-17 — iOS/Backend Operational Stabilization and Sync Fixes
 
 - Restored full functionality of the iOS dashboard and backend data pipeline after repeated DB timeout and user scoping issues.
