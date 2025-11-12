@@ -1,0 +1,159 @@
+name: codex-review
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  pull-requests: write
+
+concurrency:
+  group: codex-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        if: ${{ hashFiles('**/*.py') != '' || hashFiles('**/requirements*.txt') != '' || hashFiles('pyproject.toml') != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node
+        if: ${{ hashFiles('**/package.json') != '' || hashFiles('**/pnpm-lock.yaml') != '' || hashFiles('**/yarn.lock') != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: ${{ hashFiles('**/package-lock.json') != '' && 'npm' || '' }}
+
+      - name: Install JS deps
+        if: ${{ hashFiles('**/package.json') != '' && hashFiles('**/package-lock.json') != '' }}
+        run: npm ci --ignore-scripts
+
+      - name: Install Python deps (requirements)
+        if: ${{ hashFiles('**/requirements*.txt') != '' }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r $(git ls-files 'requirements*.txt' | head -n1)
+
+      - name: Install Python deps (pyproject)
+        if: ${{ hashFiles('pyproject.toml') != '' && !hashFiles('poetry.lock') }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+
+      - name: Install Poetry project
+        if: ${{ hashFiles('pyproject.toml') != '' && hashFiles('poetry.lock') != '' }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          poetry install --no-interaction --no-ansi
+
+      - name: Gitleaks (secrets)
+        uses: zricethezav/gitleaks-action@v2
+        with:
+          args: detect --report-format sarif --report-path gitleaks.sarif
+
+      - name: OSV-Scanner
+        uses: google/osv-scanner-action@v1
+        with:
+          scan-args: >
+            --recursive --lockfile --format sarif --output osv-results.sarif .
+
+      - name: pip-audit
+        if: ${{ hashFiles('**/*.py') != '' || hashFiles('**/requirements*.txt') != '' || hashFiles('pyproject.toml') != '' }}
+        run: |
+          python -m pip install pip-audit
+          pip-audit -r $(git ls-files 'requirements*.txt' | head -n1 2>/dev/null || echo '') -f sarif -o pip-audit.sarif || true
+
+      - name: Bandit
+        if: ${{ hashFiles('**/*.py') != '' }}
+        run: |
+          python -m pip install bandit
+          bandit -r . -f sarif -o bandit.sarif || true
+
+      - name: Semgrep SAST
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: p/ci
+          generateSarif: true
+          sarifFile: semgrep.sarif
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN || '' }}
+
+      - name: Trivy FS
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs.sarif
+          ignore-unfixed: true
+        env:
+          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db
+
+      - name: actionlint
+        uses: reviewdog/action-actionlint@v1
+        with:
+          actionlint_flags: "-color"
+          reporter: github-pr-review
+
+      - name: Dependency Review
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+      - name: Upload SARIF - OSV
+        if: ${{ always() && hashFiles('osv-results.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: osv-results.sarif
+
+      - name: Upload SARIF - Gitleaks
+        if: ${{ always() && hashFiles('gitleaks.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gitleaks.sarif
+
+      - name: Upload SARIF - Bandit
+        if: ${{ always() && hashFiles('bandit.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit.sarif
+
+      - name: Upload SARIF - pip-audit
+        if: ${{ always() && hashFiles('pip-audit.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: pip-audit.sarif
+
+      - name: Upload SARIF - Trivy
+        if: ${{ always() && hashFiles('trivy-fs.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+
+      - name: Upload SARIF - Semgrep
+        if: ${{ always() && hashFiles('semgrep.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+
+      - name: Summarize Findings
+        if: always()
+        run: |
+          echo "## Codex Review Summary" >> $GITHUB_STEP_SUMMARY
+          for f in *.sarif; do
+            [ -f "$f" ] && echo "- Uploaded report: $f" >> $GITHUB_STEP_SUMMARY
+          done
