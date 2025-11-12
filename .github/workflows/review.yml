@@ -59,16 +59,26 @@ jobs:
           pip install poetry
           poetry install --no-interaction --no-ansi
 
+      # ---- Security & Hygiene ----
       - name: Gitleaks (secrets)
         uses: zricethezav/gitleaks-action@v2
         with:
           args: detect --report-format sarif --report-path gitleaks.sarif
 
+      # ✅ OSV Scanner via reusable workflow (correct tag)
       - name: OSV-Scanner
-        uses: google/osv-scanner-action@v1
+        uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.2.4
         with:
-          scan-args: >
-            --recursive --lockfile --format sarif --output osv-results.sarif .
+          # default args are:
+          #   --recursive
+          #   ./
+          # override here only if you want to narrow/expand scan scope
+          # scan-args: |-
+          #   --recursive
+          #   ./
+          upload-sarif: true
+          fail-on-vuln: true
+          results-file-name: results.sarif
 
       - name: pip-audit
         if: ${{ hashFiles('**/*.py') != '' || hashFiles('**/requirements*.txt') != '' || hashFiles('pyproject.toml') != '' }}
@@ -102,24 +112,19 @@ jobs:
         env:
           TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db
 
-      - name: actionlint
+      - name: actionlint (workflow hygiene)
         uses: reviewdog/action-actionlint@v1
         with:
           actionlint_flags: "-color"
           reporter: github-pr-review
 
-      - name: Dependency Review
+      - name: Dependency Review (PRs only)
         if: ${{ github.event_name == 'pull_request' }}
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
 
-      - name: Upload SARIF - OSV
-        if: ${{ always() && hashFiles('osv-results.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: osv-results.sarif
-
+      # ---- Upload SARIF to Code Scanning (others; OSV already uploads) ----
       - name: Upload SARIF - Gitleaks
         if: ${{ always() && hashFiles('gitleaks.sarif') != '' }}
         uses: github/codeql-action/upload-sarif@v3
@@ -150,10 +155,20 @@ jobs:
         with:
           sarif_file: semgrep.sarif
 
+      # ---- Human-friendly Summary ----
       - name: Summarize Findings
         if: always()
         run: |
           echo "## Codex Review Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Repo: $GITHUB_REPOSITORY" >> $GITHUB_STEP_SUMMARY
+          echo "- Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          shopt -s nullglob
+          count=0
           for f in *.sarif; do
-            [ -f "$f" ] && echo "- Uploaded report: $f" >> $GITHUB_STEP_SUMMARY
+            echo "- Uploaded report: $f" >> $GITHUB_STEP_SUMMARY
+            count=$((count+1))
           done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total SARIF reports:** $count" >> $GITHUB_STEP_SUMMARY
