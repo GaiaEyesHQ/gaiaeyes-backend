@@ -43,6 +43,21 @@ if (!defined('GAIA_AURORA_VIEWLINE_P')) {
     }
     define('GAIA_AURORA_VIEWLINE_P', $p_val);
 }
+if (!defined('GAIA_AURORA_VIEWLINE_P_NORTH')) {
+    $p_env_north = getenv('GAIA_AURORA_VIEWLINE_P_NORTH');
+    if ($p_env_north !== false && $p_env_north !== '') {
+        $p_val_north = (float) $p_env_north;
+        if ($p_val_north > 1) {
+            $p_val_north /= 100;
+        }
+        if ($p_val_north <= 0) {
+            $p_val_north = GAIA_AURORA_VIEWLINE_P;
+        }
+        define('GAIA_AURORA_VIEWLINE_P_NORTH', $p_val_north);
+    } else {
+        define('GAIA_AURORA_VIEWLINE_P_NORTH', null);
+    }
+}
 if (!defined('GAIA_AURORA_SMOOTH_WINDOW')) {
     $w_env = getenv('GAIA_AURORA_SMOOTH_WINDOW');
     $w_val = ($w_env !== false) ? (int) $w_env : 5;
@@ -58,6 +73,31 @@ if (!defined('GAIA_AURORA_ENABLE_JSON_EXPORT')) {
     $flag = getenv('GAIA_AURORA_ENABLE_JSON_EXPORT');
     define('GAIA_AURORA_ENABLE_JSON_EXPORT', $flag === false || $flag === '' || $flag === '1' || strtolower((string) $flag) === 'true');
 }
+if (!defined('GAIA_AURORA_LON0_N')) {
+    define('GAIA_AURORA_LON0_N', (float) gaia_aurora_env('LON0_N', 0));
+}
+if (!defined('GAIA_AURORA_LON0_S')) {
+    define('GAIA_AURORA_LON0_S', (float) gaia_aurora_env('LON0_S', 0));
+}
+if (!defined('GAIA_AURORA_KP_LEVELS')) {
+    $levels_raw = gaia_aurora_env('GAIA_AURORA_KP_LEVELS', '0.01,0.03,0.05,0.10,0.20,0.30,0.50');
+    $levels_list = [];
+    foreach (array_filter(array_map('trim', explode(',', (string) $levels_raw)), 'strlen') as $level_str) {
+        $value = (float) $level_str;
+        if ($value > 1) {
+            $value /= 100;
+        }
+        if ($value <= 0) {
+            continue;
+        }
+        if ($value > 1) {
+            $value = 1;
+        }
+        $levels_list[] = $value;
+    }
+    sort($levels_list);
+    define('GAIA_AURORA_KP_LEVELS', $levels_list);
+}
 
 /**
  * Resolve an environment variable with sensible fallbacks.
@@ -67,6 +107,27 @@ function gaia_aurora_env($key, $default = null)
     $val = getenv($key);
     if ($val === false || $val === '') {
         return $default;
+    }
+    return $val;
+}
+
+function gaia_aurora_normalize_probability($value, $fallback = null)
+{
+    if ($value === null) {
+        return $fallback;
+    }
+    if (!is_numeric($value)) {
+        return $fallback;
+    }
+    $val = (float) $value;
+    if ($val > 1) {
+        $val /= 100;
+    }
+    if ($val <= 0) {
+        return $fallback;
+    }
+    if ($val > 1) {
+        $val = 1;
     }
     return $val;
 }
@@ -367,10 +428,17 @@ function gaia_aurora_refresh_nowcast()
     }
 
     $ts = $grid_data['timestamp'] ?: gmdate('c');
-    $viewline_p = GAIA_AURORA_VIEWLINE_P;
+    $base_threshold = gaia_aurora_normalize_probability(GAIA_AURORA_VIEWLINE_P, 0.10);
+    $north_threshold = GAIA_AURORA_VIEWLINE_P_NORTH !== null
+        ? gaia_aurora_normalize_probability(GAIA_AURORA_VIEWLINE_P_NORTH, $base_threshold)
+        : $base_threshold;
+    $south_threshold = $base_threshold;
+    $lon0_north = GAIA_AURORA_LON0_N;
+    $lon0_south = GAIA_AURORA_LON0_S;
+    $kp_levels = is_array(GAIA_AURORA_KP_LEVELS) ? GAIA_AURORA_KP_LEVELS : [];
 
-    $north_bundle = gaia_aurora_build_payload('north', $ts, $grid_data['north'], $viewline_p, $kp_info, $grid_resp, $grid_data['meta']);
-    $south_bundle = gaia_aurora_build_payload('south', $ts, $grid_data['south'], $viewline_p, $kp_info, $grid_resp, $grid_data['meta']);
+    $north_bundle = gaia_aurora_build_payload('north', $ts, $grid_data['north'], $north_threshold, $kp_info, $grid_resp, $grid_data['meta'], $lon0_north, $kp_levels);
+    $south_bundle = gaia_aurora_build_payload('south', $ts, $grid_data['south'], $south_threshold, $kp_info, $grid_resp, $grid_data['meta'], $lon0_south, $kp_levels);
 
     $north_payload = $north_bundle['payload'];
     $south_payload = $south_bundle['payload'];
@@ -637,15 +705,29 @@ function gaia_aurora_parse_kp($body)
 /**
  * Build the REST payload for a hemisphere.
  */
-function gaia_aurora_build_payload($hemisphere, $ts, $grid, $viewline_p, $kp_info, $grid_resp, $meta)
+function gaia_aurora_build_payload($hemisphere, $ts, $grid, $viewline_p, $kp_info, $grid_resp, $meta, $lon0, $kp_levels)
 {
     $grid = gaia_aurora_normalize_grid($grid);
     $width = $grid['width'];
     $height = $grid['height'];
     $prob_grid = $grid['data'];
 
-    $coords = gaia_aurora_derive_viewline($prob_grid, $hemisphere, $viewline_p);
-    $metrics = gaia_aurora_compute_metrics($coords, $prob_grid, $hemisphere);
+    $coords_raw = gaia_isoline_southmost($prob_grid, $viewline_p, $hemisphere);
+    $coords_smoothed = gaia_line_smooth($coords_raw, GAIA_AURORA_SMOOTH_WINDOW);
+    $coords = gaia_aurora_round_coords($coords_smoothed);
+    $metrics = gaia_aurora_compute_metrics($coords, $hemisphere, $prob_grid);
+
+    $effective_p = $viewline_p;
+    if ($hemisphere === 'north' && ((int) ($metrics['count'] ?? 0) === 0) && $viewline_p > 0.03) {
+        $salvage = max(0.03, $viewline_p - 0.02);
+        $coords_raw = gaia_isoline_southmost($prob_grid, $salvage, $hemisphere);
+        $coords_smoothed = gaia_line_smooth($coords_raw, GAIA_AURORA_SMOOTH_WINDOW);
+        $coords = gaia_aurora_round_coords($coords_smoothed);
+        $metrics = gaia_aurora_compute_metrics($coords, $hemisphere, $prob_grid);
+        $effective_p = $salvage;
+    }
+
+    $kp_lines_payload = gaia_aurora_build_kp_lines($prob_grid, $hemisphere, $kp_levels);
 
     $kp = $kp_info['kp'] ?? ($meta['kp_hint'] ?? null);
     $kp_time = $kp_info['kp_time'] ?? null;
@@ -665,22 +747,25 @@ function gaia_aurora_build_payload($hemisphere, $ts, $grid, $viewline_p, $kp_inf
     ];
 
     $payload = [
-        'ts'             => $ts,
-        'hemisphere'     => $hemisphere,
-        'kp'             => $kp,
-        'kp_obs_time'    => $kp_time,
-        'kp_bucket'      => gaia_aurora_kp_bucket($kp),
-        'grid'           => [
-            'w'       => $width,
-            'h'       => $height,
-            'src'     => 'swpc_ovation',
-            'sample'  => 'omitted',
+        'ts'                  => $ts,
+        'hemisphere'          => $hemisphere,
+        'kp'                  => $kp,
+        'kp_obs_time'         => $kp_time,
+        'kp_bucket'           => gaia_aurora_kp_bucket($kp),
+        'grid'                => [
+            'w'      => $width,
+            'h'      => $height,
+            'src'    => 'swpc_ovation',
+            'sample' => 'omitted',
         ],
-        'viewline_p'     => $viewline_p,
-        'viewline_coords'=> $coords,
-        'metrics'        => $metrics,
-        'images'         => $images,
-        'diagnostics'    => $diagnostics,
+        'viewline_p'          => $effective_p,
+        'viewline_requested_p'=> $viewline_p,
+        'viewline_coords'     => $coords,
+        'metrics'             => $metrics,
+        'images'              => $images,
+        'diagnostics'         => $diagnostics,
+        'lon0'                => (float) $lon0,
+        'kp_lines'            => $kp_lines_payload,
     ];
 
     return [
@@ -732,116 +817,218 @@ function gaia_aurora_normalize_grid($grid)
     ];
 }
 
-function gaia_aurora_derive_viewline($grid, $hemisphere, $p_threshold)
+function gaia_isoline_southmost($grid, $pstar, $hemi)
 {
     $coords = [];
-    $height = count($grid);
-    if ($height === 0) {
+    $rows = count($grid);
+    if ($rows === 0) {
         return $coords;
     }
-    $width = count($grid[0]);
-    if ($width === 0) {
+    $cols = count($grid[0]);
+    if ($cols === 0) {
         return $coords;
     }
-    $equator_index = (int) floor(($height - 1) / 2);
-    $lon_step = 360 / max(1, $width);
+    $threshold = ($pstar <= 1) ? $pstar * 100 : $pstar;
+    $row_start = min(90, $rows - 1);
+    if ($row_start < 0) {
+        return $coords;
+    }
 
-    for ($col = 0; $col < $width; $col++) {
-        $lon = -180 + $col * $lon_step;
-        $prob_column = [];
-        for ($row = 0; $row < $height; $row++) {
-            $prob_column[$row] = $grid[$row][$col] ?? 0;
+    if ($hemi === 'south') {
+        $row_start = 90;
+        if ($row_start >= $rows) {
+            $row_start = $rows - 1;
         }
-        if ($hemisphere === 'north') {
-            $lat = gaia_aurora_scan_latitude($prob_column, $equator_index, 0, -1, $p_threshold, $height);
-        } else {
-            $lat = gaia_aurora_scan_latitude($prob_column, $equator_index, $height - 1, 1, $p_threshold, $height);
+        $row_end = min($rows - 1, 180);
+        if ($row_start > $row_end) {
+            $row_start = $row_end;
         }
-        if ($lat !== null) {
-            $coords[] = ['lon' => round($lon, 2), 'lat' => round($lat, 2)];
+        $step = 1;
+    } else {
+        $row_end = 0;
+        if ($row_start < $row_end) {
+            $row_start = $row_end;
+        }
+        $step = -1;
+    }
+
+    for ($lon = 0; $lon < $cols; $lon++) {
+        $hit = null;
+        $prev_prob = null;
+        $prev_lat = null;
+        for ($r = $row_start; ($step < 0 ? $r >= $row_end : $r <= $row_end); $r += $step) {
+            if (!isset($grid[$r][$lon])) {
+                $prob = 0;
+            } else {
+                $prob = (float) $grid[$r][$lon];
+            }
+            $lat = 90 - $r;
+            if ($prob >= $threshold) {
+                if ($prev_prob !== null && $prob !== $prev_prob) {
+                    $ratio = ($threshold - $prev_prob) / max(0.0001, $prob - $prev_prob);
+                    $ratio = max(0, min(1, $ratio));
+                    $lat = $prev_lat + ($lat - $prev_lat) * $ratio;
+                }
+                $hit = [
+                    'lon' => $lon - 180,
+                    'lat' => $lat,
+                ];
+                break;
+            }
+            $prev_prob = $prob;
+            $prev_lat = $lat;
+        }
+        if ($hit !== null) {
+            $coords[] = $hit;
         }
     }
 
-    return gaia_aurora_smooth_coords($coords, GAIA_AURORA_SMOOTH_WINDOW);
+    return $coords;
 }
 
-function gaia_aurora_scan_latitude($prob_column, $start, $end, $step, $threshold, $height)
-{
-    $prev_prob = null;
-    $prev_lat = null;
-    for ($row = $start; ($step < 0 ? $row >= $end : $row <= $end); $row += $step) {
-        $prob = $prob_column[$row] ?? 0;
-        $lat = 90 - $row;
-        if ($prev_prob !== null && $prob >= $threshold && $prev_prob < $threshold) {
-            $ratio = ($threshold - $prev_prob) / max(0.0001, $prob - $prev_prob);
-            $lat = $prev_lat + ($lat - $prev_lat) * (1 - $ratio);
-            return $lat;
-        }
-        if ($prob >= $threshold) {
-            return $lat;
-        }
-        $prev_prob = $prob;
-        $prev_lat = $lat;
-    }
-    return null;
-}
-
-function gaia_aurora_smooth_coords($coords, $window)
+function gaia_line_smooth($coords, $window = 5)
 {
     $count = count($coords);
     if ($count === 0 || $window <= 1) {
         return $coords;
     }
-    $half = (int) floor($window / 2);
-    $smoothed = [];
+    $half = max(1, (int) floor($window / 2));
+    $out = [];
     for ($i = 0; $i < $count; $i++) {
+        if (!isset($coords[$i]['lon'], $coords[$i]['lat'])) {
+            continue;
+        }
         $sum = 0;
-        $weight = 0;
+        $samples = 0;
         for ($j = max(0, $i - $half); $j <= min($count - 1, $i + $half); $j++) {
-            $sum += $coords[$j]['lat'];
-            $weight++;
-        }
-        if ($weight > 0) {
-            $lat = round($sum / $weight, 2);
-        } else {
-            $lat = $coords[$i]['lat'];
-        }
-        $smoothed[] = ['lon' => $coords[$i]['lon'], 'lat' => $lat];
-    }
-    return $smoothed;
-}
-
-function gaia_aurora_compute_metrics($coords, $grid, $hemisphere)
-{
-    if (!$coords) {
-        return [];
-    }
-    $lats = array_column($coords, 'lat');
-    sort($lats);
-    $min = $lats[0];
-    $mid_index = (int) floor(count($lats) / 2);
-    $median = $lats[$mid_index];
-
-    $mean_prob = null;
-    $sum = 0;
-    $samples = 0;
-    foreach ($coords as $coord) {
-        $row = (int) round(90 - $coord['lat']);
-        $col = (int) round(($coord['lon'] + 180));
-        if (isset($grid[$row][$col])) {
-            $sum += (float) $grid[$row][$col];
+            if (!isset($coords[$j]['lat'])) {
+                continue;
+            }
+            $sum += (float) $coords[$j]['lat'];
             $samples++;
         }
+        $lat = $samples > 0 ? $sum / $samples : (float) $coords[$i]['lat'];
+        $out[] = [
+            'lon' => (float) $coords[$i]['lon'],
+            'lat' => $lat,
+        ];
     }
-    if ($samples > 0) {
-        $mean_prob = round($sum / $samples, 2);
+    return $out;
+}
+
+function gaia_aurora_round_coords($coords, $precision = 2)
+{
+    $out = [];
+    foreach ($coords as $coord) {
+        if (!isset($coord['lon'], $coord['lat'])) {
+            continue;
+        }
+        $out[] = [
+            'lon' => round((float) $coord['lon'], $precision),
+            'lat' => round((float) $coord['lat'], $precision),
+        ];
+    }
+    return $out;
+}
+
+function gaia_aurora_build_kp_lines($grid, $hemisphere, $levels)
+{
+    $out = [];
+    if (!is_array($levels)) {
+        return $out;
+    }
+    foreach ($levels as $idx => $level) {
+        $p = gaia_aurora_normalize_probability($level, null);
+        if ($p === null) {
+            continue;
+        }
+        $coords_raw = gaia_isoline_southmost($grid, $p, $hemisphere);
+        $coords = gaia_aurora_round_coords(gaia_line_smooth($coords_raw, GAIA_AURORA_SMOOTH_WINDOW));
+        if (count($coords) < 2) {
+            continue;
+        }
+        $out[] = [
+            'p'      => $p,
+            'coords' => $coords,
+        ];
+    }
+    return $out;
+}
+
+function gaia_aurora_compute_metrics($coords, $hemisphere, $grid = null)
+{
+    $count = is_array($coords) ? count($coords) : 0;
+    if ($count === 0) {
+        return [
+            'min_lat'        => null,
+            'median_lat'     => null,
+            'mean_prob'      => null,
+            'mean_prob_line' => null,
+            'count'          => 0,
+            'hemisphere'     => $hemisphere,
+        ];
+    }
+
+    $lats = [];
+    foreach ($coords as $coord) {
+        if (isset($coord['lat'])) {
+            $lats[] = (float) $coord['lat'];
+        }
+    }
+    if (!$lats) {
+        return [
+            'min_lat'        => null,
+            'median_lat'     => null,
+            'mean_prob'      => null,
+            'mean_prob_line' => null,
+            'count'          => 0,
+            'hemisphere'     => $hemisphere,
+        ];
+    }
+    sort($lats);
+    $lat_count = count($lats);
+    $min = $lats[0];
+    $mid = (int) floor($lat_count / 2);
+    if ($lat_count % 2 === 0) {
+        $median = ($lats[$mid - 1] + $lats[$mid]) / 2;
+    } else {
+        $median = $lats[$mid];
+    }
+
+    $mean_prob = null;
+    if (is_array($grid) && $grid) {
+        $max_row = count($grid) - 1;
+        $max_col = $max_row >= 0 ? count($grid[0]) - 1 : -1;
+        $sum = 0;
+        $samples = 0;
+        foreach ($coords as $coord) {
+            if (!isset($coord['lat'], $coord['lon'])) {
+                continue;
+            }
+            $row = (int) round(90 - (float) $coord['lat']);
+            $col = (int) round((float) $coord['lon'] + 180);
+            if ($max_row >= 0) {
+                $row = max(0, min($max_row, $row));
+            }
+            if ($max_col >= 0) {
+                $col = max(0, min($max_col, $col));
+            }
+            if (isset($grid[$row][$col])) {
+                $sum += (float) $grid[$row][$col];
+                $samples++;
+            }
+        }
+        if ($samples > 0) {
+            $mean_prob = round($sum / $samples, 2);
+        }
     }
 
     return [
         'min_lat'        => round($min, 2),
         'median_lat'     => round($median, 2),
+        'mean_prob'      => $mean_prob,
         'mean_prob_line' => $mean_prob,
-        'count'          => count($coords),
+        'count'          => $lat_count,
         'hemisphere'     => $hemisphere,
     ];
 }

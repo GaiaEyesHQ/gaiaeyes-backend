@@ -1,0 +1,135 @@
+name: codex-review
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  pull-requests: write
+
+concurrency:
+  group: codex-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        if: ${{ hashFiles('**/*.py') != '' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node
+        if: ${{ hashFiles('**/package.json') != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # -------------------------
+      # Security Scanners (non-blocking)
+      # -------------------------
+
+      - name: Gitleaks (secrets)
+        uses: zricethezav/gitleaks-action@v2
+        with:
+          args: detect --report-format sarif --report-path gitleaks.sarif
+        continue-on-error: true
+
+      - name: pip-audit (Python deps)
+        if: ${{ hashFiles('**/*.py') != '' }}
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          pip-audit -f sarif -o pip-audit.sarif || true
+        continue-on-error: true
+
+      - name: Bandit (Python SAST)
+        if: ${{ hashFiles('**/*.py') != '' }}
+        run: |
+          python -m pip install bandit
+          bandit -r . -f sarif -o bandit.sarif || true
+        continue-on-error: true
+
+      - name: Semgrep (multi-language SAST)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: p/ci
+          generateSarif: true
+          sarifFile: semgrep.sarif
+        continue-on-error: true
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs.sarif
+          ignore-unfixed: true
+        continue-on-error: true
+
+      - name: Dependency Review (PRs only)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+        continue-on-error: true
+
+      # -------------------------
+      # Upload SARIF files to Code Scanning
+      # -------------------------
+
+      - name: Upload SARIF - Gitleaks
+        if: ${{ always() && hashFiles('gitleaks.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gitleaks.sarif
+
+      - name: Upload SARIF - pip-audit
+        if: ${{ always() && hashFiles('pip-audit.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: pip-audit.sarif
+
+      - name: Upload SARIF - Bandit
+        if: ${{ always() && hashFiles('bandit.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bandit.sarif
+
+      - name: Upload SARIF - Semgrep
+        if: ${{ always() && hashFiles('semgrep.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+
+      - name: Upload SARIF - Trivy
+        if: ${{ always() && hashFiles('trivy-fs.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+
+      # -------------------------
+      # Summary in the job UI
+      # -------------------------
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Codex Review Completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Repo: $GITHUB_REPOSITORY" >> $GITHUB_STEP_SUMMARY
+          echo "- Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### SARIF files generated" >> $GITHUB_STEP_SUMMARY
+          ls -1 *.sarif 2>/dev/null >> $GITHUB_STEP_SUMMARY || echo "No SARIF files found" >> $GITHUB_STEP_SUMMARY
