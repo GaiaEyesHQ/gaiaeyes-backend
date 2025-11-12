@@ -833,12 +833,23 @@ function gaia_isoline_southmost($grid, $pstar, $hemi)
     if ($row_start < 0) {
         return $coords;
     }
-    if ($hemi === 'north') {
-        $row_end = 0;
-        $step = -1;
-    } else {
+
+    if ($hemi === 'south') {
+        $row_start = 90;
+        if ($row_start >= $rows) {
+            $row_start = $rows - 1;
+        }
         $row_end = min($rows - 1, 180);
+        if ($row_start > $row_end) {
+            $row_start = $row_end;
+        }
         $step = 1;
+    } else {
+        $row_end = 0;
+        if ($row_start < $row_end) {
+            $row_start = $row_end;
+        }
+        $step = -1;
     }
 
     for ($lon = 0; $lon < $cols; $lon++) {
