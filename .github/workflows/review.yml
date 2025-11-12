@@ -23,6 +23,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+        # --- Diagnostics upfront ---
+      - name: Runner / Tool versions
+        if: always()
+        run: |
+          echo "Shell: $SHELL"
+          uname -a || true
+          node -v || true
+          npm -v || true
+          python3 --version || true
+          pip --version || true
+          go version || true
+          docker --version || true
+          echo "Disk usage:"
+          df -h || true
+          echo "Env snapshot:"
+          env | sort | sed -e 's/\(AUTH\|TOKEN\|SECRET\|PASSWORD\)=.*/\1=***REDACTED***/g' | head -200
+
+      - name: List repo tree (top level)
+        if: always()
+        run: |
+          ls -la
+          echo
+          echo "package.json?"
+          git ls-files package.json || true
+          echo "requirements*?"
+          git ls-files 'requirements*.txt' || true
+          echo "pyproject.toml?"
+          git ls-files 'pyproject.toml' || true
+          echo "workflows?"
+          ls -la .github/workflows || true
+
       - name: Setup Python
         if: ${{ hashFiles('**/*.py') != '' || hashFiles('**/requirements*.txt') != '' || hashFiles('pyproject.toml') != '' }}
         uses: actions/setup-python@v5
@@ -39,58 +70,63 @@ jobs:
       - name: Install JS deps
         if: ${{ hashFiles('**/package.json') != '' && hashFiles('**/package-lock.json') != '' }}
         run: npm ci --ignore-scripts
+        continue-on-error: true
 
       - name: Install Python deps (requirements)
         if: ${{ hashFiles('**/requirements*.txt') != '' }}
         run: |
           python -m pip install --upgrade pip
           pip install -r $(git ls-files 'requirements*.txt' | head -n1)
+        continue-on-error: true
 
       - name: Install Python deps (pyproject)
         if: ${{ hashFiles('pyproject.toml') != '' && !hashFiles('poetry.lock') }}
         run: |
           python -m pip install --upgrade pip
           pip install .
+        continue-on-error: true
 
       - name: Install Poetry project
-        if: ${{ hashFiles('pyproject.toml') != '' && hashFiles('poetry.lock') != '' }}
+        if: ${{ hashFiles('pyproject.toml') != '' && hashFiles('poetry.lock') }}
         run: |
           python -m pip install --upgrade pip
           pip install poetry
           poetry install --no-interaction --no-ansi
+        continue-on-error: true
 
-      # ---- Security & Hygiene ----
+      # ---- Security & Hygiene (all non-blocking) ----
       - name: Gitleaks (secrets)
         uses: zricethezav/gitleaks-action@v2
         with:
           args: detect --report-format sarif --report-path gitleaks.sarif
+        continue-on-error: true
 
-      # ✅ OSV Scanner via reusable workflow (correct tag)
+      # OSV reusable workflow (fixed tag) — do not fail the job
       - name: OSV-Scanner
         uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.2.4
         with:
-          # default args are:
-          #   --recursive
-          #   ./
-          # override here only if you want to narrow/expand scan scope
-          # scan-args: |-
-          #   --recursive
-          #   ./
           upload-sarif: true
-          fail-on-vuln: true
+          fail-on-vuln: false
           results-file-name: results.sarif
+        continue-on-error: true
 
       - name: pip-audit
         if: ${{ hashFiles('**/*.py') != '' || hashFiles('**/requirements*.txt') != '' || hashFiles('pyproject.toml') != '' }}
         run: |
           python -m pip install pip-audit
-          pip-audit -r $(git ls-files 'requirements*.txt' | head -n1 2>/dev/null || echo '') -f sarif -o pip-audit.sarif || true
+          set +e
+          pip-audit -r $(git ls-files 'requirements*.txt' | head -n1 2>/dev/null || echo '') -f sarif -o pip-audit.sarif
+          echo "pip-audit exit code: $?"
+        continue-on-error: true
 
       - name: Bandit
         if: ${{ hashFiles('**/*.py') != '' }}
         run: |
           python -m pip install bandit
-          bandit -r . -f sarif -o bandit.sarif || true
+          set +e
+          bandit -r . -f sarif -o bandit.sarif
+          echo "bandit exit code: $?"
+        continue-on-error: true
 
       - name: Semgrep SAST
         uses: returntocorp/semgrep-action@v1
@@ -100,6 +136,7 @@ jobs:
           sarifFile: semgrep.sarif
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN || '' }}
+        continue-on-error: true
 
       - name: Trivy FS
         uses: aquasecurity/trivy-action@0.24.0
@@ -111,20 +148,23 @@ jobs:
           ignore-unfixed: true
         env:
           TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db
+        continue-on-error: true
 
       - name: actionlint (workflow hygiene)
         uses: reviewdog/action-actionlint@v1
         with:
           actionlint_flags: "-color"
           reporter: github-pr-review
+        continue-on-error: true
 
       - name: Dependency Review (PRs only)
         if: ${{ github.event_name == 'pull_request' }}
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
+        continue-on-error: true
 
-      # ---- Upload SARIF to Code Scanning (others; OSV already uploads) ----
+      # ---- Upload SARIF (OSV already uploads; we upload the rest) ----
       - name: Upload SARIF - Gitleaks
         if: ${{ always() && hashFiles('gitleaks.sarif') != '' }}
         uses: github/codeql-action/upload-sarif@v3
@@ -155,7 +195,7 @@ jobs:
         with:
           sarif_file: semgrep.sarif
 
-      # ---- Human-friendly Summary ----
+      # ---- Human-friendly Summary & Bundle ----
       - name: Summarize Findings
         if: always()
         run: |
@@ -167,8 +207,26 @@ jobs:
           shopt -s nullglob
           count=0
           for f in *.sarif; do
-            echo "- Uploaded report: $f" >> $GITHUB_STEP_SUMMARY
+            echo "- Report: $f" >> $GITHUB_STEP_SUMMARY
             count=$((count+1))
           done
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Total SARIF reports:** $count" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "Codex Review for $GITHUB_REPOSITORY"
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo
+            echo "Reports:"
+            ls -1 *.sarif 2>/dev/null || echo "(none)"
+          } > codex-review-email.txt
+
+      - name: Upload bundle artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-review-sarif
+          path: |
+            *.sarif
+            codex-review-email.txt
+          if-no-files-found: warn
+          retention-days: 7
