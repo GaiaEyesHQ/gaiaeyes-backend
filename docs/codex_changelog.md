@@ -2,6 +2,14 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-24 — Fix initial symptom mart refresh
+
+- Updated `20251019140000_setup_symptom_domain.sql` to run the first `symptom_daily` and
+  `symptom_x_space_daily` refreshes without the `CONCURRENTLY` clause so Supabase can
+  populate the newly created materialized views before enabling concurrent refreshes.
+- Keeps subsequent refresh jobs (including the helper function) untouched, since once
+  populated the views support `CONCURRENTLY` as before.
+
 ## 2025-11-23 — Restore daily_features mart dependency
 
 - Added an idempotent Supabase migration (`20251019135900_create_marts_daily_features.sql`) that materializes
