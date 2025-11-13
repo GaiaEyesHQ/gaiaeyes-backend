@@ -148,9 +148,8 @@ begin
   end if;
 end$$;
 
--- Refresh the marts so downstream queries stay consistent
-refresh materialized view concurrently marts.symptom_daily;
-refresh materialized view concurrently marts.symptom_x_space_daily;
+refresh materialized view marts.symptom_daily;
+refresh materialized view marts.symptom_x_space_daily;
 
 -- Helper function for future refresh jobs
 create or replace function marts.refresh_symptom_marts()
