@@ -2,6 +2,7 @@
 # app/routers/summary.py
 # NOTE: Do not make any changes in this file per instructions.
 import asyncio
+import json
 import logging
 import random
 from contextlib import asynccontextmanager
@@ -1996,6 +1997,257 @@ async def forecast_summary(conn = Depends(get_db)):
     except Exception as e:
         # Defensive: return a safe shape even if parsing fails
         return {"ok": False, "data": None, "error": f"forecast_summary parse failed: {e}"}
+
+
+@router.get("/space/forecast/outlook")
+async def space_forecast_outlook(
+    conn = Depends(get_db),
+    horizon_hours: int = 72,
+):
+    """Aggregate predictive datasets surfaced in Step 1."""
+
+    horizon_hours = max(1, min(horizon_hours, 240))
+
+    cme_rows = []
+    sep_row = None
+    radiation_rows = []
+    aurora_rows = []
+    ch_rows = []
+    scoreboard_rows = []
+    drap_rows = []
+    solar_rows = []
+    magnetometer_rows = []
+
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute("set statement_timeout = 60000")
+
+            await cur.execute(
+                """
+                select arrival_time, simulation_id, location, kp_estimate, cme_speed_kms, confidence
+                from marts.cme_arrivals
+                where arrival_time >= now() - %s::interval
+                order by arrival_time asc
+                """,
+                (f"{horizon_hours} hours",),
+                prepare=False,
+            )
+            cme_rows = await cur.fetchall()
+
+            await cur.execute(
+                """
+                select ts_utc, satellite, energy_band, flux, s_scale, s_scale_index
+                from ext.sep_flux
+                where s_scale_index is not null
+                order by ts_utc desc
+                limit 1
+                """,
+                prepare=False,
+            )
+            sep_row = await cur.fetchone()
+
+            await cur.execute(
+                """
+                select day, satellite, max_flux, avg_flux, risk_level
+                from marts.radiation_belts_daily
+                order by day desc, satellite asc
+                limit 8
+                """,
+                prepare=False,
+            )
+            radiation_rows = await cur.fetchall()
+
+            await cur.execute(
+                """
+                select valid_from, valid_to, hemisphere, headline, power_gw, wing_kp, confidence
+                from marts.aurora_outlook
+                where coalesce(valid_to, now()) >= now() - interval '6 hours'
+                order by valid_from desc
+                limit 12
+                """,
+                prepare=False,
+            )
+            aurora_rows = await cur.fetchall()
+
+            await cur.execute(
+                """
+                select forecast_time, source, speed_kms, density_cm3
+                from ext.ch_forecast
+                where forecast_time >= now() - %s::interval
+                order by forecast_time asc
+                limit 24
+                """,
+                (f"{horizon_hours} hours",),
+                prepare=False,
+            )
+            ch_rows = await cur.fetchall()
+
+            await cur.execute(
+                """
+                select event_time, team_name, predicted_arrival, observed_arrival, kp_predicted
+                from ext.cme_scoreboard
+                where event_time >= now() - %s::interval
+                order by event_time desc
+                limit 10
+                """,
+                (f"{horizon_hours} hours",),
+                prepare=False,
+            )
+            scoreboard_rows = await cur.fetchall()
+
+            await cur.execute(
+                """
+                select day, region, max_absorption_db, avg_absorption_db
+                from marts.drap_absorption_daily
+                order by day desc, region asc
+                limit 12
+                """,
+                prepare=False,
+            )
+            drap_rows = await cur.fetchall()
+
+            await cur.execute(
+                """
+                select forecast_month, sunspot_number, f10_7_flux, issued_at, confidence
+                from marts.solar_cycle_progress
+                order by forecast_month asc
+                limit 24
+                """,
+                prepare=False,
+            )
+            solar_rows = await cur.fetchall()
+
+            await cur.execute(
+                """
+                select ts_utc, region, ae, al, au, pc, stations
+                from marts.magnetometer_regional
+                where ts_utc >= now() - %s::interval
+                order by ts_utc desc, region asc
+                limit 60
+                """,
+                (f"{horizon_hours} hours",),
+                prepare=False,
+            )
+            magnetometer_rows = await cur.fetchall()
+
+    except Exception as exc:  # pragma: no cover - defensive
+        return {"ok": False, "error": f"space_forecast_outlook failed: {exc}"}
+
+    def iso(ts):
+        if isinstance(ts, datetime):
+            return ts.astimezone(timezone.utc).isoformat()
+        if isinstance(ts, date):
+            return ts.isoformat()
+        return None
+
+    def fnum(value):
+        return float(value) if value is not None else None
+
+    def maybe_json(value):
+        if value is None or isinstance(value, (dict, list)):
+            return value
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                return value
+        return value
+
+    payload = {
+        "cme_arrivals": [
+            {
+                "arrival_time": iso(row.get("arrival_time")),
+                "simulation_id": row.get("simulation_id"),
+                "location": row.get("location"),
+                "kp_estimate": fnum(row.get("kp_estimate")),
+                "cme_speed_kms": fnum(row.get("cme_speed_kms")),
+                "confidence": row.get("confidence"),
+            }
+            for row in (cme_rows or [])
+        ],
+        "sep": {
+            "ts": iso(sep_row.get("ts_utc")) if sep_row else None,
+            "satellite": sep_row.get("satellite") if sep_row else None,
+            "energy_band": sep_row.get("energy_band") if sep_row else None,
+            "flux": fnum(sep_row.get("flux")) if sep_row else None,
+            "s_scale": sep_row.get("s_scale") if sep_row else None,
+            "s_scale_index": sep_row.get("s_scale_index") if sep_row else None,
+        },
+        "radiation_belts": [
+            {
+                "day": iso(row.get("day")),
+                "satellite": row.get("satellite"),
+                "max_flux": fnum(row.get("max_flux")),
+                "avg_flux": fnum(row.get("avg_flux")),
+                "risk_level": row.get("risk_level"),
+            }
+            for row in (radiation_rows or [])
+        ],
+        "aurora_outlook": [
+            {
+                "valid_from": iso(row.get("valid_from")),
+                "valid_to": iso(row.get("valid_to")),
+                "hemisphere": row.get("hemisphere"),
+                "headline": row.get("headline"),
+                "power_gw": fnum(row.get("power_gw")),
+                "wing_kp": fnum(row.get("wing_kp")),
+                "confidence": row.get("confidence"),
+            }
+            for row in (aurora_rows or [])
+        ],
+        "coronal_holes": [
+            {
+                "forecast_time": iso(row.get("forecast_time")),
+                "source": row.get("source"),
+                "speed_kms": fnum(row.get("speed_kms")),
+                "density_cm3": fnum(row.get("density_cm3")),
+            }
+            for row in (ch_rows or [])
+        ],
+        "cme_scoreboard": [
+            {
+                "event_time": iso(row.get("event_time")),
+                "team_name": row.get("team_name"),
+                "predicted_arrival": iso(row.get("predicted_arrival")),
+                "observed_arrival": iso(row.get("observed_arrival")),
+                "kp_predicted": fnum(row.get("kp_predicted")),
+            }
+            for row in (scoreboard_rows or [])
+        ],
+        "drap_absorption": [
+            {
+                "day": iso(row.get("day")),
+                "region": row.get("region"),
+                "max_absorption_db": fnum(row.get("max_absorption_db")),
+                "avg_absorption_db": fnum(row.get("avg_absorption_db")),
+            }
+            for row in (drap_rows or [])
+        ],
+        "solar_cycle": [
+            {
+                "forecast_month": iso(row.get("forecast_month")),
+                "sunspot_number": fnum(row.get("sunspot_number")),
+                "f10_7_flux": fnum(row.get("f10_7_flux")),
+                "issued_at": iso(row.get("issued_at")),
+                "confidence": row.get("confidence"),
+            }
+            for row in (solar_rows or [])
+        ],
+        "magnetometer": [
+            {
+                "ts": iso(row.get("ts_utc")),
+                "region": row.get("region"),
+                "ae": fnum(row.get("ae")),
+                "al": fnum(row.get("al")),
+                "au": fnum(row.get("au")),
+                "pc": fnum(row.get("pc")),
+                "stations": maybe_json(row.get("stations")),
+            }
+            for row in (magnetometer_rows or [])
+        ],
+    }
+
+    return {"ok": True, "data": payload}
 
 
 # -----------------------------

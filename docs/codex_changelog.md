@@ -2,6 +2,27 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-22 — Backfill Schumann mart dependency
+
+- Added an idempotent Supabase migration that defines the `ext.schumann_*` landing tables and the `marts.schumann_daily`
+  materialized view so downstream analytics (e.g., `marts.symptom_x_space_daily`) can rely on the relation existing during
+  deploys.
+- Documented the required `marts.schumann_daily` refresh step alongside the Schumann ingestion script for ongoing operations.
+
+## 2025-11-21 — Step 1 ingestion follow-ups
+
+- Updated the Step 1 ingestion pipeline so the CME arrival and D-RAP upserts use the actual Supabase primary-key constraints,
+  preventing runtime failures caused by generated columns in the conflict targets.
+- Backfilled the missing `ext.magnetosphere_pulse` table inside the legacy magnetosphere migration so the dependent
+  `marts.magnetosphere_last_24h` view can be created successfully during Supabase deploys.
+
+## 2025-11-20 — Step 1 predictive datasets & outlook API
+
+- Delivered the Step 1 ingestion orchestrator (`ingest_space_forecasts_step1.py`) covering Enlil CME runs, SEP/radiation belts, aurora power, coronal holes, D-RAP, solar-cycle forecasts, and magnetometer indices with Supabase upserts.
+- Added Supabase schema migrations for the new `ext.*` landing tables and `marts.*` rollups (CME arrivals, radiation belts, aurora outlook, D-RAP, solar cycle, regional magnetometers).
+- Exposed `/v1/space/forecast/outlook` so clients can query consolidated predictive datasets alongside the existing forecast summary card.
+- Documented cron guidance and dataset details inside `docs/SCRIPTS_GUIDE.md`.
+
 ## 2025-11-17 — iOS/Backend Operational Stabilization and Sync Fixes
 
 - Restored full functionality of the iOS dashboard and backend data pipeline after repeated DB timeout and user scoping issues.
