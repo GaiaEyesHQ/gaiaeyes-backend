@@ -32,6 +32,8 @@ This guide documents the maintenance and data-processing scripts located in [`/s
 | `rollup_space_weather_daily.py` | Aggregates `ext.space_weather` telemetry and DONKI counts into `marts.space_weather_daily`. | `SUPABASE_DB_URL`; `DAYS_BACK` |
 | `rollup_health_daily.py` | Summarizes Gaia health samples into `gaia.daily_summary` using a configurable timezone. | `SUPABASE_DB_URL`; `DAYS_BACK`; `USER_TZ` |
 | `rollup_daily_features.py` | Joins health summaries with space-weather and Schumann mart data into `marts.daily_features`. | `SUPABASE_DB_URL`; `DAYS_BACK` |
+
+> **Note:** Supabase migration `20251019135900_create_marts_daily_features.sql` provisions the `marts.daily_features` mart and supporting indexes so the rollup script and dependent symptom views have a guaranteed target.
 | `refresh_symptom_marts.py` | Invokes the `marts.refresh_symptom_marts()` stored procedure. | `SUPABASE_DB_URL` |
 
 ## Publishing & derived artifacts

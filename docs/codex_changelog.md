@@ -2,6 +2,13 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-23 — Restore daily_features mart dependency
+
+- Added an idempotent Supabase migration (`20251019135900_create_marts_daily_features.sql`) that materializes
+  `marts.daily_features` with the health, space-weather, and Schumann columns required by the symptom analytics
+  views, guaranteeing the mart exists before `marts.symptom_x_space_daily` is created during deploys.
+- Documented the migration in the scripts guide so future operators know the mart is provisioned automatically.
+
 ## 2025-11-22 — Backfill Schumann mart dependency
 
 - Added an idempotent Supabase migration that defines the `ext.schumann_*` landing tables and the `marts.schumann_daily`
