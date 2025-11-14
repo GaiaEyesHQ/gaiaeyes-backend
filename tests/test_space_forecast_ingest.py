@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import pytest
+import httpx
 
 from scripts.ingest_space_forecasts_step1 import (
     _aurora_headline,
@@ -236,3 +237,21 @@ def test_ingest_magnetometer_supermag(monkeypatch):
     assert mart_rows, "expected aggregated regional rows"
     stations = json.loads(mart_rows[0]["stations"])
     assert stations
+
+
+def test_ingest_magnetometer_fallback_handles_html(monkeypatch):
+    from scripts import ingest_space_forecasts_step1 as module
+
+    async def fake_fetch_json(client, url, params=None):  # noqa: ARG001
+        if "SuperMAG_AE" in url:
+            raise httpx.HTTPError("boom")
+        raise json.JSONDecodeError("Expecting value", "<html>oops", 0)
+
+    async def runner():
+        monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
+        writer = RecordingWriter()
+        await ingest_magnetometer(None, writer, days=1)  # type: ignore[arg-type]
+        return writer
+
+    writer = asyncio.run(runner())
+    assert writer.calls == []

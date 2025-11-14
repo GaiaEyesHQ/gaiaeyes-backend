@@ -1023,6 +1023,11 @@ async def ingest_magnetometer(
                 )
                 return
             raise
+        except json.JSONDecodeError:
+            logger.warning(
+                "SuperMAG fallback endpoint returned non-JSON content; skipping magnetometer ingest",
+            )
+            return
         records = extract_records(data)
     if not records:
         logger.warning(
