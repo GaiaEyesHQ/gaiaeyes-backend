@@ -237,10 +237,23 @@ class SupabaseWriter:
         return len(rows)
 
 
+
 async def fetch_json(client: httpx.AsyncClient, url: str, params: dict[str, Any] | None = None) -> Any:
     resp = await client.get(url, params=params, timeout=60)
     resp.raise_for_status()
     return resp.json()
+
+
+# Helper to fetch plain text (e.g., DRAP text products)
+async def fetch_text(
+    client: httpx.AsyncClient,
+    url: str,
+    params: dict[str, Any] | None = None,
+) -> str:
+    """Fetch a text resource (e.g., DRAP text products)."""
+    resp = await client.get(url, params=params, timeout=60)
+    resp.raise_for_status()
+    return resp.text
 
 
 async def ingest_enlil(
@@ -585,19 +598,44 @@ async def ingest_drap(
 ) -> None:
     logger.info("Fetching D-RAP absorption indices")
     try:
-        data = await fetch_json(
+        text = await fetch_text(
             client,
-            "https://services.swpc.noaa.gov/json/drap/global.json",
+            "https://services.swpc.noaa.gov/text/drap_global_frequencies.txt",
         )
     except httpx.HTTPStatusError as exc:
-        # The documented DRAP product is provided as text (drap_global_frequencies.txt)
-        # and the JSON endpoint is not yet available. Do not fail the whole Step 1 run
-        # if this feed 404s; log and skip until a proper JSON API is wired up.
+        # The documented DRAP product is provided as a text product
+        # (drap_global_frequencies.txt). Do not fail the whole Step 1 run
+        # if this feed 404s; log and skip until a proper endpoint is wired up.
         status = exc.response.status_code if exc.response is not None else None
         if status == 404:
-            logger.warning("D-RAP JSON endpoint not available (404); skipping DRAP ingest for now")
+            logger.warning(
+                "D-RAP text endpoint not available (404); skipping DRAP ingest for now"
+            )
             return
         raise
+
+    # Parse the DRAP text into a list of dicts using the first non-comment line as a header.
+    header_cols: list[str] | None = None
+    records: list[dict[str, Any]] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if header_cols is None:
+            header_cols = parts
+            continue
+        if len(parts) < len(header_cols):
+            continue
+        record = {header_cols[i]: parts[i] for i in range(len(header_cols))}
+        records.append(record)
+
+    if not records:
+        logger.warning("No parsable DRAP records found in text feed; skipping")
+        return
+
+    data = records
+
     cutoff = datetime.now(tz=UTC) - timedelta(days=days)
     rows: list[dict[str, Any]] = []
     for entry in data or []:
