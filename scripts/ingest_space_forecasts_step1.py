@@ -318,7 +318,7 @@ async def ingest_sep_flux(
     logger.info("Fetching GOES proton flux")
     data = await fetch_json(
         client,
-        "https://services.swpc.noaa.gov/json/goes/primary/integrated_protons-5-minute.json",
+        "https://services.swpc.noaa.gov/json/goes/primary/integral-protons-3-day.json",
     )
     cutoff = datetime.now(tz=UTC) - timedelta(days=days)
     rows: list[dict[str, Any]] = []
