@@ -12,15 +12,15 @@ Datasets handled here:
 * GOES proton flux and S-scale classification → ``ext.sep_flux``.
 * GOES >2 MeV electron flux / radiation belt outlooks →
   ``ext.radiation_belts`` + ``marts.radiation_belts_daily``.
-* OVATION auroral power and Wing Kp forecasts →
-  ``ext.aurora_power`` + ``marts.aurora_outlook``.
+* OVATION auroral power nowcasts → ``ext.aurora_power`` +
+  ``marts.aurora_outlook``.
 * Coronal hole high-speed stream forecasts → ``ext.ch_forecast``.
 * DONKI CME Scoreboard consensus → ``ext.cme_scoreboard``.
 * D-RAP absorption indices → ``ext.drap_absorption`` +
   ``marts.drap_absorption_daily``.
 * SWPC solar-cycle predictions → ``ext.solar_cycle_forecast`` +
   ``marts.solar_cycle_progress``.
-* AE/AL/PC magnetometer chain → ``ext.magnetometer_chain`` +
+* AE/AL/PC magnetometer chain (SuperMAG) → ``ext.magnetometer_chain`` +
   ``marts.magnetometer_regional``.
 
 The implementation follows the existing ingestion pattern used by other
@@ -53,6 +53,7 @@ import json
 import logging
 import math
 import os
+import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -166,6 +167,208 @@ def _region_from_station(station: str | None) -> str:
     if station in {"lyr", "nur", "sor", "brw"}:
         return "polar"
     return "global"
+
+
+def _normalise_key(name: str) -> str:
+    return re.sub(r"[^a-z0-9_]+", "", name.strip().lower().replace(" ", "_"))
+
+
+def _normalise_dict(data: dict[Any, Any]) -> dict[str, Any]:
+    return {_normalise_key(str(k)): v for k, v in data.items()}
+
+
+def _coerce_hemisphere(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    if text in {"n", "north", "northern"}:
+        return "north"
+    if text in {"s", "south", "southern"}:
+        return "south"
+    return None
+
+
+def _aurora_timestamp(entry: dict[str, Any]) -> datetime | None:
+    candidates = [
+        entry.get("time_tag"),
+        entry.get("time"),
+        entry.get("timestamp"),
+        entry.get("ts"),
+        entry.get("observation_time"),
+        entry.get("forecast_time"),
+        entry.get("valid_time"),
+    ]
+    for value in candidates:
+        ts = _parse_dt(value)
+        if ts:
+            return ts
+    date_val = entry.get("date")
+    time_val = entry.get("utctime") or entry.get("utc_time") or entry.get("hour")
+    if date_val and time_val:
+        ts = _parse_dt(f"{date_val} {time_val}")
+        if ts:
+            return ts
+    return None
+
+
+def _extract_aurora_rows(data: Any) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    def emit(ts: datetime | None, hemisphere: Any, power: Any, raw_obj: Any) -> None:
+        hemi = _coerce_hemisphere(hemisphere)
+        if ts is None or hemi is None:
+            return
+        power_val = _parse_float(power)
+        rows.append(
+            {
+                "ts_utc": ts,
+                "hemisphere": hemi,
+                "hemispheric_power_gw": power_val,
+                "wing_kp": None,
+                "raw": json.dumps(raw_obj),
+            }
+        )
+
+    def handle_dict(obj: dict[str, Any]) -> None:
+        norm = _normalise_dict(obj)
+        ts = _aurora_timestamp(norm)
+
+        def emit_from_mapping(mapping: Any, label: str | None = None) -> bool:
+            emitted = False
+            if isinstance(mapping, dict):
+                for key, value in mapping.items():
+                    hemi = _coerce_hemisphere(key)
+                    if hemi:
+                        emit(ts, hemi, value, {"hemisphere": hemi, "power": value, "source": label or "map"})
+                        emitted = True
+            elif isinstance(mapping, list):
+                for entry in mapping:
+                    if isinstance(entry, dict):
+                        hemi = entry.get("hemisphere") or entry.get("hemi") or entry.get("label")
+                        emit(
+                            _aurora_timestamp(_normalise_dict(entry)) or ts,
+                            hemi,
+                            entry.get("hemispheric_power")
+                            or entry.get("hemisphere_power")
+                            or entry.get("power"),
+                            entry,
+                        )
+                        emitted = True
+            return emitted
+
+        if emit_from_mapping(obj.get("Hemisphere Power") or obj.get("Hemispheric Power")):
+            return
+        if emit_from_mapping(norm.get("hemisphere_power") or norm.get("hemispheric_power")):
+            return
+
+        power_value = (
+            norm.get("hemisphere_power")
+            or norm.get("hemispheric_power")
+            or norm.get("hemispheric_power_gw")
+            or norm.get("power")
+        )
+        hemi_value = norm.get("hemisphere") or norm.get("hemi")
+        if power_value is not None and hemi_value is not None:
+            emit(ts, hemi_value, power_value, obj)
+
+        data_block = obj.get("data") or obj.get("coordinates")
+        if isinstance(data_block, list):
+            for entry in data_block:
+                if isinstance(entry, dict):
+                    entry_norm = _normalise_dict(entry)
+                    hemi = entry_norm.get("hemisphere") or entry_norm.get("hemi")
+                    power = entry_norm.get("hemispheric_power") or entry_norm.get("hemisphere_power")
+                    emit(_aurora_timestamp(entry_norm) or ts, hemi, power, entry)
+
+        for key, value in norm.items():
+            if "power" not in key:
+                continue
+            hemi = None
+            if "north" in key:
+                hemi = "north"
+            elif "south" in key:
+                hemi = "south"
+            elif key.endswith("_n"):
+                hemi = "north"
+            elif key.endswith("_s"):
+                hemi = "south"
+            if hemi is not None:
+                emit(ts, hemi, value, {"hemisphere": hemi, "power": value, "source": key})
+
+        for hemi_key in ("north", "south"):
+            block = obj.get(hemi_key) or obj.get(hemi_key.capitalize())
+            if isinstance(block, dict):
+                emit(ts, hemi_key, block.get("hemisphere_power") or block.get("power"), block)
+
+    if isinstance(data, list):
+        for entry in data:
+            if isinstance(entry, dict):
+                handle_dict(entry)
+    elif isinstance(data, dict):
+        handle_dict(data)
+
+    return rows
+
+
+_DRAP_PIVOT_COL = re.compile(r"(?P<region>[a-z]+)_(?P<freq>[0-9]+(?:\.[0-9]+)?)m?hz?")
+
+
+def _parse_frequency(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    multiplier = 1.0
+    if text.endswith("khz"):
+        multiplier = 0.001
+    elif text.endswith("hz") and not text.endswith("mhz"):
+        multiplier = 1e-6
+    cleaned = re.sub(r"[^0-9.]+", "", text)
+    if not cleaned:
+        return None
+    try:
+        return float(cleaned) * multiplier
+    except ValueError:
+        return None
+
+
+def _parse_drap_timestamp(entry: dict[str, Any]) -> datetime | None:
+    for key in (
+        "time_tag",
+        "timestamp",
+        "time",
+        "utc_time",
+        "utctime",
+        "valid_time",
+    ):
+        ts = _parse_dt(entry.get(key))
+        if ts:
+            return ts
+    date_val = entry.get("date")
+    time_val = entry.get("utctime") or entry.get("utc_time") or entry.get("time")
+    if date_val and time_val:
+        ts = _parse_dt(f"{date_val} {time_val}")
+        if ts:
+            return ts
+    return None
+
+
+def _normalise_region(region: Any) -> str:
+    if not region:
+        return "global"
+    text = str(region).strip().lower()
+    mapping = {
+        "equator": "equatorial",
+        "mid": "midlat",
+        "midlatitude": "midlat",
+        "polar_cap": "polar",
+    }
+    return mapping.get(text, text)
 
 
 @dataclass(slots=True)
@@ -446,33 +649,13 @@ async def ingest_aurora(
     client: httpx.AsyncClient,
     writer: SupabaseWriter,
 ) -> None:
-    logger.info("Fetching auroral power (OVATION); Wing Kp deprecated and handled elsewhere")
+    logger.info("Fetching auroral power (OVATION JSON)")
     aurora_data = await fetch_json(
         client,
         "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json",
     )
-    rows: list[dict[str, Any]] = []
+    rows = _extract_aurora_rows(aurora_data)
     now = datetime.now(tz=UTC)
-    # Wing Kp endpoint (rtsw/wing-kp.json) has been deprecated. We no longer fetch Kp here,
-    # and will source Kp from the existing ext.space_weather / marts rollups instead.
-    latest_kp: float | None = None
-    for entry in aurora_data or []:
-        if not isinstance(entry, dict):
-            continue
-        ts = _parse_dt(entry.get("time_tag") or entry.get("time"))
-        hemisphere = entry.get("hemisphere") or entry.get("hemi")
-        power = _parse_float(entry.get("hemispheric_power") or entry.get("power"))
-        if ts is None or hemisphere is None:
-            continue
-        rows.append(
-            {
-                "ts_utc": ts,
-                "hemisphere": hemisphere.lower(),
-                "hemispheric_power_gw": power,
-                "wing_kp": latest_kp,
-                "raw": json.dumps(entry),
-            }
-        )
     if rows:
         await writer.upsert_many(
             "ext",
@@ -486,15 +669,14 @@ async def ingest_aurora(
         ts = row["ts_utc"]
         hemisphere = row["hemisphere"]
         power = row.get("hemispheric_power_gw")
-        kp = row.get("wing_kp")
         outlook_rows.append(
             {
                 "valid_from": ts,
                 "valid_to": ts + timedelta(hours=1),
                 "hemisphere": hemisphere,
-                "headline": _aurora_headline(power, kp),
+                "headline": _aurora_headline(power, None),
                 "power_gw": power,
-                "wing_kp": kp,
+                "wing_kp": None,
                 "confidence": "medium" if power and power >= 40 else "low",
                 "created_at": now,
             }
@@ -614,45 +796,81 @@ async def ingest_drap(
             return
         raise
 
-    # Parse the DRAP text into a list of dicts using the first non-comment line as a header.
     header_cols: list[str] | None = None
     records: list[dict[str, Any]] = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(":"):
+            continue
+        if line.startswith("#"):
+            header_cols = [_normalise_key(part) for part in line.lstrip("#").split()]
             continue
         parts = line.split()
         if header_cols is None:
-            header_cols = parts
+            header_cols = [_normalise_key(part) for part in parts]
             continue
-        if len(parts) < len(header_cols):
+        if not parts:
             continue
-        record = {header_cols[i]: parts[i] for i in range(len(header_cols))}
+        count = min(len(parts), len(header_cols))
+        record = {header_cols[i]: parts[i] for i in range(count)}
         records.append(record)
 
     if not records:
         logger.warning("No parsable DRAP records found in text feed; skipping")
         return
 
-    data = records
-
     cutoff = datetime.now(tz=UTC) - timedelta(days=days)
     rows: list[dict[str, Any]] = []
-    for entry in data or []:
-        if not isinstance(entry, dict):
-            continue
-        ts = _parse_dt(entry.get("time_tag") or entry.get("time"))
+    for entry in records:
+        norm = _normalise_dict(entry)
+        ts = _parse_drap_timestamp(norm)
         if ts is None or ts < cutoff:
             continue
-        rows.append(
-            {
-                "ts_utc": ts,
-                "frequency_mhz": _parse_float(entry.get("frequency")),
-                "region": entry.get("region") or entry.get("location"),
-                "absorption_db": _parse_float(entry.get("absorption")),
-                "raw": json.dumps(entry),
-            }
+        region_value = (
+            norm.get("region")
+            or norm.get("band")
+            or norm.get("latitude_band")
+            or norm.get("sector")
         )
+        freq_value = norm.get("frequency") or norm.get("freq")
+        absorption_value = (
+            norm.get("absorption_db")
+            or norm.get("absorption")
+            or norm.get("db")
+        )
+        freq = _parse_frequency(freq_value)
+        absorption = _parse_float(absorption_value)
+        added = False
+        if freq is not None and absorption is not None:
+            rows.append(
+                {
+                    "ts_utc": ts,
+                    "frequency_mhz": freq,
+                    "region": _normalise_region(region_value),
+                    "absorption_db": absorption,
+                    "raw": json.dumps(entry),
+                }
+            )
+            added = True
+        if added:
+            continue
+        for key, value in norm.items():
+            match = _DRAP_PIVOT_COL.match(key)
+            if not match:
+                continue
+            freq = _parse_frequency(match.group("freq"))
+            absorption = _parse_float(value)
+            if freq is None or absorption is None:
+                continue
+            rows.append(
+                {
+                    "ts_utc": ts,
+                    "frequency_mhz": freq,
+                    "region": _normalise_region(match.group("region")),
+                    "absorption_db": absorption,
+                    "raw": json.dumps(entry),
+                }
+            )
     if rows:
         await writer.upsert_many(
             "ext",
@@ -753,41 +971,145 @@ async def ingest_magnetometer(
     writer: SupabaseWriter,
     days: int,
 ) -> None:
-    logger.info("Fetching AE/AL/PC magnetometer indices")
+    logger.info("Fetching AE/AL/PC magnetometer indices from SuperMAG")
+    stations_filter = os.getenv("SUPERMAG_STATIONS")
+    end_time = datetime.now(tz=UTC)
+    start_time = end_time - timedelta(days=days)
+    params = {
+        "start": start_time.strftime("%Y%m%d%H%M"),
+        "end": end_time.strftime("%Y%m%d%H%M"),
+        "fmt": "json",
+    }
+    if stations_filter:
+        params["stations"] = stations_filter
+    primary_url = "https://supermag.jhuapl.edu/mag/indices/SuperMAG_AE.json"
+    fallback_url = "https://supermag.jhuapl.edu/mag/"
+
+    def extract_records(payload: Any) -> list[Any]:
+        if isinstance(payload, dict):
+            for key in (
+                "data",
+                "records",
+                "indices",
+                "result",
+                "values",
+                "MagIdx",
+                "magidx",
+            ):
+                block = payload.get(key)
+                if isinstance(block, list):
+                    return block
+        elif isinstance(payload, list):
+            return payload
+        return []
+
     try:
-        data = await fetch_json(
-            client,
-            "https://services.swpc.noaa.gov/json/rtsw/indices.json",
+        data = await fetch_json(client, primary_url, params)
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "Primary SuperMAG AE endpoint failed (%s); falling back to generic feed",
+            exc,
         )
-    except httpx.HTTPStatusError as exc:
-        # The documented real-time indices feed under rtsw/indices.json is not available
-        # or has been retired in the current SWPC JSON catalog. Do not fail the entire
-        # Step 1 ingestion if this endpoint 404s; log and skip until a maintained source
-        # for AE/AL/PC indices is wired up.
-        status = exc.response.status_code if exc.response is not None else None
-        if status == 404:
+        data = None
+
+    records = extract_records(data) if data is not None else []
+    if not records:
+        try:
+            data = await fetch_json(client, fallback_url, params)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                logger.warning(
+                    "SuperMAG fallback endpoint returned 404; skipping magnetometer ingest",
+                )
+                return
+            raise
+        except json.JSONDecodeError:
             logger.warning(
-                "Magnetometer indices JSON endpoint not available (404); skipping magnetometer ingest for now"
+                "SuperMAG fallback endpoint returned non-JSON content; skipping magnetometer ingest",
             )
             return
-        raise
-    cutoff = datetime.now(tz=UTC) - timedelta(days=days)
+        records = extract_records(data)
+    if not records:
+        logger.warning(
+            "SuperMAG response did not include records; skipping magnetometer ingest",
+        )
+        return
+
     rows: list[dict[str, Any]] = []
-    for entry in data or []:
+    for entry in records:
         if not isinstance(entry, dict):
             continue
-        ts = _parse_dt(entry.get("time_tag") or entry.get("time"))
-        if ts is None or ts < cutoff:
+        norm = _normalise_dict(entry)
+        ts = _parse_dt(
+            entry.get("time_tag")
+            or entry.get("time")
+            or entry.get("timestamp")
+            or norm.get("timestamp")
+            or norm.get("datetime")
+            or norm.get("utctime")
+        )
+        if ts is None:
+            date_field = (
+                entry.get("date")
+                or entry.get("date_utc")
+                or entry.get("Date_UTC")
+                or norm.get("date")
+                or norm.get("date_utc")
+            )
+            time_field = (
+                entry.get("time_utc")
+                or entry.get("Time_UTC")
+                or norm.get("time_utc")
+            )
+            if date_field and time_field:
+                ts = _parse_dt(f"{date_field}T{time_field}")
+        if ts is None:
             continue
-        station = entry.get("station") or entry.get("observatory")
+        station = (
+            entry.get("station")
+            or entry.get("station_code")
+            or entry.get("observatory")
+            or entry.get("site")
+            or entry.get("code")
+            or norm.get("station")
+            or norm.get("station_code")
+        )
+        if not station:
+            station = entry.get("index") or entry.get("source") or "supermag_global"
+        ae = _parse_float(
+            entry.get("ae")
+            or entry.get("AE")
+            or norm.get("sme")
+            or norm.get("sm_e")
+        )
+        al = _parse_float(
+            entry.get("al")
+            or entry.get("AL")
+            or norm.get("sml")
+            or norm.get("sm_l")
+        )
+        au = _parse_float(
+            entry.get("au")
+            or entry.get("AU")
+            or norm.get("smu")
+            or norm.get("sm_u")
+        )
+        pc = _parse_float(
+            entry.get("pc")
+            or entry.get("PC")
+            or norm.get("smr")
+            or norm.get("sm_r")
+        )
+        if ae is None and al is None and au is None and pc is None:
+            continue
         rows.append(
             {
                 "ts_utc": ts,
                 "station": station,
-                "ae": _parse_float(entry.get("ae")),
-                "al": _parse_float(entry.get("al")),
-                "au": _parse_float(entry.get("au")),
-                "pc": _parse_float(entry.get("pc")),
+                "ae": ae,
+                "al": al,
+                "au": au,
+                "pc": pc,
                 "raw": json.dumps(entry),
             }
         )
@@ -869,7 +1191,7 @@ async def run_ingestion(args: argparse.Namespace) -> None:
         raise SystemExit("SUPABASE_DB_URL is required unless --dry-run is supplied")
 
     async with SupabaseWriter(dsn, dry_run=args.dry_run) as writer:
-        async with httpx.AsyncClient(headers={"User-Agent": args.user_agent}) as client:
+        async with httpx.AsyncClient() as client:
             if "enlil" in selected:
                 await ingest_enlil(client, writer, args.days)
             if "sep" in selected:
@@ -899,11 +1221,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="subset of feeds to run (enlil, sep, radiation, aurora, coronal, scoreboard, drap, solar, magnetometer)",
     )
     parser.add_argument("--dry-run", action="store_true", help="skip Supabase writes")
-    parser.add_argument(
-        "--user-agent",
-        default="gaiaeyes-backend/step1 (contact: ops@gaiaeyes.com)",
-        help="HTTP User-Agent when talking to upstream APIs",
-    )
     return parser
 
 
