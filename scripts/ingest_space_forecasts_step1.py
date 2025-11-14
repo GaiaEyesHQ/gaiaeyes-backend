@@ -362,7 +362,7 @@ async def ingest_radiation_belts(
     logger.info("Fetching GOES electron flux")
     data = await fetch_json(
         client,
-        "https://services.swpc.noaa.gov/json/goes/primary/electrons-5-minute.json",
+        "https://services.swpc.noaa.gov/json/goes/primary/integral-electrons-3-day.json",
     )
     cutoff = datetime.now(tz=UTC) - timedelta(days=days)
     rows: list[dict[str, Any]] = []
@@ -433,21 +433,16 @@ async def ingest_aurora(
     client: httpx.AsyncClient,
     writer: SupabaseWriter,
 ) -> None:
-    logger.info("Fetching auroral power and Wing Kp")
+    logger.info("Fetching auroral power (OVATION); Wing Kp deprecated and handled elsewhere")
     aurora_data = await fetch_json(
         client,
         "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json",
     )
-    kp_data = await fetch_json(
-        client,
-        "https://services.swpc.noaa.gov/json/rtsw/wing-kp.json",
-    )
     rows: list[dict[str, Any]] = []
     now = datetime.now(tz=UTC)
+    # Wing Kp endpoint (rtsw/wing-kp.json) has been deprecated. We no longer fetch Kp here,
+    # and will source Kp from the existing ext.space_weather / marts rollups instead.
     latest_kp: float | None = None
-    if isinstance(kp_data, list) and kp_data:
-        last = kp_data[-1]
-        latest_kp = _parse_float(last.get("kp"))
     for entry in aurora_data or []:
         if not isinstance(entry, dict):
             continue
@@ -508,7 +503,7 @@ async def ingest_coronal_hole(
     logger.info("Fetching coronal-hole forecasts")
     data = await fetch_json(
         client,
-        "https://services.swpc.noaa.gov/json/predicted-solar-wind.json",
+        "https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json",
     )
     cutoff = datetime.now(tz=UTC) - timedelta(days=days)
     rows: list[dict[str, Any]] = []
@@ -543,14 +538,17 @@ async def ingest_cme_scoreboard(
 ) -> None:
     logger.info("Fetching DONKI CME Scoreboard")
     now = datetime.now(tz=UTC)
+    # Use the CCMC CME Scoreboard API. Wing-style DONKI endpoint has been retired.
     params = {
-        "startDate": (now - timedelta(days=days)).strftime("%Y-%m-%d"),
-        "endDate": now.strftime("%Y-%m-%d"),
-        "api_key": os.getenv("NASA_API", "DEMO_KEY"),
+        "CMEtimeStart": (now - timedelta(days=days)).strftime("%Y-%m-%d"),
+        "CMEtimeEnd": now.strftime("%Y-%m-%d"),
+        # Include active and closed-out CMEs and do not skip “no arrival observed” events.
+        "skipNoArrivalObservedCMEs": "false",
+        "closeOutCMEsOnly": "false",
     }
     data = await fetch_json(
         client,
-        "https://kauai.ccmc.gsfc.nasa.gov/DONKI/CMEscoreboard",
+        "https://kauai.ccmc.gsfc.nasa.gov/CMEscoreboard/WS/get/predictions",
         params,
     )
     rows: list[dict[str, Any]] = []
@@ -586,10 +584,20 @@ async def ingest_drap(
     days: int,
 ) -> None:
     logger.info("Fetching D-RAP absorption indices")
-    data = await fetch_json(
-        client,
-        "https://services.swpc.noaa.gov/json/drap/global.json",
-    )
+    try:
+        data = await fetch_json(
+            client,
+            "https://services.swpc.noaa.gov/json/drap/global.json",
+        )
+    except httpx.HTTPStatusError as exc:
+        # The documented DRAP product is provided as text (drap_global_frequencies.txt)
+        # and the JSON endpoint is not yet available. Do not fail the whole Step 1 run
+        # if this feed 404s; log and skip until a proper JSON API is wired up.
+        status = exc.response.status_code if exc.response is not None else None
+        if status == 404:
+            logger.warning("D-RAP JSON endpoint not available (404); skipping DRAP ingest for now")
+            return
+        raise
     cutoff = datetime.now(tz=UTC) - timedelta(days=days)
     rows: list[dict[str, Any]] = []
     for entry in data or []:
@@ -708,10 +716,23 @@ async def ingest_magnetometer(
     days: int,
 ) -> None:
     logger.info("Fetching AE/AL/PC magnetometer indices")
-    data = await fetch_json(
-        client,
-        "https://services.swpc.noaa.gov/json/rtsw/indices.json",
-    )
+    try:
+        data = await fetch_json(
+            client,
+            "https://services.swpc.noaa.gov/json/rtsw/indices.json",
+        )
+    except httpx.HTTPStatusError as exc:
+        # The documented real-time indices feed under rtsw/indices.json is not available
+        # or has been retired in the current SWPC JSON catalog. Do not fail the entire
+        # Step 1 ingestion if this endpoint 404s; log and skip until a maintained source
+        # for AE/AL/PC indices is wired up.
+        status = exc.response.status_code if exc.response is not None else None
+        if status == 404:
+            logger.warning(
+                "Magnetometer indices JSON endpoint not available (404); skipping magnetometer ingest for now"
+            )
+            return
+        raise
     cutoff = datetime.now(tz=UTC) - timedelta(days=days)
     rows: list[dict[str, Any]] = []
     for entry in data or []:
