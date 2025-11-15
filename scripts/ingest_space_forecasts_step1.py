@@ -1158,11 +1158,11 @@ async def ingest_magnetometer(
     writer: SupabaseWriter,
     days: int,
 ) -> None:
-    logger.info("Fetching AE/AL/PC magnetometer indices from SuperMAG")
-    stations_filter = os.getenv("SUPERMAG_STATIONS")
-    username = os.getenv("SUPERMAG_USERNAME")
+    logger.info("Fetching AE/AL/PC magnetometer indices from ")
+    stations_filter = os.getenv("_STATIONS")
+    username = os.getenv("_USERNAME")
     if not username:
-        logger.warning("SUPERMAG_USERNAME is not configured; skipping magnetometer ingest")
+        logger.warning("_USERNAME is not configured; skipping magnetometer ingest")
         return
     end_time = datetime.now(tz=UTC)
     start_time = end_time - timedelta(days=days)
@@ -1174,7 +1174,7 @@ async def ingest_magnetometer(
     }
     if stations_filter:
         params["stations"] = stations_filter
-    primary_url = "https://supermag.jhuapl.edu/mag/indices/SuperMAG_AE.json"
+    primary_url = "https://supermag.jhuapl.edu/services/indices.php"
     fallback_url = "https://supermag.jhuapl.edu/mag/"
 
     def extract_records(payload: Any) -> list[Any]:
