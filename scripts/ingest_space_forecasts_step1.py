@@ -275,6 +275,41 @@ def _extract_aurora_rows(data: Any) -> list[dict[str, Any]]:
 
         data_block = obj.get("data") or obj.get("coordinates")
         if isinstance(data_block, list):
+            # OVATION grid format: each entry is [longitude, latitude, aurora_value].
+            if data_block and isinstance(data_block[0], (list, tuple)) and len(data_block[0]) >= 3:
+                north_vals: list[float] = []
+                south_vals: list[float] = []
+                for entry in data_block:
+                    if not isinstance(entry, (list, tuple)) or len(entry) < 3:
+                        continue
+                    lon, lat, aur_val = entry[0], entry[1], entry[2]
+                    try:
+                        lat_f = float(lat)
+                        aur_f = float(aur_val)
+                    except (TypeError, ValueError):
+                        continue
+                    if lat_f > 0:
+                        north_vals.append(aur_f)
+                    elif lat_f < 0:
+                        south_vals.append(aur_f)
+                if north_vals:
+                    total = sum(north_vals)
+                    emit(
+                        ts,
+                        "north",
+                        total,
+                        {"hemisphere": "north", "sum": total, "count": len(north_vals), "source": "ovation_grid"},
+                    )
+                if south_vals:
+                    total = sum(south_vals)
+                    emit(
+                        ts,
+                        "south",
+                        total,
+                        {"hemisphere": "south", "sum": total, "count": len(south_vals), "source": "ovation_grid"},
+                    )
+                return
+            # Fallback: list of dict records with hemisphere/power fields.
             for entry in data_block:
                 if isinstance(entry, dict):
                     entry_norm = _normalise_dict(entry)
