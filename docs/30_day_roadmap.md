@@ -97,7 +97,7 @@ Close ingestion gaps so Supabase becomes the single source for all predictive fe
    - Verify Supabase service-role credentials have insert/update privileges for the new schemas.
 
 2. **Environment Configuration**
-   - Add any new environment variables (e.g., `SUPERMAG_API_KEY`, `SWPC_API_EMAIL`) to `env.production`, staging, and deployment environments. Update onboarding docs so future engineers know how to configure them.
+   - Add any new environment variables to `env.production`, staging, and deployment environments. Update onboarding docs so future engineers know how to configure them.
    - Confirm cron/worker infrastructure (Heroku Scheduler, GitHub Actions, etc.) has available capacity for the additional ingestion jobs.
 
 3. **Data Source Validation**

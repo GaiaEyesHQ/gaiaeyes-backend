@@ -20,7 +20,7 @@ This guide documents the maintenance and data-processing scripts located in [`/s
 | `ingest_space_news.py` | Aggregates space-weather RSS/JSON feeds (NASA, SWPC, DONKI) into a news digest JSON file. | `OUTPUT_JSON_PATH`, `MEDIA_DIR`, `LOOKBACK_DAYS`, plus DONKI API key via `NASA_API_KEY` when provided |
 | `ingest_space_weather_custom.py` | Streams high-resolution Kp, solar-wind plasma, and magnetometer data into `ext.space_weather`. | `SUPABASE_DB_URL` (required); optional overrides for `KP_URL`, `SW_URL`, `MAG_URL`, `HTTP_USER_AGENT`, `SINCE_HOURS` |
 | `ingest_space_weather_swpc.py` | Fetches SWPC summary feeds (Kp, speed, Bz), merges timestamps, upserts into `ext.space_weather`, and can emit a dashboard JSON snapshot. | `SUPABASE_DB_URL` (required); `SINCE_HOURS`, `OUTPUT_JSON_PATH`, `OUTPUT_JSON_GZIP`, `NEXT72_DEFAULT`, `HTTP_USER_AGENT` |
-| `ingest_space_forecasts_step1.py` | Consolidated Step 1 ingestion covering Enlil CME runs, SEP/radiation belts, aurora power, coronal-hole forecasts, D-RAP, solar-cycle predictions, and magnetometer rollups. Writes to the new `ext.*`/`marts.*` tables. | `SUPABASE_DB_URL` (required unless `--dry-run`), `NASA_API`; optional `--days`, `--only`, `--user-agent` |
+| `ingest_space_forecasts_step1.py` | Consolidated Step 1 ingestion covering Enlil CME runs, SEP/radiation belts, OVATION aurora power (`ext.aurora_power` + `marts.aurora_outlook`), coronal-hole forecasts, D-RAP text absorption (`ext.drap_absorption` + `marts.drap_absorption_daily`), SuperMAG magnetometer indices (`ext.magnetometer_chain` + `marts.magnetometer_regional`), and solar-cycle predictions. | `SUPABASE_DB_URL` (required unless `--dry-run`), `NASA_API`; optional `--days`, `--only`, `SUPERMAG_STATIONS` |
 | `ingest_usgs_quakes.py` | Collects USGS day/week feeds, curates recent M5+ events, optional PostgREST upserts, and writes `quakes_latest.json`. | `MEDIA_DIR`, `OUTPUT_JSON_PATH`; optional `SUPABASE_REST_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY` |
 | `ingest_usgs_history.py` | Builds historical quake trend series (daily/monthly) and emits `quakes_history.json`. | `OUTPUT_JSON_PATH`, `HISTORY_DAYS`, `HISTORY_MONTHS` |
 | `space_visuals_ingest.py` | Downloads imagery for the live “Space Weather” section (SUVI, aurora, LASCO, CCOR, geospace plots) plus GOES JSON traces. Assets land under `gaiaeyes-media/images/space` and `space_live.json`. | `MEDIA_DIR`, `OUTPUT_JSON_PATH`, plus numerous URL overrides such as `SUVI_URLS`, `LASCO_C3_URLS`, `CCOR1_MP4_NAME` |
@@ -60,6 +60,8 @@ This guide documents the maintenance and data-processing scripts located in [`/s
 * Publishing scripts expect the latest ingestion JSON files in `gaiaeyes-media/data`. Run ingestors first or point `MEDIA_DIR` to a directory containing fresh source files.
 * Shell out `scan-secrets.sh` as part of workflow reviews, and run `check_site_assets.py` periodically to catch stale vendor URLs.
 * **Step 1 Cron** – schedule `ingest_space_forecasts_step1.py` every 30 minutes with staggered retries. Recommended flags: `--days 3` for routine operation, and `--only enlil solar` for ad-hoc backfills. Ensure Supabase write credentials are scoped to the new schemas.
+
+> SuperMAG magnetometer data are provided courtesy of SuperMAG, Johns Hopkins University Applied Physics Laboratory. Cite their contribution on dashboards or downstream artifacts that surface the indices.
 
 ## Adding new scripts
 
