@@ -1158,12 +1158,20 @@ async def ingest_magnetometer(
     writer: SupabaseWriter,
     days: int,
 ) -> None:
-    logger.info("Fetching AE/AL/PC magnetometer indices from ")
-    stations_filter = os.getenv("_STATIONS")
-    username = os.getenv("_USERNAME")
+    primary_url = "https://supermag.jhuapl.edu/services/indices.php"
+    fallback_url = "https://supermag.jhuapl.edu/mag/"
+
+    USERNAME_ENV = "SUPERMAG_USERNAME"
+    STATIONS_ENV = "SUPERMAG_STATIONS"
+
+    username = os.getenv(USERNAME_ENV)
+    stations_filter = os.getenv(STATIONS_ENV)
+
     if not username:
-        logger.warning("_USERNAME is not configured; skipping magnetometer ingest")
+        logger.warning("%s is not configured; skipping magnetometer ingest", USERNAME_ENV)
         return
+
+    logger.info("Fetching AE/AL/PC magnetometer indices from %s", primary_url)
     end_time = datetime.now(tz=UTC)
     start_time = end_time - timedelta(days=days)
     params = {
@@ -1174,8 +1182,6 @@ async def ingest_magnetometer(
     }
     if stations_filter:
         params["stations"] = stations_filter
-    primary_url = "https://supermag.jhuapl.edu/services/indices.php"
-    fallback_url = "https://supermag.jhuapl.edu/mag/"
 
     def extract_records(payload: Any) -> list[Any]:
         if isinstance(payload, dict):
