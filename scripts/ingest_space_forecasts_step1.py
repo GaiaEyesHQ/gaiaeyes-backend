@@ -322,6 +322,14 @@ def _extract_aurora_rows(data: Any) -> list[dict[str, Any]]:
 _DRAP_PIVOT_COL = re.compile(r"(?P<region>[a-z]+)_(?P<freq>[0-9]+(?:\.[0-9]+)?)m?hz?")
 
 
+@dataclass
+class DrapGrid:
+    detected: bool
+    valid_time: datetime | None
+    frequency_mhz: float | None
+    rows: list[tuple[float, float, float]]
+
+
 def _parse_frequency(value: Any) -> float | None:
     if value is None:
         return None
@@ -362,6 +370,111 @@ def _parse_drap_timestamp(entry: dict[str, Any]) -> datetime | None:
         ts = _parse_dt(f"{date_val} {time_val}")
         if ts:
             return ts
+    return None
+
+
+def _parse_drap_grid(text: str) -> DrapGrid:
+    """Parse the DRAP global grid text product into lat/lon/value triples."""
+
+    valid_time: datetime | None = None
+    frequency_mhz: float | None = None
+    longitudes: list[float] | None = None
+    waiting_for_longitudes = False
+    rows: list[tuple[float, float, float]] = []
+
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            header = stripped.lstrip("#").strip()
+            header_lower = header.lower()
+            if "product valid at" in header_lower and valid_time is None:
+                _, _, remainder = header.partition(":")
+                ts_text = remainder.strip() or header
+                ts_text = re.sub(r"\s*utc$", "", ts_text, flags=re.IGNORECASE)
+                parsed = _parse_dt(ts_text)
+                if parsed:
+                    valid_time = parsed
+            if frequency_mhz is None and "mhz" in header_lower:
+                match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*mhz", header_lower)
+                if match:
+                    try:
+                        frequency_mhz = float(match.group(1))
+                    except ValueError:
+                        pass
+            if "latitude and longitude" in header_lower:
+                waiting_for_longitudes = True
+            continue
+        if waiting_for_longitudes and longitudes is None:
+            lon_values: list[float] = []
+            for token in stripped.split():
+                try:
+                    lon_values.append(float(token))
+                except ValueError:
+                    continue
+            if lon_values:
+                longitudes = lon_values
+                waiting_for_longitudes = False
+            continue
+        if longitudes is None:
+            continue
+        if re.fullmatch(r"-+", stripped):
+            continue
+        if "|" not in line:
+            continue
+        lat_text, values_text = line.split("|", 1)
+        try:
+            lat = float(lat_text.strip())
+        except ValueError:
+            logger.debug("Skipping DRAP row with invalid latitude: %s", lat_text)
+            continue
+        value_tokens = values_text.strip().split()
+        if len(value_tokens) != len(longitudes):
+            logger.debug(
+                "Skipping DRAP row due to column mismatch (lat=%s)",
+                lat_text.strip(),
+            )
+            continue
+        parsed_values: list[float] = []
+        valid_row = True
+        for token in value_tokens:
+            parsed_value = _parse_float(token)
+            if parsed_value is None:
+                valid_row = False
+                break
+            parsed_values.append(parsed_value)
+        if not valid_row:
+            logger.debug("Skipping DRAP row due to non-numeric values at lat=%s", lat)
+            continue
+        for lon, absorption in zip(longitudes, parsed_values):
+            rows.append((lat, lon, absorption))
+
+    detected = longitudes is not None
+    return DrapGrid(
+        detected=detected,
+        valid_time=valid_time,
+        frequency_mhz=frequency_mhz,
+        rows=rows,
+    )
+
+
+def _parse_month_label(value: Any) -> date | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if re.fullmatch(r"\d{4}-\d{2}", text):
+        text = f"{text}-01"
+    try:
+        parsed = datetime.strptime(text, "%Y-%m-%d").date()
+        return parsed.replace(day=1)
+    except ValueError:
+        dt_value = _parse_dt(text)
+        if dt_value:
+            return date(dt_value.year, dt_value.month, 1)
     return None
 
 
@@ -803,81 +916,116 @@ async def ingest_drap(
             return
         raise
 
-    header_cols: list[str] | None = None
-    records: list[dict[str, Any]] = []
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith(":"):
-            continue
-        if line.startswith("#"):
-            header_cols = [_normalise_key(part) for part in line.lstrip("#").split()]
-            continue
-        parts = line.split()
-        if header_cols is None:
-            header_cols = [_normalise_key(part) for part in parts]
-            continue
-        if not parts:
-            continue
-        count = min(len(parts), len(header_cols))
-        record = {header_cols[i]: parts[i] for i in range(count)}
-        records.append(record)
-
-    if not records:
-        logger.warning("No parsable DRAP records found in text feed; skipping")
-        return
-
     cutoff = datetime.now(tz=UTC) - timedelta(days=days)
     rows: list[dict[str, Any]] = []
-    for entry in records:
-        norm = _normalise_dict(entry)
-        ts = _parse_drap_timestamp(norm)
-        if ts is None or ts < cutoff:
-            continue
-        region_value = (
-            norm.get("region")
-            or norm.get("band")
-            or norm.get("latitude_band")
-            or norm.get("sector")
-        )
-        freq_value = norm.get("frequency") or norm.get("freq")
-        absorption_value = (
-            norm.get("absorption_db")
-            or norm.get("absorption")
-            or norm.get("db")
-        )
-        freq = _parse_frequency(freq_value)
-        absorption = _parse_float(absorption_value)
-        added = False
-        if freq is not None and absorption is not None:
+
+    grid = _parse_drap_grid(text)
+    if grid.detected:
+        if grid.valid_time is None:
+            logger.warning(
+                "Detected DRAP grid but could not parse Product Valid At timestamp; skipping",
+            )
+            return
+        if grid.valid_time < cutoff:
+            logger.info(
+                "DRAP grid is older than %s days (valid at %s); skipping",
+                days,
+                grid.valid_time,
+            )
+            return
+        frequency = grid.frequency_mhz or 10.0
+        for lat, lon, absorption in grid.rows:
             rows.append(
                 {
-                    "ts_utc": ts,
-                    "frequency_mhz": freq,
-                    "region": _normalise_region(region_value),
+                    "ts_utc": grid.valid_time,
+                    "lat": lat,
+                    "lon": lon,
+                    "frequency_mhz": frequency,
+                    "region": "global",
                     "absorption_db": absorption,
-                    "raw": json.dumps(entry),
+                    "raw": json.dumps({"lat": lat, "lon": lon, "value": absorption}),
                 }
             )
-            added = True
-        if added:
-            continue
-        for key, value in norm.items():
-            match = _DRAP_PIVOT_COL.match(key)
-            if not match:
+        if not rows:
+            logger.warning("Detected DRAP grid but no valid absorption rows were parsed")
+    else:
+        header_cols: list[str] | None = None
+        records: list[dict[str, Any]] = []
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith(":"):
                 continue
-            freq = _parse_frequency(match.group("freq"))
-            absorption = _parse_float(value)
-            if freq is None or absorption is None:
+            if line.startswith("#"):
+                header_cols = [_normalise_key(part) for part in line.lstrip("#").split()]
                 continue
-            rows.append(
-                {
-                    "ts_utc": ts,
-                    "frequency_mhz": freq,
-                    "region": _normalise_region(match.group("region")),
-                    "absorption_db": absorption,
-                    "raw": json.dumps(entry),
-                }
+            parts = line.split()
+            if header_cols is None:
+                header_cols = [_normalise_key(part) for part in parts]
+                continue
+            if not parts:
+                continue
+            count = min(len(parts), len(header_cols))
+            record = {header_cols[i]: parts[i] for i in range(count)}
+            records.append(record)
+
+        if not records:
+            logger.warning("No parsable DRAP records found in text feed; skipping")
+            return
+
+        for entry in records:
+            norm = _normalise_dict(entry)
+            ts = _parse_drap_timestamp(norm)
+            if ts is None or ts < cutoff:
+                continue
+            region_value = (
+                norm.get("region")
+                or norm.get("band")
+                or norm.get("latitude_band")
+                or norm.get("sector")
             )
+            freq_value = norm.get("frequency") or norm.get("freq")
+            absorption_value = (
+                norm.get("absorption_db")
+                or norm.get("absorption")
+                or norm.get("db")
+            )
+            freq = _parse_frequency(freq_value)
+            absorption = _parse_float(absorption_value)
+            added = False
+            if freq is not None and absorption is not None:
+                rows.append(
+                    {
+                        "ts_utc": ts,
+                        "frequency_mhz": freq,
+                        "region": _normalise_region(region_value),
+                        "absorption_db": absorption,
+                        "raw": json.dumps(entry),
+                    }
+                )
+                added = True
+            if added:
+                continue
+            for key, value in norm.items():
+                match = _DRAP_PIVOT_COL.match(key)
+                if not match:
+                    continue
+                freq = _parse_frequency(match.group("freq"))
+                absorption = _parse_float(value)
+                if freq is None or absorption is None:
+                    continue
+                rows.append(
+                    {
+                        "ts_utc": ts,
+                        "frequency_mhz": freq,
+                        "region": _normalise_region(match.group("region")),
+                        "absorption_db": absorption,
+                        "raw": json.dumps(entry),
+                    }
+                )
+
+    if not rows:
+        logger.warning("No D-RAP rows survived parsing; skipping upsert")
+        return
     if rows:
         await writer.upsert_many(
             "ext",
@@ -930,18 +1078,50 @@ async def ingest_solar_cycle(
     )
     rows: list[dict[str, Any]] = []
     mart_rows: list[dict[str, Any]] = []
-    for entry in data or []:
+    global_issue: datetime | None = None
+    if isinstance(data, dict):
+        global_issue = _parse_dt(
+            data.get("issueTime")
+            or data.get("issued")
+            or data.get("issue_time")
+            or data.get("issue")
+        )
+        records = data.get("records") or data.get("data") or data.get("values")
+        if isinstance(records, list):
+            iterable = records
+        else:
+            iterable = [data]
+    else:
+        iterable = data or []
+    for entry in iterable:
         if not isinstance(entry, dict):
             continue
-        issued = _parse_dt(entry.get("issueTime") or entry.get("issued"))
-        forecast_month = _parse_dt(entry.get("forecastTime") or entry.get("time_tag"))
+        issued = _parse_dt(
+            entry.get("issueTime")
+            or entry.get("issue_time")
+            or entry.get("issued")
+            or entry.get("issued_at")
+        )
+        if issued is None:
+            issued = global_issue
+        forecast_month = _parse_month_label(
+            entry.get("time-tag")
+            or entry.get("time_tag")
+            or entry.get("forecast_month")
+            or entry.get("forecastTime")
+        )
         if forecast_month is None:
             continue
         sunspot = _parse_float(entry.get("predicted_ssn") or entry.get("sunspot_number"))
-        flux = _parse_float(entry.get("predicted_f107"))
+        flux = _parse_float(
+            entry.get("predicted_f10.7")
+            or entry.get("predicted_f107")
+            or entry.get("f10.7")
+            or entry.get("f107")
+        )
         rows.append(
             {
-                "forecast_month": forecast_month.date(),
+                "forecast_month": forecast_month,
                 "issued_at": issued,
                 "sunspot_number": sunspot,
                 "f10_7_flux": flux,
@@ -950,7 +1130,7 @@ async def ingest_solar_cycle(
         )
         mart_rows.append(
             {
-                "forecast_month": forecast_month.date(),
+                "forecast_month": forecast_month,
                 "sunspot_number": sunspot,
                 "f10_7_flux": flux,
                 "issued_at": issued,

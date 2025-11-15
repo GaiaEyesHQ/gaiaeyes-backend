@@ -63,6 +63,12 @@ This guide documents the maintenance and data-processing scripts located in [`/s
 
 > SuperMAG magnetometer data are provided courtesy of SuperMAG, Johns Hopkins University Applied Physics Laboratory. Cite their contribution on dashboards or downstream artifacts that surface the indices.
 
+### Step 1 dataset notes
+
+**D-RAP absorption grid** – `ingest_space_forecasts_step1.py` fetches `https://services.swpc.noaa.gov/text/drap_global_frequencies.txt`, extracts the “Product Valid At” timestamp, longitude header, and every latitude row, and flattens the lat/lon grid into `ext.drap_absorption`. Each grid cell is labeled as the `global` region with the 10 MHz carrier (or the frequency declared in the header) plus the parsed absorption dB value; the script then rolls the day’s grid into `marts.drap_absorption_daily` (max + average absorption per day/region).
+
+**Solar-cycle predictions** – The same script ingests `https://services.swpc.noaa.gov/json/solar-cycle/predicted-solar-cycle.json`, treating each object’s `time-tag` (`YYYY-MM`) as the first day of that month for `forecast_month`. The feed’s `predicted_ssn` and `predicted_f10.7` fields populate `sunspot_number` and `f10_7_flux` respectively, with the `issued_at` column filled from `issueTime` when present (or left NULL otherwise) in both `ext.solar_cycle_forecast` and `marts.solar_cycle_progress`.
+
 ## Adding new scripts
 
 When adding to `/scripts`:
