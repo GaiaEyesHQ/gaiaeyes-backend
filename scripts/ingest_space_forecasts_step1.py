@@ -66,40 +66,30 @@ logger = logging.getLogger("gaiaeyes.ingest.step1")
 
 
 def _parse_dt(value: str | None) -> datetime | None:
-    """Parse ISO8601-ish timestamps used by NOAA/NASA feeds.
+    """Parse ISO8601-ish timestamps used by NOAA/NASA feeds."""
 
-    Design: if a timestamp string has no explicit timezone, we treat it as
-    already being in UTC and simply attach tzinfo=UTC. If the string includes
-    an offset or ``Z``, we normalise it to UTC via astimezone(UTC).
-    """
     if not value:
         return None
     value = value.strip()
     if not value:
         return None
-
-    # Normalise trailing ``Z`` to ``+00:00`` for fromisoformat.
-    if value.endswith("Z"):
-        value = value[:-1] + "+00:00"
-
     try:
-        dt = datetime.fromisoformat(value)
+        # Normalise trailing ``Z`` to ``+00:00`` for fromisoformat.
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+        # Some feeds return fractional seconds but others do not; letting
+        # ``fromisoformat`` handle both makes the function robust.
+        return datetime.fromisoformat(value).astimezone(UTC)
     except ValueError:
         # Try a couple of common fallbacks (space separator, missing offset).
-        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M"):
+        try:
+            return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+        except ValueError:
             try:
-                return datetime.strptime(value, fmt).replace(tzinfo=UTC)
+                return datetime.strptime(value, "%Y-%m-%dT%H:%M").replace(tzinfo=UTC)
             except ValueError:
-                continue
-        logger.debug("could not parse datetime value %s", value)
-        return None
-
-    # If the parsed datetime had no timezone, treat it as already UTC.
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=UTC)
-
-    # If it had a timezone, normalise to UTC.
-    return dt.astimezone(UTC)
+                logger.debug("could not parse datetime value %s", value)
+                return None
 
 
 def _parse_float(value: Any) -> float | None:
@@ -479,7 +469,7 @@ async def ingest_enlil(
     params = {
         "startDate": (now - timedelta(days=days)).strftime("%Y-%m-%d"),
         "endDate": now.strftime("%Y-%m-%d"),
-        "api_key": os.getenv("NASA_API", "DEMO_KEY"),
+        "api_key": os.getenv("NASA_API_KEY"),
     }
     data = await fetch_json(client, "https://api.nasa.gov/DONKI/WSAEnlilSimulations", params)
     ext_rows: list[dict[str, Any]] = []
