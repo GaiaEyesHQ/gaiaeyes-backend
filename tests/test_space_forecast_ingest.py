@@ -205,8 +205,8 @@ def test_ingest_magnetometer_supermag(monkeypatch):
                 "station": "ALE",
                 "sme": 480,
                 "sml": -320,
-                "smu": 160,
-                "smr": 2.1,
+                "smu": 0,
+                "smr": 0,
             },
             {
                 "timestamp": "2024-11-05T12:10:00Z",
@@ -222,10 +222,12 @@ def test_ingest_magnetometer_supermag(monkeypatch):
     async def fake_fetch_json(client, url, params=None):  # noqa: ARG001
         assert url.startswith("https://supermag.jhuapl.edu/mag/indices/SuperMAG_AE.json")
         assert params and params.get("fmt") == "json"
+        assert params.get("user") == "demo-user"
         return sample
 
     async def runner():
         monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
+        monkeypatch.setenv("SUPERMAG_USERNAME", "demo-user")
         writer = RecordingWriter()
         await ingest_magnetometer(None, writer, days=1)  # type: ignore[arg-type]
         return writer
@@ -262,6 +264,7 @@ def test_ingest_magnetometer_primary_bad_json(monkeypatch):
 
     async def runner():
         monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
+        monkeypatch.setenv("SUPERMAG_USERNAME", "demo-user")
         writer = RecordingWriter()
         await ingest_magnetometer(None, writer, days=1)  # type: ignore[arg-type]
         return writer
@@ -281,9 +284,64 @@ def test_ingest_magnetometer_fallback_handles_html(monkeypatch):
 
     async def runner():
         monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
+        monkeypatch.setenv("SUPERMAG_USERNAME", "demo-user")
         writer = RecordingWriter()
         await ingest_magnetometer(None, writer, days=1)  # type: ignore[arg-type]
         return writer
 
     writer = asyncio.run(runner())
     assert writer.calls == []
+
+
+def test_ingest_magnetometer_requires_username(monkeypatch):
+    from scripts import ingest_space_forecasts_step1 as module
+
+    async def fake_fetch_json(client, url, params=None):  # noqa: ARG001
+        raise AssertionError("should not be called without username")
+
+    async def runner():
+        monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
+        monkeypatch.delenv("SUPERMAG_USERNAME", raising=False)
+        writer = RecordingWriter()
+        await ingest_magnetometer(None, writer, days=1)  # type: ignore[arg-type]
+        return writer
+
+    writer = asyncio.run(runner())
+    assert writer.calls == []
+
+
+def test_ingest_magnetometer_preserves_zero_values(monkeypatch):
+    from scripts import ingest_space_forecasts_step1 as module
+
+    sample = {
+        "records": [
+            {
+                "timestamp": "2024-11-05T15:00:00Z",
+                "station": "BRW",
+                "ae": 0,
+                "al": 0,
+                "au": 0,
+                "pc": 0,
+            }
+        ]
+    }
+
+    async def fake_fetch_json(client, url, params=None):  # noqa: ARG001
+        if "SuperMAG_AE" in url:
+            return sample
+        return sample
+
+    async def runner():
+        monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
+        monkeypatch.setenv("SUPERMAG_USERNAME", "demo-user")
+        writer = RecordingWriter()
+        await ingest_magnetometer(None, writer, days=1)  # type: ignore[arg-type]
+        return writer
+
+    writer = asyncio.run(runner())
+    ext_rows = writer.rows_for("ext", "magnetometer_chain")
+    assert len(ext_rows) == 1
+    assert ext_rows[0]["ae"] == 0
+    assert ext_rows[0]["al"] == 0
+    assert ext_rows[0]["au"] == 0
+    assert ext_rows[0]["pc"] == 0

@@ -104,6 +104,13 @@ def _parse_float(value: Any) -> float | None:
     return f
 
 
+def _coalesce(*values: Any) -> Any:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
 def _s_scale_from_flux(flux: float | None) -> tuple[str | None, int | None]:
     """Return NOAA S-scale class and integer index for a flux measurement."""
 
@@ -275,41 +282,6 @@ def _extract_aurora_rows(data: Any) -> list[dict[str, Any]]:
 
         data_block = obj.get("data") or obj.get("coordinates")
         if isinstance(data_block, list):
-            # OVATION grid format: each entry is [longitude, latitude, aurora_value].
-            if data_block and isinstance(data_block[0], (list, tuple)) and len(data_block[0]) >= 3:
-                north_vals: list[float] = []
-                south_vals: list[float] = []
-                for entry in data_block:
-                    if not isinstance(entry, (list, tuple)) or len(entry) < 3:
-                        continue
-                    lon, lat, aur_val = entry[0], entry[1], entry[2]
-                    try:
-                        lat_f = float(lat)
-                        aur_f = float(aur_val)
-                    except (TypeError, ValueError):
-                        continue
-                    if lat_f > 0:
-                        north_vals.append(aur_f)
-                    elif lat_f < 0:
-                        south_vals.append(aur_f)
-                if north_vals:
-                    total = sum(north_vals)
-                    emit(
-                        ts,
-                        "north",
-                        total,
-                        {"hemisphere": "north", "sum": total, "count": len(north_vals), "source": "ovation_grid"},
-                    )
-                if south_vals:
-                    total = sum(south_vals)
-                    emit(
-                        ts,
-                        "south",
-                        total,
-                        {"hemisphere": "south", "sum": total, "count": len(south_vals), "source": "ovation_grid"},
-                    )
-                return
-            # Fallback: list of dict records with hemisphere/power fields.
             for entry in data_block:
                 if isinstance(entry, dict):
                     entry_norm = _normalise_dict(entry)
@@ -1008,12 +980,17 @@ async def ingest_magnetometer(
 ) -> None:
     logger.info("Fetching AE/AL/PC magnetometer indices from SuperMAG")
     stations_filter = os.getenv("SUPERMAG_STATIONS")
+    username = os.getenv("SUPERMAG_USERNAME")
+    if not username:
+        logger.warning("SUPERMAG_USERNAME is not configured; skipping magnetometer ingest")
+        return
     end_time = datetime.now(tz=UTC)
     start_time = end_time - timedelta(days=days)
     params = {
         "start": start_time.strftime("%Y%m%d%H%M"),
         "end": end_time.strftime("%Y%m%d%H%M"),
         "fmt": "json",
+        "user": username,
     }
     if stations_filter:
         params["stations"] = stations_filter
@@ -1112,28 +1089,36 @@ async def ingest_magnetometer(
         if not station:
             station = entry.get("index") or entry.get("source") or "supermag_global"
         ae = _parse_float(
-            entry.get("ae")
-            or entry.get("AE")
-            or norm.get("sme")
-            or norm.get("sm_e")
+            _coalesce(
+                entry.get("ae"),
+                entry.get("AE"),
+                norm.get("sme"),
+                norm.get("sm_e"),
+            )
         )
         al = _parse_float(
-            entry.get("al")
-            or entry.get("AL")
-            or norm.get("sml")
-            or norm.get("sm_l")
+            _coalesce(
+                entry.get("al"),
+                entry.get("AL"),
+                norm.get("sml"),
+                norm.get("sm_l"),
+            )
         )
         au = _parse_float(
-            entry.get("au")
-            or entry.get("AU")
-            or norm.get("smu")
-            or norm.get("sm_u")
+            _coalesce(
+                entry.get("au"),
+                entry.get("AU"),
+                norm.get("smu"),
+                norm.get("sm_u"),
+            )
         )
         pc = _parse_float(
-            entry.get("pc")
-            or entry.get("PC")
-            or norm.get("smr")
-            or norm.get("sm_r")
+            _coalesce(
+                entry.get("pc"),
+                entry.get("PC"),
+                norm.get("smr"),
+                norm.get("sm_r"),
+            )
         )
         if ae is None and al is None and au is None and pc is None:
             continue

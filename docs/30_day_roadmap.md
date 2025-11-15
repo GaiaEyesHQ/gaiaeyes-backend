@@ -78,7 +78,7 @@ Close ingestion gaps so Supabase becomes the single source for all predictive fe
 > **Technical Notes**
 > - Reuse existing ingestion patterns (see `scripts/ingest_nasa_donki.py`, `scripts/ingest_space_weather_swpc.py`).
 > - Follow project linting/typing standards (`black`, `ruff`, `mypy` as configured).
-> - Ensure secrets/keys are pulled from environment variables—do not hardcode credentials. The existing `NASA_API` variable should be used for DONKI/WSA–Enlil requests; NOAA feeds do not require keys; SuperMAG endpoints are open but the attribution guidelines in their API docs must be respected when surfacing data.
+> - Ensure secrets/keys are pulled from environment variables—do not hardcode credentials. The existing `NASA_API` variable should be used for DONKI/WSA–Enlil requests; NOAA feeds do not require keys; SuperMAG endpoints expect a registered username passed via `SUPERMAG_USERNAME` plus the attribution guidelines in their API docs when surfacing data.
 >
 > **Testing Expectations**
 > - Add or update unit/integration tests for new scripts/utilities.
@@ -93,7 +93,7 @@ Close ingestion gaps so Supabase becomes the single source for all predictive fe
 **Human Owner Checklist (complete outside of Codex)**
 
 1. **Credential & Access Preparation**
-   - Confirm the `NASA_API` key in the secrets manager is valid for DONKI/WSA–Enlil calls; NOAA SWPC endpoints remain keyless, and SuperMAG access relies on following their credit requirements rather than credentials.
+   - Confirm the `NASA_API` key in the secrets manager is valid for DONKI/WSA–Enlil calls; NOAA SWPC endpoints remain keyless, and SuperMAG access requires the registered username stored in `SUPERMAG_USERNAME` (and their credit requirements).
    - Verify Supabase service-role credentials have insert/update privileges for the new schemas.
 
 2. **Environment Configuration**
