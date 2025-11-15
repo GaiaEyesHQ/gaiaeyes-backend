@@ -469,7 +469,7 @@ async def ingest_enlil(
     params = {
         "startDate": (now - timedelta(days=days)).strftime("%Y-%m-%d"),
         "endDate": now.strftime("%Y-%m-%d"),
-        "api_key": os.getenv("NASA_API", "DEMO_KEY"),
+        "api_key": os.getenv("NASA_API_KEY"),
     }
     data = await fetch_json(client, "https://api.nasa.gov/DONKI/WSAEnlilSimulations", params)
     ext_rows: list[dict[str, Any]] = []
