@@ -239,6 +239,38 @@ def test_ingest_magnetometer_supermag(monkeypatch):
     assert stations
 
 
+def test_ingest_magnetometer_primary_bad_json(monkeypatch):
+    from scripts import ingest_space_forecasts_step1 as module
+
+    sample = {
+        "records": [
+            {
+                "timestamp": "2024-11-05T13:00:00Z",
+                "station": "ALE",
+                "sme": 420,
+                "sml": -210,
+                "smu": 150,
+                "smr": 1.8,
+            }
+        ]
+    }
+
+    async def fake_fetch_json(client, url, params=None):  # noqa: ARG001
+        if "SuperMAG_AE" in url:
+            raise json.JSONDecodeError("bad", "<html>oops", 0)
+        return sample
+
+    async def runner():
+        monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
+        writer = RecordingWriter()
+        await ingest_magnetometer(None, writer, days=1)  # type: ignore[arg-type]
+        return writer
+
+    writer = asyncio.run(runner())
+    ext_rows = writer.rows_for("ext", "magnetometer_chain")
+    assert len(ext_rows) == 1
+
+
 def test_ingest_magnetometer_fallback_handles_html(monkeypatch):
     from scripts import ingest_space_forecasts_step1 as module
 

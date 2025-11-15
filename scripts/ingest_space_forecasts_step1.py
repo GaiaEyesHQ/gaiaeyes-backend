@@ -1005,7 +1005,7 @@ async def ingest_magnetometer(
 
     try:
         data = await fetch_json(client, primary_url, params)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, json.JSONDecodeError) as exc:
         logger.warning(
             "Primary SuperMAG AE endpoint failed (%s); falling back to generic feed",
             exc,
@@ -1191,7 +1191,7 @@ async def run_ingestion(args: argparse.Namespace) -> None:
         raise SystemExit("SUPABASE_DB_URL is required unless --dry-run is supplied")
 
     async with SupabaseWriter(dsn, dry_run=args.dry_run) as writer:
-        async with httpx.AsyncClient(headers={"User-Agent": args.user_agent}) as client:
+        async with httpx.AsyncClient() as client:
             if "enlil" in selected:
                 await ingest_enlil(client, writer, args.days)
             if "sep" in selected:
@@ -1221,11 +1221,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="subset of feeds to run (enlil, sep, radiation, aurora, coronal, scoreboard, drap, solar, magnetometer)",
     )
     parser.add_argument("--dry-run", action="store_true", help="skip Supabase writes")
-    parser.add_argument(
-        "--user-agent",
-        default="gaiaeyes-backend/step1 (contact: ops@gaiaeyes.com)",
-        help="HTTP User-Agent when talking to upstream APIs",
-    )
     return parser
 
 
