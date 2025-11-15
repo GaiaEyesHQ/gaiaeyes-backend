@@ -29,6 +29,7 @@ sensitive entries (if any) should move to repository variables.
 | `OPENAI_API_KEY` | OpenAI access key | GitHub org secret |
 | `SOCIAL_WEBHOOK_URL` | Social automation webhook | GitHub org secret |
 | `SUPABASE_DB_URL` | Supabase pooled database URL | GitHub org secret |
+| `SUPERMAG_USERNAME` | Registered username required for SuperMAG ingest | GitHub org secret |
 | `SUPABASE_REST_URL` | Supabase REST endpoint | Consider moving to repository variable |
 | `SUPABASE_SERVICE_KEY` | Supabase service role key | GitHub org secret |
 | `SUPABASE_SERVICE_ROLE` | Supabase service role secret | GitHub org secret |
