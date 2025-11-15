@@ -28,7 +28,7 @@ jobs:
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           NASA_API_KEY: ${{ secrets.NASA_API_KEY }}
-          USERNAME: ${{ secrets.SUPERMAG_USERNAME}}
+          SUPERMAG_USERNAME: ${{ secrets.SUPERMAG_USERNAME }}
           SUPERMAG_STATIONS: ${{ secrets.SUPERMAG_STATIONS }}
           SWPC_API_EMAIL: ${{ secrets.SWPC_API_EMAIL }}
         run: |
