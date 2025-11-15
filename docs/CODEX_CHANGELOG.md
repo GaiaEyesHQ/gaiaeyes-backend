@@ -2,6 +2,16 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-25 — DRAP grid parsing + solar-cycle mapping
+
+- Updated `scripts/ingest_space_forecasts_step1.py` so the D-RAP text product is parsed
+  as a latitude/longitude grid with flattened rows stored in `ext.drap_absorption`
+  and corresponding daily rollups in `marts.drap_absorption_daily`.
+- Corrected the solar-cycle ingest to map `time-tag` to first-of-month dates and to
+  read the `predicted_ssn` and `predicted_f10.7` fields from the live SWPC JSON feed,
+  ensuring rows land consistently in `ext.solar_cycle_forecast` and `marts.solar_cycle_progress`.
+- Documented the new parsing behavior in `docs/SCRIPTS_GUIDE.md`.
+
 ## 2025-11-24 — Fix initial symptom mart refresh
 
 - Updated `20251019140000_setup_symptom_domain.sql` to run the first `symptom_daily` and

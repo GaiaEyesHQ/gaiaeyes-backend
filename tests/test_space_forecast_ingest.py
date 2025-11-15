@@ -1,7 +1,7 @@
 import asyncio
 import json
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +22,7 @@ from scripts.ingest_space_forecasts_step1 import (
     ingest_aurora,
     ingest_drap,
     ingest_magnetometer,
+    ingest_solar_cycle,
 )
 
 
@@ -166,14 +167,18 @@ def test_ingest_aurora_parses_summary(monkeypatch):
     assert any("Elevated" in row["headline"] or "Active" in row["headline"] for row in mart_rows)
 
 
-def test_ingest_drap_parses_text(monkeypatch):
+def test_ingest_drap_parses_grid(monkeypatch):
     from scripts import ingest_space_forecasts_step1 as module
 
     text_payload = """
-:Product: dummy
-# Time Frequency Region Absorption
-2024-11-05T12:00:00Z 5MHz global 2.5
-2024-11-05T12:00:00Z 10MHz equatorial 1.2
+# Product: D-Region Absorption
+# Product Valid At : 2024-11-05 12:00 UTC
+# Frequency (MHz) as a function of Latitude and Longitude
+
+-180 -165 -150
+-------------------------------------------------
+ 60 | 10.0 12.5 15.0
+ 45 | 5.0 7.5 9.0
 """
 
     async def fake_fetch_text(client, url, params=None):  # noqa: ARG001
@@ -187,12 +192,66 @@ def test_ingest_drap_parses_text(monkeypatch):
 
     writer = asyncio.run(runner())
     ext_rows = writer.rows_for("ext", "drap_absorption")
-    assert len(ext_rows) == 2
-    freqs = sorted(row["frequency_mhz"] for row in ext_rows)
-    assert freqs == [5.0, 10.0]
+    assert len(ext_rows) == 6
+    assert {row["region"] for row in ext_rows} == {"global"}
+    assert all(row["frequency_mhz"] == 10.0 for row in ext_rows)
+    assert {row["lat"] for row in ext_rows} == {60.0, 45.0}
+    assert {row["lon"] for row in ext_rows} == {-180.0, -165.0, -150.0}
+    assert all(row["ts_utc"].date() == date(2024, 11, 5) for row in ext_rows)
+
     mart_rows = writer.rows_for("marts", "drap_absorption_daily")
+    assert len(mart_rows) == 1
+    mart_row = mart_rows[0]
+    assert mart_row["region"] == "global"
+    assert mart_row["max_absorption_db"] == pytest.approx(15.0)
+    assert mart_row["avg_absorption_db"] == pytest.approx(
+        (10.0 + 12.5 + 15.0 + 5.0 + 7.5 + 9.0) / 6,
+    )
+
+
+def test_ingest_solar_cycle_maps_monthly_fields(monkeypatch):
+    from scripts import ingest_space_forecasts_step1 as module
+
+    payload = [
+        {
+            "time-tag": "2025-05",
+            "predicted_ssn": 131.5,
+            "predicted_f10.7": 162.9,
+        },
+        {
+            "time-tag": "2025-06",
+            "predicted_ssn": 120.0,
+            "predicted_f10.7": 150.0,
+            "issueTime": "2024-12-15T00:00:00Z",
+        },
+    ]
+
+    async def fake_fetch_json(client, url, params=None):  # noqa: ARG001
+        return payload
+
+    async def runner():
+        monkeypatch.setattr(module, "fetch_json", fake_fetch_json)
+        writer = RecordingWriter()
+        await ingest_solar_cycle(None, writer)  # type: ignore[arg-type]
+        return writer
+
+    writer = asyncio.run(runner())
+    ext_rows = writer.rows_for("ext", "solar_cycle_forecast")
+    assert len(ext_rows) == 2
+    ext_map = {row["forecast_month"]: row for row in ext_rows}
+    assert date(2025, 5, 1) in ext_map
+    assert date(2025, 6, 1) in ext_map
+    may_row = ext_map[date(2025, 5, 1)]
+    assert may_row["sunspot_number"] == 131.5
+    assert may_row["f10_7_flux"] == 162.9
+    assert may_row["issued_at"] is None
+    june_row = ext_map[date(2025, 6, 1)]
+    assert june_row["issued_at"] == datetime(2024, 12, 15, 0, 0, tzinfo=UTC)
+
+    mart_rows = writer.rows_for("marts", "solar_cycle_progress")
     assert len(mart_rows) == 2
-    assert {row["region"] for row in mart_rows} == {"global", "equatorial"}
+    assert {row["forecast_month"] for row in mart_rows} == {date(2025, 5, 1), date(2025, 6, 1)}
+    assert all(row["confidence"] == "baseline" for row in mart_rows)
 
 
 def test_ingest_magnetometer_supermag(monkeypatch):
