@@ -66,30 +66,40 @@ logger = logging.getLogger("gaiaeyes.ingest.step1")
 
 
 def _parse_dt(value: str | None) -> datetime | None:
-    """Parse ISO8601-ish timestamps used by NOAA/NASA feeds."""
+    """Parse ISO8601-ish timestamps used by NOAA/NASA feeds.
 
+    Design: if a timestamp string has no explicit timezone, we treat it as
+    already being in UTC and simply attach tzinfo=UTC. If the string includes
+    an offset or ``Z``, we normalise it to UTC via astimezone(UTC).
+    """
     if not value:
         return None
     value = value.strip()
     if not value:
         return None
+
+    # Normalise trailing ``Z`` to ``+00:00`` for fromisoformat.
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+
     try:
-        # Normalise trailing ``Z`` to ``+00:00`` for fromisoformat.
-        if value.endswith("Z"):
-            value = value[:-1] + "+00:00"
-        # Some feeds return fractional seconds but others do not; letting
-        # ``fromisoformat`` handle both makes the function robust.
-        return datetime.fromisoformat(value).astimezone(UTC)
+        dt = datetime.fromisoformat(value)
     except ValueError:
         # Try a couple of common fallbacks (space separator, missing offset).
-        try:
-            return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
-        except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M"):
             try:
-                return datetime.strptime(value, "%Y-%m-%dT%H:%M").replace(tzinfo=UTC)
+                return datetime.strptime(value, fmt).replace(tzinfo=UTC)
             except ValueError:
-                logger.debug("could not parse datetime value %s", value)
-                return None
+                continue
+        logger.debug("could not parse datetime value %s", value)
+        return None
+
+    # If the parsed datetime had no timezone, treat it as already UTC.
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+
+    # If it had a timezone, normalise to UTC.
+    return dt.astimezone(UTC)
 
 
 def _parse_float(value: Any) -> float | None:
