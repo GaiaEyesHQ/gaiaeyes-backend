@@ -466,6 +466,12 @@ def _collect_page_images(page: TomskPage) -> List[Tuple[str, str, Optional[dt.da
 
 
 def main():
+    if os.getenv("TOMSK_VISUALS_ENABLED", "0").lower() not in {"1", "true", "yes", "on"}:
+        print(
+            "[tomsk_visuals] ingestion temporarily disabled; set TOMSK_VISUALS_ENABLED=1 to run"
+        )
+        return
+
     rows: List[Dict[str, object]] = []
     seen_keys: Set[str] = set()
 

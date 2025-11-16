@@ -2,6 +2,15 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-12-02 — Pause Tomsk ingestion and fix aurora timestamps
+
+- Disabled `scripts/tomsk_visuals_ingest.py` by default so we stop pulling placeholder
+  SOS70 assets. Set `TOMSK_VISUALS_ENABLED=1` only after explicit permission to ingest
+  is received.
+- Hardened `_parse_timestamp` in `scripts/space_visuals_ingest.py` to attach UTC to
+  timezone-less aurora forecast timestamps (e.g., `2024-11-16 04:20:00`) so ingestion
+  no longer crashes when the feed omits a trailing `Z`.
+
 ## 2025-12-01 — Tomsk ingestion now reads SOS70 provider directory
 
 - Extended `scripts/tomsk_visuals_ingest.py` so it scrapes the SOS70 `provider.php`

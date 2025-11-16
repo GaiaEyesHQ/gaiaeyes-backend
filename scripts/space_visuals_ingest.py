@@ -182,8 +182,12 @@ def _parse_timestamp(value: Any) -> dt.datetime | None:
         for fmt in (None, "%Y-%m-%d %H:%M:%S"):
             try:
                 if fmt:
-                    return dt.datetime.strptime(v, fmt).replace(tzinfo=dt.timezone.utc)
-                return dt.datetime.fromisoformat(v)
+                    parsed = dt.datetime.strptime(v, fmt).replace(tzinfo=dt.timezone.utc)
+                else:
+                    parsed = dt.datetime.fromisoformat(v)
+                if parsed.tzinfo is None:
+                    return parsed.replace(tzinfo=dt.timezone.utc)
+                return parsed.astimezone(dt.timezone.utc)
             except ValueError:
                 continue
     return None

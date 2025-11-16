@@ -312,7 +312,7 @@ This section focuses on the spark helper usage inside the Space Dashboard.
 
 **Assets overview**
 
-* 6 assets tracked (JSON + Tomsk/Cumiana/HeartMath imagery).
+* 5 assets tracked (JSON + Cumiana/HeartMath imagery; Tomsk feed paused).
 
 **Responsive notes**
 
