@@ -23,7 +23,9 @@ This guide documents the maintenance and data-processing scripts located in [`/s
 | `ingest_space_forecasts_step1.py` | Consolidated Step 1 ingestion covering Enlil CME runs, SEP/radiation belts, OVATION aurora power (`ext.aurora_power` + `marts.aurora_outlook`), coronal-hole forecasts, D-RAP text absorption (`ext.drap_absorption` + `marts.drap_absorption_daily`), SuperMAG magnetometer indices (`ext.magnetometer_chain` + `marts.magnetometer_regional`), and solar-cycle predictions. | `SUPABASE_DB_URL` (required unless `--dry-run`), `NASA_API`, `SUPERMAG_USERNAME`; optional `--days`, `--only`, `SUPERMAG_STATIONS` |
 | `ingest_usgs_quakes.py` | Collects USGS day/week feeds, curates recent M5+ events, optional PostgREST upserts, and writes `quakes_latest.json`. | `MEDIA_DIR`, `OUTPUT_JSON_PATH`; optional `SUPABASE_REST_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY` |
 | `ingest_usgs_history.py` | Builds historical quake trend series (daily/monthly) and emits `quakes_history.json`. | `OUTPUT_JSON_PATH`, `HISTORY_DAYS`, `HISTORY_MONTHS` |
-| `space_visuals_ingest.py` | Downloads imagery for the live “Space Weather” section (SUVI, aurora, LASCO, CCOR, geospace plots) plus GOES JSON traces. Assets land under `gaiaeyes-media/images/space` and `space_live.json`. | `MEDIA_DIR`, `OUTPUT_JSON_PATH`, plus numerous URL overrides such as `SUVI_URLS`, `LASCO_C3_URLS`, `CCOR1_MP4_NAME` |
+| `space_visuals_ingest.py` | Downloads imagery for the live “Space Weather” section (SUVI, aurora, LASCO, CCOR, geospace plots), normalizes GOES X-ray/proton/electron and aurora-power telemetry, writes `space_live.json`, and upserts the latest imagery + series into `ext.space_visuals` for the `/v1/space/visuals` API. | `MEDIA_DIR`, `OUTPUT_JSON_PATH`, optional `SUPABASE_DB_URL` for idempotent upserts, plus numerous URL overrides such as `SUVI_URLS`, `LASCO_C3_URLS`, `CCOR1_MP4_NAME` |
+| `tomsk_visuals_ingest.py` | Pulls SOS70 Tomsk Schumann-resonance charts by first scraping the `provider.php` directory for the canonical `shm/srf/sra/srq` assets, then falling back to the site’s WordPress media API + HTML parsing to capture any additional embeds before upserting the downloads into `ext.space_visuals`. | `MEDIA_DIR`, `SUPABASE_DB_URL`; optional `TOMSK_VISUALS_UA`, `TOMSK_VISUALS_TIMEOUT` |
+| `cumiana_visuals_ingest.py` | Downloads the latest Cumiana VLF / Schumann charts from VLF.it (direct image URLs), stores them under `gaiaeyes-media/images/cumiana`, and upserts rows into `ext.space_visuals` so `/v1/space/visuals` can surface the Cumiana overlays. | `MEDIA_DIR`, `SUPABASE_DB_URL`; optional `CUMIANA_VISUALS_UA`, `CUMIANA_VISUALS_TIMEOUT` |
 
 ## Rollups and marts
 
@@ -44,7 +46,7 @@ This guide documents the maintenance and data-processing scripts located in [`/s
 | `build_space_history.py` | Queries Supabase REST for `marts.space_weather_daily` records and emits `space_history.json`. | `SUPABASE_REST_URL`, `SUPABASE_SERVICE_KEY`/`SUPABASE_ANON_KEY`; `OUTPUT_JSON_PATH`, `HISTORY_DAYS`, `SW_DAILY_TABLE`, `SW_DAILY_FIELDS` |
 | `earthscope_rules_emit.py` | Blends ingest outputs into `earthscope.json`, providing guidance strings and combined Schumann insights. | `MEDIA_DIR`, `OUTPUT_JSON_PATH` |
 | `pulse_emit.py` | Produces the `pulse.json` card deck summarizing flares, CMEs, aurora outlooks, quakes, and alerts. | `MEDIA_DIR`, `OUTPUT_JSON_PATH` |
-| `space_visuals_ingest.py` | (See ingestion table) feeds dashboard imagery and telemetry. | Same as above |
+| `space_visuals_ingest.py` | (See ingestion table) feeds dashboard imagery/telemetry and now seeds `ext.space_visuals` for website + app overlays. | Same as above |
 
 ## Auditing & maintenance
 
