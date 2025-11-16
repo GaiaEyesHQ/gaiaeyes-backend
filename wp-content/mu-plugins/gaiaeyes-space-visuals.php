@@ -6,12 +6,23 @@
  */
 if (!defined('ABSPATH')) exit;
 
-function ge_json_cached($url, $cache_min){
+if (!defined('GAIAEYES_SPACE_VISUALS_ENDPOINT')){
+  $endpoint = getenv('GAIAEYES_SPACE_VISUALS_ENDPOINT');
+  define('GAIAEYES_SPACE_VISUALS_ENDPOINT', $endpoint ? esc_url_raw($endpoint) : '');
+}
+if (!defined('GAIAEYES_SPACE_VISUALS_BEARER')){
+  $bearer = getenv('GAIAEYES_SPACE_VISUALS_BEARER');
+  define('GAIAEYES_SPACE_VISUALS_BEARER', $bearer ? trim($bearer) : '');
+}
+
+function ge_json_cached($url, $cache_min, $headers = array()){
   $ttl = max(1, intval($cache_min)) * MINUTE_IN_SECONDS;
-  $k = 'ge_json_' . md5($url);
+  $sig = $url . '|' . md5(wp_json_encode($headers));
+  $k = 'ge_json_' . md5($sig);
   $j = get_transient($k);
   if ($j===false){
-    $r = wp_remote_get(esc_url_raw($url), ['timeout'=>10,'headers'=>['Accept'=>'application/json']]);
+    $req_headers = array_merge(array('Accept'=>'application/json'), (array)$headers);
+    $r = wp_remote_get(esc_url_raw($url), ['timeout'=>10,'headers'=>$req_headers]);
     if (!is_wp_error($r) && wp_remote_retrieve_response_code($r)===200){
       $j = json_decode(wp_remote_retrieve_body($r), true);
       set_transient($k, $j, $ttl);
@@ -20,18 +31,109 @@ function ge_json_cached($url, $cache_min){
   return is_array($j)? $j : null;
 }
 
-add_shortcode('gaia_space_detail', function($atts){
-  $a = shortcode_atts(['url'=>'https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_live.json','cache'=>5], $atts, 'gaia_space_detail');
-  $j = ge_json_cached($a['url'], $a['cache']);
-  if (!$j) return '<div class="ge-card">Space dashboard unavailable.</div>';
-  $img = $j['images'] ?? [];
-  $ser = $j['series'] ?? ['xrs_7d'=>[],'protons_7d'=>[]];
-  $vid = $j['video'] ?? [];
-  $missing = $j['missing'] ?? [];
-  $updated = !empty($j['timestamp_utc']) ? esc_html($j['timestamp_utc']) : '';
+function ge_visual_url($images, $key){
+  return isset($images[$key]['url']) ? esc_url($images[$key]['url']) : '';
+}
 
-  // helper for clickable image
-  $base = 'https://gaiaeyeshq.github.io/gaiaeyes-media/';
+add_shortcode('gaia_space_detail', function($atts){
+  $defaults = [
+    'api' => GAIAEYES_SPACE_VISUALS_ENDPOINT,
+    'url' => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_live.json',
+    'cache' => 5,
+  ];
+  $a = shortcode_atts($defaults, $atts, 'gaia_space_detail');
+
+  $api_payload = null;
+  if (!empty($a['api'])){
+    $headers = [];
+    if (defined('GAIAEYES_SPACE_VISUALS_BEARER') && GAIAEYES_SPACE_VISUALS_BEARER){
+      $headers['Authorization'] = 'Bearer ' . GAIAEYES_SPACE_VISUALS_BEARER;
+    }
+    $maybe = ge_json_cached($a['api'], $a['cache'], $headers);
+    if (is_array($maybe) && !empty($maybe['ok']) && !empty($maybe['images'])){
+      $api_payload = $maybe;
+    }
+  }
+
+  $legacy_payload = null;
+  if (!$api_payload){
+    $legacy_payload = ge_json_cached($a['url'], $a['cache']);
+    if (!$legacy_payload){
+      return '<div class="ge-card">Space dashboard unavailable.</div>';
+    }
+  }
+
+  $media_base = 'https://gaiaeyeshq.github.io/gaiaeyes-media/';
+  $images = [];
+  $video = [];
+  $structured_series = [];
+  $legacy_series = [];
+  $overlay_flags = [];
+  $updated = '';
+
+  if ($api_payload){
+    $updated = !empty($api_payload['generated_at']) ? esc_html($api_payload['generated_at']) : '';
+    foreach (($api_payload['images'] ?? []) as $item){
+      if (empty($item['key'])) continue;
+      $images[$item['key']] = [
+        'url' => !empty($item['url']) ? esc_url($item['url']) : '',
+        'asset_type' => $item['asset_type'] ?? 'image',
+        'instrument' => $item['instrument'] ?? '',
+        'credit' => $item['credit'] ?? '',
+      ];
+      if (($item['asset_type'] ?? '') === 'video'){
+        $video[$item['key']] = $images[$item['key']];
+      }
+    }
+    foreach (($api_payload['series'] ?? []) as $entry){
+      if (empty($entry['key'])) continue;
+      $structured_series[$entry['key']] = [
+        'samples' => $entry['samples'] ?? [],
+        'meta' => $entry['meta'] ?? [],
+      ];
+    }
+    $overlay_flags = $api_payload['feature_flags'] ?? [];
+    $media_base = '';
+  } else {
+    $updated = !empty($legacy_payload['timestamp_utc']) ? esc_html($legacy_payload['timestamp_utc']) : '';
+    foreach (($legacy_payload['images'] ?? []) as $key=>$path){
+      $images[$key] = [
+        'url' => esc_url($media_base . ltrim($path, '/')),
+        'asset_type' => 'image',
+      ];
+    }
+    foreach (($legacy_payload['video'] ?? []) as $key=>$path){
+      $video[$key] = [
+        'url' => esc_url($media_base . ltrim($path, '/')),
+        'asset_type' => 'video',
+      ];
+    }
+  }
+
+  if ($legacy_payload){
+    $legacy_series = $legacy_payload['series'] ?? ['xrs_7d'=>[],'protons_7d'=>[]];
+  } else {
+    $legacy_series = ['xrs_7d'=>[],'protons_7d'=>[]];
+  }
+
+  $client_payload = [
+    'series' => $structured_series,
+    'legacySeries' => $legacy_series,
+    'featureFlags' => $overlay_flags,
+  ];
+
+  $base = $media_base ?: '';
+  $img = [];
+  foreach ($images as $key=>$entry){
+    if (empty($entry['url'])) continue;
+    $img[$key] = $media_base ? ltrim(str_replace($media_base, '', $entry['url']), '/') : $entry['url'];
+  }
+  $vid_paths = [];
+  foreach ($video as $key=>$entry){
+    if (empty($entry['url'])) continue;
+    $vid_paths[$key] = $media_base ? ltrim(str_replace($media_base, '', $entry['url']), '/') : $entry['url'];
+  }
+  $vid = $vid_paths;
 
   ob_start(); ?>
   <section class="ge-panel ge-space">
@@ -45,17 +147,24 @@ add_shortcode('gaia_space_detail', function($atts){
       <!-- Solar disc -->
       <article class="ge-card">
         <h3>Solar disc (AIA 193/304 Å)</h3>
-        <?php if(!empty($img['aia_primary'])): ?>
-          <a href="<?php echo $base . esc_attr($img['aia_primary']); ?>" target="_blank" rel="noopener">
-            <img src="<?php echo $base . esc_attr($img['aia_primary']); ?>" alt="SDO AIA latest" />
-          </a>
-        <?php elseif(!empty($img['hmi_intensity'])): ?>
-          <a href="<?php echo $base . esc_attr($img['hmi_intensity']); ?>" target="_blank" rel="noopener">
-            <img src="<?php echo $base . esc_attr($img['hmi_intensity']); ?>" alt="HMI Intensitygram latest" />
-          </a>
-        <?php else: ?>
-          <div class="ge-note">Latest solar disc image unavailable.</div>
-        <?php endif; ?>
+        <?php $solar_overlay = !empty($structured_series['goes_xray']['samples']); ?>
+        <div class="visual-overlay<?php echo $solar_overlay ? '' : ' overlay-disabled'; ?>" data-overlay="solarOverlay" data-series-keys="<?php echo $solar_overlay ? 'goes_xray' : ''; ?>">
+          <?php if(!empty($img['aia_primary'])): ?>
+            <a href="<?php echo $base . esc_attr($img['aia_primary']); ?>" target="_blank" rel="noopener">
+              <img src="<?php echo $base . esc_attr($img['aia_primary']); ?>" alt="SDO AIA latest" />
+            </a>
+          <?php elseif(!empty($img['hmi_intensity'])): ?>
+            <a href="<?php echo $base . esc_attr($img['hmi_intensity']); ?>" target="_blank" rel="noopener">
+              <img src="<?php echo $base . esc_attr($img['hmi_intensity']); ?>" alt="HMI Intensitygram latest" />
+            </a>
+          <?php else: ?>
+            <div class="ge-note">Latest solar disc image unavailable.</div>
+          <?php endif; ?>
+          <?php if($solar_overlay): ?>
+            <canvas id="solarOverlay" class="overlay-canvas" aria-hidden="true"></canvas>
+            <button type="button" class="overlay-toggle" data-overlay-target="solarOverlay" aria-pressed="false">Toggle GOES X-ray overlay</button>
+          <?php endif; ?>
+        </div>
 
         <div class="spark-wrap">
           <div class="spark-head"><span id="sparkXrsVal">—</span></div>
@@ -67,22 +176,33 @@ add_shortcode('gaia_space_detail', function($atts){
       <!-- Aurora -->
       <article class="ge-card">
         <h3>Auroral Ovals</h3>
-        <div class="ov-grid">
-          <?php if(!empty($img['ovation_nh'])): ?>
-            <figure>
-              <a href="<?php echo $base . esc_attr($img['ovation_nh']); ?>" target="_blank" rel="noopener">
-                <img src="<?php echo $base . esc_attr($img['ovation_nh']); ?>" alt="Aurora NH" />
-              </a>
-              <figcaption>NH forecast</figcaption>
-            </figure>
-          <?php endif; ?>
-          <?php if(!empty($img['ovation_sh'])): ?>
-            <figure>
-              <a href="<?php echo $base . esc_attr($img['ovation_sh']); ?>" target="_blank" rel="noopener">
-                <img src="<?php echo $base . esc_attr($img['ovation_sh']); ?>" alt="Aurora SH" />
-              </a>
-              <figcaption>SH forecast</figcaption>
-            </figure>
+        <?php
+          $aurora_keys = [];
+          if (!empty($structured_series['aurora_power_north']['samples'])) $aurora_keys[] = 'aurora_power_north';
+          if (!empty($structured_series['aurora_power_south']['samples'])) $aurora_keys[] = 'aurora_power_south';
+        ?>
+        <div class="visual-overlay<?php echo $aurora_keys ? '' : ' overlay-disabled'; ?>" data-overlay="auroraOverlay" data-series-keys="<?php echo esc_attr(implode(',', $aurora_keys)); ?>">
+          <div class="ov-grid">
+            <?php if(!empty($img['ovation_nh'])): ?>
+              <figure>
+                <a href="<?php echo $base . esc_attr($img['ovation_nh']); ?>" target="_blank" rel="noopener">
+                  <img src="<?php echo $base . esc_attr($img['ovation_nh']); ?>" alt="Aurora NH" />
+                </a>
+                <figcaption>NH forecast</figcaption>
+              </figure>
+            <?php endif; ?>
+            <?php if(!empty($img['ovation_sh'])): ?>
+              <figure>
+                <a href="<?php echo $base . esc_attr($img['ovation_sh']); ?>" target="_blank" rel="noopener">
+                  <img src="<?php echo $base . esc_attr($img['ovation_sh']); ?>" alt="Aurora SH" />
+                </a>
+                <figcaption>SH forecast</figcaption>
+              </figure>
+            <?php endif; ?>
+          </div>
+          <?php if($aurora_keys): ?>
+            <canvas id="auroraOverlay" class="overlay-canvas" aria-hidden="true"></canvas>
+            <button type="button" class="overlay-toggle" data-overlay-target="auroraOverlay" aria-pressed="false">Toggle aurora power overlay</button>
           <?php endif; ?>
         </div>
         <div class="care-box">
@@ -259,6 +379,12 @@ add_shortcode('gaia_space_detail', function($atts){
       .spark-box{ position:relative; width:100%; height:120px; min-height:120px; }
       .spark-canvas{ display:block; width:100% !important; height:100% !important; }
       .spark-head{ font-size:.9rem; opacity:.9; margin-bottom:6px; display:flex; justify-content:flex-end; }
+      .visual-overlay{ position:relative; }
+      .visual-overlay .overlay-canvas{ position:absolute; inset:0; width:100% !important; height:100% !important; pointer-events:none; opacity:0; transition:opacity .3s ease; }
+      .visual-overlay.overlay-active .overlay-canvas{ opacity:.85; }
+      .visual-overlay .overlay-toggle{ position:absolute; top:8px; right:8px; background:rgba(0,0,0,.6); color:#fff; border:none; border-radius:999px; padding:4px 12px; font-size:.8rem; cursor:pointer; }
+      .visual-overlay.overlay-disabled .overlay-toggle{ display:none; }
+      .visual-overlay .overlay-toggle:focus{ outline:2px solid rgba(255,255,255,.6); outline-offset:2px; }
       /* Cap very tall media on mobile/desktop (kept from previous fix) */
       @media(max-width:640px){
         .ge-space img,
@@ -275,7 +401,10 @@ add_shortcode('gaia_space_detail', function($atts){
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script>
       (function(){
-        const ser = <?php echo wp_json_encode($ser); ?> || {};
+        const visualsPayload = <?php echo wp_json_encode($client_payload); ?> || {};
+        const structuredSeries = visualsPayload.series || {};
+        const legacySeries = visualsPayload.legacySeries || {};
+        const overlayCharts = {};
 
         function whenSparkReady(cb){
           if (window.GaiaSpark && window.GaiaSpark.renderSpark) {
@@ -299,21 +428,17 @@ add_shortcode('gaia_space_detail', function($atts){
 
         function latestPoint(arr){ if(!arr || !arr.length) return null; return arr[arr.length-1]; }
         function fmtXray(value){
-          // value in W/m^2 (XRS). Convert to class (A/B/C/M/X) with magnitude.
           const v = Number(value||0);
           if (!isFinite(v) || v<=0) return '—';
           const logv = Math.log10(v);
-          // thresholds: A=1e-8.., B=1e-7.., C=1e-6.., M=1e-5.., X=1e-4..
           const cls = (logv>=-4)?'X':(logv>=-5)?'M':(logv>=-6)?'C':(logv>=-7)?'B':'A';
-          // magnitude within class (e.g., 1.3C)
           const scale = {'A':1e-8,'B':1e-7,'C':1e-6,'M':1e-5,'X':1e-4}[cls];
           const mag = (v/scale).toFixed(1);
           return `${mag}${cls} (${v.toExponential(1)} W/m²)`;
         }
+
         function toSeriesXrs(rows){
-          // Accepts array of objects (time_tag, short/long) OR array-of-arrays with header
           if (!Array.isArray(rows) || rows.length === 0) return [];
-          // Case 1: rows are objects
           if (rows.length && typeof rows[0] === 'object' && !Array.isArray(rows[0])) {
             const out = [];
             rows.forEach(r=>{
@@ -325,75 +450,136 @@ add_shortcode('gaia_space_detail', function($atts){
             });
             return out;
           }
-          // Case 2: rows are arrays, maybe with a header row at [0]
-          // Common SWPC order: [time_tag, short, long]
-          let start = 0, timeIdx = 0, sIdx = 1, lIdx = 2;
+          let start = 0;
           if (Array.isArray(rows[0]) && rows[0].length && typeof rows[0][0] === 'string') {
-            // If first row looks like header strings, shift start to 1
             const maybeHeader = rows[0].join(',').toLowerCase();
             if (maybeHeader.includes('time') || maybeHeader.includes('short') || maybeHeader.includes('long')) start = 1;
           }
           const out = [];
           for (let i = start; i < rows.length; i++) {
             const r = rows[i]; if (!Array.isArray(r)) continue;
-            const t = r[timeIdx];
-            const c1 = parseFloat(r[sIdx]);
-            const c2 = parseFloat(r[lIdx]);
+            const t = r[0];
+            const c1 = parseFloat(r[1]);
+            const c2 = parseFloat(r[2]);
             const v  = Math.max(isFinite(c1)?c1:0, isFinite(c2)?c2:0);
             if (t) out.push({x:new Date(t), y:v});
           }
           return out;
         }
+
+        function structuredSamples(key){
+          const entry = structuredSeries[key];
+          if (!entry || !Array.isArray(entry.samples)) return [];
+          return entry.samples.map((pt)=>{
+            if (!pt || !pt.ts) return null;
+            const dt = new Date(pt.ts);
+            if (Number.isNaN(dt.getTime())) return null;
+            return { x: dt, y: Number(pt.value||0), raw: pt };
+          }).filter(Boolean);
+        }
+
         function setVal(id, text){ const el=document.getElementById(id); if(el) el.textContent=text; }
-        // Sparks: XRS from JSON, Protons from JSON, Bz/Speed from SWPC 1-day
-        // XRS (7d) — use embedded series if present else live fetch
+
+        function ensureOverlay(canvasId, keys){
+          if (overlayCharts[canvasId]) return overlayCharts[canvasId];
+          const ctx = document.getElementById(canvasId);
+          if (!ctx) return null;
+          const datasets = [];
+          keys.forEach((key)=>{
+            let samples = structuredSamples(key);
+            if (!samples.length && key === 'goes_xray'){
+              samples = toSeriesXrs(legacySeries.xrs_7d || []);
+            } else if (!samples.length && key === 'goes_protons'){
+              const out=[];
+              (legacySeries.protons_7d || []).forEach(r=>{ const t=r.time_tag||r.time||null; const v=parseFloat(r.integral_protons_10MeV||r.flux||0); if(t&&isFinite(v)) out.push({x:new Date(t), y:v}); });
+              samples = out;
+            }
+            if (!samples.length) return;
+            const meta = (structuredSeries[key] && structuredSeries[key].meta) || {};
+            const color = meta.color || '#7fc8ff';
+            datasets.push({
+              label: meta.label || key,
+              data: samples,
+              parsing: false,
+              borderColor: color,
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.25,
+              fill: false,
+            });
+          });
+          if (!datasets.length) return null;
+          overlayCharts[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: { datasets },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: { mode: 'nearest', intersect: false },
+              plugins: { legend: { display: true, labels:{ color:'#eee' } } },
+              scales: {
+                x: { type: 'time', ticks:{ color:'#ddd' }, grid:{ color:'rgba(255,255,255,.2)' } },
+                y: { ticks:{ color:'#ddd' }, grid:{ color:'rgba(255,255,255,.15)' } }
+              }
+            }
+          });
+          return overlayCharts[canvasId];
+        }
+
+        document.querySelectorAll('[data-overlay]').forEach((wrapper)=>{
+          const canvasId = wrapper.getAttribute('data-overlay');
+          const keys = (wrapper.getAttribute('data-series-keys') || '').split(',').map(k=>k.trim()).filter(Boolean);
+          if (!canvasId || !keys.length) return;
+          const btn = wrapper.querySelector('[data-overlay-toggle]');
+          if (btn){
+            btn.addEventListener('click', () => {
+              const active = wrapper.classList.toggle('overlay-active');
+              btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+              if (active){ ensureOverlay(canvasId, keys); }
+            });
+          } else {
+            ensureOverlay(canvasId, keys);
+            wrapper.classList.add('overlay-active');
+          }
+        });
+
         (async function(){
-          try {
-            let xrsRaw = ser.xrs_7d || [];
-            // If the embedded series is empty, fetch live JSON from SWPC
-            if (!Array.isArray(xrsRaw) || xrsRaw.length === 0) {
-              try {
+          let arr = structuredSamples('goes_xray');
+          if (!arr.length){
+            try {
+              let xrsRaw = legacySeries.xrs_7d || [];
+              if (!Array.isArray(xrsRaw) || xrsRaw.length === 0) {
                 const live = await fetch('https://services.swpc.noaa.gov/json/goes/primary/xrays-7-day.json', {cache:'no-store'});
                 if (live.ok) xrsRaw = await live.json();
-              } catch(e) {}
-            }
-            // Some SWPC payloads are array-of-arrays with a header row
-            // If so, trim to last ~240 points for the spark
-            let arr = toSeriesXrs(xrsRaw);
-            if (arr.length > 240) arr = arr.slice(-240);
-            renderSpark('sparkXrs', arr, { xLabel:'UTC time', yLabel:'GOES X-ray flux', units:'W/m²', yMin:0, color:'#7fc8ff' });
-            // Update latest value header (with class)
-            const lp = (arr.length ? arr[arr.length-1] : null);
-            if (lp) {
-              const v = Number(lp.y||0);
-              const txt = (function fmtXray(value){
-                const vv = Number(value||0);
-                if (!isFinite(vv) || vv<=0) return '—';
-                const logv = Math.log10(vv);
-                const cls = (logv>=-4)?'X':(logv>=-5)?'M':(logv>=-6)?'C':(logv>=-7)?'B':'A';
-                const scale = {'A':1e-8,'B':1e-7,'C':1e-6,'M':1e-5,'X':1e-4}[cls];
-                const mag = (vv/scale).toFixed(1);
-                return `${mag}${cls} (${vv.toExponential(1)} W/m²)`;
-              })(v);
-              const el = document.getElementById('sparkXrsVal'); if (el) el.textContent = txt;
-            } else {
-              const el = document.getElementById('sparkXrsVal'); if (el) el.textContent = '—';
-            }
-          } catch(e){}
+              }
+              arr = toSeriesXrs(xrsRaw);
+            } catch(e){}
+          }
+          if (arr.length > 240) arr = arr.slice(-240);
+          renderSpark('sparkXrs', arr, { xLabel:'UTC time', yLabel:'GOES X-ray flux', units:'W/m²', yMin:0, color:'#7fc8ff' });
+          const lp = (arr.length ? arr[arr.length-1] : null);
+          if (lp) {
+            const sample = lp.raw;
+            const txt = sample && sample.class ? `${sample.class} (${lp.y.toExponential(1)} W/m²)` : fmtXray(lp.y);
+            setVal('sparkXrsVal', txt);
+          } else {
+            setVal('sparkXrsVal', '—');
+          }
         })();
 
-        // Protons (7d)
-        try {
-          const p = ser.protons_7d || [];
-          const out=[];
-          (p||[]).forEach(r=>{ const t=r.time_tag||r.time||null; const v=parseFloat(r.integral_protons_10MeV||r.flux||0); if(t&&isFinite(v)) out.push({x:new Date(t), y:v}); });
-          const sliced = out.slice(-240);
+        (function(){
+          let arr = structuredSamples('goes_protons');
+          if (!arr.length){
+            const out=[];
+            (legacySeries.protons_7d || []).forEach(r=>{ const t=r.time_tag||r.time||null; const v=parseFloat(r.integral_protons_10MeV||r.flux||0); if(t&&isFinite(v)) out.push({x:new Date(t), y:v}); });
+            arr = out;
+          }
+          const sliced = arr.slice(-240);
           renderSpark('sparkProtons', sliced, { xLabel:'UTC time', yLabel:'Proton flux', units:'pfu', yMin:0, color:'#ffd089' });
           const lp = latestPoint(sliced);
           setVal('sparkProtonsVal', lp ? (lp.y.toFixed(0)+' pfu') : '—');
-        } catch(e){}
+        })();
 
-        // Bz & SW from SWPC 1-day
         Promise.all([
           fetch('https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json',{cache:'no-store'}).then(r=>r.json()).catch(()=>null),
           fetch('https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json',{cache:'no-store'}).then(r=>r.json()).catch(()=>null)
