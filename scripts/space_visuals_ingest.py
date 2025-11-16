@@ -9,6 +9,7 @@ import urllib.parse
 from typing import Any, Dict, List, Tuple
 
 import psycopg
+from psycopg.types.json import Json as PsycoJson
 
 
 # Helper to read env overrides and split by comma
@@ -345,6 +346,13 @@ def _persist_supabase(rows: List[Dict[str, Any]]):
         return
     if not rows:
         return
+    payload = []
+    for row in rows:
+        item = dict(row)
+        for field in ("meta", "series", "feature_flags"):
+            if item.get(field) is not None:
+                item[field] = PsycoJson(item[field])
+        payload.append(item)
     sql = """
         insert into ext.space_visuals (ts, key, asset_type, image_path, meta, series, feature_flags, instrument, credit)
         values (%(ts)s, %(key)s, %(asset_type)s, %(image_path)s, %(meta)s, %(series)s, %(feature_flags)s, %(instrument)s, %(credit)s)
@@ -360,7 +368,7 @@ def _persist_supabase(rows: List[Dict[str, Any]]):
     try:
         with psycopg.connect(SUPABASE_DB_URL) as conn:
             with conn.cursor() as cur:
-                cur.executemany(sql, rows)
+                cur.executemany(sql, payload)
             conn.commit()
         print(f"[space_visuals] upserted {len(rows)} rows into ext.space_visuals")
     except Exception as exc:

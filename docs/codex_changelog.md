@@ -8,6 +8,7 @@ Document noteworthy backend/front-end changes implemented via Codex tasks. Keep 
 - Added the `/v1/space/visuals` FastAPI router plus regression tests so WordPress/iOS clients can request synchronized imagery, time-series samples, and overlay feature flags with cached CDN URLs.
 - Refreshed `wp-content/mu-plugins/gaiaeyes-space-visuals.php` to call the new API (with bearer support), render Chart.js overlays on solar-disc and aurora imagery, and rely on structured telemetry before falling back to NOAA JSON.
 - Documented the ingestion + overlay flow (`docs/SCRIPTS_GUIDE.md`, `docs/web/SITE_OVERVIEW.md`) so future operators know about the Supabase requirement and shortcode behavior; captured the change here per instructions.
+- Patched the Supabase ingestion helper to wrap `meta`, `series`, and `feature_flags` payloads in proper JSON adapters before `executemany` so psycopg can persist the overlay data without `can't adapt type 'dict'` errors when `SUPABASE_DB_URL` is configured.
 
 ## 2025-11-25 — DRAP grid parsing + solar-cycle mapping
 
