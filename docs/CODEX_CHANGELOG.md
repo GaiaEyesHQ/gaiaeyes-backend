@@ -2,6 +2,32 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-28 — Fix OVATION aurora feed source
+
+- Updated `scripts/space_visuals_ingest.py` to pull hemispheric power samples from
+  `https://services.swpc.noaa.gov/json/ovation_aurora_latest.json` (the currently
+  maintained NOAA endpoint) so aurora telemetry ingestion resumes without 404s.
+- No front-end behavior changed, but Step 2 operators should re-run the ingestion
+  script so Supabase receives fresh aurora power series from the corrected feed.
+
+## 2025-11-27 — Cumiana VLF visuals ingestion
+
+- Added `scripts/cumiana_visuals_ingest.py`, which downloads the latest Cumiana VLF / Schumann charts from VLF.it, caches them under `gaiaeyes-media/images/cumiana`, and upserts the imagery into `ext.space_visuals` so `/v1/space/visuals` (and downstream WordPress/iOS overlays) can surface the new sources alongside NASA + Tomsk feeds.
+- Documented the script, its environment knobs, and expected destinations inside `docs/SCRIPTS_GUIDE.md`, keeping the Step 2 ingestion docs aligned with the growing imagery set.
+
+## 2025-11-26 — Tomsk SOS70 visuals ingestion
+
+- Added `scripts/tomsk_visuals_ingest.py`, which scrapes the requested SOS70 pages, normalizes the base/original image URLs, downloads the visuals into `gaiaeyes-media/images/tomsk`, and upserts them into `ext.space_visuals` so the `/v1/space/visuals` API (and WordPress/iOS overlays) can surface the Tomsk charts alongside the NASA imagery.
+- Documented the new script + environment knobs inside `docs/SCRIPTS_GUIDE.md` so operators know how to run it and which env vars (`MEDIA_DIR`, `SUPABASE_DB_URL`, `TOMSK_VISUALS_*`) to supply.
+
+## 2025-11-26 — Interactive NASA overlays & `/v1/space/visuals`
+
+- Extended `scripts/space_visuals_ingest.py` to normalize GOES X-ray/proton/electron and aurora hemispheric-power samples, emit the enriched series inside `space_live.json`, and upsert imagery + telemetry rows into `ext.space_visuals` (backed by a new migration adding metadata/series columns and an updated-at trigger).
+- Added the `/v1/space/visuals` FastAPI router plus regression tests so WordPress/iOS clients can request synchronized imagery, time-series samples, and overlay feature flags with cached CDN URLs.
+- Refreshed `wp-content/mu-plugins/gaiaeyes-space-visuals.php` to call the new API (with bearer support), render Chart.js overlays on solar-disc and aurora imagery, and rely on structured telemetry before falling back to NOAA JSON.
+- Documented the ingestion + overlay flow (`docs/SCRIPTS_GUIDE.md`, `docs/web/SITE_OVERVIEW.md`) so future operators know about the Supabase requirement and shortcode behavior; captured the change here per instructions.
+- Patched the Supabase ingestion helper to wrap `meta`, `series`, and `feature_flags` payloads in proper JSON adapters before `executemany` so psycopg can persist the overlay data without `can't adapt type 'dict'` errors when `SUPABASE_DB_URL` is configured.
+
 ## 2025-11-25 — DRAP grid parsing + solar-cycle mapping
 
 - Updated `scripts/ingest_space_forecasts_step1.py` so the D-RAP text product is parsed
