@@ -2,6 +2,15 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-12-03 — iOS space-weather detail plan
+
+- Captured iOS implementation guidance for a non-destructive Space Weather detail flow in
+  `docs/ios repo-UI docs-frontend/SpaceWeatherDetailPlan.md`, including backup expectations,
+  dashboard stats-only additions, and navigation to a dedicated detail page instead of
+  surfacing imagery on the home screen.
+- Emphasized focusing on NASA + Cumiana overlays while Tomsk ingestion remains disabled,
+  and keeping existing Health/Sleep/Earthscope/Symptom cards untouched.
+
 ## 2025-12-02 — Pause Tomsk ingestion and fix aurora timestamps
 
 - Disabled `scripts/tomsk_visuals_ingest.py` by default so we stop pulling placeholder
