@@ -2,6 +2,13 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-26 — Interactive NASA overlays & `/v1/space/visuals`
+
+- Extended `scripts/space_visuals_ingest.py` to normalize GOES X-ray/proton/electron and aurora hemispheric-power samples, emit the enriched series inside `space_live.json`, and upsert imagery + telemetry rows into `ext.space_visuals` (backed by a new migration adding metadata/series columns and an updated-at trigger).
+- Added the `/v1/space/visuals` FastAPI router plus regression tests so WordPress/iOS clients can request synchronized imagery, time-series samples, and overlay feature flags with cached CDN URLs.
+- Refreshed `wp-content/mu-plugins/gaiaeyes-space-visuals.php` to call the new API (with bearer support), render Chart.js overlays on solar-disc and aurora imagery, and rely on structured telemetry before falling back to NOAA JSON.
+- Documented the ingestion + overlay flow (`docs/SCRIPTS_GUIDE.md`, `docs/web/SITE_OVERVIEW.md`) so future operators know about the Supabase requirement and shortcode behavior; captured the change here per instructions.
+
 ## 2025-11-25 — DRAP grid parsing + solar-cycle mapping
 
 - Updated `scripts/ingest_space_forecasts_step1.py` so the D-RAP text product is parsed
