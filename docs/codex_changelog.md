@@ -2,6 +2,14 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-12-04 — Space visuals workflow cleanup
+
+- Updated the `space-visuals` GitHub Action to install Python dependencies (including
+  psycopg) before running the ingest script, preventing `ModuleNotFoundError: No module
+  named 'psycopg'` failures in CI.
+- Clear `gaiaeyes-media/images/space` at the start of the workflow and stage deletions so
+  legacy images do not accumulate beyond the current ingest run.
+
 ## 2025-12-03 — iOS space-weather detail plan
 
 - Captured iOS implementation guidance for a non-destructive Space Weather detail flow in
