@@ -388,7 +388,8 @@ def main():
     # 2) Aurora (Ovation) maps (NH/SH)
     ov_nh = "https://services.swpc.noaa.gov/images/aurora-forecast-northern-hemisphere.jpg"
     ov_sh = "https://services.swpc.noaa.gov/images/aurora-forecast-southern-hemisphere.jpg"
-    aurora_forecast = "https://services.swpc.noaa.gov/json/ovation_aurora_forecast.json"
+    # NOAA deprecated the older forecast URL; use the latest JSON endpoint that stays updated.
+    aurora_forecast = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 
     # 3) CME coronagraph imagery (SOHO C2 & LASCO C3)
     soho_c2 = "https://soho.nascom.nasa.gov/data/realtime/c2/1024/latest.jpg"
