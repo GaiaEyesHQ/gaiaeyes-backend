@@ -2,6 +2,16 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-30 — Tomsk scraper now fetches real media assets
+
+- Updated `scripts/tomsk_visuals_ingest.py` to call the SOS70 WordPress media API when a
+  `page_id` is available (falling back to HTML parsing otherwise) and to prefer the raw
+  image URLs before any normalization. This ensures we ingest the actual Schumann charts
+  instead of placeholder icons when Supabase rows are refreshed.
+- Added regression tests covering the new API helper + URL ordering, refreshed
+  `docs/SCRIPTS_GUIDE.md`, and noted that operators should rerun the Tomsk ingestion so
+  `/v1/space/visuals` exposes the corrected imagery set.
+
 ## 2025-11-29 — Tomsk scraper now pulls embedded image URLs
 
 - Updated `scripts/tomsk_visuals_ingest.py` so it parses inline `style="background-image:url(...)"`

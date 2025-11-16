@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
 import re
 import sys
@@ -31,6 +32,7 @@ class TomskPage:
     url: str
     label: str
     feature_flags: Dict[str, bool]
+    wp_parent_id: Optional[int] = None
 
 TOMSK_PAGES: Sequence[TomskPage] = (
     TomskPage(
@@ -38,12 +40,14 @@ TOMSK_PAGES: Sequence[TomskPage] = (
         url="https://sos70.ru/?page_id=47",
         label="SOS70 Tomsk Schumann visuals (page 47)",
         feature_flags={"schumann_visual": True},
+        wp_parent_id=47,
     ),
     TomskPage(
         slug="sos70_page_48",
         url="https://sos70.ru/?page_id=48",
         label="SOS70 Tomsk Schumann visuals (page 48)",
         feature_flags={"schumann_visual": True},
+        wp_parent_id=48,
     ),
     TomskPage(
         slug="sos70_home",
@@ -56,6 +60,7 @@ TOMSK_PAGES: Sequence[TomskPage] = (
         url="https://sos70.ru/?page_id=52",
         label="SOS70 Tomsk Schumann visuals (page 52)",
         feature_flags={"schumann_visual": True},
+        wp_parent_id=52,
     ),
 )
 
@@ -187,9 +192,9 @@ def _normalize_image_url(url: str, base_url: str) -> Optional[str]:
 
 def _candidate_urls(raw_url: str, base_url: str) -> List[str]:
     guesses = []
-    normalized = _normalize_image_url(raw_url, base_url)
     raw_abs = urllib.parse.urljoin(base_url, raw_url)
-    for cand in (normalized, raw_abs):
+    normalized = _normalize_image_url(raw_url, base_url)
+    for cand in (raw_abs, normalized):
         if cand and _looks_like_image(cand):
             guesses.append(cand)
     # keep order but drop duplicates
@@ -212,6 +217,28 @@ def _parse_last_modified(value: Optional[str]) -> Optional[dt.datetime]:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=dt.timezone.utc)
     return parsed.astimezone(dt.timezone.utc)
+
+
+def _parse_iso_datetime(value: Optional[str]) -> Optional[dt.datetime]:
+    if not value:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        normalized = value.replace("Z", "+00:00")
+        parsed = dt.datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def _site_root(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    scheme = parsed.scheme or "https"
+    return f"{scheme}://{parsed.netloc}"
 
 
 def _download_with_meta(urls: Sequence[str], dest_dir: str, prefix: str) -> Optional[Tuple[str, str, Optional[dt.datetime]]]:
@@ -237,6 +264,37 @@ def _download_with_meta(urls: Sequence[str], dest_dir: str, prefix: str) -> Opti
         except Exception as exc:
             print(f"[tomsk_visuals] download {cand} -> {exc}")
     return None
+
+
+def _collect_wp_media_assets(page: TomskPage) -> List[Tuple[str, Optional[dt.datetime]]]:
+    if page.wp_parent_id is None:
+        return []
+    api_url = urllib.parse.urljoin(
+        _site_root(page.url),
+        f"/wp-json/wp/v2/media?parent={page.wp_parent_id}&per_page=100&_fields=source_url,modified_gmt,date_gmt,media_type,mime_type",
+    )
+    payload = _http_get(api_url)
+    if not payload:
+        return []
+    try:
+        parsed = json.loads(payload.decode("utf-8"))
+    except Exception as exc:
+        print(f"[tomsk_visuals] failed to parse media API for {page.slug}: {exc}")
+        return []
+    assets: List[Tuple[str, Optional[dt.datetime]]] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        mime_type = (item.get("mime_type") or "").lower()
+        media_type = (item.get("media_type") or "").lower()
+        if media_type and media_type != "image" and not mime_type.startswith("image/"):
+            continue
+        source_url = item.get("source_url")
+        if not _looks_like_image(source_url):
+            continue
+        lm = _parse_iso_datetime(item.get("modified_gmt")) or _parse_iso_datetime(item.get("date_gmt"))
+        assets.append((source_url, lm))
+    return assets
 
 
 def _slugify(value: str) -> str:
@@ -280,6 +338,23 @@ def _persist_supabase(rows: List[Dict[str, object]]):
 
 
 def _collect_page_images(page: TomskPage) -> List[Tuple[str, str, Optional[dt.datetime]]]:
+    assets: List[Tuple[str, str, Optional[dt.datetime]]] = []
+    seen_sources = set()
+
+    api_assets = _collect_wp_media_assets(page)
+    for source_url, lm_hint in api_assets:
+        download = _download_with_meta([source_url], TOMSK_DIR, page.slug)
+        if not download:
+            continue
+        dl_source, rel_path, lm_dt = download
+        if dl_source in seen_sources:
+            continue
+        seen_sources.add(dl_source)
+        assets.append((dl_source, rel_path, lm_dt or lm_hint))
+
+    if assets:
+        return assets
+
     body = _http_get(page.url)
     if not body:
         print(f"[tomsk_visuals] unable to fetch {page.url}")
@@ -298,8 +373,6 @@ def _collect_page_images(page: TomskPage) -> List[Tuple[str, str, Optional[dt.da
             continue
         deduped.append(cand)
         seen_raw.add(cand)
-    assets: List[Tuple[str, str, Optional[dt.datetime]]] = []
-    seen_sources = set()
     for raw in deduped:
         urls = _candidate_urls(raw, page.url)
         if not urls:
