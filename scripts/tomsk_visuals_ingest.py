@@ -77,6 +77,13 @@ def _looks_like_image(url: Optional[str]) -> bool:
     return any(q.endswith(ext) for ext in IMAGE_EXTS)
 
 
+STYLE_URL_RE = re.compile(r"url\(([^)]+)\)", re.IGNORECASE)
+INLINE_IMG_RE = re.compile(
+    r"(?P<url>(?:https?:)?//[^\s'\"]+\.(?:jpg|jpeg|png|gif|webp)(?:\?[^'\"\s]*)?)",
+    re.IGNORECASE,
+)
+
+
 class _ImageHTMLParser(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -84,12 +91,25 @@ class _ImageHTMLParser(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs):
         attrs_map = {k.lower(): v for k, v in attrs}
-        if tag.lower() == "img":
+        lower_tag = tag.lower()
+        if lower_tag == "img":
             self._collect_from_img(attrs_map)
-        elif tag.lower() == "a":
+        elif lower_tag == "a":
             href = attrs_map.get("href")
             if _looks_like_image(href):
                 self.candidates.append(href)
+        elif lower_tag in {"div", "figure", "section", "span"}:
+            style = attrs_map.get("style")
+            if style:
+                self._collect_from_style(style)
+        if "data-lazy-srcset" in attrs_map:
+            parsed = _largest_from_srcset(attrs_map["data-lazy-srcset"])
+            if parsed:
+                self.candidates.append(parsed)
+
+    def handle_startendtag(self, tag: str, attrs):
+        # Some HTML uses <img ... /> self-closing tags; delegate to starttag logic
+        self.handle_starttag(tag, attrs)
 
     def _collect_from_img(self, attrs: Dict[str, str]):
         keys = [
@@ -109,6 +129,21 @@ class _ImageHTMLParser(HTMLParser):
             parsed = _largest_from_srcset(srcset)
             if parsed:
                 self.candidates.append(parsed)
+
+    def _collect_from_style(self, style_value: str):
+        for match in STYLE_URL_RE.findall(style_value):
+            cleaned = match.strip().strip('"').strip("'")
+            if _looks_like_image(cleaned):
+                self.candidates.append(cleaned)
+
+
+def _regex_image_candidates(html: str) -> List[str]:
+    matches = []
+    for match in INLINE_IMG_RE.finditer(html):
+        url = match.group("url")
+        if url:
+            matches.append(url)
+    return matches
 
 
 def _largest_from_srcset(srcset: str) -> Optional[str]:
@@ -255,9 +290,17 @@ def _collect_page_images(page: TomskPage) -> List[Tuple[str, str, Optional[dt.da
         decoded = body.decode("cp1251", errors="ignore")
     parser = _ImageHTMLParser()
     parser.feed(decoded)
+    raw_candidates = parser.candidates + _regex_image_candidates(decoded)
+    deduped: List[str] = []
+    seen_raw = set()
+    for cand in raw_candidates:
+        if cand in seen_raw:
+            continue
+        deduped.append(cand)
+        seen_raw.add(cand)
     assets: List[Tuple[str, str, Optional[dt.datetime]]] = []
     seen_sources = set()
-    for raw in parser.candidates:
+    for raw in deduped:
         urls = _candidate_urls(raw, page.url)
         if not urls:
             continue

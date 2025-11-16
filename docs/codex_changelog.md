@@ -2,6 +2,17 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-11-29 — Tomsk scraper now pulls embedded image URLs
+
+- Updated `scripts/tomsk_visuals_ingest.py` so it parses inline `style="background-image:url(...)"`
+  attributes and any other embedded `jpg/png` references within the SOS70 pages, ensuring
+  the script follows the nested image URLs rather than attempting to ingest the HTML pages
+  themselves. Added regression tests that cover the background-image and inline-script
+  parsing helpers.
+- Operators should rerun `python scripts/tomsk_visuals_ingest.py` after exporting
+  `SUPABASE_DB_URL`/`MEDIA_DIR` to refresh Supabase rows with the corrected Tomsk imagery
+  metadata before wiring the overlays into WordPress/iOS.
+
 ## 2025-11-28 — Fix OVATION aurora feed source
 
 - Updated `scripts/space_visuals_ingest.py` to pull hemispheric power samples from
