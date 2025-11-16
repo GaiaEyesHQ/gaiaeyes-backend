@@ -7,10 +7,10 @@ import os
 import re
 import sys
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 import urllib.parse
 import urllib.request
 
@@ -25,6 +25,10 @@ SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
 os.makedirs(TOMSK_DIR, exist_ok=True)
 
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".gif", ".webp")
+PROVIDER_BASE = "https://sos70.ru/provider.php"
+PROVIDER_LISTING_URL = PROVIDER_BASE + "?"
+PROVIDER_FILE_RE = re.compile(r"file=([A-Za-z0-9_.\-]+)")
+PLACEHOLDER_SUBSTRINGS = ("site-icon", "placeholder", "logo", "avatar")
 
 @dataclass
 class TomskPage:
@@ -33,6 +37,17 @@ class TomskPage:
     label: str
     feature_flags: Dict[str, bool]
     wp_parent_id: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class TomskProviderAsset:
+    slug: str
+    file: str
+    label: str
+    feature_flags: Dict[str, bool] = field(default_factory=dict)
+    page_url: Optional[str] = None
+    instrument: str = "Tomsk SR Observatory"
+    credit: str = "SOS70.ru"
 
 TOMSK_PAGES: Sequence[TomskPage] = (
     TomskPage(
@@ -61,6 +76,33 @@ TOMSK_PAGES: Sequence[TomskPage] = (
         label="SOS70 Tomsk Schumann visuals (page 52)",
         feature_flags={"schumann_visual": True},
         wp_parent_id=52,
+    ),
+)
+
+TOMSK_PROVIDER_ASSETS: Sequence[TomskProviderAsset] = (
+    TomskProviderAsset(
+        slug="shm_spectrogram",
+        file="shm.jpg",
+        label="Tomsk 72h Schumann spectrogram",
+        feature_flags={"schumann_visual": True, "tomsk_provider": True},
+    ),
+    TomskProviderAsset(
+        slug="srf_frequency",
+        file="srf.jpg",
+        label="Tomsk SRF (frequency) parameters",
+        feature_flags={"schumann_visual": True, "tomsk_provider": True},
+    ),
+    TomskProviderAsset(
+        slug="sra_amplitude",
+        file="sra.jpg",
+        label="Tomsk SRA (amplitude) parameters",
+        feature_flags={"schumann_visual": True, "tomsk_provider": True},
+    ),
+    TomskProviderAsset(
+        slug="srq_quality",
+        file="srq.jpg",
+        label="Tomsk SRQ (quality) parameters",
+        feature_flags={"schumann_visual": True, "tomsk_provider": True},
     ),
 )
 
@@ -190,6 +232,10 @@ def _normalize_image_url(url: str, base_url: str) -> Optional[str]:
     return urllib.parse.urlunparse(normalized)
 
 
+def _provider_download_url(file_name: str) -> str:
+    return f"{PROVIDER_BASE}?file={urllib.parse.quote(file_name)}"
+
+
 def _candidate_urls(raw_url: str, base_url: str) -> List[str]:
     guesses = []
     raw_abs = urllib.parse.urljoin(base_url, raw_url)
@@ -292,8 +338,39 @@ def _collect_wp_media_assets(page: TomskPage) -> List[Tuple[str, Optional[dt.dat
         source_url = item.get("source_url")
         if not _looks_like_image(source_url):
             continue
+        lowered = (source_url or "").lower()
+        if any(marker in lowered for marker in PLACEHOLDER_SUBSTRINGS):
+            continue
         lm = _parse_iso_datetime(item.get("modified_gmt")) or _parse_iso_datetime(item.get("date_gmt"))
         assets.append((source_url, lm))
+    return assets
+
+
+def _parse_provider_listing(payload: bytes) -> Set[str]:
+    if not payload:
+        return set()
+    try:
+        decoded = payload.decode("utf-8")
+    except UnicodeDecodeError:
+        decoded = payload.decode("cp1251", errors="ignore")
+    return {match.group(1) for match in PROVIDER_FILE_RE.finditer(decoded)}
+
+
+def _collect_provider_images() -> List[Tuple[TomskProviderAsset, str, str, Optional[dt.datetime]]]:
+    assets: List[Tuple[TomskProviderAsset, str, str, Optional[dt.datetime]]] = []
+    listing_payload = _http_get(PROVIDER_LISTING_URL)
+    available = _parse_provider_listing(listing_payload or b"") if listing_payload else set()
+    for provider_asset in TOMSK_PROVIDER_ASSETS:
+        if available and provider_asset.file not in available:
+            print(f"[tomsk_visuals] provider file {provider_asset.file} not listed; skipping")
+            continue
+        download = _download_with_meta([
+            _provider_download_url(provider_asset.file)
+        ], TOMSK_DIR, provider_asset.slug)
+        if not download:
+            continue
+        source_url, rel_path, lm_dt = download
+        assets.append((provider_asset, source_url, rel_path, lm_dt))
     return assets
 
 
@@ -390,6 +467,35 @@ def _collect_page_images(page: TomskPage) -> List[Tuple[str, str, Optional[dt.da
 
 def main():
     rows: List[Dict[str, object]] = []
+    seen_keys: Set[str] = set()
+
+    provider_assets = _collect_provider_images()
+    for asset, source_url, rel_path, lm_dt in provider_assets:
+        ts = (lm_dt or dt.datetime.now(dt.timezone.utc)).replace(minute=0, second=0, microsecond=0)
+        key = f"tomsk_{asset.slug}"
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        page_url = asset.page_url or _provider_download_url(asset.file)
+        rows.append(
+            {
+                "ts": ts,
+                "key": key,
+                "asset_type": "image",
+                "image_path": rel_path,
+                "meta": {
+                    "page_url": page_url,
+                    "label": asset.label,
+                    "source_url": source_url,
+                    "provider_file": asset.file,
+                },
+                "series": None,
+                "feature_flags": asset.feature_flags,
+                "instrument": asset.instrument,
+                "credit": asset.credit,
+            }
+        )
+
     for page in TOMSK_PAGES:
         page_assets = _collect_page_images(page)
         if not page_assets:
@@ -398,11 +504,15 @@ def main():
             parsed = urllib.parse.urlparse(source_url)
             stem = os.path.splitext(os.path.basename(parsed.path))[0]
             slug = _slugify(f"{page.slug}-{stem}")
+            key = f"tomsk_{slug}"
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
             ts = (lm_dt or dt.datetime.now(dt.timezone.utc)).replace(minute=0, second=0, microsecond=0)
             rows.append(
                 {
                     "ts": ts,
-                    "key": f"tomsk_{slug}",
+                    "key": key,
                     "asset_type": "image",
                     "image_path": rel_path,
                     "meta": {

@@ -2,6 +2,17 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-12-01 — Tomsk ingestion now reads SOS70 provider directory
+
+- Extended `scripts/tomsk_visuals_ingest.py` so it scrapes the SOS70 `provider.php`
+  listing, downloads the canonical `shm/srf/sra/srq` chart images directly, and skips
+  known placeholder/site-icon assets before falling back to the WordPress media API or
+  HTML parsing. The ingest now writes deterministic keys for the provider-backed rows
+  to keep `/v1/space/visuals` stocked with the real Tomsk charts.
+- Added provider-specific regression tests plus doc updates in `docs/SCRIPTS_GUIDE.md`.
+  Run `python scripts/tomsk_visuals_ingest.py` (with `SUPABASE_DB_URL`/`MEDIA_DIR`
+  exported) so Supabase refreshes the `tomsk_*` rows with the direct provider assets.
+
 ## 2025-11-30 — Tomsk scraper now fetches real media assets
 
 - Updated `scripts/tomsk_visuals_ingest.py` to call the SOS70 WordPress media API when a
