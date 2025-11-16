@@ -20,6 +20,23 @@ jobs:
           repository: GaiaEyesHQ/gaiaeyes-media
           token: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
           path: gaiaeyes-media
+      - name: Ensure media repo is aligned with origin/main
+        working-directory: gaiaeyes-media
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Clean space images directory
+        run: |
+          rm -rf gaiaeyes-media/images/space/*
+          mkdir -p gaiaeyes-media/images/space
       - name: Run space visuals ingest
         env:
           OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/space_live.json
@@ -35,7 +52,7 @@ jobs:
           git config pull.rebase true
 
           # Stage changes (tolerate no matches)
-          git add images/space/* data/space_live.json || true
+          git add -A images/space data/space_live.json || true
 
           # No-op if nothing to commit
           if git diff --cached --quiet; then
@@ -45,9 +62,13 @@ jobs:
 
           git commit -m "chore: update space visuals & space_live.json [skip ci]"
 
-          # Make sure we're up to date with remote main before pushing
+          # Keep current artifacts on top of the latest main
           git fetch origin main || true
-          git pull --rebase origin main || true
+          git pull --rebase --strategy-option=ours origin main || {
+            echo "Rebase failed; aborting to keep working tree clean."
+            git rebase --abort || true
+            exit 1
+          }
 
           # Retry push up to 3 times in case remote advanced between runs
           for attempt in 1 2 3; do
@@ -57,7 +78,11 @@ jobs:
             fi
             echo "Push failed on attempt ${attempt}; rebasing and retrying…"
             git fetch origin main || true
-            git pull --rebase origin main || true
+            git pull --rebase --strategy-option=ours origin main || {
+              echo "Retry rebase failed; aborting to avoid conflicts."
+              git rebase --abort || true
+              break
+            }
             sleep $((RANDOM % 4 + 2))
           done
 

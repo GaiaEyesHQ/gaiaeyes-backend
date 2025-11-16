@@ -129,6 +129,7 @@ GaiaSpark.renderSpark(canvasOrId, data, {
 * `[gaia_space_detail url="https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_live.json" cache="5"]`
 * PHP: `wp-content/mu-plugins/gaiaeyes-space-visuals.php`
 * Spark helper: `GaiaSpark.renderSpark` for X-ray, protons, IMF Bz, and solar-wind speed sparklines.
+* API source: `/v1/space/visuals` (FastAPI) now hydrates the shortcode with Supabase-backed imagery + telemetry; fallback JSON is still supported via the `url` attribute for offline testing.
 
 **DOM outline**
 
@@ -145,7 +146,11 @@ GaiaSpark.renderSpark(canvasOrId, data, {
 **Data flow & caching**
 
 * Primary JSON (`space_live.json`) cached for 5 minutes via `ge_json_cached` (WordPress transient).
-* Media assets served from `https://gaiaeyeshq.github.io/gaiaeyes-media/` (jsDelivr/Pages).
+* Media assets served from `https://gaiaeyeshq.github.io/gaiaeyes-media/` (jsDelivr/Pages); when the API is used the mu-plugin reads absolute URLs directly from Supabase metadata.
+* `/v1/space/visuals` returns:
+  * `images[]` – keyed assets with capture timestamps, credits, and NASA/SWPC instrument metadata.
+  * `series[]` – normalized GOES X-ray/proton/electron and aurora hemispheric-power samples for overlays.
+  * `feature_flags` – feature availability (e.g., `flare_markers`, `aurora_probability`) used to show overlay toggles.
 * Sparklines supplement feed data with live NOAA endpoints:
   * `…/json/goes/primary/xrays-7-day.json`
   * `…/products/solar-wind/mag-1-day.json`
@@ -160,6 +165,7 @@ GaiaSpark.renderSpark(canvasOrId, data, {
 **Responsive notes**
 
 * Grid collapses to single column below 900 px; images/video capped to 360 px height on small screens.
+* `.visual-overlay` containers layer Chart.js canvases on top of NASA assets; toggles add/remove the overlay canvas without blocking image clicks (canvas uses `pointer-events: none`).
 * `.spark-box` fixed at 120 px to preserve axis padding.
 
 **Maintenance notes**
@@ -306,7 +312,7 @@ This section focuses on the spark helper usage inside the Space Dashboard.
 
 **Assets overview**
 
-* 6 assets tracked (JSON + Tomsk/Cumiana/HeartMath imagery).
+* 5 assets tracked (JSON + Cumiana/HeartMath imagery; Tomsk feed paused).
 
 **Responsive notes**
 
