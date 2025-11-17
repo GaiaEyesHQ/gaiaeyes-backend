@@ -36,6 +36,7 @@ jobs:
         env:
           OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/space_live.json
           MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           python3 scripts/space_visuals_ingest.py
       - name: Commit & push (images + space_live.json)
