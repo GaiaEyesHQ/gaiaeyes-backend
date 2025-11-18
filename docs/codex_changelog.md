@@ -5,8 +5,8 @@ Document noteworthy backend/front-end changes implemented via Codex tasks. Keep 
 ## 2025-12-05 — Space visuals Supabase alignment
 
 - Reworked `/v1/space/visuals` to prefer the new `VISUALS_MEDIA_BASE_URL` while keeping the
-  existing `MEDIA_BASE_URL` as a fallback and emitting relative URLs when the media base
-  matches.
+  existing `MEDIA_BASE_URL` as a fallback, emitting relative URLs when the media base
+  matches, and preserving fully qualified image URLs for legacy consumers.
 - Added `schema_version`, `cdn_base`, and a unified `items` array to the response while
   preserving the legacy `images`/`series` shape for existing clients.
 - Normalized URL handling so Supabase-hosted media returns client-resolvable relative paths

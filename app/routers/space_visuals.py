@@ -133,19 +133,16 @@ async def space_visuals(conn=Depends(get_db)):
             continue
 
         rel_path = (row.get("image_path") or "").lstrip("/")
-        url = meta.get("url")
-        if url:
-            url = _to_relative(url, media_base)
-        elif rel_path:
-            url = f"/{rel_path}"
-        else:
-            url = None
+        absolute_url = meta.get("url")
+        if not absolute_url and rel_path:
+            # Preserve fully qualified URLs for legacy consumers when meta.url is absent.
+            absolute_url = f"{media_base}/{rel_path}" if media_base else f"/{rel_path}"
 
         images.append(
             {
                 "key": row.get("key"),
                 "captured_at": iso_ts,
-                "url": url,
+                "url": absolute_url,
                 "image_path": rel_path,
                 "instrument": row.get("instrument"),
                 "credit": row.get("credit"),
@@ -161,12 +158,15 @@ async def space_visuals(conn=Depends(get_db)):
     # Unified items array (new) — keeps legacy fields too
     items: List[Dict[str, Any]] = []
     for img in images:
+        rel_url = _to_relative(img.get("url"), media_base)
+        if not rel_url and img.get("image_path"):
+            rel_url = f"/{(img.get('image_path') or '').lstrip('/')}"
         items.append(
             {
                 "id": img.get("key") or img.get("asset_type") or "image",
                 "title": (img.get("meta") or {}).get("title") or img.get("key"),
                 "credit": img.get("credit"),
-                "url": img.get("url") or (f"/{(img.get('image_path') or '').lstrip('/')}" if img.get("image_path") else ""),
+                "url": rel_url or img.get("url") or "",
                 "meta": (img.get("meta") or {}) | {"captured_at": img.get("captured_at")},
             }
         )
