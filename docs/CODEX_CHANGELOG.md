@@ -2,6 +2,64 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-12-04 — Space visuals workflow cleanup
+
+- Updated the `space-visuals` GitHub Action to install Python dependencies (including
+  psycopg) before running the ingest script, preventing `ModuleNotFoundError: No module
+  named 'psycopg'` failures in CI.
+- Clear `gaiaeyes-media/images/space` at the start of the workflow and stage deletions so
+  legacy images do not accumulate beyond the current ingest run.
+
+## 2025-12-03 — iOS space-weather detail plan
+
+- Captured iOS implementation guidance for a non-destructive Space Weather detail flow in
+  `docs/ios repo-UI docs-frontend/SpaceWeatherDetailPlan.md`, including backup expectations,
+  dashboard stats-only additions, and navigation to a dedicated detail page instead of
+  surfacing imagery on the home screen.
+- Emphasized focusing on NASA + Cumiana overlays while Tomsk ingestion remains disabled,
+  and keeping existing Health/Sleep/Earthscope/Symptom cards untouched.
+
+## 2025-12-02 — Pause Tomsk ingestion and fix aurora timestamps
+
+- Disabled `scripts/tomsk_visuals_ingest.py` by default so we stop pulling placeholder
+  SOS70 assets. Set `TOMSK_VISUALS_ENABLED=1` only after explicit permission to ingest
+  is received.
+- Hardened `_parse_timestamp` in `scripts/space_visuals_ingest.py` to attach UTC to
+  timezone-less aurora forecast timestamps (e.g., `2024-11-16 04:20:00`) so ingestion
+  no longer crashes when the feed omits a trailing `Z`.
+
+## 2025-12-01 — Tomsk ingestion now reads SOS70 provider directory
+
+- Extended `scripts/tomsk_visuals_ingest.py` so it scrapes the SOS70 `provider.php`
+  listing, downloads the canonical `shm/srf/sra/srq` chart images directly, and skips
+  known placeholder/site-icon assets before falling back to the WordPress media API or
+  HTML parsing. The ingest now writes deterministic keys for the provider-backed rows
+  to keep `/v1/space/visuals` stocked with the real Tomsk charts.
+- Added provider-specific regression tests plus doc updates in `docs/SCRIPTS_GUIDE.md`.
+  Run `python scripts/tomsk_visuals_ingest.py` (with `SUPABASE_DB_URL`/`MEDIA_DIR`
+  exported) so Supabase refreshes the `tomsk_*` rows with the direct provider assets.
+
+## 2025-11-30 — Tomsk scraper now fetches real media assets
+
+- Updated `scripts/tomsk_visuals_ingest.py` to call the SOS70 WordPress media API when a
+  `page_id` is available (falling back to HTML parsing otherwise) and to prefer the raw
+  image URLs before any normalization. This ensures we ingest the actual Schumann charts
+  instead of placeholder icons when Supabase rows are refreshed.
+- Added regression tests covering the new API helper + URL ordering, refreshed
+  `docs/SCRIPTS_GUIDE.md`, and noted that operators should rerun the Tomsk ingestion so
+  `/v1/space/visuals` exposes the corrected imagery set.
+
+## 2025-11-29 — Tomsk scraper now pulls embedded image URLs
+
+- Updated `scripts/tomsk_visuals_ingest.py` so it parses inline `style="background-image:url(...)"`
+  attributes and any other embedded `jpg/png` references within the SOS70 pages, ensuring
+  the script follows the nested image URLs rather than attempting to ingest the HTML pages
+  themselves. Added regression tests that cover the background-image and inline-script
+  parsing helpers.
+- Operators should rerun `python scripts/tomsk_visuals_ingest.py` after exporting
+  `SUPABASE_DB_URL`/`MEDIA_DIR` to refresh Supabase rows with the corrected Tomsk imagery
+  metadata before wiring the overlays into WordPress/iOS.
+
 ## 2025-11-28 — Fix OVATION aurora feed source
 
 - Updated `scripts/space_visuals_ingest.py` to pull hemispheric power samples from
