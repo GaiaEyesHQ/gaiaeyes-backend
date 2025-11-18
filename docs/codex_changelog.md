@@ -2,6 +2,17 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-12-05 — Space visuals Supabase alignment
+
+- Reworked `/v1/space/visuals` to prefer the new `VISUALS_MEDIA_BASE_URL` while keeping the
+  existing `MEDIA_BASE_URL` as a fallback and emitting relative URLs when the media base
+  matches.
+- Added `schema_version`, `cdn_base`, and a unified `items` array to the response while
+  preserving the legacy `images`/`series` shape for existing clients.
+- Normalized URL handling so Supabase-hosted media returns client-resolvable relative paths
+  and the endpoint continues to expose overlay feature flags and metadata alongside imagery
+  and series samples.
+
 ## 2025-12-04 — Space visuals workflow cleanup
 
 - Updated the `space-visuals` GitHub Action to install Python dependencies (including
