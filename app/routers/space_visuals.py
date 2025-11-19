@@ -71,6 +71,21 @@ def _to_relative(url: str | None, base: str | None) -> str | None:
     return url
 
 
+def _rebase_path(rel_path: str | None, key: str | None) -> str | None:
+    if not rel_path:
+        return None
+    rp = rel_path.lstrip("/")
+    # Back-compat: if old rows had images/space/*, remap based on key
+    if rp.startswith("images/space/"):
+        if key in ("lasco_c2", "aia_304", "ccor1"):
+            return rp.replace("images/space/", "nasa/", 1)
+        if key and key.startswith("aurora"):
+            return rp.replace("images/space/", "aurora/", 1)
+        if key == "drap":
+            return rp.replace("images/space/", "drap/", 1)
+    return rp
+
+
 @router.get("/space/visuals")
 async def space_visuals(conn=Depends(get_db)):
     media_base = _media_base()
@@ -132,17 +147,21 @@ async def space_visuals(conn=Depends(get_db)):
             )
             continue
 
-        rel_path = (row.get("image_path") or "").lstrip("/")
-        absolute_url = meta.get("url")
-        if not absolute_url and rel_path:
-            # Preserve fully qualified URLs for legacy consumers when meta.url is absent.
-            absolute_url = f"{media_base}/{rel_path}" if media_base else f"/{rel_path}"
+        raw_rel = row.get("image_path") or ""
+        rel_path = _rebase_path(raw_rel, row.get("key"))
+        url = meta.get("url")
+        if url:
+            url = _to_relative(url, media_base)
+        elif rel_path:
+            url = f"/{rel_path}"
+        else:
+            url = None
 
         images.append(
             {
                 "key": row.get("key"),
                 "captured_at": iso_ts,
-                "url": absolute_url,
+                "url": url,
                 "image_path": rel_path,
                 "instrument": row.get("instrument"),
                 "credit": row.get("credit"),
