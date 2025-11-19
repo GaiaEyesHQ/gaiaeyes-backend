@@ -28,6 +28,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install requests pillow "psycopg[binary]"
       - name: Clean space images directory
         run: |
           rm -rf gaiaeyes-media/images/space/*
@@ -39,6 +40,15 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           python3 scripts/space_visuals_ingest.py
+      - name: Upload images to Supabase Storage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BUCKET: space-visuals
+          MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
+          OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/space_live.json
+        run: |
+          python3 scripts/space_visuals_upload_to_supabase.py
       - name: Commit & push (images + space_live.json)
         run: |
           set -euo pipefail
