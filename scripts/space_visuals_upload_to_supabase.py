@@ -4,6 +4,10 @@ import os
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from scripts.supabase_storage import upload_file
 
 MEDIA_DIR = Path(os.getenv("MEDIA_DIR", "gaiaeyes-media"))
