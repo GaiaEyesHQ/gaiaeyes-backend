@@ -203,6 +203,16 @@ async def space_visuals(conn=Depends(get_db)):
             }
         )
 
+    items.append(
+        {
+            "id": "enlil_cme",
+            "title": "ENLIL CME Propagation",
+            "credit": "NOAA/WSA–ENLIL+Cone",
+            "url": "/nasa/enlil/latest.mp4",
+            "meta": {"source": "https://services.swpc.noaa.gov/images/animations/enlil/"},
+        }
+    )
+
     return {
         "ok": True,
         "schema_version": 1,
