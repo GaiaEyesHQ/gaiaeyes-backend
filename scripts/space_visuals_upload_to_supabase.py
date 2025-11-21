@@ -16,18 +16,50 @@ IMAGES_DIR = MEDIA_DIR / "images" / "space"
 SPACE_JSON = Path(os.getenv("OUTPUT_JSON_PATH", MEDIA_DIR / "data" / "space_live.json"))
 
 
-def map_dest(path: Path) -> str:
+def map_dest(path: Path) -> str | None:
     name = path.name.lower()
-    if "d-rap" in name or "drap" in name:
+
+    # ENLIL poster fallback (mp4 step adds the movie separately)
+    if "enlil" in name and name.endswith((".jpg", ".png")):
+        return "nasa/enlil/latest.jpg"
+
+    # DRAP aliases → single latest
+    if name.startswith("drap_") and name.endswith(".png"):
         return "drap/latest.png"
-    if "lasco" in name and name.endswith(".jpg"):
-        return "nasa/lasco_c2/latest.jpg"
-    if ("aia_304" in name or "sdo_aia_304" in name) and name.endswith(".jpg"):
-        return "nasa/aia_304/latest.jpg"
-    if "tonight" in name and "viewline" in str(path.parent).lower():
+
+    # Aurora (NH/SH) viewlines
+    if name.startswith("ovation_nh") and name.endswith((".jpg", ".png")):
         return "aurora/viewline/tonight-north.png"
-    if "tomorrow" in name and "viewline" in str(path.parent).lower():
-        return "aurora/viewline/tomorrow-north.png"
+    if name.startswith("ovation_sh") and name.endswith((".jpg", ".png")):
+        return "aurora/viewline/tonight-south.png"
+
+    # NASA LASCO/AIA/HMI
+    if name.startswith(("lasco_c2", "soho_c2")) and name.endswith(".jpg"):
+        return "nasa/lasco_c2/latest.jpg"
+    if name.startswith("lasco_c3") and name.endswith(".jpg"):
+        return "nasa/lasco_c3/latest.jpg"
+    if name.startswith(("aia_primary", "aia_304")) and name.endswith(".jpg"):
+        return "nasa/aia_304/latest.jpg"
+    if name.startswith("hmi_intensity") and name.endswith(".jpg"):
+        return "nasa/hmi_intensity/latest.jpg"
+
+    # Magnetosphere (geospace horizons)
+    if name.startswith("geospace_") and name.endswith(".png"):
+        try:
+            horizon = name.split("_")[1]
+        except Exception:  # noqa: BLE001
+            horizon = "latest"
+        return f"magnetosphere/geospace/{horizon}.png"
+
+    # KP station snapshot
+    if name.startswith("kp_station") and name.endswith(".png"):
+        return "space/kp_station/latest.png"
+
+    # SWPC overview
+    if name.startswith("swx_overview_small") and name.endswith(".gif"):
+        return "nasa/swx/overview/latest.gif"
+
+    # Fallback: keep legacy path for back-compat with older apps
     return f"images/space/{path.name}"
 
 
@@ -46,13 +78,22 @@ def main() -> int:
     for f in files:
         src = Path(f)
         dest = map_dest(src)
-        try:
-            public = upload_file(dest, str(src))
-            print(json.dumps({"src": str(src), "dest": dest, "public": public}))
-            ok += 1
-        except Exception as e:  # noqa: BLE001
-            print(json.dumps({"src": str(src), "dest": dest, "error": str(e)}))
-            fail += 1
+        if not dest:
+            print(json.dumps({"src": str(src), "dest": dest, "skipped": True}))
+            continue
+
+        uploads = [dest]
+        if not dest.startswith("images/space/"):
+            uploads.append(f"images/space/{src.name}")
+
+        for target in uploads:
+            try:
+                public = upload_file(target, str(src))
+                print(json.dumps({"src": str(src), "dest": target, "public": public}))
+                ok += 1
+            except Exception as e:  # noqa: BLE001
+                print(json.dumps({"src": str(src), "dest": target, "error": str(e)}))
+                fail += 1
     print(f"[upload] done ok={ok} fail={fail}", file=sys.stderr)
     return 0 if ok > 0 else (1 if fail > 0 else 0)
 
