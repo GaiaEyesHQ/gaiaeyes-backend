@@ -23,6 +23,16 @@ if (!defined('GAIAEYES_FC_URL_MIRROR')) {
   define('GAIAEYES_FC_URL_MIRROR', 'https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/data/flares_cmes.json');
 }
 
+/* ---------- Backend API (optional) ---------- */
+if (!defined('GAIAEYES_API_BASE')) {
+  $api_base = getenv('GAIAEYES_API_BASE');
+  define('GAIAEYES_API_BASE', $api_base ? rtrim(esc_url_raw($api_base), '/') : '');
+}
+if (!defined('GAIAEYES_API_BEARER')) {
+  $api_bearer = getenv('GAIAEYES_API_BEARER');
+  define('GAIAEYES_API_BEARER', $api_bearer ? trim($api_bearer) : '');
+}
+
 /* ---------- Fetch & Cache Helpers ---------- */
 function gaiaeyes_http_get_json_with_fallback($primary, $mirror, $cache_key, $ttl) {
   $cached = get_transient($cache_key);
@@ -36,6 +46,19 @@ function gaiaeyes_http_get_json_with_fallback($primary, $mirror, $cache_key, $tt
   $data = json_decode(wp_remote_retrieve_body($resp), true);
   if (!is_array($data)) return null;
 
+  set_transient($cache_key, $data, $ttl);
+  return $data;
+}
+
+function gaiaeyes_http_get_json_api_cached($url, $cache_key, $ttl, $bearer = ''){
+  $cached = get_transient($cache_key);
+  if ($cached !== false) return $cached;
+  $args = ['timeout'=>10, 'headers'=>['Accept'=>'application/json']];
+  if ($bearer) $args['headers']['Authorization'] = 'Bearer ' . $bearer;
+  $resp = wp_remote_get(add_query_arg(['v'=>floor(time()/600)], $url), $args);
+  if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) return null;
+  $data = json_decode(wp_remote_retrieve_body($resp), true);
+  if (!is_array($data)) return null;
   set_transient($cache_key, $data, $ttl);
   return $data;
 }
@@ -65,12 +88,66 @@ function gaia_space_weather_detail_shortcode($atts){
     'fc_url' => GAIAEYES_FC_URL,
     'cache'  => 10, // minutes
     'aurora_detail' => '/aurora/#map',
+    'api_base' => GAIAEYES_API_BASE,
+    'api_bearer' => GAIAEYES_API_BEARER,
   ], $atts, 'gaia_space_weather_detail');
 
   $ttl = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
 
-  $sw = gaiaeyes_http_get_json_with_fallback($a['sw_url'], GAIAEYES_SW_URL_MIRROR, 'ge_sw_json', $ttl);
-  $fc = gaiaeyes_http_get_json_with_fallback($a['fc_url'], GAIAEYES_FC_URL_MIRROR, 'ge_fc_json', $ttl);
+  $sw = null;
+  $fc = null;
+
+  // API-first: try backend if api_base is configured
+  $api_base = isset($a['api_base']) ? trim($a['api_base']) : '';
+  $api_bearer = isset($a['api_bearer']) ? trim($a['api_bearer']) : '';
+  if ($api_base) {
+    $outlook = gaiaeyes_http_get_json_api_cached($api_base . '/v1/space/forecast/outlook', 'ge_fc_outlook', $ttl, $api_bearer);
+    $features = gaiaeyes_http_get_json_api_cached($api_base . '/v1/features/today', 'ge_sw_features', $ttl, $api_bearer);
+
+    // Shape a minimal legacy-compatible $sw/$fc for rendering
+    $sw = [
+      'timestamp_utc' => gmdate('Y-m-d H:i:s\\Z'),
+      'now' => [
+        'kp' => null, 'solar_wind_kms' => null, 'bz_nt' => null
+      ],
+      'last_24h' => [],
+      'next_72h' => [],
+      'alerts' => [],
+      'impacts' => []
+    ];
+    if (is_array($features)) {
+      // best-effort extraction from likely keys
+      $snap = isset($features['snapshot']) ? $features['snapshot'] : (isset($features['now']) ? $features['now'] : $features);
+      $sw['now']['kp'] = $snap['kp'] ?? $snap['kp_now'] ?? $snap['kp_index'] ?? null;
+      $sw['now']['solar_wind_kms'] = $snap['sw_speed_kms'] ?? $snap['solar_wind_kms'] ?? $snap['solar_wind'] ?? null;
+      $sw['now']['bz_nt'] = $snap['bz_nt'] ?? $snap['bz'] ?? null;
+      $sw['timestamp_utc'] = $features['generated_at'] ?? $sw['timestamp_utc'];
+      // last 24h maxima if present
+      $last = $features['last_24h'] ?? [];
+      if (is_array($last)) {
+        if (isset($last['kp_max'])) $sw['last_24h']['kp_max'] = $last['kp_max'];
+        if (isset($last['solar_wind_max_kms'])) $sw['last_24h']['solar_wind_max_kms'] = $last['solar_wind_max_kms'];
+      }
+    }
+    if (is_array($outlook)) {
+      $sw['next_72h']['headline'] = $outlook['headline'] ?? ($outlook['summary'] ?? '');
+      $sw['next_72h']['confidence'] = $outlook['confidence'] ?? ($outlook['confidence_text'] ?? '');
+      $sw['alerts'] = is_array($outlook['alerts'] ?? null) ? $outlook['alerts'] : [];
+      $sw['impacts'] = is_array($outlook['impacts'] ?? null) ? $outlook['impacts'] : [];
+      // Flares/CMEs panel
+      $fc = [
+        'flares' => $outlook['flares'] ?? [],
+        'cmes'   => $outlook['cmes'] ?? [],
+      ];
+    }
+  }
+  // If API failed or not configured, fall back to legacy JSON sources
+  if (!$sw) {
+    $sw = gaiaeyes_http_get_json_with_fallback($a['sw_url'], GAIAEYES_SW_URL_MIRROR, 'ge_sw_json', $ttl);
+  }
+  if (!$fc) {
+    $fc = gaiaeyes_http_get_json_with_fallback($a['fc_url'], GAIAEYES_FC_URL_MIRROR, 'ge_fc_json', $ttl);
+  }
 
   $aurora_detail = isset($a['aurora_detail']) ? $a['aurora_detail'] : '/aurora/#map';
 
