@@ -13,16 +13,21 @@ from app.db import get_db
 router = APIRouter(prefix="/v1")
 
 # Legacy default (GitHub) remains as last resort
-_DEFAULT_MEDIA_BASE = "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main"
+_DEFAULT_MEDIA_BASE = ""
 
 
 def _media_base() -> str:
     """
-    Prefer a visuals-specific base if provided; fall back to legacy MEDIA_BASE_URL; then default.
-    This allows visuals to use Supabase while other parts of the stack continue using the GitHub base.
+    Prefer a visuals-specific Supabase base if provided; otherwise try MEDIA_BASE_URL/GAIA_MEDIA_BASE.
+    Return an empty string if unset (clients can still resolve relative URLs via their own base).
     """
-    base = getenv("VISUALS_MEDIA_BASE_URL") or getenv("MEDIA_BASE_URL") or _DEFAULT_MEDIA_BASE
-    return base.rstrip("/")
+    base = (
+        getenv("VISUALS_MEDIA_BASE_URL")
+        or getenv("MEDIA_BASE_URL")
+        or getenv("GAIA_MEDIA_BASE")
+        or ""
+    )
+    return base.rstrip("/") if base else ""
 
 
 def _iso(ts):
@@ -77,12 +82,38 @@ def _rebase_path(rel_path: str | None, key: str | None) -> str | None:
     rp = rel_path.lstrip("/")
     # Back-compat: if old rows had images/space/*, remap based on key
     if rp.startswith("images/space/"):
-        if key in ("lasco_c2", "aia_304", "ccor1"):
-            return rp.replace("images/space/", "nasa/", 1)
-        if key and key.startswith("aurora"):
-            return rp.replace("images/space/", "aurora/", 1)
-        if key == "drap":
-            return rp.replace("images/space/", "drap/", 1)
+        k = (key or "").lower()
+        # DRAP (any variant) -> single latest
+        if k.startswith("drap"):
+            return "drap/latest.png"
+        # Aurora viewlines
+        if k in ("ovation_nh", "aurora_north", "aurora_viewline_north"):
+            return "aurora/viewline/tonight-north.png"
+        if k in ("ovation_sh", "aurora_south", "aurora_viewline_south"):
+            return "aurora/viewline/tomorrow-north.png"  # keep 'tomorrow' if that's your convention; otherwise 'tonight-south.png'
+        # NASA LASCO/AIA/HMI/CCOR
+        if k in ("lasco_c2", "soho_c2"):
+            return "nasa/lasco_c2/latest.jpg"
+        if k == "lasco_c3":
+            return "nasa/lasco_c3/latest.jpg"
+        if k in ("aia_primary", "aia_304"):
+            return "nasa/aia_304/latest.jpg"
+        if k == "hmi_intensity":
+            return "nasa/hmi_intensity/latest.jpg"
+        if k in ("ccor1", "ccor1_jpeg"):
+            return "nasa/ccor1/latest.jpg"
+        # Magnetosphere geospace horizons: geospace_1d/3h/7d
+        if k.startswith("geospace_"):
+            try:
+                horizon = k.split("_", 1)[1]
+            except Exception:
+                horizon = "latest"
+            return f"magnetosphere/geospace/{horizon}.png"
+        # KP station
+        if k == "kp_station":
+            return "space/kp_station/latest.png"
+        # Fallback: strip the legacy prefix (clients may still resolve via cdn_base/GAIA_MEDIA_BASE)
+        return rp[len("images/space/"):]
     return rp
 
 
