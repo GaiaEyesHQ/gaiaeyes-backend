@@ -1501,9 +1501,11 @@ async def features_today(
 ):
     """Return the daily features snapshot for the caller, honoring timezone overrides."""
 
-    default_media_base = "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main"
+    default_media_base = getenv("GAIA_MEDIA_BASE") or ""
     raw_media_base = getenv("MEDIA_BASE_URL")
-    media_base = (raw_media_base or default_media_base).rstrip("/")
+    media_base = (raw_media_base or default_media_base).rstrip("/") if (
+        raw_media_base or default_media_base
+    ) else ""
 
     tz_param = request.query_params.get("tz", DEFAULT_TIMEZONE)
     tz_name, tzinfo = _normalize_timezone(tz_param)

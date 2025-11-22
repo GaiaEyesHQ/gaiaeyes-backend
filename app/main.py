@@ -5,7 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .routers import health as health_router, ingest, summary, symptoms, space_visuals
- # Resilient imports for optional/relocated modules
+
+# Resilient imports for optional/relocated modules
 try:
     # Preferred layout: app/api/...
     from .api.middleware import WebhookSigMiddleware  # type: ignore
@@ -24,6 +25,7 @@ except ModuleNotFoundError:
 from .utils.auth import require_auth as ensure_authenticated
 from .db import get_pool, open_pool, close_pool
 from .db.health import ensure_health_monitor_started, stop_health_monitor
+from .routers.space_visuals import _media_base
 
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,8 @@ app = FastAPI(
     version="0.1.0",
     generate_unique_id_function=custom_generate_unique_id
 )
+
+logging.getLogger("uvicorn").info(f"[visuals] media_base at startup: {_media_base() or 'None'}")
 
 @app.exception_handler(Exception)
 async def _global_exception_handler(request: Request, exc: Exception):
