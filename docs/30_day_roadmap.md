@@ -13,6 +13,8 @@
 ### 1. Predictive Data Coverage Expansion
 Close ingestion gaps so Supabase becomes the single source for all predictive feeds competitors surface.
 
+**Note:** For Week 1 execution, the priority is establishing website → app parity for existing GaiaEyes data (earthquakes, series compare, NOAA charts, spark lines, aurora maps) using data already in Supabase/JSON exports. Predictive feeds are implemented in parallel but do not block UI parity work.
+
 **Implementation Tasks**
 1. **WSA–Enlil propagation**  
    a. Extend `ingest_nasa_donki.py` (or ship `ingest_enlil_forecast.py`) to call the DONKI `WSAEnlilSimulations` endpoint.  
@@ -42,11 +44,11 @@ Close ingestion gaps so Supabase becomes the single source for all predictive fe
    a. Ingest SWPC sunspot/F10.7 projections into `ext.solar_cycle_forecast`.  
    b. Build comparative views versus historical data in `marts.solar_cycle_progress`.  
    c. Display cycle context on Earthquake and Space Weather dashboards for long-range planning.
-8. **Regional magnetometer indices**  
-   a. Capture AE/AL/PC chain data (SWPC AE index feed or SuperMAG API) into `ext.magnetometer_chain`.  
-   b. Normalize to regional stress indicators within `marts.magnetometer_regional`.  
-   c. Highlight regional spikes in web/app dashboards and social alerts.  
-9. **Documentation & schema**
+
+### Deferred to Phase 2
+- Regional magnetometer indices (AE/AL/PC) ingestion and marts normalization.
+
+8. **Documentation & schema**
    a. Update Supabase migrations for each new `ext`/`marts` table.
    b. Refresh `docs/SCRIPTS_GUIDE.md` with usage, scheduling, and troubleshooting notes.
    c. Add observability checks (Grafana or scripted Slack pings) to ensure each ingestion pipeline stays healthy.
@@ -667,12 +669,14 @@ Lay groundwork for diversified revenue once testing completes.
 
 | Week | Focus | Key Deliverables |
 | --- | --- | --- |
-| **Week 1** | Predictive data ingestion foundation | Supabase tables & scripts for Enlil, SEP/radiation, aurora power, coronal hole forecasts, D-RAP, solar cycle, magnetometer indices; documentation refreshed. |
-| **Week 2** | Analytics & automation enablement | Compare 2.0 marts, earthquake aggregates, predictive-model prototypes, `/v1/space/visuals`, Earthscope bot signal detection upgrades. |
+| **Week 1** | Website → app parity for existing data (earthquakes, spark lines, NOAA imagery, aurora charts); Supabase ingestion foundation for Enlil, SEP/radiation, aurora power, coronal-hole forecasts, D‑RAP, solar cycle. |
+| **Week 2** | Compare 2.0 marts, earthquake aggregates, predictive-model prototypes, `/v1/space/visuals`, Earthscope bot detection upgrades; begin integration of new predictive marts into web/app views. |
 | **Week 3** | Front-end & app integration | Overlay UI, navigation/tooltips, guidance hub draft, personalized overlays, TestFlight-ready CI pipeline, feature freeze tagged. |
 | **Week 4** | Testing, social rollout & monetization prep | External tester onboarding + triage cadence, automated social content runs (stories/reels, forecast posts), premium web tier specification, revenue roadmap refinement. |
 
 ---
+
+*Magnetometer ingestion/normalization was moved to Phase 2 due to unreliable upstream feeds and authentication requirements.*
 
 ## Dependencies & Risks
 - Timely access to SWPC/NOAA/DONKI feeds—implement retry/backoff to handle outages.

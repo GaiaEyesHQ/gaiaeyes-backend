@@ -14,12 +14,6 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout media repo
-        uses: actions/checkout@v4
-        with:
-          repository: GaiaEyesHQ/gaiaeyes-media
-          token: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
-          path: gaiaeyes-media
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -29,14 +23,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install requests pillow "psycopg[binary]"
-      - name: Clean space images directory
+      - name: Prepare media workspace (temp)
         run: |
-          rm -rf gaiaeyes-media/images/space/*
-          mkdir -p gaiaeyes-media/images/space
+          mkdir -p "$RUNNER_TEMP/media/images/space"
+          mkdir -p "$RUNNER_TEMP/media/data"
       - name: Run space visuals ingest
         env:
-          OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/space_live.json
-          MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
+          OUTPUT_JSON_PATH: ${{ runner.temp }}/media/data/space_live.json
+          MEDIA_DIR: ${{ runner.temp }}/media
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           python3 scripts/space_visuals_ingest.py
@@ -116,44 +110,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BUCKET: space-visuals
-          MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
-          OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/space_live.json
+          MEDIA_DIR: ${{ runner.temp }}/media
+          OUTPUT_JSON_PATH: ${{ runner.temp }}/media/data/space_live.json
         run: |
           python3 scripts/space_visuals_upload_to_supabase.py
-      - name: Commit & push (images + space_live.json)
-        run: |
-          set -euo pipefail
-          cd gaiaeyes-media
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config pull.rebase true
-
-          # Stage changes (tolerate no matches)
-          git add -A images/space data/space_live.json || true
-
-          # No-op if nothing to commit
-          if git diff --cached --quiet; then
-            echo "No changes."
-            exit 0
-          fi
-
-          git commit -m "chore: update space visuals & space_live.json [skip ci]"
-
-          # Make sure we're up to date with remote main before pushing
-          git fetch origin main || true
-          git pull --rebase origin main || true
-
-          # Retry push up to 3 times in case remote advanced between runs
-          for attempt in 1 2 3; do
-            if git push origin HEAD:main; then
-              echo "Push succeeded on attempt ${attempt}."
-              exit 0
-            fi
-            echo "Push failed on attempt ${attempt}; rebasing and retrying…"
-            git fetch origin main || true
-            git pull --rebase origin main || true
-            sleep $((RANDOM % 4 + 2))
-          done
-
-          echo "ERROR: Could not push after 3 attempts."
-          exit 1

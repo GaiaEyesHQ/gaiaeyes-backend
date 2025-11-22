@@ -68,6 +68,49 @@ IMAGE_SPECS: Dict[str, Dict[str, Any]] = {
 }
 
 SERIES_SPECS: Dict[str, Dict[str, Any]] = {
+ # Map a logical key/filename to a standardized Supabase Storage relative path
+def _map_supabase_dest(key: str, filename: str) -> str:
+    k = (key or "").lower()
+    # DRAP -> single latest
+    if k.startswith("drap_"):
+        return "drap/latest.png"
+    # Aurora viewlines
+    if k == "ovation_nh":
+        return "aurora/viewline/tonight-north.png"
+    if k == "ovation_sh":
+        return "aurora/viewline/tonight-south.png"
+    # NASA LASCO/AIA/HMI/CCOR
+    if k in ("soho_c2",):
+        return "nasa/lasco_c2/latest.jpg"
+    if k in ("lasco_c3",):
+        return "nasa/lasco_c3/latest.jpg"
+    if k in ("aia_primary", "aia_304"):
+        return "nasa/aia_304/latest.jpg"
+    if k == "hmi_intensity":
+        return "nasa/hmi_intensity/latest.jpg"
+    if k in ("ccor1_jpeg",):
+        return "nasa/ccor1/latest.jpg"
+    if k in ("ccor1_mp4",):
+        return "nasa/ccor1/latest.mp4"
+    # Magnetosphere (geospace horizons)
+    if k == "geospace_1d":
+        return "magnetosphere/geospace/1d.png"
+    if k == "geospace_3h":
+        return "magnetosphere/geospace/3h.png"
+    if k == "geospace_7d":
+        return "magnetosphere/geospace/7d.png"
+    # Station indices
+    if k == "kp_station":
+        return "space/kp_station/latest.png"
+    if k == "a_station":
+        return "space/a_station/latest.png"
+    # Synoptic / SWX overview
+    if k == "synoptic_map":
+        return "nasa/synoptic/latest.jpg"
+    if k == "swx_overview_small":
+        return "nasa/swx/overview/latest.gif"
+    # Fallback: keep the legacy filename shape under images/space only if explicitly needed later
+    return f"images/space/{filename}"
     "goes_xray": {
         "label": "GOES X-ray flux (1–8 Å)",
         "units": "W/m²",
@@ -454,7 +497,7 @@ def main():
     for key, (fn, url) in imgs.items():
         dest = os.path.join(IMG_DIR, fn)
         if dl(url, dest):
-            saved[key] = f"images/space/{fn}"
+            saved[key] = _map_supabase_dest(key, fn)
         else:
             missing.append(key)
 
@@ -465,7 +508,7 @@ def main():
             mp4_name = f"ccor1_{stamp}.mp4"
             mp4_dest = os.path.join(IMG_DIR, mp4_name)
             if dl([ccor1_mp4_url], mp4_dest):
-                video["ccor1_mp4"] = f"images/space/{mp4_name}"
+                video["ccor1_mp4"] = _map_supabase_dest("ccor1_mp4", mp4_name)
             else:
                 missing.append("ccor1_mp4")
         except Exception as e:
@@ -473,6 +516,10 @@ def main():
             missing.append("ccor1_mp4")
     else:
         missing.append("ccor1_mp4")
+
+    # Warn if any legacy images/space paths slipped through
+    if any((p or "").startswith("images/space/") for p in list(saved.values()) + list(video.values())):
+        print("[space_visuals] WARNING: legacy images/space/ paths present; consider full migration to standardized keys.")
 
     xrs = fetch_json(xrs_7d) or []
     p7d = fetch_json(protons_7d) or []

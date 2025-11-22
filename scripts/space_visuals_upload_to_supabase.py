@@ -55,12 +55,16 @@ def map_dest(path: Path) -> str | None:
     if name.startswith("kp_station") and name.endswith(".png"):
         return "space/kp_station/latest.png"
 
+    # CCOR1 video (mp4)
+    if name.startswith("ccor1_") and name.endswith(".mp4"):
+        return "nasa/ccor1/latest.mp4"
+
     # SWPC overview
     if name.startswith("swx_overview_small") and name.endswith(".gif"):
         return "nasa/swx/overview/latest.gif"
 
-    # Fallback: keep legacy path for back-compat with older apps
-    return f"images/space/{path.name}"
+    # Fallback: skip unknowns; no legacy images/space fallback
+    return None  # skip unknowns; no legacy images/space fallback
 
 
 def main() -> int:
@@ -82,18 +86,13 @@ def main() -> int:
             print(json.dumps({"src": str(src), "dest": dest, "skipped": True}))
             continue
 
-        uploads = [dest]
-        if not dest.startswith("images/space/"):
-            uploads.append(f"images/space/{src.name}")
-
-        for target in uploads:
-            try:
-                public = upload_file(target, str(src))
-                print(json.dumps({"src": str(src), "dest": target, "public": public}))
-                ok += 1
-            except Exception as e:  # noqa: BLE001
-                print(json.dumps({"src": str(src), "dest": target, "error": str(e)}))
-                fail += 1
+        try:
+            public = upload_file(dest, str(src))
+            print(json.dumps({"src": str(src), "dest": dest, "public": public}))
+            ok += 1
+        except Exception as e:  # noqa: BLE001
+            print(json.dumps({"src": str(src), "dest": dest, "error": str(e)}))
+            fail += 1
     print(f"[upload] done ok={ok} fail={fail}", file=sys.stderr)
     return 0 if ok > 0 else (1 if fail > 0 else 0)
 

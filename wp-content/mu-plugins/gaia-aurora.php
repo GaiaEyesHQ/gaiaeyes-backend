@@ -14,22 +14,32 @@ if (!defined('ABSPATH')) {
 // -----------------------------------------------------------------------------
 
 if (!defined('GAIA_AURORA_NOWCAST_URL')) {
-    define('GAIA_AURORA_NOWCAST_URL', 'https://services.swpc.noaa.gov/json/ovation_aurora_latest.json');
+    $nowcast_env = getenv('GAIA_AURORA_NOWCAST_URL');
+    define('GAIA_AURORA_NOWCAST_URL', $nowcast_env ? esc_url_raw($nowcast_env) : 'https://services.swpc.noaa.gov/json/ovation_aurora_latest.json');
 }
 if (!defined('GAIA_AURORA_KP_URL')) {
     define('GAIA_AURORA_KP_URL', 'https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json');
 }
+// Optional Supabase media base (used to prefer Supabase-hosted images)
+if (!defined('GAIA_MEDIA_BASE')) {
+    $mb = getenv('GAIA_MEDIA_BASE');
+    define('GAIA_MEDIA_BASE', $mb ? rtrim(esc_url_raw($mb), '/') : '');
+}
 if (!defined('GAIA_AURORA_IMAGE_NORTH')) {
-    define('GAIA_AURORA_IMAGE_NORTH', 'https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg');
+    $img_env_n = getenv('GAIA_AURORA_IMAGE_NORTH');
+    define('GAIA_AURORA_IMAGE_NORTH', $img_env_n ? esc_url_raw($img_env_n) : 'https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg');
 }
 if (!defined('GAIA_AURORA_IMAGE_SOUTH')) {
-    define('GAIA_AURORA_IMAGE_SOUTH', 'https://services.swpc.noaa.gov/images/animations/ovation/south/latest.jpg');
+    $img_env_s = getenv('GAIA_AURORA_IMAGE_SOUTH');
+    define('GAIA_AURORA_IMAGE_SOUTH', $img_env_s ? esc_url_raw($img_env_s) : 'https://services.swpc.noaa.gov/images/animations/ovation/south/latest.jpg');
 }
 if (!defined('GAIA_AURORA_VIEWLINE_TONIGHT')) {
-    define('GAIA_AURORA_VIEWLINE_TONIGHT', 'https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png');
+    $base = (defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE) ? GAIA_MEDIA_BASE : '';
+    define('GAIA_AURORA_VIEWLINE_TONIGHT', $base ? ($base . '/aurora/viewline/tonight-north.png') : 'https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png');
 }
 if (!defined('GAIA_AURORA_VIEWLINE_TOMORROW')) {
-    define('GAIA_AURORA_VIEWLINE_TOMORROW', 'https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png');
+    $base = (defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE) ? GAIA_MEDIA_BASE : '';
+    define('GAIA_AURORA_VIEWLINE_TOMORROW', $base ? ($base . '/aurora/viewline/tomorrow-north.png') : 'https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png');
 }
 if (!defined('GAIA_AURORA_CACHE_TTL')) {
     $ttl_env = getenv('GAIA_AURORA_CACHE_TTL_SECONDS');
