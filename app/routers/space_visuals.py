@@ -16,6 +16,16 @@ router = APIRouter(prefix="/v1")
 _DEFAULT_MEDIA_BASE = ""
 
 
+def _visuals_env_snapshot() -> dict:
+    from os import getenv
+
+    return {
+        "VISUALS_MEDIA_BASE_URL": getenv("VISUALS_MEDIA_BASE_URL") or None,
+        "MEDIA_BASE_URL": getenv("MEDIA_BASE_URL") or None,
+        "GAIA_MEDIA_BASE": getenv("GAIA_MEDIA_BASE") or None,
+    }
+
+
 def _media_base() -> str:
     """
     Prefer a visuals-specific Supabase base if provided; otherwise try MEDIA_BASE_URL/GAIA_MEDIA_BASE.
@@ -250,13 +260,32 @@ async def space_visuals(conn=Depends(get_db)):
         if b["id"] not in existing:
             items.append(b)
 
+    cdn_out = media_base or None
+
     return {
         "ok": True,
         "schema_version": 1,
-        "cdn_base": (media_base or None),
+        "cdn_base": cdn_out,
         "generated_at": latest_ts,
         "images": images,
         "series": series,
         "feature_flags": overlay_flags,
         "items": items,
     }
+
+
+@router.get("/space/visuals/diag")
+async def space_visuals_diag(conn=Depends(get_db)):
+    # What the service sees
+    env = _visuals_env_snapshot()
+    # Quick count from DB
+    total = 0
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute("select count(*) as c from ext.space_visuals", prepare=False)
+            total = (await cur.fetchone())["c"]
+    except Exception as exc:
+        return {"ok": False, "env": env, "error": f"db failed: {exc}"}
+    # Dry-run media base
+    mb = _media_base()
+    return {"ok": True, "env": env, "media_base": mb or None, "db_rows": total}

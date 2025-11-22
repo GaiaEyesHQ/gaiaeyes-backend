@@ -24,6 +24,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check for legacy visuals origins
+        run: |
+          git grep -nE 'cdn\.jsdelivr|gaiaeyes-media|images/space/' || true
+
       - name: Setup Python
         if: ${{ hashFiles('**/*.py') != '' }}
         uses: actions/setup-python@v5

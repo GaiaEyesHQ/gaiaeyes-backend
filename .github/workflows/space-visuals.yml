@@ -12,6 +12,9 @@ jobs:
     permissions:
       contents: write
       issues: write
+    env:
+      BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL || vars.BACKEND_BASE_URL || '' }}
+      DEV_BEARER: ${{ secrets.DEV_BEARER || vars.DEV_BEARER || '' }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -35,7 +38,7 @@ jobs:
         run: |
           python3 scripts/space_visuals_ingest.py
       - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg jq
 
       - name: Build & upload ENLIL animation (mp4 + poster)
         env:
@@ -114,3 +117,16 @@ jobs:
           OUTPUT_JSON_PATH: ${{ runner.temp }}/media/data/space_live.json
         run: |
           python3 scripts/space_visuals_upload_to_supabase.py
+      - name: Smoke check space visuals API
+        if: env.BACKEND_BASE_URL != '' && env.DEV_BEARER != ''
+        env:
+          BASE_URL: ${{ env.BACKEND_BASE_URL }}
+          BEARER: ${{ env.DEV_BEARER }}
+        run: |
+          set -euo pipefail
+          curl -sS -H "Authorization: Bearer ${BEARER}" "${BASE_URL}/v1/space/visuals/diag" | jq .
+          curl -sS -H "Authorization: Bearer ${BEARER}" "${BASE_URL}/v1/space/visuals" \
+            | jq -e 'select(.cdn_base != null and (.items|length) >= 5) | .cdn_base'
+      - name: Skip smoke check (backend env missing)
+        if: env.BACKEND_BASE_URL == '' || env.DEV_BEARER == ''
+        run: echo "Skipping space visuals smoke check; BACKEND_BASE_URL/DEV_BEARER not configured."
