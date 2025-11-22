@@ -68,7 +68,48 @@ IMAGE_SPECS: Dict[str, Dict[str, Any]] = {
 }
 
 SERIES_SPECS: Dict[str, Dict[str, Any]] = {
- # Map a logical key/filename to a standardized Supabase Storage relative path
+    "goes_xray": {
+        "label": "GOES X-ray flux (1–8 Å)",
+        "units": "W/m²",
+        "color": "#7fc8ff",
+        "instrument": "GOES XRS",
+        "credit": "NOAA/SWPC",
+        "feature_flags": {"flare_markers": True},
+    },
+    "goes_protons": {
+        "label": "GOES proton flux (≥10 MeV)",
+        "units": "pfu",
+        "color": "#ffd089",
+        "instrument": "GOES EPS",
+        "credit": "NOAA/SWPC",
+        "feature_flags": {"radiation_alerts": True},
+    },
+    "goes_electrons": {
+        "label": "GOES electron flux (>2 MeV)",
+        "units": "e⁻ cm⁻² s⁻¹ sr⁻¹",
+        "color": "#b0f2ff",
+        "instrument": "GOES SEISS",
+        "credit": "NOAA/SWPC",
+    },
+    "aurora_power_north": {
+        "label": "Aurora hemispheric power (north)",
+        "units": "GW",
+        "color": "#5eead4",
+        "instrument": "OVATION Prime",
+        "credit": "NOAA/SWPC",
+        "feature_flags": {"aurora_probability": True},
+    },
+    "aurora_power_south": {
+        "label": "Aurora hemispheric power (south)",
+        "units": "GW",
+        "color": "#c084fc",
+        "instrument": "OVATION Prime",
+        "credit": "NOAA/SWPC",
+        "feature_flags": {"aurora_probability": True},
+    },
+}
+
+# Map a logical key/filename to a standardized Supabase Storage relative path
 def _map_supabase_dest(key: str, filename: str) -> str:
     k = (key or "").lower()
     # DRAP -> single latest
@@ -111,46 +152,6 @@ def _map_supabase_dest(key: str, filename: str) -> str:
         return "nasa/swx/overview/latest.gif"
     # Fallback: keep the legacy filename shape under images/space only if explicitly needed later
     return f"images/space/{filename}"
-    "goes_xray": {
-        "label": "GOES X-ray flux (1–8 Å)",
-        "units": "W/m²",
-        "color": "#7fc8ff",
-        "instrument": "GOES XRS",
-        "credit": "NOAA/SWPC",
-        "feature_flags": {"flare_markers": True},
-    },
-    "goes_protons": {
-        "label": "GOES proton flux (≥10 MeV)",
-        "units": "pfu",
-        "color": "#ffd089",
-        "instrument": "GOES EPS",
-        "credit": "NOAA/SWPC",
-        "feature_flags": {"radiation_alerts": True},
-    },
-    "goes_electrons": {
-        "label": "GOES electron flux (>2 MeV)",
-        "units": "e⁻ cm⁻² s⁻¹ sr⁻¹",
-        "color": "#b0f2ff",
-        "instrument": "GOES SEISS",
-        "credit": "NOAA/SWPC",
-    },
-    "aurora_power_north": {
-        "label": "Aurora hemispheric power (north)",
-        "units": "GW",
-        "color": "#5eead4",
-        "instrument": "OVATION Prime",
-        "credit": "NOAA/SWPC",
-        "feature_flags": {"aurora_probability": True},
-    },
-    "aurora_power_south": {
-        "label": "Aurora hemispheric power (south)",
-        "units": "GW",
-        "color": "#c084fc",
-        "instrument": "OVATION Prime",
-        "credit": "NOAA/SWPC",
-        "feature_flags": {"aurora_probability": True},
-    },
-}
 
 
 def dl(url_or_urls, dest):
