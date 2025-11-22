@@ -90,7 +90,7 @@ def _rebase_path(rel_path: str | None, key: str | None) -> str | None:
         if k in ("ovation_nh", "aurora_north", "aurora_viewline_north"):
             return "aurora/viewline/tonight-north.png"
         if k in ("ovation_sh", "aurora_south", "aurora_viewline_south"):
-            return "aurora/viewline/tomorrow-north.png"  # keep 'tomorrow' if that's your convention; otherwise 'tonight-south.png'
+            return "aurora/viewline/tonight-south.png"
         # NASA LASCO/AIA/HMI/CCOR
         if k in ("lasco_c2", "soho_c2"):
             return "nasa/lasco_c2/latest.jpg"
@@ -234,20 +234,26 @@ async def space_visuals(conn=Depends(get_db)):
             }
         )
 
-    items.append(
-        {
-            "id": "enlil_cme",
-            "title": "ENLIL CME Propagation",
-            "credit": "NOAA/WSA–ENLIL+Cone",
-            "url": "/nasa/enlil/latest.mp4",
-            "meta": {"source": "https://services.swpc.noaa.gov/images/animations/enlil/"},
-        }
-    )
+    # Ensure a small baseline set so clients render even if DB yields few/none
+    existing = {it.get("id") for it in items if it.get("id")}
+    baseline: List[Dict[str, Any]] = [
+        {"id": "enlil_cme",  "title": "ENLIL CME Propagation", "credit": "NOAA/WSA–ENLIL+Cone", "url": "/nasa/enlil/latest.mp4",
+         "meta": {"source": "https://services.swpc.noaa.gov/images/animations/enlil/"}},
+        {"id": "drap",       "title": "D-RAP Absorption",       "credit": "NOAA/SWPC",         "url": "/drap/latest.png"},
+        {"id": "lasco_c2",   "title": "LASCO C2",               "credit": "SOHO/LASCO",        "url": "/nasa/lasco_c2/latest.jpg"},
+        {"id": "aia_304",    "title": "AIA 304Å",               "credit": "SDO/AIA",           "url": "/nasa/aia_304/latest.jpg"},
+        {"id": "ovation_nh", "title": "Aurora Viewline (N)",    "credit": "NOAA SWPC",         "url": "/aurora/viewline/tonight-north.png"},
+        {"id": "ovation_sh", "title": "Aurora Viewline (S)",    "credit": "NOAA SWPC",         "url": "/aurora/viewline/tonight-south.png"},
+    ]
+    # Append any baseline not already present; also use baseline when items is empty
+    for b in baseline:
+        if b["id"] not in existing:
+            items.append(b)
 
     return {
         "ok": True,
         "schema_version": 1,
-        "cdn_base": media_base,
+        "cdn_base": (media_base or None),
         "generated_at": latest_ts,
         "images": images,
         "series": series,
