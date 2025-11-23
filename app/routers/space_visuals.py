@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 from psycopg.rows import dict_row
 
 from app.db import get_db
+from app.utils.auth import require_auth
 
 router = APIRouter(prefix="/v1")
 
@@ -273,7 +274,7 @@ async def _build_visuals_payload(conn, media_base: str) -> dict:
     }
 
 
-@router.get("/space/visuals")
+@router.get("/space/visuals", dependencies=[Depends(require_auth)])
 async def space_visuals(conn=Depends(get_db)):
     media_base = _media_base()
     payload = await _build_visuals_payload(conn, media_base)
@@ -289,7 +290,7 @@ async def space_visuals_public(conn=Depends(get_db)):
     return payload
 
 
-@router.get("/space/visuals/diag")
+@router.get("/space/visuals/diag", dependencies=[Depends(require_auth)])
 async def space_visuals_diag(conn=Depends(get_db)):
     # What the service sees
     env = _visuals_env_snapshot()
