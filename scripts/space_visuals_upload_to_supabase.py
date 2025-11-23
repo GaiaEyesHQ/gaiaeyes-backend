@@ -55,9 +55,21 @@ def map_dest(path: Path) -> str | None:
     if name.startswith("kp_station") and name.endswith(".png"):
         return "space/kp_station/latest.png"
 
+    # a_station snapshot
+    if name.startswith("a_station") and name.endswith(".png"):
+        return "space/a_station/latest.png"
+
     # CCOR1 video (mp4)
     if name.startswith("ccor1_") and name.endswith(".mp4"):
         return "nasa/ccor1/latest.mp4"
+
+    # CCOR1 poster (jpg)
+    if name.startswith("ccor1_") and name.endswith(".jpg"):
+        return "nasa/ccor1/latest.jpg"
+
+    # Synoptic map (jpg)
+    if name.startswith("synoptic_map") and name.endswith(".jpg"):
+        return "nasa/synoptic/latest.jpg"
 
     # SWPC overview
     if name.startswith("swx_overview_small") and name.endswith(".gif"):
