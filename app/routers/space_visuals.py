@@ -11,7 +11,6 @@ from fastapi.responses import JSONResponse
 from psycopg.rows import dict_row
 
 from app.db import get_db
-from app.utils.auth import require_auth
 
 router = APIRouter(prefix="/v1")
 
@@ -257,10 +256,10 @@ async def _build_visuals_payload(conn, media_base: str) -> dict:
         {"id": "ovation_nh", "title": "Aurora Viewline (N)",    "credit": "NOAA SWPC",         "url": "/aurora/viewline/tonight-north.png"},
         {"id": "ovation_sh", "title": "Aurora Viewline (S)",    "credit": "NOAA SWPC",         "url": "/aurora/viewline/tonight-south.png"},
     ]
-    # Append any baseline not already present; also use baseline when items is empty
+    items_unified: List[Dict[str, Any]] = items.copy()
     for b in baseline:
         if b["id"] not in existing:
-            items.append(b)
+            items_unified.append(b)
 
     cdn_out = media_base or None
 
@@ -272,33 +271,29 @@ async def _build_visuals_payload(conn, media_base: str) -> dict:
         "images": images,
         "series": series,
         "feature_flags": overlay_flags,
-        "items": items,
+        "items": items_unified,
     }
 
 
-def _visuals_response(payload: dict, request: Request | None = None):
-    etag = hashlib.md5(
-        json.dumps(payload, sort_keys=True, default=str).encode()
-    ).hexdigest()
-    headers = {
-        "Cache-Control": "public, max-age=15, stale-while-revalidate=60",
-        "ETag": f'W/"{etag}"',
-        "Vary": "Accept-Encoding",
-        "Content-Type": "application/json; charset=utf-8",
-    }
-    if request:
-        if_none = request.headers.get("If-None-Match")
-        if if_none and if_none.strip('W/"') == etag:
-            return JSONResponse(status_code=304, content=None, headers=headers)
-    return JSONResponse(content=payload, headers=headers)
+def _visuals_response(payload: dict):
+    etag = hashlib.md5(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+    return JSONResponse(
+        content=payload,
+        headers={
+            "Cache-Control": "public, max-age=15, stale-while-revalidate=60",
+            "ETag": f'W/"{etag}"',
+            "Vary": "Accept-Encoding",
+            "Content-Type": "application/json; charset=utf-8",
+        },
+    )
 
 
-@router.get("/space/visuals", dependencies=[Depends(require_auth)])
+@router.get("/space/visuals")
 async def space_visuals(request: Request, conn=Depends(get_db)):
     media_base = _media_base()
     payload = await _build_visuals_payload(conn, media_base)
     payload["cdn_base"] = payload.get("cdn_base") or (media_base or None)
-    return _visuals_response(payload, request)
+    return _visuals_response(payload)
 
 
 @router.get("/space/visuals/public")
@@ -306,21 +301,20 @@ async def space_visuals_public(request: Request, conn=Depends(get_db)):
     media_base = _media_base()
     payload = await _build_visuals_payload(conn, media_base)
     payload["cdn_base"] = payload.get("cdn_base") or (media_base or None)
-    return _visuals_response(payload, request)
+    return _visuals_response(payload)
 
 
-@router.get("/space/visuals/diag", dependencies=[Depends(require_auth)])
+@router.get("/space/visuals/diag")
 async def space_visuals_diag(conn=Depends(get_db)):
-    # What the service sees
-    env = _visuals_env_snapshot()
-    # Quick count from DB
-    total = 0
+    env = {
+        "VISUALS_MEDIA_BASE_URL": getenv("VISUALS_MEDIA_BASE_URL") or None,
+        "MEDIA_BASE_URL": getenv("MEDIA_BASE_URL") or None,
+        "GAIA_MEDIA_BASE": getenv("GAIA_MEDIA_BASE") or None,
+    }
     try:
         async with conn.cursor(row_factory=dict_row) as cur:
-            await cur.execute("select count(*) as c from ext.space_visuals", prepare=False)
+            await cur.execute("select count(*) as c from ext.space_visuals")
             total = (await cur.fetchone())["c"]
     except Exception as exc:
-        return {"ok": False, "env": env, "error": f"db failed: {exc}"}
-    # Dry-run media base
-    mb = _media_base()
-    return {"ok": True, "env": env, "media_base": mb or None, "db_rows": total}
+        return {"ok": False, "env": env, "media_base": (_media_base() or None), "error": str(exc)}
+    return {"ok": True, "env": env, "media_base": (_media_base() or None), "db_rows": total}
