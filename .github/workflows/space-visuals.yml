@@ -125,7 +125,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -sS -H "Authorization: Bearer ${BEARER}" "${BASE_URL}/v1/space/visuals/diag" | jq .
-          curl -sS -H "Authorization: Bearer ${BEARER}" "${BASE_URL}/v1/space/visuals" \
+          curl -sS -H "Authorization: Bearer ${BEARER}" "${BASE_URL}/v1/space/visuals" -H "Cache-Control: no-cache" \
             | jq -e 'select(.cdn_base != null and (.items|length) >= 5) | .cdn_base'
       - name: Skip smoke check (backend env missing)
         if: env.BACKEND_BASE_URL == '' || env.DEV_BEARER == ''
