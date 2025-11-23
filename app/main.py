@@ -40,6 +40,14 @@ app = FastAPI(
     generate_unique_id_function=custom_generate_unique_id
 )
 
+
+@app.middleware("http")
+async def auth_bypass_for_visuals(request: Request, call_next):
+    path = request.url.path
+    if path.startswith(("/v1/space/visuals",)):
+        return await call_next(request)
+    return await call_next(request)
+
 logging.getLogger("uvicorn").info(f"[visuals] media_base at startup: {_media_base() or 'None'}")
 
 @app.exception_handler(Exception)
