@@ -114,7 +114,7 @@ app.include_router(health_router.router)
 app.include_router(ingest.router, prefix="/v1", dependencies=[Depends(require_auth)])
 app.include_router(symptoms.router, prefix="/v1", dependencies=[Depends(require_auth)])
 app.include_router(summary.router, dependencies=[Depends(require_auth)])
-app.include_router(space_visuals.router, dependencies=[Depends(require_auth)])
+app.include_router(space_visuals.router)
 
 # Webhooks are protected by HMAC middleware, not bearer auth
 if webhooks_router is not None:

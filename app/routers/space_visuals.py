@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 from psycopg.rows import dict_row
 
 from app.db import get_db
+from app.utils.auth import require_auth
 
 router = APIRouter(prefix="/v1")
 
@@ -127,9 +128,8 @@ def _rebase_path(rel_path: str | None, key: str | None) -> str | None:
     return rp
 
 
-@router.get("/space/visuals")
-async def space_visuals(conn=Depends(get_db)):
-    media_base = _media_base()
+async def _build_visuals_payload(conn, media_base: str) -> dict:
+    cdn_out = media_base or None
     try:
         async with conn.cursor(row_factory=dict_row) as cur:
             # Latest record per (asset_type, key)
@@ -152,7 +152,7 @@ async def space_visuals(conn=Depends(get_db)):
             )
             rows = await cur.fetchall()
     except Exception as exc:
-        return {"ok": False, "data": None, "error": f"space_visuals failed: {exc}"}
+        return {"ok": False, "data": None, "error": f"space_visuals failed: {exc}", "cdn_base": cdn_out}
 
     images: List[Dict[str, Any]] = []
     series: List[Dict[str, Any]] = []
@@ -274,7 +274,23 @@ async def space_visuals(conn=Depends(get_db)):
     }
 
 
-@router.get("/space/visuals/diag")
+@router.get("/space/visuals", dependencies=[Depends(require_auth)])
+async def space_visuals(conn=Depends(get_db)):
+    media_base = _media_base()
+    payload = await _build_visuals_payload(conn, media_base)
+    payload["cdn_base"] = payload.get("cdn_base") or (media_base or None)
+    return payload
+
+
+@router.get("/space/visuals/public")
+async def space_visuals_public(conn=Depends(get_db)):
+    media_base = _media_base()
+    payload = await _build_visuals_payload(conn, media_base)
+    payload["cdn_base"] = payload.get("cdn_base") or (media_base or None)
+    return payload
+
+
+@router.get("/space/visuals/diag", dependencies=[Depends(require_auth)])
 async def space_visuals_diag(conn=Depends(get_db)):
     # What the service sees
     env = _visuals_env_snapshot()
