@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import timezone
 from os import getenv
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 from psycopg.rows import dict_row
 
 from app.db import get_db
@@ -274,20 +276,37 @@ async def _build_visuals_payload(conn, media_base: str) -> dict:
     }
 
 
+def _visuals_response(payload: dict, request: Request | None = None):
+    etag = hashlib.md5(
+        json.dumps(payload, sort_keys=True, default=str).encode()
+    ).hexdigest()
+    headers = {
+        "Cache-Control": "public, max-age=15, stale-while-revalidate=60",
+        "ETag": f'W/"{etag}"',
+        "Vary": "Accept-Encoding",
+        "Content-Type": "application/json; charset=utf-8",
+    }
+    if request:
+        if_none = request.headers.get("If-None-Match")
+        if if_none and if_none.strip('W/"') == etag:
+            return JSONResponse(status_code=304, content=None, headers=headers)
+    return JSONResponse(content=payload, headers=headers)
+
+
 @router.get("/space/visuals", dependencies=[Depends(require_auth)])
-async def space_visuals(conn=Depends(get_db)):
+async def space_visuals(request: Request, conn=Depends(get_db)):
     media_base = _media_base()
     payload = await _build_visuals_payload(conn, media_base)
     payload["cdn_base"] = payload.get("cdn_base") or (media_base or None)
-    return payload
+    return _visuals_response(payload, request)
 
 
 @router.get("/space/visuals/public")
-async def space_visuals_public(conn=Depends(get_db)):
+async def space_visuals_public(request: Request, conn=Depends(get_db)):
     media_base = _media_base()
     payload = await _build_visuals_payload(conn, media_base)
     payload["cdn_base"] = payload.get("cdn_base") or (media_base or None)
-    return payload
+    return _visuals_response(payload, request)
 
 
 @router.get("/space/visuals/diag", dependencies=[Depends(require_auth)])
