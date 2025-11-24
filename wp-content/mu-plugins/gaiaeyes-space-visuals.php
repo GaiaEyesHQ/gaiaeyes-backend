@@ -96,7 +96,7 @@ add_shortcode('gaia_space_detail', function($atts){
     foreach (($api_payload['images'] ?? []) as $item){
       if (empty($item['key'])) continue;
       $images[$item['key']] = [
-        'url' => !empty($item['url']) ? esc_url($item['url']) : '',
+        'url' => !empty($item['url']) ? $item['url'] : '',
         'asset_type' => $item['asset_type'] ?? 'image',
         'instrument' => $item['instrument'] ?? '',
         'credit' => $item['credit'] ?? '',
@@ -113,7 +113,7 @@ add_shortcode('gaia_space_detail', function($atts){
         if (!$id || !$url) continue;
         $assetType = (is_string($url) && preg_match('#\.(mp4|mov)(\?.*)?$#i', $url)) ? 'video' : 'image';
         $entry = [
-          'url' => esc_url($url),
+          'url' => $url,
           'asset_type' => $assetType,
           'instrument' => isset($it['credit']) ? $it['credit'] : '',
           'credit' => isset($it['credit']) ? $it['credit'] : '',
