@@ -70,10 +70,17 @@ add_shortcode('gaia_space_detail', function($atts){
 
   $legacy_payload = null;
   if (!$api_payload){
-    $legacy_payload = ge_json_cached($a['url'], $a['cache']);
-    if (!$legacy_payload){
-      return '<div class="ge-card">Space dashboard unavailable.</div>';
+    $legacy_payload = !empty($a['url']) ? ge_json_cached($a['url'], $a['cache']) : null;
+
+    // Try public alias automatically if API failed and not already pointed to it
+    if (!$legacy_payload && empty($api_payload) && !empty($a['api']) && substr(rtrim($a['api'], '/'), -6) !== 'public'){
+      $maybe_public = rtrim($a['api'], '/') . '/public';
+      $maybe_pub = ge_json_cached($maybe_public, $a['cache'], ['Accept'=>'application/json','User-Agent'=>'GaiaEyesWP/1.0']);
+      if (is_array($maybe_pub) && !empty($maybe_pub['ok']) && (!empty($maybe_pub['images']) || !empty($maybe_pub['items']))){
+        $api_payload = $maybe_pub;
+      }
     }
+    // Do not early-return; if both sources are empty we'll render with baseline visuals using GAIA_MEDIA_BASE
   }
 
   $media_base = (defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE) ? GAIA_MEDIA_BASE : '';
@@ -148,6 +155,36 @@ add_shortcode('gaia_space_detail', function($atts){
         'url' => esc_url($media_base . ltrim($path, '/')),
         'asset_type' => 'video',
       ];
+    }
+  }
+
+  // If neither API nor legacy JSON was available, render a minimal baseline using Supabase paths
+  if (!$api_payload && !$legacy_payload) {
+    // Media base from env (Supabase); if missing, leave baseline empty
+    $media_base = (defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE) ? GAIA_MEDIA_BASE : '';
+    $updated = '';
+    $baseline = [
+      'drap'        => 'drap/latest.png',
+      'lasco_c2'    => 'nasa/lasco_c2/latest.jpg',
+      'aia_304'     => 'nasa/aia_304/latest.jpg',
+      'ovation_nh'  => 'aurora/viewline/tonight-north.png',
+      'ovation_sh'  => 'aurora/viewline/tonight-south.png',
+      'hmi_intensity'=> 'nasa/hmi_intensity/latest.jpg',
+      'a_station'   => 'space/a_station/latest.png',
+      'ccor1'       => 'nasa/ccor1/latest.jpg',
+      // 'ccor1_mp4' => 'nasa/ccor1/latest.mp4', // enable if you want the video tag to appear by default
+    ];
+    if ($media_base) {
+      foreach ($baseline as $k=>$rel) {
+        $abs = rtrim($media_base, '/') . '/' . ltrim($rel, '/');
+        $atype = (preg_match('#\.(mp4|mov)(\?.*)?$#i', $rel)) ? 'video' : 'image';
+        if (!isset($images[$k])) {
+          $images[$k] = [ 'url' => esc_url($abs), 'asset_type' => $atype ];
+        }
+        if ($atype === 'video' && !isset($video[$k])) {
+          $video[$k] = [ 'url' => esc_url($abs), 'asset_type' => 'video' ];
+        }
+      }
     }
   }
 
