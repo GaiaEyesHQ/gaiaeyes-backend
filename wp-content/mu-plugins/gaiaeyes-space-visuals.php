@@ -193,6 +193,10 @@ add_shortcode('gaia_space_detail', function($atts){
             <a href="<?php echo $base . esc_attr($img['aia_primary']); ?>" target="_blank" rel="noopener">
               <img src="<?php echo $base . esc_attr($img['aia_primary']); ?>" alt="SDO AIA latest" />
             </a>
+          <?php elseif(!empty($img['aia_304'])): ?>
+            <a href="<?php echo $base . esc_attr($img['aia_304']); ?>" target="_blank" rel="noopener">
+              <img src="<?php echo $base . esc_attr($img['aia_304']); ?>" alt="SDO AIA 304Å latest" />
+            </a>
           <?php elseif(!empty($img['hmi_intensity'])): ?>
             <a href="<?php echo $base . esc_attr($img['hmi_intensity']); ?>" target="_blank" rel="noopener">
               <img src="<?php echo $base . esc_attr($img['hmi_intensity']); ?>" alt="HMI Intensitygram latest" />
@@ -259,12 +263,13 @@ add_shortcode('gaia_space_detail', function($atts){
       <article class="ge-card">
         <h3>Coronagraph / CMEs</h3>
         <div class="ov-grid">
-          <?php if(!empty($img['soho_c2'])): ?>
+          <?php if(!empty($img['soho_c2']) || !empty($img['lasco_c2'])): ?>
             <figure>
-              <a href="<?php echo $base . esc_attr($img['soho_c2']); ?>" target="_blank" rel="noopener">
-                <img src="<?php echo $base . esc_attr($img['soho_c2']); ?>" alt="SOHO C2 latest" />
+              <?php $c2 = !empty($img['soho_c2']) ? $img['soho_c2'] : $img['lasco_c2']; ?>
+              <a href="<?php echo $base . esc_attr($c2); ?>" target="_blank" rel="noopener">
+                <img src="<?php echo $base . esc_attr($c2); ?>" alt="SOHO/LASCO C2 latest" />
               </a>
-              <figcaption>SOHO C2</figcaption>
+              <figcaption>LASCO C2</figcaption>
             </figure>
           <?php endif; ?>
           <?php if(!empty($img['lasco_c3'])): ?>
@@ -275,10 +280,11 @@ add_shortcode('gaia_space_detail', function($atts){
               <figcaption>LASCO C3</figcaption>
             </figure>
           <?php endif; ?>
-          <?php if(!empty($img['ccor1_jpeg'])): ?>
+          <?php if(!empty($img['ccor1_jpeg']) || !empty($img['ccor1'])): ?>
             <figure>
-              <a href="<?php echo $base . esc_attr($img['ccor1_jpeg']); ?>" target="_blank" rel="noopener">
-                <img src="<?php echo $base . esc_attr($img['ccor1_jpeg']); ?>" alt="GOES CCOR-1 latest" />
+              <?php $ccor = !empty($img['ccor1_jpeg']) ? $img['ccor1_jpeg'] : $img['ccor1']; ?>
+              <a href="<?php echo $base . esc_attr($ccor); ?>" target="_blank" rel="noopener">
+                <img src="<?php echo $base . esc_attr($ccor); ?>" alt="GOES CCOR-1 latest" />
               </a>
               <figcaption>CCOR-1</figcaption>
             </figure>
@@ -349,10 +355,11 @@ add_shortcode('gaia_space_detail', function($atts){
       <article class="ge-card">
         <h3>HF/DRAP & Indices</h3>
         <div class="ov-grid">
-          <?php if(!empty($img['drap_global'])): ?>
+          <?php if(!empty($img['drap_global']) || !empty($img['drap'])): ?>
             <figure>
-              <a href="<?php echo $base . esc_attr($img['drap_global']); ?>" target="_blank" rel="noopener">
-                <img src="<?php echo $base . esc_attr($img['drap_global']); ?>" alt="DRAP Global" />
+              <?php $drap = !empty($img['drap_global']) ? $img['drap_global'] : $img['drap']; ?>
+              <a href="<?php echo $base . esc_attr($drap); ?>" target="_blank" rel="noopener">
+                <img src="<?php echo $base . esc_attr($drap); ?>" alt="DRAP Global" />
               </a>
               <figcaption>DRAP global</figcaption>
             </figure>
