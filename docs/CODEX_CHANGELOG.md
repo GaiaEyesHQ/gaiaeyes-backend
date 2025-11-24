@@ -2,6 +2,15 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-12-06 — Space visuals public diagnostics and cache headers
+
+- Allowed `/v1/space/visuals` endpoints (including `/public` and `/diag`) to bypass bearer auth
+  via middleware so WordPress/iOS callers can fetch visuals without token errors.
+- Added a diagnostics route to surface environment media base settings and the Supabase row count,
+  plus a public alias that mirrors the visuals payload with CDN/base resolution and cache headers.
+- Ensured visuals responses always include `cdn_base`, unified `items` with baseline fallbacks,
+  and stable ETag/Cache-Control headers for downstream clients.
+
 ## 2025-12-05 — Space visuals Supabase alignment
 
 - Reworked `/v1/space/visuals` to prefer the new `VISUALS_MEDIA_BASE_URL` while keeping the
