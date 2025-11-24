@@ -98,20 +98,23 @@ add_shortcode('gaia_space_detail', function($atts){
         $video[$item['key']] = $images[$item['key']];
       }
     }
-    // Fallback: populate $images/$video from items if images is empty
-    if (empty($images) && !empty($api_payload['items']) && is_array($api_payload['items'])) {
+    // Merge in $items so keys not present in legacy $images appear (e.g., ENLIL, standardized keys)
+    if (!empty($api_payload['items']) && is_array($api_payload['items'])) {
       foreach ($api_payload['items'] as $it) {
         $id = !empty($it['id']) ? $it['id'] : '';
         $url = !empty($it['url']) ? $it['url'] : '';
         if (!$id || !$url) continue;
+        $assetType = (is_string($url) && preg_match('#\.(mp4|mov)(\?.*)?$#i', $url)) ? 'video' : 'image';
         $entry = [
           'url' => esc_url($url),
-          'asset_type' => (is_string($url) && preg_match('#\.(mp4|mov)(\?.*)?$#i', $url)) ? 'video' : 'image',
+          'asset_type' => $assetType,
           'instrument' => isset($it['credit']) ? $it['credit'] : '',
           'credit' => isset($it['credit']) ? $it['credit'] : '',
         ];
-        $images[$id] = $entry;
-        if ($entry['asset_type'] === 'video') {
+        if (!isset($images[$id])) {
+          $images[$id] = $entry;
+        }
+        if ($assetType === 'video' && !isset($video[$id])) {
           $video[$id] = $entry;
         }
       }
