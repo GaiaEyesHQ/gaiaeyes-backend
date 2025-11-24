@@ -14,6 +14,10 @@ if (!defined('GAIAEYES_SPACE_VISUALS_BEARER')){
   $bearer = getenv('GAIAEYES_SPACE_VISUALS_BEARER');
   define('GAIAEYES_SPACE_VISUALS_BEARER', $bearer ? trim($bearer) : '');
 }
+if (!defined('GAIAEYES_SPACE_VISUALS_DEV_USER')){
+  $devu = getenv('GAIAEYES_API_DEV_USERID');
+  define('GAIAEYES_SPACE_VISUALS_DEV_USER', $devu ? trim($devu) : '');
+}
 
 // Supabase media base constant
 if (!defined('GAIA_MEDIA_BASE')){
@@ -51,12 +55,15 @@ add_shortcode('gaia_space_detail', function($atts){
 
   $api_payload = null;
   if (!empty($a['api'])){
-    $headers = [];
+    $headers = ['Accept' => 'application/json', 'User-Agent' => 'GaiaEyesWP/1.0'];
     if (defined('GAIAEYES_SPACE_VISUALS_BEARER') && GAIAEYES_SPACE_VISUALS_BEARER){
       $headers['Authorization'] = 'Bearer ' . GAIAEYES_SPACE_VISUALS_BEARER;
     }
+    if (defined('GAIAEYES_SPACE_VISUALS_DEV_USER') && GAIAEYES_SPACE_VISUALS_DEV_USER){
+      $headers['X-Dev-UserId'] = GAIAEYES_SPACE_VISUALS_DEV_USER;
+    }
     $maybe = ge_json_cached($a['api'], $a['cache'], $headers);
-    if (is_array($maybe) && !empty($maybe['ok']) && !empty($maybe['images'])){
+    if (is_array($maybe) && !empty($maybe['ok']) && (!empty($maybe['images']) || !empty($maybe['items']))){
       $api_payload = $maybe;
     }
   }
@@ -69,7 +76,7 @@ add_shortcode('gaia_space_detail', function($atts){
     }
   }
 
-  $media_base = 'https://gaiaeyeshq.github.io/gaiaeyes-media/';
+  $media_base = (defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE) ? GAIA_MEDIA_BASE : '';
   $images = [];
   $video = [];
   $structured_series = [];
@@ -153,7 +160,7 @@ add_shortcode('gaia_space_detail', function($atts){
     'featureFlags' => $overlay_flags,
   ];
 
-  $base = $media_base ?: '';
+  $base = $media_base ? (rtrim($media_base, '/') . '/') : '';
   $img = [];
   foreach ($images as $key=>$entry){
     if (empty($entry['url'])) continue;
