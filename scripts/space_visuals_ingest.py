@@ -8,6 +8,8 @@ import urllib.request
 import urllib.parse
 from typing import Any, Dict, List, Tuple
 
+import requests
+
 import psycopg
 from psycopg.types.json import Json as PsycoJson
 
@@ -125,7 +127,9 @@ def _map_supabase_dest(key: str, filename: str) -> str:
         return "nasa/lasco_c2/latest.jpg"
     if k in ("lasco_c3",):
         return "nasa/lasco_c3/latest.jpg"
-    if k in ("aia_primary", "aia_304"):
+    if k == "aia_primary":
+        return "nasa/aia_193/latest.jpg"
+    if k == "aia_304":
         return "nasa/aia_304/latest.jpg"
     if k == "hmi_intensity":
         return "nasa/hmi_intensity/latest.jpg"
@@ -152,6 +156,38 @@ def _map_supabase_dest(key: str, filename: str) -> str:
         return "nasa/swx/overview/latest.gif"
     # Fallback: keep the legacy filename shape under images/space only if explicitly needed later
     return f"images/space/{filename}"
+
+
+def probe_url(url: str, timeout: int = 8) -> bool:
+    """Check if a URL responds with an image payload."""
+
+    try:
+        r = requests.head(url, timeout=timeout, allow_redirects=True)
+        if r.status_code == 200 and str(r.headers.get("content-type", "")).startswith("image"):
+            return True
+    except Exception:
+        pass
+
+    try:
+        r = requests.get(url, timeout=timeout, allow_redirects=True)
+        if r.status_code == 200 and str(r.headers.get("content-type", "")).startswith("image"):
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
+def probe_and_select(primary_urls: List[str], secondary_urls: List[str]) -> str | None:
+    """Return the first URL that responds successfully, preferring the primary list."""
+
+    for url in primary_urls:
+        if probe_url(url):
+            return url
+    for url in secondary_urls:
+        if probe_url(url):
+            return url
+    return None
 
 
 def dl(url_or_urls, dest):
@@ -425,10 +461,30 @@ def _persist_supabase(rows: List[Dict[str, Any]]):
 
 def main():
     # 1) Solar imagery + Solar flares (XRS) + Proton/Electron flux (GOES)
-    suvi_latest = env_urls("SUVI_URLS", [
-        "https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0193.jpg",  # SDO AIA 193Å (coronal holes proxy)
-        "https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0304.jpg"   # SDO AIA 304Å (prominences/filaments)
-    ])
+    aia_primary_urls = env_urls(
+        "AIA_PRIMARY_URLS",
+        ["https://services.swpc.noaa.gov/images/solar-images/latest_1024_0193.jpg"],
+    )
+    aia_304_primary = env_urls(
+        "AIA_304_URLS",
+        ["https://services.swpc.noaa.gov/images/solar-images/latest_1024_0304.jpg"],
+    )
+    aia_304_fallback = env_urls(
+        "AIA_304_FALLBACK_URLS",
+        ["https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0304.jpg"],
+    )
+    hmi_primary = env_urls(
+        "HMI_INTENSITY_URLS",
+        ["https://services.swpc.noaa.gov/images/solar-images/latest_1024_HMIIC.jpg"],
+    )
+    hmi_fallback = env_urls(
+        "HMI_INTENSITY_FALLBACK_URLS",
+        ["https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_HMIIC.jpg"],
+    )
+
+    aia_primary_url = probe_and_select(aia_primary_urls, aia_304_primary + aia_304_fallback) or (aia_primary_urls[0] if aia_primary_urls else None)
+    aia_304_url = probe_and_select(aia_304_primary, aia_304_fallback) or (aia_304_primary[0] if aia_304_primary else None)
+    hmi_img = probe_and_select(hmi_primary, hmi_fallback) or (hmi_primary[0] if hmi_primary else None)
     xrs_7d = "https://services.swpc.noaa.gov/json/goes/primary/xrays-7-day.json"
     protons_7d = "https://services.swpc.noaa.gov/json/goes/primary/integral-protons-7-day.json"
     electrons_7d = "https://services.swpc.noaa.gov/json/goes/primary/integral-electrons-7-day.json"
@@ -456,9 +512,6 @@ def main():
             ccor1_mp4_url = test
             break
 
-    # 4) HMI intensitygram (sunspot context). If you prefer SDO AIA 193Å (coronal holes), swap a stable endpoint later.
-    hmi_img = "https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_HMIIC.jpg"
-
     # GEOSPACE plots and station indices / DRAP / synoptic / overview
     geospace_1d = "https://services.swpc.noaa.gov/images/geospace/geospace_1_day.png"
     geospace_3h = "https://services.swpc.noaa.gov/images/geospace/geospace_3_hour.png"
@@ -475,13 +528,14 @@ def main():
     stamp = now_utc.strftime("%Y%m%dT%H%M%SZ")
     slot_ts = now_utc.replace(minute=0, second=0, microsecond=0)
     imgs = {
-        "aia_primary": (f"aia_primary_{stamp}.jpg", suvi_latest),
+        "aia_primary": (f"aia_primary_{stamp}.jpg", [aia_primary_url] if aia_primary_url else []),
+        "aia_304": (f"aia_304_{stamp}.jpg", [aia_304_url] if aia_304_url else []),
         "ovation_nh": (f"ovation_nh_{stamp}.jpg", ov_nh),
         "ovation_sh": (f"ovation_sh_{stamp}.jpg", ov_sh),
         "soho_c2": (f"soho_c2_{stamp}.jpg", soho_c2),
         "lasco_c3": (f"lasco_c3_{stamp}.jpg", lasco_c3),
         "ccor1_jpeg": (f"ccor1_{stamp}.jpg", [ccor1_jpeg_url] if ccor1_jpeg_url else []),
-        "hmi_intensity": (f"hmi_intensity_{stamp}.jpg", hmi_img),
+        "hmi_intensity": (f"hmi_intensity_{stamp}.jpg", [hmi_img] if hmi_img else []),
         "geospace_1d": (f"geospace_1d_{stamp}.png", geospace_1d),
         "geospace_3h": (f"geospace_3h_{stamp}.png", geospace_3h),
         "geospace_7d": (f"geospace_7d_{stamp}.png", geospace_7d),

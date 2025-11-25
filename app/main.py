@@ -4,7 +4,15 @@ from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .routers import health as health_router, ingest, summary, symptoms, space_visuals
+from .routers import (
+    earth,
+    health as health_router,
+    ingest,
+    quakes,
+    space_visuals,
+    summary,
+    symptoms,
+)
 
 # Resilient imports for optional/relocated modules
 try:
@@ -122,6 +130,8 @@ app.include_router(health_router.router)
 app.include_router(ingest.router, prefix="/v1", dependencies=[Depends(require_auth)])
 app.include_router(symptoms.router, prefix="/v1", dependencies=[Depends(require_auth)])
 app.include_router(summary.router, dependencies=[Depends(require_auth)])
+app.include_router(quakes.router)
+app.include_router(earth.router)
 app.include_router(space_visuals.router)
 
 # Webhooks are protected by HMAC middleware, not bearer auth
