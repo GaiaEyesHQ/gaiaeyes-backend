@@ -190,19 +190,83 @@ function gaia_space_weather_detail_shortcode($atts){
       }
     }
     if (is_array($outlook)) {
-      $sw['next_72h']['headline'] = $outlook['headline'] ?? ($outlook['summary'] ?? '');
+      // Headline & confidence (tolerant)
+      $aur = is_array($outlook['aurora'] ?? null) ? $outlook['aurora'] : [];
+      $headline = $outlook['headline'] ?? ($outlook['summary'] ?? ($aur['headline'] ?? ''));
+      $sw['next_72h']['headline'] = $headline;
+
       $conf = $outlook['confidence'] ?? ($outlook['confidence_text'] ?? null);
       if (is_array($conf)) $conf = ($conf['label'] ?? $conf['text'] ?? $conf['value'] ?? null);
       if (!$conf && isset($outlook['summary']) && is_array($outlook['summary'])) {
         $conf = $outlook['summary']['confidence'] ?? ($outlook['summary']['confidence_text'] ?? null);
       }
+      if (!$conf && $aur) {
+        $conf = $aur['confidence'] ?? ($aur['confidence_text'] ?? null);
+        if (is_array($conf)) $conf = ($conf['label'] ?? $conf['text'] ?? $conf['value'] ?? null);
+      }
       $sw['next_72h']['confidence'] = $conf;
-      $sw['alerts'] = is_array($outlook['alerts'] ?? null) ? $outlook['alerts'] : [];
-      $sw['impacts'] = is_array($outlook['impacts'] ?? null) ? $outlook['impacts'] : [];
-      // Flares/CMEs panel
+
+      // Alerts & impacts (accept alternate shapes and normalize keys)
+      $alerts = $outlook['alerts'] ?? ($outlook['advisories'] ?? []);
+      $sw['alerts'] = is_array($alerts) ? $alerts : [];
+
+      $imp = $outlook['impacts'] ?? ($outlook['impacts_plain'] ?? ($aur['impacts'] ?? []));
+      if (is_array($imp)) {
+        // Normalize common synonyms to gps/comms/grids/aurora
+        $norm = ['gps'=>null,'comms'=>null,'grids'=>null,'aurora'=>null];
+        foreach ($imp as $k=>$v){
+          $lk = strtolower(is_string($k)?$k:(is_string($v)?$v:''));
+          if (isset($imp['gps'])) $norm['gps'] = $imp['gps'];
+          if (isset($imp['gnss'])) $norm['gps'] = $imp['gnss'];
+          if (isset($imp['comms'])) $norm['comms'] = $imp['comms'];
+          if (isset($imp['radio'])) $norm['comms'] = $imp['radio'];
+          if (isset($imp['radio_comms'])) $norm['comms'] = $imp['radio_comms'];
+          if (isset($imp['grids'])) $norm['grids'] = $imp['grids'];
+          if (isset($imp['power'])) $norm['grids'] = $imp['power'];
+          if (isset($imp['power_grids'])) $norm['grids'] = $imp['power_grids'];
+          if (isset($imp['aurora'])) $norm['aurora'] = $imp['aurora'];
+          if (isset($imp['visibility'])) $norm['aurora'] = $imp['visibility'];
+        }
+        $sw['impacts'] = array_filter($norm, function($x){ return $x !== null && $x !== ''; });
+      } else {
+        $sw['impacts'] = [];
+      }
+
+      // Flares — accept alternate keys
+      $fl = is_array($outlook['flares'] ?? null) ? $outlook['flares'] : [];
+      $fl_max   = $fl['max_24h'] ?? $fl['peak_24h'] ?? $fl['peak_class_24h'] ?? $fl['max_class'] ?? null;
+      $fl_total = $fl['total_24h'] ?? $fl['total'] ?? $fl['count_24h'] ?? null;
+      $fl_bands = $fl['bands_24h'] ?? $fl['bands'] ?? $fl['distribution_24h'] ?? null;
+      if (!$fl_bands && is_array($fl)) {
+        // if the object itself is banded, pick X/M/C/B/A keys when present
+        $cand = [];
+        foreach (['X','M','C','B','A','x','m','c','b','a'] as $bk){ if (isset($fl[$bk])) $cand[strtoupper($bk)] = $fl[$bk]; }
+        if ($cand) $fl_bands = $cand;
+      }
+
+      // CMEs — accept alternate shapes and stats keys
+      $cme = is_array($outlook['cmes'] ?? null) ? $outlook['cmes'] : [];
+      $c_headline = $cme['headline'] ?? $cme['summary'] ?? ($outlook['cme_headline'] ?? '');
+      $c_stats = is_array($cme['stats'] ?? null) ? $cme['stats'] : $cme;
+      $c_total = $c_stats['total_72h'] ?? $c_stats['count_72h'] ?? $c_stats['total'] ?? null;
+      $c_ed    = $c_stats['earth_directed_count'] ?? $c_stats['earth_directed'] ?? $c_stats['ed'] ?? null;
+      $c_vmax  = $c_stats['max_speed_kms'] ?? $c_stats['vmax_kms'] ?? $c_stats['speed_max_kms'] ?? null;
+
+      // Assemble panel data for renderer
       $fc = [
-        'flares' => $outlook['flares'] ?? [],
-        'cmes'   => $outlook['cmes'] ?? [],
+        'flares' => [
+          'max_24h'   => $fl_max,
+          'total_24h' => $fl_total,
+          'bands_24h' => is_array($fl_bands) ? $fl_bands : [],
+        ],
+        'cmes' => [
+          'headline' => $c_headline,
+          'stats'    => [
+            'total_72h'          => $c_total,
+            'earth_directed_count'=> $c_ed,
+            'max_speed_kms'      => $c_vmax,
+          ],
+        ],
       ];
     }
   }
