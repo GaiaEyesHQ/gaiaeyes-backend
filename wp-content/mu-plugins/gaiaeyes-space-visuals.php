@@ -564,7 +564,10 @@ add_shortcode('gaia_space_detail', function($atts){
               const c1 = parseFloat(r.xray_flux_1 || r.short || r['flux_short'] || 0);
               const c2 = parseFloat(r.xray_flux_2 || r.long  || r['flux_long']  || 0);
               const v  = Math.max(isFinite(c1)?c1:0, isFinite(c2)?c2:0);
-              if (t) out.push({x:new Date(t), y:v});
+              if (t) {
+                const ts = (typeof t === 'string' && !t.endsWith('Z')) ? (t + 'Z') : t;
+                out.push({x:new Date(ts), y:v});
+              }
             });
             return out;
           }
@@ -580,7 +583,10 @@ add_shortcode('gaia_space_detail', function($atts){
             const c1 = parseFloat(r[1]);
             const c2 = parseFloat(r[2]);
             const v  = Math.max(isFinite(c1)?c1:0, isFinite(c2)?c2:0);
-            if (t) out.push({x:new Date(t), y:v});
+            if (t) {
+              const ts = (typeof t === 'string' && !t.endsWith('Z')) ? (t + 'Z') : t;
+              out.push({x:new Date(ts), y:v});
+            }
           }
           return out;
         }
@@ -685,14 +691,51 @@ add_shortcode('gaia_space_detail', function($atts){
           }
         })();
 
-        (function(){
-          let arr = structuredSamples('goes_protons');
-          if (!arr.length){
-            const out=[];
-            (legacySeries.protons_7d || []).forEach(r=>{ const t=r.time_tag||r.time||null; const v=parseFloat(r.integral_protons_10MeV||r.flux||0); if(t&&isFinite(v)) out.push({x:new Date(t), y:v}); });
-            arr = out;
+        (async function(){
+          function toSeriesProtons(rows){
+            if (!Array.isArray(rows)) return [];
+            const out = [];
+            // object form
+            if (rows.length && typeof rows[0] === 'object' && !Array.isArray(rows[0])) {
+              rows.forEach(r=>{
+                const t = r.time_tag || r.time || r.timestamp || null;
+                const v = parseFloat(r.integral_protons_10MeV || r.flux || r.value || 0);
+                if (!t || !isFinite(v)) return;
+                const ts = (typeof t === 'string' && !t.endsWith('Z')) ? (t + 'Z') : t;
+                out.push({ x: new Date(ts), y: v });
+              });
+              return out;
+            }
+            // 2D array form (skip header)
+            let start = 0;
+            if (Array.isArray(rows[0]) && rows[0].length && typeof rows[0][0] === 'string') start = 1;
+            for (let i=start;i<rows.length;i++){
+              const r = rows[i];
+              if (!Array.isArray(r)) continue;
+              const t = r[0];
+              const v = parseFloat(r[1] ?? r[2] ?? 0);
+              if (!t || !isFinite(v)) continue;
+              const ts = (typeof t === 'string' && !t.endsWith('Z')) ? (t + 'Z') : t;
+              out.push({ x: new Date(ts), y: v });
+            }
+            return out;
           }
-          const sliced = arr.slice(-240);
+
+          let arr = structuredSamples('goes_protons');
+          if (!arr.length && Array.isArray(legacySeries.protons_7d) && legacySeries.protons_7d.length){
+            arr = toSeriesProtons(legacySeries.protons_7d);
+          }
+          if (!arr.length){
+            try {
+              // Live SWPC fallback (primary integral protons 7-day)
+              const live = await fetch('https://services.swpc.noaa.gov/json/goes/primary/integral-protons-7-day.json', {cache:'no-store'});
+              if (live.ok) {
+                const json = await live.json();
+                arr = toSeriesProtons(json);
+              }
+            } catch(e){}
+          }
+          const sliced = arr.length > 240 ? arr.slice(-240) : arr;
           renderSpark('sparkProtons', sliced, { xLabel:'UTC time', yLabel:'Proton flux', units:'pfu', yMin:0, color:'#ffd089' });
           const lp = latestPoint(sliced);
           setVal('sparkProtonsVal', lp ? (lp.y.toFixed(0)+' pfu') : '—');
@@ -704,13 +747,25 @@ add_shortcode('gaia_space_detail', function($atts){
         ]).then(([mag,plasma])=>{
           try{
             const mRows = Array.isArray(mag)? mag.slice(1):[];
-            const bz = []; mRows.slice(-300).forEach(r=>{ const t=r[0], v=parseFloat(r[3]); if(t&&isFinite(v)) bz.push({x:new Date(t), y:v}); });
+            const bz = [];
+            mRows.slice(-300).forEach(r=>{
+              const t = r[0], v = parseFloat(r[3]);
+              if (!t || !isFinite(v)) return;
+              const ts = (typeof t === 'string' && !t.endsWith('Z')) ? (t + 'Z') : t;
+              bz.push({ x: new Date(ts), y: v });
+            });
             renderSpark('sparkBz', bz, { xLabel:'UTC time', yLabel:'IMF Bz', units:'nT', zeroLine:true, color:'#a7d3ff' });
             const lp = latestPoint(bz); setVal('sparkBzVal', lp ? (lp.y.toFixed(1)+' nT') : '—');
           }catch(e){}
           try{
             const pRows = Array.isArray(plasma)? plasma.slice(1):[];
-            const sw = []; pRows.slice(-300).forEach(r=>{ const t=r[0], v=parseFloat(r[2]); if(t&&isFinite(v)) sw.push({x:new Date(t), y:v}); });
+            const sw = [];
+            pRows.slice(-300).forEach(r=>{
+              const t = r[0], v = parseFloat(r[2]);
+              if (!t || !isFinite(v)) return;
+              const ts = (typeof t === 'string' && !t.endsWith('Z')) ? (t + 'Z') : t;
+              sw.push({ x: new Date(ts), y: v });
+            });
             renderSpark('sparkSw', sw, { xLabel:'UTC time', yLabel:'Solar wind speed', units:'km/s', yMin:0, color:'#ffd089' });
             const lp = latestPoint(sw); setVal('sparkSwVal', lp ? (lp.y.toFixed(0)+' km/s') : '—');
           }catch(e){}
