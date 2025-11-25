@@ -108,7 +108,9 @@ def _rebase_path(rel_path: str | None, key: str | None) -> str | None:
             return "nasa/lasco_c2/latest.jpg"
         if k == "lasco_c3":
             return "nasa/lasco_c3/latest.jpg"
-        if k in ("aia_primary", "aia_304"):
+        if k == "aia_primary":
+            return "nasa/aia_193/latest.jpg"
+        if k == "aia_304":
             return "nasa/aia_304/latest.jpg"
         if k == "hmi_intensity":
             return "nasa/hmi_intensity/latest.jpg"
