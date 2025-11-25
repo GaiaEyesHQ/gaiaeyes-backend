@@ -140,6 +140,30 @@ add_shortcode('gaia_space_detail', function($atts){
     }
     $overlay_flags = $api_payload['feature_flags'] ?? [];
     $media_base = $cdn_base;
+    // Safety baseline: if API returned but produced no image entries, inject minimal Supabase visuals
+    if ($api_payload && empty($images)) {
+      $mb = (defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE) ? GAIA_MEDIA_BASE : '';
+      if ($mb) {
+        $fallback = [
+          'drap'         => 'drap/latest.png',
+          'lasco_c2'     => 'nasa/lasco_c2/latest.jpg',
+          'aia_304'      => 'nasa/aia_304/latest.jpg',
+          'ovation_nh'   => 'aurora/viewline/tonight-north.png',
+          'ovation_sh'   => 'aurora/viewline/tonight-south.png',
+          'hmi_intensity'=> 'nasa/hmi_intensity/latest.jpg',
+          'a_station'    => 'space/a_station/latest.png',
+          'ccor1'        => 'nasa/ccor1/latest.jpg',
+        ];
+        foreach ($fallback as $k=>$rel) {
+          if (!isset($images[$k])) {
+            $images[$k] = [
+              'url' => $rel,
+              'asset_type' => (preg_match('#\.(mp4|mov)(\?.*)?$#i', $rel) ? 'video' : 'image')
+            ];
+          }
+        }
+      }
+    }
   } else {
     $updated = !empty($legacy_payload['timestamp_utc']) ? esc_html($legacy_payload['timestamp_utc']) : '';
     // Use GAIA_MEDIA_BASE if defined, else fallback to empty string
@@ -216,6 +240,12 @@ add_shortcode('gaia_space_detail', function($atts){
   $vid = $vid_paths;
 
   ob_start(); ?>
+  <?php
+    $dbg_base = $media_base ?: '(none)';
+    $dbg_imgc = count($images);
+    $dbg_vidc = count($video);
+    echo "\n<!-- ge-space-debug base={$dbg_base} images={$dbg_imgc} videos={$dbg_vidc} -->\n";
+  ?>
   <section class="ge-panel ge-space">
     <div class="ge-headrow">
       <div class="ge-title">Space Dashboard</div>
