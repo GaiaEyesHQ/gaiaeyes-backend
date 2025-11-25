@@ -190,6 +190,50 @@ def probe_and_select(primary_urls: List[str], secondary_urls: List[str]) -> str 
     return None
 
 
+def select_solar_imagery_sources():
+    """Pick the best-available solar imagery sources for AIA 193Å, AIA 304Å, and HMI."""
+
+    aia_primary_urls = env_urls(
+        "AIA_PRIMARY_URLS",
+        ["https://services.swpc.noaa.gov/images/solar-images/latest_1024_0193.jpg"],
+    )
+    aia_primary_fallback = env_urls(
+        "AIA_193_FALLBACK_URLS",
+        ["https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0193.jpg"],
+    )
+    aia_304_primary = env_urls(
+        "AIA_304_URLS",
+        ["https://services.swpc.noaa.gov/images/solar-images/latest_1024_0304.jpg"],
+    )
+    aia_304_fallback = env_urls(
+        "AIA_304_FALLBACK_URLS",
+        ["https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0304.jpg"],
+    )
+    hmi_primary = env_urls(
+        "HMI_INTENSITY_URLS",
+        ["https://services.swpc.noaa.gov/images/solar-images/latest_1024_HMIIC.jpg"],
+    )
+    hmi_fallback = env_urls(
+        "HMI_INTENSITY_FALLBACK_URLS",
+        ["https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_HMIIC.jpg"],
+    )
+
+    return {
+        "aia_primary_urls": aia_primary_urls,
+        "aia_primary_fallback": aia_primary_fallback,
+        "aia_primary_url": probe_and_select(aia_primary_urls, aia_primary_fallback)
+        or (aia_primary_urls[0] if aia_primary_urls else None),
+        "aia_304_primary": aia_304_primary,
+        "aia_304_fallback": aia_304_fallback,
+        "aia_304_url": probe_and_select(aia_304_primary, aia_304_fallback)
+        or (aia_304_primary[0] if aia_304_primary else None),
+        "hmi_primary": hmi_primary,
+        "hmi_fallback": hmi_fallback,
+        "hmi_img": probe_and_select(hmi_primary, hmi_fallback)
+        or (hmi_primary[0] if hmi_primary else None),
+    }
+
+
 def dl(url_or_urls, dest):
     """Download first successful URL into dest. url_or_urls can be str or list[str]."""
     urls = url_or_urls if isinstance(url_or_urls, (list, tuple)) else [url_or_urls]
@@ -461,30 +505,10 @@ def _persist_supabase(rows: List[Dict[str, Any]]):
 
 def main():
     # 1) Solar imagery + Solar flares (XRS) + Proton/Electron flux (GOES)
-    aia_primary_urls = env_urls(
-        "AIA_PRIMARY_URLS",
-        ["https://services.swpc.noaa.gov/images/solar-images/latest_1024_0193.jpg"],
-    )
-    aia_304_primary = env_urls(
-        "AIA_304_URLS",
-        ["https://services.swpc.noaa.gov/images/solar-images/latest_1024_0304.jpg"],
-    )
-    aia_304_fallback = env_urls(
-        "AIA_304_FALLBACK_URLS",
-        ["https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0304.jpg"],
-    )
-    hmi_primary = env_urls(
-        "HMI_INTENSITY_URLS",
-        ["https://services.swpc.noaa.gov/images/solar-images/latest_1024_HMIIC.jpg"],
-    )
-    hmi_fallback = env_urls(
-        "HMI_INTENSITY_FALLBACK_URLS",
-        ["https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_HMIIC.jpg"],
-    )
-
-    aia_primary_url = probe_and_select(aia_primary_urls, aia_304_primary + aia_304_fallback) or (aia_primary_urls[0] if aia_primary_urls else None)
-    aia_304_url = probe_and_select(aia_304_primary, aia_304_fallback) or (aia_304_primary[0] if aia_304_primary else None)
-    hmi_img = probe_and_select(hmi_primary, hmi_fallback) or (hmi_primary[0] if hmi_primary else None)
+    solar_sources = select_solar_imagery_sources()
+    aia_primary_url = solar_sources["aia_primary_url"]
+    aia_304_url = solar_sources["aia_304_url"]
+    hmi_img = solar_sources["hmi_img"]
     xrs_7d = "https://services.swpc.noaa.gov/json/goes/primary/xrays-7-day.json"
     protons_7d = "https://services.swpc.noaa.gov/json/goes/primary/integral-protons-7-day.json"
     electrons_7d = "https://services.swpc.noaa.gov/json/goes/primary/integral-electrons-7-day.json"

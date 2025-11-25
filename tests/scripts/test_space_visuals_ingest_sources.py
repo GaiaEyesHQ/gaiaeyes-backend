@@ -59,3 +59,29 @@ def test_probe_and_select_fallback(monkeypatch):
     ])
 
     assert chosen == "https://fallback.example/latest.jpg"
+
+
+def test_select_solar_imagery_prefers_193_family(monkeypatch):
+    monkeypatch.setenv("AIA_PRIMARY_URLS", "https://swpc.example/latest_0193.jpg")
+    monkeypatch.setenv("AIA_193_FALLBACK_URLS", "https://sdo.example/latest_0193.jpg")
+    monkeypatch.setenv("AIA_304_URLS", "https://swpc.example/latest_0304.jpg")
+    monkeypatch.setenv("AIA_304_FALLBACK_URLS", "https://sdo.example/latest_0304.jpg")
+    monkeypatch.setenv("HMI_INTENSITY_URLS", "https://swpc.example/latest_HMIIC.jpg")
+    monkeypatch.setenv("HMI_INTENSITY_FALLBACK_URLS", "https://sdo.example/latest_HMIIC.jpg")
+
+    calls = []
+
+    def fake_probe(primary, secondary):
+        calls.append((primary, secondary))
+        # Simulate primary probe failure to force fallback selection
+        return secondary[0] if secondary else None
+
+    monkeypatch.setattr(svi, "probe_and_select", fake_probe)
+
+    sources = svi.select_solar_imagery_sources()
+
+    assert sources["aia_primary_url"] == "https://sdo.example/latest_0193.jpg"
+    assert calls[0] == (
+        ["https://swpc.example/latest_0193.jpg"],
+        ["https://sdo.example/latest_0193.jpg"],
+    )
