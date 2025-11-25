@@ -334,18 +334,59 @@ function gaia_space_weather_detail_shortcode($atts){
         <h3 id="flares">Solar Flares <a class="anchor-link" href="#flares" aria-label="Link to Solar Flares">🔗</a></h3>
         <?php
           $flr = is_array($fc) ? ($fc['flares'] ?? []) : [];
-          $max = $flr['max_24h'] ?? null;
-          $tot = $flr['total_24h'] ?? null;
-          $bands = is_array($flr['bands_24h'] ?? null) ? $flr['bands_24h'] : [];
+
+          // Tolerant max class extraction: accept strings, nested objects, or derive from events/bands
+          $max = $flr['max_24h'] ?? $flr['peak_24h'] ?? $flr['peak_class_24h'] ?? $flr['max_class'] ?? $flr['peak_class'] ?? null;
+          if (is_array($max)) {
+            // Nested like {class:'M2.1'} or {label|text|value}
+            $max = $max['class'] ?? $max['label'] ?? $max['text'] ?? $max['value'] ?? null;
+          }
+          if (!is_string($max) || $max === '') {
+            // Try recent/events/list arrays for the strongest peak_class
+            $candidates = [];
+            foreach (['recent','events','list'] as $k) {
+              if (!empty($flr[$k]) && is_array($flr[$k])) {
+                foreach ($flr[$k] as $ev) {
+                  if (!is_array($ev)) continue;
+                  $pc = $ev['peak_class'] ?? $ev['class'] ?? $ev['peak'] ?? null;
+                  if (is_string($pc) && $pc !== '') $candidates[] = $pc;
+                }
+              }
+            }
+            if ($candidates) {
+              // Rank by letter (A<B<C<M<X) and magnitude when present
+              $rank = function($cls){
+                if (!is_string($cls) || $cls === '') return -1;
+                if (!preg_match('/([AaBbCcMmXx])\\s*([0-9.]+)?/', $cls, $m)) return -1;
+                $L = strtoupper($m[1]); $num = isset($m[2]) && $m[2] !== '' ? (float)$m[2] : 0.0;
+                $base = ['A'=>1,'B'=>2,'C'=>3,'M'=>4,'X'=>5][$L] ?? 0;
+                return $base * 100 + $num; // simple composite score
+              };
+              usort($candidates, function($a,$b) use($rank){ return $rank($b) <=> $rank($a); });
+              $max = $candidates[0] ?? $max;
+            }
+          }
+          // If still empty, derive letter from bands_24h
+          $bands = is_array($flr['bands_24h'] ?? null) ? $flr['bands_24h'] : ($flr['bands'] ?? []);
+          if ((!is_string($max) || $max === '') && is_array($bands)) {
+            foreach (['X','M','C','B','A'] as $L) {
+              if (!empty($bands[$L])) { $max = $L; break; }
+            }
+          }
+
+          $tot = $flr['total_24h'] ?? $flr['total'] ?? $flr['count_24h'] ?? null;
+
+          // Prepare optional band summary line (X/M/C/B/A:count)
+          $band_line = [];
+          if (is_array($bands)) {
+            foreach (['X','M','C','B','A'] as $b) {
+              if (!empty($bands[$b])) $band_line[] = "{$b}:{$bands[$b]}";
+            }
+          }
 
           echo ge_row('Max class (24h)', ge_val_or_dash($max));
           if ($tot !== null) echo ge_row('Total flares (24h)', ge_val_or_dash($tot));
-
-          $band_line = [];
-          foreach (['X','M','C','B','A'] as $b) {
-            if (!empty($bands[$b])) $band_line[] = "{$b}:{$bands[$b]}";
-          }
-          if ($band_line) echo "<div class='sw-bandline'>Bands: ".esc_html(implode(' ', $band_line))."</div>";
+          if ($band_line) echo "<div class='sw-bandline'>".esc_html('Bands: '.implode(' ', $band_line))."</div>";
         ?>
         <p class="ge-note">Flares are measured by X-ray flux (A→X). Higher classes indicate stronger events that can impact radio propagation and ionospheric conditions.</p>
       </article>
