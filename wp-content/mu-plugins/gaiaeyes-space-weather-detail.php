@@ -32,6 +32,10 @@ if (!defined('GAIAEYES_API_BEARER')) {
   $api_bearer = getenv('GAIAEYES_API_BEARER');
   define('GAIAEYES_API_BEARER', $api_bearer ? trim($api_bearer) : '');
 }
+if (!defined('GAIAEYES_API_DEV_USERID')) {
+  $api_dev = getenv('GAIAEYES_API_DEV_USERID');
+  define('GAIAEYES_API_DEV_USERID', $api_dev ? trim($api_dev) : '');
+}
 
 /* ---------- Fetch & Cache Helpers ---------- */
 function gaiaeyes_http_get_json_with_fallback($primary, $mirror, $cache_key, $ttl) {
@@ -53,12 +57,26 @@ function gaiaeyes_http_get_json_with_fallback($primary, $mirror, $cache_key, $tt
 function gaiaeyes_http_get_json_api_cached($url, $cache_key, $ttl, $bearer = ''){
   $cached = get_transient($cache_key);
   if ($cached !== false) return $cached;
-  $args = ['timeout'=>10, 'headers'=>['Accept'=>'application/json']];
-  if ($bearer) $args['headers']['Authorization'] = 'Bearer ' . $bearer;
+
+  $headers = [
+    'Accept'      => 'application/json',
+    'User-Agent'  => 'GaiaEyesWP/1.0'
+  ];
+  if ($bearer) {
+    $headers['Authorization'] = 'Bearer ' . $bearer;
+  }
+  if (defined('GAIAEYES_API_DEV_USERID') && GAIAEYES_API_DEV_USERID) {
+    $headers['X-Dev-UserId'] = GAIAEYES_API_DEV_USERID;
+  }
+  $args = ['timeout' => 10, 'headers' => $headers];
+
   $resp = wp_remote_get(add_query_arg(['v'=>floor(time()/600)], $url), $args);
-  if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) return null;
+  $code = is_wp_error($resp) ? 0 : intval(wp_remote_retrieve_response_code($resp));
+  if ($code < 200 || $code >= 300) return null;
+
   $data = json_decode(wp_remote_retrieve_body($resp), true);
   if (!is_array($data)) return null;
+
   set_transient($cache_key, $data, $ttl);
   return $data;
 }
@@ -156,6 +174,14 @@ function gaia_space_weather_detail_shortcode($atts){
   <section class="ge-sw ge-panel">
     <header class="ge-sw__head">
       <h2>Space Weather – Scientific Detail</h2>
+      <?php
+        // Debug comment: shows whether API/values were detected (will appear in page source only)
+        $dbg_kp = isset($sw['now']['kp']) ? $sw['now']['kp'] : null;
+        $dbg_conf = isset($sw['next_72h']['confidence']) ? $sw['next_72h']['confidence'] : null;
+        echo "\n<!-- ge-sw-debug api_base=" . (defined('GAIAEYES_API_BASE') ? GAIAEYES_API_BASE : '(none)') .
+             " kp=" . (is_null($dbg_kp)?'null':esc_html((string)$dbg_kp)) .
+             " conf=" . (is_null($dbg_conf)?'null':esc_html((string)$dbg_conf)) . " -->\n";
+      ?>
       <div class="ge-sw__meta">
         <?php if (is_array($sw) && !empty($sw['timestamp_utc'])): ?>
           Updated <?php echo esc_html($sw['timestamp_utc']); ?>
