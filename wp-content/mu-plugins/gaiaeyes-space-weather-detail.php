@@ -129,9 +129,19 @@ function gaia_space_weather_detail_shortcode($atts){
       'impacts' => []
     ];
     if (is_array($features)) {
-      // tolerant extraction helpers
+      // tolerant extraction helpers (support nested {value:...} or strings)
       $pickNum = function($arr, $keys){
-        foreach ($keys as $k){ if (isset($arr[$k]) && is_numeric($arr[$k])) return (float)$arr[$k]; }
+        foreach ($keys as $k){
+          if (!isset($arr[$k])) continue;
+          $v = $arr[$k];
+          if (is_numeric($v)) return (float)$v;
+          if (is_array($v)) {
+            foreach (['value','val','latest','now'] as $nk) {
+              if (isset($v[$nk]) && is_numeric($v[$nk])) return (float)$v[$nk];
+            }
+          }
+          if (is_string($v) && is_numeric($v+0)) return (float)$v;
+        }
         return null;
       };
       $tryScopes = [
@@ -143,13 +153,30 @@ function gaia_space_weather_detail_shortcode($atts){
         $features['space_weather'] ?? [],
       ];
       $kp = $swk = $bzv = null;
-      $kpKeys = ['kp','kp_now','kp_index','planetary_kp'];
-      $swKeys = ['sw_speed_kms','solar_wind_kms','solar_wind','speed_kms'];
-      $bzKeys = ['bz_nt','bz','imf_bz','bz_now'];
+      $kpKeys = ['kp','kp_now','kp_index','planetary_kp','kp_now_value'];
+      $swKeys = ['sw_speed_kms','solar_wind_kms','solar_wind','speed_kms','solar_wind_speed','solar_wind_speed_kms'];
+      $bzKeys = ['bz_nt','bz','imf_bz','bz_now','bz_gsm'];
       foreach ($tryScopes as $scope){
-        if ($kp === null) $kp = $pickNum($scope, $kpKeys);
-        if ($swk === null) $swk = $pickNum($scope, $swKeys);
-        if ($bzv === null) $bzv = $pickNum($scope, $bzKeys);
+        if (is_array($scope)) {
+          if ($kp === null)  $kp  = $pickNum($scope, $kpKeys);
+          if ($swk === null) $swk = $pickNum($scope, $swKeys);
+          if ($bzv === null) $bzv = $pickNum($scope, $bzKeys);
+        }
+      }
+      // If API produced a shell but left values null, try legacy JSON to fill missing now-values
+      if (($kp === null || $swk === null || $bzv === null)) {
+        $legacy_now = gaiaeyes_http_get_json_with_fallback(GAIAEYES_SW_URL, GAIAEYES_SW_URL_MIRROR, 'ge_sw_json_fill', $ttl);
+        if (is_array($legacy_now) && isset($legacy_now['now']) && is_array($legacy_now['now'])) {
+          if ($kp === null  && isset($legacy_now['now']['kp']) && is_numeric($legacy_now['now']['kp'])) $kp = (float)$legacy_now['now']['kp'];
+          if ($swk === null && isset($legacy_now['now']['solar_wind_kms']) && is_numeric($legacy_now['now']['solar_wind_kms'])) $swk = (float)$legacy_now['now']['solar_wind_kms'];
+          if ($bzv === null && isset($legacy_now['now']['bz_nt']) && is_numeric($legacy_now['now']['bz_nt'])) $bzv = (float)$legacy_now['now']['bz_nt'];
+          // also fill last_24h maxima if missing
+          if (isset($legacy_now['last_24h']) && is_array($legacy_now['last_24h'])) {
+            $last = $legacy_now['last_24h'];
+            if (!isset($sw['last_24h']['kp_max']) && isset($last['kp_max']) && is_numeric($last['kp_max'])) $sw['last_24h']['kp_max'] = (float)$last['kp_max'];
+            if (!isset($sw['last_24h']['solar_wind_max_kms']) && isset($last['solar_wind_max_kms']) && is_numeric($last['solar_wind_max_kms'])) $sw['last_24h']['solar_wind_max_kms'] = (float)$last['solar_wind_max_kms'];
+          }
+        }
       }
       $sw['now']['kp'] = $kp;
       $sw['now']['solar_wind_kms'] = $swk;
@@ -158,14 +185,17 @@ function gaia_space_weather_detail_shortcode($atts){
       // last 24h maxima if present under common shapes
       $last = $features['last_24h'] ?? $features['last24h'] ?? [];
       if (is_array($last)) {
-        if (isset($last['kp_max']) && is_numeric($last['kp_max'])) $sw['last_24h']['kp_max'] = (float)$last['kp_max'];
-        if (isset($last['solar_wind_max_kms']) && is_numeric($last['solar_wind_max_kms'])) $sw['last_24h']['solar_wind_max_kms'] = (float)$last['solar_wind_max_kms'];
+        if (!isset($sw['last_24h']['kp_max']) && isset($last['kp_max']) && is_numeric($last['kp_max'])) $sw['last_24h']['kp_max'] = (float)$last['kp_max'];
+        if (!isset($sw['last_24h']['solar_wind_max_kms']) && isset($last['solar_wind_max_kms']) && is_numeric($last['solar_wind_max_kms'])) $sw['last_24h']['solar_wind_max_kms'] = (float)$last['solar_wind_max_kms'];
       }
     }
     if (is_array($outlook)) {
       $sw['next_72h']['headline'] = $outlook['headline'] ?? ($outlook['summary'] ?? '');
       $conf = $outlook['confidence'] ?? ($outlook['confidence_text'] ?? null);
-      if (is_array($conf)) $conf = ($conf['label'] ?? $conf['text'] ?? null);
+      if (is_array($conf)) $conf = ($conf['label'] ?? $conf['text'] ?? $conf['value'] ?? null);
+      if (!$conf && isset($outlook['summary']) && is_array($outlook['summary'])) {
+        $conf = $outlook['summary']['confidence'] ?? ($outlook['summary']['confidence_text'] ?? null);
+      }
       $sw['next_72h']['confidence'] = $conf;
       $sw['alerts'] = is_array($outlook['alerts'] ?? null) ? $outlook['alerts'] : [];
       $sw['impacts'] = is_array($outlook['impacts'] ?? null) ? $outlook['impacts'] : [];
