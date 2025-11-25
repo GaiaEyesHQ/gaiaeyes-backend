@@ -2249,7 +2249,105 @@ async def space_forecast_outlook(
         ],
     }
 
-    return {"ok": True, "data": payload}
+    def _first_str(*values):
+        for val in values:
+            if val is None:
+                continue
+            if isinstance(val, (dict, list)):
+                continue
+            if isinstance(val, str):
+                if val.strip():
+                    return val.strip()
+            else:
+                return str(val)
+        return None
+
+    def _normalize_confidence(value):
+        if value is None:
+            return None
+        if isinstance(value, dict):
+            return _first_str(value.get("label"), value.get("text"), value.get("value"))
+        return _first_str(value)
+
+    def _normalize_impacts(raw_impacts):
+        if isinstance(raw_impacts, dict):
+            impacts_dict = {k.lower(): v for k, v in raw_impacts.items()}
+            return {
+                "gps": impacts_dict.get("gps") or impacts_dict.get("nav") or "Normal",
+                "comms": impacts_dict.get("comms") or impacts_dict.get("hf") or "Normal",
+                "grids": impacts_dict.get("grids") or impacts_dict.get("power") or "Normal",
+                "aurora": impacts_dict.get("aurora")
+                or impacts_dict.get("auroral")
+                or "Confined to polar regions",
+            }
+        if isinstance(raw_impacts, str) and raw_impacts.strip():
+            return {k: raw_impacts for k in ("gps", "comms", "grids", "aurora")}
+        return {
+            "gps": "Normal",
+            "comms": "Normal",
+            "grids": "Normal",
+            "aurora": "Confined to polar regions",
+        }
+
+    def _normalize_flares(raw):
+        raw = raw or {}
+        counts = raw.get("bands_24h") or raw.get("bands") or {}
+        peak = _first_str(
+            raw.get("max_24h"),
+            raw.get("peak_class_24h"),
+            raw.get("peak_class"),
+            raw.get("peak_class_label"),
+        )
+        total = raw.get("total_24h") or raw.get("count") or raw.get("total")
+        try:
+            total = int(total) if total is not None else None
+        except Exception:
+            total = None
+        return {
+            "max_24h": peak or None,
+            "total_24h": total,
+            "bands_24h": {
+                "X": counts.get("X") or counts.get("x") or 0,
+                "M": counts.get("M") or counts.get("m") or 0,
+                "C": counts.get("C") or counts.get("c") or 0,
+            },
+        }
+
+    def _normalize_cmes(raw_rows):
+        speeds = [fnum(row.get("cme_speed_kms")) for row in raw_rows or [] if row.get("cme_speed_kms") is not None]
+        locations = [str(row.get("location") or "").lower() for row in raw_rows or []]
+        earth_directed = len([loc for loc in locations if "earth" in loc or "earth-directed" in loc])
+        max_speed = max(speeds) if speeds else None
+        return {
+            "headline": "CME arrivals tracked" if raw_rows else "No CME arrivals in window",
+            "stats": {
+                "total_72h": len(raw_rows or []),
+                "earth_directed_count": earth_directed,
+                "max_speed_kms": max_speed,
+            },
+        }
+
+    aurora_headline = None
+    aurora_confidence = None
+    if payload["aurora_outlook"]:
+        aurora_headline = payload["aurora_outlook"][0].get("headline")
+        aurora_confidence = payload["aurora_outlook"][0].get("confidence")
+
+    impacts_source = payload.get("impacts") or payload.get("impacts_plain")
+
+    outlook = {
+        "ok": True,
+        "headline": _first_str(payload.get("headline"), aurora_headline, "Space weather outlook"),
+        "confidence": _normalize_confidence(payload.get("confidence") or aurora_confidence) or "medium",
+        "summary": _first_str(payload.get("summary"), payload.get("body")),
+        "alerts": payload.get("alerts") or [],
+        "impacts": _normalize_impacts(impacts_source),
+        "flares": _normalize_flares(payload.get("flares")),
+        "cmes": _normalize_cmes(payload.get("cme_arrivals")),
+        "data": payload,
+    }
+
+    return outlook
 
 
 # -----------------------------

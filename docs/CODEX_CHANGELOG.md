@@ -2,6 +2,19 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-05-28 — Supabase-first rollout, quake feeds, and outlook normalization
+
+- Normalized `/v1/space/forecast/outlook` to emit flattened headline/confidence/impact fields while preserving the richer
+  nested forecast data for dashboards.
+- Added `/v1/quakes/daily|monthly` and `/v1/earth/schumann/latest` so WordPress can source recent seismic and Schumann data
+  directly from the backend.
+- Updated the space visuals ingest to pull AIA 304 and HMI intensity from the current SWPC endpoints with probe-and-fallback
+  handling, plus a regression test to keep image MIME types covered.
+- Simplified the visuals workflow to publish solely to Supabase and added a post-deploy smoke check against the public visuals
+  API.
+- Tweaked the WordPress visuals CSS to prevent spark overlays from colliding with the solar disc and refreshed the site
+  overview docs to call out the Supabase `/public` alias and GAIA_MEDIA_BASE joins.
+
 ## 2025-12-06 — Space visuals public diagnostics and cache headers
 
 - Allowed `/v1/space/visuals` endpoints (including `/public` and `/diag`) to bypass bearer auth

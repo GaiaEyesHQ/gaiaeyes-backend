@@ -502,6 +502,7 @@ add_shortcode('gaia_space_detail', function($atts){
       .visual-overlay .overlay-toggle{ position:absolute; top:8px; right:8px; background:rgba(0,0,0,.6); color:#fff; border:none; border-radius:999px; padding:4px 12px; font-size:.8rem; cursor:pointer; }
       .visual-overlay.overlay-disabled .overlay-toggle{ display:none; }
       .visual-overlay .overlay-toggle:focus{ outline:2px solid rgba(255,255,255,.6); outline-offset:2px; }
+      .visual-overlay + .spark-wrap { margin-top: 8px; clear: both; }
       /* Cap very tall media on mobile/desktop (kept from previous fix) */
       @media(max-width:640px){
         .ge-space img,

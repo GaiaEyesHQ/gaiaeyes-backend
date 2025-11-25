@@ -87,7 +87,7 @@ GaiaSpark.renderSpark(canvasOrId, data, {
 ### Hazards Brief (Homepage snapshot)
 
 * Location: Homepage hero region (auto-injected ahead of content via `the_content` filter).
-* Shortcode: `[gaia_hazards_brief url="https://gaiaeyeshq.github.io/gaiaeyes-media/public/hazards/latest.json" cache="5"]`
+* Shortcode: `[gaia_hazards_brief url="${GAIA_MEDIA_BASE}/public/hazards/latest.json" cache="5"]` (falls back to the `/public` alias in Supabase during rollout).
 * PHP: `wp-content/mu-plugins/gaia-hazards-brief.php`
 
 **DOM outline**
@@ -126,7 +126,7 @@ GaiaSpark.renderSpark(canvasOrId, data, {
 
 **Shortcodes & templates**
 
-* `[gaia_space_detail url="https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_live.json" cache="5"]`
+* `[gaia_space_detail api="/v1/space/visuals" cache="5"]` (uses `/v1/space/visuals/public` automatically if the private API is unavailable)
 * PHP: `wp-content/mu-plugins/gaiaeyes-space-visuals.php`
 * Spark helper: `GaiaSpark.renderSpark` for X-ray, protons, IMF Bz, and solar-wind speed sparklines.
 * API source: `/v1/space/visuals` (FastAPI) now hydrates the shortcode with Supabase-backed imagery + telemetry; fallback JSON is still supported via the `url` attribute for offline testing.
@@ -146,7 +146,7 @@ GaiaSpark.renderSpark(canvasOrId, data, {
 **Data flow & caching**
 
 * Primary JSON (`space_live.json`) cached for 5 minutes via `ge_json_cached` (WordPress transient).
-* Media assets served from `https://gaiaeyeshq.github.io/gaiaeyes-media/` (jsDelivr/Pages); when the API is used the mu-plugin reads absolute URLs directly from Supabase metadata.
+* Media assets served from Supabase Storage (`GAIA_MEDIA_BASE`). The shortcode joins relative `url` values against `GAIA_MEDIA_BASE` or uses the fully-qualified URLs returned by `/v1/space/visuals`.
 * `/v1/space/visuals` returns:
   * `images[]` – keyed assets with capture timestamps, credits, and NASA/SWPC instrument metadata.
   * `series[]` – normalized GOES X-ray/proton/electron and aurora hemispheric-power samples for overlays.
