@@ -259,7 +259,7 @@ function gaia_space_weather_detail_shortcode($atts){
         'bands_24h' => is_array($fl_bands) ? $fl_bands : [],
       ];
       // Pass through helpful alternate keys so the renderer can compute a max class
-      foreach (['peak_24h','peak_class_24h','max_class','bands','counts','recent','events','list'] as $k) {
+      foreach (['peak_24h','peak_class_24h','max_class','max_class_24h','peak','bands','counts','recent','events','list','peaks','values','last_24h','24h'] as $k) {
         if (isset($fl[$k])) { $flares_out[$k] = $fl[$k]; }
       }
 
@@ -348,16 +348,21 @@ function gaia_space_weather_detail_shortcode($atts){
             $max = $max['class'] ?? $max['label'] ?? $max['text'] ?? $max['value'] ?? null;
           }
           if (!is_string($max) || $max === '') {
-            // Try recent/events/list arrays for the strongest peak_class
+            // Try recent/events/list/peaks/values arrays for the strongest peak_class
             $candidates = [];
-            foreach (['recent','events','list'] as $k) {
+            foreach (['recent','events','list','peaks','values'] as $k) {
               if (!empty($flr[$k]) && is_array($flr[$k])) {
                 foreach ($flr[$k] as $ev) {
                   if (!is_array($ev)) continue;
-                  $pc = $ev['peak_class'] ?? $ev['class'] ?? $ev['peak'] ?? null;
+                  $pc = $ev['peak_class'] ?? $ev['class'] ?? $ev['peak'] ?? $ev['max_class'] ?? null;
                   if (is_string($pc) && $pc !== '') $candidates[] = $pc;
                 }
               }
+            }
+            // Also check nested last_24h summary objects
+            if (empty($candidates) && !empty($flr['last_24h']) && is_array($flr['last_24h'])) {
+              $pc = $flr['last_24h']['peak_class'] ?? $flr['last_24h']['max_class'] ?? null;
+              if (is_string($pc) && $pc !== '') $candidates[] = $pc;
             }
             if ($candidates) {
               // Rank by letter (A<B<C<M<X) and magnitude when present
@@ -389,6 +394,10 @@ function gaia_space_weather_detail_shortcode($atts){
               if (!empty($bands[$b])) $band_line[] = "{$b}:{$bands[$b]}";
             }
           }
+
+          // Debug: emit keys and chosen max in HTML comment for troubleshooting
+          $dbg_keys = is_array($flr) ? implode(',', array_keys($flr)) : '';
+          echo "\n<!-- ge-flr-debug keys=" . esc_html($dbg_keys) . " max=" . esc_html((string)$max) . " total=" . esc_html((string)($tot ?? '')) . " -->\n";
 
           echo ge_row('Max class (24h)', ge_val_or_dash($max));
           if ($tot !== null) echo ge_row('Total flares (24h)', ge_val_or_dash($tot));
