@@ -252,19 +252,25 @@ function gaia_space_weather_detail_shortcode($atts){
       $c_ed    = $c_stats['earth_directed_count'] ?? $c_stats['earth_directed'] ?? $c_stats['ed'] ?? null;
       $c_vmax  = $c_stats['max_speed_kms'] ?? $c_stats['vmax_kms'] ?? $c_stats['speed_max_kms'] ?? null;
 
-      // Assemble panel data for renderer
+      // Assemble panel data for renderer — include pass‑through so renderer can derive max class from events when needed
+      $flares_out = [
+        'max_24h'   => $fl_max,
+        'total_24h' => $fl_total,
+        'bands_24h' => is_array($fl_bands) ? $fl_bands : [],
+      ];
+      // Pass through helpful alternate keys so the renderer can compute a max class
+      foreach (['peak_24h','peak_class_24h','max_class','bands','counts','recent','events','list'] as $k) {
+        if (isset($fl[$k])) { $flares_out[$k] = $fl[$k]; }
+      }
+
       $fc = [
-        'flares' => [
-          'max_24h'   => $fl_max,
-          'total_24h' => $fl_total,
-          'bands_24h' => is_array($fl_bands) ? $fl_bands : [],
-        ],
+        'flares' => $flares_out,
         'cmes' => [
           'headline' => $c_headline,
           'stats'    => [
-            'total_72h'          => $c_total,
+            'total_72h'           => $c_total,
             'earth_directed_count'=> $c_ed,
-            'max_speed_kms'      => $c_vmax,
+            'max_speed_kms'       => $c_vmax,
           ],
         ],
       ];
