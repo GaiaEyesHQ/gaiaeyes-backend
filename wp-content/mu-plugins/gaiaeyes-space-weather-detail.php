@@ -58,17 +58,12 @@ function gaiaeyes_http_get_json_api_cached($url, $cache_key, $ttl, $bearer = '')
   $cached = get_transient($cache_key);
   if ($cached !== false) return $cached;
 
-  $headers = [
-    'Accept'      => 'application/json',
-    'User-Agent'  => 'GaiaEyesWP/1.0'
-  ];
-  if ($bearer) {
-    $headers['Authorization'] = 'Bearer ' . $bearer;
-  }
+  $headers = [ 'Accept' => 'application/json', 'User-Agent' => 'GaiaEyesWP/1.0' ];
+  if ($bearer) $headers['Authorization'] = 'Bearer ' . $bearer;
   if (defined('GAIAEYES_API_DEV_USERID') && GAIAEYES_API_DEV_USERID) {
     $headers['X-Dev-UserId'] = GAIAEYES_API_DEV_USERID;
   }
-  $args = ['timeout' => 10, 'headers' => $headers];
+  $args = ['timeout'=>10, 'headers'=>$headers];
 
   $resp = wp_remote_get(add_query_arg(['v'=>floor(time()/600)], $url), $args);
   $code = is_wp_error($resp) ? 0 : intval(wp_remote_retrieve_response_code($resp));
@@ -134,22 +129,44 @@ function gaia_space_weather_detail_shortcode($atts){
       'impacts' => []
     ];
     if (is_array($features)) {
-      // best-effort extraction from likely keys
-      $snap = isset($features['snapshot']) ? $features['snapshot'] : (isset($features['now']) ? $features['now'] : $features);
-      $sw['now']['kp'] = $snap['kp'] ?? $snap['kp_now'] ?? $snap['kp_index'] ?? null;
-      $sw['now']['solar_wind_kms'] = $snap['sw_speed_kms'] ?? $snap['solar_wind_kms'] ?? $snap['solar_wind'] ?? null;
-      $sw['now']['bz_nt'] = $snap['bz_nt'] ?? $snap['bz'] ?? null;
-      $sw['timestamp_utc'] = $features['generated_at'] ?? $sw['timestamp_utc'];
-      // last 24h maxima if present
-      $last = $features['last_24h'] ?? [];
+      // tolerant extraction helpers
+      $pickNum = function($arr, $keys){
+        foreach ($keys as $k){ if (isset($arr[$k]) && is_numeric($arr[$k])) return (float)$arr[$k]; }
+        return null;
+      };
+      $tryScopes = [
+        $features,
+        $features['snapshot'] ?? [],
+        $features['now'] ?? [],
+        $features['today'] ?? [],
+        $features['space'] ?? [],
+        $features['space_weather'] ?? [],
+      ];
+      $kp = $swk = $bzv = null;
+      $kpKeys = ['kp','kp_now','kp_index','planetary_kp'];
+      $swKeys = ['sw_speed_kms','solar_wind_kms','solar_wind','speed_kms'];
+      $bzKeys = ['bz_nt','bz','imf_bz','bz_now'];
+      foreach ($tryScopes as $scope){
+        if ($kp === null) $kp = $pickNum($scope, $kpKeys);
+        if ($swk === null) $swk = $pickNum($scope, $swKeys);
+        if ($bzv === null) $bzv = $pickNum($scope, $bzKeys);
+      }
+      $sw['now']['kp'] = $kp;
+      $sw['now']['solar_wind_kms'] = $swk;
+      $sw['now']['bz_nt'] = $bzv;
+
+      // last 24h maxima if present under common shapes
+      $last = $features['last_24h'] ?? $features['last24h'] ?? [];
       if (is_array($last)) {
-        if (isset($last['kp_max'])) $sw['last_24h']['kp_max'] = $last['kp_max'];
-        if (isset($last['solar_wind_max_kms'])) $sw['last_24h']['solar_wind_max_kms'] = $last['solar_wind_max_kms'];
+        if (isset($last['kp_max']) && is_numeric($last['kp_max'])) $sw['last_24h']['kp_max'] = (float)$last['kp_max'];
+        if (isset($last['solar_wind_max_kms']) && is_numeric($last['solar_wind_max_kms'])) $sw['last_24h']['solar_wind_max_kms'] = (float)$last['solar_wind_max_kms'];
       }
     }
     if (is_array($outlook)) {
       $sw['next_72h']['headline'] = $outlook['headline'] ?? ($outlook['summary'] ?? '');
-      $sw['next_72h']['confidence'] = $outlook['confidence'] ?? ($outlook['confidence_text'] ?? '');
+      $conf = $outlook['confidence'] ?? ($outlook['confidence_text'] ?? null);
+      if (is_array($conf)) $conf = ($conf['label'] ?? $conf['text'] ?? null);
+      $sw['next_72h']['confidence'] = $conf;
       $sw['alerts'] = is_array($outlook['alerts'] ?? null) ? $outlook['alerts'] : [];
       $sw['impacts'] = is_array($outlook['impacts'] ?? null) ? $outlook['impacts'] : [];
       // Flares/CMEs panel
