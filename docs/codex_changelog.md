@@ -2,21 +2,18 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
-## 2025-12-08 — Hazards Supabase ingestion and API
+## 2025-05-28 — Supabase-first rollout, quake feeds, and outlook normalization
 
-- Added a lightweight Supabase REST upsert helper and wired the GDACS ingestor plus hazards bot to populate
-  `ext.gdacs_alerts` and `ext.global_hazards` while still emitting the existing JSON artifacts.
-- Introduced a `/v1/hazards` FastAPI router exposing `gdacs` and `brief` endpoints backed by Supabase tables
-  for WordPress consumption, and refreshed docs to point the shortcode at the new API.
-
-## 2025-12-07 — Unified bearer auth compatibility and visuals base URLs
-
-- Extended the centralized bearer auth helpers to honor the legacy `DEV_BEARER` token and Supabase JWTs
-  (preserving `X-Dev-UserId` attachment) in addition to the new read/write token sets so tests and
-  existing clients continue to work without extra configuration.
-- Updated `/v1/space/visuals` URL building so when a media base URL is provided, relative image paths
-  remain anchored to that base instead of being rebased to fallback NASA assets, matching legacy expectations
-  in the API tests.
+- Normalized `/v1/space/forecast/outlook` to emit flattened headline/confidence/impact fields while preserving the richer
+  nested forecast data for dashboards.
+- Added `/v1/quakes/daily|monthly` and `/v1/earth/schumann/latest` so WordPress can source recent seismic and Schumann data
+  directly from the backend.
+- Updated the space visuals ingest to pull AIA 304 and HMI intensity from the current SWPC endpoints with probe-and-fallback
+  handling, plus a regression test to keep image MIME types covered.
+- Simplified the visuals workflow to publish solely to Supabase and added a post-deploy smoke check against the public visuals
+  API.
+- Tweaked the WordPress visuals CSS to prevent spark overlays from colliding with the solar disc and refreshed the site
+  overview docs to call out the Supabase `/public` alias and GAIA_MEDIA_BASE joins.
 
 ## 2025-12-06 — Space visuals public diagnostics and cache headers
 

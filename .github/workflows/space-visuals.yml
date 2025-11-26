@@ -134,11 +134,12 @@ jobs:
     needs: run
     env:
       BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL || vars.BACKEND_BASE_URL || '' }}
-    if: ${{ env.BACKEND_BASE_URL != '' }}
     steps:
       - name: Install jq
+        if: env.BACKEND_BASE_URL != ''
         run: sudo apt-get update && sudo apt-get install -y jq
       - name: Smoke check public endpoints
+        if: env.BACKEND_BASE_URL != ''
         run: |
           set -euo pipefail
           curl -sS "$BACKEND_BASE_URL/v1/space/visuals/diag" | jq .
