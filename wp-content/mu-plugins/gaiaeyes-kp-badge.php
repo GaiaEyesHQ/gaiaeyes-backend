@@ -10,9 +10,6 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 require_once __DIR__ . '/gaiaeyes-api-helpers.php';
 
-$__ge_media_base = defined('GAIA_MEDIA_BASE') ? rtrim(GAIA_MEDIA_BASE, '/') : '';
-define( 'GAIAEYES_KP_JSON', $__ge_media_base ? ($__ge_media_base . '/data/space_weather.json') : '' );
-
 /**
  * Insert a small script in <head> that:
  * 1) Tries to append the badge inside common Neve header containers.
@@ -119,96 +116,81 @@ add_action( 'wp_footer', function () {
 </style>
 <script id="gaia-badges-js">
 (function(){
-        var WX_URL  = "<?php echo esc_js(GAIAEYES_KP_JSON); ?>";
-        var ES_URL  = "<?php echo esc_js($__ge_media_base ? ($__ge_media_base . '/data/earthscope.json') : ''); ?>";
-        var SCH_FALLBACK = "<?php echo esc_js($__ge_media_base ? ($__ge_media_base . '/data/schumann_latest.json') : ''); ?>";
+    var BADGE_URL = "<?php echo esc_js(defined('GAIAEYES_API_BASE') ? rtrim(GAIAEYES_API_BASE, '/') . '/v1/badges/kp_schumann' : ''); ?>";
 
-	function colorizeKp(kp){
-		if (kp >= 7) return {bg:"#a40000", glow:"#ff4f4f", pulse:true};
-		if (kp >= 5) return {bg:"#d98200", glow:"#ffc84f", pulse:true};
-		if (kp >= 4) return {bg:"#0e6218", glow:"#34e07a", pulse:false};
-		return {bg:"#222", glow:"#888", pulse:false};
-	}
-	function colorizeF1(f1){
-		if (f1 == null) return {bg:"#222", glow:"#888"};
-		if (f1 >= 9.0)  return {bg:"#3a235d", glow:"#b58cff"};   // elevated vs ~7.8–8.0
-		if (f1 <= 7.2)  return {bg:"#003a52", glow:"#7fd1ff"};   // subdued vs baseline
-		return {bg:"#222", glow:"#888"};
-	}
+    function colorizeKp(kp){
+        if (kp >= 7) return {bg:"#a40000", glow:"#ff4f4f", pulse:true};
+        if (kp >= 5) return {bg:"#d98200", glow:"#ffc84f", pulse:true};
+        if (kp >= 4) return {bg:"#0e6218", glow:"#34e07a", pulse:false};
+        return {bg:"#222", glow:"#888", pulse:false};
+    }
+    function colorizeF1(f1){
+        if (f1 == null) return {bg:"#222", glow:"#888"};
+        if (f1 >= 9.0)  return {bg:"#3a235d", glow:"#b58cff"};   // elevated vs ~7.8–8.0
+        if (f1 <= 7.2)  return {bg:"#003a52", glow:"#7fd1ff"};   // subdued vs baseline
+        return {bg:"#222", glow:"#888"};
+    }
 
-	function updateKp(el){
-		return fetch(WX_URL + "?v=" + Date.now(), {cache:"no-store"})
-		  .then(r=>r.json())
-		  .then(j=>{
-			var v = parseFloat(j && j.now ? j.now.kp : NaN);
-			if (isNaN(v)){ el.textContent = "Kp —"; return; }
-			var c = colorizeKp(v);
-			el.textContent = "Kp " + v.toFixed(1);
-			el.style.background = c.bg;
-			el.style.boxShadow  = "0 0 10px " + c.glow;
-			if (c.pulse){ el.classList.add('gaia-pulse'); } else { el.classList.remove('gaia-pulse'); }
-		  })
-		  .catch(()=>{ el.textContent = "Kp —"; });
-	}
+    function updateBadges(kpEl, schEl){
+        if (!BADGE_URL){
+            kpEl.textContent = "Kp —";
+            schEl.textContent = "F1 —";
+            return;
+        }
+        return fetch(BADGE_URL + "?v=" + Date.now(), {cache:"no-store"})
+            .then(function(r){
+                if (!r.ok) throw new Error("badge http " + r.status);
+                return r.json();
+            })
+            .then(function(j){
+                var kp = j && j.kp && j.kp.value != null ? parseFloat(j.kp.value) : NaN;
+                var f1 = j && j.schumann_f1 && j.schumann_f1.value != null ? parseFloat(j.schumann_f1.value) : null;
 
-	function readF1FromEarthscope(d){
-		try { return d && d.schumann && d.schumann.combined && d.schumann.combined.f1_hz; } catch(e){ return null; }
-	}
-	function readF1FromSchumannLatest(d){
-		try {
-			var s = d && d.sources || {};
-			var c = s.cumiana ? s.cumiana.fundamental_hz : null;
-			var t = s.tomsk   ? s.tomsk.fundamental_hz   : null;
-			if (c!=null && t!=null) return (parseFloat(c)*0.3 + parseFloat(t)*0.7);
-			return (c!=null) ? parseFloat(c) : (t!=null ? parseFloat(t) : null);
-		} catch(e){ return null; }
-	}
+                if (!isNaN(kp)){
+                    var kc = colorizeKp(kp);
+                    kpEl.textContent = "Kp " + kp.toFixed(1);
+                    kpEl.style.background = kc.bg;
+                    kpEl.style.boxShadow  = "0 0 10px " + kc.glow;
+                    if (kc.pulse){ kpEl.classList.add('gaia-pulse'); } else { kpEl.classList.remove('gaia-pulse'); }
+                } else {
+                    kpEl.textContent = "Kp —";
+                }
 
-	function updateF1(el){
-		return fetch(ES_URL + "?v=" + Date.now(), {cache:"no-store"})
-		  .then(r=>r.ok?r.json():Promise.reject())
-		  .then(d=>{
-			var f1 = readF1FromEarthscope(d);
-			if (f1==null) throw new Error("no f1 in earthscope");
-			var c = colorizeF1(f1);
-			el.textContent = "SH " + Number(f1).toFixed(2) + " Hz";
-			el.style.background = c.bg;
-			el.style.boxShadow  = "0 0 10px " + c.glow;
-		  })
-		  .catch(()=>fetch(SCH_FALLBACK + "?v=" + Date.now(), {cache:"no-store"})
-			.then(r=>r.json())
-			.then(d=>{
-				var f1 = readF1FromSchumannLatest(d);
-				if (f1==null) throw new Error("no f1 fallback");
-				var c = colorizeF1(f1);
-				el.textContent = "F1 " + Number(f1).toFixed(2) + " Hz";
-				el.style.background = c.bg;
-				el.style.boxShadow  = "0 0 10px " + c.glow;
-			})
-			.catch(()=>{ el.textContent = "F1 —"; })
-		  );
-	}
+                if (f1 != null){
+                    var sc = colorizeF1(f1);
+                    schEl.textContent = "F1 " + f1.toFixed(2) + " Hz";
+                    schEl.style.background = sc.bg;
+                    schEl.style.boxShadow  = "0 0 10px " + sc.glow;
+                } else {
+                    schEl.textContent = "F1 —";
+                }
+            })
+            .catch(function(){
+                kpEl.textContent = "Kp —";
+                schEl.textContent = "F1 —";
+            });
+    }
 
-	// Wait until both badges exist before first update (avoids "F1 …" stuck state)
-	function waitAndKick(attempt){
-		attempt = attempt || 0;
-		var kp  = document.getElementById('gaia-kp-badge');
-		var sch = document.getElementById('gaia-sch-badge');
-		if (kp && sch){
-			updateKp(kp); updateF1(sch);
-			setInterval(function(){ updateKp(kp); updateF1(sch); }, 600000); // 10 min
-			return;
-		}
-		if (attempt < 40){
-			setTimeout(function(){ waitAndKick(attempt+1); }, 250);
-		}
-	}
+    // Wait until both badges exist before first update (avoids "F1 …" stuck state)
+    function waitAndKick(attempt){
+        attempt = attempt || 0;
+        var kp  = document.getElementById('gaia-kp-badge');
+        var sch = document.getElementById('gaia-sch-badge');
+        if (kp && sch){
+            updateBadges(kp, sch);
+            setInterval(function(){ updateBadges(kp, sch); }, 600000); // 10 min
+            return;
+        }
+        if (attempt < 40){
+            setTimeout(function(){ waitAndKick(attempt+1); }, 250);
+        }
+    }
 
-	if (document.readyState === 'loading'){
-		document.addEventListener('DOMContentLoaded', function(){ waitAndKick(0); });
-	}else{
-		waitAndKick(0);
-	}
+    if (document.readyState === 'loading'){
+        document.addEventListener('DOMContentLoaded', function(){ waitAndKick(0); });
+    } else {
+        waitAndKick(0);
+    }
 })();
 </script>
 	<?php
