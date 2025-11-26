@@ -2,6 +2,13 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-12-08 — Hazards Supabase ingestion and API
+
+- Added a lightweight Supabase REST upsert helper and wired the GDACS ingestor plus hazards bot to populate
+  `ext.gdacs_alerts` and `ext.global_hazards` while still emitting the existing JSON artifacts.
+- Introduced a `/v1/hazards` FastAPI router exposing `gdacs` and `brief` endpoints backed by Supabase tables
+  for WordPress consumption, and refreshed docs to point the shortcode at the new API.
+
 ## 2025-12-07 — Unified bearer auth compatibility and visuals base URLs
 
 - Extended the centralized bearer auth helpers to honor the legacy `DEV_BEARER` token and Supabase JWTs

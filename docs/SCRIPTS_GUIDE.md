@@ -14,7 +14,7 @@ This guide documents the maintenance and data-processing scripts located in [`/s
 | Script | Purpose & Outputs | Key environment variables |
 | --- | --- | --- |
 | `ingest_alerts_us.py` | Pulls active severe-weather alerts from the NWS API and emits `alerts_us_latest.json`. | `MEDIA_DIR`, `OUTPUT_JSON_PATH` |
-| `ingest_gdacs.py` | Parses the GDACS RSS feed for global hazard alerts and writes `gdacs_latest.json`. | `MEDIA_DIR`, `OUTPUT_JSON_PATH`, `GDACS_RSS` |
+| `ingest_gdacs.py` | Parses the GDACS RSS feed for global hazard alerts, writes `gdacs_latest.json`, and upserts the latest alerts into `ext.gdacs_alerts` via Supabase REST when credentials are present. | `MEDIA_DIR`, `OUTPUT_JSON_PATH`, `GDACS_RSS`; optional `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` for DB upsert |
 | `ingest_nasa_donki.py` | Fetches NASA DONKI flare and CME events (plus GOES flux summaries), upserts them into `ext.donki_event`, and optionally emits `flares_cmes.json`. | `SUPABASE_DB_URL`, `NASA_API_KEY` (required); `START_DAYS_AGO`, `OUTPUT_JSON_PATH`, `OUTPUT_JSON_GZIP`, retry tuning vars |
 | `ingest_schumann_github.py` | Pulls Schumann resonance telemetry from the `gaiaeyes-media` GitHub repo, upserts station readings into `ext.schumann_*`, and should be followed by `psql "$SUPABASE_DB_URL" -c "refresh materialized view marts.schumann_daily"` so the daily mart stays current. | `SUPABASE_DB_URL` or `DATABASE_URL` |
 | `ingest_space_news.py` | Aggregates space-weather RSS/JSON feeds (NASA, SWPC, DONKI) into a news digest JSON file. | `OUTPUT_JSON_PATH`, `MEDIA_DIR`, `LOOKBACK_DAYS`, plus DONKI API key via `NASA_API_KEY` when provided |
