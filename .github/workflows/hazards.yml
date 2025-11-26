@@ -28,13 +28,13 @@ jobs:
 
       - name: Validate WordPress secrets
         env:
-          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
+          WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
           WP_USERNAME: ${{ secrets.WP_USERNAME }}
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
         run: |
           set -euo pipefail
           missing=()
-          [[ -n "${WP_SITE_URL:-}" ]] || missing+=(WP_SITE_URL)
+          [[ -n "${WP_BASE_URL:-}" ]] || missing+=(WP_BASE_URL)
           [[ -n "${WP_USERNAME:-}" ]] || missing+=(WP_USERNAME)
           [[ -n "${WP_APP_PASSWORD:-}" ]] || missing+=(WP_APP_PASSWORD)
 
@@ -43,14 +43,14 @@ jobs:
             exit 1
           fi
 
-          if [[ ! "$WP_SITE_URL" =~ ^https?:// ]]; then
-            printf '::error::WP_SITE_URL must be an absolute URL (https://...), got: %s\n' "$WP_SITE_URL"
+          if [[ ! "$WP_BASE_URL" =~ ^https?:// ]]; then
+            printf '::error::WP_BASE_URL must be an absolute URL (https://...), got: %s\n' "$WP_BASE_URL"
             exit 1
           fi
 
       - name: Run Hazards Bot (builds bots/hazards/out/latest.json)
         env:
-          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}           # e.g., https://staging2.gaiaeyes.com
+          WP_SITE_URL: ${{ secrets.WP_BASE_URL }}           # e.g., https://staging2.gaiaeyes.com
           WP_USERNAME: ${{ secrets.WP_USERNAME }}           # user tied to the App Password
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}   # application password (no spaces needed)
           PYTHONPATH: ${{ github.workspace }}
@@ -62,9 +62,9 @@ jobs:
       - name: Debug WP REST route
         if: failure()
         env:
-          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
+          WP_SITE_URL: ${{ secrets.WP_BASE_URL }}
         run: |
-          echo "Categories route: ${WP_SITE_URL}/wp-json/wp/v2/categories"
+          echo "Categories route: ${WP_BASE_URL}/wp-json/wp/v2/categories"
 
       # === Publish to media repo using GAIAEYES_MEDIA_TOKEN (same pattern as space-visuals) ===
       - name: Checkout media repo
