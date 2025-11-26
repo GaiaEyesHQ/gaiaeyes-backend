@@ -21,7 +21,7 @@ ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
 
-from wp_client import WPClient  # noqa: E402
+from bots.hazards.wp_client import WPClient  # noqa: E402
 from scripts.supabase_rest_client import supabase_upsert  # noqa: E402
 
 UTC = timezone.utc
@@ -226,22 +226,18 @@ def items_window(hours: int = 12) -> List[dict]:
     return [json.loads(row[0]) for row in rows]
 
 
-def setup_wp() -> WPClient:
-    base = os.environ.get("WP_BASE_URL", "").strip()
-    user = os.environ.get("WP_USERNAME", "").strip()
-    app = os.environ.get("WP_APP_PASSWORD", "").strip()
-    if not (base and user and app):
-        raise RuntimeError("Missing WP_BASE_URL / WP_USERNAME / WP_APP_PASSWORD")
-    return WPClient(base, user, app)
-
-
 def ensure_taxonomy(wp: WPClient) -> Dict[str, int]:
-    return {
-        "Hazards Digest": wp.ensure_category("Hazards Digest", "hazards-digest"),
-        "Earthquake": wp.ensure_category("Earthquake"),
-        "Cyclone": wp.ensure_category("Cyclone"),
-        "Volcano/Ash": wp.ensure_category("Volcano/Ash", "volcano-ash"),
-    }
+    try:
+        return {
+            "Hazards Digest": wp.ensure_category("Hazards Digest", "hazards-digest"),
+            "Global Hazards": wp.ensure_category("Global Hazards", "global-hazards"),
+            "Alerts": wp.ensure_category("Alerts", "alerts"),
+            "Earthquake": wp.ensure_category("Earthquake"),
+            "Cyclone": wp.ensure_category("Cyclone"),
+            "Volcano/Ash": wp.ensure_category("Volcano/Ash", "volcano-ash"),
+        }
+    except Exception as e:  # pragma: no cover - network/auth handling
+        raise RuntimeError(f"Failed to ensure categories via WP REST: {e}")
 
 
 def severity_quake_usgs(mag: float) -> str:
@@ -639,7 +635,7 @@ def instant_tags(wp: WPClient, item: dict) -> List[int]:
 
 def run_once() -> None:
     db_init()
-    wp = setup_wp()
+    wp = WPClient()
     categories = ensure_taxonomy(wp)
 
     items: List[dict] = []
