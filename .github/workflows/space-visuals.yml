@@ -132,9 +132,9 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     needs: run
-    if: ${{ (secrets.BACKEND_BASE_URL || vars.BACKEND_BASE_URL) != '' }}
     env:
-      BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL || vars.BACKEND_BASE_URL }}
+      BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL || vars.BACKEND_BASE_URL || '' }}
+    if: ${{ env.BACKEND_BASE_URL != '' }}
     steps:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
