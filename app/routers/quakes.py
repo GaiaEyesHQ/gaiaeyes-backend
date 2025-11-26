@@ -70,35 +70,35 @@ async def quakes_events(
     It filters by minimum magnitude and a trailing time window (in hours), and
     returns a compact, badge-friendly shape.
 
-    NOTE: This assumes a table ext.quakes_events with at least:
-      - ts_utc (timestamptz)
+    NOTE: This assumes a table ext.earthquakes_events with at least:
+      - time_utc (timestamptz)
       - mag (numeric)
       - depth_km (numeric)
-      - lat (numeric)
-      - lon (numeric)
+      - latitude (numeric)
+      - longitude (numeric)
       - place (text)
       - source (text)
       - url (text)
-      - event_id (text)
+      - usgs_id (text)
     """
     try:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
                 """
                 select
-                    ts_utc,
+                    time_utc,
                     mag,
                     depth_km,
-                    lat,
-                    lon,
+                    latitude,
+                    longitude,
                     place,
                     source,
                     url,
-                    event_id
-                from ext.quakes_events
-                where ts_utc >= now() - (%s || ' hours')::interval
+                    usgs_id
+                from ext.earthquakes_events
+                where time_utc >= now() - (%s || ' hours')::interval
                   and (mag is not null and mag >= %s)
-                order by ts_utc desc
+                order by time_utc desc
                 limit %s
                 """,
                 (hours, min_mag, limit),
@@ -114,19 +114,19 @@ async def quakes_events(
 
     items: list[dict] = []
     for row in rows:
-        ts = row.get("ts_utc")
+        ts = row.get("time_utc")
         ts_iso = ts.isoformat().replace("+00:00", "Z") if hasattr(ts, "isoformat") else None
         items.append(
             {
                 "time_utc": ts_iso,
                 "mag": row.get("mag"),
                 "depth_km": row.get("depth_km"),
-                "lat": row.get("lat"),
-                "lon": row.get("lon"),
+                "lat": row.get("latitude"),
+                "lon": row.get("longitude"),
                 "place": row.get("place"),
                 "source": row.get("source"),
                 "url": row.get("url"),
-                "id": row.get("event_id"),
+                "id": row.get("usgs_id"),
             }
         )
 
