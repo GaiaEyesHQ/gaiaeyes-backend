@@ -181,8 +181,9 @@ function gaiaeyes_quakes_detail_shortcode($atts){
 
         <script>
           (function(){
-            const listM5 = <?php echo wp_json_encode($events); ?> || [];
-            const listAll = <?php echo wp_json_encode( (is_array($d) && isset($d['events_all_sample']) && is_array($d['events_all_sample'])) ? $d['events_all_sample'] : [] ); ?> || [];
+            const EVENTS_URL = "<?php echo esc_js(defined('GAIAEYES_API_BASE') ? rtrim(GAIAEYES_API_BASE, '/') . '/v1/quakes/events' : ''); ?>";
+            let listM5 = [];
+            let listAll = [];
             const maxItems = <?php echo (int)$max_items; ?>;
             let pageSize = maxItems; // default page size
             let shown = maxItems;     // how many items currently shown
@@ -306,8 +307,36 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             btnAll.addEventListener('click', function(){ shown = 1000; applyAndButtons(); });
             btnLess.addEventListener('click', function(){ shown = pageSize; applyAndButtons(); });
             filters.addEventListener('change', function(){ shown = pageSize; applyAndButtons(); });
-            // initial draw
-            applyAndButtons();
+
+            function loadEvents(){
+              if (!EVENTS_URL){
+                applyAndButtons();
+                return;
+              }
+              fetch(EVENTS_URL + '?min_mag=4.5&hours=72&limit=200', {cache:"no-store"})
+                .then(function(r){
+                  if (!r.ok) throw new Error('http ' + r.status);
+                  return r.json();
+                })
+                .then(function(j){
+                  const items = (j && Array.isArray(j.items)) ? j.items : [];
+                  // All = all returned events; M5+ = filtered subset
+                  listAll = items.slice();
+                  listM5 = items.filter(function(ev){
+                    const m = (typeof ev.mag === 'number') ? ev.mag : parseFloat(ev.mag);
+                    return !isNaN(m) && m >= 5.0;
+                  });
+                  shown = pageSize;
+                  applyAndButtons();
+                })
+                .catch(function(){
+                  listAll = [];
+                  listM5 = [];
+                  applyAndButtons();
+                });
+            }
+            // initial draw: fetch and populate
+            loadEvents();
           })();
         </script>
       </article>
