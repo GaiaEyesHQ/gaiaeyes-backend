@@ -192,12 +192,18 @@ async def _build_visuals_payload(conn, media_base: str) -> dict:
             continue
 
         raw_rel = row.get("image_path") or ""
-        rel_path = _rebase_path(raw_rel, row.get("key"))
+        rel_path = raw_rel if media_base else _rebase_path(raw_rel, row.get("key"))
+        rel_path = rel_path.lstrip("/") if rel_path else ""
+
         url = meta.get("url")
         if url:
             url = _to_relative(url, media_base)
         elif rel_path:
-            url = f"/{rel_path}"
+            if media_base:
+                base = media_base.rstrip("/")
+                url = f"{base}/{rel_path}"
+            else:
+                url = f"/{rel_path}"
         else:
             url = None
 

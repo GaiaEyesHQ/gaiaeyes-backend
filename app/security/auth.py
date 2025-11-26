@@ -3,6 +3,9 @@ from typing import Optional
 
 from fastapi import Header, HTTPException, Request, status
 
+from app.db import settings
+from app.utils.auth import _normalize_uuid, decode_supabase_token
+
 
 def _parse_tokens(s: Optional[str]) -> set[str]:
     if not s:
@@ -55,17 +58,65 @@ def _extract_bearer(authorization: Optional[str]) -> Optional[str]:
     return None
 
 
+def _maybe_attach_dev_user(request: Request) -> None:
+    request.state.user_id = _normalize_uuid(request.headers.get("X-Dev-UserId"))
+
+
+def _token_matches_dev(token: str) -> bool:
+    return bool(settings.DEV_BEARER and token == settings.DEV_BEARER)
+
+
+def _validate_supabase_token(request: Request, token: str) -> bool:
+    user_id = decode_supabase_token(token)
+    if user_id:
+        request.state.user_id = user_id
+        return True
+    return False
+
+
+def _is_allowed_read(request: Request, token: Optional[str]) -> bool:
+    if not token:
+        return False
+
+    if token in READ_TOKENS or token in WRITE_TOKENS:
+        if _token_matches_dev(token):
+            _maybe_attach_dev_user(request)
+        return True
+
+    if _token_matches_dev(token):
+        _maybe_attach_dev_user(request)
+        return True
+
+    return _validate_supabase_token(request, token)
+
+
+def _is_allowed_write(request: Request, token: Optional[str]) -> bool:
+    if not token:
+        return False
+
+    if token in WRITE_TOKENS:
+        if _token_matches_dev(token):
+            _maybe_attach_dev_user(request)
+        return True
+
+    if _token_matches_dev(token):
+        _maybe_attach_dev_user(request)
+        return True
+
+    return _validate_supabase_token(request, token)
+
+
 async def require_read_auth(request: Request, authorization: Optional[str] = Header(None)):
     if _is_public_read(request):
         return
     token = _extract_bearer(authorization)
-    if token and (token in READ_TOKENS or token in WRITE_TOKENS):
+    if _is_allowed_read(request, token):
         return
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid Authorization header")
 
 
-async def require_write_auth(authorization: Optional[str] = Header(None)):
+async def require_write_auth(request: Request, authorization: Optional[str] = Header(None)):
     token = _extract_bearer(authorization)
-    if token and token in WRITE_TOKENS:
+    if _is_allowed_write(request, token):
         return
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid Authorization header")
