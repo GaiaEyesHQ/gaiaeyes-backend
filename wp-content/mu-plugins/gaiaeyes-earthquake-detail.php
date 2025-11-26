@@ -9,123 +9,71 @@ if (!defined('ABSPATH')) exit;
 // Defaults (GitHub Pages + jsDelivr mirror)
 require_once __DIR__ . '/gaiaeyes-api-helpers.php';
 
-$__ge_media_base = defined('GAIA_MEDIA_BASE') ? rtrim(GAIA_MEDIA_BASE, '/') : '';
-if (!defined('GAIAEYES_QUAKES_URL')) {
-  define('GAIAEYES_QUAKES_URL', $__ge_media_base ? ($__ge_media_base . '/data/quakes_latest.json') : '');
-}
-if (!defined('GAIAEYES_QUAKES_MIRROR')) {
-  define('GAIAEYES_QUAKES_MIRROR', GAIAEYES_QUAKES_URL);
-}
-
-function gaiaeyes_quakes_fetch($primary, $mirror, $cache_key, $ttl){
-  $cached = get_transient($cache_key);
-  if ($cached !== false) return $cached;
-  $v = array('v' => floor(time()/600));
-  $resp = wp_remote_get(add_query_arg($v, esc_url_raw($primary)), ['timeout'=>10,'headers'=>['Accept'=>'application/json']]);
-  if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) {
-    $resp = wp_remote_get(add_query_arg($v, esc_url_raw($mirror)), ['timeout'=>10,'headers'=>['Accept'=>'application/json']]);
-  }
-  if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) return null;
-  $data = json_decode(wp_remote_retrieve_body($resp), true);
-  if (!is_array($data)) return null;
-  set_transient($cache_key, $data, $ttl);
-  return $data;
-}
 
 /**
  * Shortcode: [gaia_quakes_detail quakes_url="" cache="10" max="10"]
  */
 function gaiaeyes_quakes_detail_shortcode($atts){
   $a = shortcode_atts([
-    'quakes_url'  => GAIAEYES_QUAKES_URL,
-    'history_url' => $__ge_media_base ? ($__ge_media_base . '/data/quakes_history.json') : '',
-    'cache'       => 10,
-    'max'         => 10,
+    'cache' => 10,
+    'max'   => 10,
   ], $atts, 'gaia_quakes_detail');
 
   $ttl = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
-  $d = gaiaeyes_quakes_fetch($a['quakes_url'], GAIAEYES_QUAKES_MIRROR, 'ge_quakes_latest', $ttl);
-  $hist = gaiaeyes_quakes_fetch(
-    $a['history_url'],
-    str_replace('github.io','cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main',$a['history_url']),
-    'ge_quakes_history',
-    $ttl
-  );
 
-  $ts = is_array($d) && !empty($d['timestamp_utc']) ? $d['timestamp_utc'] : '';
-  $events = is_array($d) && !empty($d['events']) && is_array($d['events']) ? $d['events'] : [];
-  $total = is_array($d) && isset($d['total']) ? intval($d['total']) : null;
-  $total24 = is_array($d) && isset($d['total_24h']) ? intval($d['total_24h']) : null;
+  $api_base = defined('GAIAEYES_API_BASE') ? rtrim(GAIAEYES_API_BASE, '/') : '';
+  $bearer   = defined('GAIAEYES_API_BEARER') ? GAIAEYES_API_BEARER : '';
+  $dev_user = defined('GAIAEYES_API_DEV_USERID') ? GAIAEYES_API_DEV_USERID : '';
 
-  // Robust "all magnitudes" total detection
-  $tot_all = null; $tot24_all = null;
-  if (isset($d['total_all'])) { $tot_all = intval($d['total_all']); }
-  elseif (isset($d['counts']) && isset($d['counts']['all'])) { $tot_all = intval($d['counts']['all']); }
-  elseif (isset($d['stats']) && isset($d['stats']['total_all'])) { $tot_all = intval($d['stats']['total_all']); }
-  elseif ($total !== null) { $tot_all = $total; }
+  $latest_payload = $api_base
+    ? gaiaeyes_http_get_json_api_cached($api_base . '/v1/quakes/latest', 'ge_quakes_latest', $ttl, $bearer, $dev_user)
+    : null;
+  $history_payload = $api_base
+    ? gaiaeyes_http_get_json_api_cached($api_base . '/v1/quakes/history', 'ge_quakes_history', $ttl, $bearer, $dev_user)
+    : null;
 
-  if (isset($d['total_24h_all'])) { $tot24_all = intval($d['total_24h_all']); }
-  elseif (isset($d['counts']) && (isset($d['counts']['24h']) || isset($d['counts']['last_24h']))) { $tot24_all = isset($d['counts']['24h']) ? intval($d['counts']['24h']) : intval($d['counts']['last_24h']); }
-  elseif (isset($d['stats']) && isset($d['stats']['total_24h_all'])) { $tot24_all = intval($d['stats']['total_24h_all']); }
-  elseif ($total24 !== null) { $tot24_all = $total24; }
+  $d = (is_array($latest_payload) && !empty($latest_payload['ok']) && !empty($latest_payload['item']) && is_array($latest_payload['item']))
+    ? $latest_payload['item']
+    : null;
+  $hist_items = (is_array($history_payload) && !empty($history_payload['ok']) && !empty($history_payload['items']) && is_array($history_payload['items']))
+    ? $history_payload['items']
+    : [];
 
-  // Prefer all-magnitudes buckets from the day feed if available; fallback to M5+ events distribution
-  $buckets = ['<2.5'=>0,'2.5–3.9'=>0,'4.0–4.9'=>0,'5.0–5.9'=>0,'6.0–6.9'=>0,'≥7.0'=>0];
-  if (is_array($d) && !empty($d['buckets_day']) && is_array($d['buckets_day'])) {
-    foreach (['<2.5','2.5–3.9','4.0–4.9','5.0–5.9','6.0–6.9','≥7.0'] as $key){
-      if (isset($d['buckets_day'][$key])) $buckets[$key] = intval($d['buckets_day'][$key]);
-    }
-  } else if ($events){
-    // fallback using listed (M5+) events
-    $buckets = ['<4.0'=>0,'4.0–4.9'=>0,'5.0–5.9'=>0,'6.0–6.9'=>0,'≥7.0'=>0];
-    foreach($events as $ev){
-      $m = isset($ev['mag']) ? floatval($ev['mag']) : null;
-      if ($m===null) continue;
-      if ($m < 4.0) $buckets['<4.0']++;
-      elseif ($m < 5.0) $buckets['4.0–4.9']++;
-      elseif ($m < 6.0) $buckets['5.0–5.9']++;
-      elseif ($m < 7.0) $buckets['6.0–6.9']++;
-      else $buckets['≥7.0']++;
-    }
-  }
-  // If day-feed buckets show zero high-magnitude counts but recent samples include them, patch those buckets
-  $sample = (is_array($d) && !empty($d['events_all_sample']) && is_array($d['events_all_sample'])) ? $d['events_all_sample'] : [];
-  if ($sample) {
-    $over = ['5.0–5.9'=>0,'6.0–6.9'=>0,'≥7.0'=>0];
-    foreach ($sample as $evsmp) {
-      $m = isset($evsmp['mag']) ? floatval($evsmp['mag']) : null;
-      if ($m === null) continue;
-      if ($m >= 7.0) $over['≥7.0']++;
-      elseif ($m >= 6.0) $over['6.0–6.9']++;
-      elseif ($m >= 5.0) $over['5.0–5.9']++;
-    }
-    foreach ($over as $k => $cnt) {
-      if ($cnt > 0 && isset($buckets[$k]) && intval($buckets[$k]) === 0) {
-        $buckets[$k] = $cnt;
-      }
-    }
-  }
+  $ts = is_array($d) && !empty($d['day']) ? $d['day'] : '';
+  $events = []; // event-level feed not yet wired to the API; JS list will be empty for now.
 
-  // Monthly summary (last 6 months) + YoY delta for M5+ from quakes_history.json (if present)
+  $tot_all = is_array($d) && isset($d['all_quakes']) ? intval($d['all_quakes']) : null;
+
+  // Buckets approximated from the daily aggregates by magnitude class
+  $buckets = [
+    'M4.0–4.9' => (is_array($d) && isset($d['m4p'])) ? intval($d['m4p']) : 0,
+    'M5.0–5.9' => (is_array($d) && isset($d['m5p'])) ? intval($d['m5p']) : 0,
+    'M6.0–6.9' => (is_array($d) && isset($d['m6p'])) ? intval($d['m6p']) : 0,
+    'M7.0+'    => (is_array($d) && isset($d['m7p'])) ? intval($d['m7p']) : 0,
+  ];
+
+  // Monthly summary (last 6 months) + YoY delta for M5+ from /v1/quakes/history endpoint
   $monthly_rows = [];
-  if (is_array($hist) && !empty($hist['monthly']) && is_array($hist['monthly'])) {
-    $months = $hist['monthly'];
-    // Build index of month -> values for YoY/MoM lookup
+  if (!empty($hist_items) && is_array($hist_items)) {
+    $months = $hist_items;
+    // Build index of month (YYYY-MM) -> values for YoY/MoM lookup
     $mon_idx = [];
     foreach ($months as $row) {
-      $mk = $row['month'] ?? '';
-      if ($mk === '') continue;
+      $rawMonth = $row['month'] ?? '';
+      if ($rawMonth === '') continue;
+      $mk = substr($rawMonth, 0, 7); // normalize to "YYYY-MM"
       $mon_idx[$mk] = [
-        'm5p' => isset($row['m5p']) ? intval($row['m5p']) : (isset($row['m5p_daily']) ? intval($row['m5p_daily']) : null),
-        'all' => isset($row['all']) ? intval($row['all']) : null,
+        'm5p' => isset($row['m5p']) ? intval($row['m5p']) : null,
+        'all' => isset($row['all_quakes']) ? intval($row['all_quakes']) : null,
       ];
     }
     // keep last 6 entries
     $tail = array_slice($months, -6);
     foreach ($tail as $row) {
-      $mon = $row['month'] ?? '';
-      $m5  = isset($row['m5p']) ? intval($row['m5p']) : (isset($row['m5p_daily']) ? intval($row['m5p_daily']) : null);
-      $all = isset($row['all']) ? intval($row['all']) : null;
+      $rawMonth = $row['month'] ?? '';
+      $mon = $rawMonth !== '' ? substr($rawMonth, 0, 7) : '';
+      $m5  = isset($row['m5p']) ? intval($row['m5p']) : null;
+      $all = isset($row['all_quakes']) ? intval($row['all_quakes']) : null;
       // Compute YoY delta for M5+: current month minus same month last year; fallback to MoM if YoY missing
       $yoy = null; $mom = null;
       if ($mon !== '' && $m5 !== null) {
@@ -234,7 +182,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
         <script>
           (function(){
             const listM5 = <?php echo wp_json_encode($events); ?> || [];
-            const listAll = <?php echo wp_json_encode( isset($d['events_all_sample']) ? $d['events_all_sample'] : [] ); ?> || [];
+            const listAll = <?php echo wp_json_encode( (is_array($d) && isset($d['events_all_sample']) && is_array($d['events_all_sample'])) ? $d['events_all_sample'] : [] ); ?> || [];
             const maxItems = <?php echo (int)$max_items; ?>;
             let pageSize = maxItems; // default page size
             let shown = maxItems;     // how many items currently shown
