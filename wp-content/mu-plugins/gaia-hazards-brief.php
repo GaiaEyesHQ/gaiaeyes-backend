@@ -1,241 +1,160 @@
 <?php
 /**
  * Plugin Name: Gaia Eyes – Hazards Brief
- * Description: Shows a compact Global Hazards brief on the homepage, sourced from latest.json. Also provides [gaia_hazards_brief] shortcode.
+ * Description: Front-page "Global Hazards Brief" cards sourced from the Gaia Eyes backend /v1/hazards/brief endpoint.
  * Author: Gaia Eyes
- * Version: 0.1.0
+ * Version: 0.2.0
  */
 
-if ( ! defined( 'ABSPATH' ) ) {
-    exit;
+if (!defined('ABSPATH')) exit;
+
+// Ensure shared API helper is available
+if (file_exists(__DIR__ . '/gaiaeyes-api-helpers.php')) {
+    require_once __DIR__ . '/gaiaeyes-api-helpers.php';
 }
 
-require_once __DIR__ . '/gaiaeyes-api-helpers.php';
-
 /**
- * Shortcode: [gaia_hazards_brief url="https://.../public/hazards/latest.json" cache="5"]
- * - Fetches hazards/latest.json (48h snapshot created by the bot)
- * - Renders a concise summary and links to the latest “Hazards Digest” post
+ * Render the hazards brief section.
+ *
+ * Expects backend endpoint /v1/hazards/brief to return:
+ * {
+ *   "ok": true,
+ *   "generated_at": "...",
+ *   "items": [
+ *     {
+ *       "title": "M5.8 – Off the coast of ...",
+ *       "url": "https://...",
+ *       "source": "usgs",
+ *       "kind": "earthquake",
+ *       "location": "Off the coast of ...",
+ *       "severity": "M5.8",
+ *       "started_at": "2025-11-24T12:34:00Z"
+ *     },
+ *     ...
+ *   ]
+ * }
  */
-function gaia_hazards_brief_shortcode( $atts = [] ) {
-    $atts = shortcode_atts(
+function gaia_hazards_brief_shortcode($atts = []) {
+    $a = shortcode_atts(
         [
-            'url'   => ( defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE ) ? rtrim(GAIA_MEDIA_BASE,'/') . '/public/hazards/latest.json' : '',
-            'cache' => 5, // minutes.
+            'limit' => 4,
+            'cache' => 10, // minutes
         ],
         $atts,
         'gaia_hazards_brief'
     );
 
-    $ttl = max( 1, intval( $atts['cache'] ) ) * MINUTE_IN_SECONDS;
+    $limit = max(1, intval($a['limit']));
+    $ttl   = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
 
-    $get_json = function ( $url ) use ( $ttl ) {
-        $key    = 'gaia_hazards_latest_' . md5( $url );
-        $cached = get_transient( $key );
-        if ( false !== $cached ) {
-            return $cached;
-        }
+    $items = [];
+    $generated_at = null;
 
-        $response = wp_remote_get(
-            esc_url_raw( $url ),
-            [
-                'timeout' => 10,
-                'headers' => [ 'Accept' => 'application/json' ],
-            ]
-        );
+    if (function_exists('gaiaeyes_http_get_json_api_cached') && defined('GAIAEYES_API_BASE')) {
+        $api_base = GAIAEYES_API_BASE;
+        $bearer   = defined('GAIAEYES_API_BEARER') ? GAIAEYES_API_BEARER : '';
+        $dev_user = defined('GAIAEYES_API_DEV_USERID') ? GAIAEYES_API_DEV_USERID : '';
 
-        if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
-            return null;
-        }
+        $url      = rtrim($api_base, '/') . '/v1/hazards/brief';
+        $payload  = gaiaeyes_http_get_json_api_cached($url, 'ge_hazards_brief', $ttl, $bearer, $dev_user);
 
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
-        if ( is_array( $body ) ) {
-            set_transient( $key, $body, $ttl );
-            return $body;
-        }
-
-        return null;
-    };
-
-    $data = $get_json( $atts['url'] );
-    if ( ! is_array( $data ) ) {
-        return '<section class="gaia-hazards-brief"><div class="ghb-card">Global Hazards: unavailable</div></section>';
-    }
-
-    $items = isset( $data['items'] ) && is_array( $data['items'] ) ? $data['items'] : [];
-    $gen   = isset( $data['generated_at'] ) ? $data['generated_at'] : '';
-
-    $severity_counts = [
-        'red'    => 0,
-        'orange' => 0,
-        'yellow' => 0,
-        'info'   => 0,
-    ];
-    $type_counts     = [
-        'quake'   => 0,
-        'cyclone' => 0,
-        'ash'     => 0,
-        'other'   => 0,
-    ];
-    $top              = [];
-
-    foreach ( $items as $item ) {
-        $severity = isset( $item['severity'] ) ? strtolower( (string) $item['severity'] ) : 'info';
-        if ( isset( $severity_counts[ $severity ] ) ) {
-            $severity_counts[ $severity ]++;
-        }
-
-        $type = isset( $item['type'] ) ? strtolower( (string) $item['type'] ) : 'other';
-        if ( isset( $type_counts[ $type ] ) ) {
-            $type_counts[ $type ]++;
-        }
-
-        $top[] = [
-            'sev'   => $severity,
-            'type'  => $type,
-            'title' => isset( $item['title'] ) ? (string) $item['title'] : '',
-            'ts'    => isset( $item['ts'] ) ? (string) $item['ts'] : '',
-        ];
-    }
-
-    usort(
-        $top,
-        function ( $a, $b ) {
-            $rank = [ 'red' => 3, 'orange' => 2, 'yellow' => 1, 'info' => 0 ];
-            $ra   = isset( $rank[ $a['sev'] ] ) ? $rank[ $a['sev'] ] : 0;
-            $rb   = isset( $rank[ $b['sev'] ] ) ? $rank[ $b['sev'] ] : 0;
-
-            if ( $ra === $rb ) {
-                return strcmp( $b['ts'], $a['ts'] );
+        if (is_array($payload) && !empty($payload['ok']) && !empty($payload['items']) && is_array($payload['items'])) {
+            $items = array_slice($payload['items'], 0, $limit);
+            if (!empty($payload['generated_at'])) {
+                $generated_at = $payload['generated_at'];
             }
-
-            return $rb - $ra;
-        }
-    );
-
-    $top = array_slice( $top, 0, 5 );
-
-    $digest_link = '';
-    $digest_cat  = get_category_by_slug( 'hazards-digest' );
-    if ( $digest_cat && isset( $digest_cat->term_id ) ) {
-        $digest_posts = get_posts(
-            [
-                'numberposts' => 1,
-                'category'    => $digest_cat->term_id,
-                'post_status' => 'publish',
-                'orderby'     => 'date',
-                'order'       => 'DESC',
-            ]
-        );
-
-        if ( $digest_posts ) {
-            $digest_link = get_permalink( $digest_posts[0] );
         }
     }
 
     ob_start();
     ?>
     <section class="gaia-hazards-brief">
-        <header class="ghb-head">
-            <h3 class="ghb-title">Global Hazards Brief</h3>
-            <?php if ( $gen ) : ?>
-                <time class="ghb-time" datetime="<?php echo esc_attr( $gen ); ?>">
-                    Updated <?php echo esc_html( gmdate( 'D, d M Y H:i', strtotime( $gen ) ) ); ?> UTC
-                </time>
-            <?php endif; ?>
-        </header>
+      <header class="ghb-header">
+        <h2>Global Hazards Brief</h2>
+        <?php if ($generated_at): ?>
+          <span class="ghb-updated">Updated <?php echo esc_html(str_replace('T', ' ', preg_replace('/\..+$/', '', $generated_at))); ?> UTC</span>
+        <?php endif; ?>
+      </header>
 
-        <div class="ghb-row">
-            <div class="ghb-card">
-                <div class="ghb-label">Severity (48h)</div>
-                <ul class="ghb-stats">
-                    <li class="sev sev-red">RED: <strong><?php echo intval( $severity_counts['red'] ); ?></strong></li>
-                    <li class="sev sev-orange">ORANGE: <strong><?php echo intval( $severity_counts['orange'] ); ?></strong></li>
-                    <li class="sev sev-yellow">YELLOW: <strong><?php echo intval( $severity_counts['yellow'] ); ?></strong></li>
-                    <li class="sev sev-info">INFO: <strong><?php echo intval( $severity_counts['info'] ); ?></strong></li>
-                </ul>
-            </div>
-
-            <div class="ghb-card">
-                <div class="ghb-label">By Type (48h)</div>
-                <ul class="ghb-stats">
-                    <li>Earthquakes: <strong><?php echo intval( $type_counts['quake'] ); ?></strong></li>
-                    <li>Cyclones/Severe: <strong><?php echo intval( $type_counts['cyclone'] ); ?></strong></li>
-                    <li>Volcano/Ash: <strong><?php echo intval( $type_counts['ash'] ); ?></strong></li>
-                    <li>Other: <strong><?php echo intval( $type_counts['other'] ); ?></strong></li>
-                </ul>
-            </div>
-
-            <div class="ghb-card">
-                <div class="ghb-label">Recent Highlights</div>
-                <ul class="ghb-top">
-                    <?php foreach ( $top as $highlight ) :
-                        $sev_label  = strtoupper( $highlight['sev'] );
-                        $headline   = $highlight['title'] ? $highlight['title'] : ucfirst( $highlight['type'] ) . ' update';
-                        $time_label = $highlight['ts'] ? gmdate( 'd M H:i', strtotime( $highlight['ts'] ) ) . 'Z' : '';
-                        ?>
-                        <li class="sev-<?php echo esc_attr( $highlight['sev'] ); ?>">
-                            <span class="badge"><?php echo esc_html( $sev_label ); ?></span>
-                            <span class="txt"><?php echo esc_html( $headline ); ?></span>
-                            <?php if ( $time_label ) : ?>
-                                <span class="when"><?php echo esc_html( $time_label ); ?></span>
-                            <?php endif; ?>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-
-                <?php if ( $digest_link ) : ?>
-                    <div class="ghb-more"><a class="ghb-link" href="<?php echo esc_url( $digest_link ); ?>">Full details → Hazards Digest</a></div>
-                <?php endif; ?>
-            </div>
+      <?php if (empty($items)): ?>
+        <div class="ghb-card ghb-empty">
+          <strong>Global Hazards:</strong> unavailable at the moment. Data feed may be delayed.
         </div>
+      <?php else: ?>
+        <div class="ghb-grid">
+          <?php foreach ($items as $item): ?>
+            <?php
+              $title    = isset($item['title']) ? trim($item['title']) : '';
+              $url      = isset($item['url']) ? trim($item['url']) : '';
+              $source   = isset($item['source']) ? trim($item['source']) : '';
+              $kind     = isset($item['kind']) ? trim($item['kind']) : '';
+              $location = isset($item['location']) ? trim($item['location']) : '';
+              $severity = isset($item['severity']) ? trim($item['severity']) : '';
+              $started  = isset($item['started_at']) ? trim($item['started_at']) : '';
 
-        <style>
-            .gaia-hazards-brief { border-radius: 14px; padding: 14px; background: #101015; color: #eee; }
-            .ghb-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
-            .ghb-title { margin: 0; font-size: 1.05rem; }
-            .ghb-time { opacity: .8; font-size: .9rem; }
-            .ghb-row { display: grid; gap: 12px; }
-            @media (min-width: 768px) { .ghb-row { grid-template-columns: repeat(3, 1fr); } }
-            .ghb-card { background: #151827; border: 1px solid rgba(255,255,255,.06); border-radius: 12px; padding: 12px; }
-            .ghb-label { font-size: .9rem; opacity: .85; margin-bottom: 6px; }
-            .ghb-stats { margin: 0; padding-left: 18px; line-height: 1.4; }
-            .ghb-top { margin: 0; padding-left: 0; list-style: none; }
-            .ghb-top li { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
-            .badge { font-size: .72rem; border-radius: 999px; padding: 2px 8px; background: #222; color: #ddd; border: 1px solid #333; }
-            .sev-red .badge { background: #5a1a1a; color: #ffd2d2; border-color: #8e2a2a; }
-            .sev-orange .badge { background: #3f2d12; color: #ffd089; border-color: #8a5a1a; }
-            .sev-yellow .badge { background: #2c3515; color: #d2f59a; border-color: #516b1f; }
-            .sev-info .badge { background: #22304a; color: #bbd7ff; border-color: #35537c; }
-            .when { opacity: .75; font-size: .82rem; margin-left: auto; }
-            .ghb-more { margin-top: 8px; }
-            .ghb-link { color: #bcd5ff; text-decoration: none; border-bottom: 1px dashed #4b6aa1; }
-            .ghb-link:hover { border-bottom-color: #bcd5ff; }
-        </style>
+              // Basic label line
+              $label_parts = [];
+              if ($kind)     $label_parts[] = ucfirst($kind);
+              if ($severity) $label_parts[] = $severity;
+              if ($source)   $label_parts[] = strtoupper($source);
+              $label = implode(' • ', $label_parts);
+            ?>
+            <article class="ghb-card">
+              <header>
+                <?php if ($title && $url): ?>
+                  <h3><a href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener"><?php echo esc_html($title); ?></a></h3>
+                <?php elseif ($title): ?>
+                  <h3><?php echo esc_html($title); ?></h3>
+                <?php else: ?>
+                  <h3>Hazard</h3>
+                <?php endif; ?>
+
+                <?php if ($label): ?>
+                  <div class="ghb-label"><?php echo esc_html($label); ?></div>
+                <?php endif; ?>
+              </header>
+
+              <?php if ($location): ?>
+                <div class="ghb-location">
+                  <span class="ghb-meta-label">Region:</span>
+                  <span class="ghb-meta-value"><?php echo esc_html($location); ?></span>
+                </div>
+              <?php endif; ?>
+
+              <?php if ($started): ?>
+                <div class="ghb-time">
+                  <span class="ghb-meta-label">Started:</span>
+                  <span class="ghb-meta-value">
+                    <?php echo esc_html(str_replace('T', ' ', preg_replace('/\..+$/', '', $started))); ?> UTC
+                  </span>
+                </div>
+              <?php endif; ?>
+            </article>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
     </section>
     <?php
     return ob_get_clean();
 }
-add_shortcode( 'gaia_hazards_brief', 'gaia_hazards_brief_shortcode' );
+add_shortcode('gaia_hazards_brief', 'gaia_hazards_brief_shortcode');
+
 
 /**
- * Auto-inject hazards brief on the homepage unless already present or in admin.
+ * Auto-insert hazards brief on the front-page main query if not already present.
  */
-add_filter(
-    'the_content',
-    function ( $content ) {
-        if ( is_admin() || ! in_the_loop() || ! is_main_query() ) {
-            return $content;
-        }
-
-        if ( ! function_exists( 'is_front_page' ) || ! is_front_page() ) {
-            return $content;
-        }
-
-        if ( function_exists( 'has_shortcode' ) && has_shortcode( $content, 'gaia_hazards_brief' ) ) {
-            return $content;
-        }
-
-        return do_shortcode( '[gaia_hazards_brief]' ) . $content;
+add_filter('the_content', function ($content) {
+    if (is_admin() || !in_the_loop() || !is_main_query()) {
+        return $content;
     }
-);
+
+    if (!function_exists('is_front_page') || !is_front_page()) {
+        return $content;
+    }
+
+    if (function_exists('has_shortcode') && has_shortcode($content, 'gaia_hazards_brief')) {
+        return $content;
+    }
+
+    return do_shortcode('[gaia_hazards_brief]') . $content;
+});
