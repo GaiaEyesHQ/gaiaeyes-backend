@@ -118,5 +118,13 @@ async def require_read_auth(request: Request, authorization: Optional[str] = Hea
 async def require_write_auth(request: Request, authorization: Optional[str] = Header(None)):
     token = _extract_bearer(authorization)
     if _is_allowed_write(request, token):
+        # Ensure routes that depend on request.state.user_id still work
+        if not getattr(request.state, "user_id", None) and token:
+            user_id = decode_supabase_token(token)
+            if user_id:
+                request.state.user_id = user_id
         return
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid Authorization header")
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Missing or invalid Authorization header",
+    )

@@ -61,7 +61,13 @@ add_shortcode('gaia_space_detail', function($atts){
 
   $api = isset($a['api']) ? trim($a['api']) : '';
   if ($api){
-    $api_payload = gaiaeyes_http_get_json_api_cached($api, 'ge_space_visuals', $ttl, defined('GAIAEYES_API_BEARER') ? GAIAEYES_API_BEARER : '', defined('GAIAEYES_API_DEV_USERID') ? GAIAEYES_API_DEV_USERID : '');
+    $bearer = defined('GAIAEYES_SPACE_VISUALS_BEARER') && GAIAEYES_SPACE_VISUALS_BEARER
+      ? GAIAEYES_SPACE_VISUALS_BEARER
+      : (defined('GAIAEYES_API_BEARER') ? GAIAEYES_API_BEARER : '');
+    $dev_user = defined('GAIAEYES_SPACE_VISUALS_DEV_USER') && GAIAEYES_SPACE_VISUALS_DEV_USER
+      ? GAIAEYES_SPACE_VISUALS_DEV_USER
+      : (defined('GAIAEYES_API_DEV_USERID') ? GAIAEYES_API_DEV_USERID : '');
+    $api_payload = gaiaeyes_http_get_json_api_cached($api, 'ge_space_visuals', $ttl, $bearer, $dev_user);
     if (!is_array($api_payload) || empty($api_payload['ok']) || (empty($api_payload['items']) && empty($api_payload['images']))){
       $api_payload = null;
     }
@@ -203,16 +209,16 @@ add_shortcode('gaia_space_detail', function($atts){
         <?php $solar_overlay = !empty($structured_series['goes_xray']['samples']); ?>
         <div class="visual-overlay<?php echo $solar_overlay ? '' : ' overlay-disabled'; ?>" data-overlay="solarOverlay" data-series-keys="<?php echo $solar_overlay ? 'goes_xray' : ''; ?>">
           <?php if(!empty($img['aia_primary'])): ?>
-            <a href="<?php echo $base . esc_attr($img['aia_primary']); ?>" target="_blank" rel="noopener">
-              <img src="<?php echo $base . esc_attr($img['aia_primary']); ?>" alt="SDO AIA latest" />
+            <a href="<?php echo esc_attr($img['aia_primary']); ?>" target="_blank" rel="noopener">
+              <img src="<?php echo esc_attr($img['aia_primary']); ?>" alt="SDO AIA latest" />
             </a>
           <?php elseif(!empty($img['aia_304'])): ?>
-            <a href="<?php echo $base . esc_attr($img['aia_304']); ?>" target="_blank" rel="noopener">
-              <img src="<?php echo $base . esc_attr($img['aia_304']); ?>" alt="SDO AIA 304Å latest" />
+            <a href="<?php echo esc_attr($img['aia_304']); ?>" target="_blank" rel="noopener">
+              <img src="<?php echo esc_attr($img['aia_304']); ?>" alt="SDO AIA 304Å latest" />
             </a>
           <?php elseif(!empty($img['hmi_intensity'])): ?>
-            <a href="<?php echo $base . esc_attr($img['hmi_intensity']); ?>" target="_blank" rel="noopener">
-              <img src="<?php echo $base . esc_attr($img['hmi_intensity']); ?>" alt="HMI Intensitygram latest" />
+            <a href="<?php echo esc_attr($img['hmi_intensity']); ?>" target="_blank" rel="noopener">
+              <img src="<?php echo esc_attr($img['hmi_intensity']); ?>" alt="HMI Intensitygram latest" />
             </a>
           <?php else: ?>
             <div class="ge-note">Latest solar disc image unavailable.</div>
@@ -242,16 +248,16 @@ add_shortcode('gaia_space_detail', function($atts){
           <div class="ov-grid">
             <?php if(!empty($img['ovation_nh'])): ?>
               <figure>
-                <a href="<?php echo $base . esc_attr($img['ovation_nh']); ?>" target="_blank" rel="noopener">
-                  <img src="<?php echo $base . esc_attr($img['ovation_nh']); ?>" alt="Aurora NH" />
+                <a href="<?php echo esc_attr($img['ovation_nh']); ?>" target="_blank" rel="noopener">
+                  <img src="<?php echo esc_attr($img['ovation_nh']); ?>" alt="Aurora NH" />
                 </a>
                 <figcaption>NH forecast</figcaption>
               </figure>
             <?php endif; ?>
             <?php if(!empty($img['ovation_sh'])): ?>
               <figure>
-                <a href="<?php echo $base . esc_attr($img['ovation_sh']); ?>" target="_blank" rel="noopener">
-                  <img src="<?php echo $base . esc_attr($img['ovation_sh']); ?>" alt="Aurora SH" />
+                <a href="<?php echo esc_attr($img['ovation_sh']); ?>" target="_blank" rel="noopener">
+                  <img src="<?php echo esc_attr($img['ovation_sh']); ?>" alt="Aurora SH" />
                 </a>
                 <figcaption>SH forecast</figcaption>
               </figure>
@@ -279,16 +285,16 @@ add_shortcode('gaia_space_detail', function($atts){
           <?php if(!empty($img['soho_c2']) || !empty($img['lasco_c2'])): ?>
             <figure>
               <?php $c2 = !empty($img['soho_c2']) ? $img['soho_c2'] : $img['lasco_c2']; ?>
-              <a href="<?php echo $base . esc_attr($c2); ?>" target="_blank" rel="noopener">
-                <img src="<?php echo $base . esc_attr($c2); ?>" alt="SOHO/LASCO C2 latest" />
+              <a href="<?php echo esc_attr($c2); ?>" target="_blank" rel="noopener">
+                <img src="<?php echo esc_attr($c2); ?>" alt="SOHO/LASCO C2 latest" />
               </a>
               <figcaption>LASCO C2</figcaption>
             </figure>
           <?php endif; ?>
           <?php if(!empty($img['lasco_c3'])): ?>
             <figure>
-              <a href="<?php echo $base . esc_attr($img['lasco_c3']); ?>" target="_blank" rel="noopener">
-                <img src="<?php echo $base . esc_attr($img['lasco_c3']); ?>" alt="SOHO LASCO C3 latest" />
+              <a href="<?php echo esc_attr($img['lasco_c3']); ?>" target="_blank" rel="noopener">
+                <img src="<?php echo esc_attr($img['lasco_c3']); ?>" alt="SOHO LASCO C3 latest" />
               </a>
               <figcaption>LASCO C3</figcaption>
             </figure>
@@ -296,8 +302,8 @@ add_shortcode('gaia_space_detail', function($atts){
           <?php if(!empty($img['ccor1_jpeg']) || !empty($img['ccor1'])): ?>
             <figure>
               <?php $ccor = !empty($img['ccor1_jpeg']) ? $img['ccor1_jpeg'] : $img['ccor1']; ?>
-              <a href="<?php echo $base . esc_attr($ccor); ?>" target="_blank" rel="noopener">
-                <img src="<?php echo $base . esc_attr($ccor); ?>" alt="GOES CCOR-1 latest" />
+              <a href="<?php echo esc_attr($ccor); ?>" target="_blank" rel="noopener">
+                <img src="<?php echo esc_attr($ccor); ?>" alt="GOES CCOR-1 latest" />
               </a>
               <figcaption>CCOR-1</figcaption>
             </figure>
@@ -305,7 +311,7 @@ add_shortcode('gaia_space_detail', function($atts){
         </div>
         <?php if (!empty($vid['ccor1_mp4'])): ?>
           <video controls preload="metadata" controlslist="nodownload" style="width:100%;margin-top:8px;border-radius:8px;border:1px solid rgba(255,255,255,.08)">
-            <source src="<?php echo $base . esc_attr($vid['ccor1_mp4']); ?>" type="video/mp4" />
+            <source src="<?php echo esc_attr($vid['ccor1_mp4']); ?>" type="video/mp4" />
           </video>
         <?php endif; ?>
       </article>
@@ -314,8 +320,8 @@ add_shortcode('gaia_space_detail', function($atts){
       <article class="ge-card">
         <h3>Geomagnetic Indices (Kp)</h3>
         <?php if(!empty($img['kp_station'])): ?>
-          <a href="<?php echo $base . esc_attr($img['kp_station']); ?>" target="_blank" rel="noopener">
-            <img src="<?php echo $base . esc_attr($img['kp_station']); ?>" alt="Station K-index" />
+          <a href="<?php echo esc_attr($img['kp_station']); ?>" target="_blank" rel="noopener">
+            <img src="<?php echo esc_attr($img['kp_station']); ?>" alt="Station K-index" />
           </a>
         <?php else: ?>
           <div class="ge-note">K-index plot unavailable.</div>
@@ -352,8 +358,8 @@ add_shortcode('gaia_space_detail', function($atts){
         <div class="ov-grid">
           <?php foreach (['geospace_1d'=>'1 day','geospace_3h'=>'3 hours','geospace_7d'=>'7 days'] as $k=>$cap): if(!empty($img[$k])): ?>
             <figure>
-              <a href="<?php echo $base . esc_attr($img[$k]); ?>" target="_blank" rel="noopener">
-                <img src="<?php echo $base . esc_attr($img[$k]); ?>" alt="Geospace <?php echo esc_attr($cap); ?>" />
+              <a href="<?php echo esc_attr($img[$k]); ?>" target="_blank" rel="noopener">
+                <img src="<?php echo esc_attr($img[$k]); ?>" alt="Geospace <?php echo esc_attr($cap); ?>" />
               </a>
               <figcaption><?php echo esc_html($cap); ?></figcaption>
             </figure>
@@ -371,16 +377,16 @@ add_shortcode('gaia_space_detail', function($atts){
           <?php if(!empty($img['drap_global']) || !empty($img['drap'])): ?>
             <figure>
               <?php $drap = !empty($img['drap_global']) ? $img['drap_global'] : $img['drap']; ?>
-              <a href="<?php echo $base . esc_attr($drap); ?>" target="_blank" rel="noopener">
-                <img src="<?php echo $base . esc_attr($drap); ?>" alt="DRAP Global" />
+              <a href="<?php echo esc_attr($drap); ?>" target="_blank" rel="noopener">
+                <img src="<?php echo esc_attr($drap); ?>" alt="DRAP Global" />
               </a>
               <figcaption>DRAP global</figcaption>
             </figure>
           <?php endif; ?>
           <?php if(!empty($img['a_station'])): ?>
             <figure>
-              <a href="<?php echo $base . esc_attr($img['a_station']); ?>" target="_blank" rel="noopener">
-                <img src="<?php echo $base . esc_attr($img['a_station']); ?>" alt="Station A-index" />
+              <a href="<?php echo esc_attr($img['a_station']); ?>" target="_blank" rel="noopener">
+                <img src="<?php echo esc_attr($img['a_station']); ?>" alt="Station A-index" />
               </a>
               <figcaption>Station A-index</figcaption>
             </figure>
@@ -392,8 +398,8 @@ add_shortcode('gaia_space_detail', function($atts){
       <article class="ge-card">
         <h3>Sunspots / HMI</h3>
         <?php if(!empty($img['hmi_intensity'])): ?>
-          <a href="<?php echo $base . esc_attr($img['hmi_intensity']); ?>" target="_blank" rel="noopener">
-            <img src="<?php echo $base . esc_attr($img['hmi_intensity']); ?>" alt="HMI Intensitygram latest" />
+          <a href="<?php echo esc_attr($img['hmi_intensity']); ?>" target="_blank" rel="noopener">
+            <img src="<?php echo esc_attr($img['hmi_intensity']); ?>" alt="HMI Intensitygram latest" />
           </a>
         <?php else: ?>
           <div class="ge-note">Sunspot image unavailable.</div>
@@ -405,8 +411,8 @@ add_shortcode('gaia_space_detail', function($atts){
       <article class="ge-card">
         <h3>SWx Overview</h3>
         <?php if(!empty($img['swx_overview_small'])): ?>
-          <a href="<?php echo $base . esc_attr($img['swx_overview_small']); ?>" target="_blank" rel="noopener">
-            <img src="<?php echo $base . esc_attr($img['swx_overview_small']); ?>" alt="Space Weather Overview" />
+          <a href="<?php echo esc_attr($img['swx_overview_small']); ?>" target="_blank" rel="noopener">
+            <img src="<?php echo esc_attr($img['swx_overview_small']); ?>" alt="Space Weather Overview" />
           </a>
         <?php else: ?>
           <div class="ge-note">SWx overview unavailable.</div>
