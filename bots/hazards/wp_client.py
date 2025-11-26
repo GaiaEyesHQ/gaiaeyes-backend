@@ -19,6 +19,8 @@ class WPClient:
 
     def __init__(self) -> None:
         site = _env("WP_SITE_URL")
+        if not site:
+            raise RuntimeError("WP_SITE_URL env var is required and must be an absolute URL (https://...).")
         if not site.startswith("http"):
             raise RuntimeError("WP_SITE_URL must be an absolute URL (https://...).")
         self.api_base = site.rstrip("/") + "/wp-json/wp/v2"

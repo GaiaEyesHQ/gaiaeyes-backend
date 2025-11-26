@@ -2,6 +2,14 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-06-01 — Clarify hazards bot WordPress secret requirements
+
+- Added a CI validation step that fails early with actionable errors when `WP_SITE_URL`,
+  `WP_USERNAME`, or `WP_APP_PASSWORD` are missing or malformed so scheduled runs don't
+  crash inside the bot constructor.
+- Tightened the WordPress client initialization error for an empty `WP_SITE_URL` to make
+  the missing-secret root cause explicit.
+
 ## 2025-05-31 — Restore hazards bot WordPress post upserts
 
 - Reintroduced the hazards WordPress client helpers for fetching and upserting posts

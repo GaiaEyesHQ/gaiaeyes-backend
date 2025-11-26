@@ -26,6 +26,28 @@ jobs:
           python -m pip install -U pip
           pip install -r bots/hazards/requirements.txt
 
+      - name: Validate WordPress secrets
+        env:
+          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -n "${WP_SITE_URL:-}" ]] || missing+=(WP_SITE_URL)
+          [[ -n "${WP_USERNAME:-}" ]] || missing+=(WP_USERNAME)
+          [[ -n "${WP_APP_PASSWORD:-}" ]] || missing+=(WP_APP_PASSWORD)
+
+          if (( ${#missing[@]} > 0 )); then
+            printf '::error::Missing required secrets: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+          if [[ ! "$WP_SITE_URL" =~ ^https?:// ]]; then
+            printf '::error::WP_SITE_URL must be an absolute URL (https://...), got: %s\n' "$WP_SITE_URL"
+            exit 1
+          fi
+
       - name: Run Hazards Bot (builds bots/hazards/out/latest.json)
         env:
           WP_SITE_URL: ${{ secrets.WP_SITE_URL }}           # e.g., https://staging2.gaiaeyes.com
