@@ -7,11 +7,14 @@
 if (!defined('ABSPATH')) exit;
 
 // Defaults (GitHub Pages + jsDelivr mirror)
+require_once __DIR__ . '/gaiaeyes-api-helpers.php';
+
+$__ge_media_base = defined('GAIA_MEDIA_BASE') ? rtrim(GAIA_MEDIA_BASE, '/') : '';
 if (!defined('GAIAEYES_QUAKES_URL')) {
-  define('GAIAEYES_QUAKES_URL', 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/quakes_latest.json');
+  define('GAIAEYES_QUAKES_URL', $__ge_media_base ? ($__ge_media_base . '/data/quakes_latest.json') : '');
 }
 if (!defined('GAIAEYES_QUAKES_MIRROR')) {
-  define('GAIAEYES_QUAKES_MIRROR', 'https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/data/quakes_latest.json');
+  define('GAIAEYES_QUAKES_MIRROR', GAIAEYES_QUAKES_URL);
 }
 
 function gaiaeyes_quakes_fetch($primary, $mirror, $cache_key, $ttl){
@@ -35,7 +38,7 @@ function gaiaeyes_quakes_fetch($primary, $mirror, $cache_key, $ttl){
 function gaiaeyes_quakes_detail_shortcode($atts){
   $a = shortcode_atts([
     'quakes_url'  => GAIAEYES_QUAKES_URL,
-    'history_url' => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/quakes_history.json',
+    'history_url' => $__ge_media_base ? ($__ge_media_base . '/data/quakes_history.json') : '',
     'cache'       => 10,
     'max'         => 10,
   ], $atts, 'gaia_quakes_detail');
