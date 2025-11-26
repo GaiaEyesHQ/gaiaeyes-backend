@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .routers import (
+    badges,
     earth,
     health as health_router,
     hazards,
@@ -113,9 +114,10 @@ if WebhookSigMiddleware is not None:
     app.add_middleware(WebhookSigMiddleware)
 
 
-# Public health endpoint
+# Public health + public info endpoints
 app.include_router(health_router.router)
 app.include_router(hazards.router)
+app.include_router(badges.router)
 
 # Read-mostly routers (GET)
 app.include_router(space_visuals.router, dependencies=[Depends(require_read_auth)])
