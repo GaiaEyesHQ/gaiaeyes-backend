@@ -2,6 +2,12 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-05-29 — Fix GDACS module imports in CI
+
+- Marked `scripts/` as a package and updated the pulse workflow to run the GDACS ingester
+  via `python -m` with the repository root on `PYTHONPATH`, preventing `ModuleNotFoundError`
+  errors in CI and local runs.
+
 ## 2025-05-28 — Supabase-first rollout, quake feeds, and outlook normalization
 
 - Normalized `/v1/space/forecast/outlook` to emit flattened headline/confidence/impact fields while preserving the richer

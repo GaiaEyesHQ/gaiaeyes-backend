@@ -33,11 +33,13 @@ jobs:
         env:
           MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
           OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/quakes_latest.json
+          PYTHONPATH: ${{ github.workspace }}
         run: |
+          set -euo pipefail
           mkdir -p "${MEDIA_DIR}/data"
           python scripts/ingest_usgs_quakes.py
           OUTPUT_JSON_PATH="${MEDIA_DIR}/data/alerts_us_latest.json" python scripts/ingest_alerts_us.py
-          OUTPUT_JSON_PATH="${MEDIA_DIR}/data/gdacs_latest.json"    python scripts/ingest_gdacs.py
+          OUTPUT_JSON_PATH="${MEDIA_DIR}/data/gdacs_latest.json"    python -m scripts.ingest_gdacs
           OUTPUT_JSON_PATH="${MEDIA_DIR}/data/pulse.json" python scripts/pulse_emit.py
 
       - name: Commit & push updates
