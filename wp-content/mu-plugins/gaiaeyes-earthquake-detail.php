@@ -40,7 +40,24 @@ function gaiaeyes_quakes_detail_shortcode($atts){
     : [];
 
   $ts = is_array($d) && !empty($d['day']) ? $d['day'] : '';
-  $events = []; // event-level feed not yet wired to the API; JS list will be empty for now.
+
+  // Fetch recent event-level data from /v1/quakes/events for the "Recent Events" list.
+  $events_payload = $api_base
+    ? gaiaeyes_http_get_json_api_cached(
+        $api_base . '/v1/quakes/events?min_mag=4.5&hours=72&limit=200',
+        'ge_quakes_events',
+        $ttl,
+        $bearer,
+        $dev_user
+      )
+    : null;
+
+  $events = (is_array($events_payload)
+    && !empty($events_payload['ok'])
+    && !empty($events_payload['items'])
+    && is_array($events_payload['items']))
+    ? $events_payload['items']
+    : [];
 
   $tot_all = is_array($d) && isset($d['all_quakes']) ? intval($d['all_quakes']) : null;
 
@@ -181,9 +198,11 @@ function gaiaeyes_quakes_detail_shortcode($atts){
 
         <script>
           (function(){
-            const EVENTS_URL = "<?php echo esc_js(defined('GAIAEYES_API_BASE') ? rtrim(GAIAEYES_API_BASE, '/') . '/v1/quakes/events' : ''); ?>";
-            let listM5 = [];
-            let listAll = [];
+            const listAll = <?php echo wp_json_encode($events); ?> || [];
+            const listM5 = listAll.filter(function(ev){
+              const m = (typeof ev.mag === 'number') ? ev.mag : parseFloat(ev.mag);
+              return !isNaN(m) && m >= 5.0;
+            });
             const maxItems = <?php echo (int)$max_items; ?>;
             let pageSize = maxItems; // default page size
             let shown = maxItems;     // how many items currently shown
@@ -308,35 +327,8 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             btnLess.addEventListener('click', function(){ shown = pageSize; applyAndButtons(); });
             filters.addEventListener('change', function(){ shown = pageSize; applyAndButtons(); });
 
-            function loadEvents(){
-              if (!EVENTS_URL){
-                applyAndButtons();
-                return;
-              }
-              fetch(EVENTS_URL + '?min_mag=4.5&hours=72&limit=200', {cache:"no-store"})
-                .then(function(r){
-                  if (!r.ok) throw new Error('http ' + r.status);
-                  return r.json();
-                })
-                .then(function(j){
-                  const items = (j && Array.isArray(j.items)) ? j.items : [];
-                  // All = all returned events; M5+ = filtered subset
-                  listAll = items.slice();
-                  listM5 = items.filter(function(ev){
-                    const m = (typeof ev.mag === 'number') ? ev.mag : parseFloat(ev.mag);
-                    return !isNaN(m) && m >= 5.0;
-                  });
-                  shown = pageSize;
-                  applyAndButtons();
-                })
-                .catch(function(){
-                  listAll = [];
-                  listM5 = [];
-                  applyAndButtons();
-                });
-            }
-            // initial draw: fetch and populate
-            loadEvents();
+            // initial draw using PHP-provided events
+            applyAndButtons();
           })();
         </script>
       </article>
