@@ -2,6 +2,15 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-12-07 — Unified bearer auth compatibility and visuals base URLs
+
+- Extended the centralized bearer auth helpers to honor the legacy `DEV_BEARER` token and Supabase JWTs
+  (preserving `X-Dev-UserId` attachment) in addition to the new read/write token sets so tests and
+  existing clients continue to work without extra configuration.
+- Updated `/v1/space/visuals` URL building so when a media base URL is provided, relative image paths
+  remain anchored to that base instead of being rebased to fallback NASA assets, matching legacy expectations
+  in the API tests.
+
 ## 2025-12-06 — Space visuals public diagnostics and cache headers
 
 - Allowed `/v1/space/visuals` endpoints (including `/public` and `/diag`) to bypass bearer auth

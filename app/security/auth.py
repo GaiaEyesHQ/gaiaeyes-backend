@@ -1,0 +1,122 @@
+import os
+from typing import Optional
+
+from fastapi import Header, HTTPException, Request, status
+
+from app.db import settings
+from app.utils.auth import _normalize_uuid, decode_supabase_token
+
+
+def _parse_tokens(s: Optional[str]) -> set[str]:
+    if not s:
+        return set()
+    return {t.strip() for t in s.split(",") if t.strip()}
+
+
+READ_TOKENS = _parse_tokens(os.getenv("READ_TOKENS", ""))
+WRITE_TOKENS = _parse_tokens(os.getenv("WRITE_TOKENS", ""))
+
+# Public GET allowlist (normalized, no trailing slash)
+DEFAULT_PUBLIC_READ = [
+    "/health",
+    "/v1/space/visuals",
+    "/v1/space/forecast/summary",
+    "/v1/space/forecast/outlook",
+    "/v1/quakes/daily",
+    "/v1/quakes/monthly",
+    "/v1/earth/schumann/latest",
+    "/v1/space/series",
+    "/v1/series",
+    # diag endpoints are optional; uncomment if you want them public:
+    # "/v1/space/visuals/diag",
+]
+PUBLIC_READ_ENABLED = os.getenv("PUBLIC_READ_ENABLED", "1").lower() in ("1", "true", "yes")
+PUBLIC_READ_PATHS = [p.rstrip("/") for p in os.getenv("PUBLIC_READ_PATHS", "").split(",") if p.strip()] or DEFAULT_PUBLIC_READ
+
+
+def _normalized(path: str) -> str:
+    return path.rstrip("/") or "/"
+
+
+def _is_public_read(request: Request) -> bool:
+    if not PUBLIC_READ_ENABLED or request.method != "GET":
+        return False
+    path = _normalized(request.url.path)
+    for p in PUBLIC_READ_PATHS:
+        p = p.rstrip("/")
+        if path == p or path.startswith(p + "/"):
+            return True
+    return False
+
+
+def _extract_bearer(authorization: Optional[str]) -> Optional[str]:
+    if not authorization:
+        return None
+    parts = authorization.split(None, 1)
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1].strip()
+    return None
+
+
+def _maybe_attach_dev_user(request: Request) -> None:
+    request.state.user_id = _normalize_uuid(request.headers.get("X-Dev-UserId"))
+
+
+def _token_matches_dev(token: str) -> bool:
+    return bool(settings.DEV_BEARER and token == settings.DEV_BEARER)
+
+
+def _validate_supabase_token(request: Request, token: str) -> bool:
+    user_id = decode_supabase_token(token)
+    if user_id:
+        request.state.user_id = user_id
+        return True
+    return False
+
+
+def _is_allowed_read(request: Request, token: Optional[str]) -> bool:
+    if not token:
+        return False
+
+    if token in READ_TOKENS or token in WRITE_TOKENS:
+        if _token_matches_dev(token):
+            _maybe_attach_dev_user(request)
+        return True
+
+    if _token_matches_dev(token):
+        _maybe_attach_dev_user(request)
+        return True
+
+    return _validate_supabase_token(request, token)
+
+
+def _is_allowed_write(request: Request, token: Optional[str]) -> bool:
+    if not token:
+        return False
+
+    if token in WRITE_TOKENS:
+        if _token_matches_dev(token):
+            _maybe_attach_dev_user(request)
+        return True
+
+    if _token_matches_dev(token):
+        _maybe_attach_dev_user(request)
+        return True
+
+    return _validate_supabase_token(request, token)
+
+
+async def require_read_auth(request: Request, authorization: Optional[str] = Header(None)):
+    if _is_public_read(request):
+        return
+    token = _extract_bearer(authorization)
+    if _is_allowed_read(request, token):
+        return
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid Authorization header")
+
+
+async def require_write_auth(request: Request, authorization: Optional[str] = Header(None)):
+    token = _extract_bearer(authorization)
+    if _is_allowed_write(request, token):
+        return
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid Authorization header")
