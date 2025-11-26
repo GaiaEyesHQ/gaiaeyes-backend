@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import FastAPI, Depends, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -13,6 +13,7 @@ from .routers import (
     summary,
     symptoms,
 )
+from .security.auth import require_read_auth, require_write_auth
 
 # Resilient imports for optional/relocated modules
 try:
@@ -30,7 +31,6 @@ except ModuleNotFoundError:
         from .webhooks import router as webhooks_router  # type: ignore
     except ModuleNotFoundError:
         webhooks_router = None
-from .utils.auth import require_auth as ensure_authenticated
 from .db import get_pool, open_pool, close_pool
 from .db.health import ensure_health_monitor_started, stop_health_monitor
 from .routers.space_visuals import _media_base
@@ -48,13 +48,6 @@ app = FastAPI(
     generate_unique_id_function=custom_generate_unique_id
 )
 
-
-@app.middleware("http")
-async def auth_bypass_for_visuals(request: Request, call_next):
-    path = request.url.path
-    if path.startswith(("/v1/space/visuals",)):
-        return await call_next(request)
-    return await call_next(request)
 
 logging.getLogger("uvicorn").info(f"[visuals] media_base at startup: {_media_base() or 'None'}")
 
@@ -119,20 +112,18 @@ if WebhookSigMiddleware is not None:
     app.add_middleware(WebhookSigMiddleware)
 
 
-# ---- Simple bearer auth for /v1/*
-async def require_auth(request: Request):
-    await ensure_authenticated(request)
-
 # Public health endpoint
 app.include_router(health_router.router)
 
-# Mount routers WITH /v1 prefix and the auth dependency
-app.include_router(ingest.router, prefix="/v1", dependencies=[Depends(require_auth)])
-app.include_router(symptoms.router, prefix="/v1", dependencies=[Depends(require_auth)])
-app.include_router(summary.router, dependencies=[Depends(require_auth)])
-app.include_router(quakes.router)
-app.include_router(earth.router)
-app.include_router(space_visuals.router)
+# Read-mostly routers (GET)
+app.include_router(space_visuals.router, dependencies=[Depends(require_read_auth)])
+app.include_router(quakes.router, dependencies=[Depends(require_read_auth)])
+app.include_router(earth.router, dependencies=[Depends(require_read_auth)])
+app.include_router(summary.router, dependencies=[Depends(require_read_auth)])
+
+# Write routers (POST/PUT/DELETE)
+app.include_router(ingest.router, prefix="/v1", dependencies=[Depends(require_write_auth)])
+app.include_router(symptoms.router, prefix="/v1", dependencies=[Depends(require_write_auth)])
 
 # Webhooks are protected by HMAC middleware, not bearer auth
 if webhooks_router is not None:
