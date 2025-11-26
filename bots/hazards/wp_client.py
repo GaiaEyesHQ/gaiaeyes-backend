@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 import requests
 
 
@@ -95,3 +95,40 @@ class WPClient:
 
     def ensure_tag(self, name: str, slug: Optional[str] = None) -> int:
         return self.ensure_term("tags", name, slug)
+
+    # ---------- Post upsert ----------
+    def get_post_by_slug(self, slug: str) -> Optional[Dict[str, Any]]:
+        params = {"slug": slug, "per_page": 1, "context": "edit"}
+        r = self._request("GET", "posts", params=params)
+        data = self._json(r)
+        return data[0] if data else None
+
+    def upsert_post(
+        self,
+        *,
+        slug: str,
+        title: str,
+        content: str,
+        status: str = "publish",
+        categories: Optional[List[int]] = None,
+        tags: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
+        existing = self.get_post_by_slug(slug)
+        payload: Dict[str, Any] = {
+            "title": title,
+            "content": content,
+            "status": status,
+            "slug": slug,
+        }
+        if categories:
+            payload["categories"] = categories
+        if tags:
+            payload["tags"] = tags
+
+        if existing:
+            post_id = existing["id"]
+            r = self._request("PUT", f"posts/{post_id}", json=payload)
+            return self._json(r)
+
+        r = self._request("POST", "posts", json=payload)
+        return self._json(r)
