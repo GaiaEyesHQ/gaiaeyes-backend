@@ -55,6 +55,84 @@ async def quakes_daily(conn=Depends(get_db)):
     return {"ok": True, "items": items}
 
 
+# New endpoint: /quakes/events
+@router.get("/quakes/events")
+async def quakes_events(
+    conn=Depends(get_db),
+    min_mag: float = 5.0,
+    hours: int = 48,
+    limit: int = 200,
+):
+    """
+    Return recent individual earthquake events for detail views.
+
+    This endpoint is intended to back the WordPress "Recent events (M5+)" section.
+    It filters by minimum magnitude and a trailing time window (in hours), and
+    returns a compact, badge-friendly shape.
+
+    NOTE: This assumes a table ext.quakes_events with at least:
+      - ts_utc (timestamptz)
+      - mag (numeric)
+      - depth_km (numeric)
+      - lat (numeric)
+      - lon (numeric)
+      - place (text)
+      - source (text)
+      - url (text)
+      - event_id (text)
+    """
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                """
+                select
+                    ts_utc,
+                    mag,
+                    depth_km,
+                    lat,
+                    lon,
+                    place,
+                    source,
+                    url,
+                    event_id
+                from ext.quakes_events
+                where ts_utc >= now() - (%s || ' hours')::interval
+                  and (mag is not null and mag >= %s)
+                order by ts_utc desc
+                limit %s
+                """,
+                (hours, min_mag, limit),
+                prepare=False,
+            )
+            rows = await cur.fetchall()
+    except Exception as exc:  # pragma: no cover - defensive envelope
+        return {
+            "ok": False,
+            "items": [],
+            "error": f"quakes_events failed: {exc}",
+        }
+
+    items: list[dict] = []
+    for row in rows:
+        ts = row.get("ts_utc")
+        ts_iso = ts.isoformat().replace("+00:00", "Z") if hasattr(ts, "isoformat") else None
+        items.append(
+            {
+                "time_utc": ts_iso,
+                "mag": row.get("mag"),
+                "depth_km": row.get("depth_km"),
+                "lat": row.get("lat"),
+                "lon": row.get("lon"),
+                "place": row.get("place"),
+                "source": row.get("source"),
+                "url": row.get("url"),
+                "id": row.get("event_id"),
+            }
+        )
+
+    return {"ok": True, "items": items}
+
+
 @router.get("/quakes/latest")
 async def quakes_latest(conn=Depends(get_db)):
     """Return the most recent daily earthquake aggregate."""
