@@ -14,6 +14,39 @@ This document summarizes the database objects created by the Supabase migrations
 
 > **Note:** The migrations also rely on Supabase's default `auth` schema for row-level security policies (e.g., `auth.uid()`).
 
+## `ext` Schema
+
+External landing tables populated by ingestion scripts and referenced by marts.
+
+### Tables
+
+#### `ext.gdacs_alerts`
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `code` | `text` | GDACS hazard code (e.g., `FL`, `TC`). |
+  | `title` | `text` | Alert headline. |
+  | `url` | `text` | Link to the GDACS alert detail page. |
+  | `published_raw` | `text` | Raw `pubDate` string from the RSS feed. |
+  | `published_at` | `timestamptz` | Parsed publication time (nullable). |
+  | `hash` | `text` | Deduplication key (unique). |
+  | `ingested_at` | `timestamptz` | Insertion timestamp (default `now()`). |
+
+#### `ext.global_hazards`
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `source` | `text` | Originating feed or provider identifier. |
+  | `kind` | `text` | Hazard type/category. |
+  | `title` | `text` | Human-readable headline. |
+  | `location` | `text` | Optional location/region descriptor. |
+  | `severity` | `text` | Severity indicator (e.g., magnitude). |
+  | `started_at` | `timestamptz` | Start time (nullable). |
+  | `ended_at` | `timestamptz` | End time (nullable). |
+  | `payload` | `jsonb` | Raw source payload retained for downstream parsing. |
+  | `hash` | `text` | Deduplication key (unique). |
+  | `ingested_at` | `timestamptz` | Insertion timestamp (default `now()`). |
+
 ## `gaia` Schema
 
 ### Tables

@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from .routers import (
     earth,
     health as health_router,
+    hazards,
     ingest,
     quakes,
     space_visuals,
@@ -114,6 +115,7 @@ if WebhookSigMiddleware is not None:
 
 # Public health endpoint
 app.include_router(health_router.router)
+app.include_router(hazards.router)
 
 # Read-mostly routers (GET)
 app.include_router(space_visuals.router, dependencies=[Depends(require_read_auth)])

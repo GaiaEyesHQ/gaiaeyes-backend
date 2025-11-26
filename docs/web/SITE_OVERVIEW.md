@@ -87,7 +87,7 @@ GaiaSpark.renderSpark(canvasOrId, data, {
 ### Hazards Brief (Homepage snapshot)
 
 * Location: Homepage hero region (auto-injected ahead of content via `the_content` filter).
-* Shortcode: `[gaia_hazards_brief url="${GAIA_MEDIA_BASE}/public/hazards/latest.json" cache="5"]` (falls back to the `/public` alias in Supabase during rollout).
+* Shortcode: `[gaia_hazards_brief url="${GAIA_API_BASE}/v1/hazards/brief" cache="5"]` (can still point to the Supabase `/public/hazards/latest.json` mirror if the API is unavailable).
 * PHP: `wp-content/mu-plugins/gaia-hazards-brief.php`
 
 **DOM outline**
@@ -103,8 +103,8 @@ GaiaSpark.renderSpark(canvasOrId, data, {
 
 **Data flow & caching**
 
-* Fetches `public/hazards/latest.json` with a configurable 5-minute transient.
-* `hazards.yml` GitHub Action runs every 10 minutes to rebuild and publish `latest.json`.
+* Fetches `/v1/hazards/brief` with a configurable 5-minute transient (legacy media JSON remains as a fallback source).
+* `hazards.yml` GitHub Action runs every 10 minutes to rebuild and publish `latest.json` for backwards compatibility.
 * If the hazards digest category has published posts, the card links to the newest article.
 
 **Presentation notes**
