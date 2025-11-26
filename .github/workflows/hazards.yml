@@ -11,10 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    env:
-      WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
-      WP_USERNAME: ${{ secrets.WP_USERNAME }}
-      WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
 
     steps:
       - name: Checkout backend repo
@@ -30,9 +26,45 @@ jobs:
           python -m pip install -U pip
           pip install -r bots/hazards/requirements.txt
 
-      - name: Run Hazards Bot (builds bots/hazards/out/latest.json)
+      - name: Validate WordPress secrets
+        env:
+          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
         run: |
-          python bots/hazards/hazards_bot.py run
+          set -euo pipefail
+          missing=()
+          [[ -n "${WP_SITE_URL:-}" ]] || missing+=(WP_SITE_URL)
+          [[ -n "${WP_USERNAME:-}" ]] || missing+=(WP_USERNAME)
+          [[ -n "${WP_APP_PASSWORD:-}" ]] || missing+=(WP_APP_PASSWORD)
+
+          if (( ${#missing[@]} > 0 )); then
+            printf '::error::Missing required secrets: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+          if [[ ! "$WP_SITE_URL" =~ ^https?:// ]]; then
+            printf '::error::WP_SITE_URL must be an absolute URL (https://...), got: %s\n' "$WP_SITE_URL"
+            exit 1
+          fi
+
+      - name: Run Hazards Bot (builds bots/hazards/out/latest.json)
+        env:
+          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}           # e.g., https://staging2.gaiaeyes.com
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}           # user tied to the App Password
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}   # application password (no spaces needed)
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          python -m bots.hazards.hazards_bot
+        working-directory: ${{ github.workspace }}
+
+      - name: Debug WP REST route
+        if: failure()
+        env:
+          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
+        run: |
+          echo "Categories route: ${WP_SITE_URL}/wp-json/wp/v2/categories"
 
       # === Publish to media repo using GAIAEYES_MEDIA_TOKEN (same pattern as space-visuals) ===
       - name: Checkout media repo
