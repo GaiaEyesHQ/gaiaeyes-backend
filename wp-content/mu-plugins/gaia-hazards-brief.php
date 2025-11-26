@@ -10,8 +10,6 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-require_once __DIR__ . '/gaiaeyes-api-helpers.php';
-
 /**
  * Shortcode: [gaia_hazards_brief url="https://.../public/hazards/latest.json" cache="5"]
  * - Fetches hazards/latest.json (48h snapshot created by the bot)
@@ -20,7 +18,7 @@ require_once __DIR__ . '/gaiaeyes-api-helpers.php';
 function gaia_hazards_brief_shortcode( $atts = [] ) {
     $atts = shortcode_atts(
         [
-            'url'   => ( defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE ) ? rtrim(GAIA_MEDIA_BASE,'/') . '/public/hazards/latest.json' : '',
+            'url'   => 'https://gaiaeyeshq.github.io/gaiaeyes-media/public/hazards/latest.json',
             'cache' => 5, // minutes.
         ],
         $atts,

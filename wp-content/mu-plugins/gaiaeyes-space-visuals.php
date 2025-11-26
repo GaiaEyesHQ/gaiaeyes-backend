@@ -6,8 +6,6 @@
  */
 if (!defined('ABSPATH')) exit;
 
-require_once __DIR__ . '/gaiaeyes-api-helpers.php';
-
 if (!defined('GAIAEYES_SPACE_VISUALS_ENDPOINT')){
   $endpoint = getenv('GAIAEYES_SPACE_VISUALS_ENDPOINT');
   define('GAIAEYES_SPACE_VISUALS_ENDPOINT', $endpoint ? esc_url_raw($endpoint) : '');
@@ -49,30 +47,43 @@ function ge_visual_url($images, $key){
 
 add_shortcode('gaia_space_detail', function($atts){
   $defaults = [
-    'api' => defined('GAIAEYES_SPACE_VISUALS_ENDPOINT') ? GAIAEYES_SPACE_VISUALS_ENDPOINT : '',
+    'api' => GAIAEYES_SPACE_VISUALS_ENDPOINT,
     'url' => '',
-    'cache' => 10,
+    'cache' => 5,
   ];
   $a = shortcode_atts($defaults, $atts, 'gaia_space_detail');
 
-  $ttl = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
   $api_payload = null;
-  $legacy_payload = null;
-
-  $api = isset($a['api']) ? trim($a['api']) : '';
-  if ($api){
-    $api_payload = gaiaeyes_http_get_json_api_cached($api, 'ge_space_visuals', $ttl, defined('GAIAEYES_API_BEARER') ? GAIAEYES_API_BEARER : '', defined('GAIAEYES_API_DEV_USERID') ? GAIAEYES_API_DEV_USERID : '');
-    if (!is_array($api_payload) || empty($api_payload['ok']) || (empty($api_payload['items']) && empty($api_payload['images']))){
-      $api_payload = null;
+  if (!empty($a['api'])){
+    $headers = ['Accept' => 'application/json', 'User-Agent' => 'GaiaEyesWP/1.0'];
+    if (defined('GAIAEYES_SPACE_VISUALS_BEARER') && GAIAEYES_SPACE_VISUALS_BEARER){
+      $headers['Authorization'] = 'Bearer ' . GAIAEYES_SPACE_VISUALS_BEARER;
+    }
+    if (defined('GAIAEYES_SPACE_VISUALS_DEV_USER') && GAIAEYES_SPACE_VISUALS_DEV_USER){
+      $headers['X-Dev-UserId'] = GAIAEYES_SPACE_VISUALS_DEV_USER;
+    }
+    $maybe = ge_json_cached($a['api'], $a['cache'], $headers);
+    if (is_array($maybe) && !empty($maybe['ok']) && (!empty($maybe['images']) || !empty($maybe['items']))){
+      $api_payload = $maybe;
     }
   }
 
-  if (!$api_payload && !empty($a['url'])){
-    $legacy_payload = ge_json_cached($a['url'], $a['cache']);
+  $legacy_payload = null;
+  if (!$api_payload){
+    $legacy_payload = !empty($a['url']) ? ge_json_cached($a['url'], $a['cache']) : null;
+
+    // Try public alias automatically if API failed and not already pointed to it
+    if (!$legacy_payload && empty($api_payload) && !empty($a['api']) && substr(rtrim($a['api'], '/'), -6) !== 'public'){
+      $maybe_public = rtrim($a['api'], '/') . '/public';
+      $maybe_pub = ge_json_cached($maybe_public, $a['cache'], ['Accept'=>'application/json','User-Agent'=>'GaiaEyesWP/1.0']);
+      if (is_array($maybe_pub) && !empty($maybe_pub['ok']) && (!empty($maybe_pub['images']) || !empty($maybe_pub['items']))){
+        $api_payload = $maybe_pub;
+      }
+    }
+    // Do not early-return; if both sources are empty we'll render with baseline visuals using GAIA_MEDIA_BASE
   }
 
-  $base = $api_payload['cdn_base'] ?? (defined('GAIA_MEDIA_BASE') ? GAIA_MEDIA_BASE : '');
-  $base = $base ? rtrim($base, '/') . '/' : '';
+  $media_base = (defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE) ? GAIA_MEDIA_BASE : '';
   $images = [];
   $video = [];
   $structured_series = [];
@@ -80,41 +91,40 @@ add_shortcode('gaia_space_detail', function($atts){
   $overlay_flags = [];
   $updated = '';
 
-  $seen = [];
-  $append_media = function($id, $path, $asset_type = 'image') use (&$images, &$video, &$seen) {
-    $norm = strtolower(trim($id));
-    if (!$norm || !$path || isset($seen[$norm])) return;
-    $seen[$norm] = true;
-    $entry = [
-      'url' => $path,
-      'asset_type' => $asset_type,
-    ];
-    $images[$norm] = $entry;
-    if ($asset_type === 'video'){
-      $video[$norm] = $entry;
-    }
-  };
-
   if ($api_payload){
     $updated = !empty($api_payload['generated_at']) ? esc_html($api_payload['generated_at']) : '';
     foreach (($api_payload['images'] ?? []) as $item){
-      $id = $item['key'] ?? $item['id'] ?? '';
-      $path = $item['url'] ?? $item['path'] ?? '';
-      $atype = $item['asset_type'] ?? (preg_match('#\.(mp4|mov)(\?.*)?$#i', (string)$path) ? 'video' : 'image');
-      if ($id && $path){
-        $append_media($id, $path, $atype);
+      if (empty($item['key'])) continue;
+      $images[$item['key']] = [
+        'url' => !empty($item['url']) ? $item['url'] : '',
+        'asset_type' => $item['asset_type'] ?? 'image',
+        'instrument' => $item['instrument'] ?? '',
+        'credit' => $item['credit'] ?? '',
+      ];
+      if (($item['asset_type'] ?? '') === 'video'){
+        $video[$item['key']] = $images[$item['key']];
       }
     }
-    foreach (($api_payload['items'] ?? []) as $it){
-      $id = $it['id'] ?? $it['key'] ?? '';
-      $path = $it['url'] ?? $it['path'] ?? '';
-      $atype = $it['asset_type'] ?? (preg_match('#\.(mp4|mov)(\?.*)?$#i', (string)$path) ? 'video' : 'image');
-      if ($id && $path){
-        $append_media($id, $path, $atype);
+    // Merge in $items so keys not present in legacy $images appear (e.g., ENLIL, standardized keys)
+    if (!empty($api_payload['items']) && is_array($api_payload['items'])) {
+      foreach ($api_payload['items'] as $it) {
+        $id = !empty($it['id']) ? $it['id'] : '';
+        $url = !empty($it['url']) ? $it['url'] : '';
+        if (!$id || !$url) continue;
+        $assetType = (is_string($url) && preg_match('#\.(mp4|mov)(\?.*)?$#i', $url)) ? 'video' : 'image';
+        $entry = [
+          'url' => $url,
+          'asset_type' => $assetType,
+          'instrument' => isset($it['credit']) ? $it['credit'] : '',
+          'credit' => isset($it['credit']) ? $it['credit'] : '',
+        ];
+        if (!isset($images[$id])) {
+          $images[$id] = $entry;
+        }
+        if ($assetType === 'video' && !isset($video[$id])) {
+          $video[$id] = $entry;
+        }
       }
-    }
-    if (!isset($images['enlil']) && !isset($video['enlil'])){
-      $append_media('enlil', 'nasa/enlil/latest.mp4', 'video');
     }
     foreach (($api_payload['series'] ?? []) as $entry){
       if (empty($entry['key'])) continue;
@@ -123,20 +133,61 @@ add_shortcode('gaia_space_detail', function($atts){
         'meta' => $entry['meta'] ?? [],
       ];
     }
+    // Set cdn_base from API or fallback to GAIA_MEDIA_BASE
+    $cdn_base = !empty($api_payload['cdn_base']) ? esc_url_raw($api_payload['cdn_base']) : '';
+    if (!$cdn_base && defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE){
+      $cdn_base = GAIA_MEDIA_BASE;
+    }
     $overlay_flags = $api_payload['feature_flags'] ?? [];
-  } elseif ($legacy_payload){
+    $media_base = $cdn_base;
+    // Safety baseline: if API returned but produced no image entries, inject minimal Supabase visuals
+    if ($api_payload && empty($images)) {
+      $mb = (defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE) ? GAIA_MEDIA_BASE : '';
+      if ($mb) {
+        $fallback = [
+          'drap'         => 'drap/latest.png',
+          'lasco_c2'     => 'nasa/lasco_c2/latest.jpg',
+          'aia_304'      => 'nasa/aia_304/latest.jpg',
+          'ovation_nh'   => 'aurora/viewline/tonight-north.png',
+          'ovation_sh'   => 'aurora/viewline/tonight-south.png',
+          'hmi_intensity'=> 'nasa/hmi_intensity/latest.jpg',
+          'a_station'    => 'space/a_station/latest.png',
+          'ccor1'        => 'nasa/ccor1/latest.jpg',
+        ];
+        foreach ($fallback as $k=>$rel) {
+          if (!isset($images[$k])) {
+            $images[$k] = [
+              'url' => $rel,
+              'asset_type' => (preg_match('#\.(mp4|mov)(\?.*)?$#i', $rel) ? 'video' : 'image')
+            ];
+          }
+        }
+      }
+    }
+  } else {
     $updated = !empty($legacy_payload['timestamp_utc']) ? esc_html($legacy_payload['timestamp_utc']) : '';
+    // Use GAIA_MEDIA_BASE if defined, else fallback to empty string
+    $media_base = (defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE) ? GAIA_MEDIA_BASE . (substr(GAIA_MEDIA_BASE,-1) !== '/' ? '/' : '') : '';
     foreach (($legacy_payload['images'] ?? []) as $key=>$path){
-      $append_media($key, $path, 'image');
+      $images[$key] = [
+        'url' => esc_url($media_base . ltrim($path, '/')),
+        'asset_type' => 'image',
+      ];
     }
     foreach (($legacy_payload['video'] ?? []) as $key=>$path){
-      $append_media($key, $path, 'video');
+      $video[$key] = [
+        'url' => esc_url($media_base . ltrim($path, '/')),
+        'asset_type' => 'video',
+      ];
     }
-    $legacy_series = $legacy_payload['series'] ?? ['xrs_7d'=>[],'protons_7d'=>[]];
   }
 
-  if (!$api_payload && !$legacy_payload){
-    $fallback = [
+  // If neither API nor legacy JSON was available, render a minimal baseline using Supabase paths
+  if (!$api_payload && !$legacy_payload) {
+    // Media base from env (Supabase); if missing, leave baseline empty
+    $media_base = (defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE) ? GAIA_MEDIA_BASE : '';
+    $updated = '';
+    $baseline = [
       'drap'        => 'drap/latest.png',
       'lasco_c2'    => 'nasa/lasco_c2/latest.jpg',
       'aia_304'     => 'nasa/aia_304/latest.jpg',
@@ -145,15 +196,21 @@ add_shortcode('gaia_space_detail', function($atts){
       'hmi_intensity'=> 'nasa/hmi_intensity/latest.jpg',
       'a_station'   => 'space/a_station/latest.png',
       'ccor1'       => 'nasa/ccor1/latest.jpg',
-      'enlil'       => 'nasa/enlil/latest.mp4',
+      // 'ccor1_mp4' => 'nasa/ccor1/latest.mp4', // enable if you want the video tag to appear by default
     ];
-    foreach ($fallback as $k=>$rel){
-      $atype = preg_match('#\.(mp4|mov)(\?.*)?$#i', $rel) ? 'video' : 'image';
-      $append_media($k, $rel, $atype);
+    if ($media_base) {
+      foreach ($baseline as $k=>$rel) {
+        $abs = rtrim($media_base, '/') . '/' . ltrim($rel, '/');
+        $atype = (preg_match('#\.(mp4|mov)(\?.*)?$#i', $rel)) ? 'video' : 'image';
+        if (!isset($images[$k])) {
+          $images[$k] = [ 'url' => esc_url($abs), 'asset_type' => $atype ];
+        }
+        if ($atype === 'video' && !isset($video[$k])) {
+          $video[$k] = [ 'url' => esc_url($abs), 'asset_type' => 'video' ];
+        }
+      }
     }
   }
-
-  $media_base = $base;
 
   if ($legacy_payload){
     $legacy_series = $legacy_payload['series'] ?? ['xrs_7d'=>[],'protons_7d'=>[]];
@@ -172,13 +229,13 @@ add_shortcode('gaia_space_detail', function($atts){
   foreach ($images as $key=>$entry){
     if (empty($entry['url'])) continue;
     $url = $entry['url'];
-    $img[$key] = preg_match('#^https?://#', $url) ? $url : ($base . ltrim($url, '/'));
+    $img[$key] = ($media_base && strpos($url, 'http') === 0) ? ltrim(str_replace($media_base, '', $url), '/') : ltrim($url, '/');
   }
   $vid_paths = [];
   foreach ($video as $key=>$entry){
     if (empty($entry['url'])) continue;
     $vurl = $entry['url'];
-    $vid_paths[$key] = preg_match('#^https?://#', $vurl) ? $vurl : ($base . ltrim($vurl, '/'));
+    $vid_paths[$key] = ($media_base && strpos($vurl, 'http') === 0) ? ltrim(str_replace($media_base, '', $vurl), '/') : ltrim($vurl, '/');
   }
   $vid = $vid_paths;
 
