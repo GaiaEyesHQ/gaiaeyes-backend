@@ -2,6 +2,20 @@
 
 Document noteworthy backend/front-end changes implemented via Codex tasks. Keep the newest entries at the top.
 
+## 2025-05-31 — Restore hazards bot WordPress post upserts
+
+- Reintroduced the hazards WordPress client helpers for fetching and upserting posts
+  so instant alerts and digest publishing continue to function after the retry/auth
+  refactor.
+
+## 2025-05-30 — Harden hazards bot WordPress REST calls
+
+- Rebuilt the hazards WordPress client to use Application Password basic auth with retry/backoff, JSON content-type
+  verification, and clearer error surfacing for non-JSON responses.
+- Updated the hazards bot to create required categories with explicit failure messaging, reuse a single WP client
+  instance, and refreshed the CI workflow to run the module entrypoint with the new `WP_SITE_URL`/`WP_USERNAME`
+  secrets.
+
 ## 2025-05-29 — Fix GDACS module imports in CI
 
 - Marked `scripts/` as a package and updated the pulse workflow to run the GDACS ingester
