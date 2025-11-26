@@ -8,6 +8,7 @@
  */
 
 if (!defined('ABSPATH')) exit;
+require_once __DIR__ . '/gaiaeyes-api-helpers.php';
 
 /* ---------- Defaults (GitHub Pages + jsDelivr mirror) ---------- */
 if (!defined('GAIAEYES_SW_URL')) {
@@ -54,27 +55,6 @@ function gaiaeyes_http_get_json_with_fallback($primary, $mirror, $cache_key, $tt
   return $data;
 }
 
-function gaiaeyes_http_get_json_api_cached($url, $cache_key, $ttl, $bearer = ''){
-  $cached = get_transient($cache_key);
-  if ($cached !== false) return $cached;
-
-  $headers = [ 'Accept' => 'application/json', 'User-Agent' => 'GaiaEyesWP/1.0' ];
-  if ($bearer) $headers['Authorization'] = 'Bearer ' . $bearer;
-  if (defined('GAIAEYES_API_DEV_USERID') && GAIAEYES_API_DEV_USERID) {
-    $headers['X-Dev-UserId'] = GAIAEYES_API_DEV_USERID;
-  }
-  $args = ['timeout'=>10, 'headers'=>$headers];
-
-  $resp = wp_remote_get(add_query_arg(['v'=>floor(time()/600)], $url), $args);
-  $code = is_wp_error($resp) ? 0 : intval(wp_remote_retrieve_response_code($resp));
-  if ($code < 200 || $code >= 300) return null;
-
-  $data = json_decode(wp_remote_retrieve_body($resp), true);
-  if (!is_array($data)) return null;
-
-  set_transient($cache_key, $data, $ttl);
-  return $data;
-}
 
 /* ---------- Render Helpers ---------- */
 function ge_chip($label, $value, $class='') {
