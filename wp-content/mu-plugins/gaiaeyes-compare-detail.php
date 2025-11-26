@@ -6,23 +6,26 @@
  */
 if (!defined('ABSPATH')) exit;
 
+require_once __DIR__ . '/gaiaeyes-api-helpers.php';
+
+  $base = defined('GAIA_MEDIA_BASE') ? rtrim(GAIA_MEDIA_BASE, '/') : '';
 if (!defined('GAIAEYES_COMPARE_URL')) {
-  define('GAIAEYES_COMPARE_URL', 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/compare_series.json');
+  define('GAIAEYES_COMPARE_URL', $base ? ($base . '/data/compare_series.json') : '');
 }
 if (!defined('GAIAEYES_COMPARE_MIRROR')) {
-  define('GAIAEYES_COMPARE_MIRROR', 'https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/data/compare_series.json');
+  define('GAIAEYES_COMPARE_MIRROR', GAIAEYES_COMPARE_URL);
 }
 if (!defined('GAIAEYES_QH_URL')) {
-  define('GAIAEYES_QH_URL', 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/quakes_history.json');
+  define('GAIAEYES_QH_URL', $base ? ($base . '/data/quakes_history.json') : '');
 }
 if (!defined('GAIAEYES_QH_MIRROR')) {
-  define('GAIAEYES_QH_MIRROR', 'https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/data/quakes_history.json');
+  define('GAIAEYES_QH_MIRROR', GAIAEYES_QH_URL);
 }
 if (!defined('GAIAEYES_SH_URL')) {
-  define('GAIAEYES_SH_URL', 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_history.json');
+  define('GAIAEYES_SH_URL', $base ? ($base . '/data/space_history.json') : '');
 }
 if (!defined('GAIAEYES_SH_MIRROR')) {
-  define('GAIAEYES_SH_MIRROR', 'https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/data/space_history.json');
+  define('GAIAEYES_SH_MIRROR', GAIAEYES_SH_URL);
 }
 
 function gaiaeyes_compare_fetch($primary, $mirror, $cache_key, $ttl){

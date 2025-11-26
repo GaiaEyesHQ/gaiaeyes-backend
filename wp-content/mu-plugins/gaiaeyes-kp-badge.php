@@ -8,7 +8,10 @@
 
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
-define( 'GAIAEYES_KP_JSON', 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json' );
+require_once __DIR__ . '/gaiaeyes-api-helpers.php';
+
+$__ge_media_base = defined('GAIA_MEDIA_BASE') ? rtrim(GAIA_MEDIA_BASE, '/') : '';
+define( 'GAIAEYES_KP_JSON', $__ge_media_base ? ($__ge_media_base . '/data/space_weather.json') : '' );
 
 /**
  * Insert a small script in <head> that:
@@ -116,9 +119,9 @@ add_action( 'wp_footer', function () {
 </style>
 <script id="gaia-badges-js">
 (function(){
-	var WX_URL  = "https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json";
-	var ES_URL  = "https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json";
-	var SCH_FALLBACK = "https://gaiaeyeshq.github.io/gaiaeyes-media/data/schumann_latest.json";
+        var WX_URL  = "<?php echo esc_js(GAIAEYES_KP_JSON); ?>";
+        var ES_URL  = "<?php echo esc_js($__ge_media_base ? ($__ge_media_base . '/data/earthscope.json') : ''); ?>";
+        var SCH_FALLBACK = "<?php echo esc_js($__ge_media_base ? ($__ge_media_base . '/data/schumann_latest.json') : ''); ?>";
 
 	function colorizeKp(kp){
 		if (kp >= 7) return {bg:"#a40000", glow:"#ff4f4f", pulse:true};
