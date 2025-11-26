@@ -17,8 +17,12 @@ from dateutil import parser as dtparse
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
     sys.path.append(SCRIPT_DIR)
+ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
 
 from wp_client import WPClient  # noqa: E402
+from scripts.supabase_rest_client import supabase_upsert  # noqa: E402
 
 UTC = timezone.utc
 
@@ -731,11 +735,39 @@ def run_once() -> None:
         except Exception as exc:  # pragma: no cover - network handling
             print("[error] Digest post failed:", exc, file=sys.stderr)
 
-    snapshot = {"generated_at": iso(now_utc()), "items": items_window(hours=48)}
+    items = items_window(hours=48)
+    snapshot = {"generated_at": iso(now_utc()), "items": items}
     out_dir = os.path.join(SCRIPT_DIR, "out")
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, "latest.json"), "w", encoding="utf-8") as handle:
         json.dump(snapshot, handle, indent=2)
+
+    rows = []
+    for it in items:
+        src = it.get("source")
+        kind = it.get("kind") or it.get("type")
+        title = it.get("title")
+        if not title:
+            continue
+        loc = it.get("location") or it.get("region")
+        sev = it.get("severity") or it.get("magnitude")
+
+        # started_at / ended_at can be null for now unless you have clear timestamps
+        h = f"{src}|{kind}|{title}|{it.get('id') or it.get('slug') or ''}"
+
+        rows.append(
+            {
+                "source": src,
+                "kind": kind,
+                "title": title,
+                "location": loc,
+                "severity": sev,
+                "payload": it,
+                "hash": h,
+            }
+        )
+
+    supabase_upsert("ext.global_hazards", rows, on_conflict="hash")
 
 
 def main() -> None:
