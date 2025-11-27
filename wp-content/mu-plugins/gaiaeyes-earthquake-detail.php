@@ -77,17 +77,19 @@ function gaiaeyes_quakes_detail_shortcode($atts){
   ];
 
   // Determine view mode for Monthly & YoY: either "last6" (default) or a specific year (YYYY).
-  $raw_year = isset($_GET['quakes_year']) ? (string) $_GET['quakes_year'] : 'last6';
-  if ($raw_year === '') {
-    $raw_year = 'last6';
+  $requested_year = isset($_GET['quakes_year']) ? (string) $_GET['quakes_year'] : 'last6';
+  if ($requested_year === '') {
+    $requested_year = 'last6';
   }
-  $normalized_year = preg_replace('/[^0-9]/', '', $raw_year);
+  $normalized_year = preg_replace('/[^0-9]/', '', $requested_year);
   if ($normalized_year === '' || strlen($normalized_year) !== 4) {
     $selected_year = 'last6';
   } else {
     $selected_year = $normalized_year;
   }
   $view_last6 = ($selected_year === 'last6');
+  // For UI purposes, the currently active option in the dropdown should match what the logic is using.
+  $selected_for_ui = $view_last6 ? 'last6' : $selected_year;
   $year_list = [];
 
   // Monthly summary (last 6 months or selected year) + YoY/MoM delta for M5+ from /v1/quakes/history endpoint
@@ -471,9 +473,9 @@ function gaiaeyes_quakes_detail_shortcode($atts){
           <label>
             View:
             <select name="quakes_year" onchange="this.form.submit()">
-              <option value="last6"<?php if ($raw_year === 'last6') echo ' selected'; ?>>Last 6 months</option>
+              <option value="last6"<?php if ($selected_for_ui === 'last6') echo ' selected'; ?>>Last 6 months</option>
               <?php foreach ($year_list as $yr): ?>
-                <option value="<?php echo esc_attr($yr); ?>"<?php if ($raw_year === $yr) echo ' selected'; ?>>
+                <option value="<?php echo esc_attr($yr); ?>"<?php if ($selected_for_ui === $yr) echo ' selected'; ?>>
                   Year <?php echo esc_html($yr); ?>
                 </option>
               <?php endforeach; ?>
