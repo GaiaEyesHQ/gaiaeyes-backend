@@ -376,6 +376,10 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             Year <?php echo esc_html($selected_year); ?> (global). M5+ counts shown; totals where available.
           <?php endif; ?>
         </div>
+        <div class="ge-note" style="font-size:.85rem; opacity:.75; margin-top:2px;">
+          <strong>YoY Δ</strong> compares each month’s M5+ count to the <em>same month last year</em>.<br>
+          <strong>MoM Δ</strong> compares each month’s M5+ count to the <em>immediately preceding month</em>.
+        </div>
         <?php if (!empty($year_list)): ?>
         <form method="get" class="ge-year-filter" style="margin-bottom:6px;">
           <label>
@@ -392,7 +396,21 @@ function gaiaeyes_quakes_detail_shortcode($atts){
         </form>
         <?php endif; ?>
         <table class="ge-table">
-          <thead><tr><th>Month</th><th>M5+</th><th>YoY Δ (M5+)</th><th>MoM Δ (M5+)</th><th>All</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>M5+</th>
+              <th>
+                YoY Δ (M5+)
+                <span class="ge-tip" title="Year‑over‑year difference: this month’s M5+ count minus the same month last year.">❔</span>
+              </th>
+              <th>
+                MoM Δ (M5+)
+                <span class="ge-tip" title="Month‑over‑month difference: this month’s M5+ count minus the previous month.">❔</span>
+              </th>
+              <th>All</th>
+            </tr>
+          </thead>
           <tbody>
             <?php foreach ($monthly_rows as $r): ?>
               <tr>
@@ -505,9 +523,18 @@ function gaiaeyes_quakes_detail_shortcode($atts){
         .ev-link{ grid-area: link; justify-self: end; }
       }
       .ev-time small{ opacity: .8; }
-    .delta-pos{ color:#aef2c0; }
-    .delta-neg{ color:#ffb3b3; }
-    .delta-tag{ opacity:.8; font-size:.8rem; margin-left:4px }
+      .delta-pos{ color:#aef2c0; }
+      .delta-neg{ color:#ffb3b3; }
+      .delta-tag{ opacity:.8; font-size:.8rem; margin-left:4px }
+      .ge-tip {
+        cursor: help;
+        font-size: .85rem;
+        opacity: .65;
+        margin-left: 4px;
+      }
+      .ge-tip:hover {
+        opacity: 1;
+      }
     </style>
   </section>
   <?php
