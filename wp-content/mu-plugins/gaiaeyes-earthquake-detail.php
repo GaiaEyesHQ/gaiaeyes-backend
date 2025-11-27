@@ -512,7 +512,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               years = years.slice(years.length - 10);
             }
 
-            // Sort months ascending within each year
+            // Sort months ascending within each year and fill missing months with null
             years.forEach(function(y){
               byYear[y].sort(function(a,b){ return a.m - b.m; });
             });
@@ -526,7 +526,35 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             });
             if (maxVal <= 0) maxVal = 1;
 
-            var w = 600, h = 220, pad = 32;
+            // Compute per-month min, max, median for band/median line
+            var monthStats = {};
+            for (var m = 1; m <= 12; m++) {
+              var vals = [];
+              years.forEach(function(y){
+                var pts = byYear[y];
+                for (var i = 0; i < pts.length; i++) {
+                  if (pts[i].m === m && pts[i].v != null && !isNaN(pts[i].v)) {
+                    vals.push(pts[i].v);
+                    break;
+                  }
+                }
+              });
+              if (!vals.length) continue;
+              vals.sort(function(a,b){ return a - b; });
+              var minv = vals[0];
+              var maxv = vals[vals.length - 1];
+              var median;
+              var mid = Math.floor(vals.length / 2);
+              if (vals.length % 2 === 0) {
+                median = (vals[mid - 1] + vals[mid]) / 2;
+              } else {
+                median = vals[mid];
+              }
+              monthStats[m] = { min: minv, max: maxv, median: median };
+              if (maxv > maxVal) maxVal = maxv;
+            }
+
+            var w = 600, h = 240, pad = 36;
             var monthToX = function(m){ return pad + ((m - 1) / 11) * (w - pad * 2); };
             var valToY = function(v){ return h - pad - (v / maxVal) * (h - pad * 2); };
 
@@ -536,7 +564,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
             svg.classList.add("ge-quake-chart-svg");
 
-            // Axes
+            // Axes + grid
             var axis = document.createElementNS(svgNS, "g");
             axis.setAttribute("stroke", "rgba(255,255,255,0.4)");
             axis.setAttribute("stroke-width", "1");
@@ -571,7 +599,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
 
               var lbl = document.createElementNS(svgNS, "text");
               lbl.setAttribute("x", mx);
-              lbl.setAttribute("y", h - pad + 14);
+              lbl.setAttribute("y", h - pad + 16);
               lbl.setAttribute("text-anchor", "middle");
               lbl.setAttribute("font-size", "10");
               lbl.setAttribute("fill", "rgba(255,255,255,0.8)");
@@ -579,16 +607,28 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               axis.appendChild(lbl);
             }
 
-            // A few horizontal gridlines
-            for (var i = 1; i <= 4; i++) {
-              var gy = valToY((maxVal * i) / 4);
-              var gl = document.createElementNS(svgNS, "line");
-              gl.setAttribute("x1", pad);
-              gl.setAttribute("y1", gy);
-              gl.setAttribute("x2", w - pad);
-              gl.setAttribute("y2", gy);
-              gl.setAttribute("stroke", "rgba(255,255,255,0.08)");
-              axis.appendChild(gl);
+            // Y-axis ticks/labels
+            var steps = 4;
+            for (var i = 0; i <= steps; i++) {
+              var val = (maxVal * i) / steps;
+              var gy = valToY(val);
+              if (i > 0 && i < steps) {
+                var gl = document.createElementNS(svgNS, "line");
+                gl.setAttribute("x1", pad);
+                gl.setAttribute("y1", gy);
+                gl.setAttribute("x2", w - pad);
+                gl.setAttribute("y2", gy);
+                gl.setAttribute("stroke", "rgba(255,255,255,0.08)");
+                axis.appendChild(gl);
+              }
+              var yl = document.createElementNS(svgNS, "text");
+              yl.setAttribute("x", pad - 6);
+              yl.setAttribute("y", gy + 3);
+              yl.setAttribute("text-anchor", "end");
+              yl.setAttribute("font-size", "9");
+              yl.setAttribute("fill", "rgba(255,255,255,0.7)");
+              yl.textContent = Math.round(val);
+              axis.appendChild(yl);
             }
 
             svg.appendChild(axis);
@@ -601,7 +641,52 @@ function gaiaeyes_quakes_detail_shortcode($atts){
 
             var latestYear = years[years.length - 1];
 
-            // Plot each year
+            // Median band (min/max envelope)
+            var bandPath = "";
+            var xs = [], upper = [], lower = [];
+            for (var m2 = 1; m2 <= 12; m2++) {
+              if (!monthStats[m2]) continue;
+              xs.push(monthToX(m2));
+              upper.push(valToY(monthStats[m2].max));
+              lower.push(valToY(monthStats[m2].min));
+            }
+            if (xs.length > 1) {
+              // Build polygon: upper from left→right, lower from right→left
+              bandPath += "M" + xs[0] + " " + upper[0] + " ";
+              for (var i2 = 1; i2 < xs.length; i2++) {
+                bandPath += "L" + xs[i2] + " " + upper[i2] + " ";
+              }
+              for (var j = xs.length - 1; j >= 0; j--) {
+                bandPath += "L" + xs[j] + " " + lower[j] + " ";
+              }
+              bandPath += "Z";
+              var band = document.createElementNS(svgNS, "path");
+              band.setAttribute("d", bandPath.trim());
+              band.setAttribute("fill", "rgba(255,255,255,0.06)");
+              band.setAttribute("stroke", "none");
+              svg.appendChild(band);
+
+              // Median line
+              var medianPath = "";
+              var firstMedian = true;
+              for (var m3 = 1; m3 <= 12; m3++) {
+                if (!monthStats[m3]) continue;
+                var mx2 = monthToX(m3);
+                var my2 = valToY(monthStats[m3].median);
+                medianPath += (firstMedian ? "M" : "L") + mx2 + " " + my2 + " ";
+                firstMedian = false;
+              }
+              var median = document.createElementNS(svgNS, "path");
+              median.setAttribute("d", medianPath.trim());
+              median.setAttribute("fill", "none");
+              median.setAttribute("stroke", "rgba(255,255,255,0.7)");
+              median.setAttribute("stroke-width", "1.2");
+              median.setAttribute("stroke-dasharray", "4 3");
+              svg.appendChild(median);
+            }
+
+            // Plot year lines
+            var yearPaths = {};
             years.forEach(function(y, idx){
               var pts = byYear[y];
               if (!pts.length) return;
@@ -616,9 +701,11 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               var color = palette[idx % palette.length];
               path.setAttribute("fill", "none");
               path.setAttribute("stroke", color);
-              path.setAttribute("stroke-width", y === latestYear ? "2.4" : "1.2");
-              path.setAttribute("stroke-opacity", y === latestYear ? "1.0" : "0.55");
+              path.setAttribute("data-year", y);
+              path.setAttribute("stroke-width", y === latestYear ? "2.4" : "1.4");
+              path.setAttribute("stroke-opacity", y === latestYear ? "1.0" : "0.6");
               svg.appendChild(path);
+              yearPaths[y] = path;
             });
 
             var container = document.getElementById("geQuakeChart");
@@ -627,19 +714,130 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               container.appendChild(svg);
             }
 
-            // Build legend
+            // Legend with click/hover interactions
             var legend = document.getElementById("geQuakeChartLegend");
+            var visibleYears = {};
+            years.forEach(function(y){ visibleYears[y] = true; });
+
+            function updateVisibility() {
+              years.forEach(function(y){
+                var p = yearPaths[y];
+                if (!p) return;
+                if (visibleYears[y]) {
+                  p.style.display = "";
+                } else {
+                  p.style.display = "none";
+                }
+              });
+            }
+
             if (legend) {
               legend.innerHTML = "";
-              years.slice().reverse().forEach(function(y, idx){
+              years.slice().reverse().forEach(function(y){
                 var color = palette[(years.indexOf(y)) % palette.length];
                 var item = document.createElement("span");
                 item.className = "ge-quake-legend-item" + (y === latestYear ? " latest" : "");
+                item.setAttribute("data-year", y);
                 item.innerHTML = '<span class="swatch" style="background:'+color+'"></span>' +
                                  '<span class="label">'+y+(y === latestYear ? " (latest)" : "")+'</span>';
+                item.addEventListener("click", function(){
+                  visibleYears[y] = !visibleYears[y];
+                  if (!visibleYears[y]) {
+                    item.classList.add("muted");
+                  } else {
+                    item.classList.remove("muted");
+                  }
+                  updateVisibility();
+                });
+                item.addEventListener("mouseenter", function(){
+                  var p = yearPaths[y];
+                  if (!p) return;
+                  p.setAttribute("stroke-width", "3");
+                  p.setAttribute("stroke-opacity", "1.0");
+                });
+                item.addEventListener("mouseleave", function(){
+                  var p = yearPaths[y];
+                  if (!p) return;
+                  var baseWidth = (y === latestYear) ? "2.4" : "1.4";
+                  var baseOpacity = (y === latestYear) ? "1.0" : "0.6";
+                  p.setAttribute("stroke-width", baseWidth);
+                  p.setAttribute("stroke-opacity", baseOpacity);
+                });
                 legend.appendChild(item);
               });
             }
+
+            updateVisibility();
+
+            // Simple tooltip on hover
+            var tooltip = document.createElement("div");
+            tooltip.className = "ge-quake-tooltip";
+            tooltip.style.position = "absolute";
+            tooltip.style.pointerEvents = "none";
+            tooltip.style.fontSize = "11px";
+            tooltip.style.padding = "4px 6px";
+            tooltip.style.borderRadius = "4px";
+            tooltip.style.background = "rgba(0,0,0,0.85)";
+            tooltip.style.color = "#fff";
+            tooltip.style.display = "none";
+
+            var chartWrap = container;
+            if (chartWrap && chartWrap.style.position === "") {
+              chartWrap.style.position = "relative";
+            }
+            if (chartWrap) {
+              chartWrap.appendChild(tooltip);
+            }
+
+            function showTooltip(evt) {
+              if (!chartWrap) return;
+              var rect = svg.getBoundingClientRect();
+              var bx = evt.clientX - rect.left;
+              var by = evt.clientY - rect.top;
+
+              // Map x to month index
+              var rel = Math.max(pad, Math.min(w - pad, bx));
+              var frac = (rel - pad) / (w - pad * 2);
+              var mFloat = 1 + frac * 11;
+              var mIdx = Math.round(mFloat);
+              if (mIdx < 1) mIdx = 1;
+              if (mIdx > 12) mIdx = 12;
+
+              var rows = [];
+              years.forEach(function(y){
+                if (!visibleYears[y]) return;
+                var pts = byYear[y];
+                for (var i = 0; i < pts.length; i++) {
+                  if (pts[i].m === mIdx) {
+                    rows.push({ year: y, v: pts[i].v });
+                    break;
+                  }
+                }
+              });
+              if (!rows.length) {
+                tooltip.style.display = "none";
+                return;
+              }
+              // Sort by year descending so latest is on top
+              rows.sort(function(a,b){ return b.year.localeCompare(a.year); });
+
+              var monthName = monthsShort[mIdx-1];
+              var html = '<strong>' + monthName + '</strong><br>';
+              rows.forEach(function(r){
+                html += r.year + ': ' + r.v + '<br>';
+              });
+              tooltip.innerHTML = html;
+              tooltip.style.left = (bx + 10) + "px";
+              tooltip.style.top = (by + 10) + "px";
+              tooltip.style.display = "block";
+            }
+
+            function hideTooltip() {
+              tooltip.style.display = "none";
+            }
+
+            svg.addEventListener("mousemove", showTooltip);
+            svg.addEventListener("mouseleave", hideTooltip);
           })();
         </script>
       </article>
@@ -740,6 +938,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .ge-quake-legend-item { display:inline-flex; align-items:center; gap:4px; opacity:.8; }
       .ge-quake-legend-item.latest { opacity: 1; font-weight: 600; }
       .ge-quake-legend-item .swatch { width:12px; height:12px; border-radius:2px; display:inline-block; }
+      .ge-quake-legend-item.muted { opacity: .25; }
     </style>
   </section>
   <?php
