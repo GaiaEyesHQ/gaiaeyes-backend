@@ -77,9 +77,15 @@ function gaiaeyes_quakes_detail_shortcode($atts){
   ];
 
   // Determine view mode for Monthly & YoY: either "last6" (default) or a specific year (YYYY).
-  $selected_year = isset($_GET['quakes_year']) ? preg_replace('/[^0-9]/', '', (string) $_GET['quakes_year']) : '';
-  if ($selected_year === '' || strlen($selected_year) !== 4) {
+  $raw_year = isset($_GET['quakes_year']) ? (string) $_GET['quakes_year'] : 'last6';
+  if ($raw_year === '') {
+    $raw_year = 'last6';
+  }
+  $normalized_year = preg_replace('/[^0-9]/', '', $raw_year);
+  if ($normalized_year === '' || strlen($normalized_year) !== 4) {
     $selected_year = 'last6';
+  } else {
+    $selected_year = $normalized_year;
   }
   $view_last6 = ($selected_year === 'last6');
   $year_list = [];
@@ -355,9 +361,20 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               const mb = (typeof b.mag==='number')? b.mag : parseFloat(b.mag)||0;
               return ma - mb;
             }
+            function normalizePlace(str){
+  let p = (str || '').toLowerCase().trim();
+  // Remove common leading descriptors to improve grouping
+  const prefixes = ['near ', 'off the coast of ', 'off the ', 'the '];
+  prefixes.forEach(function(pref){
+    if (p.startsWith(pref)) {
+      p = p.slice(pref.length);
+    }
+  });
+  return p;
+}
             function sortPlace(a,b){
-              const pa = (a.place || '').toLowerCase();
-              const pb = (b.place || '').toLowerCase();
+              const pa = normalizePlace(a.place);
+              const pb = normalizePlace(b.place);
               if (!pa && !pb) return 0;
               if (!pa) return 1;
               if (!pb) return -1;
@@ -454,9 +471,9 @@ function gaiaeyes_quakes_detail_shortcode($atts){
           <label>
             View:
             <select name="quakes_year" onchange="this.form.submit()">
-              <option value="last6"<?php if ($view_last6) echo ' selected'; ?>>Last 6 months</option>
+              <option value="last6"<?php if ($raw_year === 'last6') echo ' selected'; ?>>Last 6 months</option>
               <?php foreach ($year_list as $yr): ?>
-                <option value="<?php echo esc_attr($yr); ?>"<?php if (!$view_last6 && $selected_year === $yr) echo ' selected'; ?>>
+                <option value="<?php echo esc_attr($yr); ?>"<?php if ($raw_year === $yr) echo ' selected'; ?>>
                   Year <?php echo esc_html($yr); ?>
                 </option>
               <?php endforeach; ?>
