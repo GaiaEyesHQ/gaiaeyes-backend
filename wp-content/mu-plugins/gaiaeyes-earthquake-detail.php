@@ -393,7 +393,8 @@ function gaiaeyes_quakes_detail_shortcode($atts){
         </div>
         <div class="ge-note" style="font-size:.85rem; opacity:.75; margin-top:2px;">
           <strong>YoY Δ</strong> compares each month’s M5+ count to the <em>same month last year</em>.<br>
-          <strong>MoM Δ</strong> compares each month’s M5+ count to the <em>immediately preceding month</em>.
+          <strong>MoM Δ</strong> compares each month’s M5+ count to the <em>immediately preceding month</em>.<br>
+          <em>Selecting a year here also focuses the trends chart below on that year and its previous year.</em>
         </div>
         <?php if (!empty($year_list)): ?>
         <form method="get" class="ge-year-filter" style="margin-bottom:6px;">
@@ -720,11 +721,24 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             var legend = document.getElementById("geQuakeChartLegend");
             var visibleYears = {};
             years.forEach(function(y){ visibleYears[y] = true; });
+
+            function applyDefaultVisibility() {
+              if (selectedYear && years.indexOf(selectedYear) !== -1) {
+                years.forEach(function(y){
+                  visibleYears[y] = (y === selectedYear || y === selectedPrevYear);
+                });
+              } else {
+                var latest = years[years.length - 1];
+                var prev = years.length > 1 ? years[years.length - 2] : null;
+                years.forEach(function(y){
+                  visibleYears[y] = (y === latest || (prev && y === prev));
+                });
+              }
+            }
+
             // If a specific year is selected in the Monthly & YoY view, default to showing only that year + its previous year.
             if (selectedYear && years.indexOf(selectedYear) !== -1) {
-              years.forEach(function(y){
-                visibleYears[y] = (y === selectedYear || y === selectedPrevYear);
-              });
+              applyDefaultVisibility();
             }
 
             function updateVisibility() {
@@ -747,11 +761,19 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               medianItem.innerHTML = '<span class="swatch median"></span><span class="label">Median (dashed line)</span>';
               legend.appendChild(medianItem);
 
-              // Show all years control
+              // Show all years control with checkbox
               var showAllItem = document.createElement("span");
               showAllItem.className = "ge-quake-legend-item showall";
-              showAllItem.innerHTML = '<span class="swatch"></span><span class="label">Show all years</span>';
-              showAllItem.addEventListener("click", function(){
+              showAllItem.innerHTML =
+                '<label class="legend-year-label">' +
+                  '<input type="checkbox" class="ge-showall-toggle">' +
+                  '<span class="swatch"></span>' +
+                  '<span class="label">Show all years</span>' +
+                '</label>';
+              legend.appendChild(showAllItem);
+              var showAllCheckbox = showAllItem.querySelector('input.ge-showall-toggle');
+
+              function setAllVisible() {
                 years.forEach(function(y){
                   visibleYears[y] = true;
                   var entry = legend.querySelector('.ge-quake-legend-item[data-year="'+y+'"]');
@@ -761,9 +783,55 @@ function gaiaeyes_quakes_detail_shortcode($atts){
                     if (cb) cb.checked = true;
                   }
                 });
+              }
+
+              function setDefaultVisible() {
+                applyDefaultVisibility();
+                years.forEach(function(y){
+                  var entry = legend.querySelector('.ge-quake-legend-item[data-year="'+y+'"]');
+                  if (entry) {
+                    var state = visibleYears[y];
+                    if (!state) entry.classList.add("muted"); else entry.classList.remove("muted");
+                    var cb = entry.querySelector('input.ge-year-toggle');
+                    if (cb) cb.checked = !!state;
+                  }
+                });
+              }
+
+              function updateShowAllState() {
+                var allVisible = years.every(function(y){ return visibleYears[y]; });
+                if (showAllCheckbox) {
+                  showAllCheckbox.checked = allVisible;
+                }
+                if (allVisible) {
+                  showAllItem.classList.remove("muted");
+                } else {
+                  showAllItem.classList.add("muted");
+                }
+              }
+
+              showAllCheckbox.addEventListener("click", function(e){
+                e.stopPropagation();
+                if (showAllCheckbox.checked) {
+                  setAllVisible();
+                } else {
+                  setDefaultVisible();
+                }
                 updateVisibility();
+                updateShowAllState();
               });
-              legend.appendChild(showAllItem);
+
+              showAllItem.addEventListener("click", function(){
+                var newState = !showAllCheckbox.checked;
+                showAllCheckbox.checked = newState;
+                if (newState) {
+                  setAllVisible();
+                } else {
+                  setDefaultVisible();
+                }
+                updateVisibility();
+                updateShowAllState();
+              });
 
               years.slice().reverse().forEach(function(y){
                 var color = palette[(years.indexOf(y)) % palette.length];
@@ -788,6 +856,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
                     item.classList.remove("muted");
                   }
                   updateVisibility();
+                  updateShowAllState();
                 }
 
                 checkbox.addEventListener("click", function(e){
@@ -816,6 +885,10 @@ function gaiaeyes_quakes_detail_shortcode($atts){
 
                 legend.appendChild(item);
               });
+
+              // Initialize legend checkbox states based on visibleYears
+              setDefaultVisible();
+              updateShowAllState();
             }
 
             updateVisibility();
