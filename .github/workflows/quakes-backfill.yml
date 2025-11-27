@@ -21,8 +21,8 @@ jobs:
       HISTORY_JSON_PATH: ${{ github.workspace }}/quakes_history.json
 
       # Control how much history to fetch
-      HISTORY_DAYS: "3650"          # ~10 years
-      HISTORY_MONTHS: "120"         # ~10 years of monthly data
+      HISTORY_DAYS: "5110"          # ~10 years
+      HISTORY_MONTHS: "168"         # ~10 years of monthly data
 
     steps:
       - name: Checkout backend repo
