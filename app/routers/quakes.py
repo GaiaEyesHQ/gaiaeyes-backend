@@ -70,35 +70,35 @@ async def quakes_events(
     It filters by minimum magnitude and a trailing time window (in hours), and
     returns a compact, badge-friendly shape.
 
-    NOTE: This assumes a table ext.earthquakes_events with at least:
-      - time_utc (timestamptz)
+    NOTE: This assumes a table ext.earthquakes with at least:
+      - origin_time (timestamptz)
       - mag (numeric)
       - depth_km (numeric)
-      - latitude (numeric)
-      - longitude (numeric)
+      - lat (numeric)
+      - lon (numeric)
       - place (text)
-      - source (text)
-      - url (text)
-      - usgs_id (text)
+      - src (text)
+      - meta (jsonb with optional url)
+      - event_id (text)
     """
     try:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
                 """
                 select
-                    time_utc,
+                    origin_time,
                     mag,
                     depth_km,
-                    latitude,
-                    longitude,
+                    lat,
+                    lon,
                     place,
-                    source,
-                    url,
-                    usgs_id
-                from ext.earthquakes_events
-                where time_utc >= now() - (%s || ' hours')::interval
+                    src as source,
+                    coalesce(meta->>'url', '') as url,
+                    event_id
+                from ext.earthquakes
+                where origin_time >= now() - (%s || ' hours')::interval
                   and (mag is not null and mag >= %s)
-                order by time_utc desc
+                order by origin_time desc
                 limit %s
                 """,
                 (hours, min_mag, limit),
@@ -114,19 +114,19 @@ async def quakes_events(
 
     items: list[dict] = []
     for row in rows:
-        ts = row.get("time_utc")
+        ts = row.get("origin_time")
         ts_iso = ts.isoformat().replace("+00:00", "Z") if hasattr(ts, "isoformat") else None
         items.append(
             {
                 "time_utc": ts_iso,
                 "mag": row.get("mag"),
                 "depth_km": row.get("depth_km"),
-                "lat": row.get("latitude"),
-                "lon": row.get("longitude"),
+                "lat": row.get("lat"),
+                "lon": row.get("lon"),
                 "place": row.get("place"),
                 "source": row.get("source"),
                 "url": row.get("url"),
-                "id": row.get("usgs_id"),
+                "id": row.get("event_id"),
             }
         )
 
