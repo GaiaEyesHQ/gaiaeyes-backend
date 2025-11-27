@@ -10,6 +10,7 @@ WEEK = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojs
 
 import urllib.request
 import urllib.parse
+from urllib.error import HTTPError, URLError
 
 # Supabase/PostgREST env (optional DB upserts)
 # Prefer an explicit SUPABASE_REST_URL if provided, otherwise derive from SUPABASE_URL.
@@ -57,6 +58,18 @@ def rest_upsert(schema: str, table: str, rows: list):
         with urllib.request.urlopen(req, timeout=30) as r:
             r.read()  # drain
         return True
+    except HTTPError as e:
+        # Print HTTP status and response body to help diagnose Supabase/PostgREST errors
+        body = ""
+        try:
+            body = e.read().decode("utf-8", "ignore")
+        except Exception:
+            pass
+        print(f"[postgrest] upsert {schema}.{table} failed: HTTP {e.code}: {body}", file=sys.stderr)
+        return False
+    except URLError as e:
+        print(f"[postgrest] upsert {schema}.{table} failed: URL error: {e}", file=sys.stderr)
+        return False
     except Exception as e:
         print(f"[postgrest] upsert {schema}.{table} failed: {e}", file=sys.stderr)
         return False
