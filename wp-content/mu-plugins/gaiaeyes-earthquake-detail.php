@@ -69,30 +69,62 @@ function gaiaeyes_quakes_detail_shortcode($atts){
     'M7.0+'    => (is_array($d) && isset($d['m7p'])) ? intval($d['m7p']) : 0,
   ];
 
-  // Monthly summary (last 6 months) + YoY delta for M5+ from /v1/quakes/history endpoint
+  // Determine view mode for Monthly & YoY: either "last6" (default) or a specific year (YYYY).
+  $selected_year = isset($_GET['quakes_year']) ? preg_replace('/[^0-9]/', '', (string) $_GET['quakes_year']) : '';
+  if ($selected_year === '' || strlen($selected_year) !== 4) {
+    $selected_year = 'last6';
+  }
+  $view_last6 = ($selected_year === 'last6');
+  $year_list = [];
+
+  // Monthly summary (last 6 months or selected year) + YoY/MoM delta for M5+ from /v1/quakes/history endpoint
   $monthly_rows = [];
   if (!empty($hist_items) && is_array($hist_items)) {
     $months = $hist_items;
-    // Build index of month (YYYY-MM) -> values for YoY/MoM lookup
+    // Build index of month (YYYY-MM) -> values for YoY/MoM lookup and collect available years
     $mon_idx = [];
     foreach ($months as $row) {
       $rawMonth = $row['month'] ?? '';
       if ($rawMonth === '') continue;
+      $year = substr($rawMonth, 0, 4);
+      if ($year !== '' && ctype_digit($year)) {
+        $year_list[$year] = true;
+      }
       $mk = substr($rawMonth, 0, 7); // normalize to "YYYY-MM"
       $mon_idx[$mk] = [
         'm5p' => isset($row['m5p']) ? intval($row['m5p']) : null,
         'all' => isset($row['all_quakes']) ? intval($row['all_quakes']) : null,
       ];
     }
-    // keep last 6 (most recent) entries and display oldest→newest
-    $tail = array_slice($months, 0, 6);
-    $tail = array_reverse($tail);
-    foreach ($tail as $row) {
+    // Normalize year_list to a sorted array of years (newest first)
+    $year_list = array_keys($year_list);
+    rsort($year_list);
+
+    // Choose subset of months for display
+    if ($view_last6) {
+      // Last 6 (most recent) entries and display oldest→newest
+      $subset = array_slice($months, 0, 6);
+      $subset = array_reverse($subset);
+    } else {
+      // All months in the selected year, oldest→newest
+      $subset = [];
+      foreach ($months as $row) {
+        $rawMonth = $row['month'] ?? '';
+        if ($rawMonth === '') continue;
+        $year = substr($rawMonth, 0, 4);
+        if ($year === $selected_year) {
+          $subset[] = $row;
+        }
+      }
+      $subset = array_reverse($subset);
+    }
+
+    foreach ($subset as $row) {
       $rawMonth = $row['month'] ?? '';
       $mon = $rawMonth !== '' ? substr($rawMonth, 0, 7) : '';
       $m5  = isset($row['m5p']) ? intval($row['m5p']) : null;
       $all = isset($row['all_quakes']) ? intval($row['all_quakes']) : null;
-      // Compute YoY delta for M5+: current month minus same month last year; fallback to MoM if YoY missing
+      // Compute YoY and MoM deltas for M5+
       $yoy = null; $mom = null;
       if ($mon !== '' && $m5 !== null) {
         try {
@@ -104,7 +136,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             if (isset($mon_idx[$prev_year_key]) && isset($mon_idx[$prev_year_key]['m5p'])) {
               $yoy = $m5 - intval($mon_idx[$prev_year_key]['m5p']);
             }
-            // MoM (fallback when YoY is not available)
+            // MoM
             $dtmMoM = clone $dtmCur; $dtmMoM->sub(new DateInterval('P1M'));
             $prev_mon_key = $dtmMoM->format('Y-m');
             if (isset($mon_idx[$prev_mon_key]) && isset($mon_idx[$prev_mon_key]['m5p'])) {
@@ -337,7 +369,28 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       <?php if (!empty($monthly_rows)) : ?>
       <article class="ge-card">
         <h3 id="monthly">Monthly & YoY <a class="anchor-link" href="#monthly" aria-label="Link to Monthly & YoY">🔗</a></h3>
-        <div class="ge-note">Last 6 months (global). M5+ counts shown; totals where available.</div>
+        <div class="ge-note">
+          <?php if ($view_last6): ?>
+            Last 6 months (global). M5+ counts shown; totals where available.
+          <?php else: ?>
+            Year <?php echo esc_html($selected_year); ?> (global). M5+ counts shown; totals where available.
+          <?php endif; ?>
+        </div>
+        <?php if (!empty($year_list)): ?>
+        <form method="get" class="ge-year-filter" style="margin-bottom:6px;">
+          <label>
+            View:
+            <select name="quakes_year" onchange="this.form.submit()">
+              <option value="last6"<?php if ($view_last6) echo ' selected'; ?>>Last 6 months</option>
+              <?php foreach ($year_list as $yr): ?>
+                <option value="<?php echo esc_attr($yr); ?>"<?php if (!$view_last6 && $selected_year === $yr) echo ' selected'; ?>>
+                  Year <?php echo esc_html($yr); ?>
+                </option>
+              <?php endforeach; ?>
+            </select>
+          </label>
+        </form>
+        <?php endif; ?>
         <table class="ge-table">
           <thead><tr><th>Month</th><th>M5+</th><th>YoY Δ (M5+)</th><th>MoM Δ (M5+)</th><th>All</th></tr></thead>
           <tbody>
