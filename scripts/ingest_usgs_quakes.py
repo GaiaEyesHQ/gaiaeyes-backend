@@ -12,8 +12,17 @@ import urllib.request
 import urllib.parse
 
 # Supabase/PostgREST env (optional DB upserts)
-REST = os.getenv("SUPABASE_REST_URL", "").rstrip("/")
-KEY  = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_ANON_KEY", "")
+# Prefer an explicit SUPABASE_REST_URL if provided, otherwise derive from SUPABASE_URL.
+REST = os.getenv("SUPABASE_REST_URL", "") or os.getenv("SUPABASE_URL", "")
+REST = REST.rstrip("/")
+if REST and "/rest/v1" not in REST:
+    REST = REST + "/rest/v1"
+# Prefer a service role key, fall back to SUPABASE_SERVICE_KEY or anon key if present.
+KEY = (
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    or os.getenv("SUPABASE_SERVICE_KEY", "")
+    or os.getenv("SUPABASE_ANON_KEY", "")
+)
 
 def rest_upsert(schema: str, table: str, rows: list):
     """Upsert rows into schema.table via PostgREST (Prefer: resolution=merge-duplicates)."""
