@@ -44,7 +44,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
   // Fetch recent event-level data from /v1/quakes/events for the "Recent Events" list.
   $events_payload = $api_base
     ? gaiaeyes_http_get_json_api_cached(
-        $api_base . '/v1/quakes/events?min_mag=4.5&hours=72&limit=200',
+        $api_base . '/v1/quakes/events?min_mag=0&hours=24&limit=500',
         'ge_quakes_events',
         $ttl,
         $bearer,
@@ -190,8 +190,8 @@ function gaiaeyes_quakes_detail_shortcode($atts){
 
     <div class="ge-grid">
       <article class="ge-card">
-        <h3 id="recent">Recent Events (M5.0+) <a class="anchor-link" href="#recent" aria-label="Link to Recent Events">🔗</a></h3>
-        <div class="ge-note">Note: This list shows magnitude 5.0 and above. Global stats above include all magnitudes.</div>
+        <h3 id="recent">Recent Events (Last 24 Hours) <a class="anchor-link" href="#recent" aria-label="Link to Recent Events">🔗</a></h3>
+        <div class="ge-note">This list shows all earthquakes from the past 24 hours. Use the “Show” toggle to focus on M5+ events. Global stats above include all magnitudes.</div>
         <div class="ge-filters" id="geEqFilters">
           <div class="flt-group">
             <span class="flt-label">Show:</span>
