@@ -482,7 +482,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       <?php endif; ?>
 
       <article class="ge-card">
-        <h3 id="quake-trends">10-Year Monthly M5+ Trends <a class="anchor-link" href="#quake-trends" aria-label="Link to 10-Year Monthly M5+ Trends">🔗</a></h3>
+        <h3 id="quake-trends">14-Year Monthly M5+ Trends <a class="anchor-link" href="#quake-trends" aria-label="Link to 14-Year Monthly M5+ Trends">🔗</a></h3>
         <div class="ge-note">Each line represents a year. X-axis is month (Jan–Dec), Y-axis is M5+ count. Latest year is highlighted.</div>
         <div id="geQuakeChart" class="ge-quake-chart"></div>
         <div id="geQuakeChartLegend" class="ge-quake-chart-legend"></div>
@@ -509,9 +509,9 @@ function gaiaeyes_quakes_detail_shortcode($atts){
 
             var years = Object.keys(byYear).filter(function(y){ return /^[0-9]{4}$/.test(y); }).sort();
             if (!years.length) return;
-            // Keep at most the last 10 years
-            if (years.length > 10) {
-              years = years.slice(years.length - 10);
+            // Keep at most the last 14 years
+            if (years.length > 14) {
+              years = years.slice(years.length - 14);
             }
 
             // Sort months ascending within each year and fill missing months with null
