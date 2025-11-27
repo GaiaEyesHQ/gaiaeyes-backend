@@ -234,6 +234,13 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             <label><input type="radio" name="eqSort" value="mag_asc"> Mag ↑</label>
             <label><input type="radio" name="eqSort" value="place"> Location A–Z</label>
           </div>
+          <div class="flt-group">
+            <span class="flt-label">Mag:</span>
+            <label><input type="radio" name="eqMagRange" value="all" checked> All</label>
+            <label><input type="radio" name="eqMagRange" value="0_4"> M0–3.9</label>
+            <label><input type="radio" name="eqMagRange" value="4_5"> M4.0–4.9</label>
+            <label><input type="radio" name="eqMagRange" value="5p"> M5+</label>
+          </div>
         </div>
         <div id="geEqListWrap">
           <ul class="ev-list" id="geEqList"></ul>
@@ -386,9 +393,22 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               return pa.localeCompare(pb);
             }
 
+            function getMagRange(){
+              return (filters.querySelector('input[name="eqMagRange"]:checked')||{}).value || 'all';
+            }
+            function magPass(ev){
+              const range = getMagRange();
+              const m = (typeof ev.mag === 'number') ? ev.mag : parseFloat(ev.mag);
+              if (isNaN(m)) return range === 'all';
+              if (range === '0_4') return m < 4.0;
+              if (range === '4_5') return m >= 4.0 && m < 5.0;
+              if (range === '5p')  return m >= 5.0;
+              return true; // 'all'
+            }
             function currentList(){
               const show = (filters.querySelector('input[name="eqShow"]:checked')||{}).value || 'm5';
-              return show==='all'? listAll.slice() : listM5.slice();
+              let base = (show === 'all') ? listAll.slice() : listM5.slice();
+              return base.filter(magPass);
             }
 
             const moreCtl = document.getElementById('geEqMoreCtl');
@@ -407,6 +427,39 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               btnMore.style.display = (shown < items.length) ? 'inline-block' : 'none';
               btnAll.style.display  = (shown < items.length) ? 'inline-block' : 'none';
               btnLess.style.display = (shown > pageSize) ? 'inline-block' : 'none';
+            }
+
+            function renderClusters(items){
+              const id = 'geEqClusters';
+              let node = document.getElementById(id);
+              if (!items || !items.length){
+                if (node) node.remove();
+                return;
+              }
+              const clustersMap = {};
+              items.forEach(function(ev){
+                const key = normalizePlace(ev.place);
+                if (!key) return;
+                if (!clustersMap[key]) {
+                  clustersMap[key] = { count: 0, sample: ev.place || '' };
+                }
+                clustersMap[key].count++;
+              });
+              const clusters = Object.values(clustersMap).filter(function(c){ return c.count >= 3; }).sort(function(a,b){ return b.count - a.count; });
+              if (!clusters.length){
+                if (node) node.remove();
+                return;
+              }
+              if (!node){
+                node = document.createElement('div');
+                node.id = id;
+                node.className = 'ge-note';
+                wrap.insertBefore(node, wrap.firstChild);
+              }
+              const parts = clusters.slice(0, 5).map(function(c){
+                return c.count + ' near ' + c.sample;
+              });
+              node.textContent = 'Clusters (24h): ' + parts.join(' · ');
             }
 
             function renderHintIfCapped(items){
@@ -442,6 +495,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               }
               render(items);
               updateButtons(items);
+              renderClusters(items);
               renderHintIfCapped(items);
             }
 
