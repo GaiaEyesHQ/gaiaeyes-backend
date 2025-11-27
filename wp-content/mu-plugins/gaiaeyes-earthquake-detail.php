@@ -62,11 +62,18 @@ function gaiaeyes_quakes_detail_shortcode($atts){
   $tot_all = is_array($d) && isset($d['all_quakes']) ? intval($d['all_quakes']) : null;
 
   // Buckets approximated from the daily aggregates by magnitude class
+  $m4 = (is_array($d) && isset($d['m4p'])) ? intval($d['m4p']) : 0;
+  $m5 = (is_array($d) && isset($d['m5p'])) ? intval($d['m5p']) : 0;
+  $m6 = (is_array($d) && isset($d['m6p'])) ? intval($d['m6p']) : 0;
+  $m7 = (is_array($d) && isset($d['m7p'])) ? intval($d['m7p']) : 0;
+  $low = ($tot_all !== null) ? max(0, $tot_all - ($m4 + $m5 + $m6 + $m7)) : null;
+
   $buckets = [
-    'M4.0–4.9' => (is_array($d) && isset($d['m4p'])) ? intval($d['m4p']) : 0,
-    'M5.0–5.9' => (is_array($d) && isset($d['m5p'])) ? intval($d['m5p']) : 0,
-    'M6.0–6.9' => (is_array($d) && isset($d['m6p'])) ? intval($d['m6p']) : 0,
-    'M7.0+'    => (is_array($d) && isset($d['m7p'])) ? intval($d['m7p']) : 0,
+    'M0–3.9'   => $low !== null ? $low : 0,
+    'M4.0–4.9' => $m4,
+    'M5.0–5.9' => $m5,
+    'M6.0–6.9' => $m6,
+    'M7.0+'    => $m7,
   ];
 
   // Determine view mode for Monthly & YoY: either "last6" (default) or a specific year (YYYY).
@@ -175,12 +182,25 @@ function gaiaeyes_quakes_detail_shortcode($atts){
     <article class="ge-card ge-topstats">
       <h3 id="stats">Global Stats (all magnitudes) <a class="anchor-link" href="#stats" aria-label="Link to Global Stats">🔗</a></h3>
       <div class="ge-meta-row">
-        <span><strong>Total (all mags):</strong> <?php echo ($tot_all!==null)? intval($tot_all) : '—'; ?></span>
+        <span class="total-all">
+          <strong>Total (all mags):</strong>
+          <span class="total-all-val"><?php echo ($tot_all!==null)? intval($tot_all) : '—'; ?></span>
+        </span>
       </div>
       <div class="ge-note">Distribution shown for all magnitudes (USGS day feed). The Recent Events list defaults to M5.0+.</div>
       <div class="bucket-grid">
-        <?php foreach ($buckets as $label=>$count): ?>
-          <div class="bucket-item"><span class="b-lab"><?php echo esc_html($label); ?></span><span class="b-val"><?php echo intval($count); ?></span></div>
+        <?php foreach ($buckets as $label=>$count): 
+          $bClass = '';
+          if (strpos($label, 'M0') === 0)      $bClass = 'bucket-low';
+          elseif (strpos($label, 'M4.') === 0) $bClass = 'bucket-m4';
+          elseif (strpos($label, 'M5.') === 0) $bClass = 'bucket-m5';
+          elseif (strpos($label, 'M6.') === 0) $bClass = 'bucket-m6';
+          elseif (strpos($label, 'M7') === 0)  $bClass = 'bucket-m7';
+        ?>
+          <div class="bucket-item <?php echo esc_attr($bClass); ?>">
+            <span class="b-lab"><?php echo esc_html($label); ?></span>
+            <span class="b-val"><?php echo intval($count); ?></span>
+          </div>
         <?php endforeach; ?>
       </div>
       <div class="ge-cta">
@@ -200,8 +220,11 @@ function gaiaeyes_quakes_detail_shortcode($atts){
           </div>
           <div class="flt-group">
             <span class="flt-label">Sort:</span>
-            <label><input type="radio" name="eqSort" value="latest" checked> Latest</label>
-            <label><input type="radio" name="eqSort" value="mag"> Magnitude</label>
+            <label><input type="radio" name="eqSort" value="latest" checked> Latest ↓</label>
+            <label><input type="radio" name="eqSort" value="oldest"> Oldest ↑</label>
+            <label><input type="radio" name="eqSort" value="mag_desc"> Mag ↓</label>
+            <label><input type="radio" name="eqSort" value="mag_asc"> Mag ↑</label>
+            <label><input type="radio" name="eqSort" value="place"> Location A–Z</label>
           </div>
         </div>
         <div id="geEqListWrap">
@@ -312,15 +335,33 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               });
             }
 
-            function sortLatest(a,b){
+            function sortLatestDesc(a,b){
               const ta = Date.parse(a.time_utc||'');
               const tb = Date.parse(b.time_utc||'');
               return (isNaN(tb)?0:tb) - (isNaN(ta)?0:ta);
             }
-            function sortMag(a,b){
+            function sortLatestAsc(a,b){
+              const ta = Date.parse(a.time_utc||'');
+              const tb = Date.parse(b.time_utc||'');
+              return (isNaN(ta)?0:ta) - (isNaN(tb)?0:tb);
+            }
+            function sortMagDesc(a,b){
               const ma = (typeof a.mag==='number')? a.mag : parseFloat(a.mag)||0;
               const mb = (typeof b.mag==='number')? b.mag : parseFloat(b.mag)||0;
               return mb - ma;
+            }
+            function sortMagAsc(a,b){
+              const ma = (typeof a.mag==='number')? a.mag : parseFloat(a.mag)||0;
+              const mb = (typeof b.mag==='number')? b.mag : parseFloat(b.mag)||0;
+              return ma - mb;
+            }
+            function sortPlace(a,b){
+              const pa = (a.place || '').toLowerCase();
+              const pb = (b.place || '').toLowerCase();
+              if (!pa && !pb) return 0;
+              if (!pa) return 1;
+              if (!pb) return -1;
+              return pa.localeCompare(pb);
             }
 
             function currentList(){
@@ -364,7 +405,19 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             function applyAndButtons(){
               const items = currentList();
               const sort = (filters.querySelector('input[name="eqSort"]:checked')||{}).value || 'latest';
-              items.sort(sort==='mag'? sortMag : sortLatest);
+              if (sort === 'latest') {
+                items.sort(sortLatestDesc);
+              } else if (sort === 'oldest') {
+                items.sort(sortLatestAsc);
+              } else if (sort === 'mag_desc') {
+                items.sort(sortMagDesc);
+              } else if (sort === 'mag_asc') {
+                items.sort(sortMagAsc);
+              } else if (sort === 'place') {
+                items.sort(sortPlace);
+              } else {
+                items.sort(sortLatestDesc);
+              }
               render(items);
               updateButtons(items);
               renderHintIfCapped(items);
@@ -1006,6 +1059,10 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .bucket-item{background:#1b2233;border:1px solid #344a72;border-radius:10px;padding:8px;text-align:center}
       .b-lab{display:block;font-size:.85rem;opacity:.85}
       .b-val{display:block;font-size:1.05rem;font-weight:700}
+      .bucket-item.bucket-m4 .b-val { color: #ffd089; }  /* similar to sev-low */
+      .bucket-item.bucket-m5 .b-val { color: #ffd089; }  /* still moderate */
+      .bucket-item.bucket-m6 .b-val { color: #ffb347; }  /* sev-medium orange */
+      .bucket-item.bucket-m7 .b-val { color: #ff6b6b; }  /* sev-high red */
       .anchor-link{opacity:0;margin-left:8px;font-size:.9rem;color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25);transition:opacity .2s ease}
       .ge-card h3:hover .anchor-link{opacity:1}
       .anchor-link:hover{border-bottom-color:rgba(255,255,255,.6)}
@@ -1095,3 +1152,8 @@ function gaiaeyes_quakes_detail_shortcode($atts){
   return ob_get_clean();
 }
 add_shortcode('gaia_quakes_detail','gaiaeyes_quakes_detail_shortcode');
+
+      .total-all-val {
+        color: #ffb347;
+        font-weight: 700;
+      }
