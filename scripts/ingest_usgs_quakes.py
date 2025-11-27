@@ -183,6 +183,30 @@ def main():
             if events_rows:
                 rest_upsert("ext", "earthquakes_events", events_rows)
 
+            # Upsert into ext.earthquakes for API consumers (/v1/quakes/events)
+            quakes_rows = []
+            for f in all_features:
+                ev = pick(f)
+                if not ev.get("usgs_id") or not ev.get("time_utc"):
+                    continue
+                quakes_rows.append({
+                    "event_id": ev["usgs_id"],
+                    "origin_time": ev["time_utc"],
+                    "mag": ev["mag"],
+                    "depth_km": ev.get("depth_km"),
+                    "lat": ev.get("latitude"),
+                    "lon": ev.get("longitude"),
+                    "place": ev.get("place"),
+                    "src": "usgs",
+                    "meta": {
+                        "url": ev.get("url"),
+                        "magType": ev.get("magType"),
+                        "tsunami": ev.get("tsunami"),
+                    },
+                })
+            if quakes_rows:
+                rest_upsert("ext", "earthquakes", quakes_rows)
+
             # Upsert day snapshot into ext.earthquakes_day
             day_row = {
                 "day": now.date().isoformat(),
