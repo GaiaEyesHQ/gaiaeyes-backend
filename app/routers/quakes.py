@@ -209,7 +209,6 @@ async def quakes_history(conn=Depends(get_db)):
                 select month as day, all_quakes, m4p, m5p, m6p, m7p
                 from marts.quakes_monthly
                 order by month desc
-                limit 36
                 """,
                 prepare=False,
             )
