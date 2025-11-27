@@ -1152,8 +1152,3 @@ function gaiaeyes_quakes_detail_shortcode($atts){
   return ob_get_clean();
 }
 add_shortcode('gaia_quakes_detail','gaiaeyes_quakes_detail_shortcode');
-
-      .total-all-val {
-        color: #ffb347;
-        font-weight: 700;
-      }
