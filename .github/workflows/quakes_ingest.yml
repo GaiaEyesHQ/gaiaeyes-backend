@@ -17,8 +17,8 @@ jobs:
       contents: read
     env:
       # Supabase project + service role for REST upserts
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
       # Optional: override USGS feed URLs if ingest script supports them
       # USGS_FEED_DAY: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
       # USGS_FEED_WEEK: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
