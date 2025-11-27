@@ -146,7 +146,9 @@ def build():
 def main():
     out = build()
     path = os.getenv("OUTPUT_JSON_PATH", "quakes_history.json")
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    dirpath = os.path.dirname(path)
+    if dirpath:
+        os.makedirs(dirpath, exist_ok=True)
     raw = json.dumps(out, ensure_ascii=False, separators=(",",":"))
     with open(path, "w", encoding="utf-8") as f:
         f.write(raw)
