@@ -364,16 +364,19 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               return ma - mb;
             }
             function normalizePlace(str){
-  let p = (str || '').toLowerCase().trim();
-  // Remove common leading descriptors to improve grouping
-  const prefixes = ['near ', 'off the coast of ', 'off the ', 'the '];
-  prefixes.forEach(function(pref){
-    if (p.startsWith(pref)) {
-      p = p.slice(pref.length);
-    }
-  });
-  return p;
-}
+              let p = (str || '').toLowerCase().trim();
+              // Remove common leading descriptors to improve grouping
+              const prefixes = ['near ', 'off the coast of ', 'off the ', 'the '];
+              prefixes.forEach(function(pref){
+                if (p.startsWith(pref)) {
+                  p = p.slice(pref.length);
+                }
+              });
+              // Remove distance/direction patterns like "3 km NW of " or "1 km N of "
+              // e.g. "0 km NNW of The Geysers, CA" -> "the geysers, ca"
+              p = p.replace(/^[0-9.\-]+\s*km\s+[a-z]{1,3}\s+of\s+/i, '');
+              return p;
+            }
             function sortPlace(a,b){
               const pa = normalizePlace(a.place);
               const pb = normalizePlace(b.place);
