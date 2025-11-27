@@ -1146,7 +1146,15 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .sev-medium .ev-mag{color:#ffb347}
       .sev-high .ev-mag{color:#ff6b6b}
       .ge-note{opacity:.8;font-size:.9rem;margin:.25rem 0 .5rem 0}
-      .ge-filters{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:.35rem 0 .5rem}
+      .ge-filters{
+        display:flex;
+        gap:16px;
+        flex-wrap:wrap;
+        align-items:center;
+        margin:.25rem 0 .5rem;
+        padding-top:4px;
+        border-top:1px solid rgba(255,255,255,.08);
+      }
       .flt-group{display:flex;gap:8px;align-items:center}
       .flt-label{opacity:.85}
       .ge-topstats{margin-bottom:12px}
@@ -1156,6 +1164,14 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .btn-compare:hover{border-color:#4b6aa1}
       .ge-more{display:flex;gap:8px;margin:.5rem 0}
       .ge-note#geEqHint{ margin-top:.25rem }
+      #geEqClusters{
+        margin:.4rem 0 .6rem;
+        padding:4px 8px;
+        border-radius:6px;
+        background:rgba(255,255,255,.03);
+        border:1px solid rgba(255,255,255,.1);
+        font-size:.9rem;
+      }
       .btn-more{background:#1b2233;color:#cfe3ff;border:1px solid #344a72;border-radius:8px;padding:6px 10px;cursor:pointer}
       .btn-more:hover{border-color:#4b6aa1}
       .ge-table{width:100%;border-collapse:collapse;margin-top:6px}
