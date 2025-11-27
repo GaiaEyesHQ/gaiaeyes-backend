@@ -147,6 +147,21 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       }
       $monthly_rows[] = [ 'month' => $mon, 'm5p' => $m5, 'all' => $all, 'yoy_m5p' => $yoy, 'mom_m5p' => $mom ];
     }
+    // After building $monthly_rows, compute per-year totals and YoY deltas for M5+
+    $year_totals = [];
+    if (!empty($hist_items) && is_array($hist_items)) {
+      foreach ($hist_items as $row) {
+        $rawMonth = $row['month'] ?? '';
+        if ($rawMonth === '') continue;
+        $year = substr($rawMonth, 0, 4);
+        if ($year === '' || !ctype_digit($year)) continue;
+        $m5  = isset($row['m5p']) ? intval($row['m5p']) : 0;
+        if (!isset($year_totals[$year])) {
+          $year_totals[$year] = 0;
+        }
+        $year_totals[$year] += $m5;
+      }
+    }
   }
 
   $max_items = max(1, intval($a['max']));
@@ -394,6 +409,28 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             </select>
           </label>
         </form>
+        <?php
+          if (!$view_last6 && !empty($year_totals)) {
+            $cur_year = $selected_year;
+            $cur_total = isset($year_totals[$cur_year]) ? $year_totals[$cur_year] : null;
+            $prev_year = (string) ((int) $cur_year - 1);
+            $prev_total = isset($year_totals[$prev_year]) ? $year_totals[$prev_year] : null;
+            if ($cur_total !== null && $prev_total !== null) {
+              $delta = $cur_total - $prev_total;
+              $cls = ($delta > 0) ? 'delta-pos' : (($delta < 0) ? 'delta-neg' : '');
+              echo '<div class="ge-note" style="margin-top:4px;">';
+              echo 'Year&nbsp;' . esc_html($cur_year) . ' had ';
+              echo '<span class="' . esc_attr($cls) . '">';
+              echo ($delta > 0 ? '+' : '') . intval($delta);
+              echo '</span> more M5+ earthquakes than ' . esc_html($prev_year) . '.';
+              echo '</div>';
+            } elseif ($cur_total !== null) {
+              echo '<div class="ge-note" style="margin-top:4px;">';
+              echo 'Year&nbsp;' . esc_html($cur_year) . ' had ' . intval($cur_total) . ' M5+ earthquakes.';
+              echo '</div>';
+            }
+          }
+        ?>
         <?php endif; ?>
         <table class="ge-table">
           <thead>
