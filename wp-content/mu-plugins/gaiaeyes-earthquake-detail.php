@@ -459,7 +459,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
               const parts = clusters.slice(0, 5).map(function(c){
                 return c.count + ' near ' + c.sample;
               });
-              node.textContent = 'Clusters (24h): ' + parts.join(' · ');
+              node.innerHTML = '<strong>🟣 Clusters (24h)</strong>: ' + parts.join(' · ');
             }
 
             function renderHintIfCapped(items){
