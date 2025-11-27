@@ -199,13 +199,14 @@ def main():
     try:
         if REST and KEY:
             # Upsert raw events into ext.earthquakes_events (dedup by usgs_id)
-            events_rows = []
+            events_rows_map = {}
             for f in all_features:
                 ev = pick(f)
-                if not ev.get("usgs_id"):
+                uid = ev.get("usgs_id")
+                if not uid:
                     continue
-                events_rows.append({
-                    "usgs_id": ev["usgs_id"],
+                events_rows_map[uid] = {
+                    "usgs_id": uid,
                     "time_utc": ev["time_utc"],
                     "mag": ev["mag"],
                     "mag_type": ev.get("magType"),
@@ -214,19 +215,21 @@ def main():
                     "latitude": ev.get("latitude"),
                     "longitude": ev.get("longitude"),
                     "url": ev.get("url"),
-                    "source": "usgs"
-                })
+                    "source": "usgs",
+                }
+            events_rows = list(events_rows_map.values())
             if events_rows:
                 rest_upsert("ext", "earthquakes_events", events_rows)
 
             # Upsert into ext.earthquakes for API consumers (/v1/quakes/events)
-            quakes_rows = []
+            quakes_rows_map = {}
             for f in all_features:
                 ev = pick(f)
-                if not ev.get("usgs_id") or not ev.get("time_utc"):
+                uid = ev.get("usgs_id")
+                if not uid or not ev.get("time_utc"):
                     continue
-                quakes_rows.append({
-                    "event_id": ev["usgs_id"],
+                quakes_rows_map[uid] = {
+                    "event_id": uid,
                     "origin_time": ev["time_utc"],
                     "mag": ev["mag"],
                     "depth_km": ev.get("depth_km"),
@@ -239,7 +242,8 @@ def main():
                         "magType": ev.get("magType"),
                         "tsunami": ev.get("tsunami"),
                     },
-                })
+                }
+            quakes_rows = list(quakes_rows_map.values())
             if quakes_rows:
                 rest_upsert("ext", "earthquakes", quakes_rows)
 
