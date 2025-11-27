@@ -586,7 +586,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
             axis.appendChild(xAxis);
 
             // X-axis month ticks/labels
-            var monthsShort = ["J","F","M","A","M","J","J","A","S","O","N","D"];
+            var monthsShort = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
             for (var m = 1; m <= 12; m++) {
               var mx = monthToX(m);
               var tick = document.createElementNS(svgNS, "line");
@@ -733,22 +733,46 @@ function gaiaeyes_quakes_detail_shortcode($atts){
 
             if (legend) {
               legend.innerHTML = "";
+              // Median legend entry
+              var medianItem = document.createElement("span");
+              medianItem.className = "ge-quake-legend-item median";
+              medianItem.innerHTML = '<span class="swatch median"></span><span class="label">Median (dashed line)</span>';
+              legend.appendChild(medianItem);
+
               years.slice().reverse().forEach(function(y){
                 var color = palette[(years.indexOf(y)) % palette.length];
                 var item = document.createElement("span");
                 item.className = "ge-quake-legend-item" + (y === latestYear ? " latest" : "");
                 item.setAttribute("data-year", y);
-                item.innerHTML = '<span class="swatch" style="background:'+color+'"></span>' +
-                                 '<span class="label">'+y+(y === latestYear ? " (latest)" : "")+'</span>';
-                item.addEventListener("click", function(){
-                  visibleYears[y] = !visibleYears[y];
-                  if (!visibleYears[y]) {
+                item.innerHTML =
+                  '<label class="legend-year-label">' +
+                    '<input type="checkbox" class="ge-year-toggle" checked>' +
+                    '<span class="swatch" style="background:'+color+'"></span>' +
+                    '<span class="label">'+y+(y === latestYear ? " (latest)" : "")+'</span>' +
+                  '</label>';
+
+                var checkbox = item.querySelector('input.ge-year-toggle');
+
+                function setVisible(state) {
+                  visibleYears[y] = state;
+                  checkbox.checked = state;
+                  if (!state) {
                     item.classList.add("muted");
                   } else {
                     item.classList.remove("muted");
                   }
                   updateVisibility();
+                }
+
+                checkbox.addEventListener("click", function(e){
+                  e.stopPropagation();
+                  setVisible(checkbox.checked);
                 });
+
+                item.addEventListener("click", function(){
+                  setVisible(!visibleYears[y]);
+                });
+
                 item.addEventListener("mouseenter", function(){
                   var p = yearPaths[y];
                   if (!p) return;
@@ -763,6 +787,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
                   p.setAttribute("stroke-width", baseWidth);
                   p.setAttribute("stroke-opacity", baseOpacity);
                 });
+
                 legend.appendChild(item);
               });
             }
@@ -939,6 +964,18 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .ge-quake-legend-item.latest { opacity: 1; font-weight: 600; }
       .ge-quake-legend-item .swatch { width:12px; height:12px; border-radius:2px; display:inline-block; }
       .ge-quake-legend-item.muted { opacity: .25; }
+      .ge-quake-legend-item.median .swatch {
+        background: none;
+        border: 1px dashed rgba(255,255,255,0.7);
+      }
+      .legend-year-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .legend-year-label input.ge-year-toggle {
+        margin: 0;
+      }
     </style>
   </section>
   <?php
