@@ -1,0 +1,48 @@
+name: Quakes Monthly Backfill (One-Time)
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    name: Run quakes monthly backfill
+    runs-on: ubuntu-latest
+
+    env:
+      # Supabase REST targets
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # Path where ingest_usgs_history.py will write history JSON
+      HISTORY_JSON_PATH: ${{ github.workspace }}/quakes_history.json
+
+      # Control how much history to fetch
+      HISTORY_DAYS: "3650"          # ~10 years
+      HISTORY_MONTHS: "120"         # ~10 years of monthly data
+
+    steps:
+      - name: Checkout backend repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install requests "psycopg[binary]"
+
+      - name: Generate quakes_history.json (10 years)
+        run: |
+          mkdir -p "$(dirname "$HISTORY_JSON_PATH")"
+          python scripts/ingest_usgs_history.py
+
+      - name: Backfill marts.quakes_monthly from history JSON
+        run: |
+          python scripts/backfill_quakes_monthly_from_history.py
