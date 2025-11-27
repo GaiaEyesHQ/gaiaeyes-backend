@@ -84,8 +84,9 @@ function gaiaeyes_quakes_detail_shortcode($atts){
         'all' => isset($row['all_quakes']) ? intval($row['all_quakes']) : null,
       ];
     }
-    // keep last 6 entries
-    $tail = array_slice($months, -6);
+    // keep last 6 (most recent) entries and display oldest→newest
+    $tail = array_slice($months, 0, 6);
+    $tail = array_reverse($tail);
     foreach ($tail as $row) {
       $rawMonth = $row['month'] ?? '';
       $mon = $rawMonth !== '' ? substr($rawMonth, 0, 7) : '';
@@ -338,7 +339,7 @@ function gaiaeyes_quakes_detail_shortcode($atts){
         <h3 id="monthly">Monthly & YoY <a class="anchor-link" href="#monthly" aria-label="Link to Monthly & YoY">🔗</a></h3>
         <div class="ge-note">Last 6 months (global). M5+ counts shown; totals where available.</div>
         <table class="ge-table">
-          <thead><tr><th>Month</th><th>M5+</th><th>YoY Δ (M5+)</th><th>All</th></tr></thead>
+          <thead><tr><th>Month</th><th>M5+</th><th>YoY Δ (M5+)</th><th>MoM Δ (M5+)</th><th>All</th></tr></thead>
           <tbody>
             <?php foreach ($monthly_rows as $r): ?>
               <tr>
@@ -347,14 +348,20 @@ function gaiaeyes_quakes_detail_shortcode($atts){
                 <td>
                   <?php
                     if ($r['yoy_m5p'] === null) {
-                      if ($r['mom_m5p'] === null) { echo '—'; }
-                      else {
-                        $cls = ($r['mom_m5p'] > 0) ? 'delta-pos' : (($r['mom_m5p'] < 0) ? 'delta-neg' : '');
-                        echo '<span class="'.esc_attr($cls).'">'.(($r['mom_m5p']>0?'+':'').intval($r['mom_m5p'])).'</span> <small class="delta-tag">(MoM)</small>';
-                      }
+                      echo '—';
                     } else {
                       $cls = ($r['yoy_m5p'] > 0) ? 'delta-pos' : (($r['yoy_m5p'] < 0) ? 'delta-neg' : '');
-                      echo '<span class="'.esc_attr($cls).'">'.(($r['yoy_m5p']>0?'+':'').intval($r['yoy_m5p'])).'</span>';
+                      echo '<span class="'.esc_attr($cls).'">'.(($r['yoy_m5p'] > 0 ? '+' : '').intval($r['yoy_m5p'])).'</span>';
+                    }
+                  ?>
+                </td>
+                <td>
+                  <?php
+                    if ($r['mom_m5p'] === null) {
+                      echo '—';
+                    } else {
+                      $cls = ($r['mom_m5p'] > 0) ? 'delta-pos' : (($r['mom_m5p'] < 0) ? 'delta-neg' : '');
+                      echo '<span class="'.esc_attr($cls).'">'.(($r['mom_m5p'] > 0 ? '+' : '').intval($r['mom_m5p'])).'</span>';
                     }
                   ?>
                 </td>
