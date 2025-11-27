@@ -1007,6 +1007,16 @@ function gaiaeyes_quakes_detail_shortcode($atts){
         margin: 0;
       }
     </style>
+  <?php if (isset($_GET['quakes_year']) && $_GET['quakes_year'] !== '' && $_GET['quakes_year'] !== 'last6'): ?>
+    <script>
+      (function(){
+        // After the page reloads with a specific year selected, scroll to the Monthly & YoY section.
+        if (location.hash !== '#monthly' && location.hash !== '#quake-trends') {
+          location.hash = '#monthly';
+        }
+      })();
+    </script>
+  <?php endif; ?>
   </section>
   <?php
   return ob_get_clean();
