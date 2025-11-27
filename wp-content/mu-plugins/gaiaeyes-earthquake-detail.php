@@ -480,6 +480,168 @@ function gaiaeyes_quakes_detail_shortcode($atts){
         </table>
       </article>
       <?php endif; ?>
+
+      <article class="ge-card">
+        <h3 id="quake-trends">10-Year Monthly M5+ Trends <a class="anchor-link" href="#quake-trends" aria-label="Link to 10-Year Monthly M5+ Trends">🔗</a></h3>
+        <div class="ge-note">Each line represents a year. X-axis is month (Jan–Dec), Y-axis is M5+ count. Latest year is highlighted.</div>
+        <div id="geQuakeChart" class="ge-quake-chart"></div>
+        <div id="geQuakeChartLegend" class="ge-quake-chart-legend"></div>
+        <script>
+          (function(){
+            const hist = <?php echo wp_json_encode($hist_items); ?> || [];
+            if (!hist.length) return;
+
+            const byYear = {};
+            hist.forEach(function(row){
+              var raw = row && row.month ? String(row.month) : '';
+              if (!raw) return;
+              var year = raw.slice(0,4);
+              var monthStr = raw.slice(5,7);
+              var month = parseInt(monthStr, 10);
+              if (!/^[0-9]{4}$/.test(year) || isNaN(month) || month < 1 || month > 12) return;
+              var m5 = (row.m5p != null) ? parseInt(row.m5p, 10) : null;
+              if (m5 === null || isNaN(m5)) return;
+              if (!byYear[year]) byYear[year] = [];
+              byYear[year].push({ m: month, v: m5 });
+            });
+
+            var years = Object.keys(byYear).filter(function(y){ return /^[0-9]{4}$/.test(y); }).sort();
+            if (!years.length) return;
+            // Keep at most the last 10 years
+            if (years.length > 10) {
+              years = years.slice(years.length - 10);
+            }
+
+            // Sort months ascending within each year
+            years.forEach(function(y){
+              byYear[y].sort(function(a,b){ return a.m - b.m; });
+            });
+
+            // Compute global max for scaling
+            var maxVal = 0;
+            years.forEach(function(y){
+              byYear[y].forEach(function(p){
+                if (p.v > maxVal) maxVal = p.v;
+              });
+            });
+            if (maxVal <= 0) maxVal = 1;
+
+            var w = 600, h = 220, pad = 32;
+            var monthToX = function(m){ return pad + ((m - 1) / 11) * (w - pad * 2); };
+            var valToY = function(v){ return h - pad - (v / maxVal) * (h - pad * 2); };
+
+            var svgNS = "http://www.w3.org/2000/svg";
+            var svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+            svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+            svg.classList.add("ge-quake-chart-svg");
+
+            // Axes
+            var axis = document.createElementNS(svgNS, "g");
+            axis.setAttribute("stroke", "rgba(255,255,255,0.4)");
+            axis.setAttribute("stroke-width", "1");
+
+            // Y axis
+            var yAxis = document.createElementNS(svgNS, "line");
+            yAxis.setAttribute("x1", pad);
+            yAxis.setAttribute("y1", pad - 4);
+            yAxis.setAttribute("x2", pad);
+            yAxis.setAttribute("y2", h - pad + 4);
+            axis.appendChild(yAxis);
+
+            // X axis
+            var xAxis = document.createElementNS(svgNS, "line");
+            xAxis.setAttribute("x1", pad - 4);
+            xAxis.setAttribute("y1", h - pad);
+            xAxis.setAttribute("x2", w - pad + 4);
+            xAxis.setAttribute("y2", h - pad);
+            axis.appendChild(xAxis);
+
+            // X-axis month ticks/labels
+            var monthsShort = ["J","F","M","A","M","J","J","A","S","O","N","D"];
+            for (var m = 1; m <= 12; m++) {
+              var mx = monthToX(m);
+              var tick = document.createElementNS(svgNS, "line");
+              tick.setAttribute("x1", mx);
+              tick.setAttribute("y1", h - pad);
+              tick.setAttribute("x2", mx);
+              tick.setAttribute("y2", h - pad + 4);
+              tick.setAttribute("stroke", "rgba(255,255,255,0.4)");
+              axis.appendChild(tick);
+
+              var lbl = document.createElementNS(svgNS, "text");
+              lbl.setAttribute("x", mx);
+              lbl.setAttribute("y", h - pad + 14);
+              lbl.setAttribute("text-anchor", "middle");
+              lbl.setAttribute("font-size", "10");
+              lbl.setAttribute("fill", "rgba(255,255,255,0.8)");
+              lbl.textContent = monthsShort[m-1];
+              axis.appendChild(lbl);
+            }
+
+            // A few horizontal gridlines
+            for (var i = 1; i <= 4; i++) {
+              var gy = valToY((maxVal * i) / 4);
+              var gl = document.createElementNS(svgNS, "line");
+              gl.setAttribute("x1", pad);
+              gl.setAttribute("y1", gy);
+              gl.setAttribute("x2", w - pad);
+              gl.setAttribute("y2", gy);
+              gl.setAttribute("stroke", "rgba(255,255,255,0.08)");
+              axis.appendChild(gl);
+            }
+
+            svg.appendChild(axis);
+
+            // Colors for lines
+            var palette = [
+              "#7fc3ff","#ffb3b3","#ffe38f","#b9f2a1","#e3b3ff",
+              "#ff9f80","#80ffd4","#ffd480","#a0a0ff"
+            ];
+
+            var latestYear = years[years.length - 1];
+
+            // Plot each year
+            years.forEach(function(y, idx){
+              var pts = byYear[y];
+              if (!pts.length) return;
+              var d = "";
+              pts.forEach(function(p, i){
+                var x = monthToX(p.m);
+                var ycoord = valToY(p.v);
+                d += (i === 0 ? "M" : "L") + x + " " + ycoord + " ";
+              });
+              var path = document.createElementNS(svgNS, "path");
+              path.setAttribute("d", d.trim());
+              var color = palette[idx % palette.length];
+              path.setAttribute("fill", "none");
+              path.setAttribute("stroke", color);
+              path.setAttribute("stroke-width", y === latestYear ? "2.4" : "1.2");
+              path.setAttribute("stroke-opacity", y === latestYear ? "1.0" : "0.55");
+              svg.appendChild(path);
+            });
+
+            var container = document.getElementById("geQuakeChart");
+            if (container) {
+              container.innerHTML = "";
+              container.appendChild(svg);
+            }
+
+            // Build legend
+            var legend = document.getElementById("geQuakeChartLegend");
+            if (legend) {
+              legend.innerHTML = "";
+              years.slice().reverse().forEach(function(y, idx){
+                var color = palette[(years.indexOf(y)) % palette.length];
+                var item = document.createElement("span");
+                item.className = "ge-quake-legend-item" + (y === latestYear ? " latest" : "");
+                item.innerHTML = '<span class="swatch" style="background:'+color+'"></span>' +
+                                 '<span class="label">'+y+(y === latestYear ? " (latest)" : "")+'</span>';
+                legend.appendChild(item);
+              });
+            }
+          })();
+        </script>
       </article>
 
       <article class="ge-card">
@@ -572,6 +734,12 @@ function gaiaeyes_quakes_detail_shortcode($atts){
       .ge-tip:hover {
         opacity: 1;
       }
+      .ge-quake-chart { width: 100%; max-width: 100%; margin-top: 6px; }
+      .ge-quake-chart-svg { width: 100%; height: auto; display: block; }
+      .ge-quake-chart-legend { margin-top: 6px; font-size: .85rem; display:flex; flex-wrap:wrap; gap:8px; }
+      .ge-quake-legend-item { display:inline-flex; align-items:center; gap:4px; opacity:.8; }
+      .ge-quake-legend-item.latest { opacity: 1; font-weight: 600; }
+      .ge-quake-legend-item .swatch { width:12px; height:12px; border-radius:2px; display:inline-block; }
     </style>
   </section>
   <?php
