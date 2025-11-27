@@ -25,20 +25,34 @@ KEY = (
 )
 
 def rest_upsert(schema: str, table: str, rows: list):
-    """Upsert rows into schema.table via PostgREST (Prefer: resolution=merge-duplicates)."""
+    """Upsert rows into schema.table via PostgREST/Supabase (Prefer: resolution=merge-duplicates)."""
     if not (REST and KEY and rows):
         return False
-    url = f"{REST}/{table}"
-    headers = {
-        "apikey": KEY,
-        "Authorization": f"Bearer {KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates,return=representation"
-    }
-    if schema and schema != "public":
-        headers["Accept-Profile"] = schema
+
+    # Supabase REST (supabase.co) uses /rest/v1/{table} and Content-Profile to select schema.
+    if "supabase.co" in REST:
+        url = f"{REST}/{table}"
+        headers = {
+            "apikey": KEY,
+            "Authorization": f"Bearer {KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates,return=representation",
+        }
+        if schema and schema != "public":
+            headers["Content-Profile"] = schema
+            headers["Accept-Profile"] = schema
+    else:
+        # Generic PostgREST: schema-qualified table in the path.
+        url = f"{REST}/{schema}.{table}"
+        headers = {
+            "apikey": KEY,
+            "Authorization": f"Bearer {KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates,return=representation",
+        }
+
     data = json.dumps(rows).encode("utf-8")
-    req  = urllib.request.Request(url, headers=headers, data=data, method="POST")
+    req = urllib.request.Request(url, headers=headers, data=data, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             r.read()  # drain
