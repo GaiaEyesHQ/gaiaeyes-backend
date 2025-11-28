@@ -218,20 +218,122 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
       );
     }
 
-    if ( ! is_array( $data ) || empty( $data['now'] ) ) {
+    // Try to fetch 24h space-weather history for Kp/SW/Bz from the API
+    $sw_history = null;
+    if ( $api_base && function_exists('gaiaeyes_http_get_json_api_cached') ) {
+      $sw_history = gaiaeyes_http_get_json_api_cached(
+        $api_base . '/v1/space/history?hours=24',
+        'ge_sw_history_bar',
+        $cache_secs,
+        $api_bearer,
+        $api_dev
+      );
+    }
+
+    // If neither JSON nor API provide anything, bail out
+    $series24 = null;
+    if ( is_array( $sw_history )
+         && ! empty( $sw_history['ok'] )
+         && ! empty( $sw_history['data']['series24'] )
+         && is_array( $sw_history['data']['series24'] ) ) {
+      $series24 = $sw_history['data']['series24'];
+    }
+
+    if ( ( ! is_array( $data ) || empty( $data['now'] ) ) && ! $series24 ) {
       return '<section class="gaia-sw"><div class="gaia-sw__card">Space Weather: unavailable</div></section>';
     }
 
-    $ts   = ! empty( $data['timestamp_utc'] ) ? strtotime( $data['timestamp_utc'] ) : time();
-    $kp   = isset( $data['now']['kp'] ) ? number_format( floatval( $data['now']['kp'] ), 1 ) : '—';
-    $sw   = isset( $data['now']['solar_wind_kms'] ) ? intval( $data['now']['solar_wind_kms'] ) : '—';
-    $bzv  = isset( $data['now']['bz_nt'] ) ? floatval( $data['now']['bz_nt'] ) : null;
-    $bz   = ( null !== $bzv ) ? number_format( $bzv, 1 ) : '—';
-    $bzpol= ( null !== $bzv && $bzv < 0 ) ? 'southward' : 'northward';
+    // Helpers to derive "now" and 24h max from [ts,val] series
+    $extract_last = function( $series ) {
+      if ( ! is_array( $series ) || ! $series ) {
+        return null;
+      }
+      $last = end( $series );
+      if ( is_array( $last ) ) {
+        if ( isset( $last[1] ) && is_numeric( $last[1] ) ) {
+          return (float) $last[1];
+        }
+        if ( isset( $last[0] ) && is_numeric( $last[0] ) ) {
+          return (float) $last[0];
+        }
+        return null;
+      }
+      return is_numeric( $last ) ? (float) $last : null;
+    };
+    $extract_max = function( $series ) {
+      if ( ! is_array( $series ) || ! $series ) {
+        return null;
+      }
+      $max = null;
+      foreach ( $series as $entry ) {
+        $val = $entry;
+        if ( is_array( $entry ) ) {
+          $val = isset( $entry[1] ) ? $entry[1] : ( $entry[0] ?? null );
+        }
+        if ( ! is_numeric( $val ) ) {
+          continue;
+        }
+        $val = (float) $val;
+        if ( $max === null || $val > $max ) {
+          $max = $val;
+        }
+      }
+      return $max;
+    };
 
-    // NEW: last 24h maxima
-    $kp_max24 = isset( $data['last_24h']['kp_max'] ) ? number_format( floatval( $data['last_24h']['kp_max'] ), 1 ) : null;
-    $sw_max24 = isset( $data['last_24h']['solar_wind_max_kms'] ) ? intval( $data['last_24h']['solar_wind_max_kms'] ) : null;
+    $kp_now_val = null;
+    $sw_now_val = null;
+    $bz_now_val = null;
+    $kp_max24_val = null;
+    $sw_max24_val = null;
+
+    if ( $series24 ) {
+      if ( isset( $series24['kp'] ) ) {
+        $kp_now_val   = $extract_last( $series24['kp'] );
+        $kp_max24_val = $extract_max( $series24['kp'] );
+      }
+      if ( isset( $series24['sw'] ) ) {
+        $sw_now_val   = $extract_last( $series24['sw'] );
+        $sw_max24_val = $extract_max( $series24['sw'] );
+      }
+      if ( isset( $series24['bz'] ) ) {
+        $bz_now_val = $extract_last( $series24['bz'] );
+      }
+    }
+
+    // Fallback to JSON "now" values when API history did not provide them
+    if ( is_array( $data ) && ! empty( $data['now'] ) ) {
+      if ( $kp_now_val === null && isset( $data['now']['kp'] ) && is_numeric( $data['now']['kp'] ) ) {
+        $kp_now_val = (float) $data['now']['kp'];
+      }
+      if ( $sw_now_val === null && isset( $data['now']['solar_wind_kms'] ) && is_numeric( $data['now']['solar_wind_kms'] ) ) {
+        $sw_now_val = (float) $data['now']['solar_wind_kms'];
+      }
+      if ( $bz_now_val === null && isset( $data['now']['bz_nt'] ) && is_numeric( $data['now']['bz_nt'] ) ) {
+        $bz_now_val = (float) $data['now']['bz_nt'];
+      }
+    }
+
+    // Fallback to JSON 24h maxima if API history did not provide them
+    if ( is_array( $data ) && isset( $data['last_24h'] ) && is_array( $data['last_24h'] ) ) {
+      if ( $kp_max24_val === null && isset( $data['last_24h']['kp_max'] ) && is_numeric( $data['last_24h']['kp_max'] ) ) {
+        $kp_max24_val = (float) $data['last_24h']['kp_max'];
+      }
+      if ( $sw_max24_val === null && isset( $data['last_24h']['solar_wind_max_kms'] ) && is_numeric( $data['last_24h']['solar_wind_max_kms'] ) ) {
+        $sw_max24_val = (float) $data['last_24h']['solar_wind_max_kms'];
+      }
+    }
+
+    $ts = ! empty( $data['timestamp_utc'] ) ? strtotime( $data['timestamp_utc'] ) : time();
+
+    $kp  = $kp_now_val !== null ? number_format( $kp_now_val, 1 ) : '—';
+    $sw  = $sw_now_val !== null ? intval( $sw_now_val ) : '—';
+    $bzv = $bz_now_val !== null ? $bz_now_val : null;
+    $bz  = ( $bzv !== null ) ? number_format( $bzv, 1 ) : '—';
+    $bzpol = ( $bzv !== null && $bzv < 0 ) ? 'southward' : 'northward';
+
+    $kp_max24 = $kp_max24_val !== null ? number_format( $kp_max24_val, 1 ) : null;
+    $sw_max24 = $sw_max24_val !== null ? intval( $sw_max24_val ) : null;
 
     $headline   = $data['next_72h']['headline'] ?? '';
     $confidence = $data['next_72h']['confidence'] ?? '';
