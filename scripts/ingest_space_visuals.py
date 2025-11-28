@@ -16,6 +16,7 @@ from psycopg import connect
 from app.utils.supabase_storage import _public_url, upload_alias, upload_bytes
 
 DB_URL = os.getenv("DIRECT_URL") or os.getenv("DATABASE_URL")
+HELIOVIEWER_API = os.getenv("HELIOVIEWER_API_URL", "https://api.helioviewer.org/v2/takeScreenshot/")
 
 
 def _stamp(ts: dt.datetime) -> str:
@@ -68,15 +69,55 @@ def ingest_lasco_c2(captured_at: dt.datetime):
     upsert_visual_row("lasco_c2", rel, "SOHO/LASCO", "lasco_c2", captured_at)
 
 
-# AIA 304 (mirror)
+# AIA 304 (via Helioviewer screenshot)
 def ingest_aia_304(captured_at: dt.datetime):
-    src = "https://sdo.gsfc.nasa.gov/assets/img/browse/latest/SDO_AIA_304.jpg"
-    r = requests.get(src, timeout=60)
-    r.raise_for_status()
-    rel = f"nasa/aia_304/aia_304_{_stamp(captured_at)}.jpg"
-    public = upload_bytes(rel, r.content, content_type="image/jpeg")
-    upload_alias("nasa/aia_304/latest.jpg", public, content_type="image/jpeg")
-    upsert_visual_row("aia_304", rel, "SDO/AIA", "aia_304", captured_at)
+    """
+    Fetch a recent AIA 304 Å full-disc image via the Helioviewer API and mirror it into Supabase.
+
+    We use the v2 takeScreenshot endpoint with sourceId=13 (SDO/AIA 304) and request a 1024x1024 PNG.
+    """
+    # Build request parameters for Helioviewer
+    date_str = captured_at.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    params = {
+        "date": date_str,
+        "imageScale": 2.0,
+        # Single-layer: [sourceId, opacity, visibilityFlag]; 13 = AIA 304
+        "layers": "[13,1,100]",
+        # Centered full disc
+        "x0": 0,
+        "y0": 0,
+        "width": 1024,
+        "height": 1024,
+        # Return PNG bytes directly
+        "display": "true",
+    }
+
+    # Try Helioviewer first
+    img_bytes = None
+    try:
+        hv_resp = requests.get(HELIOVIEWER_API, params=params, timeout=60)
+        hv_resp.raise_for_status()
+        img_bytes = hv_resp.content
+        content_type = "image/png"
+    except Exception:
+        # Fallback: attempt legacy SDO browse image (may be stale if SDO web is down)
+        try:
+            fallback_src = "https://sdo.gsfc.nasa.gov/assets/img/browse/latest/SDO_AIA_304.jpg"
+            r = requests.get(fallback_src, timeout=60)
+            r.raise_for_status()
+            img_bytes = r.content
+            content_type = "image/jpeg"
+        except Exception:
+            raise
+
+    if not img_bytes:
+        raise RuntimeError("Failed to fetch AIA 304 image from Helioviewer and fallback source")
+
+    rel = f"nasa/aia_304/aia_304_{_stamp(captured_at)}.png"
+    public = upload_bytes(rel, img_bytes, content_type=content_type)
+    # Alias for "latest" solar disc
+    upload_alias("nasa/aia_304/latest.png", public, content_type=content_type)
+    upsert_visual_row("aia_304", rel, "SDO/AIA (via Helioviewer)", "aia_304", captured_at)
 
 
 # Aurora viewline (use your stored URLs if you already fetch them; otherwise just alias)
