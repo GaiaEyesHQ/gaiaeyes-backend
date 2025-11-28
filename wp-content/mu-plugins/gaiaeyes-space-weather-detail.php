@@ -511,7 +511,15 @@ function gaia_space_weather_detail_shortcode($atts){
       .ge-impacts ul{margin:0;padding-left:18px;line-height:1.4}
       .ge-sw__error{padding:12px;background:#331e1e;color:#ffd6d6;border:1px solid #6e3a3a;border-radius:8px}
       .ge-sparklines{margin-top:10px}
-      .ge-sparklines canvas{width:100%;height:120px;max-width:100%;margin-top:6px}
+      .ge-sparklines canvas{
+        width:100%;
+        height:120px;
+        max-width:100%;
+        margin-top:6px;
+        background:#151a24;
+        border:1px solid rgba(255,255,255,.06);
+        border-radius:8px;
+      }
       .anchor-link{opacity:0;margin-left:8px;font-size:.9rem;color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25);transition:opacity .2s ease}
       .ge-card h3:hover .anchor-link{opacity:1}
       .anchor-link:hover{border-bottom-color:rgba(255,255,255,.6)}
