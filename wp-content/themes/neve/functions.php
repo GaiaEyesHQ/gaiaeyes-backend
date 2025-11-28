@@ -203,6 +203,21 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
     $fc    = $fetch_json( $atts['flares_url'], 'flr' );
     $detail = trailingslashit( $atts['detail'] );
 
+    // Prefer API-based flares summary when available
+    $api_base   = defined('GAIAEYES_API_BASE') ? rtrim(GAIAEYES_API_BASE, '/') : '';
+    $api_bearer = defined('GAIAEYES_API_BEARER') ? GAIAEYES_API_BEARER : '';
+    $api_dev    = defined('GAIAEYES_API_DEV_USERID') ? GAIAEYES_API_DEV_USERID : '';
+    $flares_api = null;
+    if ( $api_base && function_exists('gaiaeyes_http_get_json_api_cached') ) {
+      $flares_api = gaiaeyes_http_get_json_api_cached(
+        $api_base . '/v1/space/flares',
+        'ge_sw_flr_bar',
+        $cache_secs,
+        $api_bearer,
+        $api_dev
+      );
+    }
+
     if ( ! is_array( $data ) || empty( $data['now'] ) ) {
       return '<section class="gaia-sw"><div class="gaia-sw__card">Space Weather: unavailable</div></section>';
     }
@@ -225,9 +240,25 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
     // Pull new flare/CME stats
     $flares      = is_array($fc) ? ($fc['flares'] ?? []) : [];
     $cmes        = is_array($fc) ? ($fc['cmes']   ?? []) : [];
+
+    // Default flare stats from legacy JSON (for now)
     $flr_total   = $flares['total_24h'] ?? null;
     $flr_bands   = is_array($flares['bands_24h'] ?? null) ? $flares['bands_24h'] : [];
     $flr_max     = $flares['max_24h'] ?? null;
+
+    // Override flare stats from /v1/space/flares API when available
+    if ( is_array($flares_api) && !empty($flares_api['ok']) && !empty($flares_api['data']) && is_array($flares_api['data']) ) {
+      $fd = $flares_api['data'];
+      if ( array_key_exists('max_24h', $fd) ) {
+        $flr_max = $fd['max_24h'];
+      }
+      if ( array_key_exists('total_24h', $fd) ) {
+        $flr_total = $fd['total_24h'];
+      }
+      if ( !empty($fd['bands_24h']) && is_array($fd['bands_24h']) ) {
+        $flr_bands = $fd['bands_24h'];
+      }
+    }
 
     $cme_stats   = is_array($cmes['stats'] ?? null) ? $cmes['stats'] : [];
     $cme_total   = $cme_stats['total_72h'] ?? null;

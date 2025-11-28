@@ -97,6 +97,10 @@ function gaia_space_weather_detail_shortcode($atts){
     $outlook = gaiaeyes_http_get_json_api_cached($api_base . '/v1/space/forecast/outlook', 'ge_fc_outlook', $ttl, $api_bearer);
     $features = gaiaeyes_http_get_json_api_cached($api_base . '/v1/features/today', 'ge_sw_features', $ttl, $api_bearer);
 
+    // New dedicated space endpoints for history and flares
+    $sw_history = gaiaeyes_http_get_json_api_cached($api_base . '/v1/space/history?hours=24', 'ge_sw_history', $ttl, $api_bearer);
+    $sw_flares  = gaiaeyes_http_get_json_api_cached($api_base . '/v1/space/flares', 'ge_sw_flares', $ttl, $api_bearer);
+
     // Shape a minimal legacy-compatible $sw/$fc for rendering
     $sw = [
       'timestamp_utc' => gmdate('Y-m-d H:i:s\\Z'),
@@ -143,27 +147,15 @@ function gaia_space_weather_detail_shortcode($atts){
           if ($bzv === null) $bzv = $pickNum($scope, $bzKeys);
         }
       }
-      // If API produced a shell but left values null, try legacy JSON to fill missing now-values
-      // Optionally fill missing now/24h/series data from legacy JSON
-      $legacy_now = gaiaeyes_http_get_json_with_fallback(GAIAEYES_SW_URL, GAIAEYES_SW_URL_MIRROR, 'ge_sw_json_fill', $ttl);
-      if (is_array($legacy_now) && isset($legacy_now['now']) && is_array($legacy_now['now'])) {
-        if ($kp === null  && isset($legacy_now['now']['kp']) && is_numeric($legacy_now['now']['kp'])) $kp = (float)$legacy_now['now']['kp'];
-        if ($swk === null && isset($legacy_now['now']['solar_wind_kms']) && is_numeric($legacy_now['now']['solar_wind_kms'])) $swk = (float)$legacy_now['now']['solar_wind_kms'];
-        if ($bzv === null && isset($legacy_now['now']['bz_nt']) && is_numeric($legacy_now['now']['bz_nt'])) $bzv = (float)$legacy_now['now']['bz_nt'];
-        // also fill last_24h maxima if missing
-        if (isset($legacy_now['last_24h']) && is_array($legacy_now['last_24h'])) {
-          $last = $legacy_now['last_24h'];
-          if (!isset($sw['last_24h']['kp_max']) && isset($last['kp_max']) && is_numeric($last['kp_max'])) $sw['last_24h']['kp_max'] = (float)$last['kp_max'];
-          if (!isset($sw['last_24h']['solar_wind_max_kms']) && isset($last['solar_wind_max_kms']) && is_numeric($last['solar_wind_max_kms'])) $sw['last_24h']['solar_wind_max_kms'] = (float)$last['solar_wind_max_kms'];
-        }
-        // Fill series24 (for sparklines) if API did not provide it
-        if (!isset($sw['series24']) && isset($legacy_now['series24']) && is_array($legacy_now['series24'])) {
-          $sw['series24'] = $legacy_now['series24'];
-        }
-      }
+
       $sw['now']['kp'] = $kp;
       $sw['now']['solar_wind_kms'] = $swk;
       $sw['now']['bz_nt'] = $bzv;
+
+      // If the space history endpoint provided series24, use it for sparklines
+      if (is_array($sw_history) && !empty($sw_history['ok']) && !empty($sw_history['data']['series24']) && is_array($sw_history['data']['series24'])) {
+        $sw['series24'] = $sw_history['data']['series24'];
+      }
 
       // last 24h maxima if present under common shapes
       $last = $features['last_24h'] ?? $features['last24h'] ?? [];
@@ -215,8 +207,17 @@ function gaia_space_weather_detail_shortcode($atts){
         $sw['impacts'] = [];
       }
 
-      // Flares — accept alternate keys
+      // Flares — merge dedicated /v1/space/flares summary with any outlook-provided flares block
       $fl = is_array($outlook['flares'] ?? null) ? $outlook['flares'] : [];
+      if (is_array($sw_flares) && !empty($sw_flares['ok']) && !empty($sw_flares['data']) && is_array($sw_flares['data'])) {
+        $fl_api = $sw_flares['data'];
+        foreach (['max_24h','total_24h','bands_24h'] as $k) {
+          if (isset($fl_api[$k]) && !isset($fl[$k])) {
+            $fl[$k] = $fl_api[$k];
+          }
+        }
+      }
+
       $fl_max   = $fl['max_24h'] ?? $fl['peak_24h'] ?? $fl['peak_class_24h'] ?? $fl['max_class'] ?? null;
       $fl_total = $fl['total_24h'] ?? $fl['total'] ?? $fl['count_24h'] ?? null;
       $fl_bands = $fl['bands_24h'] ?? $fl['bands'] ?? $fl['distribution_24h'] ?? null;
@@ -323,13 +324,6 @@ function gaia_space_weather_detail_shortcode($atts){
         <h3 id="flares">Solar Flares <a class="anchor-link" href="#flares" aria-label="Link to Solar Flares">🔗</a></h3>
         <?php
           $flr = is_array($fc) ? ($fc['flares'] ?? []) : [];
-          // If API flares payload is empty or missing max/total, fall back to legacy JSON flares_cmes feed
-          if ((!is_array($flr) || !$flr) && isset($a['fc_url'])) {
-            $legacy_fc = gaiaeyes_http_get_json_with_fallback($a['fc_url'], GAIAEYES_FC_URL_MIRROR, 'ge_fc_json_fill', $ttl);
-            if (is_array($legacy_fc) && !empty($legacy_fc['flares']) && is_array($legacy_fc['flares'])) {
-              $flr = $legacy_fc['flares'];
-            }
-          }
 
           // Tolerant max class extraction: accept strings, nested objects, or derive from events/bands
           $max = $flr['max_24h'] ?? $flr['peak_24h'] ?? $flr['peak_class_24h'] ?? $flr['max_class'] ?? $flr['peak_class'] ?? null;
