@@ -697,7 +697,7 @@ add_shortcode('gaia_space_detail', function($atts){
           try{
             const mRows = Array.isArray(mag)? mag.slice(1):[];
             const bz = [];
-            mRows.slice(-300).forEach(r=>{
+            mRows.forEach(r=>{
               const t = r[0], v = parseFloat(r[3]);
               if (!t || !isFinite(v)) return;
               const ts = (typeof t === 'string' && !t.endsWith('Z')) ? (t + 'Z') : t;
@@ -709,7 +709,7 @@ add_shortcode('gaia_space_detail', function($atts){
           try{
             const pRows = Array.isArray(plasma)? plasma.slice(1):[];
             const sw = [];
-            pRows.slice(-300).forEach(r=>{
+            pRows.forEach(r=>{
               const t = r[0], v = parseFloat(r[2]);
               if (!t || !isFinite(v)) return;
               const ts = (typeof t === 'string' && !t.endsWith('Z')) ? (t + 'Z') : t;
