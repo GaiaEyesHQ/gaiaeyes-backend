@@ -54,6 +54,8 @@ jobs:
           WP_USERNAME: ${{ secrets.WP_USERNAME }}           # user tied to the App Password
           WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}   # application password (no spaces needed)
           PYTHONPATH: ${{ github.workspace }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
           python -m bots.hazards.hazards_bot
