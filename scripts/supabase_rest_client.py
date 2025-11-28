@@ -1,3 +1,11 @@
+import os
+import json
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+
 def supabase_upsert(table, rows, on_conflict=None):
     """
     Upsert rows into a Supabase table via the REST API.
