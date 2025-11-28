@@ -49,6 +49,9 @@ function gaia_hazards_brief_shortcode($atts = []) {
 
     $items = [];
     $generated_at = null;
+    $all_items   = [];
+    $sev_counts  = ['red' => 0, 'orange' => 0, 'yellow' => 0, 'info' => 0];
+    $type_counts = ['earthquakes' => 0, 'cyclones' => 0, 'volcano' => 0, 'other' => 0];
 
     if (function_exists('gaiaeyes_http_get_json_api_cached') && defined('GAIAEYES_API_BASE')) {
         $api_base = GAIAEYES_API_BASE;
@@ -59,7 +62,41 @@ function gaia_hazards_brief_shortcode($atts = []) {
         $payload  = gaiaeyes_http_get_json_api_cached($url, 'ge_hazards_brief', $ttl, $bearer, $dev_user);
 
         if (is_array($payload) && !empty($payload['ok']) && !empty($payload['items']) && is_array($payload['items'])) {
-            $items = array_slice($payload['items'], 0, $limit);
+            $all_items = $payload['items'];
+            // Compute severity and type counts over the full window
+            foreach ($all_items as $it) {
+                $sev = isset($it['severity']) ? strtolower(trim($it['severity'])) : '';
+                if ($sev !== '') {
+                    if (strpos($sev, 'red') !== false) {
+                        $sev_counts['red']++;
+                    } elseif (strpos($sev, 'orange') !== false) {
+                        $sev_counts['orange']++;
+                    } elseif (strpos($sev, 'yellow') !== false) {
+                        $sev_counts['yellow']++;
+                    } else {
+                        $sev_counts['info']++;
+                    }
+                } else {
+                    $sev_counts['info']++;
+                }
+
+                $kind = isset($it['kind']) ? strtolower(trim($it['kind'])) : '';
+                if ($kind !== '') {
+                    if (strpos($kind, 'quake') !== false || strpos($kind, 'earth') !== false) {
+                        $type_counts['earthquakes']++;
+                    } elseif (strpos($kind, 'cyclone') !== false || strpos($kind, 'storm') !== false || strpos($kind, 'severe') !== false) {
+                        $type_counts['cyclones']++;
+                    } elseif (strpos($kind, 'volcano') !== false || strpos($kind, 'ash') !== false) {
+                        $type_counts['volcano']++;
+                    } else {
+                        $type_counts['other']++;
+                    }
+                } else {
+                    $type_counts['other']++;
+                }
+            }
+
+            $items = array_slice($all_items, 0, $limit);
             if (!empty($payload['generated_at'])) {
                 $generated_at = $payload['generated_at'];
             }
@@ -81,59 +118,202 @@ function gaia_hazards_brief_shortcode($atts = []) {
           <strong>Global Hazards:</strong> unavailable at the moment. Data feed may be delayed.
         </div>
       <?php else: ?>
-        <div class="ghb-grid">
-          <?php foreach ($items as $item): ?>
-            <?php
-              $title    = isset($item['title']) ? trim($item['title']) : '';
-              $url      = isset($item['url']) ? trim($item['url']) : '';
-              $source   = isset($item['source']) ? trim($item['source']) : '';
-              $kind     = isset($item['kind']) ? trim($item['kind']) : '';
-              $location = isset($item['location']) ? trim($item['location']) : '';
-              $severity = isset($item['severity']) ? trim($item['severity']) : '';
-              $started  = isset($item['started_at']) ? trim($item['started_at']) : '';
+        <div class="ghb-grid-summary">
+          <article class="ghb-card ghb-card-summary">
+            <h3>Severity (48h)</h3>
+            <dl class="ghb-summary-list">
+              <div><dt>RED:</dt><dd><?php echo intval($sev_counts['red']); ?></dd></div>
+              <div><dt>ORANGE:</dt><dd><?php echo intval($sev_counts['orange']); ?></dd></div>
+              <div><dt>YELLOW:</dt><dd><?php echo intval($sev_counts['yellow']); ?></dd></div>
+              <div><dt>INFO:</dt><dd><?php echo intval($sev_counts['info']); ?></dd></div>
+            </dl>
+          </article>
 
-              // Basic label line
-              $label_parts = [];
-              if ($kind)     $label_parts[] = ucfirst($kind);
-              if ($severity) $label_parts[] = $severity;
-              if ($source)   $label_parts[] = strtoupper($source);
-              $label = implode(' • ', $label_parts);
-            ?>
-            <article class="ghb-card">
-              <header>
-                <?php if ($title && $url): ?>
-                  <h3><a href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener"><?php echo esc_html($title); ?></a></h3>
-                <?php elseif ($title): ?>
-                  <h3><?php echo esc_html($title); ?></h3>
-                <?php else: ?>
-                  <h3>Hazard</h3>
-                <?php endif; ?>
+          <article class="ghb-card ghb-card-summary">
+            <h3>By Type (48h)</h3>
+            <dl class="ghb-summary-list">
+              <div><dt>Earthquakes:</dt><dd><?php echo intval($type_counts['earthquakes']); ?></dd></div>
+              <div><dt>Cyclones/Severe:</dt><dd><?php echo intval($type_counts['cyclones']); ?></dd></div>
+              <div><dt>Volcano/Ash:</dt><dd><?php echo intval($type_counts['volcano']); ?></dd></div>
+              <div><dt>Other:</dt><dd><?php echo intval($type_counts['other']); ?></dd></div>
+            </dl>
+          </article>
 
-                <?php if ($label): ?>
-                  <div class="ghb-label"><?php echo esc_html($label); ?></div>
-                <?php endif; ?>
-              </header>
+          <article class="ghb-card ghb-card-highlights">
+            <h3>Recent Highlights</h3>
+            <ul class="ghb-highlights">
+              <?php foreach ($items as $item): ?>
+                <?php
+                  $title    = isset($item['title']) ? trim($item['title']) : '';
+                  $url      = isset($item['url']) ? trim($item['url']) : '';
+                  $source   = isset($item['source']) ? trim($item['source']) : '';
+                  $kind     = isset($item['kind']) ? trim($item['kind']) : '';
+                  $location = isset($item['location']) ? trim($item['location']) : '';
+                  $severity = isset($item['severity']) ? trim($item['severity']) : '';
+                  $started  = isset($item['started_at']) ? trim($item['started_at']) : '';
 
-              <?php if ($location): ?>
-                <div class="ghb-location">
-                  <span class="ghb-meta-label">Region:</span>
-                  <span class="ghb-meta-value"><?php echo esc_html($location); ?></span>
-                </div>
-              <?php endif; ?>
+                  $sev_class = 'sev-info';
+                  $sev_label = strtoupper($severity ?: 'info');
+                  $sev_lower = strtolower($severity);
+                  if (strpos($sev_lower, 'red') !== false) {
+                    $sev_class = 'sev-red';
+                  } elseif (strpos($sev_lower, 'orange') !== false) {
+                    $sev_class = 'sev-orange';
+                  } elseif (strpos($sev_lower, 'yellow') !== false) {
+                    $sev_class = 'sev-yellow';
+                  }
 
-              <?php if ($started): ?>
-                <div class="ghb-time">
-                  <span class="ghb-meta-label">Started:</span>
-                  <span class="ghb-meta-value">
-                    <?php echo esc_html(str_replace('T', ' ', preg_replace('/\..+$/', '', $started))); ?> UTC
-                  </span>
-                </div>
-              <?php endif; ?>
-            </article>
-          <?php endforeach; ?>
+                  $time_label = '';
+                  if ($started) {
+                    $time_label = str_replace('T', ' ', preg_replace('/\..+$/', '', $started)) . ' UTC';
+                  }
+
+                  $meta_bits = [];
+                  if ($kind)   $meta_bits[] = strtolower($kind);
+                  if ($source) $meta_bits[] = strtolower($source);
+                  if ($location) $meta_bits[] = $location;
+                ?>
+                <li>
+                  <span class="sev-pill <?php echo esc_attr($sev_class); ?>"><?php echo esc_html($sev_label); ?></span>
+                  <div class="ghb-highlight-main">
+                    <?php if ($title && $url): ?>
+                      <a href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener"><?php echo esc_html($title); ?></a>
+                    <?php elseif ($title): ?>
+                      <?php echo esc_html($title); ?>
+                    <?php else: ?>
+                      <?php echo esc_html($location ?: 'Hazard'); ?>
+                    <?php endif; ?>
+                    <?php if ($meta_bits): ?>
+                      <div class="ghb-highlight-meta"><?php echo esc_html(implode(' • ', $meta_bits)); ?></div>
+                    <?php endif; ?>
+                  </div>
+                  <?php if ($time_label): ?>
+                    <div class="ghb-highlight-time"><?php echo esc_html($time_label); ?></div>
+                  <?php endif; ?>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          </article>
         </div>
       <?php endif; ?>
     </section>
+    <style>
+      .gaia-hazards-brief{
+        margin: 1.25rem 0;
+      }
+      .gaia-hazards-brief .ghb-header{
+        display:flex;
+        justify-content:space-between;
+        align-items:baseline;
+        margin-bottom:.75rem;
+      }
+      .gaia-hazards-brief .ghb-header h2{
+        font-size:1.4rem;
+        margin:0;
+      }
+      .gaia-hazards-brief .ghb-updated{
+        font-size:.85rem;
+        opacity:.75;
+      }
+      .gaia-hazards-brief .ghb-card{
+        background:#111822;
+        border:1px solid #24324b;
+        border-radius:12px;
+        padding:12px 14px;
+      }
+      .gaia-hazards-brief .ghb-card h3{
+        font-size:1rem;
+        margin:0 0 .5rem;
+      }
+      .gaia-hazards-brief .ghb-grid-summary{
+        display:grid;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        gap:12px;
+      }
+      @media (max-width:900px){
+        .gaia-hazards-brief .ghb-grid-summary{
+          grid-template-columns:1fr;
+        }
+      }
+      .ghb-summary-list{
+        margin:0;
+        padding:0;
+      }
+      .ghb-summary-list div{
+        display:flex;
+        justify-content:space-between;
+        font-size:.9rem;
+        margin-bottom:2px;
+      }
+      .ghb-summary-list dt{
+        font-weight:600;
+      }
+      .ghb-summary-list dd{
+        margin:0;
+        font-weight:700;
+      }
+      .ghb-highlights{
+        list-style:none;
+        margin:0;
+        padding:0;
+      }
+      .ghb-highlights li{
+        display:grid;
+        grid-template-columns:auto 1fr auto;
+        align-items:flex-start;
+        gap:8px;
+        font-size:.9rem;
+        padding:6px 0;
+        border-bottom:1px solid rgba(255,255,255,.05);
+      }
+      .ghb-highlights li:last-child{
+        border-bottom:none;
+      }
+      .sev-pill{
+        display:inline-flex;
+        align-items:center;
+        padding:2px 8px;
+        border-radius:999px;
+        font-size:.75rem;
+        font-weight:600;
+      }
+      .sev-info{
+        background:#24324b;
+        color:#dbe6ff;
+      }
+      .sev-yellow{
+        background:#524f26;
+        color:#ffe58a;
+      }
+      .sev-orange{
+        background:#5a3b20;
+        color:#ffd089;
+      }
+      .sev-red{
+        background:#5a2222;
+        color:#ff8787;
+      }
+      .ghb-highlight-main a{
+        color:inherit;
+        text-decoration:none;
+      }
+      .ghb-highlight-main a:hover{
+        text-decoration:underline;
+      }
+      .ghb-highlight-meta{
+        font-size:.8rem;
+        opacity:.8;
+      }
+      .ghb-highlight-time{
+        font-size:.8rem;
+        opacity:.7;
+        white-space:nowrap;
+      }
+      .ghb-card.ghb-empty{
+        text-align:center;
+        font-size:.95rem;
+      }
+    </style>
     <?php
     return ob_get_clean();
 }
