@@ -112,7 +112,8 @@ if (!function_exists('gaiaeyes_output_spark_helper')) {
               color: '#7fc8ff',
               zeroLine: false,
               tension: 0.25,
-              fontSize: 11
+              fontSize: 11,
+              backgroundColor: '#151a24'
             }, options || {});
 
             const dataset = prepareData(data);
@@ -173,6 +174,18 @@ if (!function_exists('gaiaeyes_output_spark_helper')) {
               scales.y.max = cfg.yMax;
             }
 
+            const backgroundPlugin = {
+              id: 'gaiaSparkBackground',
+              beforeDraw(chart){
+                const {ctx, chartArea} = chart;
+                if (!chartArea) return;
+                ctx.save();
+                ctx.fillStyle = cfg.backgroundColor || '#151a24';
+                ctx.fillRect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+                ctx.restore();
+              }
+            };
+
             const zeroLinePlugin = {
               id: 'gaiaSparkZero',
               afterDraw(chart){
@@ -216,7 +229,7 @@ if (!function_exists('gaiaeyes_output_spark_helper')) {
                   tooltip: { enabled: false }
                 }
               },
-              plugins: [zeroLinePlugin]
+              plugins: [backgroundPlugin, zeroLinePlugin]
             });
 
             charts.set(canvas, chart);
