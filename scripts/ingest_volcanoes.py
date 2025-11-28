@@ -21,7 +21,13 @@ import xml.etree.ElementTree as ET
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 
-from scripts.supabase_rest_client import supabase_upsert
+# Ensure the repo root (parent of this file) is on sys.path so we can import supabase_rest_client
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PARENT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
+if PARENT_DIR not in sys.path:
+    sys.path.insert(0, PARENT_DIR)
+
+from supabase_rest_client import supabase_upsert
 
 
 DEFAULT_GVP_RSS = "https://volcano.si.edu/news/WeeklyVolcanoRSS.xml"  # example; update to actual GVP RSS URL
