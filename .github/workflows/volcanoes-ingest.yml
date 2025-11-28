@@ -1,0 +1,30 @@
+name: volcanoes-ingest
+
+on:
+  schedule:
+    - cron: "0 6 * * 3"   # once a week, e.g. Wed 06:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GVP_VOLCANO_RSS_URL: ${{ secrets.GVP_VOLCANO_RSS_URL }}  # optional override
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ingest volcano activity (GVP Weekly)
+        run: |
+          python scripts/ingest_volcanoes.py
