@@ -148,16 +148,67 @@ function gaia_space_weather_detail_shortcode($atts){
         }
       }
 
-      $sw['now']['kp'] = $kp;
-      $sw['now']['solar_wind_kms'] = $swk;
-      $sw['now']['bz_nt'] = $bzv;
-
       // If the space history endpoint provided series24, use it for sparklines
       if (is_array($sw_history) && !empty($sw_history['ok']) && !empty($sw_history['data']['series24']) && is_array($sw_history['data']['series24'])) {
         $sw['series24'] = $sw_history['data']['series24'];
       }
 
-      // last 24h maxima if present under common shapes
+      // Helper to extract last value and max from a [ts, val] style series
+      $extract_last = function($series){
+        if (!is_array($series) || !$series) return null;
+        $last = end($series);
+        if (is_array($last)) {
+          if (isset($last[1]) && is_numeric($last[1])) return (float)$last[1];
+          if (isset($last[0]) && is_numeric($last[0])) return (float)$last[0];
+          return null;
+        }
+        return is_numeric($last) ? (float)$last : null;
+      };
+      $extract_max = function($series){
+        if (!is_array($series) || !$series) return null;
+        $max = null;
+        foreach ($series as $entry) {
+          $val = $entry;
+          if (is_array($entry)) {
+            $val = isset($entry[1]) ? $entry[1] : ($entry[0] ?? null);
+          }
+          if (!is_numeric($val)) continue;
+          $val = (float)$val;
+          if ($max === null || $val > $max) $max = $val;
+        }
+        return $max;
+      };
+
+      // If features didn't provide kp/sw/bz, derive them from series24
+      if (isset($sw['series24']) && is_array($sw['series24'])) {
+        $series24 = $sw['series24'];
+        if ($kp === null && isset($series24['kp'])) {
+          $kp = $extract_last($series24['kp']);
+        }
+        if ($swk === null && isset($series24['sw'])) {
+          $swk = $extract_last($series24['sw']);
+        }
+        if ($bzv === null && isset($series24['bz'])) {
+          $bzv = $extract_last($series24['bz']);
+        }
+        // Also derive 24h maxima if not present
+        $last = $features['last_24h'] ?? $features['last24h'] ?? [];
+        if (!is_array($last)) $last = [];
+        if (!isset($sw['last_24h']['kp_max']) && isset($series24['kp'])) {
+          $kpmax = $extract_max($series24['kp']);
+          if ($kpmax !== null) $sw['last_24h']['kp_max'] = $kpmax;
+        }
+        if (!isset($sw['last_24h']['solar_wind_max_kms']) && isset($series24['sw'])) {
+          $swmax = $extract_max($series24['sw']);
+          if ($swmax !== null) $sw['last_24h']['solar_wind_max_kms'] = $swmax;
+        }
+      }
+
+      $sw['now']['kp'] = $kp;
+      $sw['now']['solar_wind_kms'] = $swk;
+      $sw['now']['bz_nt'] = $bzv;
+
+      // last 24h maxima if present under common shapes from features payload
       $last = $features['last_24h'] ?? $features['last24h'] ?? [];
       if (is_array($last)) {
         if (!isset($sw['last_24h']['kp_max']) && isset($last['kp_max']) && is_numeric($last['kp_max'])) $sw['last_24h']['kp_max'] = (float)$last['kp_max'];
