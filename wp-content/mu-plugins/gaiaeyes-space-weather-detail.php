@@ -144,18 +144,21 @@ function gaia_space_weather_detail_shortcode($atts){
         }
       }
       // If API produced a shell but left values null, try legacy JSON to fill missing now-values
-      if (($kp === null || $swk === null || $bzv === null)) {
-        $legacy_now = gaiaeyes_http_get_json_with_fallback(GAIAEYES_SW_URL, GAIAEYES_SW_URL_MIRROR, 'ge_sw_json_fill', $ttl);
-        if (is_array($legacy_now) && isset($legacy_now['now']) && is_array($legacy_now['now'])) {
-          if ($kp === null  && isset($legacy_now['now']['kp']) && is_numeric($legacy_now['now']['kp'])) $kp = (float)$legacy_now['now']['kp'];
-          if ($swk === null && isset($legacy_now['now']['solar_wind_kms']) && is_numeric($legacy_now['now']['solar_wind_kms'])) $swk = (float)$legacy_now['now']['solar_wind_kms'];
-          if ($bzv === null && isset($legacy_now['now']['bz_nt']) && is_numeric($legacy_now['now']['bz_nt'])) $bzv = (float)$legacy_now['now']['bz_nt'];
-          // also fill last_24h maxima if missing
-          if (isset($legacy_now['last_24h']) && is_array($legacy_now['last_24h'])) {
-            $last = $legacy_now['last_24h'];
-            if (!isset($sw['last_24h']['kp_max']) && isset($last['kp_max']) && is_numeric($last['kp_max'])) $sw['last_24h']['kp_max'] = (float)$last['kp_max'];
-            if (!isset($sw['last_24h']['solar_wind_max_kms']) && isset($last['solar_wind_max_kms']) && is_numeric($last['solar_wind_max_kms'])) $sw['last_24h']['solar_wind_max_kms'] = (float)$last['solar_wind_max_kms'];
-          }
+      // Optionally fill missing now/24h/series data from legacy JSON
+      $legacy_now = gaiaeyes_http_get_json_with_fallback(GAIAEYES_SW_URL, GAIAEYES_SW_URL_MIRROR, 'ge_sw_json_fill', $ttl);
+      if (is_array($legacy_now) && isset($legacy_now['now']) && is_array($legacy_now['now'])) {
+        if ($kp === null  && isset($legacy_now['now']['kp']) && is_numeric($legacy_now['now']['kp'])) $kp = (float)$legacy_now['now']['kp'];
+        if ($swk === null && isset($legacy_now['now']['solar_wind_kms']) && is_numeric($legacy_now['now']['solar_wind_kms'])) $swk = (float)$legacy_now['now']['solar_wind_kms'];
+        if ($bzv === null && isset($legacy_now['now']['bz_nt']) && is_numeric($legacy_now['now']['bz_nt'])) $bzv = (float)$legacy_now['now']['bz_nt'];
+        // also fill last_24h maxima if missing
+        if (isset($legacy_now['last_24h']) && is_array($legacy_now['last_24h'])) {
+          $last = $legacy_now['last_24h'];
+          if (!isset($sw['last_24h']['kp_max']) && isset($last['kp_max']) && is_numeric($last['kp_max'])) $sw['last_24h']['kp_max'] = (float)$last['kp_max'];
+          if (!isset($sw['last_24h']['solar_wind_max_kms']) && isset($last['solar_wind_max_kms']) && is_numeric($last['solar_wind_max_kms'])) $sw['last_24h']['solar_wind_max_kms'] = (float)$last['solar_wind_max_kms'];
+        }
+        // Fill series24 (for sparklines) if API did not provide it
+        if (!isset($sw['series24']) && isset($legacy_now['series24']) && is_array($legacy_now['series24'])) {
+          $sw['series24'] = $legacy_now['series24'];
         }
       }
       $sw['now']['kp'] = $kp;
@@ -320,6 +323,13 @@ function gaia_space_weather_detail_shortcode($atts){
         <h3 id="flares">Solar Flares <a class="anchor-link" href="#flares" aria-label="Link to Solar Flares">🔗</a></h3>
         <?php
           $flr = is_array($fc) ? ($fc['flares'] ?? []) : [];
+          // If API flares payload is empty or missing max/total, fall back to legacy JSON flares_cmes feed
+          if ((!is_array($flr) || !$flr) && isset($a['fc_url'])) {
+            $legacy_fc = gaiaeyes_http_get_json_with_fallback($a['fc_url'], GAIAEYES_FC_URL_MIRROR, 'ge_fc_json_fill', $ttl);
+            if (is_array($legacy_fc) && !empty($legacy_fc['flares']) && is_array($legacy_fc['flares'])) {
+              $flr = $legacy_fc['flares'];
+            }
+          }
 
           // Tolerant max class extraction: accept strings, nested objects, or derive from events/bands
           $max = $flr['max_24h'] ?? $flr['peak_24h'] ?? $flr['peak_class_24h'] ?? $flr['max_class'] ?? $flr['peak_class'] ?? null;

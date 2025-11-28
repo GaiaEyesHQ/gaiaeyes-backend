@@ -11,6 +11,7 @@ from .routers import (
     hazards,
     ingest,
     quakes,
+    space,
     space_visuals,
     summary,
     symptoms,
@@ -123,6 +124,7 @@ app.include_router(badges.router)
 app.include_router(space_visuals.router, dependencies=[Depends(require_read_auth)])
 app.include_router(quakes.router, dependencies=[Depends(require_read_auth)])
 app.include_router(earth.router, dependencies=[Depends(require_read_auth)])
+app.include_router(space.router, dependencies=[Depends(require_read_auth)])
 app.include_router(summary.router, dependencies=[Depends(require_read_auth)])
 
 # Write routers (POST/PUT/DELETE)
