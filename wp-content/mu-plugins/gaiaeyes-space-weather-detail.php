@@ -487,10 +487,10 @@ function gaia_space_weather_detail_shortcode($atts){
 
     <!-- Optional sparklines (graceful if no series) -->
     <div class="ge-sparklines" id="ge-spark-wrap" style="display:none;">
-      <h3>Recent trends</h3>
+      <!-- <h3>Recent trends</h3>
       <canvas id="ge-spark-kp" height="80"></canvas>
       <canvas id="ge-spark-sw" height="80"></canvas>
-      <canvas id="ge-spark-bz" height="80"></canvas>
+      <canvas id="ge-spark-bz" height="80"></canvas> -->
     </div>
 
     <style>
@@ -519,6 +519,9 @@ function gaia_space_weather_detail_shortcode($atts){
         background:#151a24;
         border:1px solid rgba(255,255,255,.06);
         border-radius:8px;
+      }
+      #ge-spark-wrap{
+        display:none !important;
       }
       .anchor-link{opacity:0;margin-left:8px;font-size:.9rem;color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25);transition:opacity .2s ease}
       .ge-card h3:hover .anchor-link{opacity:1}
