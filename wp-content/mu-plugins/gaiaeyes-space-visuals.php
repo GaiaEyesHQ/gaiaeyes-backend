@@ -628,7 +628,7 @@ add_shortcode('gaia_space_detail', function($atts){
               arr = toSeriesXrs(xrsRaw);
             } catch(e){}
           }
-          if (arr.length > 240) arr = arr.slice(-240);
+          if (arr.length > 1000) arr = arr.slice(-1000);
           renderSpark('sparkXrs', arr, { xLabel:'UTC time', yLabel:'GOES X-ray flux', units:'W/m²', yMin:0, color:'#7fc8ff' });
           const lp = (arr.length ? arr[arr.length-1] : null);
           if (lp) {
@@ -684,7 +684,7 @@ add_shortcode('gaia_space_detail', function($atts){
               }
             } catch(e){}
           }
-          const sliced = arr.length > 240 ? arr.slice(-240) : arr;
+          const sliced = arr.length > 1000 ? arr.slice(-1000) : arr;
           renderSpark('sparkProtons', sliced, { xLabel:'UTC time', yLabel:'Proton flux', units:'pfu', yMin:0, color:'#ffd089' });
           const lp = latestPoint(sliced);
           setVal('sparkProtonsVal', lp ? (lp.y.toFixed(0)+' pfu') : '—');
