@@ -38,10 +38,12 @@ def map_dest(path: Path) -> str | None:
         return "nasa/lasco_c2/latest.jpg"
     if name.startswith("lasco_c3") and name.endswith(".jpg"):
         return "nasa/lasco_c3/latest.jpg"
+    # AIA 304 & HMI intensity are now managed via ingest_space_visuals (Helioviewer),
+    # so skip local JPGs here to avoid overwriting the Helioviewer-backed latest.jpg aliases.
     if name.startswith(("aia_primary", "aia_304")) and name.endswith(".jpg"):
-        return "nasa/aia_304/latest.jpg"
+        return None
     if name.startswith("hmi_intensity") and name.endswith(".jpg"):
-        return "nasa/hmi_intensity/latest.jpg"
+        return None
 
     # Magnetosphere (geospace horizons)
     if name.startswith("geospace_") and name.endswith(".png"):
