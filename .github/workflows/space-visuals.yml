@@ -33,6 +33,7 @@ jobs:
           OUTPUT_JSON_PATH: ${{ runner.temp }}/media/data/space_live.json
           MEDIA_DIR: ${{ runner.temp }}/media
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          HELIOVIEWER_API_URL: ${{ secrets.HELIOVIEWER_API_URL || vars.HELIOVIEWER_API_URL || '' }}
         run: |
           python3 scripts/space_visuals_ingest.py
       - name: Install ffmpeg
