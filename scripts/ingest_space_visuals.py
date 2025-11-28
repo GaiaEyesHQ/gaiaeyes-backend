@@ -120,6 +120,53 @@ def ingest_aia_304(captured_at: dt.datetime):
     upsert_visual_row("aia_304", rel, "SDO/AIA (via Helioviewer)", "aia_304", captured_at)
 
 
+# HMI Intensity (continuum) via Helioviewer screenshot
+def ingest_hmi_intensity(captured_at: dt.datetime):
+    """
+    Fetch a recent HMI continuum (intensitygram) full-disc image via the Helioviewer API
+    and mirror it into Supabase.
+
+    We use the v2 takeScreenshot endpoint with sourceId=18 (SDO/HMI Int) and request a 1024x1024 PNG.
+    """
+    date_str = captured_at.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    params = {
+        "date": date_str,
+        "imageScale": 2.0,
+        # Single-layer: [sourceId, opacity, visibilityFlag]; 18 = HMI Int (continuum)
+        "layers": "[18,1,100]",
+        "x0": 0,
+        "y0": 0,
+        "width": 1024,
+        "height": 1024,
+        "display": "true",
+    }
+
+    img_bytes = None
+    try:
+        hv_resp = requests.get(HELIOVIEWER_API, params=params, timeout=60)
+        hv_resp.raise_for_status()
+        img_bytes = hv_resp.content
+        content_type = "image/png"
+    except Exception:
+        # Fallback: attempt legacy HMI intensity image from SDO (may be stale if SDO web is down)
+        try:
+            fallback_src = "https://sdo.gsfc.nasa.gov/assets/img/browse/latest/SDO_HMIIC.jpg"
+            r = requests.get(fallback_src, timeout=60)
+            r.raise_for_status()
+            img_bytes = r.content
+            content_type = "image/jpeg"
+        except Exception:
+            raise
+
+    if not img_bytes:
+        raise RuntimeError("Failed to fetch HMI intensity image from Helioviewer and fallback source")
+
+    rel = f"nasa/hmi_intensity/hmi_intensity_{_stamp(captured_at)}.png"
+    public = upload_bytes(rel, img_bytes, content_type=content_type)
+    upload_alias("nasa/hmi_intensity/latest.png", public, content_type=content_type)
+    upsert_visual_row("hmi_intensity", rel, "SDO/HMI (via Helioviewer)", "hmi_intensity", captured_at)
+
+
 # Aurora viewline (use your stored URLs if you already fetch them; otherwise just alias)
 def alias_aurora_viewline(tonight_url: Optional[str], tomorrow_url: Optional[str], ts: dt.datetime):
     # If your ingest computes/pulls these PNGs elsewhere, re-upload via deterministic rel keys (aurora/viewline/…)
@@ -160,6 +207,7 @@ __all__ = [
     "_public_url",
     "alias_aurora_viewline",
     "ingest_aia_304",
+    "ingest_hmi_intensity",
     "ingest_drap_now",
     "ingest_lasco_c2",
     "upload_rendered_png",
