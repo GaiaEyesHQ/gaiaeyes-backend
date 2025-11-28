@@ -169,9 +169,21 @@ function gaia_hazards_brief_shortcode($atts = []) {
                   }
 
                   $meta_bits = [];
-                  if ($kind)   $meta_bits[] = strtolower($kind);
-                  if ($source) $meta_bits[] = strtolower($source);
-                  if ($location) $meta_bits[] = $location;
+                  $kind_lower = strtolower($kind);
+                  if ($kind) {
+                    // Show a friendlier label for volcano activity
+                    if (strpos($kind_lower, 'volcano') !== false) {
+                      $meta_bits[] = '🌋 volcano';
+                    } else {
+                      $meta_bits[] = $kind_lower;
+                    }
+                  }
+                  if ($source) {
+                    $meta_bits[] = strtolower($source);
+                  }
+                  if ($location) {
+                    $meta_bits[] = $location;
+                  }
                 ?>
                 <li>
                   <span class="sev-pill <?php echo esc_attr($sev_class); ?>"><?php echo esc_html($sev_label); ?></span>
