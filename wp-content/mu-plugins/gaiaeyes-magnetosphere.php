@@ -194,7 +194,7 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
     <?php if ( !empty($data['series']) && is_array($data['series']['r0'] ?? null) ): ?>
       <div class="ge-detail__card">
         <h3>r₀ Trend</h3>
-        <canvas id="geR0Chart" height="120"></canvas>
+        <canvas id="geR0Chart" height="120" style="max-height: 160px; width: 100%;"></canvas>
       </div>
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
       <script>
@@ -245,7 +245,7 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
           },
           options: {
             responsive: true,
-            maintainAspectRatio: false,
+            maintainAspectRatio: true,
             scales: {
               x: {
                 ticks: { color: '#cfe3ff' },
