@@ -629,7 +629,30 @@ add_shortcode('gaia_space_detail', function($atts){
             } catch(e){}
           }
           if (arr.length > 1000) arr = arr.slice(-1000);
-          renderSpark('sparkXrs', arr, { xLabel:'UTC time', yLabel:'GOES X-ray flux', units:'W/m²', yMin:0, color:'#7fc8ff' });
+
+          // Dynamically tighten the Y-axis so tiny flux variations are still visible.
+          let yMax = 1e-5; // default for very quiet conditions
+          let maxVal = 0;
+          for (let i = 0; i < arr.length; i++) {
+            const v = Number(arr[i].y || 0);
+            if (!isFinite(v)) continue;
+            if (v > maxVal) maxVal = v;
+          }
+          if (maxVal > 0) {
+            // Give some headroom above the largest value; if it's extremely small, still bump to a reasonable scale.
+            yMax = maxVal * 5;
+            if (yMax < 5e-7) yMax = 5e-7;
+          }
+
+          renderSpark('sparkXrs', arr, {
+            xLabel:'UTC time',
+            yLabel:'GOES X-ray flux',
+            units:'W/m²',
+            yMin:0,
+            yMax:yMax,
+            color:'#7fc8ff'
+          });
+
           const lp = (arr.length ? arr[arr.length-1] : null);
           if (lp) {
             const sample = lp.raw;
