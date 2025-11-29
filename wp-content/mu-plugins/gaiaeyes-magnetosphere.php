@@ -154,12 +154,63 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
   $ts   = isset($data['ts']) ? esc_html($data['ts']) : '';
   $kpis = $data['kpis'];
   $trend  = isset($data['trend']['r0']) ? sanitize_text_field($data['trend']['r0']) : 'flat';
-  $r0     = (isset($kpis['r0_re']) && $kpis['r0_re'] !== null) ? number_format_i18n(floatval($kpis['r0_re']), 2) . ' Rᴇ' : '—';
+
+  $r0_raw  = isset($kpis['r0_re']) ? floatval($kpis['r0_re']) : null;
+  $kp_raw  = isset($kpis['kp']) ? floatval($kpis['kp']) : null;
+  $lpp_raw = isset($kpis['lpp_re']) ? floatval($kpis['lpp_re']) : null;
+
+  $r0     = ($r0_raw !== null) ? number_format_i18n($r0_raw, 2) . ' Rᴇ' : '—';
   $geo    = isset($kpis['geo_risk']) ? sanitize_text_field($kpis['geo_risk']) : 'unknown';
   $storm  = isset($kpis['storminess']) ? sanitize_text_field($kpis['storminess']) : 'unknown';
   $dbdt   = isset($kpis['dbdt']) ? sanitize_text_field($kpis['dbdt']) : 'unknown';
-  $kp     = (isset($kpis['kp']) && $kpis['kp'] !== null) ? number_format_i18n(floatval($kpis['kp']), 1) : '—';
-  $lpp    = (isset($kpis['lpp_re']) && $kpis['lpp_re'] !== null) ? number_format_i18n(floatval($kpis['lpp_re']), 2) . ' Rᴇ' : '—';
+  $kp     = ($kp_raw !== null) ? number_format_i18n($kp_raw, 1) : '—';
+  $lpp    = ($lpp_raw !== null) ? number_format_i18n($lpp_raw, 2) . ' Rᴇ' : '—';
+
+  // Badge alert classes
+  $geo_l   = strtolower($geo);
+  $storm_l = strtolower($storm);
+  $trend_l = strtolower($trend);
+
+  $geo_class   = 'ge-badge--geo'   . (($geo_l === 'elevated' || $geo_l === 'watch') ? ' ge-badge--alert' : '');
+  $storm_class = 'ge-badge--storm' . (in_array($storm_l, ['storm','strong_storm']) ? ' ge-badge--alert' : '');
+  $kp_class    = 'ge-badge--kp'    . (($kp_raw !== null && $kp_raw >= 5.0) ? ' ge-badge--alert' : '');
+
+  // Gaia Eyes style summary sentence
+  $state_phrase = 'typical';
+  if ($r0_raw !== null) {
+    if ($r0_raw < 8.0) {
+      $state_phrase = 'slightly compressed';
+    } elseif ($r0_raw > 10.0) {
+      $state_phrase = 'more expanded than usual';
+    } else {
+      $state_phrase = 'near its typical size';
+    }
+  }
+  $kp_phrase = 'baseline';
+  if ($kp_raw !== null) {
+    if ($kp_raw >= 6.0) {
+      $kp_phrase = 'strongly elevated';
+    } elseif ($kp_raw >= 4.0) {
+      $kp_phrase = 'a little edgy';
+    }
+  }
+  $geo_phrase = ($geo_l === 'low') ? 'baseline' : $geo_l;
+  $storm_phrase = ($storm_l === 'quiet') ? 'calm' : $storm_l;
+  $trend_phrase = $trend_l;
+  if ($trend_l === 'rising') {
+    $trend_phrase = 'slowly relaxing outward';
+  } elseif ($trend_l === 'falling') {
+    $trend_phrase = 'gradually tightening inward';
+  }
+
+  $mag_summary = sprintf(
+    'Today the magnetosphere looks %s with GEO risk %s and storminess %s. Kp is %s, so the shield edge is %s.',
+    $state_phrase,
+    $geo_phrase,
+    $storm_phrase,
+    $kp_phrase,
+    $trend_phrase
+  );
 
   ob_start(); ?>
   <section class="ge-detail ge-magneto-detail">
@@ -169,9 +220,9 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
         <div class="ge-detail__meta">Updated <?php echo $ts; ?></div>
       </div>
       <div class="ge-detail__chips ge-badges">
-        <?php echo gaiaeyes_badge('GEO', $geo, 'ge-badge--geo'); ?>
-        <?php echo gaiaeyes_badge('Storm', $storm, 'ge-badge--storm'); ?>
-        <?php echo gaiaeyes_badge('Kp', $kp, 'ge-badge--kp'); ?>
+        <?php echo gaiaeyes_badge('GEO', $geo, $geo_class); ?>
+        <?php echo gaiaeyes_badge('Storm', $storm, $storm_class); ?>
+        <?php echo gaiaeyes_badge('Kp', $kp, $kp_class); ?>
       </div>
     </header>
 
@@ -180,13 +231,13 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
         <h3>Magnetosphere snapshot</h3>
         <p class="ge-detail__lede">Here&rsquo;s how Earth&rsquo;s magnetic shield is behaving right now:</p>
         <ul class="ge-detail__list">
-          <li><strong>Shield size (r₀):</strong> <?php echo $r0; ?> <span class="ge-detail__hint">Distance to the sun-facing edge of the magnetosphere. Lower values mean the shield is pushed closer to Earth.</span></li>
-          <li><strong>Plasmapause L:</strong> <?php echo $lpp; ?> <span class="ge-detail__hint">Approximate inner edge of the outer radiation belt.</span></li>
-          <li><strong>Geomagnetic risk:</strong> <?php echo esc_html($geo); ?> <span class="ge-detail__hint">Overall level of geomagnetic disturbance.</span></li>
-          <li><strong>Storminess:</strong> <?php echo esc_html($storm); ?> <span class="ge-detail__hint">How unsettled the magnetosphere is at the moment.</span></li>
-          <li><strong>Grid stress (dB/dt):</strong> <?php echo esc_html($dbdt); ?> <span class="ge-detail__hint">Rough feel for how strongly power grids might be shaken by changing currents.</span></li>
-          <li><strong>Kp index:</strong> <?php echo $kp; ?> <span class="ge-detail__hint">Planetary Kp index; higher values mean stronger geomagnetic activity.</span></li>
-          <li><strong>r₀ trend:</strong> <?php echo esc_html($trend); ?> <span class="ge-detail__hint">Whether the shield edge is mostly steady, expanding, or compressing.</span></li>
+          <li><strong title="Distance to the sun-facing edge of the magnetosphere. Lower values mean the shield is pushed closer to Earth.">Shield size (r₀):</strong> <?php echo $r0; ?></li>
+          <li><strong title="Approximate inner edge of the outer radiation belt.">Plasmapause L:</strong> <?php echo $lpp; ?></li>
+          <li><strong title="Overall level of geomagnetic disturbance.">Geomagnetic risk:</strong> <?php echo esc_html($geo); ?></li>
+          <li><strong title="How unsettled the magnetosphere is at the moment.">Storminess:</strong> <?php echo esc_html($storm); ?></li>
+          <li><strong title="Rough feel for how strongly power grids might be shaken by changing currents.">Grid stress (dB/dt):</strong> <?php echo esc_html($dbdt); ?></li>
+          <li><strong title="Planetary Kp index; higher values mean stronger geomagnetic activity.">Kp index:</strong> <?php echo $kp; ?></li>
+          <li><strong title="Whether the shield edge is mostly steady, expanding, or compressing.">r₀ trend:</strong> <?php echo esc_html($trend); ?></li>
         </ul>
       </div>
 
@@ -203,7 +254,7 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
 
       <div class="ge-card ge-detail__card">
         <h3>Why this matters today</h3>
-        <p class="ge-detail__lede">Most of the time the magnetosphere quietly protects us from the solar wind. On more unsettled days, changes in r₀ and Kp can ripple into everyday life.</p>
+        <p class="ge-detail__lede"><?php echo esc_html($mag_summary); ?></p>
         <ul class="ge-detail__list">
           <li><strong>For technology:</strong> Low to moderate levels generally mean GPS, radio, and power grids operate normally, with only minor tweaks needed during stronger storms.</li>
           <li><strong>For auroras:</strong> When storminess and Kp rise, auroras can dip farther from the poles and night skies become more active.</li>
@@ -316,3 +367,23 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
   return ob_get_clean();
 }
 add_shortcode('gaia_magnetosphere_detail','gaiaeyes_magnetosphere_detail_shortcode');
+
+function gaiaeyes_magnetosphere_styles() {
+  ?>
+  <style>
+    .ge-magneto-detail .ge-badges .ge-badge,
+    .ge-magneto .ge-badges .ge-badge {
+      background: rgba(255,255,255,0.08);
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 0.85rem;
+    }
+    .ge-magneto-detail .ge-badge--alert,
+    .ge-magneto .ge-badge--alert {
+      background: #c0392b;
+      color: #fff;
+    }
+  </style>
+  <?php
+}
+add_action('wp_head','gaiaeyes_magnetosphere_styles');
