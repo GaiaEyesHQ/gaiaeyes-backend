@@ -164,8 +164,15 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
   ob_start(); ?>
   <section class="ge-detail ge-magneto-detail">
     <header class="ge-detail__head">
-      <h2>Magnetosphere</h2>
-      <div class="ge-detail__meta">Updated <?php echo $ts; ?></div>
+      <div class="ge-detail__title">
+        <h2>Magnetosphere</h2>
+        <div class="ge-detail__meta">Updated <?php echo $ts; ?></div>
+      </div>
+      <div class="ge-detail__chips">
+        <?php echo gaiaeyes_badge('GEO', $geo, 'ge-badge--geo'); ?>
+        <?php echo gaiaeyes_badge('Storm', $storm, 'ge-badge--storm'); ?>
+        <?php echo gaiaeyes_badge('Kp', $kp, 'ge-badge--kp'); ?>
+      </div>
     </header>
 
     <div class="ge-detail__grid">
@@ -192,6 +199,16 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
           <li><strong>&gt; 10 Rᴇ:</strong> expanded &mdash; shield sitting farther out than usual.</li>
         </ul>
         <p class="ge-detail__hint">You can think of r₀ as how “puffed up” or “squeezed” Earth&rsquo;s magnetic bubble is at the moment.</p>
+      </div>
+
+      <div class="ge-detail__card">
+        <h3>Why this matters today</h3>
+        <p class="ge-detail__lede">Most of the time the magnetosphere quietly protects us from the solar wind. On more unsettled days, changes in r₀ and Kp can ripple into everyday life.</p>
+        <ul class="ge-detail__list">
+          <li><strong>For technology:</strong> Low to moderate levels generally mean GPS, radio, and power grids operate normally, with only minor tweaks needed during stronger storms.</li>
+          <li><strong>For auroras:</strong> When storminess and Kp rise, auroras can dip farther from the poles and night skies become more active.</li>
+          <li><strong>For sensitivity:</strong> Some people report mood, focus, or sleep shifts on more disturbed days; today’s level is a good cue for how gently to pace yourself.</li>
+        </ul>
       </div>
     </div>
 
