@@ -199,7 +199,11 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
       <script>
       (function(){
-        const series = <?php echo wp_json_encode($data['series']['r0']); ?>;
+        const fullSeries = <?php echo wp_json_encode($data['series']['r0']); ?>;
+        // Limit to a reasonable number of points so the chart doesn't become excessively long.
+        const maxPoints = 200;
+        const series = fullSeries.length > maxPoints ? fullSeries.slice(-maxPoints) : fullSeries;
+
         const lab = series.map(x => x.t);
         const val = series.map(x => x.v);
 
