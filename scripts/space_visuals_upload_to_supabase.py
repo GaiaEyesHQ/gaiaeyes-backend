@@ -33,17 +33,18 @@ def map_dest(path: Path) -> str | None:
     if name.startswith("ovation_sh") and name.endswith((".jpg", ".png")):
         return "aurora/viewline/tonight-south.png"
 
-    # NASA LASCO/AIA/HMI
+    # NASA LASCO/AIA/HMI/CCOR
     if name.startswith(("lasco_c2", "soho_c2")) and name.endswith(".jpg"):
         return "nasa/lasco_c2/latest.jpg"
     if name.startswith("lasco_c3") and name.endswith(".jpg"):
         return "nasa/lasco_c3/latest.jpg"
-    # AIA 304 & HMI intensity are now managed via ingest_space_visuals (Helioviewer),
-    # so skip local JPGs here to avoid overwriting the Helioviewer-backed latest.jpg aliases.
-    if name.startswith(("aia_primary", "aia_304")) and name.endswith(".jpg"):
-        return None
-    if name.startswith("hmi_intensity") and name.endswith(".jpg"):
-        return None
+    # SUVI-based solar disc imagery: 195 (primary), 304, and SUVI map
+    if name.startswith("aia_primary_") and name.endswith((".jpg", ".png")):
+        return "nasa/aia_193/latest.jpg"
+    if name.startswith("aia_304_") and name.endswith((".jpg", ".png")):
+        return "nasa/aia_304/latest.jpg"
+    if name.startswith("hmi_intensity_") and name.endswith((".jpg", ".png")):
+        return "nasa/hmi_intensity/latest.jpg"
 
     # Magnetosphere (geospace horizons)
     if name.startswith("geospace_") and name.endswith(".png"):
