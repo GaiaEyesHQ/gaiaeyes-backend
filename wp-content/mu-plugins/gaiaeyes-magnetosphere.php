@@ -200,12 +200,36 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
       <script>
       (function(){
         const fullSeries = <?php echo wp_json_encode($data['series']['r0']); ?>;
-        // Downsample to a maximum of ~60 points so the chart remains compact and readable.
+        // Downsample to a maximum of ~60 points so the chart remains compact and readable,
+        // but always include first/last and true min/max points so variation is visible.
         const maxPoints = 60;
         let series = fullSeries;
+
         if (Array.isArray(fullSeries) && fullSeries.length > maxPoints) {
-          const step = Math.ceil(fullSeries.length / maxPoints);
-          series = fullSeries.filter((_, idx) => idx % step === 0);
+          let minIdx = 0;
+          let maxIdx = 0;
+          let minVal = Number.POSITIVE_INFINITY;
+          let maxVal = Number.NEGATIVE_INFINITY;
+
+          for (let i = 0; i < fullSeries.length; i++) {
+            const v = Number(fullSeries[i].v);
+            if (!isFinite(v)) continue;
+            if (v < minVal) { minVal = v; minIdx = i; }
+            if (v > maxVal) { maxVal = v; maxIdx = i; }
+          }
+
+          // Start with first and last indices, plus min and max.
+          const importantIdx = new Set([0, fullSeries.length - 1, minIdx, maxIdx]);
+          const remainingSlots = Math.max(maxPoints - importantIdx.size, 0);
+          const step = remainingSlots > 0 ? Math.ceil(fullSeries.length / remainingSlots) : fullSeries.length;
+
+          // Fill additional indices spaced across the series.
+          for (let i = 0; i < fullSeries.length && importantIdx.size < maxPoints; i += step) {
+            importantIdx.add(i);
+          }
+
+          const sortedIdx = Array.from(importantIdx).sort((a, b) => a - b);
+          series = sortedIdx.map(idx => fullSeries[idx]);
         }
 
         const lab = series.map(x => x.t);
