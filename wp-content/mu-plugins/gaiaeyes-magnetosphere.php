@@ -175,11 +175,58 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
         const series = <?php echo wp_json_encode($data['series']['r0']); ?>;
         const lab = series.map(x => x.t);
         const val = series.map(x => x.v);
+
+        // Compute a dynamic y-range with padding so small changes are visible
+        let yMin = null;
+        let yMax = null;
+        for (let i = 0; i < val.length; i++) {
+          const v = Number(val[i]);
+          if (!isFinite(v)) continue;
+          if (yMin === null || v < yMin) yMin = v;
+          if (yMax === null || v > yMax) yMax = v;
+        }
+        if (yMin === null || yMax === null) {
+          // fallback range if series is missing or invalid
+          yMin = 6;
+          yMax = 15;
+        } else {
+          const padding = (yMax - yMin) * 0.2 || 0.2;
+          yMin = yMin - padding;
+          yMax = yMax + padding;
+        }
+
         const ctx = document.getElementById('geR0Chart').getContext('2d');
         new Chart(ctx, {
           type: 'line',
-          data: { labels: lab, datasets: [{ label:'r₀ (Rᴇ)', data: val, borderColor:'#7fc8ff', tension:0.25 }]},
-          options: { scales:{ x:{ ticks:{ color:'#cfe3ff'} }, y:{ ticks:{ color:'#cfe3ff'} }}, plugins:{ legend:{ labels:{ color:'#cfe3ff' } } } }
+          data: {
+            labels: lab,
+            datasets: [{
+              label: 'r₀ (Rᴇ)',
+              data: val,
+              borderColor: '#7fc8ff',
+              tension: 0.25,
+              pointRadius: 0
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                ticks: { color: '#cfe3ff' },
+                grid: { color: 'rgba(207,227,255,0.1)' }
+              },
+              y: {
+                ticks: { color: '#cfe3ff' },
+                grid: { color: 'rgba(207,227,255,0.1)' },
+                suggestedMin: yMin,
+                suggestedMax: yMax
+              }
+            },
+            plugins: {
+              legend: { labels: { color: '#cfe3ff' } }
+            }
+          }
         });
       })();
       </script>
