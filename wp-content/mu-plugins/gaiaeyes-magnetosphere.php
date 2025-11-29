@@ -219,8 +219,8 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
               y: {
                 ticks: { color: '#cfe3ff' },
                 grid: { color: 'rgba(207,227,255,0.1)' },
-                suggestedMin: yMin,
-                suggestedMax: yMax
+                min: yMin,
+                max: yMax
               }
             },
             plugins: {
