@@ -20,8 +20,6 @@ import requests
 import psycopg
 from psycopg.types.json import Json as PsycoJson
 
-# Helioviewer-backed AIA/HMI ingestors (upload directly to Supabase Storage + ext.space_visuals)
-from ingest_space_visuals import ingest_aia_304 as hv_ingest_aia_304, ingest_hmi_intensity as hv_ingest_hmi_intensity
 
 
 # Helper to read env overrides and split by comma
@@ -544,18 +542,6 @@ def main():
     now_utc = dt.datetime.now(dt.timezone.utc)
     stamp = now_utc.strftime("%Y%m%dT%H%M%SZ")
     slot_ts = now_utc.replace(minute=0, second=0, microsecond=0)
-
-    # Also mirror AIA 304 and HMI intensity via Helioviewer into Supabase Storage/ext.space_visuals.
-    # These helpers handle upload_bytes/upload_alias/upsert_visual_row themselves, and will keep
-    # nasa/aia_304/latest.jpg and nasa/hmi_intensity/latest.jpg fresh even if SDO browse images are stale.
-    try:
-        hv_ingest_aia_304(now_utc)
-    except Exception as e:
-        print(f"[space_visuals] Helioviewer ingest AIA 304 failed: {e}")
-    try:
-        hv_ingest_hmi_intensity(now_utc)
-    except Exception as e:
-        print(f"[space_visuals] Helioviewer ingest HMI intensity failed: {e}")
     imgs = {
         "aia_primary": (f"aia_primary_{stamp}.png", [aia_primary_url] if aia_primary_url else []),
         "aia_304": (f"aia_304_{stamp}.png", [aia_304_url] if aia_304_url else []),
