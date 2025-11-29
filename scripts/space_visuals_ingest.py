@@ -203,30 +203,13 @@ def probe_and_select(primary_urls: List[str], secondary_urls: List[str]) -> str 
 def select_solar_imagery_sources():
     """Pick the best-available solar imagery sources for AIA 193Å, AIA 304Å, and HMI."""
 
-    aia_primary_urls = env_urls(
-        "AIA_PRIMARY_URLS",
-        ["https://services.swpc.noaa.gov/images/solar-images/latest_1024_0193.jpg"],
-    )
-    aia_primary_fallback = env_urls(
-        "AIA_193_FALLBACK_URLS",
-        ["https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0193.jpg"],
-    )
-    aia_304_primary = env_urls(
-        "AIA_304_URLS",
-        ["https://services.swpc.noaa.gov/images/solar-images/latest_1024_0304.jpg"],
-    )
-    aia_304_fallback = env_urls(
-        "AIA_304_FALLBACK_URLS",
-        ["https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_0304.jpg"],
-    )
-    hmi_primary = env_urls(
-        "HMI_INTENSITY_URLS",
-        ["https://services.swpc.noaa.gov/images/solar-images/latest_1024_HMIIC.jpg"],
-    )
-    hmi_fallback = env_urls(
-        "HMI_INTENSITY_FALLBACK_URLS",
-        ["https://sdo.gsfc.nasa.gov/assets/img/latest/latest_1024_HMIIC.jpg"],
-    )
+    # NOAA SUVI replacements (195 Å, 304 Å, and SUVI map)
+    aia_primary_urls = ["https://services.swpc.noaa.gov/images/animations/suvi/primary/195/latest.png"]
+    aia_primary_fallback = []
+    aia_304_primary = ["https://services.swpc.noaa.gov/images/animations/suvi/primary/304/latest.png"]
+    aia_304_fallback = []
+    hmi_primary = ["https://services.swpc.noaa.gov/images/animations/suvi/primary/map/latest.png"]
+    hmi_fallback = []
 
     return {
         "aia_primary_urls": aia_primary_urls,
@@ -574,14 +557,14 @@ def main():
     except Exception as e:
         print(f"[space_visuals] Helioviewer ingest HMI intensity failed: {e}")
     imgs = {
-        "aia_primary": (f"aia_primary_{stamp}.jpg", [aia_primary_url] if aia_primary_url else []),
-        "aia_304": (f"aia_304_{stamp}.jpg", [aia_304_url] if aia_304_url else []),
+        "aia_primary": (f"aia_primary_{stamp}.png", [aia_primary_url] if aia_primary_url else []),
+        "aia_304": (f"aia_304_{stamp}.png", [aia_304_url] if aia_304_url else []),
         "ovation_nh": (f"ovation_nh_{stamp}.jpg", ov_nh),
         "ovation_sh": (f"ovation_sh_{stamp}.jpg", ov_sh),
         "soho_c2": (f"soho_c2_{stamp}.jpg", soho_c2),
         "lasco_c3": (f"lasco_c3_{stamp}.jpg", lasco_c3),
         "ccor1_jpeg": (f"ccor1_{stamp}.jpg", [ccor1_jpeg_url] if ccor1_jpeg_url else []),
-        "hmi_intensity": (f"hmi_intensity_{stamp}.jpg", [hmi_img] if hmi_img else []),
+        "hmi_intensity": (f"hmi_intensity_{stamp}.png", [hmi_img] if hmi_img else []),
         "geospace_1d": (f"geospace_1d_{stamp}.png", geospace_1d),
         "geospace_3h": (f"geospace_3h_{stamp}.png", geospace_3h),
         "geospace_7d": (f"geospace_7d_{stamp}.png", geospace_7d),
