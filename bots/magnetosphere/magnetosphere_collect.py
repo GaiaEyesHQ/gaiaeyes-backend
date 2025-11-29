@@ -641,6 +641,20 @@ def main():
     rows24 = fetch_last24_for_chart()
     chart_meta = analyze_chart_mode(rows24)
 
+    # Build 24h r0 series for front-end charting
+    series_r0 = []
+    for row in rows24:
+        t = row.get("ts")
+        v = row.get("r0_re")
+        if t is None or v is None:
+            continue
+        try:
+            # Normalize timestamp to ISO string if not already
+            t_str = str(t)
+            series_r0.append({"t": t_str, "v": float(v)})
+        except Exception:
+            continue
+
     # Read previous from marts view (create view: marts.magnetosphere_history)
     prev = sb_select_one("marts.magnetosphere_history", order="ts", desc=True, offset=1)
     prev_r0 = prev.get("r0_re") if prev else None
@@ -740,6 +754,9 @@ def main():
         "chart": {
             "mode": chart_meta.get("mode"),
             "amp": chart_meta.get("amp")
+        },
+        "series": {
+            "r0": series_r0
         },
         "explain": explainer,
         "images": {
