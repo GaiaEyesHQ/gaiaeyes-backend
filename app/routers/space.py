@@ -1,3 +1,34 @@
+def _bucket_geo_risk(r0: Optional[float]) -> str:
+    if r0 is None:
+        return "unknown"
+    # Rough buckets; you can tune thresholds later
+    if r0 < 6.6:
+        return "elevated"
+    if r0 < 8.0:
+        return "watch"
+    return "low"
+
+
+def _bucket_kpi(symh_est: Optional[int]) -> str:
+    if symh_est is None:
+        return "unknown"
+    if symh_est >= -20:
+        return "quiet"
+    if symh_est >= -50:
+        return "active"
+    if symh_est >= -100:
+        return "storm"
+    return "strong_storm"
+
+
+def _dbdt_tag_from_proxy(val: Optional[float]) -> str:
+    if val is None:
+        return "unknown"
+    if val < 0.5:
+        return "low"
+    if val < 1.5:
+        return "moderate"
+    return "high"
 # app/routers/space.py
 
 from datetime import datetime, timedelta, timezone
@@ -258,3 +289,111 @@ async def space_history(conn = Depends(get_db), hours: int = 24):
         },
         "error": None,
     }
+
+
+# Magnetosphere endpoint
+@router.get("/magnetosphere")
+async def magnetosphere(conn = Depends(get_db)):
+    """
+    Magnetosphere status + 24h r0 series backed by ext.magnetosphere_pulse and marts.magnetosphere_last_24h.
+
+    Returns shape:
+      {
+        "ok": true,
+        "data": {
+          "ts": "...",
+          "kpis": {...},
+          "sw": {...},
+          "trend": {"r0": "..."},
+          "chart": {"mode": "...", "amp": ...},
+          "series": { "r0": [ {"t": "...", "v": 9.0}, ... ] }
+        }
+      }
+    """
+    latest: Optional[Dict[str, Any]] = None
+    series_rows: List[Dict[str, Any]] = []
+    chart_meta: Dict[str, Any] = {"mode": "absolute", "amp": 1.0}
+
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute("set statement_timeout = 60000")
+            # Latest magnetosphere pulse
+            await cur.execute(
+                """
+                select ts, n_cm3, v_kms, bz_nt, pdyn_npa, r0_re, symh_est,
+                       dbdt_proxy, trend_r0, geo_risk, kpi_bucket, lpp_re, kp_latest
+                from ext.magnetosphere_pulse
+                order by ts desc
+                limit 1
+                """
+            )
+            latest = await cur.fetchone()
+
+            # 24h r0/Kp series for charts
+            await cur.execute(
+                """
+                select ts, r0_re, kp_latest
+                from marts.magnetosphere_last_24h
+                order by ts asc
+                """
+            )
+            series_rows = await cur.fetchall() or []
+
+    except Exception as exc:
+        return {"ok": False, "error": f"magnetosphere query failed: {exc}"}
+
+    if not latest:
+        return {"ok": False, "error": "no magnetosphere data available"}
+
+    # Build 24h r0 series
+    series_r0: List[Dict[str, Any]] = []
+    for row in series_rows:
+        t = row.get("ts")
+        v = row.get("r0_re")
+        if t is None or v is None:
+            continue
+        try:
+            t_str = t.isoformat() if isinstance(t, datetime) else str(t)
+            series_r0.append({"t": t_str, "v": float(v)})
+        except Exception:
+            continue
+
+    # KPIs
+    ts = latest.get("ts")
+    r0 = latest.get("r0_re")
+    geo_risk = latest.get("geo_risk") or _bucket_geo_risk(r0)
+    kpi_bucket = latest.get("kpi_bucket") or _bucket_kpi(latest.get("symh_est"))
+    dbdt_proxy = latest.get("dbdt_proxy")
+    dbdt_tag = _dbdt_tag_from_proxy(dbdt_proxy)
+    lpp = latest.get("lpp_re")
+    kp_latest = latest.get("kp_latest")
+
+    kpis = {
+        "r0_re": None if r0 is None else round(float(r0), 1),
+        "geo_risk": geo_risk,
+        "storminess": kpi_bucket,
+        "dbdt": dbdt_tag,
+        "lpp_re": None if lpp is None else round(float(lpp), 1),
+        "kp": kp_latest,
+    }
+
+    sw = {
+        "n_cm3": latest.get("n_cm3"),
+        "v_kms": latest.get("v_kms"),
+        "bz_nt": latest.get("bz_nt"),
+    }
+
+    trend = {"r0": latest.get("trend_r0") or "flat"}
+
+    data = {
+        "ts": _iso(ts) or ts,
+        "kpis": kpis,
+        "sw": sw,
+        "trend": trend,
+        "chart": chart_meta,
+        "series": {
+            "r0": series_r0,
+        },
+    }
+
+    return {"ok": True, "data": data, "error": None}
