@@ -224,7 +224,6 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
   <section class="ge-detail ge-magneto-detail">
     <header class="ge-detail__head">
       <div class="ge-detail__title">
-        <h2>Magnetosphere</h2>
         <div class="ge-detail__meta">Updated <?php echo $ts; ?></div>
       </div>
       <div class="ge-detail__chips ge-badges">
@@ -250,6 +249,16 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
       </div>
 
       <div class="ge-card ge-detail__card">
+        <h3>Why this matters today</h3>
+        <p class="ge-detail__lede"><?php echo esc_html($mag_summary); ?></p>
+        <ul class="ge-detail__list">
+          <li><strong>For technology:</strong> Low to moderate levels generally mean GPS, radio, and power grids operate normally, with only minor tweaks needed during stronger storms.</li>
+          <li><strong>For auroras:</strong> When storminess and Kp rise, auroras can dip farther from the poles and night skies become more active.</li>
+          <li><strong>For sensitivity:</strong> Some people report mood, focus, or sleep shifts on more disturbed days; today’s level is a good cue for how gently to pace yourself.</li>
+        </ul>
+      </div>
+
+      <div class="ge-card ge-detail__card">
         <h3>What “compressed” vs “expanded” means</h3>
         <p>The dayside magnetopause distance (r₀ in Earth radii, Rᴇ) describes how far Earth&rsquo;s magnetic shield sits from the planet on the Sun-facing side. Strong solar-wind pressure pushes r₀ inward (compressed), while quiet conditions let it relax outward (expanded).</p>
         <ul>
@@ -258,16 +267,6 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
           <li><strong>&gt; 10 Rᴇ:</strong> expanded &mdash; shield sitting farther out than usual.</li>
         </ul>
         <p class="ge-detail__hint">You can think of r₀ as how “puffed up” or “squeezed” Earth&rsquo;s magnetic bubble is at the moment.</p>
-      </div>
-
-      <div class="ge-card ge-detail__card">
-        <h3>Why this matters today</h3>
-        <p class="ge-detail__lede"><?php echo esc_html($mag_summary); ?></p>
-        <ul class="ge-detail__list">
-          <li><strong>For technology:</strong> Low to moderate levels generally mean GPS, radio, and power grids operate normally, with only minor tweaks needed during stronger storms.</li>
-          <li><strong>For auroras:</strong> When storminess and Kp rise, auroras can dip farther from the poles and night skies become more active.</li>
-          <li><strong>For sensitivity:</strong> Some people report mood, focus, or sleep shifts on more disturbed days; today’s level is a good cue for how gently to pace yourself.</li>
-        </ul>
       </div>
     </div>
 
@@ -280,33 +279,46 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
           </div>
           <?php if ( $media_base ): ?>
           <div class="ge-magneto-trend-visuals">
-            <?php if ( $enlil_img ): ?>
-              <div class="ge-magneto-visual">
-                <h4>Enlil forecast</h4>
-                <img src="<?php echo esc_url($enlil_img); ?>" alt="Latest Enlil solar-wind forecast" />
-                <?php if ( $enlil_video ): ?>
-                  <p class="ge-detail__hint"><a href="<?php echo esc_url($enlil_video); ?>" target="_blank" rel="noopener">Watch latest animation ↗</a></p>
-                <?php endif; ?>
-              </div>
-            <?php endif; ?>
+          <?php if ( $enlil_img ): ?>
+            <div class="ge-magneto-visual">
+              <h4>Enlil forecast</h4>
+              <?php if ( $enlil_video ): ?>
+                <video class="ge-magneto-video" poster="<?php echo esc_url($enlil_img); ?>" controls playsinline>
+                  <source src="<?php echo esc_url($enlil_video); ?>" type="video/mp4">
+                  <img src="<?php echo esc_url($enlil_img); ?>" alt="Latest Enlil solar-wind forecast" />
+                </video>
+                <p class="ge-detail__hint">Tap play to watch the latest model run. Use the fullscreen control in the player to expand.</p>
+              <?php else: ?>
+                <a href="<?php echo esc_url($enlil_img); ?>" target="_blank" rel="noopener">
+                  <img src="<?php echo esc_url($enlil_img); ?>" alt="Latest Enlil solar-wind forecast" />
+                </a>
+              <?php endif; ?>
+            </div>
+          <?php endif; ?>
             <div class="ge-magneto-visual">
               <h4>Geospace response</h4>
               <div class="ge-magneto-geospace-set">
                 <?php if ( $geospace_3h ): ?>
                   <figure>
-                    <img src="<?php echo esc_url($geospace_3h); ?>" alt="Geospace disturbance (last 3 hours)" />
+                    <a href="<?php echo esc_url($geospace_3h); ?>" target="_blank" rel="noopener">
+                      <img src="<?php echo esc_url($geospace_3h); ?>" alt="Geospace disturbance (last 3 hours)" />
+                    </a>
                     <figcaption>3 hours</figcaption>
                   </figure>
                 <?php endif; ?>
                 <?php if ( $geospace_1d ): ?>
                   <figure>
-                    <img src="<?php echo esc_url($geospace_1d); ?>" alt="Geospace disturbance (last 1 day)" />
+                    <a href="<?php echo esc_url($geospace_1d); ?>" target="_blank" rel="noopener">
+                      <img src="<?php echo esc_url($geospace_1d); ?>" alt="Geospace disturbance (last 1 day)" />
+                    </a>
                     <figcaption>1 day</figcaption>
                   </figure>
                 <?php endif; ?>
                 <?php if ( $geospace_7d ): ?>
                   <figure>
-                    <img src="<?php echo esc_url($geospace_7d); ?>" alt="Geospace disturbance (last 7 days)" />
+                    <a href="<?php echo esc_url($geospace_7d); ?>" target="_blank" rel="noopener">
+                      <img src="<?php echo esc_url($geospace_7d); ?>" alt="Geospace disturbance (last 7 days)" />
+                    </a>
                     <figcaption>7 days</figcaption>
                   </figure>
                 <?php endif; ?>
@@ -349,7 +361,14 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
           series = sortedIdx.map(idx => fullSeries[idx]);
         }
 
-        const lab = series.map(x => x.t);
+        const lab = series.map(x => {
+          try {
+            const d = new Date(x.t);
+            return d.toISOString().slice(11,16); // HH:MM
+          } catch (e) {
+            return x.t;
+          }
+        });
         const val = series.map(x => x.v);
 
         let yMin = null;
@@ -450,7 +469,8 @@ function gaiaeyes_magnetosphere_styles() {
         flex: 1;
       }
     }
-    .ge-magneto-trend-visuals img {
+    .ge-magneto-trend-visuals img,
+    .ge-magneto-trend-visuals .ge-magneto-video {
       display: block;
       width: 100%;
       height: auto;
