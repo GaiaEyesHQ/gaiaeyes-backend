@@ -200,9 +200,13 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
       <script>
       (function(){
         const fullSeries = <?php echo wp_json_encode($data['series']['r0']); ?>;
-        // Limit to a reasonable number of points so the chart doesn't become excessively long.
-        const maxPoints = 200;
-        const series = fullSeries.length > maxPoints ? fullSeries.slice(-maxPoints) : fullSeries;
+        // Downsample to a maximum of ~60 points so the chart remains compact and readable.
+        const maxPoints = 60;
+        let series = fullSeries;
+        if (Array.isArray(fullSeries) && fullSeries.length > maxPoints) {
+          const step = Math.ceil(fullSeries.length / maxPoints);
+          series = fullSeries.filter((_, idx) => idx % step === 0);
+        }
 
         const lab = series.map(x => x.t);
         const val = series.map(x => x.v);
