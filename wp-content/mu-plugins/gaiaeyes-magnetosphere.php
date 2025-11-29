@@ -36,6 +36,33 @@ function gaiaeyes_fetch_magneto_json($url = '') {
   return $data;
 }
 
+function gaiaeyes_fetch_magneto_data($override_url = '') {
+  // Prefer API-backed data when available; fall back to static JSON if needed.
+  if (!empty($override_url)) {
+    return gaiaeyes_fetch_magneto_json($override_url);
+  }
+
+  $api_base   = defined('GAIAEYES_API_BASE') ? rtrim(GAIAEYES_API_BASE, '/') : '';
+  $api_bearer = defined('GAIAEYES_API_BEARER') ? GAIAEYES_API_BEARER : '';
+  $api_dev    = defined('GAIAEYES_API_DEV_USERID') ? GAIAEYES_API_DEV_USERID : '';
+
+  if ($api_base && function_exists('gaiaeyes_http_get_json_api_cached')) {
+    $payload = gaiaeyes_http_get_json_api_cached(
+      $api_base . '/v1/space/magnetosphere',
+      'ge_magnetosphere_api',
+      GAIAEYES_MAGNETO_TTL,
+      $api_bearer,
+      $api_dev
+    );
+    if (is_array($payload) && !empty($payload['ok']) && !empty($payload['data'])) {
+      return $payload['data'];
+    }
+  }
+
+  // Fallback: legacy JSON from the static URL
+  return gaiaeyes_fetch_magneto_json();
+}
+
 function gaiaeyes_badge($label, $value, $class = '') {
   $label_esc = esc_html($label);
   $value_esc = esc_html($value);
@@ -52,7 +79,7 @@ function gaiaeyes_magnetosphere_shortcode($atts) {
     'link' => '', // optional, e.g., /magnetosphere/
   ], $atts, 'gaia_magnetosphere');
 
-  $data = gaiaeyes_fetch_magneto_json($atts['url']);
+  $data = gaiaeyes_fetch_magneto_data($atts['url']);
 
   $open_a = $close_a = '';
   if (!empty($atts['link'])) {
@@ -119,7 +146,7 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
     'url' => '', // optional override
   ], $atts, 'gaia_magnetosphere_detail');
 
-  $data = gaiaeyes_fetch_magneto_json($atts['url']);
+  $data = gaiaeyes_fetch_magneto_data($atts['url']);
   if (!$data || empty($data['kpis']) || !is_array($data['kpis'])) {
     return "<div class='ge-card ge-magneto'><p>Magnetosphere data unavailable.</p></div>";
   }
