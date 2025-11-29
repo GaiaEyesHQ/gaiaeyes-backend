@@ -168,7 +168,7 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
         <h2>Magnetosphere</h2>
         <div class="ge-detail__meta">Updated <?php echo $ts; ?></div>
       </div>
-      <div class="ge-detail__chips">
+      <div class="ge-detail__chips ge-badges">
         <?php echo gaiaeyes_badge('GEO', $geo, 'ge-badge--geo'); ?>
         <?php echo gaiaeyes_badge('Storm', $storm, 'ge-badge--storm'); ?>
         <?php echo gaiaeyes_badge('Kp', $kp, 'ge-badge--kp'); ?>
@@ -176,7 +176,7 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
     </header>
 
     <div class="ge-detail__grid">
-      <div class="ge-detail__card">
+      <div class="ge-card ge-detail__card">
         <h3>Magnetosphere snapshot</h3>
         <p class="ge-detail__lede">Here&rsquo;s how Earth&rsquo;s magnetic shield is behaving right now:</p>
         <ul class="ge-detail__list">
@@ -190,7 +190,7 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
         </ul>
       </div>
 
-      <div class="ge-detail__card">
+      <div class="ge-card ge-detail__card">
         <h3>What “compressed” vs “expanded” means</h3>
         <p>The dayside magnetopause distance (r₀ in Earth radii, Rᴇ) describes how far Earth&rsquo;s magnetic shield sits from the planet on the Sun-facing side. Strong solar-wind pressure pushes r₀ inward (compressed), while quiet conditions let it relax outward (expanded).</p>
         <ul>
@@ -201,7 +201,7 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
         <p class="ge-detail__hint">You can think of r₀ as how “puffed up” or “squeezed” Earth&rsquo;s magnetic bubble is at the moment.</p>
       </div>
 
-      <div class="ge-detail__card">
+      <div class="ge-card ge-detail__card">
         <h3>Why this matters today</h3>
         <p class="ge-detail__lede">Most of the time the magnetosphere quietly protects us from the solar wind. On more unsettled days, changes in r₀ and Kp can ripple into everyday life.</p>
         <ul class="ge-detail__list">
