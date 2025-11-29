@@ -135,6 +135,7 @@ def _map_supabase_dest(key: str, filename: str) -> str:
         return "nasa/lasco_c2/latest.jpg"
     if k in ("lasco_c3",):
         return "nasa/lasco_c3/latest.jpg"
+    # SUVI-based solar disc imagery: 195 (primary), 304, and SUVI map
     if k == "aia_primary":
         return "nasa/aia_193/latest.jpg"
     if k == "aia_304":
