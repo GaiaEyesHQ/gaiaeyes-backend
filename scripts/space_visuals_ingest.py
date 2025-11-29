@@ -6,6 +6,13 @@ import json
 import datetime as dt
 import urllib.request
 import urllib.parse
+import sys
+
+# Ensure the repo root (parent of this file) is on sys.path so we can import ingest_space_visuals
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PARENT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
+if PARENT_DIR not in sys.path:
+    sys.path.insert(0, PARENT_DIR)
 from typing import Any, Dict, List, Tuple
 
 import requests
@@ -14,7 +21,7 @@ import psycopg
 from psycopg.types.json import Json as PsycoJson
 
 # Helioviewer-backed AIA/HMI ingestors (upload directly to Supabase Storage + ext.space_visuals)
-from scripts.ingest_space_visuals import ingest_aia_304 as hv_ingest_aia_304, ingest_hmi_intensity as hv_ingest_hmi_intensity
+from ingest_space_visuals import ingest_aia_304 as hv_ingest_aia_304, ingest_hmi_intensity as hv_ingest_hmi_intensity
 
 
 # Helper to read env overrides and split by comma
