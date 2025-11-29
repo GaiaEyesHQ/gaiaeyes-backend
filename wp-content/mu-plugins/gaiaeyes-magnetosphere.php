@@ -170,24 +170,28 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
 
     <div class="ge-detail__grid">
       <div class="ge-detail__card">
-        <h3>Status</h3>
-        <p><strong>r₀ (dayside magnetopause):</strong> <?php echo $r0; ?></p>
-        <p><strong>Plasmapause L:</strong> <?php echo $lpp; ?></p>
-        <p><strong>GEO risk:</strong> <?php echo esc_html($geo); ?></p>
-        <p><strong>Storminess:</strong> <?php echo esc_html($storm); ?></p>
-        <p><strong>GIC feel (dB/dt):</strong> <?php echo esc_html($dbdt); ?></p>
-        <p><strong>Kp (context):</strong> <?php echo $kp; ?></p>
-        <p><strong>Trend:</strong> <?php echo esc_html($trend); ?></p>
+        <h3>Magnetosphere snapshot</h3>
+        <p class="ge-detail__lede">Here&rsquo;s how Earth&rsquo;s magnetic shield is behaving right now:</p>
+        <ul class="ge-detail__list">
+          <li><strong>Shield size (r₀):</strong> <?php echo $r0; ?> <span class="ge-detail__hint">Distance to the sun-facing edge of the magnetosphere. Lower values mean the shield is pushed closer to Earth.</span></li>
+          <li><strong>Plasmapause L:</strong> <?php echo $lpp; ?> <span class="ge-detail__hint">Approximate inner edge of the outer radiation belt.</span></li>
+          <li><strong>Geomagnetic risk:</strong> <?php echo esc_html($geo); ?> <span class="ge-detail__hint">Overall level of geomagnetic disturbance.</span></li>
+          <li><strong>Storminess:</strong> <?php echo esc_html($storm); ?> <span class="ge-detail__hint">How unsettled the magnetosphere is at the moment.</span></li>
+          <li><strong>Grid stress (dB/dt):</strong> <?php echo esc_html($dbdt); ?> <span class="ge-detail__hint">Rough feel for how strongly power grids might be shaken by changing currents.</span></li>
+          <li><strong>Kp index:</strong> <?php echo $kp; ?> <span class="ge-detail__hint">Planetary Kp index; higher values mean stronger geomagnetic activity.</span></li>
+          <li><strong>r₀ trend:</strong> <?php echo esc_html($trend); ?> <span class="ge-detail__hint">Whether the shield edge is mostly steady, expanding, or compressing.</span></li>
+        </ul>
       </div>
 
       <div class="ge-detail__card">
         <h3>What “compressed” vs “expanded” means</h3>
-        <p>The dayside magnetopause distance (r₀ in Earth radii, Rᴇ) indicates how “compressed” Earth’s magnetic shield is under solar wind pressure. Lower r₀ means more compression and potentially higher geomagnetic coupling.</p>
+        <p>The dayside magnetopause distance (r₀ in Earth radii, Rᴇ) describes how far Earth&rsquo;s magnetic shield sits from the planet on the Sun-facing side. Strong solar-wind pressure pushes r₀ inward (compressed), while quiet conditions let it relax outward (expanded).</p>
         <ul>
-          <li><strong>r₀ &lt; 8 Rᴇ:</strong> compressed</li>
-          <li><strong>~10 Rᴇ:</strong> typical</li>
-          <li><strong>&gt; 10 Rᴇ:</strong> expanded</li>
+          <li><strong>r₀ &lt; 8 Rᴇ:</strong> compressed &mdash; stronger coupling, higher chance of disturbances.</li>
+          <li><strong>~10 Rᴇ:</strong> typical &mdash; everyday background conditions.</li>
+          <li><strong>&gt; 10 Rᴇ:</strong> expanded &mdash; shield sitting farther out than usual.</li>
         </ul>
+        <p class="ge-detail__hint">You can think of r₀ as how “puffed up” or “squeezed” Earth&rsquo;s magnetic bubble is at the moment.</p>
       </div>
     </div>
 
