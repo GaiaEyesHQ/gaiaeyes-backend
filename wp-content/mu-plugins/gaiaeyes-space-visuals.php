@@ -232,7 +232,7 @@ add_shortcode('gaia_space_detail', function($atts){
         <div class="spark-wrap">
           <div class="spark-head"><span id="sparkXrsVal">—</span></div>
           <div class="spark-box"><canvas id="sparkXrs" class="spark-canvas"></canvas></div>
-          <div class="spark-cap">GOES X-ray (7d)</div>
+          <div class="spark-cap">GOES X-ray (last 24h)</div>
         </div>
       </article>
 
@@ -622,7 +622,7 @@ add_shortcode('gaia_space_detail', function($atts){
             try {
               let xrsRaw = legacySeries.xrs_7d || [];
               if (!Array.isArray(xrsRaw) || xrsRaw.length === 0) {
-                const live = await fetch('https://services.swpc.noaa.gov/json/goes/primary/xrays-7-day.json', {cache:'no-store'});
+                const live = await fetch('https://services.swpc.noaa.gov/json/goes/primary/xrays-1-day.json', {cache:'no-store'});
                 if (live.ok) xrsRaw = await live.json();
               }
               arr = toSeriesXrs(xrsRaw);
