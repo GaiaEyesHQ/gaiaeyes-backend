@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
 def _bucket_geo_risk(r0: Optional[float]) -> str:
     if r0 is None:
         return "unknown"
@@ -30,9 +33,6 @@ def _dbdt_tag_from_proxy(val: Optional[float]) -> str:
         return "moderate"
     return "high"
 # app/routers/space.py
-
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends
 from psycopg.rows import dict_row
