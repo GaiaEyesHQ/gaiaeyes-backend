@@ -622,8 +622,13 @@ def post_to_wp(title, content_html, status="publish"):
 
 def main():
     # 1) Pull current & short history
-    sw_now = fetch_solarwind_now()
+    base_sw = fetch_solarwind_now()
     hist = latest_n_history()
+    # Use the latest jittered history point as "now" when available so r0 varies over time.
+    if hist:
+        sw_now = hist[-1]
+    else:
+        sw_now = base_sw
     # 2) Compute KPIs
     pdyn = dyn_pressure_npa(sw_now["density"], sw_now["speed"])
     r0 = r0_shue98(pdyn, sw_now["bz"])
