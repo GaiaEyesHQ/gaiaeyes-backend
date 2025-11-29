@@ -212,6 +212,14 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
     $trend_phrase
   );
 
+  // Media base for visuals
+  $media_base = defined('GAIA_MEDIA_BASE') ? rtrim(GAIA_MEDIA_BASE, '/') : '';
+  $enlil_img   = $media_base ? $media_base . '/nasa/enlil/latest.jpg' : '';
+  $enlil_video = $media_base ? $media_base . '/nasa/enlil/latest.mp4' : '';
+  $geospace_3h = $media_base ? $media_base . '/magnetosphere/geospace/3h.png' : '';
+  $geospace_1d = $media_base ? $media_base . '/magnetosphere/geospace/1d.png' : '';
+  $geospace_7d = $media_base ? $media_base . '/magnetosphere/geospace/7d.png' : '';
+
   ob_start(); ?>
   <section class="ge-detail ge-magneto-detail">
     <header class="ge-detail__head">
@@ -264,9 +272,49 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
     </div>
 
     <?php if ( !empty($data['series']) && is_array($data['series']['r0'] ?? null) ): ?>
-      <div class="ge-detail__card">
-        <h3>r₀ Trend</h3>
-        <canvas id="geR0Chart" height="120" style="max-height: 160px; width: 100%;"></canvas>
+      <div class="ge-card ge-detail__card ge-magneto-trend">
+        <h3>r₀ trend &amp; visuals</h3>
+        <div class="ge-magneto-trend-layout">
+          <div class="ge-magneto-trend-chart">
+            <canvas id="geR0Chart" height="120" style="max-height: 200px; width: 100%;"></canvas>
+          </div>
+          <?php if ( $media_base ): ?>
+          <div class="ge-magneto-trend-visuals">
+            <?php if ( $enlil_img ): ?>
+              <div class="ge-magneto-visual">
+                <h4>Enlil forecast</h4>
+                <img src="<?php echo esc_url($enlil_img); ?>" alt="Latest Enlil solar-wind forecast" />
+                <?php if ( $enlil_video ): ?>
+                  <p class="ge-detail__hint"><a href="<?php echo esc_url($enlil_video); ?>" target="_blank" rel="noopener">Watch latest animation ↗</a></p>
+                <?php endif; ?>
+              </div>
+            <?php endif; ?>
+            <div class="ge-magneto-visual">
+              <h4>Geospace response</h4>
+              <div class="ge-magneto-geospace-set">
+                <?php if ( $geospace_3h ): ?>
+                  <figure>
+                    <img src="<?php echo esc_url($geospace_3h); ?>" alt="Geospace disturbance (last 3 hours)" />
+                    <figcaption>3 hours</figcaption>
+                  </figure>
+                <?php endif; ?>
+                <?php if ( $geospace_1d ): ?>
+                  <figure>
+                    <img src="<?php echo esc_url($geospace_1d); ?>" alt="Geospace disturbance (last 1 day)" />
+                    <figcaption>1 day</figcaption>
+                  </figure>
+                <?php endif; ?>
+                <?php if ( $geospace_7d ): ?>
+                  <figure>
+                    <img src="<?php echo esc_url($geospace_7d); ?>" alt="Geospace disturbance (last 7 days)" />
+                    <figcaption>7 days</figcaption>
+                  </figure>
+                <?php endif; ?>
+              </div>
+            </div>
+          </div>
+          <?php endif; ?>
+        </div>
       </div>
       <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
       <script>
@@ -276,7 +324,6 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
         // but always include first/last and true min/max points so variation is visible.
         const maxPoints = 60;
         let series = fullSeries;
-
         if (Array.isArray(fullSeries) && fullSeries.length > maxPoints) {
           let minIdx = 0;
           let maxIdx = 0;
@@ -290,12 +337,10 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
             if (v > maxVal) { maxVal = v; maxIdx = i; }
           }
 
-          // Start with first and last indices, plus min and max.
           const importantIdx = new Set([0, fullSeries.length - 1, minIdx, maxIdx]);
           const remainingSlots = Math.max(maxPoints - importantIdx.size, 0);
           const step = remainingSlots > 0 ? Math.ceil(fullSeries.length / remainingSlots) : fullSeries.length;
 
-          // Fill additional indices spaced across the series.
           for (let i = 0; i < fullSeries.length && importantIdx.size < maxPoints; i += step) {
             importantIdx.add(i);
           }
@@ -307,7 +352,6 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
         const lab = series.map(x => x.t);
         const val = series.map(x => x.v);
 
-        // Compute a dynamic y-range with padding so small changes are visible
         let yMin = null;
         let yMax = null;
         for (let i = 0; i < val.length; i++) {
@@ -317,7 +361,6 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
           if (yMax === null || v > yMax) yMax = v;
         }
         if (yMin === null || yMax === null) {
-          // fallback range if series is missing or invalid
           yMin = 6;
           yMax = 15;
         } else {
@@ -382,6 +425,51 @@ function gaiaeyes_magnetosphere_styles() {
     .ge-magneto .ge-badge--alert {
       background: #c0392b;
       color: #fff;
+    }
+    .ge-magneto-detail .ge-detail__grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    @media (min-width: 960px) {
+      .ge-magneto-detail .ge-detail__grid {
+        grid-template-columns: repeat(3, minmax(0,1fr));
+      }
+    }
+    .ge-magneto-trend .ge-magneto-trend-layout {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    @media (min-width: 960px) {
+      .ge-magneto-trend .ge-magneto-trend-layout {
+        flex-direction: row;
+      }
+      .ge-magneto-trend-chart,
+      .ge-magneto-trend-visuals {
+        flex: 1;
+      }
+    }
+    .ge-magneto-trend-visuals img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .ge-magneto-visual + .ge-magneto-visual {
+      margin-top: 12px;
+    }
+    .ge-magneto-geospace-set {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 8px;
+    }
+    .ge-magneto-geospace-set figure {
+      margin: 0;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #cfe3ff;
     }
   </style>
   <?php
