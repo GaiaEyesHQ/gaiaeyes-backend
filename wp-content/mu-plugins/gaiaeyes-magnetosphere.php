@@ -531,10 +531,6 @@ function gaiaeyes_magnetosphere_styles() {
     .ge-jump-link:hover {
       text-decoration: underline;
     }
-  </style>
-  <?php
-}
-add_action('wp_head','gaiaeyes_magnetosphere_styles');
     .ge-magneto-detail .ge-detail__stats {
       margin-top: 8px;
       padding: 10px 12px;
@@ -580,3 +576,7 @@ add_action('wp_head','gaiaeyes_magnetosphere_styles');
         text-align: left;
       }
     }
+  </style>
+  <?php
+}
+add_action('wp_head','gaiaeyes_magnetosphere_styles');
