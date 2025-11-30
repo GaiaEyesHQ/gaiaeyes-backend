@@ -243,31 +243,38 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
         <div class="ge-detail__stats">
           <ul class="ge-detail__list ge-detail__list--stats">
             <li>
-              <strong title="Distance to the sun-facing edge of the magnetosphere. Lower values mean the shield is pushed closer to Earth.">Shield size (r₀):</strong>
+              <strong>Shield size (r₀):</strong>
+              <span class="ge-detail__help" title="Distance to the sun-facing edge of the magnetosphere. Lower values mean the shield is pushed closer to Earth.">?</span>
               <span class="ge-detail__value"><?php echo $r0; ?></span>
             </li>
             <li>
-              <strong title="Approximate inner edge of the outer radiation belt.">Plasmapause L:</strong>
+              <strong>Plasmapause L:</strong>
+              <span class="ge-detail__help" title="Approximate inner edge of the outer radiation belt.">?</span>
               <span class="ge-detail__value"><?php echo $lpp; ?></span>
             </li>
             <li>
-              <strong title="Overall level of geomagnetic disturbance.">Geomagnetic risk:</strong>
+              <strong>Geomagnetic risk:</strong>
+              <span class="ge-detail__help" title="Overall level of geomagnetic disturbance.">?</span>
               <span class="ge-detail__value"><?php echo esc_html($geo); ?></span>
             </li>
             <li>
-              <strong title="How unsettled the magnetosphere is at the moment.">Storminess:</strong>
+              <strong>Storminess:</strong>
+              <span class="ge-detail__help" title="How unsettled the magnetosphere is at the moment.">?</span>
               <span class="ge-detail__value"><?php echo esc_html($storm); ?></span>
             </li>
             <li>
-              <strong title="Rough feel for how strongly power grids might be shaken by changing currents.">Grid stress (dB/dt):</strong>
+              <strong>Grid stress (dB/dt):</strong>
+              <span class="ge-detail__help" title="Rough feel for how strongly power grids might be shaken by changing currents.">?</span>
               <span class="ge-detail__value"><?php echo esc_html($dbdt); ?></span>
             </li>
             <li>
-              <strong title="Planetary Kp index; higher values mean stronger geomagnetic activity.">Kp index:</strong>
+              <strong>Kp index:</strong>
+              <span class="ge-detail__help" title="Planetary Kp index; higher values mean stronger geomagnetic activity.">?</span>
               <span class="ge-detail__value"><?php echo $kp; ?></span>
             </li>
             <li>
-              <strong title="Whether the shield edge is mostly steady, expanding, or compressing.">r₀ trend:</strong>
+              <strong>r₀ trend:</strong>
+              <span class="ge-detail__help" title="Whether the shield edge is mostly steady, expanding, or compressing.">?</span>
               <span class="ge-detail__value"><?php echo esc_html($trend); ?></span>
             </li>
           </ul>
@@ -558,6 +565,19 @@ function gaiaeyes_magnetosphere_styles() {
       font-weight: 600;
       margin-right: 8px;
       flex: 0 0 auto;
+    }
+    .ge-magneto-detail .ge-detail__help {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      margin-left: 4px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.4);
+      font-size: 0.7rem;
+      cursor: help;
+      color: rgba(255,255,255,0.9);
     }
     .ge-magneto-detail .ge-detail__value {
       font-weight: 500;

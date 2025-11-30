@@ -96,6 +96,28 @@ function gaia_hazards_brief_shortcode($atts = []) {
                 }
             }
 
+            // Sort items so larger earthquakes and more recent events bubble up
+            usort($all_items, function($a, $b) {
+                $sevA = isset($a['severity']) ? strtolower(trim($a['severity'])) : '';
+                $sevB = isset($b['severity']) ? strtolower(trim($b['severity'])) : '';
+                $magA = 0.0;
+                $magB = 0.0;
+                if (preg_match('/m\\s*([0-9]+(?:\\.[0-9]+)?)/i', $sevA, $mA)) {
+                    $magA = (float) $mA[1];
+                }
+                if (preg_match('/m\\s*([0-9]+(?:\\.[0-9]+)?)/i', $sevB, $mB)) {
+                    $magB = (float) $mB[1];
+                }
+                if ($magA !== $magB) {
+                    // Descending magnitude
+                    return ($magA < $magB) ? 1 : -1;
+                }
+                $tA = isset($a['started_at']) ? $a['started_at'] : '';
+                $tB = isset($b['started_at']) ? $b['started_at'] : '';
+                // Newest first
+                return strcmp($tB, $tA);
+            });
+
             $items = array_slice($all_items, 0, $limit);
             if (!empty($payload['generated_at'])) {
                 $generated_at = $payload['generated_at'];
@@ -168,21 +190,30 @@ function gaia_hazards_brief_shortcode($atts = []) {
                     $time_label = str_replace('T', ' ', preg_replace('/\..+$/', '', $started)) . ' UTC';
                   }
 
-                  $meta_bits = [];
+                  // Build a compact detail line: location – type • time
                   $kind_lower = strtolower($kind);
-                  if ($kind) {
-                    // Show a friendlier label for volcano activity
+                  $type_label = '';
+                  if ($kind_lower) {
                     if (strpos($kind_lower, 'volcano') !== false) {
-                      $meta_bits[] = '🌋 volcano';
+                      $type_label = 'Volcano';
+                    } elseif (strpos($kind_lower, 'quake') !== false || strpos($kind_lower, 'earth') !== false) {
+                      $type_label = 'Quake';
+                    } elseif (strpos($kind_lower, 'cyclone') !== false || strpos($kind_lower, 'storm') !== false || strpos($kind_lower, 'severe') !== false) {
+                      $type_label = 'Cyclone/Storm';
                     } else {
-                      $meta_bits[] = $kind_lower;
+                      $type_label = ucfirst($kind_lower);
                     }
                   }
-                  if ($source) {
-                    $meta_bits[] = strtolower($source);
-                  }
+                  $detail_parts = [];
                   if ($location) {
-                    $meta_bits[] = $location;
+                    $detail_parts[] = $location;
+                  }
+                  if ($type_label) {
+                    $detail_parts[] = $type_label;
+                  }
+                  $detail_line = $detail_parts ? implode(' – ', $detail_parts) : '';
+                  if ($time_label) {
+                    $detail_line = $detail_line ? ($detail_line . ' • ' . $time_label) : $time_label;
                   }
                 ?>
                 <li>
@@ -195,13 +226,10 @@ function gaia_hazards_brief_shortcode($atts = []) {
                     <?php else: ?>
                       <?php echo esc_html($location ?: 'Hazard'); ?>
                     <?php endif; ?>
-                    <?php if ($meta_bits): ?>
-                      <div class="ghb-highlight-meta"><?php echo esc_html(implode(' • ', $meta_bits)); ?></div>
+                    <?php if ($detail_line): ?>
+                      <div class="ghb-highlight-meta"><?php echo esc_html($detail_line); ?></div>
                     <?php endif; ?>
                   </div>
-                  <?php if ($time_label): ?>
-                    <div class="ghb-highlight-time"><?php echo esc_html($time_label); ?></div>
-                  <?php endif; ?>
                 </li>
               <?php endforeach; ?>
             </ul>
