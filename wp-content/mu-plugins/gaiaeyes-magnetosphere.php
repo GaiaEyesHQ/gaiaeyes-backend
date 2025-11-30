@@ -240,15 +240,38 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
       <div class="ge-card ge-detail__card">
         <h3>Magnetosphere snapshot</h3>
         <p class="ge-detail__lede">Here&rsquo;s how Earth&rsquo;s magnetic shield is behaving right now:</p>
-        <ul class="ge-detail__list">
-          <li><strong title="Distance to the sun-facing edge of the magnetosphere. Lower values mean the shield is pushed closer to Earth.">Shield size (r₀):</strong> <?php echo $r0; ?></li>
-          <li><strong title="Approximate inner edge of the outer radiation belt.">Plasmapause L:</strong> <?php echo $lpp; ?></li>
-          <li><strong title="Overall level of geomagnetic disturbance.">Geomagnetic risk:</strong> <?php echo esc_html($geo); ?></li>
-          <li><strong title="How unsettled the magnetosphere is at the moment.">Storminess:</strong> <?php echo esc_html($storm); ?></li>
-          <li><strong title="Rough feel for how strongly power grids might be shaken by changing currents.">Grid stress (dB/dt):</strong> <?php echo esc_html($dbdt); ?></li>
-          <li><strong title="Planetary Kp index; higher values mean stronger geomagnetic activity.">Kp index:</strong> <?php echo $kp; ?></li>
-          <li><strong title="Whether the shield edge is mostly steady, expanding, or compressing.">r₀ trend:</strong> <?php echo esc_html($trend); ?></li>
-        </ul>
+        <div class="ge-detail__stats">
+          <ul class="ge-detail__list ge-detail__list--stats">
+            <li>
+              <strong title="Distance to the sun-facing edge of the magnetosphere. Lower values mean the shield is pushed closer to Earth.">Shield size (r₀):</strong>
+              <span class="ge-detail__value"><?php echo $r0; ?></span>
+            </li>
+            <li>
+              <strong title="Approximate inner edge of the outer radiation belt.">Plasmapause L:</strong>
+              <span class="ge-detail__value"><?php echo $lpp; ?></span>
+            </li>
+            <li>
+              <strong title="Overall level of geomagnetic disturbance.">Geomagnetic risk:</strong>
+              <span class="ge-detail__value"><?php echo esc_html($geo); ?></span>
+            </li>
+            <li>
+              <strong title="How unsettled the magnetosphere is at the moment.">Storminess:</strong>
+              <span class="ge-detail__value"><?php echo esc_html($storm); ?></span>
+            </li>
+            <li>
+              <strong title="Rough feel for how strongly power grids might be shaken by changing currents.">Grid stress (dB/dt):</strong>
+              <span class="ge-detail__value"><?php echo esc_html($dbdt); ?></span>
+            </li>
+            <li>
+              <strong title="Planetary Kp index; higher values mean stronger geomagnetic activity.">Kp index:</strong>
+              <span class="ge-detail__value"><?php echo $kp; ?></span>
+            </li>
+            <li>
+              <strong title="Whether the shield edge is mostly steady, expanding, or compressing.">r₀ trend:</strong>
+              <span class="ge-detail__value"><?php echo esc_html($trend); ?></span>
+            </li>
+          </ul>
+        </div>
       </div>
 
       <div class="ge-card ge-detail__card">
@@ -512,3 +535,48 @@ function gaiaeyes_magnetosphere_styles() {
   <?php
 }
 add_action('wp_head','gaiaeyes_magnetosphere_styles');
+    .ge-magneto-detail .ge-detail__stats {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+    }
+    .ge-magneto-detail .ge-detail__list--stats {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .ge-magneto-detail .ge-detail__list--stats li {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 0.95rem;
+    }
+    .ge-magneto-detail .ge-detail__list--stats li:last-child {
+      border-bottom: none;
+    }
+    .ge-magneto-detail .ge-detail__list--stats strong {
+      font-weight: 600;
+      margin-right: 8px;
+      flex: 0 0 auto;
+    }
+    .ge-magneto-detail .ge-detail__value {
+      font-weight: 500;
+      text-align: right;
+      flex: 1 1 auto;
+      margin-left: 8px;
+    }
+    @media (max-width: 600px) {
+      .ge-magneto-detail .ge-detail__list--stats li {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .ge-magneto-detail .ge-detail__value {
+        margin-left: 0;
+        margin-top: 2px;
+        text-align: left;
+      }
+    }
