@@ -74,27 +74,37 @@ jobs:
               print("[ENLIL] no JPG frames found; skipping")
               raise SystemExit(0)
 
-          # Download last ~30 frames
+          # Download all frames exposed by NOAA (full 7-day pan)
           with tempfile.TemporaryDirectory() as td:
               import os
-              frames = jpgs[-30:]
+              frames = jpgs[:]  # use all available JPGs
               paths = []
-              for i,rel in enumerate(frames):
+              for i, rel in enumerate(frames):
                   url = urljoin(BASE, rel)
                   r = requests.get(url, timeout=60); r.raise_for_status()
                   fn = os.path.join(td, f"frame_{i:03d}.jpg")
-                  open(fn,"wb").write(r.content)
+                  with open(fn, "wb") as fh:
+                      fh.write(r.content)
                   paths.append(fn)
 
+              if not paths:
+                  print("[ENLIL] no frames saved; skipping video encode")
+                  raise SystemExit(0)
+
               # Poster = last frame
-              with open(paths[-1],"rb") as f:
+              with open(paths[-1], "rb") as f:
                   upload_bytes("/nasa/enlil/latest.jpg", f.read(), "image/jpeg")
 
-              # Encode to mp4 (12fps, 1280 wide, faststart)
+              # Encode to mp4 with a dynamic fps so duration is ~15 seconds
               mp4 = os.path.join(td, "enlil_latest.mp4")
+              n_frames = len(paths)
+              # Aim for ~15 seconds: fps ≈ n_frames / 15, clamped to [1, 24]
+              fps = max(1, min(24, int(round(n_frames / 15.0)) or 1))
+              print(f"[ENLIL] encoding {n_frames} frames at {fps} fps (~{n_frames / fps:.1f}s)")
+
               cmd = [
                 "ffmpeg","-y",
-                "-r","2",
+                "-r", str(fps),
                 "-pattern_type","glob","-i", os.path.join(td,"frame_*.jpg"),
                 "-vf","scale=1280:-2:flags=lanczos",
                 "-movflags","+faststart",
