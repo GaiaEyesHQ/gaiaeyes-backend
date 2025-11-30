@@ -232,6 +232,9 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
         <?php echo gaiaeyes_badge('Kp', $kp, $kp_class); ?>
       </div>
     </header>
+    <div class="ge-detail__jump">
+      <a href="#magneto-trend" class="ge-jump-link">Jump to charts &amp; visuals ↓</a>
+    </div>
 
     <div class="ge-detail__grid">
       <div class="ge-card ge-detail__card">
@@ -271,11 +274,42 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
     </div>
 
     <?php if ( !empty($data['series']) && is_array($data['series']['r0'] ?? null) ): ?>
-      <div class="ge-card ge-detail__card ge-magneto-trend">
+      <div id="magneto-trend" class="ge-card ge-detail__card ge-magneto-trend">
         <h3>r₀ trend &amp; visuals</h3>
         <div class="ge-magneto-trend-layout">
           <div class="ge-magneto-trend-chart">
             <canvas id="geR0Chart" height="120" style="max-height: 200px; width: 100%;"></canvas>
+            <?php if ( $media_base ): ?>
+              <div class="ge-magneto-visual ge-magneto-visual--geospace">
+                <h4>Geospace response</h4>
+                <div class="ge-magneto-geospace-set">
+                  <?php if ( $geospace_3h ): ?>
+                    <figure>
+                      <a href="<?php echo esc_url($geospace_3h); ?>" target="_blank" rel="noopener">
+                        <img src="<?php echo esc_url($geospace_3h); ?>" alt="Geospace disturbance (last 3 hours)" />
+                      </a>
+                      <figcaption>3 hours</figcaption>
+                    </figure>
+                  <?php endif; ?>
+                  <?php if ( $geospace_1d ): ?>
+                    <figure>
+                      <a href="<?php echo esc_url($geospace_1d); ?>" target="_blank" rel="noopener">
+                        <img src="<?php echo esc_url($geospace_1d); ?>" alt="Geospace disturbance (last 1 day)" />
+                      </a>
+                      <figcaption>1 day</figcaption>
+                    </figure>
+                  <?php endif; ?>
+                  <?php if ( $geospace_7d ): ?>
+                    <figure>
+                      <a href="<?php echo esc_url($geospace_7d); ?>" target="_blank" rel="noopener">
+                        <img src="<?php echo esc_url($geospace_7d); ?>" alt="Geospace disturbance (last 7 days)" />
+                      </a>
+                      <figcaption>7 days</figcaption>
+                    </figure>
+                  <?php endif; ?>
+                </div>
+              </div>
+            <?php endif; ?>
           </div>
           <?php if ( $media_base ): ?>
           <div class="ge-magneto-trend-visuals">
@@ -295,35 +329,6 @@ function gaiaeyes_magnetosphere_detail_shortcode($atts) {
               <?php endif; ?>
             </div>
           <?php endif; ?>
-            <div class="ge-magneto-visual">
-              <h4>Geospace response</h4>
-              <div class="ge-magneto-geospace-set">
-                <?php if ( $geospace_3h ): ?>
-                  <figure>
-                    <a href="<?php echo esc_url($geospace_3h); ?>" target="_blank" rel="noopener">
-                      <img src="<?php echo esc_url($geospace_3h); ?>" alt="Geospace disturbance (last 3 hours)" />
-                    </a>
-                    <figcaption>3 hours</figcaption>
-                  </figure>
-                <?php endif; ?>
-                <?php if ( $geospace_1d ): ?>
-                  <figure>
-                    <a href="<?php echo esc_url($geospace_1d); ?>" target="_blank" rel="noopener">
-                      <img src="<?php echo esc_url($geospace_1d); ?>" alt="Geospace disturbance (last 1 day)" />
-                    </a>
-                    <figcaption>1 day</figcaption>
-                  </figure>
-                <?php endif; ?>
-                <?php if ( $geospace_7d ): ?>
-                  <figure>
-                    <a href="<?php echo esc_url($geospace_7d); ?>" target="_blank" rel="noopener">
-                      <img src="<?php echo esc_url($geospace_7d); ?>" alt="Geospace disturbance (last 7 days)" />
-                    </a>
-                    <figcaption>7 days</figcaption>
-                  </figure>
-                <?php endif; ?>
-              </div>
-            </div>
           </div>
           <?php endif; ?>
         </div>
@@ -490,6 +495,18 @@ function gaiaeyes_magnetosphere_styles() {
       text-align: center;
       font-size: 0.8rem;
       color: #cfe3ff;
+    }
+    .ge-detail__jump {
+      margin: 8px 0 20px;
+      text-align: left;
+    }
+    .ge-jump-link {
+      color: #7fc8ff;
+      font-size: 0.95rem;
+      text-decoration: none;
+    }
+    .ge-jump-link:hover {
+      text-decoration: underline;
     }
   </style>
   <?php
