@@ -167,10 +167,29 @@ add_shortcode('gaia_space_detail', function($atts){
     $legacy_series = ['xrs_7d'=>[],'protons_7d'=>[]];
   }
 
+  // Try to fetch X-ray history from the backend API so the spark can use DB-backed flux.
+  $xray_series = null;
+  $api_base_hist = defined('GAIAEYES_API_BASE') ? rtrim(GAIAEYES_API_BASE, '/') : '';
+  if ($api_base_hist && function_exists('gaiaeyes_http_get_json_api_cached')) {
+    $bearer_hist = defined('GAIAEYES_API_BEARER') ? GAIAEYES_API_BEARER : '';
+    $dev_hist    = defined('GAIAEYES_API_DEV_USERID') ? GAIAEYES_API_DEV_USERID : '';
+    $xray_resp = gaiaeyes_http_get_json_api_cached(
+      $api_base_hist . '/v1/space/xray/history?hours=24',
+      'ge_space_xray_hist',
+      $ttl,
+      $bearer_hist,
+      $dev_hist
+    );
+    if (is_array($xray_resp) && !empty($xray_resp['ok']) && !empty($xray_resp['data']['series'])) {
+      $xray_series = $xray_resp['data']['series'];
+    }
+  }
+
   $client_payload = [
     'series' => $structured_series,
     'legacySeries' => $legacy_series,
     'featureFlags' => $overlay_flags,
+    'xraySeries' => $xray_series,
   ];
 
   $base = $media_base ? (rtrim($media_base, '/') . '/') : '';
@@ -471,6 +490,7 @@ add_shortcode('gaia_space_detail', function($atts){
         const visualsPayload = <?php echo wp_json_encode($client_payload); ?> || {};
         const structuredSeries = visualsPayload.series || {};
         const legacySeries = visualsPayload.legacySeries || {};
+        const xraySeries = visualsPayload.xraySeries || null;
         const overlayCharts = {};
 
         function whenSparkReady(cb){
@@ -617,17 +637,41 @@ add_shortcode('gaia_space_detail', function($atts){
         });
 
         (async function(){
-          let arr = structuredSamples('goes_xray');
-          if (!arr.length){
-            try {
-              let xrsRaw = legacySeries.xrs_7d || [];
-              if (!Array.isArray(xrsRaw) || xrsRaw.length === 0) {
-                const live = await fetch('https://services.swpc.noaa.gov/json/goes/primary/xrays-1-day.json', {cache:'no-store'});
-                if (live.ok) xrsRaw = await live.json();
+          // Prefer DB-backed X-ray flux from the backend API if available.
+          let arr = [];
+          if (xraySeries && Array.isArray(xraySeries.long)) {
+            arr = xraySeries.long.map((pt) => {
+              if (!Array.isArray(pt) || pt.length < 2) return null;
+              const t = pt[0];
+              const v = Number(pt[1]);
+              if (!t || !isFinite(v)) return null;
+              try {
+                const dt = new Date(t);
+                if (Number.isNaN(dt.getTime())) return null;
+                return { x: dt, y: v };
+              } catch (e) {
+                return null;
               }
-              arr = toSeriesXrs(xrsRaw);
-            } catch(e){}
+            }).filter(Boolean);
           }
+
+          // Fallbacks: structured series, then legacy/SWPC if API data unavailable.
+          if (!arr.length){
+            let samples = structuredSamples('goes_xray');
+            if (samples.length) {
+              arr = samples;
+            } else {
+              try {
+                let xrsRaw = legacySeries.xrs_7d || [];
+                if (!Array.isArray(xrsRaw) || xrsRaw.length === 0) {
+                  const live = await fetch('https://services.swpc.noaa.gov/json/goes/primary/xrays-1-day.json', {cache:'no-store'});
+                  if (live.ok) xrsRaw = await live.json();
+                }
+                arr = toSeriesXrs(xrsRaw);
+              } catch(e){}
+            }
+          }
+
           if (arr.length > 1000) arr = arr.slice(-1000);
 
           // Dynamically tighten the Y-axis so tiny flux variations are still visible.
