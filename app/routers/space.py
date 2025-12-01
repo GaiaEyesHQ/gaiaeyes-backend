@@ -1,3 +1,10 @@
+router = APIRouter(prefix="/v1/space", tags=["space"])
+
+@router.get("/history")
+async def space_history(conn = Depends(get_db), hours: int = 24):
+    ...
+
+
 @router.get("/xray/history")
 async def xray_history(conn = Depends(get_db), hours: int = 24):
     """
