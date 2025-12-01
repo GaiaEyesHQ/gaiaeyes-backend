@@ -21,7 +21,7 @@ Datasets handled here:
 * SWPC solar-cycle predictions → ``ext.solar_cycle_forecast`` +
   ``marts.solar_cycle_progress``.
 * AE/AL/PC magnetometer chain (SuperMAG) → ``ext.magnetometer_chain`` +
-  ``marts.magnetometer_regional``.
+  ``marts.magnetometer_regional``. -- INGESTION NOT WORKING FOR SUPERMAG, MOVED TO PHASE 2 -- OTHER MAGNETOSPHERE DATA IN ext.magnetosphere_pulse - already has router
 
 The implementation follows the existing ingestion pattern used by other
 scripts in ``scripts/``: fetch data via ``httpx``, normalise records, and
