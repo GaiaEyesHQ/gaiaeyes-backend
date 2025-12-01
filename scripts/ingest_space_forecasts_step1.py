@@ -765,6 +765,46 @@ async def ingest_radiation_belts(
         )
 
 
+# --- Begin: ingest_xray_flux function ---
+async def ingest_xray_flux(
+    client: httpx.AsyncClient,
+    writer: SupabaseWriter,
+    days: int,
+) -> None:
+    logger.info("Fetching GOES X-ray flux")
+    # Use the primary XRAYS 3-day product and filter to the requested window.
+    data = await fetch_json(
+        client,
+        "https://services.swpc.noaa.gov/json/goes/primary/xrays-3-day.json",
+    )
+    cutoff = datetime.now(tz=UTC) - timedelta(days=days)
+    rows: list[dict[str, Any]] = []
+    for entry in data or []:
+        if not isinstance(entry, dict):
+            continue
+        ts = _parse_dt(entry.get("time_tag"))
+        if ts is None or ts < cutoff:
+            continue
+        flux = _parse_float(entry.get("flux"))
+        rows.append(
+            {
+                "ts_utc": ts,
+                "satellite": str(entry.get("satellite")) if entry.get("satellite") is not None else None,
+                "energy_band": entry.get("energy"),
+                "flux": flux,
+                "raw": json.dumps(entry),
+            }
+        )
+    if rows:
+        await writer.upsert_many(
+            "ext",
+            "xray_flux",
+            rows,
+            ["ts_utc", "satellite", "energy_band"],
+        )
+# --- End: ingest_xray_flux function ---
+
+
 async def ingest_aurora(
     client: httpx.AsyncClient,
     writer: SupabaseWriter,
@@ -1380,6 +1420,7 @@ async def run_ingestion(args: argparse.Namespace) -> None:
         "enlil": ingest_enlil,
         "sep": ingest_sep_flux,
         "radiation": ingest_radiation_belts,
+        "xray": ingest_xray_flux,
         "aurora": ingest_aurora,
         "coronal": ingest_coronal_hole,
         "scoreboard": ingest_cme_scoreboard,
@@ -1404,6 +1445,8 @@ async def run_ingestion(args: argparse.Namespace) -> None:
                 await ingest_sep_flux(client, writer, args.days)
             if "radiation" in selected:
                 await ingest_radiation_belts(client, writer, args.days)
+            if "xray" in selected:
+                await ingest_xray_flux(client, writer, args.days)
             if "aurora" in selected:
                 await ingest_aurora(client, writer)
             if "coronal" in selected:
@@ -1424,7 +1467,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--only",
         nargs="+",
-        help="subset of feeds to run (enlil, sep, radiation, aurora, coronal, scoreboard, drap, solar, magnetometer)",
+        help="subset of feeds to run (enlil, sep, radiation, xray, aurora, coronal, scoreboard, drap, solar, magnetometer)",
     )
     parser.add_argument("--dry-run", action="store_true", help="skip Supabase writes")
     return parser
