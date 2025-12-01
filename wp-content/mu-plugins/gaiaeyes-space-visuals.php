@@ -648,7 +648,7 @@ add_shortcode('gaia_space_detail', function($atts){
               try {
                 const dt = new Date(t);
                 if (Number.isNaN(dt.getTime())) return null;
-                return { x: dt, y: v };
+                return { x: dt, y: v, raw: v };
               } catch (e) {
                 return null;
               }
@@ -674,24 +674,37 @@ add_shortcode('gaia_space_detail', function($atts){
 
           if (arr.length > 1000) arr = arr.slice(-1000);
 
-          // Dynamically tighten the Y-axis based on the actual min/max so small variations are visible.
+          // Scale flux values for plotting so small variations are visually clearer,
+          // but keep the raw flux in lp.raw for the numeric label.
+          const SCALE = 100; // plot 100 × flux; axis still labeled in W/m² via caption.
+          const scaled = arr.map((p) => {
+            const v = Number(p.y || 0);
+            return {
+              x: p.x,
+              y: isFinite(v) ? v * SCALE : v,
+              raw: p.raw !== undefined ? p.raw : v,
+              rawSample: p.rawSample || p.raw || null,
+            };
+          });
+
+          // Dynamically tighten the Y-axis based on the scaled min/max.
           let minVal = null;
           let maxVal = null;
-          for (let i = 0; i < arr.length; i++) {
-            const v = Number(arr[i].y || 0);
+          for (let i = 0; i < scaled.length; i++) {
+            const v = Number(scaled[i].y || 0);
             if (!isFinite(v)) continue;
             if (minVal === null || v < minVal) minVal = v;
             if (maxVal === null || v > maxVal) maxVal = v;
           }
           let yMin = 0;
-          let yMax = 1e-5;
+          let yMax = 1;
           if (minVal !== null && maxVal !== null) {
-            const span = maxVal - minVal || maxVal * 0.25 || 1e-8;
+            const span = maxVal - minVal || maxVal * 0.25 || 1e-6;
             yMin = Math.max(0, minVal - span * 0.2);
             yMax = maxVal + span * 0.2;
           }
 
-          renderSpark('sparkXrs', arr, {
+          renderSpark('sparkXrs', scaled, {
             xLabel:'UTC time',
             yLabel:'GOES X-ray flux',
             units:'W/m²',
@@ -700,10 +713,10 @@ add_shortcode('gaia_space_detail', function($atts){
             color:'#7fc8ff'
           });
 
-          const lp = (arr.length ? arr[arr.length-1] : null);
+          const lp = (scaled.length ? scaled[scaled.length-1] : null);
           if (lp) {
             const sample = lp.raw;
-            const txt = sample && sample.class ? `${sample.class} (${lp.y.toExponential(1)} W/m²)` : fmtXray(lp.y);
+            const txt = sample && sample.class ? `${sample.class} (${lp.raw.toExponential(1)} W/m²)` : fmtXray(lp.raw);
             setVal('sparkXrsVal', txt);
           } else {
             setVal('sparkXrsVal', '—');
