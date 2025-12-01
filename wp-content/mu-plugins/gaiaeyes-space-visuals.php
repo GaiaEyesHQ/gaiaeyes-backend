@@ -674,23 +674,28 @@ add_shortcode('gaia_space_detail', function($atts){
 
           if (arr.length > 1000) arr = arr.slice(-1000);
 
-          // Dynamically tighten the Y-axis so tiny flux variations are still visible.
-          let yMax = 1e-5; // default for very quiet conditions
-          let maxVal = 0;
+          // Dynamically tighten the Y-axis based on the actual min/max so small variations are visible.
+          let minVal = null;
+          let maxVal = null;
           for (let i = 0; i < arr.length; i++) {
             const v = Number(arr[i].y || 0);
             if (!isFinite(v)) continue;
-            if (v > maxVal) maxVal = v;
+            if (minVal === null || v < minVal) minVal = v;
+            if (maxVal === null || v > maxVal) maxVal = v;
           }
-          if (maxVal > 0) {
-              yMax = maxVal * 1.25; // small visual headroom
+          let yMin = 0;
+          let yMax = 1e-5;
+          if (minVal !== null && maxVal !== null) {
+            const span = maxVal - minVal || maxVal * 0.25 || 1e-8;
+            yMin = Math.max(0, minVal - span * 0.2);
+            yMax = maxVal + span * 0.2;
           }
 
           renderSpark('sparkXrs', arr, {
             xLabel:'UTC time',
             yLabel:'GOES X-ray flux',
             units:'W/m²',
-            yMin:0,
+            yMin:yMin,
             yMax:yMax,
             color:'#7fc8ff'
           });
