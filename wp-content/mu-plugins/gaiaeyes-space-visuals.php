@@ -683,9 +683,7 @@ add_shortcode('gaia_space_detail', function($atts){
             if (v > maxVal) maxVal = v;
           }
           if (maxVal > 0) {
-            // Give some headroom above the largest value; if it's extremely small, still bump to a reasonable scale.
-            yMax = maxVal * 5;
-            if (yMax < 5e-7) yMax = 5e-7;
+              yMax = maxVal * 1.25; // small visual headroom
           }
 
           renderSpark('sparkXrs', arr, {
