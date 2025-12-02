@@ -253,6 +253,25 @@ add_shortcode('gaia_space_detail', function($atts){
           <div class="spark-box"><canvas id="sparkXrs" class="spark-canvas"></canvas></div>
           <div class="spark-cap">GOES X-ray (last 24h)</div>
         </div>
+        <div class="ge-xray-scale">
+          <div class="ge-xray-scale-row">
+            <span class="ge-xray-scale-label">Flare class:</span>
+            <span class="ge-xray-band ge-xray-band-a">A</span>
+            <span class="ge-xray-band ge-xray-band-b">B</span>
+            <span class="ge-xray-band ge-xray-band-c">C</span>
+            <span class="ge-xray-band ge-xray-band-m">M</span>
+            <span class="ge-xray-band ge-xray-band-x">X</span>
+          </div>
+          <div class="ge-xray-scale-row">
+            <span class="ge-xray-scale-label">Radio blackout (R-scale):</span>
+            <span class="ge-xray-band ge-xray-band-r0">R0</span>
+            <span class="ge-xray-band ge-xray-band-r1">R1</span>
+            <span class="ge-xray-band ge-xray-band-r2">R2</span>
+            <span class="ge-xray-band ge-xray-band-r3">R3</span>
+            <span class="ge-xray-band ge-xray-band-r4">R4</span>
+            <span class="ge-xray-band ge-xray-band-r5">R5</span>
+          </div>
+        </div>
       </article>
 
       <!-- Aurora -->
@@ -471,6 +490,42 @@ add_shortcode('gaia_space_detail', function($atts){
       .visual-overlay.overlay-disabled .overlay-toggle{ display:none; }
       .visual-overlay .overlay-toggle:focus{ outline:2px solid rgba(255,255,255,.6); outline-offset:2px; }
       .visual-overlay + .spark-wrap { margin-top: 8px; clear: both; }
+      .ge-xray-scale {
+        margin-top: 6px;
+        font-size: 0.8rem;
+        opacity: 0.95;
+      }
+      .ge-xray-scale-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+        margin-top: 2px;
+      }
+      .ge-xray-scale-label {
+        margin-right: 4px;
+        font-weight: 500;
+      }
+      .ge-xray-band {
+        min-width: 28px;
+        padding: 2px 4px;
+        border-radius: 4px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 0.75rem;
+        border: 1px solid rgba(255,255,255,0.15);
+      }
+      .ge-xray-band-a { background: rgba(0, 80, 0, 0.5); }
+      .ge-xray-band-b { background: rgba(0, 120, 0, 0.5); }
+      .ge-xray-band-c { background: rgba(120, 120, 0, 0.6); }
+      .ge-xray-band-m { background: rgba(180, 100, 0, 0.7); }
+      .ge-xray-band-x { background: rgba(160, 0, 0, 0.8); }
+      .ge-xray-band-r0 { background: rgba(0, 80, 0, 0.5); }
+      .ge-xray-band-r1 { background: rgba(120, 150, 0, 0.6); }
+      .ge-xray-band-r2 { background: rgba(180, 130, 0, 0.7); }
+      .ge-xray-band-r3 { background: rgba(200, 90, 0, 0.8); }
+      .ge-xray-band-r4 { background: rgba(200, 40, 0, 0.85); }
+      .ge-xray-band-r5 { background: rgba(160, 0, 0, 0.9); }
       /* Cap very tall media on mobile/desktop (kept from previous fix) */
       @media(max-width:640px){
         .ge-space img,
@@ -680,7 +735,7 @@ add_shortcode('gaia_space_detail', function($atts){
           const canvasId = wrapper.getAttribute('data-overlay');
           const keys = (wrapper.getAttribute('data-series-keys') || '').split(',').map(k=>k.trim()).filter(Boolean);
           if (!canvasId || !keys.length) return;
-          const btn = wrapper.querySelector('[data-overlay-toggle]');
+          const btn = wrapper.querySelector('.overlay-toggle');
           if (btn){
             btn.addEventListener('click', () => {
               const active = wrapper.classList.toggle('overlay-active');
