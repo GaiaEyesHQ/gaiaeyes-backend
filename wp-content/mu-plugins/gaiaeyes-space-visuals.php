@@ -579,7 +579,27 @@ add_shortcode('gaia_space_detail', function($atts){
           if (!ctx) return null;
           const datasets = [];
           keys.forEach((key)=>{
-            let samples = structuredSamples(key);
+            let samples = [];
+
+            // For GOES X-ray, prefer the DB-backed series from xraySeries.long.
+            if (key === 'goes_xray' && xraySeries && Array.isArray(xraySeries.long)) {
+              samples = xraySeries.long.map((pt) => {
+                if (!Array.isArray(pt) || pt.length < 2) return null;
+                const t = pt[0];
+                const v = Number(pt[1]);
+                if (!t || !isFinite(v)) return null;
+                try {
+                  const dt = new Date(t);
+                  if (Number.isNaN(dt.getTime())) return null;
+                  return { x: dt, y: v };
+                } catch (e) {
+                  return null;
+                }
+              }).filter(Boolean);
+            } else {
+              samples = structuredSamples(key);
+            }
+
             if (!samples.length && key === 'goes_xray'){
               samples = toSeriesXrs(legacySeries.xrs_7d || []);
             } else if (!samples.length && key === 'goes_protons'){
@@ -641,9 +661,10 @@ add_shortcode('gaia_space_detail', function($atts){
                 },
                 y: isSolarOverlay
                   ? {
-                      display: false,
                       min: 0,
                       max: 1,
+                      ticks:{ color:'#ddd' },
+                      grid:{ color:'rgba(255,255,255,.15)' }
                     }
                   : {
                       ticks:{ color:'#ddd' },
