@@ -588,6 +588,28 @@ add_shortcode('gaia_space_detail', function($atts){
               samples = out;
             }
             if (!samples.length) return;
+
+            // For the GOES X-ray overlay on the solar disc, normalize the flux so
+            // relative changes are visible in the overlay canvas.
+            if (key === 'goes_xray') {
+              let minVal = null;
+              let maxVal = null;
+              samples.forEach((p) => {
+                const v = Number(p.y || 0);
+                if (!isFinite(v)) return;
+                if (minVal === null || v < minVal) minVal = v;
+                if (maxVal === null || v > maxVal) maxVal = v;
+              });
+              if (minVal !== null && maxVal !== null) {
+                const span = maxVal - minVal || maxVal * 0.25 || 1e-8;
+                samples = samples.map((p) => {
+                  const v = Number(p.y || 0);
+                  const norm = isFinite(v) ? (v - minVal) / span : 0;
+                  return { x: p.x, y: norm };
+                });
+              }
+            }
+
             const meta = (structuredSeries[key] && structuredSeries[key].meta) || {};
             const color = meta.color || '#7fc8ff';
             datasets.push({
@@ -602,6 +624,7 @@ add_shortcode('gaia_space_detail', function($atts){
             });
           });
           if (!datasets.length) return null;
+          const isSolarOverlay = canvasId === 'solarOverlay';
           overlayCharts[canvasId] = new Chart(ctx, {
             type: 'line',
             data: { datasets },
@@ -611,8 +634,21 @@ add_shortcode('gaia_space_detail', function($atts){
               interaction: { mode: 'nearest', intersect: false },
               plugins: { legend: { display: true, labels:{ color:'#eee' } } },
               scales: {
-                x: { type: 'time', ticks:{ color:'#ddd' }, grid:{ color:'rgba(255,255,255,.2)' } },
-                y: { ticks:{ color:'#ddd' }, grid:{ color:'rgba(255,255,255,.15)' } }
+                x: {
+                  type: 'time',
+                  ticks:{ color:'#ddd' },
+                  grid:{ color:'rgba(255,255,255,.2)' }
+                },
+                y: isSolarOverlay
+                  ? {
+                      display: false,
+                      min: 0,
+                      max: 1,
+                    }
+                  : {
+                      ticks:{ color:'#ddd' },
+                      grid:{ color:'rgba(255,255,255,.15)' }
+                    }
               }
             }
           });
