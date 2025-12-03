@@ -902,6 +902,8 @@ def _summarize_feature_payload(payload: Optional[Dict[str, Any]]) -> Dict[str, A
             "kp_max": _coerce_float_value(summary_payload.get("kp_max")),
             "bz_min": _coerce_float_value(summary_payload.get("bz_min")),
             "sw_speed_avg": _coerce_float_value(summary_payload.get("sw_speed_avg")),
+            # Expose SpO2 in diagnostics
+            "spo2_avg": _coerce_float_value(summary_payload.get("spo2_avg")),
         },
     }
 
@@ -964,6 +966,16 @@ def _normalize_features_payload(
 
     for key in _FLOAT_FIELDS:
         normalized[key] = _coerce_float_value(normalized.get(key))
+
+    # Normalize SpO₂ if backend provided a fractional value (0–1); clamp top at 100
+    sp = normalized.get("spo2_avg")
+    try:
+        if sp is not None:
+            spf = float(sp)
+            if 0.0 < spf <= 1.0:
+                normalized["spo2_avg"] = min(100.0, spf * 100.0)
+    except (TypeError, ValueError):
+        pass
 
     normalized["kp_alert"] = bool(normalized.get("kp_alert"))
     normalized["flare_alert"] = bool(normalized.get("flare_alert"))

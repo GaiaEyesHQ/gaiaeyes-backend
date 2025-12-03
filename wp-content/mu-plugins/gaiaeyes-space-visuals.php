@@ -737,6 +737,10 @@ add_shortcode('gaia_space_detail', function($atts){
           if (!canvasId || !keys.length) return;
           const btn = wrapper.querySelector('.overlay-toggle');
           if (btn){
+            // Show overlay by default
+            ensureOverlay(canvasId, keys);
+            wrapper.classList.add('overlay-active');
+            btn.setAttribute('aria-pressed', 'true');
             btn.addEventListener('click', () => {
               const active = wrapper.classList.toggle('overlay-active');
               btn.setAttribute('aria-pressed', active ? 'true' : 'false');
