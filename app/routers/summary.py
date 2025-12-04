@@ -1809,7 +1809,7 @@ async def diag_features(
         if effective_user:
             await cur.execute(
                 """
-                select day, updated_at, steps_total, hr_min, hr_max, kp_max, bz_min, sw_speed_avg
+                select day, updated_at, steps_total, hr_min, hr_max, spo2_avg, kp_max, bz_min, sw_speed_avg
                 from marts.daily_features
                 where user_id = %s
                 order by day desc
@@ -1824,6 +1824,7 @@ async def diag_features(
                     "steps_total": row.get("steps_total"),
                     "hr_min": row.get("hr_min"),
                     "hr_max": row.get("hr_max"),
+                    "spo2_avg": row.get("spo2_avg"),
                     "kp_max": row.get("kp_max"),
                     "bz_min": row.get("bz_min"),
                     "sw_speed_avg": row.get("sw_speed_avg"),
