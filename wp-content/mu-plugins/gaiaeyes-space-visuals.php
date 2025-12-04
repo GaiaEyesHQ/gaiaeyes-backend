@@ -250,7 +250,7 @@ add_shortcode('gaia_space_detail', function($atts){
 
         <div class="spark-wrap">
           <div class="spark-head"><span id="sparkXrsVal">—</span></div>
-          <div class="spark-box"><canvas id="sparkXrs" class="spark-canvas"></canvas></div>
+          <div class="spark-box spark-box--xray"><canvas id="sparkXrs" class="spark-canvas"></canvas></div>
           <div class="spark-cap">GOES X-ray (last 24h)</div>
         </div>
         <div class="ge-xray-scale">
@@ -482,6 +482,25 @@ add_shortcode('gaia_space_detail', function($atts){
       /* Spark charts: fixed height; add head row for latest value */
       .spark-box{ position:relative; width:100%; height:120px; min-height:120px; }
       .spark-canvas{ display:block; width:100% !important; height:100% !important; }
+      .spark-box--xray {
+        background: linear-gradient(
+          to top,
+          rgba(0, 80, 0, 0.25) 0%,
+          rgba(0, 80, 0, 0.25) 20%,
+          rgba(0, 120, 0, 0.25) 20%,
+          rgba(0, 120, 0, 0.25) 35%,
+          rgba(120, 120, 0, 0.25) 35%,
+          rgba(120, 120, 0, 0.25) 55%,
+          rgba(180, 100, 0, 0.25) 55%,
+          rgba(180, 100, 0, 0.25) 75%,
+          rgba(160, 0, 0, 0.25) 75%,
+          rgba(160, 0, 0, 0.25) 100%
+        );
+      }
+      .ge-xray-band--active {
+        border-color: #ffffff;
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.7);
+      }
       .spark-head{ font-size:.9rem; opacity:.9; margin-bottom:6px; display:flex; justify-content:flex-end; }
       .visual-overlay{ position:relative; }
       .visual-overlay .overlay-canvas{ position:absolute; inset:0; width:100% !important; height:100% !important; pointer-events:none; opacity:0; transition:opacity .3s ease; }
@@ -577,6 +596,41 @@ add_shortcode('gaia_space_detail', function($atts){
           const scale = {'A':1e-8,'B':1e-7,'C':1e-6,'M':1e-5,'X':1e-4}[cls];
           const mag = (v/scale).toFixed(1);
           return `${mag}${cls} (${v.toExponential(1)} W/m²)`;
+        }
+        function flareClassFromFlux(v){
+          const flux = Number(v||0);
+          if (!isFinite(flux) || flux <= 0) return null;
+          const logv = Math.log10(flux);
+          if (logv >= -4) return 'X';
+          if (logv >= -5) return 'M';
+          if (logv >= -6) return 'C';
+          if (logv >= -7) return 'B';
+          return 'A';
+        }
+        function rScaleFromFlux(v){
+          const flux = Number(v||0);
+          if (!isFinite(flux) || flux <= 0) return 'R0';
+          // Rough mapping based on NOAA R-scale thresholds
+          if (flux >= 2e-3) return 'R5';   // X20+
+          if (flux >= 1e-3) return 'R4';   // X10–X20
+          if (flux >= 1e-4) return 'R3';   // X1–X10
+          if (flux >= 5e-5) return 'R2';   // M5–M10
+          if (flux >= 1e-5) return 'R1';   // M1–M5
+          return 'R0';
+        }
+        function highlightXrayBands(flux){
+          const cls = flareClassFromFlux(flux);
+          const r   = rScaleFromFlux(flux);
+          const bands = document.querySelectorAll('.ge-xray-band');
+          bands.forEach(el => el.classList.remove('ge-xray-band--active'));
+          if (cls){
+            const el = document.querySelector('.ge-xray-band-' + cls.toLowerCase());
+            if (el) el.classList.add('ge-xray-band--active');
+          }
+          if (r){
+            const el = document.querySelector('.ge-xray-band-' + r.toLowerCase());
+            if (el) el.classList.add('ge-xray-band--active');
+          }
         }
 
         function toSeriesXrs(rows){
@@ -820,19 +874,27 @@ add_shortcode('gaia_space_detail', function($atts){
             yMax = maxVal + span * 0.2;
           }
 
+          // Determine latest flux (raw) for label, color, and band highlights.
+          const lp = (scaled.length ? scaled[scaled.length-1] : null);
+          const latestFlux = lp ? lp.raw : null;
+          let lineColor = '#7fc8ff';
+          const cls = flareClassFromFlux(latestFlux);
+          if (cls === 'C') lineColor = '#ffd166';
+          else if (cls === 'M') lineColor = '#ff9f1c';
+          else if (cls === 'X') lineColor = '#ff6b6b';
+
           renderSpark('sparkXrs', scaled, {
             xLabel:'UTC time',
             yLabel:'GOES X-ray flux',
             units:'W/m²',
             yMin:yMin,
             yMax:yMax,
-            color:'#7fc8ff'
+            color: lineColor
           });
 
-          const lp = (scaled.length ? scaled[scaled.length-1] : null);
-          if (lp) {
-            const sample = lp.raw;
-            const txt = sample && sample.class ? `${sample.class} (${lp.raw.toExponential(1)} W/m²)` : fmtXray(lp.raw);
+          if (lp && latestFlux !== null) {
+            highlightXrayBands(latestFlux);
+            const txt = fmtXray(latestFlux);
             setVal('sparkXrsVal', txt);
           } else {
             setVal('sparkXrsVal', '—');
