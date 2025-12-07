@@ -59,6 +59,55 @@ function gaiaeyes_quakes_detail_shortcode($atts){
     ? $events_payload['items']
     : [];
 
+  // Ensure the current month is represented in history so charts reflect fresh large quakes (e.g., early in a new month).
+  if (!empty($hist_items) && is_array($hist_items)) {
+    try {
+      $nowUtc = new DateTime('now', new DateTimeZone('UTC'));
+      $curMonthKey = $nowUtc->format('Y-m'); // e.g. "2025-12"
+      $hasCurrent = false;
+      foreach ($hist_items as $row) {
+        $rawMonth = isset($row['month']) ? (string) $row['month'] : '';
+        if ($rawMonth !== '' && substr($rawMonth, 0, 7) === $curMonthKey) {
+          $hasCurrent = true;
+          break;
+        }
+      }
+      if (!$hasCurrent && !empty($events)) {
+        $curM5 = 0;
+        $curAll = 0;
+        foreach ($events as $ev) {
+          $iso = isset($ev['time_utc']) ? $ev['time_utc'] : '';
+          if (!$iso) {
+            continue;
+          }
+          try {
+            $dt = new DateTime($iso, new DateTimeZone('UTC'));
+          } catch (Exception $e) {
+            continue;
+          }
+          // Only include events that fall in the current UTC month
+          if ($dt->format('Y-m') !== $curMonthKey) {
+            continue;
+          }
+          $curAll++;
+          $mag = isset($ev['mag']) ? floatval($ev['mag']) : null;
+          if ($mag !== null && $mag >= 5.0) {
+            $curM5++;
+          }
+        }
+        if ($curAll > 0 || $curM5 > 0) {
+          array_unshift($hist_items, [
+            'month' => $curMonthKey . '-01',
+            'm5p' => $curM5,
+            'all_quakes' => $curAll,
+          ]);
+        }
+      }
+    } catch (Exception $e) {
+      // If DateTime fails, silently skip synthesizing the current month row.
+    }
+  }
+
   $tot_all = is_array($d) && isset($d['all_quakes']) ? intval($d['all_quakes']) : null;
 
   // Buckets approximated from the daily aggregates by magnitude class
