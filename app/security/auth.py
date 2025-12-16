@@ -57,11 +57,7 @@ def _extract_bearer(authorization: Optional[str]) -> Optional[str]:
 
 
 def _maybe_attach_dev_user(request: Request) -> None:
-    raw = request.headers.get("X-Dev-UserId")
-    if not raw:
-        return
-    normalized = _normalize_uuid(raw)
-    request.state.user_id = normalized or raw.strip()
+    request.state.user_id = _normalize_uuid(request.headers.get("X-Dev-UserId"))
 
 
 def _token_matches_dev(token: str) -> bool:
@@ -80,18 +76,13 @@ def _is_allowed_read(request: Request, token: Optional[str]) -> bool:
     if not token:
         return False
 
-    # If a dev user header is present, always attach it to the request context
-    # so that user-scoped routes (like space/series) can see a user_id even
-    # when using non-dev backend tokens (e.g., Supabase service tokens).
-    has_dev_header = bool(request.headers.get("X-Dev-UserId"))
-    if has_dev_header:
-        _maybe_attach_dev_user(request)
-
-    # Then apply the existing token checks
     if token in READ_TOKENS or token in WRITE_TOKENS:
+        if _token_matches_dev(token):
+            _maybe_attach_dev_user(request)
         return True
 
     if _token_matches_dev(token):
+        _maybe_attach_dev_user(request)
         return True
 
     return _validate_supabase_token(request, token)
@@ -101,38 +92,25 @@ def _is_allowed_write(request: Request, token: Optional[str]) -> bool:
     if not token:
         return False
 
-    # If a dev user header is present, always attach it to the request context
-    # so that user-scoped write routes (like symptoms) can see a user_id even
-    # when using non-dev backend tokens.
-    has_dev_header = bool(request.headers.get("X-Dev-UserId"))
-    if has_dev_header:
-        _maybe_attach_dev_user(request)
-
     if token in WRITE_TOKENS:
+        if _token_matches_dev(token):
+            _maybe_attach_dev_user(request)
         return True
 
     if _token_matches_dev(token):
+        _maybe_attach_dev_user(request)
         return True
 
     return _validate_supabase_token(request, token)
 
 
-async def _is_public_read(request: Request) -> bool:
-    if not PUBLIC_READ_ENABLED or request.method != "GET":
-        return False
-
-    path = _normalized(request.url.path)
-
-    # Never treat user-scoped series endpoints as public, even if their prefixes
-    # appear in PUBLIC_READ_PATHS. These routes need a user_id in context.
-    if path in ("/v1/space/series", "/v1/series"):
-        return False
-
-    for p in PUBLIC_READ_PATHS:
-        p = p.rstrip("/")
-        if path == p or path.startswith(p + "/"):
-            return True
-    return False
+async def require_read_auth(request: Request, authorization: Optional[str] = Header(None)):
+    if _is_public_read(request):
+        return
+    token = _extract_bearer(authorization)
+    if _is_allowed_read(request, token):
+        return
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid Authorization header")
 
 
 async def require_write_auth(request: Request, authorization: Optional[str] = Header(None)):
