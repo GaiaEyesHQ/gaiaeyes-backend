@@ -9,7 +9,7 @@ I started Gaia Eyes after noticing repeating patterns between my own nerve issue
 0) Objectives
 	1.	Pull relevant geophysical + environmental signals (space weather, Schumann, local weather, earthquakes).
 	2.	Derive features (trends, thresholds, sustained conditions, composites).
-	3.	Infer likely impacts on autonomic nervous system, mood, sleep, focus, and cardio/HRV using evidence‑informed heuristics.
+	3.	Infer likely impacts on autonomic nervous system, mood, sleep, focus, nervers and cardio/HRV using emerging health data and evidence‑informed heuristics.
 	4.	Recommend counter‑practices (grounding, breathwork, light/circadian, pacing) matched to conditions.
 	5.	Generate a concise, friendly, human‑readable Daily EarthScope.
 
