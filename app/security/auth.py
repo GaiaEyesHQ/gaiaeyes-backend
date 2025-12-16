@@ -57,7 +57,11 @@ def _extract_bearer(authorization: Optional[str]) -> Optional[str]:
 
 
 def _maybe_attach_dev_user(request: Request) -> None:
-    request.state.user_id = _normalize_uuid(request.headers.get("X-Dev-UserId"))
+    raw = request.headers.get("X-Dev-UserId")
+    if not raw:
+        return
+    normalized = _normalize_uuid(raw)
+    request.state.user_id = normalized or raw.strip()
 
 
 def _token_matches_dev(token: str) -> bool:
