@@ -80,17 +80,18 @@ def _is_allowed_read(request: Request, token: Optional[str]) -> bool:
     if not token:
         return False
 
+    # If a dev user header is present, always attach it to the request context
+    # so that user-scoped routes (like space/series) can see a user_id even
+    # when using non-dev backend tokens (e.g., Supabase service tokens).
     has_dev_header = bool(request.headers.get("X-Dev-UserId"))
+    if has_dev_header:
+        _maybe_attach_dev_user(request)
 
-    # If this is a known backend token (READ/WRITE) and a dev user header is present,
-    # attach that user to the request context so user-scoped routes can work.
+    # Then apply the existing token checks
     if token in READ_TOKENS or token in WRITE_TOKENS:
-        if has_dev_header or _token_matches_dev(token):
-            _maybe_attach_dev_user(request)
         return True
 
     if _token_matches_dev(token):
-        _maybe_attach_dev_user(request)
         return True
 
     return _validate_supabase_token(request, token)
@@ -100,15 +101,17 @@ def _is_allowed_write(request: Request, token: Optional[str]) -> bool:
     if not token:
         return False
 
+    # If a dev user header is present, always attach it to the request context
+    # so that user-scoped write routes (like symptoms) can see a user_id even
+    # when using non-dev backend tokens.
     has_dev_header = bool(request.headers.get("X-Dev-UserId"))
+    if has_dev_header:
+        _maybe_attach_dev_user(request)
 
     if token in WRITE_TOKENS:
-        if has_dev_header or _token_matches_dev(token):
-            _maybe_attach_dev_user(request)
         return True
 
     if _token_matches_dev(token):
-        _maybe_attach_dev_user(request)
         return True
 
     return _validate_supabase_token(request, token)
