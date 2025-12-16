@@ -117,13 +117,22 @@ def _is_allowed_write(request: Request, token: Optional[str]) -> bool:
     return _validate_supabase_token(request, token)
 
 
-async def require_read_auth(request: Request, authorization: Optional[str] = Header(None)):
-    if _is_public_read(request):
-        return
-    token = _extract_bearer(authorization)
-    if _is_allowed_read(request, token):
-        return
-    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid Authorization header")
+async def _is_public_read(request: Request) -> bool:
+    if not PUBLIC_READ_ENABLED or request.method != "GET":
+        return False
+
+    path = _normalized(request.url.path)
+
+    # Never treat user-scoped series endpoints as public, even if their prefixes
+    # appear in PUBLIC_READ_PATHS. These routes need a user_id in context.
+    if path in ("/v1/space/series", "/v1/series"):
+        return False
+
+    for p in PUBLIC_READ_PATHS:
+        p = p.rstrip("/")
+        if path == p or path.startswith(p + "/"):
+            return True
+    return False
 
 
 async def require_write_auth(request: Request, authorization: Optional[str] = Header(None)):
