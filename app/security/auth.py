@@ -80,8 +80,12 @@ def _is_allowed_read(request: Request, token: Optional[str]) -> bool:
     if not token:
         return False
 
+    has_dev_header = bool(request.headers.get("X-Dev-UserId"))
+
+    # If this is a known backend token (READ/WRITE) and a dev user header is present,
+    # attach that user to the request context so user-scoped routes can work.
     if token in READ_TOKENS or token in WRITE_TOKENS:
-        if _token_matches_dev(token):
+        if has_dev_header or _token_matches_dev(token):
             _maybe_attach_dev_user(request)
         return True
 
@@ -96,8 +100,10 @@ def _is_allowed_write(request: Request, token: Optional[str]) -> bool:
     if not token:
         return False
 
+    has_dev_header = bool(request.headers.get("X-Dev-UserId"))
+
     if token in WRITE_TOKENS:
-        if _token_matches_dev(token):
+        if has_dev_header or _token_matches_dev(token):
             _maybe_attach_dev_user(request)
         return True
 
