@@ -57,7 +57,18 @@ def _extract_bearer(authorization: Optional[str]) -> Optional[str]:
 
 
 def _maybe_attach_dev_user(request: Request) -> None:
-    request.state.user_id = _normalize_uuid(request.headers.get("X-Dev-UserId"))
+    """
+    Attach a developer-scoped user to the request context when X-Dev-UserId is present.
+
+    This is used for local/dev flows where we identify the "current user" via a header
+    rather than a Supabase JWT. If the value cannot be normalized as a UUID, we still
+    attach the trimmed raw value so downstream routes see a non-empty user_id.
+    """
+    raw = request.headers.get("X-Dev-UserId")
+    if not raw:
+        return
+    normalized = _normalize_uuid(raw)
+    request.state.user_id = normalized or raw.strip()
 
 
 def _token_matches_dev(token: str) -> bool:
@@ -76,8 +87,12 @@ def _is_allowed_read(request: Request, token: Optional[str]) -> bool:
     if not token:
         return False
 
+    has_dev_header = bool(request.headers.get("X-Dev-UserId"))
+
+    # If this is a known backend token (READ/WRITE) and a dev user header is present,
+    # attach that user to the request context so user-scoped routes can work.
     if token in READ_TOKENS or token in WRITE_TOKENS:
-        if _token_matches_dev(token):
+        if has_dev_header or _token_matches_dev(token):
             _maybe_attach_dev_user(request)
         return True
 
@@ -92,8 +107,10 @@ def _is_allowed_write(request: Request, token: Optional[str]) -> bool:
     if not token:
         return False
 
+    has_dev_header = bool(request.headers.get("X-Dev-UserId"))
+
     if token in WRITE_TOKENS:
-        if _token_matches_dev(token):
+        if has_dev_header or _token_matches_dev(token):
             _maybe_attach_dev_user(request)
         return True
 
