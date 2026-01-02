@@ -34,8 +34,28 @@ jobs:
           MEDIA_DIR: ${{ runner.temp }}/media
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           HELIOVIEWER_API_URL: ${{ secrets.HELIOVIEWER_API_URL || vars.HELIOVIEWER_API_URL || '' }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AURORA_TONIGHT_URL: ${{ secrets.AURORA_TONIGHT_URL || vars.AURORA_TONIGHT_URL || '' }}
+          AURORA_TOMORROW_URL: ${{ secrets.AURORA_TOMORROW_URL || vars.AURORA_TOMORROW_URL || '' }}
         run: |
           python3 scripts/space_visuals_ingest.py
+      - name: Mirror Aurora static viewlines to Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # Optional nowcast image sources; leave empty to skip
+          AURORA_NOWCAST_NORTH_URL: ${{ secrets.AURORA_NOWCAST_NORTH_URL || vars.AURORA_NOWCAST_NORTH_URL || '' }}
+          AURORA_NOWCAST_SOUTH_URL: ${{ secrets.AURORA_NOWCAST_SOUTH_URL || vars.AURORA_NOWCAST_SOUTH_URL || '' }}
+        run: |
+          python3 - <<'PY'
+          import datetime as dt
+          from scripts.ingest_space_visuals import ingest_aurora_viewline_static, ingest_aurora_nowcast_from_env
+          ts = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
+          ingest_aurora_viewline_static(ts)
+          ingest_aurora_nowcast_from_env(ts)
+          print('[aurora] mirrored tonight/tomorrow viewlines and nowcast aliases (if provided)')
+          PY
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg jq
 

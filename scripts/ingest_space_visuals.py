@@ -18,6 +18,16 @@ from app.utils.supabase_storage import _public_url, upload_alias, upload_bytes
 DB_URL = os.getenv("DIRECT_URL") or os.getenv("DATABASE_URL")
 HELIOVIEWER_API = os.getenv("HELIOVIEWER_API_URL", "https://api.helioviewer.org/v2/takeScreenshot/")
 
+# SWPC static viewline forecast images (configurable via env)
+AURORA_TONIGHT_URL = os.getenv(
+    "AURORA_TONIGHT_URL",
+    "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png",
+)
+AURORA_TOMORROW_URL = os.getenv(
+    "AURORA_TOMORROW_URL",
+    "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png",
+)
+
 
 def _stamp(ts: dt.datetime) -> str:
     return ts.astimezone(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -170,6 +180,36 @@ def ingest_hmi_intensity(captured_at: dt.datetime):
     upsert_visual_row("hmi_intensity", latest_alias, "SDO/HMI (via Helioviewer)", "hmi_intensity", captured_at)
 
 
+# Aurora static viewline forecast images (tonight/tomorrow)
+def ingest_aurora_viewline_static(captured_at: dt.datetime):
+    """
+    Fetch the SWPC experimental 'static viewline' forecast images for tonight and tomorrow
+    and mirror them into Supabase Storage with deterministic aliases the site/app expect.
+    """
+    # Tonight
+    try:
+        rt = requests.get(AURORA_TONIGHT_URL, timeout=60)
+        rt.raise_for_status()
+        rel_t = f"aurora/viewline/tonight_{_stamp(captured_at)}.png"
+        pub_t = upload_bytes(rel_t, rt.content, content_type="image/png")
+        upload_alias("aurora/viewline/tonight.png", pub_t, content_type="image/png")
+        upsert_visual_row("aurora_viewline_tonight", rel_t, "NOAA/SWPC OVATION", "ovation", captured_at)
+    except Exception:
+        # Don't crash the whole job if SWPC has a brief outage
+        pass
+
+    # Tomorrow
+    try:
+        rtm = requests.get(AURORA_TOMORROW_URL, timeout=60)
+        rtm.raise_for_status()
+        rel_tm = f"aurora/viewline/tomorrow_{_stamp(captured_at)}.png"
+        pub_tm = upload_bytes(rel_tm, rtm.content, content_type="image/png")
+        upload_alias("aurora/viewline/tomorrow.png", pub_tm, content_type="image/png")
+        upsert_visual_row("aurora_viewline_tomorrow", rel_tm, "NOAA/SWPC OVATION", "ovation", captured_at)
+    except Exception:
+        pass
+
+
 # Aurora viewline (use your stored URLs if you already fetch them; otherwise just alias)
 def alias_aurora_viewline(tonight_url: Optional[str], tomorrow_url: Optional[str], ts: dt.datetime):
     # If your ingest computes/pulls these PNGs elsewhere, re-upload via deterministic rel keys (aurora/viewline/…)
@@ -187,6 +227,38 @@ def alias_aurora_viewline(tonight_url: Optional[str], tomorrow_url: Optional[str
         public = upload_bytes(rel, r.content, content_type="image/png")
         upload_alias("aurora/viewline/tomorrow-north.png", public, content_type="image/png")
         upsert_visual_row("aurora_viewline_tomorrow", rel, "NOAA/SWPC OVATION", "ovation", ts)
+
+
+# Optionally mirror nowcast images for north/south poles from environment URLs
+def ingest_aurora_nowcast_from_env(captured_at: dt.datetime):
+    """
+    Optionally mirror nowcast images for north/south poles into Supabase Storage
+    under canonical aliases nowcast-north.png / nowcast-south.png if URLs are provided
+    via environment variables:
+      - AURORA_NOWCAST_NORTH_URL
+      - AURORA_NOWCAST_SOUTH_URL
+    """
+    north_url = os.getenv("AURORA_NOWCAST_NORTH_URL", "").strip()
+    south_url = os.getenv("AURORA_NOWCAST_SOUTH_URL", "").strip()
+
+    def _fetch_and_alias(src_url: str, hemi: str):
+        if not src_url:
+            return
+        r = requests.get(src_url, timeout=60)
+        r.raise_for_status()
+        rel = f"aurora/nowcast/nowcast-{hemi}_{_stamp(captured_at)}.png"
+        pub = upload_bytes(rel, r.content, content_type="image/png")
+        upload_alias(f"aurora/nowcast/nowcast-{hemi}.png", pub, content_type="image/png")
+        upsert_visual_row(f"aurora_nowcast_{hemi}", rel, "NOAA/SWPC OVATION", "ovation", captured_at)
+
+    try:
+        _fetch_and_alias(north_url, "north")
+    except Exception:
+        pass
+    try:
+        _fetch_and_alias(south_url, "south")
+    except Exception:
+        pass
 
 
 # (Optional) If you render a custom PNG (e.g., "a_station") via PIL:
@@ -217,4 +289,6 @@ __all__ = [
     "upload_alias",
     "upload_bytes",
     "upsert_visual_row",
+    "ingest_aurora_viewline_static",
+    "ingest_aurora_nowcast_from_env",
 ]
