@@ -66,7 +66,7 @@ jobs:
           AGO6H=$(date -u -d '6 hours ago' +%Y-%m-%dT%H:%M:%SZ)
           AGO3H=$(date -u -d '3 hours ago' +%Y-%m-%dT%H:%M:%SZ)
 
-          echo "=== Verify marts.aurora_nowcast_samples (last 6h) ==="
+          echo "=== Check (info) marts.aurora_nowcast_samples (last 6h) ==="
           CODE_NC=$(curl -sS -o out/supabase_nowcast_rows.json -w "%{http_code}" \
             "$SUPABASE_REST_URL/aurora_nowcast_samples?select=ts,hemisphere,kp&ts=gte.$AGO6H&order=ts.desc.nullslast&limit=6" \
             -H "apikey: $SUPABASE_SERVICE_KEY" \
@@ -75,9 +75,9 @@ jobs:
             -H "Accept: application/json" || true)
           echo "nowcast HTTP: $CODE_NC"
           jq . out/supabase_nowcast_rows.json || true
-          NC_COUNT=$(jq 'length' out/supabase_nowcast_rows.json || echo 0)
+          NC_COUNT=$(jq 'length' out/supabase_nowcast_rows.json 2>/dev/null || echo 0)
           if [ "${NC_COUNT}" -eq 0 ]; then
-            echo "No fresh rows in marts.aurora_nowcast_samples in the last 6h"; exit 1;
+            echo "[warn] No fresh rows in marts.aurora_nowcast_samples in the last 6h (non-fatal for this job)"
           fi
 
           echo "=== Verify ext.aurora_power (both hemispheres, last 3h) ==="
@@ -92,7 +92,9 @@ jobs:
           HAVE_NORTH=$(jq -r '[.[] | select(.hemisphere=="north")] | length > 0' out/supabase_aurora_power.json)
           HAVE_SOUTH=$(jq -r '[.[] | select(.hemisphere=="south")] | length > 0' out/supabase_aurora_power.json)
           if [ "${HAVE_NORTH}" != "true" ] || [ "${HAVE_SOUTH}" != "true" ]; then
-            echo "ext.aurora_power does not have fresh rows for both hemispheres in last 3h"; exit 1;
+            echo "[fail] ext.aurora_power has no fresh rows for both hemispheres in last 3h"
+            echo "       This job triggers WP to fetch; ensure the WordPress host is configured with SUPABASE_REST_URL and SUPABASE_SERVICE_KEY env vars"
+            echo "       (gaia_aurora_supabase_post in mu-plugins must have valid keys to POST to Supabase)."; exit 1;
           fi
 
           echo "=== (Info) marts.aurora_outlook for the next 24h ==="

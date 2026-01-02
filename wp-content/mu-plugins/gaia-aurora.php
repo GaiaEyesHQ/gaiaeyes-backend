@@ -35,11 +35,11 @@ if (!defined('GAIA_AURORA_IMAGE_SOUTH')) {
 }
 if (!defined('GAIA_AURORA_VIEWLINE_TONIGHT')) {
     $base = (defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE) ? GAIA_MEDIA_BASE : '';
-    define('GAIA_AURORA_VIEWLINE_TONIGHT', $base ? ($base . '/aurora/viewline/tonight-north.png') : 'https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png');
+    define('GAIA_AURORA_VIEWLINE_TONIGHT', $base ? ($base . '/aurora/viewline/tonight.png') : 'https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png');
 }
 if (!defined('GAIA_AURORA_VIEWLINE_TOMORROW')) {
     $base = (defined('GAIA_MEDIA_BASE') && GAIA_MEDIA_BASE) ? GAIA_MEDIA_BASE : '';
-    define('GAIA_AURORA_VIEWLINE_TOMORROW', $base ? ($base . '/aurora/viewline/tomorrow-north.png') : 'https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png');
+    define('GAIA_AURORA_VIEWLINE_TOMORROW', $base ? ($base . '/aurora/viewline/tomorrow.png') : 'https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png');
 }
 if (!defined('GAIA_AURORA_CACHE_TTL')) {
     $ttl_env = getenv('GAIA_AURORA_CACHE_TTL_SECONDS');
@@ -114,11 +114,25 @@ if (!defined('GAIA_AURORA_KP_LEVELS')) {
  */
 function gaia_aurora_env($key, $default = null)
 {
-    $val = getenv($key);
-    if ($val === false || $val === '') {
-        return $default;
+    // Prefer a WP constant if defined
+    if (defined($key)) {
+        $const = constant($key);
+        if ($const !== '' && $const !== null) {
+            return $const;
+        }
     }
-    return $val;
+    // Then environment variables
+    $val = getenv($key);
+    if ($val !== false && $val !== '') {
+        return $val;
+    }
+    if (!empty($_ENV[$key])) {
+        return $_ENV[$key];
+    }
+    if (!empty($_SERVER[$key])) {
+        return $_SERVER[$key];
+    }
+    return $default;
 }
 
 function gaia_aurora_normalize_probability($value, $fallback = null)
@@ -243,8 +257,18 @@ function gaia_aurora_http_get($url, $args = [])
  */
 function gaia_aurora_supabase_post($path, $payload, $params = [], $schema = 'marts')
 {
+    // Resolve REST base: explicit SUPABASE_REST_URL or derive from SUPABASE_URL
     $rest = gaia_aurora_env('SUPABASE_REST_URL');
-    $key  = gaia_aurora_env('SUPABASE_SERVICE_KEY') ?: gaia_aurora_env('SUPABASE_ANON_KEY');
+    if (!$rest) {
+        $base = rtrim((string) gaia_aurora_env('SUPABASE_URL'), '/');
+        if ($base) {
+            $rest = $base . '/rest/v1';
+        }
+    }
+    // Resolve key: prefer service role, then service key, then anon
+    $key = gaia_aurora_env('SUPABASE_SERVICE_ROLE_KEY')
+        ?: gaia_aurora_env('SUPABASE_SERVICE_KEY')
+        ?: gaia_aurora_env('SUPABASE_ANON_KEY');
     if (!$rest || !$key) {
         return null;
     }
