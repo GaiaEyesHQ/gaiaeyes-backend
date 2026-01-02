@@ -18,6 +18,8 @@ $defaults = [
     'initial_hemisphere' => 'north',
     'refresh_interval'   => 300,
     'rest_base'          => '/wp-json/gaia/v1/aurora',
+    // Feature flag: enable KP-lines controls and overlay
+    'enable_kp_lines_toggle' => false,
 ];
 
 $merged = [];
@@ -26,6 +28,7 @@ foreach ($context_candidates as $candidate) {
 }
 
 $config = wp_parse_args($merged, $defaults);
+$show_kp_lines = !empty($config['enable_kp_lines_toggle']);
 $initial = strtolower($config['initial_hemisphere']) === 'south' ? 'south' : 'north';
 $refresh = (int) $config['refresh_interval'];
 if ($refresh < 60) {
@@ -51,7 +54,9 @@ $section_id = 'ga-aurora-' . wp_unique_id();
       <button class="ga-aurora__tab is-active" role="tab" data-target="nowcast" aria-selected="true">Nowcast (Live)</button>
       <button class="ga-aurora__tab" role="tab" data-target="tonight" aria-selected="false">Tonight (Forecast)</button>
       <button class="ga-aurora__tab" role="tab" data-target="tomorrow" aria-selected="false">Tomorrow (Forecast)</button>
-      <button class="ga-aurora__tab" role="tab" data-role="kp-lines-toggle" data-tab="kplines" aria-selected="false" aria-pressed="false">Kp Lines (Live)</button>
+      <?php if ($show_kp_lines): ?>
+        <button class="ga-aurora__tab" role="tab" data-role="kp-lines-toggle" data-tab="kplines" aria-selected="false" aria-pressed="false">Kp Lines (Live)</button>
+      <?php endif; ?>
     </div>
     <div class="ga-aurora__hemis" role="radiogroup" aria-label="Hemisphere selector">
       <button class="ga-aurora__hemi is-active" data-hemi="north" role="radio" aria-checked="true">Northern hemisphere</button>
@@ -94,7 +99,9 @@ $section_id = 'ga-aurora-' . wp_unique_id();
               <!-- central meridian -->
               <line x1="160" y1="30" x2="160" y2="290" stroke="white" stroke-opacity="0.10"/>
             </g>
-            <g id="ga-kp-lines" class="ga-kp-lines"></g>
+            <?php if ($show_kp_lines): ?>
+              <g id="ga-kp-lines" class="ga-kp-lines"></g>
+            <?php endif; ?>
             <!-- Live viewline path -->
             <path id="ga-viewline" data-role="viewline" d="" fill="none" stroke="rgba(92,220,160,0.9)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" filter="url(#gaAuroraGlowFx)" />
           </svg>
