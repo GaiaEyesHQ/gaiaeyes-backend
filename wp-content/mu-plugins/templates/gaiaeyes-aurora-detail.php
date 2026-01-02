@@ -18,6 +18,7 @@ $defaults = [
     'initial_hemisphere' => 'north',
     'refresh_interval'   => 300,
     'rest_base'          => '/wp-json/gaia/v1/aurora',
+    'enable_kp_lines_toggle' => false,
 ];
 
 $merged = [];
@@ -26,6 +27,7 @@ foreach ($context_candidates as $candidate) {
 }
 
 $config = wp_parse_args($merged, $defaults);
+$show_kp_lines = !empty($config['enable_kp_lines_toggle']);
 $initial = strtolower($config['initial_hemisphere']) === 'south' ? 'south' : 'north';
 $refresh = (int) $config['refresh_interval'];
 if ($refresh < 60) {
@@ -34,6 +36,15 @@ if ($refresh < 60) {
 $rest_base = trailingslashit($config['rest_base']);
 $section_id = 'ga-aurora-' . wp_unique_id();
 ?>
+<style>
+  .ga-aurora__forecast-img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    max-height: 520px; /* keeps image from forcing scroll */
+  }
+</style>
 <section id="<?php echo esc_attr($section_id); ?>" class="ga-aurora" data-rest-base="<?php echo esc_attr($rest_base); ?>" data-refresh="<?php echo esc_attr($refresh); ?>" data-initial="<?php echo esc_attr($initial); ?>">
   <header class="ga-aurora__header">
     <div>
@@ -51,7 +62,9 @@ $section_id = 'ga-aurora-' . wp_unique_id();
       <button class="ga-aurora__tab is-active" role="tab" data-target="nowcast" aria-selected="true">Nowcast (Live)</button>
       <button class="ga-aurora__tab" role="tab" data-target="tonight" aria-selected="false">Tonight (Forecast)</button>
       <button class="ga-aurora__tab" role="tab" data-target="tomorrow" aria-selected="false">Tomorrow (Forecast)</button>
-      <button class="ga-aurora__tab" role="tab" data-role="kp-lines-toggle" data-tab="kplines" aria-selected="false" aria-pressed="false">Kp Lines (Live)</button>
+      <?php if ($show_kp_lines): ?>
+        <button class="ga-aurora__tab" role="tab" data-role="kp-lines-toggle" data-tab="kplines" aria-selected="false" aria-pressed="false">Kp Lines (Live)</button>
+      <?php endif; ?>
     </div>
     <div class="ga-aurora__hemis" role="radiogroup" aria-label="Hemisphere selector">
       <button class="ga-aurora__hemi is-active" data-hemi="north" role="radio" aria-checked="true">Northern hemisphere</button>
@@ -67,6 +80,7 @@ $section_id = 'ga-aurora-' . wp_unique_id();
           <img data-role="ovation-image" src="" alt="Aurora nowcast imagery" loading="lazy" />
           <figcaption data-role="hemisphere-label">—</figcaption>
         </figure>
+        <?php if ($show_kp_lines): ?>
         <div class="ga-aurora__svgwrap">
           <svg viewBox="0 0 320 320" role="img" aria-label="Derived 10% probability viewline" class="ga-aurora__svg">
             <defs>
@@ -113,6 +127,7 @@ $section_id = 'ga-aurora-' . wp_unique_id();
           </div>
           <p class="ga-aurora__note">Data © NOAA SWPC / OVATION. Viewline derived from 10% probability contour and refreshed every five minutes.</p>
         </div>
+        <?php endif; ?>
       </div>
     </section>
 
@@ -123,7 +138,7 @@ $section_id = 'ga-aurora-' . wp_unique_id();
           <span class="ga-aurora__badge ga-aurora__badge--experimental">Experimental</span>
         </div>
         <figure>
-          <img data-role="forecast-tonight" src="" alt="NOAA experimental aurora viewline forecast for tonight" loading="lazy" />
+          <img class="ga-aurora__forecast-img" data-role="forecast-tonight" src="" alt="NOAA experimental aurora viewline forecast for tonight" loading="lazy" />
           <figcaption>Last fetched <span data-role="forecast-tonight-time">—</span></figcaption>
         </figure>
         <p class="ga-aurora__disclaimer">The experimental viewline is a research preview from NOAA SWPC. Timing differences of several hours are possible.</p>
@@ -137,7 +152,7 @@ $section_id = 'ga-aurora-' . wp_unique_id();
           <span class="ga-aurora__badge ga-aurora__badge--experimental">Experimental</span>
         </div>
         <figure>
-          <img data-role="forecast-tomorrow" src="" alt="NOAA experimental aurora viewline forecast for tomorrow" loading="lazy" />
+          <img class="ga-aurora__forecast-img" data-role="forecast-tomorrow" src="" alt="NOAA experimental aurora viewline forecast for tomorrow" loading="lazy" />
           <figcaption>Last fetched <span data-role="forecast-tomorrow-time">—</span></figcaption>
         </figure>
         <p class="ga-aurora__disclaimer">Use alongside alerts: tomorrow’s panel updates hourly and may lag the latest SWPC guidance.</p>
@@ -158,7 +173,6 @@ $section_id = 'ga-aurora-' . wp_unique_id();
   </div>
 
   <footer class="ga-aurora__footer">
-    <div>Need push alerts? <a class="ga-aurora__link" href="/aurora/#alerts">Get Aurora Alerts →</a></div>
     <div class="ga-aurora__diagnostics" data-role="diagnostics">Diagnostics pending…</div>
   </footer>
 </section>
@@ -526,8 +540,9 @@ $section_id = 'ga-aurora-' . wp_unique_id();
       .then((data) => {
         const targetImg = kind === 'tonight' ? tonightImg : tomorrowImg;
         const targetTime = kind === 'tonight' ? tonightTime : tomorrowTime;
-        if (data && data.url) {
-          targetImg.src = `${data.url}?t=${Date.now()}`;
+        const u = data && (data.url || data.image_url || data.href);
+        if (u) {
+          targetImg.src = `${u}${u.includes('?') ? '&' : '?'}t=${Date.now()}`;
         }
         targetTime.textContent = data && data.fetched_at ? new Date(data.fetched_at).toLocaleString() : '—';
       })
