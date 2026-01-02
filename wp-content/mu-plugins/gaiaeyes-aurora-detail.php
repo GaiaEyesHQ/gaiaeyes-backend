@@ -17,8 +17,7 @@
 if (!defined('ABSPATH')) {
     exit;
 }
-<section class="ga-aurora" id="<?php echo esc_attr($section_id); ?>" data-kp-lines="<?php echo $show_kp_lines ? '1' : '0'; ?>">
-    
+
 if (!function_exists('gaia_aurora_render_detail')) {
     /**
      * Locate and render the aurora detail partial.
