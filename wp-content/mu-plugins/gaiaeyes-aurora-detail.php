@@ -2,6 +2,7 @@
 /**
  * Plugin Name: Gaia Eyes – Aurora Detail Renderer
  * Description: Renders the Aurora detail experience via a theme partial while preserving the legacy shortcode.
+ * Feature Flag: define('GAIA_AURORA_SHOW_KP_LINES', true) to enable KP-lines overlay UI.
  * Version: 2.0.0
  */
 
@@ -36,14 +37,31 @@ if (!function_exists('gaia_aurora_render_detail')) {
 
         $context = shortcode_atts($defaults, $atts, 'gaia_aurora_detail');
         // Provide base map images for each hemisphere (served from your media repo)
- // In the context section, update base_map_url paths:
         $context['base_map_url'] = [
             'north' => home_url('/gaiaeyes-media/public/aurora/nowcast/northern-hemisphere.jpg'),
             'south' => home_url('/gaiaeyes-media/public/aurora/nowcast/southern-hemisphere.jpg'),
         ];
         // Feature toggles for the template/JS
-        $context['enable_kp_lines_toggle'] = true;   // show KP Lines button
-        $context['enable_push_alerts']     = true;   // show Push Alerts button (wire later)
+        // KP-lines overlay is parked behind a feature flag by default.
+        // Enable globally by defining GAIA_AURORA_SHOW_KP_LINES=true in wp-config.php,
+        // or per-instance with the shortcode attribute kp_lines="true|false".
+        $kp_lines_enabled = defined('GAIA_AURORA_SHOW_KP_LINES') ? (bool) GAIA_AURORA_SHOW_KP_LINES : false;
+        if (isset($atts['kp_lines'])) {
+            $v = strtolower(trim((string)$atts['kp_lines']));
+            $kp_lines_enabled = in_array($v, ['1','true','yes','on'], true) ? true :
+                                (in_array($v, ['0','false','no','off'], true) ? false : $kp_lines_enabled);
+        }
+        /**
+         * Filter: gaia_aurora_kp_lines_enabled
+         * Allow themes/plugins to override whether the KP-lines overlay UI is shown.
+         *
+         * @param bool  $enabled Current enabled state.
+         * @param array $context Current render context.
+         * @param array $atts    Raw shortcode attributes.
+         */
+        $kp_lines_enabled = apply_filters('gaia_aurora_kp_lines_enabled', $kp_lines_enabled, $context, $atts);
+        $context['enable_kp_lines_toggle'] = $kp_lines_enabled; // controls KP Lines button visibility
+        $context['enable_push_alerts']     = true;              // show Push Alerts button (wire later)
 
         $template = locate_template('partials/gaiaeyes-aurora-detail.php');
         $fallback = WP_CONTENT_DIR . '/mu-plugins/templates/gaiaeyes-aurora-detail.php';
