@@ -61,17 +61,51 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out
-          echo "Query nowcast samples…"
+
+          NOW_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          AGO6H=$(date -u -d '6 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          AGO3H=$(date -u -d '3 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+
+          echo "=== Verify marts.aurora_nowcast_samples (last 6h) ==="
           CODE_NC=$(curl -sS -o out/supabase_nowcast_rows.json -w "%{http_code}" \
-            "$SUPABASE_REST_URL/aurora_nowcast_samples?select=ts,hemisphere,kp&order=ts.desc.nullslast&limit=6" \
+            "$SUPABASE_REST_URL/aurora_nowcast_samples?select=ts,hemisphere,kp&ts=gte.$AGO6H&order=ts.desc.nullslast&limit=6" \
             -H "apikey: $SUPABASE_SERVICE_KEY" \
             -H "Authorization: Bearer $SUPABASE_SERVICE_KEY" \
             -H "Accept-Profile: marts" \
             -H "Accept: application/json" || true)
           echo "nowcast HTTP: $CODE_NC"
           jq . out/supabase_nowcast_rows.json || true
+          NC_COUNT=$(jq 'length' out/supabase_nowcast_rows.json || echo 0)
+          if [ "${NC_COUNT}" -eq 0 ]; then
+            echo "No fresh rows in marts.aurora_nowcast_samples in the last 6h"; exit 1;
+          fi
 
-          echo "Query kp_obs…"
+          echo "=== Verify ext.aurora_power (both hemispheres, last 3h) ==="
+          CODE_AP=$(curl -sS -o out/supabase_aurora_power.json -w "%{http_code}" \
+            "$SUPABASE_REST_URL/aurora_power?select=ts_utc,hemisphere,hemispheric_power_gw,wing_kp&ts_utc=gte.$AGO3H&order=ts_utc.desc.nullslast&limit=10" \
+            -H "apikey: $SUPABASE_SERVICE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_KEY" \
+            -H "Accept-Profile: ext" \
+            -H "Accept: application/json" || true)
+          echo "aurora_power HTTP: $CODE_AP"
+          jq . out/supabase_aurora_power.json || true
+          HAVE_NORTH=$(jq -r '[.[] | select(.hemisphere=="north")] | length > 0' out/supabase_aurora_power.json)
+          HAVE_SOUTH=$(jq -r '[.[] | select(.hemisphere=="south")] | length > 0' out/supabase_aurora_power.json)
+          if [ "${HAVE_NORTH}" != "true" ] || [ "${HAVE_SOUTH}" != "true" ]; then
+            echo "ext.aurora_power does not have fresh rows for both hemispheres in last 3h"; exit 1;
+          fi
+
+          echo "=== (Info) marts.aurora_outlook for the next 24h ==="
+          CODE_OUT=$(curl -sS -o out/supabase_aurora_outlook.json -w "%{http_code}" \
+            "$SUPABASE_REST_URL/aurora_outlook?select=valid_from,valid_to,hemisphere,headline,power_gw,confidence&valid_to=gte.$NOW_UTC&order=valid_from.asc&limit=12" \
+            -H "apikey: $SUPABASE_SERVICE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_KEY" \
+            -H "Accept-Profile: marts" \
+            -H "Accept: application/json" || true)
+          echo "aurora_outlook HTTP: $CODE_OUT"
+          jq . out/supabase_aurora_outlook.json || true
+
+          echo "=== (Info) kp_obs latest ==="
           CODE_KP=$(curl -sS -o out/supabase_kp_rows.json -w "%{http_code}" \
             "$SUPABASE_REST_URL/kp_obs?select=kp_time,kp&order=kp_time.desc.nullslast&limit=6" \
             -H "apikey: $SUPABASE_SERVICE_KEY" \
