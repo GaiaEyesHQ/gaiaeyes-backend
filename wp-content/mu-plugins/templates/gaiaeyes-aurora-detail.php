@@ -39,11 +39,13 @@ $section_id = 'ga-aurora-' . wp_unique_id();
 ?>
 <style>
   .ga-aurora__forecast-img {
-    max-width: 100%;
+    width: 100%;
+    max-width: 720px;       /* cap horizontal growth so it does not stretch too wide */
+    max-height: 520px;      /* cap vertical to avoid scroll */
     height: auto;
+    object-fit: contain;    /* keep intrinsic aspect ratio */
     display: block;
     margin: 0 auto;
-    max-height: 520px; /* keeps image from forcing scroll */
   }
 </style>
 <section id="<?php echo esc_attr($section_id); ?>" class="ga-aurora" data-rest-base="<?php echo esc_attr($rest_base); ?>" data-refresh="<?php echo esc_attr($refresh); ?>" data-initial="<?php echo esc_attr($initial); ?>">
@@ -479,12 +481,15 @@ $section_id = 'ga-aurora-' . wp_unique_id();
 
   function renderMetrics(payload) {
     const m = (payload && payload.metrics) || {};
-    const show = (v) => (typeof v === 'number' && Math.abs(v) > 0.05) ? `${v.toFixed(1)}°` : '—';
+    const show = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) && Math.abs(n) > 0.05 ? `${n.toFixed(1)}°` : '—';
+    };
     metricMin.textContent = show(m.min_lat);
     metricMedian.textContent = show(m.median_lat);
-    const mp = (typeof m.mean_prob === 'number') ? m.mean_prob
-             : (typeof m.mean_prob_line === 'number') ? m.mean_prob_line : null;
-    if (mp == null) metricProb.textContent = '—';
+    const mpRaw = (m.mean_prob ?? m.mean_prob_line);
+    const mp = Number(mpRaw);
+    if (!Number.isFinite(mp)) metricProb.textContent = '—';
     else metricProb.textContent = `${(mp <= 1 ? mp * 100 : mp).toFixed(0)}%`;
   }
 
@@ -541,8 +546,9 @@ $section_id = 'ga-aurora-' . wp_unique_id();
       .then((data) => {
         const targetImg = kind === 'tonight' ? tonightImg : tomorrowImg;
         const targetTime = kind === 'tonight' ? tonightTime : tomorrowTime;
-        if (data && data.url) {
-          targetImg.src = `${data.url}?t=${Date.now()}`;
+        const u = data && (data.url || data.image_url || data.href);
+        if (u) {
+          targetImg.src = `${u}${u.includes('?') ? '&' : '?'}t=${Date.now()}`;
         }
         targetTime.textContent = data && data.fetched_at ? new Date(data.fetched_at).toLocaleString() : '—';
       })
