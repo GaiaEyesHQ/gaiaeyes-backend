@@ -5,14 +5,6 @@
  * Feature Flag: define('GAIA_AURORA_SHOW_KP_LINES', true) to enable KP-lines overlay UI.
  * Version: 2.0.0
  */
-<?php if (!$show_kp_lines): ?>
-  <style>
-    .ga-aurora [data-role="kp-lines-toggle"],
-    .ga-aurora .ga-kp-lines,
-    .ga-aurora .ga-aurora__legend--kplines,
-    .ga-aurora .ga-aurora__panel--kplines { display: none !important; }
-  </style>
-<?php endif; ?>
 
 if (!defined('ABSPATH')) {
     exit;
