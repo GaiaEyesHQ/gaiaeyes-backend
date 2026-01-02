@@ -21,21 +21,25 @@ External landing tables populated by ingestion scripts and referenced by marts.
 ### Tables
 
 #### `ext.gdacs_alerts`
+- **Primary Key**: `id` (`bigint`, default sequence)
 - **Columns**
   | Column | Type | Description |
   | --- | --- | --- |
+  | `id` | `bigint` | Surrogate identifier (sequence-backed). |
   | `code` | `text` | GDACS hazard code (e.g., `FL`, `TC`). |
   | `title` | `text` | Alert headline. |
   | `url` | `text` | Link to the GDACS alert detail page. |
   | `published_raw` | `text` | Raw `pubDate` string from the RSS feed. |
   | `published_at` | `timestamptz` | Parsed publication time (nullable). |
-  | `hash` | `text` | Deduplication key (unique). |
+  | `hash` | `text` | Deduplication key. |
   | `ingested_at` | `timestamptz` | Insertion timestamp (default `now()`). |
 
 #### `ext.global_hazards`
+- **Primary Key**: `id` (`bigint`, default sequence)
 - **Columns**
   | Column | Type | Description |
   | --- | --- | --- |
+  | `id` | `bigint` | Surrogate identifier (sequence-backed). |
   | `source` | `text` | Originating feed or provider identifier. |
   | `kind` | `text` | Hazard type/category. |
   | `title` | `text` | Human-readable headline. |
@@ -44,8 +48,180 @@ External landing tables populated by ingestion scripts and referenced by marts.
   | `started_at` | `timestamptz` | Start time (nullable). |
   | `ended_at` | `timestamptz` | End time (nullable). |
   | `payload` | `jsonb` | Raw source payload retained for downstream parsing. |
-  | `hash` | `text` | Deduplication key (unique). |
+  | `hash` | `text` | Deduplication key. |
   | `ingested_at` | `timestamptz` | Insertion timestamp (default `now()`). |
+
+#### `ext.aurora_power`
+- **Primary Key**: composite (`ts_utc`, `hemisphere`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `ts_utc` | `timestamptz` | Timestamp of the OVATION sample. |
+  | `hemisphere` | `text` | `north` or `south`. |
+  | `hemispheric_power_gw` | `numeric` | Hemispheric auroral power (GW). |
+  | `wing_kp` | `numeric` | Wing Kp proxy if available. |
+  | `raw` | `jsonb` | Raw model payload. |
+
+#### `ext.ch_forecast`
+- **Primary Key**: composite (`forecast_time`, `source`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `forecast_time` | `timestamptz` | Forecast valid time. |
+  | `source` | `text` | Upstream source identifier. |
+  | `speed_kms` | `numeric` | Solar wind speed (km/s). |
+  | `density_cm3` | `numeric` | Proton density (cm³). |
+  | `raw` | `jsonb` | Raw upstream payload. |
+
+#### `ext.cme_scoreboard`
+- **Primary Key**: composite (`event_time`, `team_name`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `event_time` | `timestamptz` | CME event/launch time. |
+  | `team_name` | `text` | Forecasting team. |
+  | `scoreboard_id` | `text` | External scoreboard identifier. |
+  | `predicted_arrival` | `timestamptz` | Predicted arrival time at target. |
+  | `observed_arrival` | `timestamptz` | Observed arrival time (if any). |
+  | `kp_predicted` | `numeric` | Predicted Kp. |
+  | `raw` | `jsonb` | Raw scoreboard payload. |
+
+#### `ext.donki_event`
+- **Primary Key**: `event_id` (`text`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `event_id` | `text` | DONKI event id. |
+  | `event_type` | `text` | DONKI event type (e.g., `FLR`, `CME`). |
+  | `start_time` | `timestamptz` | Start time. |
+  | `peak_time` | `timestamptz` | Peak time. |
+  | `end_time` | `timestamptz` | End time. |
+  | `class` | `text` | Flare class or analogous label. |
+  | `source` | `text` | Source tag (default `'nasa-donki'`). |
+  | `meta` | `jsonb` | Raw event metadata. |
+  | `ingested_at` | `timestamptz` | Insertion timestamp (default `now()`). |
+
+#### `ext.drap_absorption`
+- **Primary Key**: composite (`ts_utc`, `region_key`, `frequency_key`, `lat_key`, `lon_key`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `ts_utc` | `timestamptz` | Snapshot time. |
+  | `frequency_mhz` | `numeric` | Frequency analyzed (MHz). |
+  | `region` | `text` | Logical region label (e.g., `polar`, `midlat`). |
+  | `region_key` | `text` | Normalized region key (defaults to `coalesce(region,'global')`). |
+  | `frequency_key` | `text` | Normalized frequency key. |
+  | `absorption_db` | `numeric` | Estimated HF absorption (dB). |
+  | `raw` | `jsonb` | Raw DRAP payload. |
+  | `lat` | `numeric` | Latitude (if gridded). |
+  | `lon` | `numeric` | Longitude (if gridded). |
+  | `lat_key` | `text` | Normalized latitude key. |
+  | `lon_key` | `text` | Normalized longitude key. |
+
+#### `ext.enlil_forecast`
+- **Primary Key**: `simulation_id` (`text`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `simulation_id` | `text` | ENLIL simulation identifier. |
+  | `model_run` | `timestamptz` | Model run time. |
+  | `activity_id` | `text` | Upstream activity id. |
+  | `model_type` | `text` | Model descriptor. |
+  | `impact_count` | `integer` | Number of predicted impacts (all targets). |
+  | `raw` | `jsonb` | Raw simulation payload. |
+  | `fetched_at` | `timestamptz` | Ingestion time (default `now()`). |
+
+#### `ext.local_weather`
+- **Primary Key**: composite (`location_id`, `ts_utc`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `location_id` | `text` | Location key. |
+  | `ts_utc` | `timestamptz` | Observation time. |
+  | `temp_c` | `numeric` | Temperature (°C). |
+  | `humidity_pct` | `numeric` | Relative humidity (%). |
+  | `pressure_hpa` | `numeric` | Pressure (hPa). |
+  | `wind_mps` | `numeric` | Wind speed (m/s). |
+  | `precip_mm` | `numeric` | Precipitation (mm). |
+  | `meta` | `jsonb` | Raw payload. |
+
+#### `ext.magnetometer_chain`
+- **Primary Key**: composite (`ts_utc`, `station`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `ts_utc` | `timestamptz` | Observation time. |
+  | `station` | `text` | Station identifier. |
+  | `ae` | `numeric` | AE index. |
+  | `al` | `numeric` | AL index. |
+  | `au` | `numeric` | AU index. |
+  | `pc` | `numeric` | PC index. |
+  | `raw` | `jsonb` | Raw chain payload. |
+
+#### `ext.radiation_belts`
+- **Primary Key**: composite (`ts_utc`, `satellite`, `energy_band`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `ts_utc` | `timestamptz` | Observation time. |
+  | `satellite` | `text` | Satellite id. |
+  | `energy_band` | `text` | Energy band descriptor (e.g., `>2 MeV`). |
+  | `flux` | `numeric` | Integral electron flux. |
+  | `risk_level` | `text` | Derived risk label. |
+  | `raw` | `jsonb` | Raw payload. |
+
+#### `ext.sep_flux`
+- **Primary Key**: composite (`ts_utc`, `satellite`, `energy_band`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `ts_utc` | `timestamptz` | Observation time. |
+  | `satellite` | `text` | Satellite id. |
+  | `energy_band` | `text` | Energy band descriptor (e.g., `>=10 MeV`). |
+  | `flux` | `numeric` | Proton flux (pfu). |
+  | `s_scale` | `text` | NOAA S-scale label (`S1`–`S5`). |
+  | `s_scale_index` | `integer` | Numeric S-scale index (1–5). |
+  | `raw` | `jsonb` | Raw payload. |
+
+#### `ext.solar_cycle_forecast`
+- **Primary Key**: `forecast_month` (`date`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `forecast_month` | `date` | Forecast month. |
+  | `issued_at` | `timestamptz` | Issue time. |
+  | `sunspot_number` | `numeric` | Predicted sunspot number. |
+  | `f10_7_flux` | `numeric` | Predicted F10.7 flux. |
+  | `raw` | `jsonb` | Raw payload. |
+
+#### `ext.space_visuals`
+- **Primary Key**: `id` (`bigint`, default sequence)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `id` | `bigint` | Surrogate id. |
+  | `ts` | `timestamptz` | Asset timestamp. |
+  | `key` | `text` | Logical key for the visual (e.g., `AIA_193`). |
+  | `image_path` | `text` | Storage path (if applicable). |
+  | `meta` | `jsonb` | Raw metadata. |
+  | `asset_type` | `text` | Asset type (`image` default). |
+  | `series` | `jsonb` | Optional multi-point series data. |
+  | `feature_flags` | `jsonb` | Optional flags for rendering. |
+  | `instrument` | `text` | Instrument credit/source. |
+  | `credit` | `text` | Attribution. |
+  | `created_at` | `timestamptz` | Insert time (default `now()`). |
+  | `updated_at` | `timestamptz` | Update time (default `now()`). |
+
+#### `ext.xray_flux`
+- **Primary Key**: composite (`ts_utc`, `satellite`, `energy_band`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `ts_utc` | `timestamptz` | Observation time. |
+  | `satellite` | `text` | Satellite id. |
+  | `energy_band` | `text` | Energy band descriptor. |
+  | `flux` | `numeric` | X-ray flux (W/m²). |
+  | `raw` | `jsonb` | Raw payload. |
 
 ## `gaia` Schema
 
@@ -213,14 +389,133 @@ Projection of the `gaia.daily_summary` table limited to the core metrics:
   | `fetch_ms` | `int` | Fetch duration in milliseconds. |
   | `updated_at` | `timestamptz` | Last refresh timestamp (default `now()`). |
 
-#### `marts.kp_obs`
-- **Primary Key**: `kp_time` (`timestamptz`)
+
+#### `marts.aurora_outlook`
+- **Primary Key**: composite (`valid_from`, `hemisphere`)
 - **Columns**
   | Column | Type | Description |
   | --- | --- | --- |
-  | `kp_time` | `timestamptz` | Observation time of the Kp sample. |
-  | `kp` | `numeric` | Planetary Kp index value. |
-  | `raw` | `jsonb` | Raw NOAA payload slice preserved for provenance. |
+  | `valid_from` | `timestamptz` | Start of the outlook bin. |
+  | `valid_to` | `timestamptz` | End of the outlook bin (nullable). |
+  | `hemisphere` | `text` | `north` or `south`. |
+  | `headline` | `text` | Human-readable outlook summary. |
+  | `power_gw` | `numeric` | Expected hemispheric power (GW). |
+  | `wing_kp` | `numeric` | Wing Kp proxy, if available. |
+  | `confidence` | `text` | Qualitative confidence (e.g., low/medium/high). |
+  | `created_at` | `timestamptz` | Insert time (default `now()`). |
+
+#### `marts.cme_arrivals`
+- **Primary Key**: composite (`arrival_time`, `simulation_id`, `location_key`)
+- **Foreign Keys**
+  - `simulation_id` → `ext.enlil_forecast(simulation_id)`
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `arrival_time` | `timestamptz` | Predicted arrival time. |
+  | `simulation_id` | `text` | ENLIL simulation id. |
+  | `location` | `text` | Target (e.g., Earth, Mars). |
+  | `location_key` | `text` | Normalized location key (defaults to `coalesce(location,'global')`). |
+  | `cme_speed_kms` | `numeric` | CME speed (km/s). |
+  | `kp_estimate` | `numeric` | Estimated Kp at target. |
+  | `confidence` | `text` | Qualitative confidence. |
+  | `raw` | `jsonb` | Raw slice used for this record. |
+  | `created_at` | `timestamptz` | Insert time (default `now()`). |
+
+#### `marts.daily_features`
+- **Primary Key**: composite (`user_id`, `day`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `user_id` | `uuid` | Supabase Auth user id. |
+  | `day` | `date` | Calendar day. |
+  | `hr_min` | `numeric` | Minimum HR. |
+  | `hr_max` | `numeric` | Maximum HR. |
+  | `hrv_avg` | `numeric` | Average HRV. |
+  | `steps_total` | `numeric` | Total steps. |
+  | `sleep_total_minutes` | `numeric` | Total sleep minutes. |
+  | `sleep_rem_minutes` | `numeric` | REM sleep minutes. |
+  | `sleep_core_minutes` | `numeric` | Core sleep minutes. |
+  | `sleep_deep_minutes` | `numeric` | Deep sleep minutes. |
+  | `sleep_awake_minutes` | `numeric` | Awake minutes. |
+  | `sleep_efficiency` | `numeric` | Sleep efficiency. |
+  | `spo2_avg` | `numeric` | Avg SpO₂. |
+  | `bp_sys_avg` | `double precision` | Avg systolic BP. |
+  | `bp_dia_avg` | `double precision` | Avg diastolic BP. |
+  | `kp_max` | `numeric` | Max Kp. |
+  | `bz_min` | `numeric` | Min Bz (nT). |
+  | `sw_speed_avg` | `numeric` | Avg solar wind speed (km/s). |
+  | `src` | `text` | Rollup source tag. |
+  | `updated_at` | `timestamptz` | Last update time (default `now()`). |
+  | `flares_count` | `integer` | Number of flares in day window. |
+  | `cmes_count` | `integer` | Number of CMEs in day window. |
+  | `schumann_station` | `text` | Primary station used. |
+  | `sch_fundamental_avg_hz` | `numeric` | Daily avg SR F0 (Hz). |
+  | `sch_f1_avg_hz` | `numeric` | Daily avg SR F1 (Hz). |
+  | `sch_f2_avg_hz` | `numeric` | Daily avg SR F2 (Hz). |
+  | `sch_f3_avg_hz` | `numeric` | Daily avg SR F3 (Hz). |
+  | `sch_f4_avg_hz` | `numeric` | Daily avg SR F4 (Hz). |
+  | `sch_f5_avg_hz` | `numeric` | Daily avg SR F5 (Hz). |
+  | `sch_cumiana_station` | `text` | Secondary station (Cumiana). |
+  | `sch_cumiana_fundamental_avg_hz` | `numeric` | Cumiana F0 avg. |
+  | `sch_cumiana_f1_avg_hz` | `numeric` | Cumiana F1 avg. |
+  | `sch_cumiana_f2_avg_hz` | `numeric` | Cumiana F2 avg. |
+  | `sch_cumiana_f3_avg_hz` | `numeric` | Cumiana F3 avg. |
+  | `sch_cumiana_f4_avg_hz` | `numeric` | Cumiana F4 avg. |
+  | `sch_cumiana_f5_avg_hz` | `numeric` | Cumiana F5 avg. |
+  | `sch_any_fundamental_avg_hz` | `numeric` | Any-station F0 avg. |
+  | `sch_any_f1_avg_hz` | `numeric` | Any-station F1 avg. |
+  | `sch_any_f2_avg_hz` | `numeric` | Any-station F2 avg. |
+  | `sch_any_f3_avg_hz` | `numeric` | Any-station F3 avg. |
+  | `sch_any_f4_avg_hz` | `numeric` | Any-station F4 avg. |
+  | `sch_any_f5_avg_hz` | `numeric` | Any-station F5 avg. |
+
+#### `marts.drap_absorption_daily`
+- **Primary Key**: composite (`day`, `region`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `day` | `date` | UTC day. |
+  | `region` | `text` | `polar`, `midlat`, or logical label. |
+  | `max_absorption_db` | `numeric` | Daily maximum absorption (dB). |
+  | `avg_absorption_db` | `numeric` | Daily average absorption (dB). |
+  | `created_at` | `timestamptz` | Insert time (default `now()`). |
+
+#### `marts.magnetometer_regional`
+- **Primary Key**: composite (`ts_utc`, `region`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `ts_utc` | `timestamptz` | Observation timestamp. |
+  | `region` | `text` | Region key. |
+  | `ae` | `numeric` | AE index. |
+  | `al` | `numeric` | AL index. |
+  | `au` | `numeric` | AU index. |
+  | `pc` | `numeric` | PC index. |
+  | `stations` | `jsonb` | Station coverage/meta. |
+  | `created_at` | `timestamptz` | Insert time (default `now()`). |
+
+#### `marts.radiation_belts_daily`
+- **Primary Key**: composite (`day`, `satellite`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `day` | `date` | UTC day. |
+  | `satellite` | `text` | Satellite id. |
+  | `max_flux` | `numeric` | Max >2 MeV integral electron flux. |
+  | `avg_flux` | `numeric` | Avg >2 MeV integral electron flux. |
+  | `risk_level` | `text` | Derived daily risk label. |
+  | `computed_at` | `timestamptz` | Computation time (default `now()`). |
+
+#### `marts.solar_cycle_progress`
+- **Primary Key**: `forecast_month` (`date`)
+- **Columns**
+  | Column | Type | Description |
+  | --- | --- | --- |
+  | `forecast_month` | `date` | Forecast month. |
+  | `issued_at` | `timestamptz` | Issue time. |
+  | `sunspot_number` | `numeric` | Predicted sunspot number. |
+  | `f10_7_flux` | `numeric` | Predicted F10.7 flux. |
+  | `confidence` | `text` | Qualitative confidence band. |
 
 ### Views
 

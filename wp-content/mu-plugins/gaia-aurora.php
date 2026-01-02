@@ -241,7 +241,7 @@ function gaia_aurora_http_get($url, $args = [])
 /**
  * Persist data into Supabase via REST (no-op when credentials missing).
  */
-function gaia_aurora_supabase_post($path, $payload, $params = [])
+function gaia_aurora_supabase_post($path, $payload, $params = [], $schema = 'marts')
 {
     $rest = gaia_aurora_env('SUPABASE_REST_URL');
     $key  = gaia_aurora_env('SUPABASE_SERVICE_KEY') ?: gaia_aurora_env('SUPABASE_ANON_KEY');
@@ -260,8 +260,8 @@ function gaia_aurora_supabase_post($path, $payload, $params = [])
             'apikey'          => $key,
             'Authorization'   => 'Bearer ' . $key,
             'Prefer'          => 'resolution=merge-duplicates',
-            'Content-Profile' => 'marts',
-            'Accept-Profile'  => 'marts',
+            'Content-Profile' => $schema,
+            'Accept-Profile'  => $schema,
         ],
         'body'    => wp_json_encode($payload),
     ]);
@@ -273,6 +273,82 @@ function gaia_aurora_supabase_post($path, $payload, $params = [])
         return 'HTTP ' . $code . ' ' . wp_remote_retrieve_body($resp);
     }
     return null;
+}
+
+/**
+ * Try to extract Hemisphere Power (GW) and Wing Kp from a variety of OVATION JSON shapes.
+ * Returns ['north' => float|null, 'south' => float|null, 'wing_kp' => float|null].
+ */
+function gaia_aurora_extract_hemisphere_power($body)
+{
+    if (!is_array($body)) {
+        return ['north' => null, 'south' => null, 'wing_kp' => null];
+    }
+    $get = function($arr, $paths) {
+        foreach ($paths as $p) {
+            $cur = $arr;
+            $ok = true;
+            foreach ($p as $k) {
+                if (is_array($cur) && array_key_exists($k, $cur)) {
+                    $cur = $cur[$k];
+                } else {
+                    $ok = false; break;
+                }
+            }
+            if ($ok && (is_numeric($cur) || is_string($cur))) {
+                return (float)$cur;
+            }
+        }
+        return null;
+    };
+    $north = $get($body, [
+        ['HemispherePower','North'], ['Hemisphere Power','North'],
+        ['hemisphere_power','north'], ['north_power'],
+    ]);
+    $south = $get($body, [
+        ['HemispherePower','South'], ['Hemisphere Power','South'],
+        ['hemisphere_power','south'], ['south_power'],
+    ]);
+    $wing  = $get($body, [['WingKp'], ['Kp'], ['kp'], ['kp_index']]);
+    return ['north' => $north, 'south' => $south, 'wing_kp' => $wing];
+}
+
+/**
+ * Upsert rows into ext.aurora_power for both hemispheres.
+ */
+function gaia_aurora_persist_ext_aurora_power($ts_iso, $hp)
+{
+    if (!$ts_iso || !is_array($hp)) {
+        return;
+    }
+    $ts = $ts_iso;
+    if (!is_string($ts)) {
+        $ts = gmdate('c');
+    }
+    // Upsert north
+    if (isset($hp['north']) && $hp['north'] !== null) {
+        $rowN = [
+            'ts_utc'               => $ts,
+            'hemisphere'           => 'north',
+            'hemispheric_power_gw' => $hp['north'],
+            'wing_kp'              => isset($hp['wing_kp']) ? $hp['wing_kp'] : null,
+            'raw'                  => null,
+        ];
+        $err = gaia_aurora_supabase_post('aurora_power', $rowN, ['on_conflict' => 'ts_utc,hemisphere'], 'ext');
+        if ($err) { error_log('[gaia_aurora] supabase ext.aurora_power north error: ' . $err); }
+    }
+    // Upsert south
+    if (isset($hp['south']) && $hp['south'] !== null) {
+        $rowS = [
+            'ts_utc'               => $ts,
+            'hemisphere'           => 'south',
+            'hemispheric_power_gw' => $hp['south'],
+            'wing_kp'              => isset($hp['wing_kp']) ? $hp['wing_kp'] : null,
+            'raw'                  => null,
+        ];
+        $err = gaia_aurora_supabase_post('aurora_power', $rowS, ['on_conflict' => 'ts_utc,hemisphere'], 'ext');
+        if ($err) { error_log('[gaia_aurora] supabase ext.aurora_power south error: ' . $err); }
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -449,6 +525,12 @@ function gaia_aurora_refresh_nowcast()
 
     $north_bundle = gaia_aurora_build_payload('north', $ts, $grid_data['north'], $north_threshold, $kp_info, $grid_resp, $grid_data['meta'], $lon0_north, $kp_levels);
     $south_bundle = gaia_aurora_build_payload('south', $ts, $grid_data['south'], $south_threshold, $kp_info, $grid_resp, $grid_data['meta'], $lon0_south, $kp_levels);
+
+    // Persist Hemisphere Power to ext.aurora_power when available
+    $hp = gaia_aurora_extract_hemisphere_power($grid_resp['body']);
+    if (is_array($hp) && ($hp['north'] !== null || $hp['south'] !== null)) {
+        gaia_aurora_persist_ext_aurora_power($ts, $hp);
+    }
 
     $north_payload = $north_bundle['payload'];
     $south_payload = $south_bundle['payload'];

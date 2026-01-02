@@ -266,6 +266,12 @@ _MART_COLUMNS = [
     "kp_max",
     "bz_min",
     "sw_speed_avg",
+    "aurora_hp_north_gw",
+    "aurora_hp_south_gw",
+    "xray_max_class",
+    "sep_s_max",
+    "belts_risk_level",
+    "drap_absorption_polar_db",
 ]
 _MART_SELECT = ", ".join(_MART_COLUMNS)
 
@@ -581,7 +587,12 @@ async def _fetch_space_weather_daily(conn, day_local: date) -> Dict[str, Optiona
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
             """
-            select kp_max, bz_min, sw_speed_avg, flares_count, cmes_count
+            select
+              kp_max, bz_min, sw_speed_avg, flares_count, cmes_count,
+              xray_peak_flux_wm2, xray_max_class, sep_s_max,
+              belts_flux_gt2mev_max, belts_risk_level,
+              aurora_hp_north_gw, aurora_hp_south_gw,
+              drap_absorption_polar_db, drap_absorption_midlat_db
             from marts.space_weather_daily
             where day = %s
             limit 1
@@ -595,6 +606,15 @@ async def _fetch_space_weather_daily(conn, day_local: date) -> Dict[str, Optiona
         "sw_speed_avg": res.get("sw_speed_avg"),
         "flares_count": res.get("flares_count"),
         "cmes_count": res.get("cmes_count"),
+        "xray_peak_flux_wm2": res.get("xray_peak_flux_wm2"),
+        "xray_max_class": res.get("xray_max_class"),
+        "sep_s_max": res.get("sep_s_max"),
+        "belts_flux_gt2mev_max": res.get("belts_flux_gt2mev_max"),
+        "belts_risk_level": res.get("belts_risk_level"),
+        "aurora_hp_north_gw": res.get("aurora_hp_north_gw"),
+        "aurora_hp_south_gw": res.get("aurora_hp_south_gw"),
+        "drap_absorption_polar_db": res.get("drap_absorption_polar_db"),
+        "drap_absorption_midlat_db": res.get("drap_absorption_midlat_db"),
     }
 
 
@@ -713,15 +733,32 @@ def _compose_sleep_payload(base: Dict[str, Any], sleep: Dict[str, Optional[float
 
 
 def _compose_space_weather_payload(base: Dict[str, Any], daily: Dict[str, Any], current: Dict[str, Any]) -> Dict[str, Any]:
-    kp_max = base.get("kp_max") if base else None
-    if daily.get("kp_max") is not None:
-        kp_max = daily["kp_max"]
-    bz_min = daily.get("bz_min") if daily.get("bz_min") is not None else base.get("bz_min") if base else None
-    sw_speed_avg = daily.get("sw_speed_avg") if daily.get("sw_speed_avg") is not None else base.get("sw_speed_avg") if base else None
-    flares_count = daily.get("flares_count") if daily.get("flares_count") is not None else base.get("flares_count") if base else None
-    cmes_count = daily.get("cmes_count") if daily.get("cmes_count") is not None else base.get("cmes_count") if base else None
+    # Helper: prefer daily value, fall back to base snapshot
+    def pick(key: str):
+        if daily.get(key) is not None:
+            return daily[key]
+        return (base or {}).get(key) if base else None
+
+    kp_max = pick("kp_max")
+    bz_min = pick("bz_min")
+    sw_speed_avg = pick("sw_speed_avg")
+    flares_count = pick("flares_count")
+    cmes_count = pick("cmes_count")
+
+    # New daily/planet fields with base fallback
+    xray_peak_flux_wm2     = pick("xray_peak_flux_wm2")
+    xray_max_class         = pick("xray_max_class")
+    sep_s_max              = pick("sep_s_max")
+    belts_flux_gt2mev_max  = pick("belts_flux_gt2mev_max")
+    belts_risk_level       = pick("belts_risk_level")
+    aurora_hp_north_gw     = pick("aurora_hp_north_gw")
+    aurora_hp_south_gw     = pick("aurora_hp_south_gw")
+    drap_polar_db          = pick("drap_absorption_polar_db")
+    drap_midlat_db         = pick("drap_absorption_midlat_db")
+
     kp_alert = bool(kp_max and kp_max >= 5)
     flare_alert = bool(flares_count and flares_count > 0)
+
     return {
         "kp_max": kp_max,
         "bz_min": bz_min,
@@ -733,8 +770,17 @@ def _compose_space_weather_payload(base: Dict[str, Any], daily: Dict[str, Any], 
         "kp_current": current.get("kp_current"),
         "bz_current": current.get("bz_current"),
         "sw_speed_current": current.get("sw_speed_current"),
+        # new merged fields:
+        "xray_peak_flux_wm2": xray_peak_flux_wm2,
+        "xray_max_class": xray_max_class,
+        "sep_s_max": sep_s_max,
+        "belts_flux_gt2mev_max": belts_flux_gt2mev_max,
+        "belts_risk_level": belts_risk_level,
+        "aurora_hp_north_gw": aurora_hp_north_gw,
+        "aurora_hp_south_gw": aurora_hp_south_gw,
+        "drap_absorption_polar_db": drap_polar_db,
+        "drap_absorption_midlat_db": drap_midlat_db,
     }
-
 
 _FEATURE_DEFAULTS: Dict[str, Any] = {
     "user_id": None,
@@ -775,6 +821,15 @@ _FEATURE_DEFAULTS: Dict[str, Any] = {
     "post_hashtags": None,
     "updated_at": None,
     "source": "snapshot",
+    "xray_peak_flux_wm2": None,
+    "xray_max_class": None,
+    "sep_s_max": None,
+    "belts_flux_gt2mev_max": None,
+    "belts_risk_level": None,
+    "aurora_hp_north_gw": None,
+    "aurora_hp_south_gw": None,
+    "drap_absorption_polar_db": None,
+    "drap_absorption_midlat_db": None,
 }
 
 _INT_FIELDS = {
@@ -787,6 +842,7 @@ _INT_FIELDS = {
     "inbed_m",
     "flares_count",
     "cmes_count",
+    "sep_s_max",
 }
 
 _FLOAT_FIELDS = {
@@ -808,6 +864,12 @@ _FLOAT_FIELDS = {
     "sch_f3_hz",
     "sch_f4_hz",
     "sleep_efficiency",
+    "xray_peak_flux_wm2",
+    "belts_flux_gt2mev_max",
+    "aurora_hp_north_gw",
+    "aurora_hp_south_gw",
+    "drap_absorption_polar_db",
+    "drap_absorption_midlat_db",
 }
 
 
