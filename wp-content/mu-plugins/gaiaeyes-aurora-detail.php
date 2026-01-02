@@ -61,6 +61,16 @@ if (!function_exists('gaia_aurora_render_detail')) {
          */
         $kp_lines_enabled = apply_filters('gaia_aurora_kp_lines_enabled', $kp_lines_enabled, $context, $atts);
         $context['enable_kp_lines_toggle'] = $kp_lines_enabled; // controls KP Lines button visibility
+        // Inline CSS guard to force-hide KP-lines UI/overlay when disabled (applies to theme partial and MU fallback)
+        $inline_kp_hide = '';
+        if (!$kp_lines_enabled) {
+            $inline_kp_hide = '<style>
+            .ga-aurora [data-role="kp-lines-toggle"],
+            .ga-aurora .ga-kp-lines,
+            .ga-aurora .ga-aurora__legend--kplines,
+            .ga-aurora .ga-aurora__panel--kplines { display: none !important; }
+            </style>';
+        }
         $context['enable_push_alerts']     = true;              // show Push Alerts button (wire later)
 
         $template = locate_template('partials/gaiaeyes-aurora-detail.php');
@@ -77,6 +87,10 @@ if (!function_exists('gaia_aurora_render_detail')) {
         $context = apply_filters('gaia_aurora_detail_context', $context, $atts);
 
         ob_start();
+        // Output the inline CSS guard (if KP-lines is disabled) before the template markup.
+        if (!empty($inline_kp_hide)) {
+            echo $inline_kp_hide;
+        }
         if (function_exists('load_template')) {
             load_template($template, false, $context);
         } else {
