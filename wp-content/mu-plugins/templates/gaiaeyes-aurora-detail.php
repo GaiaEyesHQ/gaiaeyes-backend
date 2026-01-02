@@ -546,11 +546,37 @@ $section_id = 'ga-aurora-' . wp_unique_id();
       .then((data) => {
         const targetImg = kind === 'tonight' ? tonightImg : tomorrowImg;
         const targetTime = kind === 'tonight' ? tonightTime : tomorrowTime;
-        const u = data && (data.url || data.image_url || data.href);
+
+        // Unwrap common shapes: {ok:..., data:{...}} or {payload:{...}} or [ {...} ]
+        let node = data;
+        if (node && typeof node === 'object') {
+          if (Array.isArray(node) && node.length > 0) node = node[0];
+          if (node && node.data && typeof node.data === 'object') node = node.data;
+          else if (node && node.payload && typeof node.payload === 'object') node = node.payload;
+          else if (node && node.result && typeof node.result === 'object') node = node.result;
+        }
+
+        // Accept multiple possible URL keys
+        const urlCandidates = [
+          'url','image_url','href','src',
+          kind === 'tomorrow' ? 'tomorrow_url' : 'tonight_url'
+        ];
+        let u = null;
+        for (const k of urlCandidates) {
+          if (node && typeof node[k] === 'string' && node[k].length) { u = node[k]; break; }
+        }
+
+        // Upgrade http→https when page is https to avoid mixed-content block
+        if (u && location.protocol === 'https:' && u.startsWith('http://')) {
+          u = 'https://' + u.slice(7);
+        }
+
         if (u) {
           targetImg.src = `${u}${u.includes('?') ? '&' : '?'}t=${Date.now()}`;
         }
-        targetTime.textContent = data && data.fetched_at ? new Date(data.fetched_at).toLocaleString() : '—';
+
+        const fetchedAt = (node && (node.fetched_at || node.updated_at || node.ts)) || null;
+        targetTime.textContent = fetchedAt ? new Date(fetchedAt).toLocaleString() : (u ? '—' : 'Unavailable');
       })
       .catch(() => {
         if (kind === 'tonight') {
