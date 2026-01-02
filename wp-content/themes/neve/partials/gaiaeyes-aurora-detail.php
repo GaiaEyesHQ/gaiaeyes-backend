@@ -37,6 +37,15 @@ if ($refresh < 60) {
 $rest_base = trailingslashit($config['rest_base']);
 $section_id = 'ga-aurora-' . wp_unique_id();
 ?>
+<style>
+  .ga-aurora__forecast-img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    max-height: 520px; /* keeps image from forcing scroll */
+  }
+</style>
 <section id="<?php echo esc_attr($section_id); ?>" class="ga-aurora" data-rest-base="<?php echo esc_attr($rest_base); ?>" data-refresh="<?php echo esc_attr($refresh); ?>" data-initial="<?php echo esc_attr($initial); ?>">
   <header class="ga-aurora__header">
     <div>
@@ -130,7 +139,7 @@ $section_id = 'ga-aurora-' . wp_unique_id();
           <span class="ga-aurora__badge ga-aurora__badge--experimental">Experimental</span>
         </div>
         <figure>
-          <img data-role="forecast-tonight" src="" alt="NOAA experimental aurora viewline forecast for tonight" loading="lazy" />
+          <img class="ga-aurora__forecast-img" data-role="forecast-tonight" src="" alt="NOAA experimental aurora viewline forecast for tonight" loading="lazy" />
           <figcaption>Last fetched <span data-role="forecast-tonight-time">—</span></figcaption>
         </figure>
         <p class="ga-aurora__disclaimer">The experimental viewline is a research preview from NOAA SWPC. Timing differences of several hours are possible.</p>
@@ -144,7 +153,7 @@ $section_id = 'ga-aurora-' . wp_unique_id();
           <span class="ga-aurora__badge ga-aurora__badge--experimental">Experimental</span>
         </div>
         <figure>
-          <img data-role="forecast-tomorrow" src="" alt="NOAA experimental aurora viewline forecast for tomorrow" loading="lazy" />
+          <img class="ga-aurora__forecast-img" data-role="forecast-tomorrow" src="" alt="NOAA experimental aurora viewline forecast for tomorrow" loading="lazy" />
           <figcaption>Last fetched <span data-role="forecast-tomorrow-time">—</span></figcaption>
         </figure>
         <p class="ga-aurora__disclaimer">Use alongside alerts: tomorrow’s panel updates hourly and may lag the latest SWPC guidance.</p>
@@ -165,7 +174,6 @@ $section_id = 'ga-aurora-' . wp_unique_id();
   </div>
 
   <footer class="ga-aurora__footer">
-    <div>Need push alerts? <a class="ga-aurora__link" href="/aurora/#alerts">Get Aurora Alerts →</a></div>
     <div class="ga-aurora__diagnostics" data-role="diagnostics">Diagnostics pending…</div>
   </footer>
 </section>

@@ -818,6 +818,15 @@ function gaia_aurora_build_payload($hemisphere, $ts, $grid, $viewline_p, $kp_inf
         $metrics = gaia_aurora_compute_metrics($coords, $hemisphere, $prob_grid);
         $effective_p = $salvage;
     }
+    // Second salvage: if still no line, try a very permissive 1% contour
+    if ($hemisphere === 'north' && ((int) ($metrics['count'] ?? 0) === 0) && $effective_p > 0.01) {
+        $salvage2 = 0.01;
+        $coords_raw = gaia_isoline_southmost($prob_grid, $salvage2, $hemisphere);
+        $coords_smoothed = gaia_line_smooth($coords_raw, GAIA_AURORA_SMOOTH_WINDOW);
+        $coords = gaia_aurora_round_coords($coords_smoothed);
+        $metrics = gaia_aurora_compute_metrics($coords, $hemisphere, $prob_grid);
+        $effective_p = $salvage2;
+    }
 
     $kp_lines_payload = gaia_aurora_build_kp_lines($prob_grid, $hemisphere, $kp_levels);
 
