@@ -37,10 +37,10 @@ if (!function_exists('gaia_aurora_render_detail')) {
 
         $context = shortcode_atts($defaults, $atts, 'gaia_aurora_detail');
         // Provide base map images for each hemisphere (served from your media repo)
-        $context['base_map_url'] = [
-            'north' => home_url('/gaiaeyes-media/public/aurora/nowcast/northern-hemisphere.jpg'),
-            'south' => home_url('/gaiaeyes-media/public/aurora/nowcast/southern-hemisphere.jpg'),
-        ];
+        //$context['base_map_url'] = [
+          //  'north' => home_url('/gaiaeyes-media/public/aurora/nowcast/northern-hemisphere.jpg'),
+          //  'south' => home_url('/gaiaeyes-media/public/aurora/nowcast/southern-hemisphere.jpg'),
+        //];
         // Feature toggles for the template/JS
         // KP-lines overlay is parked behind a feature flag by default.
         // Enable globally by defining GAIA_AURORA_SHOW_KP_LINES=true in wp-config.php,
@@ -68,7 +68,10 @@ if (!function_exists('gaia_aurora_render_detail')) {
             .ga-aurora [data-role="kp-lines-toggle"],
             .ga-aurora .ga-kp-lines,
             .ga-aurora .ga-aurora__legend--kplines,
-            .ga-aurora .ga-aurora__panel--kplines { display: none !important; }
+            .ga-aurora .ga-aurora__panel--kplines,
+            .ga-aurora svg,
+            .ga-aurora .ga-aurora__map,
+            .ga-aurora .ga-aurora__canvas { display: none !important; }
             </style>';
         }
         $context['enable_push_alerts']     = true;              // show Push Alerts button (wire later)
