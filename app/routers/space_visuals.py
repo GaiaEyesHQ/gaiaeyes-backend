@@ -100,11 +100,11 @@ def _rebase_path(rel_path: str | None, key: str | None) -> str | None:
             return "drap/latest.png"
         # Aurora viewlines
         if k in ("ovation_nh", "aurora_north", "aurora_viewline_north"):
-            # Map legacy NH aurora keys to the canonical nowcast north alias
-            return "aurora/nowcast/nowcast-north.png"
+           # Map legacy NH aurora keys to the canonical VIEWLINE (tonight) north alias
+           return "aurora/viewline/tonight-north.png"
         if k in ("ovation_sh", "aurora_south", "aurora_viewline_south"):
-            # Map legacy SH aurora keys to the canonical nowcast south alias
-            return "aurora/nowcast/nowcast-south.png"
+           # Map legacy SH aurora keys to the canonical VIEWLINE (tonight) south alias
+           return "aurora/viewline/tonight-south.png"
         # NASA LASCO/AIA/HMI/CCOR
         if k in ("lasco_c2", "soho_c2"):
             return "nasa/lasco_c2/latest.jpg"
@@ -263,8 +263,8 @@ async def _build_visuals_payload(conn, media_base: str) -> dict:
         {"id": "drap",               "title": "D-RAP Absorption",            "credit": "NOAA/SWPC",          "url": "/drap/latest.png"},
         {"id": "lasco_c2",           "title": "LASCO C2",                    "credit": "SOHO/LASCO",         "url": "/nasa/lasco_c2/latest.jpg"},
         {"id": "aia_304",            "title": "AIA 304Å",                    "credit": "SDO/AIA",            "url": "/nasa/aia_304/latest.jpg"},
-        {"id": "ovation_nh",         "title": "Aurora Nowcast (North)",      "credit": "NOAA SWPC",          "url": "/aurora/nowcast/nowcast-north.png"},
-        {"id": "ovation_sh",         "title": "Aurora Nowcast (South)",      "credit": "NOAA SWPC",          "url": "/aurora/nowcast/nowcast-south.png"},
+        {"id": "ovation_nh",         "title": "Aurora Viewline (North)",     "credit": "NOAA SWPC",          "url": "/aurora/viewline/tonight-north.png"},
+        {"id": "ovation_sh",         "title": "Aurora Viewline (South)",     "credit": "NOAA SWPC",          "url": "/aurora/viewline/tonight-south.png"},
         {"id": "viewline_tonight",   "title": "Aurora Viewline (Tonight)",   "credit": "NOAA SWPC",          "url": "/aurora/viewline/tonight.png"},
         {"id": "viewline_tomorrow",  "title": "Aurora Viewline (Tomorrow)",  "credit": "NOAA SWPC",          "url": "/aurora/viewline/tomorrow.png"},
     ]
