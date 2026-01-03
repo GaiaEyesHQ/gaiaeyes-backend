@@ -47,6 +47,9 @@ jobs:
           # Optional nowcast image sources; leave empty to skip
           AURORA_NOWCAST_NORTH_URL: ${{ secrets.AURORA_NOWCAST_NORTH_URL || vars.AURORA_NOWCAST_NORTH_URL || '' }}
           AURORA_NOWCAST_SOUTH_URL: ${{ secrets.AURORA_NOWCAST_SOUTH_URL || vars.AURORA_NOWCAST_SOUTH_URL || '' }}
+          BUCKET: space-visuals
+          AURORA_TONIGHT_URL: ${{ secrets.AURORA_TONIGHT_URL || vars.AURORA_TONIGHT_URL || '' }}
+          AURORA_TOMORROW_URL: ${{ secrets.AURORA_TOMORROW_URL || vars.AURORA_TOMORROW_URL || '' }}
         run: |
           python3 - <<'PY'
           import datetime as dt
