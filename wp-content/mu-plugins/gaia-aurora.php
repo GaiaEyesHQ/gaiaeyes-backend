@@ -272,27 +272,24 @@ function gaia_aurora_supabase_post($path, $payload, $params = [], $schema = 'mar
     if (!$rest || !$key) {
         return null;
     }
-    // Debug: log rest target and key source, with schema-qualified resource
+    // Debug: log rest target and key source (schema via profile headers)
     $key_source = gaia_aurora_env('SUPABASE_SERVICE_ROLE_KEY') ? 'service_role' : (gaia_aurora_env('SUPABASE_SERVICE_KEY') ? 'service' : (gaia_aurora_env('SUPABASE_ANON_KEY') ? 'anon' : 'none'));
-    $dbg_resource = ($schema && $schema !== 'public') ? ($schema . '.' . ltrim($path, '/')) : ltrim($path, '/');
-    error_log('[gaia_aurora] supabase post target=' . ($rest ?: 'null') . '/' . $dbg_resource . ' key=' . $key_source);
-    // Build schema-qualified resource to avoid any profile header mismatch
-    $resource = ($schema && $schema !== 'public')
-        ? (rtrim($schema, '.') . '.' . ltrim($path, '/'))
-        : ltrim($path, '/');
-    $url = rtrim($rest, '/') . '/' . $resource;
+    error_log('[gaia_aurora] supabase post target=' . ($rest ?: 'null') . '/' . ltrim($path, '/') . ' schema=' . $schema . ' key=' . $key_source);
+    // Use plain resource path and select schema via Content-Profile/Accept-Profile headers
+    $url = rtrim($rest, '/') . '/' . ltrim($path, '/');
     if ($params) {
         $url = add_query_arg($params, $url);
     }
     $resp = wp_remote_post($url, [
         'timeout' => 12,
         'headers' => [
-            'Content-Type'  => 'application/json',
-            'Accept'        => 'application/json',
-            'apikey'        => $key,
-            'Authorization' => 'Bearer ' . $key,
-            // keep merge-duplicates and return minimal; schema is in the path now
-            'Prefer'        => 'resolution=merge-duplicates,return=minimal',
+            'Content-Type'    => 'application/json',
+            'Accept'          => 'application/json',
+            'apikey'          => $key,
+            'Authorization'   => 'Bearer ' . $key,
+            'Prefer'          => 'resolution=merge-duplicates,return=minimal',
+            'Content-Profile' => $schema,
+            'Accept-Profile'  => $schema,
         ],
         'body'    => wp_json_encode($payload),
     ]);
