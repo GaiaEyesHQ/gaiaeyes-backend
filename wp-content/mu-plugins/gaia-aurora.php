@@ -534,7 +534,20 @@ function gaia_aurora_refresh_nowcast()
         'cache_snapshot_final' => null,
         'cache_updated'        => false,
     ];
-
+// Ensure ext.aurora_power is up to date even on cache hits: fetch body without ETag and persist HP
+try {
+    $hp_fetch = gaia_aurora_http_get(GAIA_AURORA_NOWCAST_URL, ['timeout' => 6]); // no etag arg
+    if ($hp_fetch['status'] === 200 && is_array($hp_fetch['body'])) {
+        $hp = gaia_aurora_extract_hemisphere_power($hp_fetch['body']);
+        if (is_array($hp) && ($hp['north'] !== null || $hp['south'] !== null)) {
+            // Use the cached payload timestamp if available
+            $ts_iso = $latest_payloads['north']['ts'] ?? $latest_payloads['south']['ts'] ?? gmdate('c');
+            gaia_aurora_persist_ext_aurora_power($ts_iso, $hp);
+        }
+    }
+} catch (Throwable $e) {
+    error_log('[gaia_aurora] hp persist on 304 failed: ' . $e->getMessage());
+}
     if ($grid_resp['status'] === 304 && $latest_payloads['north'] && $latest_payloads['south']) {
         $diagnostics['trace'][] = 'ovation etag matched – reusing cache';
         $diagnostics['cache_hit'] = true;
