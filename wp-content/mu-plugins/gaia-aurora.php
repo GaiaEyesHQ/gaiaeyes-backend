@@ -272,6 +272,9 @@ function gaia_aurora_supabase_post($path, $payload, $params = [], $schema = 'mar
     if (!$rest || !$key) {
         return null;
     }
+    // Debug: log rest target and key source
+    $key_source = gaia_aurora_env('SUPABASE_SERVICE_ROLE_KEY') ? 'service_role' : (gaia_aurora_env('SUPABASE_SERVICE_KEY') ? 'service' : (gaia_aurora_env('SUPABASE_ANON_KEY') ? 'anon' : 'none'));
+    error_log('[gaia_aurora] supabase post target=' . ($rest ?: 'null') . '/' . ltrim($path, '/') . ' schema=' . $schema . ' key=' . $key_source);
     $url = rtrim($rest, '/') . '/' . ltrim($path, '/');
     if ($params) {
         $url = add_query_arg($params, $url);
@@ -1420,6 +1423,12 @@ function gaia_aurora_register_rest_routes()
         'permission_callback' => '__return_true',
     ]);
 
+    register_rest_route('gaia/v1', '/aurora/persist-hp', [
+        'methods'             => 'POST',
+        'callback'            => 'gaia_aurora_rest_persist_hp',
+        'permission_callback' => '__return_true',
+    ]);
+
     register_rest_route('gaia/v1', '/aurora/fetch-now', [
         'methods'             => 'POST',
         'callback'            => 'gaia_aurora_rest_fetch_now',
@@ -1556,6 +1565,34 @@ function gaia_aurora_rest_cron_run(WP_REST_Request $request)
             'tomorrow'=> gaia_aurora_read_viewline_json('tomorrow'),
         ],
     ]);
+}
+
+/**
+ * Persist hemisphere power (HP) into ext.aurora_power on demand.
+ * Fetches OVATION JSON fresh, extracts HP, and upserts both hemispheres.
+ */
+function gaia_aurora_rest_persist_hp(\WP_REST_Request $request) {
+    try {
+        $fetch = gaia_aurora_http_get(GAIA_AURORA_NOWCAST_URL, ['timeout' => 8]);
+        if (!is_array($fetch) || (int)($fetch['status'] ?? 0) !== 200 || empty($fetch['body'])) {
+            return new \WP_REST_Response(['ok' => false, 'error' => 'fetch_failed', 'status' => $fetch['status'] ?? null], 502);
+        }
+        $hp = gaia_aurora_extract_hemisphere_power($fetch['body']);
+        if (!is_array($hp)) {
+            return new \WP_REST_Response(['ok' => false, 'error' => 'hp_missing'], 422);
+        }
+        // Use latest cached ts if available
+        $ts_iso = gmdate('c');
+        $north_cached = gaia_aurora_get_cached_payload('north');
+        $south_cached = gaia_aurora_get_cached_payload('south');
+        if (is_array($north_cached) && !empty($north_cached['ts']))      { $ts_iso = $north_cached['ts']; }
+        elseif (is_array($south_cached) && !empty($south_cached['ts']))  { $ts_iso = $south_cached['ts']; }
+        gaia_aurora_persist_ext_aurora_power($ts_iso, $hp);
+        return ['ok' => true, 'ts' => $ts_iso, 'north_gw' => $hp['north'] ?? null, 'south_gw' => $hp['south'] ?? null];
+    } catch (\Throwable $e) {
+        error_log('[gaia_aurora] persist-hp error: ' . $e->getMessage());
+        return new \WP_REST_Response(['ok' => false, 'error' => 'exception'], 500);
+    }
 }
 
 /**
