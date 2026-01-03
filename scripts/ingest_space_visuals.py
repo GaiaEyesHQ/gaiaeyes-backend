@@ -212,21 +212,32 @@ def ingest_aurora_viewline_static(captured_at: dt.datetime):
 
 # Aurora viewline (use your stored URLs if you already fetch them; otherwise just alias)
 def alias_aurora_viewline(tonight_url: Optional[str], tomorrow_url: Optional[str], ts: dt.datetime):
-    # If your ingest computes/pulls these PNGs elsewhere, re-upload via deterministic rel keys (aurora/viewline/…)
+    """
+    Mirror provided 'tonight'/'tomorrow' viewline PNGs into Supabase Storage.
+
+    Produces deterministic aliases:
+      - aurora/viewline/tonight.png
+      - aurora/viewline/tomorrow.png
+
+    and keeps versioned history objects:
+      - aurora/viewline/tonight_<stamp>.png
+      - aurora/viewline/tomorrow_<stamp>.png
+    """
     if tonight_url:
         r = requests.get(tonight_url, timeout=60)
         r.raise_for_status()
-        rel = f"aurora/viewline/tonight-north_{_stamp(ts)}.png"
-        public = upload_bytes(rel, r.content, content_type="image/png")
-        upload_alias("aurora/viewline/tonight-north.png", public, content_type="image/png")
-        upsert_visual_row("aurora_viewline_tonight", rel, "NOAA/SWPC OVATION", "ovation", ts)
+        rel_t = f"aurora/viewline/tonight_{_stamp(ts)}.png"
+        pub_t = upload_bytes(rel_t, r.content, content_type="image/png")
+        upload_alias("aurora/viewline/tonight.png", pub_t, content_type="image/png")
+        upsert_visual_row("aurora_viewline_tonight", rel_t, "NOAA/SWPC OVATION", "ovation", ts)
+
     if tomorrow_url:
         r = requests.get(tomorrow_url, timeout=60)
         r.raise_for_status()
-        rel = f"aurora/viewline/tomorrow-north_{_stamp(ts)}.png"
-        public = upload_bytes(rel, r.content, content_type="image/png")
-        upload_alias("aurora/viewline/tomorrow-north.png", public, content_type="image/png")
-        upsert_visual_row("aurora_viewline_tomorrow", rel, "NOAA/SWPC OVATION", "ovation", ts)
+        rel_tm = f"aurora/viewline/tomorrow_{_stamp(ts)}.png"
+        pub_tm = upload_bytes(rel_tm, r.content, content_type="image/png")
+        upload_alias("aurora/viewline/tomorrow.png", pub_tm, content_type="image/png")
+        upsert_visual_row("aurora_viewline_tomorrow", rel_tm, "NOAA/SWPC OVATION", "ovation", ts)
 
 
 # Optionally mirror nowcast images for north/south poles from environment URLs

@@ -105,6 +105,19 @@ def _rebase_path(rel_path: str | None, key: str | None) -> str | None:
         if k in ("ovation_sh", "aurora_south", "aurora_viewline_south"):
            # Map legacy SH aurora keys to the canonical VIEWLINE (tonight) south alias
            return "aurora/viewline/tonight-south.png"
+
+        # Aurora viewlines — generic tonight/tomorrow (global)
+        if k in ("viewline_tonight", "aurora_viewline_tonight"):
+            return "aurora/viewline/tonight.png"
+        if k in ("viewline_tomorrow", "aurora_viewline_tomorrow"):
+            return "aurora/viewline/tomorrow.png"
+
+        # Aurora viewlines — hemispheric synonyms for "tonight"
+        if k in ("viewline_tonight_north", "aurora_viewline_tonight_north"):
+            return "aurora/viewline/tonight-north.png"
+        if k in ("viewline_tonight_south", "aurora_viewline_tonight_south"):
+            return "aurora/viewline/tonight-south.png"
+
         # NASA LASCO/AIA/HMI/CCOR
         if k in ("lasco_c2", "soho_c2"):
             return "nasa/lasco_c2/latest.jpg"
