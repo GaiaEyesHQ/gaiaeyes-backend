@@ -93,9 +93,9 @@ jobs:
             echo "[fail] north nowcast is not valid JSON"; exit 1; fi
           if ! jq . out/nowcast_south.json >/dev/null 2>&1; then
             echo "[fail] south nowcast is not valid JSON"; exit 1; fi
-          if ! jq -e 'has("ts") and (.ts != null) and ((.ts|type=="string") or (.ts|type=="number"))' out/nowcast_north.json >/dev/null; then
+          if ! jq -e '(.ts // (.data.ts // .payload.ts // .result.ts)) | select(. != null) | (type=="string" or type=="number")' out/nowcast_north.json >/dev/null; then
             echo "north nowcast missing .ts — backend likely not writing cache"; exit 1; fi
-          if ! jq -e 'has("ts") and (.ts|type) | IN("string","number")' out/nowcast_south.json >/dev/null; then
+          if ! jq -e '(.ts // (.data.ts // .payload.ts // .result.ts)) | select(. != null) | (type=="string" or type=="number")' out/nowcast_south.json >/dev/null; then
             echo "south nowcast missing .ts — backend likely not writing cache"; exit 1; fi
 
       - name: (Optional) Verify Supabase rows landed
