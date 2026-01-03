@@ -243,9 +243,14 @@ def alias_aurora_viewline(tonight_url: Optional[str], tomorrow_url: Optional[str
 # Optionally mirror nowcast images for north/south poles from environment URLs
 def ingest_aurora_nowcast_from_env(captured_at: dt.datetime):
     """
-    Optionally mirror nowcast images for north/south poles into Supabase Storage
-    under canonical aliases nowcast-north.png / nowcast-south.png if URLs are provided
-    via environment variables:
+    Optionally mirror nowcast images for north/south poles into Supabase Storage,
+    but alias them using the existing "viewline" hemisphere names expected by the app:
+
+      - aurora/viewline/tonight-north.png  (from AURORA_NOWCAST_NORTH_URL)
+      - aurora/viewline/tonight-south.png  (from AURORA_NOWCAST_SOUTH_URL)
+
+    This matches the historical naming where "tonight-<hemi>" represents the current nowcast.
+    Environment variables:
       - AURORA_NOWCAST_NORTH_URL
       - AURORA_NOWCAST_SOUTH_URL
     """
@@ -257,9 +262,9 @@ def ingest_aurora_nowcast_from_env(captured_at: dt.datetime):
             return
         r = requests.get(src_url, timeout=60)
         r.raise_for_status()
-        rel = f"aurora/nowcast/nowcast-{hemi}_{_stamp(captured_at)}.png"
+        rel = f"aurora/viewline/tonight-{hemi}_{_stamp(captured_at)}.png"
         pub = upload_bytes(rel, r.content, content_type="image/png")
-        upload_alias(f"aurora/nowcast/nowcast-{hemi}.png", pub, content_type="image/png")
+        upload_alias(f"aurora/viewline/tonight-{hemi}.png", pub, content_type="image/png")
         upsert_visual_row(f"aurora_nowcast_{hemi}", rel, "NOAA/SWPC OVATION", "ovation", captured_at)
 
     try:
@@ -289,6 +294,7 @@ def upload_rendered_png(
     upsert_visual_row(key, rel, credit, instrument, captured_at)
 
 
+
 __all__ = [
     "_public_url",
     "alias_aurora_viewline",
@@ -303,3 +309,40 @@ __all__ = [
     "ingest_aurora_viewline_static",
     "ingest_aurora_nowcast_from_env",
 ]
+
+# --- simple CLI entrypoint so GitHub Actions can call specific ingesters ---
+def _run_cli():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Ingest aurora viewline images into Supabase Storage")
+    parser.add_argument(
+        "--viewline-static",
+        action="store_true",
+        help="Fetch & alias experimental 'tonight.png' and 'tomorrow.png' into aurora/viewline/",
+    )
+    parser.add_argument(
+        "--nowcast-env",
+        action="store_true",
+        help="Fetch & alias 'tonight-north.png' and 'tonight-south.png' from AURORA_NOWCAST_{NORTH,SOUTH}_URL env vars",
+    )
+    args = parser.parse_args()
+
+    ts = dt.datetime.utcnow()
+
+    if args.viewline_static:
+        try:
+            ingest_aurora_viewline_static(ts)
+            print("[ingest] aurora viewline: tonight.png / tomorrow.png updated")
+        except Exception as e:
+            print(f"[ingest] aurora viewline static failed: {e}")
+
+    if args.nowcast_env:
+        try:
+            ingest_aurora_nowcast_from_env(ts)
+            print("[ingest] aurora nowcast (hemispheres) updated")
+        except Exception as e:
+            print(f"[ingest] aurora nowcast failed: {e}")
+
+
+if __name__ == "__main__":
+    _run_cli()

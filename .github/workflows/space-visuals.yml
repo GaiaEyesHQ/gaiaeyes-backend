@@ -3,7 +3,7 @@ permissions:
   contents: read
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/15 * * * *"
   workflow_dispatch: {}
 jobs:
   run:
@@ -59,6 +59,17 @@ jobs:
           ingest_aurora_nowcast_from_env(ts)
           print('[aurora] mirrored tonight/tomorrow viewlines and nowcast aliases (if provided)')
           PY
+      - name: Smoke check aurora static viewlines (tonight/tomorrow)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        run: |
+          set -euo pipefail
+          for key in tonight tomorrow; do
+            echo "[check] HEAD $SUPABASE_URL/storage/v1/object/public/space-visuals/aurora/viewline/${key}.png"
+            # Don't fail the job if missing; just print the status line for visibility
+            curl -sS -I "$SUPABASE_URL/storage/v1/object/public/space-visuals/aurora/viewline/${key}.png" \
+              | awk 'tolower($0) ~ /^http\// { print }'
+          done
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg jq
 
