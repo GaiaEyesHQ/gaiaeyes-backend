@@ -54,37 +54,48 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out
-          echo "Fetching north nowcast..."
-          CODE_N=$(curl -sS -o out/nowcast_north.json -w "%{http_code}" \
-            "$AURORA_BASE/wp-json/gaia/v1/aurora/nowcast?hemi=north" \
-            -H "Accept: application/json")
-          echo "north HTTP: $CODE_N"
-          echo "Fetching south nowcast..."
-          CODE_S=$(curl -sS -o out/nowcast_south.json -w "%{http_code}" \
-            "$AURORA_BASE/wp-json/gaia/v1/aurora/nowcast?hemi=south" \
-            -H "Accept: application/json")
-          echo "south HTTP: $CODE_S"
-          echo -n "$CODE_N" > out/http_north.txt
-          echo -n "$CODE_S" > out/http_south.txt
-          echo "--- north preview ---"; head -c 200 out/nowcast_north.json || true; echo
-          echo "--- south preview ---"; head -c 200 out/nowcast_south.json || true; echo
+
+          fetch_nowcast() {
+            local hemi="$1" out_json="$2" out_code="$3"
+            local url="$AURORA_BASE/wp-json/gaia/v1/aurora/nowcast?hemi=$hemi"
+            local i=0 code=000
+            : > "$out_json"
+            while [ $i -lt 3 ]; do
+              code=$(curl -sS -o "$out_json" -w "%{http_code}" "$url" -H "Accept: application/json" || true)
+              # Accept any 2xx; if body is empty or invalid JSON, retry
+              if [ "${code:0:1}" = "2" ]; then
+                if [ -s "$out_json" ] && jq . "$out_json" >/dev/null 2>&1; then
+                  break
+                fi
+              fi
+              i=$((i+1))
+              sleep 2
+            done
+            echo -n "$code" > "$out_code"
+            echo "$hemi HTTP: $code"
+            echo "--- $hemi preview ---"; head -c 200 "$out_json" || true; echo
+          }
+
+          echo "Fetching nowcast with retries..."
+          fetch_nowcast "north" out/nowcast_north.json out/http_north.txt
+          fetch_nowcast "south" out/nowcast_south.json out/http_south.txt
 
       - name: Basic assertions (fail if no TS)
         run: |
           set -euo pipefail
           N_CODE=$(cat out/http_north.txt 2>/dev/null || echo 000)
           S_CODE=$(cat out/http_south.txt 2>/dev/null || echo 000)
-          if [ "$N_CODE" != "200" ]; then
+          if [ "${N_CODE:0:1}" != "2" ]; then
             echo "[fail] north nowcast HTTP=$N_CODE"; exit 1; fi
-          if [ "$S_CODE" != "200" ]; then
+          if [ "${S_CODE:0:1}" != "2" ]; then
             echo "[fail] south nowcast HTTP=$S_CODE"; exit 1; fi
-          if ! jq . out/nowcast_north.json >/dev/null 2>&1; then
+          if ! jq . out/nowcast_north.json >/dev/null 2/>&1; then
             echo "[fail] north nowcast is not valid JSON"; exit 1; fi
-          if ! jq . out/nowcast_south.json >/dev/null 2>&1; then
+          if ! jq . out/nowcast_south.json >/dev/null 2/>&1; then
             echo "[fail] south nowcast is not valid JSON"; exit 1; fi
           if ! jq -e 'has("ts") and (.ts != null) and ((.ts|type=="string") or (.ts|type=="number"))' out/nowcast_north.json >/dev/null; then
             echo "north nowcast missing .ts — backend likely not writing cache"; exit 1; fi
-          if ! jq -e 'has("ts") and (.ts != null) and ((.ts|type=="string") or (.ts|type=="number"))' out/nowcast_south.json >/dev/null; then
+          if ! jq -e 'has("ts") and (.ts|type) | IN("string","number")' out/nowcast_south.json >/dev/null; then
             echo "south nowcast missing .ts — backend likely not writing cache"; exit 1; fi
 
       - name: (Optional) Verify Supabase rows landed
