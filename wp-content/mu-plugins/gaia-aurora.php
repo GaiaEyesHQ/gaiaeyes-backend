@@ -381,37 +381,36 @@ function gaia_aurora_extract_hemisphere_power($body)
  */
 function gaia_aurora_persist_ext_aurora_power($ts_iso, $hp)
 {
-    if (!$ts_iso || !is_array($hp)) {
-        return;
+    if (!$ts_iso) {
+        $ts_iso = gmdate('c');
     }
-    $ts = $ts_iso;
-    if (!is_string($ts)) {
-        $ts = gmdate('c');
-    }
-    // Upsert north
-    if (isset($hp['north']) && $hp['north'] !== null) {
-        $rowN = [
+    $ts = is_string($ts_iso) ? $ts_iso : gmdate('c');
+
+    // Helper to upsert one hemisphere
+    $upsert = function($hemi, $gw, $wing) use ($ts) {
+        $row = [
             'ts_utc'               => $ts,
-            'hemisphere'           => 'north',
-            'hemispheric_power_gw' => $hp['north'],
-            'wing_kp'              => isset($hp['wing_kp']) ? $hp['wing_kp'] : null,
+            'hemisphere'           => $hemi,
+            'hemispheric_power_gw' => is_numeric($gw) ? (float)$gw : null,
+            'wing_kp'              => is_numeric($wing) ? (float)$wing : null,
             'raw'                  => ['src' => 'wp:aurora_nowcast', 'at' => $ts],
         ];
-        $err = gaia_aurora_supabase_post('aurora_power', $rowN, ['on_conflict' => 'ts_utc,hemisphere'], 'ext');
-        if ($err) { error_log('[gaia_aurora] supabase ext.aurora_power north error: ' . $err); }
-    }
-    // Upsert south
-    if (isset($hp['south']) && $hp['south'] !== null) {
-        $rowS = [
-            'ts_utc'               => $ts,
-            'hemisphere'           => 'south',
-            'hemispheric_power_gw' => $hp['south'],
-            'wing_kp'              => isset($hp['wing_kp']) ? $hp['wing_kp'] : null,
-            'raw'                  => ['src' => 'wp:aurora_nowcast', 'at' => $ts],
-        ];
-        $err = gaia_aurora_supabase_post('aurora_power', $rowS, ['on_conflict' => 'ts_utc,hemisphere'], 'ext');
-        if ($err) { error_log('[gaia_aurora] supabase ext.aurora_power south error: ' . $err); }
-    }
+        $err = gaia_aurora_supabase_post('aurora_power', $row, ['on_conflict' => 'ts_utc,hemisphere'], 'ext');
+        if ($err) {
+            error_log('[gaia_aurora] supabase ext.aurora_power ' . $hemi . ' error: ' . $err);
+        } else {
+            error_log('[gaia_aurora] supabase ext.aurora_power ' . $hemi . ' ok ts=' . $ts . ' gw=' . (is_numeric($gw) ? (float)$gw : null));
+        }
+    };
+
+    // Always upsert both hemispheres so verification can find rows,
+    // even when the extractor could not derive a numeric GW value.
+    $north_gw = is_array($hp) && array_key_exists('north', $hp) ? $hp['north'] : null;
+    $south_gw = is_array($hp) && array_key_exists('south', $hp) ? $hp['south'] : null;
+    $wing_kp  = is_array($hp) && array_key_exists('wing_kp', $hp) ? $hp['wing_kp'] : null;
+
+    $upsert('north', $north_gw, $wing_kp);
+    $upsert('south', $south_gw, $wing_kp);
 }
 
 // -----------------------------------------------------------------------------
