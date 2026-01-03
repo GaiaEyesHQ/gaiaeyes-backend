@@ -100,9 +100,11 @@ def _rebase_path(rel_path: str | None, key: str | None) -> str | None:
             return "drap/latest.png"
         # Aurora viewlines
         if k in ("ovation_nh", "aurora_north", "aurora_viewline_north"):
-            return "aurora/viewline/tonight-north.png"
+            # Map legacy NH aurora keys to the canonical nowcast north alias
+            return "aurora/nowcast/nowcast-north.png"
         if k in ("ovation_sh", "aurora_south", "aurora_viewline_south"):
-            return "aurora/viewline/tonight-south.png"
+            # Map legacy SH aurora keys to the canonical nowcast south alias
+            return "aurora/nowcast/nowcast-south.png"
         # NASA LASCO/AIA/HMI/CCOR
         if k in ("lasco_c2", "soho_c2"):
             return "nasa/lasco_c2/latest.jpg"
@@ -256,13 +258,15 @@ async def _build_visuals_payload(conn, media_base: str) -> dict:
     # Ensure a small baseline set so clients render even if DB yields few/none
     existing = {it.get("id") for it in items if it.get("id")}
     baseline: List[Dict[str, Any]] = [
-        {"id": "enlil_cme",  "title": "ENLIL CME Propagation", "credit": "NOAA/WSA–ENLIL+Cone", "url": "/nasa/enlil/latest.mp4",
+        {"id": "enlil_cme",          "title": "ENLIL CME Propagation",      "credit": "NOAA/WSA–ENLIL+Cone", "url": "/nasa/enlil/latest.mp4",
          "meta": {"source": "https://services.swpc.noaa.gov/images/animations/enlil/"}},
-        {"id": "drap",       "title": "D-RAP Absorption",       "credit": "NOAA/SWPC",         "url": "/drap/latest.png"},
-        {"id": "lasco_c2",   "title": "LASCO C2",               "credit": "SOHO/LASCO",        "url": "/nasa/lasco_c2/latest.jpg"},
-        {"id": "aia_304",    "title": "AIA 304Å",               "credit": "SDO/AIA",           "url": "/nasa/aia_304/latest.jpg"},
-        {"id": "ovation_nh", "title": "Aurora Viewline (N)",    "credit": "NOAA SWPC",         "url": "/aurora/viewline/tonight-north.png"},
-        {"id": "ovation_sh", "title": "Aurora Viewline (S)",    "credit": "NOAA SWPC",         "url": "/aurora/viewline/tonight-south.png"},
+        {"id": "drap",               "title": "D-RAP Absorption",            "credit": "NOAA/SWPC",          "url": "/drap/latest.png"},
+        {"id": "lasco_c2",           "title": "LASCO C2",                    "credit": "SOHO/LASCO",         "url": "/nasa/lasco_c2/latest.jpg"},
+        {"id": "aia_304",            "title": "AIA 304Å",                    "credit": "SDO/AIA",            "url": "/nasa/aia_304/latest.jpg"},
+        {"id": "ovation_nh",         "title": "Aurora Nowcast (North)",      "credit": "NOAA SWPC",          "url": "/aurora/nowcast/nowcast-north.png"},
+        {"id": "ovation_sh",         "title": "Aurora Nowcast (South)",      "credit": "NOAA SWPC",          "url": "/aurora/nowcast/nowcast-south.png"},
+        {"id": "viewline_tonight",   "title": "Aurora Viewline (Tonight)",   "credit": "NOAA SWPC",          "url": "/aurora/viewline/tonight.png"},
+        {"id": "viewline_tomorrow",  "title": "Aurora Viewline (Tomorrow)",  "credit": "NOAA SWPC",          "url": "/aurora/viewline/tomorrow.png"},
     ]
     items_unified: List[Dict[str, Any]] = items.copy()
     for b in baseline:

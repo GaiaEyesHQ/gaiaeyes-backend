@@ -38,9 +38,29 @@ dk as (
   from ext.donki_event
   where start_time >= date_trunc('day', now() - interval '{DAYS_BACK} days')
   group by 1
+),
+ap_latest as (
+  select d, hemisphere, hemispheric_power_gw
+  from (
+    select date(ts_utc) as d,
+           hemisphere,
+           hemispheric_power_gw,
+           ts_utc,
+           row_number() over (partition by date(ts_utc), hemisphere order by ts_utc desc) as rn
+    from ext.aurora_power
+    where ts_utc >= date_trunc('day', now() - interval '{DAYS_BACK} days')
+  ) t
+  where rn = 1
+),
+ap as (
+  select d as day,
+         max(hemispheric_power_gw) filter (where hemisphere = 'north') as aurora_hp_north_gw,
+         max(hemispheric_power_gw) filter (where hemisphere = 'south') as aurora_hp_south_gw
+  from ap_latest
+  group by 1
 )
 insert into marts.space_weather_daily
-  (day, kp_max, bz_min, sw_speed_avg, row_count, flares_count, cmes_count, updated_at)
+  (day, kp_max, bz_min, sw_speed_avg, row_count, flares_count, cmes_count, aurora_hp_north_gw, aurora_hp_south_gw, updated_at)
 select
   sw.day,
   sw.kp_max,
@@ -49,9 +69,12 @@ select
   sw.row_count,
   coalesce(dk.flares_count, 0),
   coalesce(dk.cmes_count, 0),
+  ap.aurora_hp_north_gw,
+  ap.aurora_hp_south_gw,
   now()
 from sw
 left join dk using (day)
+left join ap using (day)
 on conflict (day) do update
 set kp_max       = excluded.kp_max,
     bz_min       = excluded.bz_min,
@@ -59,6 +82,8 @@ set kp_max       = excluded.kp_max,
     row_count    = excluded.row_count,
     flares_count = excluded.flares_count,
     cmes_count   = excluded.cmes_count,
+    aurora_hp_north_gw = excluded.aurora_hp_north_gw,
+    aurora_hp_south_gw = excluded.aurora_hp_south_gw,
     updated_at   = now();
 """
 
@@ -66,7 +91,7 @@ async def main():
     conn = await asyncpg.connect(dsn=DB, statement_cache_size=0)
     try:
         await conn.execute(UPSERT_SQL)
-        print(f"Rolled up last {DAYS_BACK} days into marts.space_weather_daily (incl. DONKI counts)")
+        print(f"Rolled up last {DAYS_BACK} days into marts.space_weather_daily (incl. DONKI counts + aurora power)")
     finally:
         await conn.close()
 
