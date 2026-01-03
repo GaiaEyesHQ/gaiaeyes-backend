@@ -305,9 +305,20 @@ function gaia_aurora_supabase_post($path, $payload, $params = [], $schema = 'mar
  */
 function gaia_aurora_extract_hemisphere_power($body)
 {
+    // Normalize $body to associative array
+    if (is_string($body)) {
+        $decoded = json_decode($body, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            $body = $decoded;
+        }
+    } elseif (is_object($body)) {
+        $body = json_decode(json_encode($body), true);
+    }
     if (!is_array($body)) {
+        error_log('[gaia_aurora] extract_hp: body not array/string JSON');
         return ['north' => null, 'south' => null, 'wing_kp' => null];
     }
+
     $get = function($arr, $paths) {
         foreach ($paths as $p) {
             $cur = $arr;
@@ -325,15 +336,43 @@ function gaia_aurora_extract_hemisphere_power($body)
         }
         return null;
     };
-    $north = $get($body, [
-        ['HemispherePower','North'], ['Hemisphere Power','North'],
-        ['hemisphere_power','north'], ['north_power'],
-    ]);
-    $south = $get($body, [
-        ['HemispherePower','South'], ['Hemisphere Power','South'],
-        ['hemisphere_power','south'], ['south_power'],
-    ]);
-    $wing  = $get($body, [['WingKp'], ['Kp'], ['kp'], ['kp_index']]);
+
+    // Try common container roots
+    $candidates = [$body];
+    foreach (['data','payload','result'] as $root) {
+        if (isset($body[$root]) && is_array($body[$root])) {
+            $candidates[] = $body[$root];
+        }
+    }
+
+    $north = null; $south = null; $wing = null;
+    foreach ($candidates as $node) {
+        if ($north === null) {
+            $north = $get($node, [
+                ['HemispherePower','North'], ['Hemisphere Power','North'],
+                ['hemisphere_power','north'], ['north_power'],
+                ['Hemisphere Power (GW)','North'],
+            ]);
+        }
+        if ($south === null) {
+            $south = $get($node, [
+                ['HemispherePower','South'], ['Hemisphere Power','South'],
+                ['hemisphere_power','south'], ['south_power'],
+                ['Hemisphere Power (GW)','South'],
+            ]);
+        }
+        if ($wing === null) {
+            $wing = $get($node, [
+                ['WingKP'], ['WingKp'], ['Wing Kp'], ['wing_kp'],
+                ['Kp'], ['kp'], ['kp_index'],
+            ]);
+        }
+    }
+
+    if ($north === null && $south === null) {
+        error_log('[gaia_aurora] extract_hp: could not find Hemisphere Power in OVATION JSON');
+    }
+
     return ['north' => $north, 'south' => $south, 'wing_kp' => $wing];
 }
 
@@ -356,7 +395,7 @@ function gaia_aurora_persist_ext_aurora_power($ts_iso, $hp)
             'hemisphere'           => 'north',
             'hemispheric_power_gw' => $hp['north'],
             'wing_kp'              => isset($hp['wing_kp']) ? $hp['wing_kp'] : null,
-            'raw'                  => null,
+            'raw'                  => wp_json_encode(['src' => 'wp:aurora_nowcast', 'at' => $ts]),
         ];
         $err = gaia_aurora_supabase_post('aurora_power', $rowN, ['on_conflict' => 'ts_utc,hemisphere'], 'ext');
         if ($err) { error_log('[gaia_aurora] supabase ext.aurora_power north error: ' . $err); }
@@ -368,7 +407,7 @@ function gaia_aurora_persist_ext_aurora_power($ts_iso, $hp)
             'hemisphere'           => 'south',
             'hemispheric_power_gw' => $hp['south'],
             'wing_kp'              => isset($hp['wing_kp']) ? $hp['wing_kp'] : null,
-            'raw'                  => null,
+            'raw'                  => wp_json_encode(['src' => 'wp:aurora_nowcast', 'at' => $ts]),
         ];
         $err = gaia_aurora_supabase_post('aurora_power', $rowS, ['on_conflict' => 'ts_utc,hemisphere'], 'ext');
         if ($err) { error_log('[gaia_aurora] supabase ext.aurora_power south error: ' . $err); }
