@@ -22,10 +22,25 @@ jobs:
       - name: Trigger both collectors (nowcast + viewline)
         run: |
           set -euo pipefail
-          curl -fsSL -X POST "$AURORA_BASE/wp-json/gaia/v1/aurora/cron-run" \
-            -H "Accept: application/json" \
-            -o out/cron_run.json
-          jq . out/cron_run.json || true
+          mkdir -p out
+          try_post() {
+            local url="$1"; local name="$2"
+            echo "POST $url"
+            local code
+            code=$(curl -sS -o "out/${name}.json" -w "%{http_code}" -X POST "$url" -H "Accept: application/json" || true)
+            echo "$name HTTP: $code"
+            echo -n "$code" > "out/${name}.code"
+            echo "--- $name preview ---"; head -c 200 "out/${name}.json" || true; echo
+          }
+          # Try known endpoints; do not fail if missing
+          try_post "$AURORA_BASE/wp-json/gaia/v1/aurora/cron-run"    "cron_run"
+          if [ "$(cat out/cron_run.code 2>/dev/null || echo 000)" != "200" ]; then
+            try_post "$AURORA_BASE/wp-json/gaia/v1/aurora/cron_run"  "cron_run_alt"
+          fi
+          if [ "$(cat out/cron_run.code 2>/dev/null || echo 000)" != "200" ] && \
+             [ "$(cat out/cron_run_alt.code 2>/dev/null || echo 000)" != "200" ]; then
+            echo "[warn] cron endpoint not found (non-fatal). Proceeding…"
+          fi
 
       - name: Pull diagnostics
         run: |
@@ -38,24 +53,39 @@ jobs:
       - name: Pull nowcast (north & south)
         run: |
           set -euo pipefail
-          curl -fsSL "$AURORA_BASE/wp-json/gaia/v1/aurora/nowcast?hemi=north" \
-            -H "Accept: application/json" \
-            -o out/nowcast_north.json || true
-          curl -fsSL "$AURORA_BASE/wp-json/gaia/v1/aurora/nowcast?hemi=south" \
-            -H "Accept: application/json" \
-            -o out/nowcast_south.json || true
-          jq . out/nowcast_north.json || true
-          jq . out/nowcast_south.json || true
+          mkdir -p out
+          echo "Fetching north nowcast..."
+          CODE_N=$(curl -sS -o out/nowcast_north.json -w "%{http_code}" \
+            "$AURORA_BASE/wp-json/gaia/v1/aurora/nowcast?hemi=north" \
+            -H "Accept: application/json")
+          echo "north HTTP: $CODE_N"
+          echo "Fetching south nowcast..."
+          CODE_S=$(curl -sS -o out/nowcast_south.json -w "%{http_code}" \
+            "$AURORA_BASE/wp-json/gaia/v1/aurora/nowcast?hemi=south" \
+            -H "Accept: application/json")
+          echo "south HTTP: $CODE_S"
+          echo -n "$CODE_N" > out/http_north.txt
+          echo -n "$CODE_S" > out/http_south.txt
+          echo "--- north preview ---"; head -c 200 out/nowcast_north.json || true; echo
+          echo "--- south preview ---"; head -c 200 out/nowcast_south.json || true; echo
 
       - name: Basic assertions (fail if no TS)
         run: |
-          set -e
-          if ! jq -e '.ts' out/nowcast_north.json > /dev/null; then
-            echo "north nowcast missing .ts — backend likely not writing cache"; exit 1;
-          fi
-          if ! jq -e '.ts' out/nowcast_south.json > /dev/null; then
-            echo "south nowcast missing .ts — backend likely not writing cache"; exit 1;
-          fi
+          set -euo pipefail
+          N_CODE=$(cat out/http_north.txt 2>/dev/null || echo 000)
+          S_CODE=$(cat out/http_south.txt 2>/dev/null || echo 000)
+          if [ "$N_CODE" != "200" ]; then
+            echo "[fail] north nowcast HTTP=$N_CODE"; exit 1; fi
+          if [ "$S_CODE" != "200" ]; then
+            echo "[fail] south nowcast HTTP=$S_CODE"; exit 1; fi
+          if ! jq . out/nowcast_north.json >/dev/null 2>&1; then
+            echo "[fail] north nowcast is not valid JSON"; exit 1; fi
+          if ! jq . out/nowcast_south.json >/dev/null 2>&1; then
+            echo "[fail] south nowcast is not valid JSON"; exit 1; fi
+          if ! jq -e 'has("ts") and (.ts != null) and ((.ts|type=="string") or (.ts|type=="number"))' out/nowcast_north.json >/dev/null; then
+            echo "north nowcast missing .ts — backend likely not writing cache"; exit 1; fi
+          if ! jq -e 'has("ts") and (.ts != null) and ((.ts|type=="string") or (.ts|type=="number"))' out/nowcast_south.json >/dev/null; then
+            echo "south nowcast missing .ts — backend likely not writing cache"; exit 1; fi
 
       - name: (Optional) Verify Supabase rows landed
         if: env.SUPABASE_REST_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != ''
