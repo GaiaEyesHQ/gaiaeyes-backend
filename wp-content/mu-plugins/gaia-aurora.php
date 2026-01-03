@@ -538,7 +538,7 @@ try {
     $hp_fetch = gaia_aurora_http_get(GAIA_AURORA_NOWCAST_URL, ['timeout' => 6]); // no etag arg
     if ($hp_fetch['status'] === 200 && is_array($hp_fetch['body'])) {
         $hp = gaia_aurora_extract_hemisphere_power($hp_fetch['body']);
-        if (is_array($hp) && ($hp['north'] !== null || $hp['south'] !== null)) {
+        if (is_array($hp)) {
             // Use the cached payload timestamp if available
             $ts_iso = $latest_payloads['north']['ts'] ?? $latest_payloads['south']['ts'] ?? gmdate('c');
             gaia_aurora_persist_ext_aurora_power($ts_iso, $hp);
@@ -603,7 +603,7 @@ try {
 
     // Persist Hemisphere Power to ext.aurora_power when available
     $hp = gaia_aurora_extract_hemisphere_power($grid_resp['body']);
-    if (is_array($hp) && ($hp['north'] !== null || $hp['south'] !== null)) {
+    if (is_array($hp)) {
         gaia_aurora_persist_ext_aurora_power($ts, $hp);
     }
 
@@ -1478,7 +1478,7 @@ function gaia_aurora_rest_nowcast($request)
         $hp_fetch = gaia_aurora_http_get(GAIA_AURORA_NOWCAST_URL, ['timeout' => 6]);
         if ((int)($hp_fetch['status'] ?? 0) === 200 && is_array($hp_fetch['body'])) {
             $hp = gaia_aurora_extract_hemisphere_power($hp_fetch['body']);
-            if (is_array($hp) && ($hp['north'] !== null || $hp['south'] !== null)) {
+            if (is_array($hp)) {
                 $ts_iso = $payload['ts'] ?? gmdate('c');
                 gaia_aurora_persist_ext_aurora_power($ts_iso, $hp);
             }
