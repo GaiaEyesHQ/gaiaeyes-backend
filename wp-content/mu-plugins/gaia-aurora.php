@@ -395,7 +395,7 @@ function gaia_aurora_persist_ext_aurora_power($ts_iso, $hp)
             'hemisphere'           => 'north',
             'hemispheric_power_gw' => $hp['north'],
             'wing_kp'              => isset($hp['wing_kp']) ? $hp['wing_kp'] : null,
-            'raw'                  => wp_json_encode(['src' => 'wp:aurora_nowcast', 'at' => $ts]),
+            'raw'                  => ['src' => 'wp:aurora_nowcast', 'at' => $ts],
         ];
         $err = gaia_aurora_supabase_post('aurora_power', $rowN, ['on_conflict' => 'ts_utc,hemisphere'], 'ext');
         if ($err) { error_log('[gaia_aurora] supabase ext.aurora_power north error: ' . $err); }
@@ -407,7 +407,7 @@ function gaia_aurora_persist_ext_aurora_power($ts_iso, $hp)
             'hemisphere'           => 'south',
             'hemispheric_power_gw' => $hp['south'],
             'wing_kp'              => isset($hp['wing_kp']) ? $hp['wing_kp'] : null,
-            'raw'                  => wp_json_encode(['src' => 'wp:aurora_nowcast', 'at' => $ts]),
+            'raw'                  => ['src' => 'wp:aurora_nowcast', 'at' => $ts],
         ];
         $err = gaia_aurora_supabase_post('aurora_power', $rowS, ['on_conflict' => 'ts_utc,hemisphere'], 'ext');
         if ($err) { error_log('[gaia_aurora] supabase ext.aurora_power south error: ' . $err); }
