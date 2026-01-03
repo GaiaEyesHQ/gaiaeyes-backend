@@ -164,3 +164,7 @@ jobs:
         with:
           name: aurora-debug-${{ github.run_id }}
           path: out/
+      - name: Persist hemisphere power (on demand)
+        run: |
+          curl -sS -X POST "$AURORA_BASE/wp-json/gaia/v1/aurora/persist-hp" \
+            -H "Accept: application/json" | jq .
