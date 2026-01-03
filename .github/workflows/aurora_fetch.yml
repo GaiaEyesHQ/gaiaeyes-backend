@@ -98,6 +98,26 @@ jobs:
           if ! jq -e '(.ts // (.data.ts // .payload.ts // .result.ts)) | select(. != null) | (type=="string" or type=="number")' out/nowcast_south.json >/dev/null; then
             echo "south nowcast missing .ts — backend likely not writing cache"; exit 1; fi
 
+      - name: (Optional) Verify viewline static images (tonight/tomorrow)
+        run: |
+          set -euo pipefail
+          # Derive the public Storage CDN base from the REST URL
+          if [ -n "${SUPABASE_REST_URL:-}" ]; then
+            SUPA_BASE="${SUPABASE_REST_URL%/rest/v1}"
+            CDN="$SUPA_BASE/storage/v1/object/public/space-visuals"
+            for name in tonight tomorrow; do
+              URL="$CDN/aurora/viewline/${name}.png"
+              CODE=$(curl -sS -o /dev/null -w "%{http_code}" -I "$URL" || true)
+              echo "${name}.png HTTP: $CODE — $URL"
+              # Non-fatal: warn if missing, but continue the job
+              if [ "$CODE" != "200" ]; then
+                echo "[warn] ${name}.png not found at $URL (image may not have been generated this cycle)."
+              fi
+            done
+          else
+            echo "[info] SUPABASE_REST_URL not set; skipping viewline static image checks."
+          fi
+
       - name: (Optional) Verify Supabase rows landed
         if: env.SUPABASE_REST_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != ''
         run: |
