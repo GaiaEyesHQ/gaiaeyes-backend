@@ -1473,6 +1473,20 @@ function gaia_aurora_rest_nowcast($request)
             'error' => 'no_data',
         ], 503);
     }
+    // Best-effort: persist Hemisphere Power to ext.aurora_power when serving nowcast
+    try {
+        // Fetch OVATION JSON fresh (bypass ETag in this lightweight call)
+        $hp_fetch = gaia_aurora_http_get(GAIA_AURORA_NOWCAST_URL, ['timeout' => 6]);
+        if ((int)($hp_fetch['status'] ?? 0) === 200 && is_array($hp_fetch['body'])) {
+            $hp = gaia_aurora_extract_hemisphere_power($hp_fetch['body']);
+            if (is_array($hp) && ($hp['north'] !== null || $hp['south'] !== null)) {
+                $ts_iso = $payload['ts'] ?? gmdate('c');
+                gaia_aurora_persist_ext_aurora_power($ts_iso, $hp);
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('[gaia_aurora] persist_hp on nowcast GET failed: ' . $e->getMessage());
+    }
     return rest_ensure_response($payload);
 }
 
