@@ -33,6 +33,12 @@ def map_dest(path: Path) -> str | None:
     if name.startswith("ovation_sh") and name.endswith((".jpg", ".png")):
         return "aurora/viewline/tonight-south.png"
 
+    # Aurora viewline (static future‑cast): tonight / tomorrow (single global)
+    if name.startswith(("viewline_tonight", "aurora_viewline_tonight")) and name.endswith((".jpg", ".png")):
+        return "aurora/viewline/tonight.png"
+    if name.startswith(("viewline_tomorrow", "aurora_viewline_tomorrow")) and name.endswith((".jpg", ".png")):
+        return "aurora/viewline/tomorrow.png"
+
     # NASA LASCO/AIA/HMI/CCOR
     if name.startswith(("lasco_c2", "soho_c2")) and name.endswith(".jpg"):
         return "nasa/lasco_c2/latest.jpg"

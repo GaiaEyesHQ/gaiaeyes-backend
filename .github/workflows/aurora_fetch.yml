@@ -118,6 +118,60 @@ jobs:
             echo "[info] SUPABASE_REST_URL not set; skipping viewline static image checks."
           fi
 
+      - name: Noisy verification (nowcast summary + viewline headers)
+        if: ${{ success() }}
+        run: |
+          set -euo pipefail
+          echo "=== Nowcast quick summary ==="
+          for hemi in north south; do
+            f="out/nowcast_${hemi}.json"
+            if [ -s "$f" ]; then
+              echo "--- $hemi ---"
+              jq -r '
+                def ts: (.ts // .data.ts // .payload.ts // .result.ts // "");
+                def kp: (.kp // .data.kp // .payload.kp // .result.kp // "");
+                def w: (.grid.w // "");
+                def h: (.grid.h // "");
+                def src: (.grid.src // "");
+                "ts=\(ts) kp=\(kp) grid=\(w)x\(h) src=\(src)"
+              ' "$f" || true
+            else
+              echo "[warn] missing file $f"
+            fi
+          done
+
+          echo "=== Viewline headers (tonight/tomorrow) ==="
+          if [ -n "${SUPABASE_REST_URL:-}" ]; then
+            SUPA_BASE="${SUPABASE_REST_URL%/rest/v1}"
+            CDN="$SUPA_BASE/storage/v1/object/public/space-visuals"
+            for name in tonight tomorrow; do
+              URL="$CDN/aurora/viewline/${name}.png"
+              echo "-- $name.png"
+              HDRS=$(curl -sSI "$URL" || true)
+              echo "$HDRS" | sed "s/\r$//"
+              CODE=$(echo "$HDRS" | awk 'NR==1 {print $2}')
+              LM=$(echo "$HDRS" | awk -F': ' '/^Last-Modified:/ {print $2}' | tail -n1)
+              CL=$(echo "$HDRS" | awk -F': ' '/^Content-Length:/ {print $2}' | tail -n1)
+              if [ -n "${LM:-}" ]; then
+                LM_EPOCH=$(date -d "$LM" +%s || echo 0)
+                NOW_EPOCH=$(date -u +%s)
+                AGE=$(( NOW_EPOCH - LM_EPOCH ))
+                echo "$name.png age: ${AGE}s (Last-Modified: $LM)"
+                if [ "$CODE" = "200" ] && [ $AGE -gt 14400 ]; then
+                  echo "[warn] $name.png seems stale (>4h old)."
+                fi
+              fi
+              if [ "$CODE" != "200" ]; then
+                echo "[warn] HEAD $CODE for $URL"
+              fi
+              if [ -n "${CL:-}" ]; then
+                echo "$name.png bytes: $CL"
+              fi
+            done
+          else
+            echo "[info] SUPABASE_REST_URL not set; skipping header checks."
+          fi
+
       - name: (Optional) Verify Supabase rows landed
         if: env.SUPABASE_REST_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != ''
         run: |

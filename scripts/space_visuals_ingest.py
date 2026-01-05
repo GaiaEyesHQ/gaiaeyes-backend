@@ -53,6 +53,16 @@ IMAGE_SPECS: Dict[str, Dict[str, Any]] = {
         "credit": "NOAA/SWPC",
         "feature_flags": {"aurora_probability": True},
     },
+    "viewline_tonight": {
+        "instrument": "SWPC OVATION Prime",
+        "credit": "NOAA/SWPC",
+        "feature_flags": {"aurora_probability": True}
+    },
+    "viewline_tomorrow": {
+        "instrument": "SWPC OVATION Prime",
+        "credit": "NOAA/SWPC",
+        "feature_flags": {"aurora_probability": True}
+    },
     "soho_c2": {"instrument": "SOHO LASCO C2", "credit": "ESA & NASA"},
     "lasco_c3": {"instrument": "SOHO LASCO C3", "credit": "ESA & NASA"},
     "ccor1_jpeg": {"instrument": "GOES-16 CCOR", "credit": "NOAA/NASA"},
@@ -130,6 +140,10 @@ def _map_supabase_dest(key: str, filename: str) -> str:
         return "aurora/viewline/tonight-north.png"
     if k == "ovation_sh":
         return "aurora/viewline/tonight-south.png"
+    if k == "viewline_tonight":
+        return "aurora/viewline/tonight.png"
+    if k == "viewline_tomorrow":
+        return "aurora/viewline/tomorrow.png"
     # NASA LASCO/AIA/HMI/CCOR
     if k in ("soho_c2",):
         return "nasa/lasco_c2/latest.jpg"
@@ -508,6 +522,8 @@ def main():
     # 2) Aurora (Ovation) maps (NH/SH)
     ov_nh = "https://services.swpc.noaa.gov/images/aurora-forecast-northern-hemisphere.jpg"
     ov_sh = "https://services.swpc.noaa.gov/images/aurora-forecast-southern-hemisphere.jpg"
+    viewline_tonight = "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png"
+    viewline_tomorrow = "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png"
     # NOAA deprecated the older forecast URL; use the latest JSON endpoint that stays updated.
     aurora_forecast = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 
@@ -548,6 +564,8 @@ def main():
         "aia_304": (f"aia_304_{stamp}.png", [aia_304_url] if aia_304_url else []),
         "ovation_nh": (f"ovation_nh_{stamp}.jpg", ov_nh),
         "ovation_sh": (f"ovation_sh_{stamp}.jpg", ov_sh),
+        "viewline_tonight": (f"viewline_tonight_{stamp}.png", viewline_tonight),
+        "viewline_tomorrow": (f"viewline_tomorrow_{stamp}.png", viewline_tomorrow),
         "soho_c2": (f"soho_c2_{stamp}.jpg", soho_c2),
         "lasco_c3": (f"lasco_c3_{stamp}.jpg", lasco_c3),
         "ccor1_jpeg": (f"ccor1_{stamp}.jpg", [ccor1_jpeg_url] if ccor1_jpeg_url else []),
