@@ -50,6 +50,7 @@ jobs:
           BUCKET: space-visuals
           AURORA_TONIGHT_URL: ${{ secrets.AURORA_TONIGHT_URL || vars.AURORA_TONIGHT_URL || '' }}
           AURORA_TOMORROW_URL: ${{ secrets.AURORA_TOMORROW_URL || vars.AURORA_TOMORROW_URL || '' }}
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           python3 - <<'PY'
           import datetime as dt
