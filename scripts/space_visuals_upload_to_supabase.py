@@ -24,8 +24,12 @@ def map_dest(path: Path) -> str | None:
         return "nasa/enlil/latest.jpg"
 
     # DRAP aliases → single latest
-    if name.startswith("drap_") and name.endswith(".png"):
-        return "drap/latest.png"
+    if name.startswith("drap_global") and name.endswith(".png"):
+        return "drap/global.png"
+    if name.startswith("drap_n_pole") and name.endswith(".png"):
+        return "drap/north-pole.png"
+    if name.startswith("drap_s_pole") and name.endswith(".png"):
+        return "drap/south-pole.png"
 
     # Aurora (NH/SH) viewlines
     if name.startswith("ovation_nh") and name.endswith((".jpg", ".png")):

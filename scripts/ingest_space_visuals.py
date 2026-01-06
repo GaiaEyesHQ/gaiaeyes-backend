@@ -80,7 +80,7 @@ def upsert_visual_row(
 
 # DRAP (mirror)
 def ingest_drap_now(captured_at: dt.datetime):
-    src = "https://services.swpc.noaa.gov/images/d-rap/global_d-rap_latest.png"
+    src = "https://services.swpc.noaa.gov/images/d-rap/global.png"
     logger.info("[ingest] DRAP (now) src=%s", src)
     try:
         r = requests.get(src, timeout=60)

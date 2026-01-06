@@ -132,9 +132,13 @@ SERIES_SPECS: Dict[str, Dict[str, Any]] = {
 # Map a logical key/filename to a standardized Supabase Storage relative path
 def _map_supabase_dest(key: str, filename: str) -> str:
     k = (key or "").lower()
-    # DRAP -> single latest
-    if k.startswith("drap_"):
-        return "drap/latest.png"
+    # DRAP variants → distinct files
+    if k in ("drap_global", "drap", "swpc_drap_global"):
+        return "drap/global.png"
+    if k in ("drap_n_pole", "drap_north_pole", "drap_npole"):
+        return "drap/north-pole.png"
+    if k in ("drap_s_pole", "drap_south_pole", "drap_spole"):
+        return "drap/south-pole.png"
     # Aurora viewlines
     if k == "ovation_nh":
         return "aurora/viewline/tonight-north.png"
