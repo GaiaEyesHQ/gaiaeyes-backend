@@ -550,9 +550,9 @@ def main():
     geospace_7d = "https://services.swpc.noaa.gov/images/geospace/geospace_7_day.png"
     kp_station  = "https://services.swpc.noaa.gov/images/station-k-index.png"
     a_station   = "https://services.swpc.noaa.gov/images/station-a-index.png"
-    drap_global = "https://services.swpc.noaa.gov/images/drap_global.png"
-    drap_npole  = "https://services.swpc.noaa.gov/images/drap_n-pole.png"
-    drap_spole  = "https://services.swpc.noaa.gov/images/drap_s-pole.png"
+    drap_global = "https://services.swpc.noaa.gov/images/drap/drap_global.png"
+    drap_npole  = "https://services.swpc.noaa.gov/images/drap/drap_n-pole.png"
+    drap_spole  = "https://services.swpc.noaa.gov/images/drap/drap_s-pole.png"
     synoptic_map = "https://services.swpc.noaa.gov/images/synoptic-map.jpg"
     swx_small    = "https://services.swpc.noaa.gov/images/swx-overview-small.gif"
 
