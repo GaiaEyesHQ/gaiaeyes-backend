@@ -1,0 +1,28 @@
+name: guard-media-links
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Block unintended gennwu replacements
+        run: |
+          set -eo pipefail
+          matches=$(grep -RIn "gennwu" . \
+            --exclude-dir=.git \
+            --exclude='guard-media-links.yml' || true)
+          if [ -z "$matches" ]; then
+            exit 0
+          fi
+          disallowed=$(echo "$matches" | grep -vE 'gennwu\.github\.io/gaiaeyes-media|cdn\.jsdelivr\.net/gh/gennwu/gaiaeyes-media' || true)
+          if [ -n "$disallowed" ]; then
+            echo "Found forbidden media references:"
+            echo "$disallowed"
+            exit 1
+          fi
+          exit 0

@@ -1,0 +1,689 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0CDCBB9A2E6D036200B3EDB0 /* PolarBleSdk in Frameworks */ = {isa = PBXBuildFile; productRef = 0CDCBB992E6D036200B3EDB0 /* PolarBleSdk */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0CA35D622E5B8F980099297E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0CA35D4B2E5B8F960099297E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0CA35D522E5B8F960099297E;
+			remoteInfo = GaiaExporter;
+		};
+		0CA35D6C2E5B8F980099297E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0CA35D4B2E5B8F960099297E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0CA35D522E5B8F960099297E;
+			remoteInfo = GaiaExporter;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0CA35D532E5B8F960099297E /* GaiaExporter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GaiaExporter.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0CA35D612E5B8F980099297E /* GaiaExporterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GaiaExporterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		0CA35D6B2E5B8F980099297E /* GaiaExporterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GaiaExporterUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1A6D63BE2F74E34700D2A278 /* ios/GaiaExporter/Views/VisualsInteractiveViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ios/GaiaExporter/Views/VisualsInteractiveViewer.swift; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0C995E832E5BA57B007CA01D /* Exceptions for "GaiaExporter" folder in "GaiaExporter" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				Services/Polar/Untitled.swift,
+			);
+			target = 0CA35D522E5B8F960099297E /* GaiaExporter */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		0CA35D552E5B8F960099297E /* GaiaExporter */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0C995E832E5BA57B007CA01D /* Exceptions for "GaiaExporter" folder in "GaiaExporter" target */,
+			);
+			path = GaiaExporter;
+			sourceTree = "<group>";
+		};
+		0CA35D642E5B8F980099297E /* GaiaExporterTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = GaiaExporterTests;
+			sourceTree = "<group>";
+		};
+		0CA35D6E2E5B8F980099297E /* GaiaExporterUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = GaiaExporterUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0CA35D502E5B8F960099297E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0CDCBB9A2E6D036200B3EDB0 /* PolarBleSdk in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0CA35D5E2E5B8F980099297E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0CA35D682E5B8F980099297E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0C68A9622ED17534007425C8 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				1A6D63BE2F74E34700D2A278 /* ios/GaiaExporter/Views/VisualsInteractiveViewer.swift */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
+		0CA35D4A2E5B8F960099297E = {
+			isa = PBXGroup;
+			children = (
+				0CA35D552E5B8F960099297E /* GaiaExporter */,
+				0CA35D642E5B8F980099297E /* GaiaExporterTests */,
+				0CA35D6E2E5B8F980099297E /* GaiaExporterUITests */,
+				0CDCBB982E6D036200B3EDB0 /* Frameworks */,
+				0CA35D542E5B8F960099297E /* Products */,
+				0C68A9622ED17534007425C8 /* Recovered References */,
+			);
+			sourceTree = "<group>";
+		};
+		0CA35D542E5B8F960099297E /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0CA35D532E5B8F960099297E /* GaiaExporter.app */,
+				0CA35D612E5B8F980099297E /* GaiaExporterTests.xctest */,
+				0CA35D6B2E5B8F980099297E /* GaiaExporterUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		0CDCBB982E6D036200B3EDB0 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0CA35D522E5B8F960099297E /* GaiaExporter */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0CA35D752E5B8F980099297E /* Build configuration list for PBXNativeTarget "GaiaExporter" */;
+			buildPhases = (
+				0CA35D4F2E5B8F960099297E /* Sources */,
+				0CA35D502E5B8F960099297E /* Frameworks */,
+				0CA35D512E5B8F960099297E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0CA35D552E5B8F960099297E /* GaiaExporter */,
+			);
+			name = GaiaExporter;
+			packageProductDependencies = (
+				0CDCBB992E6D036200B3EDB0 /* PolarBleSdk */,
+			);
+			productName = GaiaExporter;
+			productReference = 0CA35D532E5B8F960099297E /* GaiaExporter.app */;
+			productType = "com.apple.product-type.application";
+		};
+		0CA35D602E5B8F980099297E /* GaiaExporterTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0CA35D782E5B8F980099297E /* Build configuration list for PBXNativeTarget "GaiaExporterTests" */;
+			buildPhases = (
+				0CA35D5D2E5B8F980099297E /* Sources */,
+				0CA35D5E2E5B8F980099297E /* Frameworks */,
+				0CA35D5F2E5B8F980099297E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0CA35D632E5B8F980099297E /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				0CA35D642E5B8F980099297E /* GaiaExporterTests */,
+			);
+			name = GaiaExporterTests;
+			packageProductDependencies = (
+			);
+			productName = GaiaExporterTests;
+			productReference = 0CA35D612E5B8F980099297E /* GaiaExporterTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		0CA35D6A2E5B8F980099297E /* GaiaExporterUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0CA35D7B2E5B8F980099297E /* Build configuration list for PBXNativeTarget "GaiaExporterUITests" */;
+			buildPhases = (
+				0CA35D672E5B8F980099297E /* Sources */,
+				0CA35D682E5B8F980099297E /* Frameworks */,
+				0CA35D692E5B8F980099297E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0CA35D6D2E5B8F980099297E /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				0CA35D6E2E5B8F980099297E /* GaiaExporterUITests */,
+			);
+			name = GaiaExporterUITests;
+			packageProductDependencies = (
+			);
+			productName = GaiaExporterUITests;
+			productReference = 0CA35D6B2E5B8F980099297E /* GaiaExporterUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		0CA35D4B2E5B8F960099297E /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 2610;
+				TargetAttributes = {
+					0CA35D522E5B8F960099297E = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					0CA35D602E5B8F980099297E = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 0CA35D522E5B8F960099297E;
+					};
+					0CA35D6A2E5B8F980099297E = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 0CA35D522E5B8F960099297E;
+					};
+				};
+			};
+			buildConfigurationList = 0CA35D4E2E5B8F960099297E /* Build configuration list for PBXProject "GaiaExporter" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 0CA35D4A2E5B8F960099297E;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				0CDCBB902E6CF16D00B3EDB0 /* XCRemoteSwiftPackageReference "polar-ble-sdk" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 0CA35D542E5B8F960099297E /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0CA35D522E5B8F960099297E /* GaiaExporter */,
+				0CA35D602E5B8F980099297E /* GaiaExporterTests */,
+				0CA35D6A2E5B8F980099297E /* GaiaExporterUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0CA35D512E5B8F960099297E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0CA35D5F2E5B8F980099297E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0CA35D692E5B8F980099297E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0CA35D4F2E5B8F960099297E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0CA35D5D2E5B8F980099297E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0CA35D672E5B8F980099297E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0CA35D632E5B8F980099297E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0CA35D522E5B8F960099297E /* GaiaExporter */;
+			targetProxy = 0CA35D622E5B8F980099297E /* PBXContainerItemProxy */;
+		};
+		0CA35D6D2E5B8F980099297E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0CA35D522E5B8F960099297E /* GaiaExporter */;
+			targetProxy = 0CA35D6C2E5B8F980099297E /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0CA35D732E5B8F980099297E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 6NS4AQC76Y;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		0CA35D742E5B8F980099297E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 6NS4AQC76Y;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		0CA35D762E5B8F980099297E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = GaiaExporter/GaiaExporter.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 6NS4AQC76Y;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GaiaExporter/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "GaiaExporter uses Bluetooth to connect to heart rate and EEG sensors (e.g., Polar H10) even in the background.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "GaiaExporter uses Bluetooth to connect to heart rate and EEG sensors.";
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "GaiaExporter reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "GaiaExporter reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GaiaExporter writes health summaries you request to the Health app.";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporter;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 2.5;
+			};
+			name = Debug;
+		};
+		0CA35D772E5B8F980099297E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = GaiaExporter/GaiaExporter.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 6NS4AQC76Y;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GaiaExporter/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "GaiaExporter uses Bluetooth to connect to heart rate and EEG sensors (e.g., Polar H10) even in the background.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "GaiaExporter uses Bluetooth to connect to heart rate and EEG sensors.";
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "GaiaExporter reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "GaiaExporter reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GaiaExporter writes health summaries you request to the Health app.";
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
+				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
+				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporter;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 2.5;
+			};
+			name = Release;
+		};
+		0CA35D792E5B8F980099297E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 6NS4AQC76Y;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporterTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GaiaExporter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GaiaExporter";
+				XROS_DEPLOYMENT_TARGET = 2.5;
+			};
+			name = Debug;
+		};
+		0CA35D7A2E5B8F980099297E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 6NS4AQC76Y;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporterTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GaiaExporter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GaiaExporter";
+				XROS_DEPLOYMENT_TARGET = 2.5;
+			};
+			name = Release;
+		};
+		0CA35D7C2E5B8F980099297E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 6NS4AQC76Y;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporterUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_TARGET_NAME = GaiaExporter;
+				XROS_DEPLOYMENT_TARGET = 2.5;
+			};
+			name = Debug;
+		};
+		0CA35D7D2E5B8F980099297E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = 6NS4AQC76Y;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporterUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_TARGET_NAME = GaiaExporter;
+				XROS_DEPLOYMENT_TARGET = 2.5;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0CA35D4E2E5B8F960099297E /* Build configuration list for PBXProject "GaiaExporter" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0CA35D732E5B8F980099297E /* Debug */,
+				0CA35D742E5B8F980099297E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0CA35D752E5B8F980099297E /* Build configuration list for PBXNativeTarget "GaiaExporter" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0CA35D762E5B8F980099297E /* Debug */,
+				0CA35D772E5B8F980099297E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0CA35D782E5B8F980099297E /* Build configuration list for PBXNativeTarget "GaiaExporterTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0CA35D792E5B8F980099297E /* Debug */,
+				0CA35D7A2E5B8F980099297E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0CA35D7B2E5B8F980099297E /* Build configuration list for PBXNativeTarget "GaiaExporterUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0CA35D7C2E5B8F980099297E /* Debug */,
+				0CA35D7D2E5B8F980099297E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		0CDCBB902E6CF16D00B3EDB0 /* XCRemoteSwiftPackageReference "polar-ble-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/polarofficial/polar-ble-sdk";
+			requirement = {
+				kind = versionRange;
+				maximumVersion = 7.0.0;
+				minimumVersion = 6.5.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0CDCBB992E6D036200B3EDB0 /* PolarBleSdk */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0CDCBB902E6CF16D00B3EDB0 /* XCRemoteSwiftPackageReference "polar-ble-sdk" */;
+			productName = PolarBleSdk;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 0CA35D4B2E5B8F960099297E /* Project object */;
+}

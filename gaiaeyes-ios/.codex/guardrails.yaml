@@ -1,0 +1,13 @@
+commands:
+  allowed:
+    - "xcodebuild -version"
+    - "xcodebuild -scheme GaiaExporter -project ios/GaiaExporter.xcodeproj -configuration Debug build"
+    - "xcodebuild -scheme GaiaExporterTests -project ios/GaiaExporter.xcodeproj -destination 'platform=iOS Simulator,name=iPhone 15' test"
+  blocked:
+    - "security find-identity -p codesigning -v"
+touch_scope:
+  include: ["ios/**", ".github/**"]
+tests_required: true
+open_pr: true
+deploy:
+  allow: false

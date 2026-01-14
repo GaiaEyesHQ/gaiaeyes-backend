@@ -1,0 +1,63 @@
+name: iOS (SPM) CI
+
+on:
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ios-ci.yml']
+  push:
+    branches: [main]
+    paths: ['ios/**', '.github/workflows/ios-ci.yml']
+
+jobs:
+  build-and-test:
+    runs-on: macos-15           # ensure the newer image
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ContentView smoke checks
+        run: scripts/check_contentview.sh
+
+      # 🔑 Pick Xcode 16 (or latest stable)
+      - name: Select Xcode 16
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable   # or '16.*' if you want to pin
+
+      - name: Show selected Xcode
+        run: |
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Resolve Swift packages
+        working-directory: ios
+        run: xcodebuild -resolvePackageDependencies -project GaiaExporter.xcodeproj
+
+      - name: Build (Debug)
+        working-directory: ios
+        run: |
+          xcodebuild \
+            -project "GaiaExporter.xcodeproj" \
+            -scheme "GaiaExporter" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            clean build | xcpretty || true
+
+      - name: Test (if scheme exists)
+        working-directory: ios
+        run: |
+          set -e
+          if xcodebuild -list -project GaiaExporter.xcodeproj | grep -q "GaiaExporterTests"; then
+            # Pick a simulator that exists on the selected Xcode
+            xcrun simctl list devices | head -n 30
+            xcodebuild \
+              -project "GaiaExporter.xcodeproj" \
+              -scheme "GaiaExporterTests" \
+              -destination 'platform=iOS Simulator,OS=latest,name=iPhone 15' \
+              test | xcpretty || \
+            xcodebuild \
+              -project "GaiaExporter.xcodeproj" \
+              -scheme "GaiaExporterTests" \
+              -destination 'platform=iOS Simulator' \
+              test | xcpretty
+          else
+            echo "No test scheme found; skipping."
+          fi
