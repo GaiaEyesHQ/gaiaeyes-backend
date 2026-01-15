@@ -1,34 +1,53 @@
-# Gaia Eyes Backend (FastAPI)
+# Gaia Eyes — Backend, iOS, and WordPress
 
-## Quickstart
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env  # then edit values
-uvicorn app.main:app --reload
+Gaia Eyes is a multi-surface system that combines a FastAPI backend, a Swift iOS app, and a WordPress front-end for space weather + health context. The backend is the canonical API surface for apps and sites, with Supabase as the source of truth for data storage, authentication, and media. The iOS app uploads HealthKit and BLE samples and reads summary endpoints; the WordPress site renders public dashboards with backend APIs where available and JSON fallbacks for legacy datasets.
 
-## Symptoms pipeline
+```mermaid
+flowchart LR
+  subgraph Clients
+    IOS[iOS App]
+    WP[WordPress wp-content]
+    Bots[Data ingest scripts/bots]
+  end
 
-The `/v1/symptoms` FastAPI routes expose the complete symptom logging workflow.
-Clients can POST new events, fetch the current day's entries, and retrieve
-aggregated daily counts. A nightly Render cron (or equivalent scheduler) should
-invoke `scripts/refresh_symptom_marts.py` to refresh the Supabase marts backing
-the analytics endpoints.
+  subgraph Backend
+    API[FastAPI /app]
+    DB[(Supabase Postgres)]
+    Storage[(Supabase Storage)]
+  end
 
-## Tooling
+  IOS -->|HTTP (Bearer / Dev User)| API
+  WP -->|HTTP (Bearer / Dev User)| API
+  Bots -->|DB writes / Storage uploads| DB
+  Bots -->|Storage uploads| Storage
+  API --> DB
+  API --> Storage
 
-- [GitHub Actions audit playbook](./docs/github-actions-audit.md)
-- [Web site overview & maintenance guide](./docs/web/SITE_OVERVIEW.md)
-- [Supabase Migration Guide](./supabase/README.md)
+  WP -->|Legacy JSON| Media[gaiaeyes-media JSON CDN]
+  IOS -->|CDN fallback| Media
+```
 
-### GitHub Actions audit helpers
+## Repo map
+- `app/`: FastAPI application (routers, db access, auth) powering the backend API.
+- `api/`: webhook middleware + routes used by the backend when enabled.
+- `scripts/` + `bots/` + `workers/`: data ingest, batch processing, and cron-style jobs.
+- `supabase/`: local Supabase config + migrations defining schemas/tables/views.
+- `gaiaeyes-ios/`: Swift iOS app (GaiaExporter) and iOS docs.
+- `wp-content/`: WordPress theme and mu-plugins that render the site.
+- `docs/`: project documentation (architecture, deployment, component guides).
 
-- `scripts/audit_workflows.py` – Query the GitHub API for workflow health
-  across GaiaEyes repositories, gather failure summaries, and produce a
-  Markdown report with referenced secrets and variables.
-- `scripts/scan-secrets.sh` – Quickly list `${{ secrets.* }}` and `${{ vars.* }}`
-  usages within the repository to keep `REQUIRED_SECRETS.md` accurate.
+## Quickstart docs
+- Backend: see `docs/BACKEND.md`
+- iOS: see `docs/IOS_APP.md`
+- WordPress: see `docs/WORDPRESS.md`
+- Supabase: see `docs/SUPABASE.md`
+- Render: see `docs/DEPLOY_RENDER.md`
 
-Run these tools whenever workflows are updated or new repositories are
-added to GaiaEyesHQ to maintain an up-to-date inventory of required
-secrets and configuration knobs.
+## Source of truth
+Supabase (Postgres + Auth + Storage) is the universal source of truth. Backend services read/write directly to Supabase and expose the API that clients should prefer. JSON files in `gaiaeyes-media` remain in use as fallbacks for the WordPress site and iOS CDN resilience, and are being phased out in favor of Supabase-backed endpoints.
+
+## Additional docs
+- `docs/ARCHITECTURE.md` — system map + data flows
+- `docs/ENVIRONMENT_VARIABLES.md` — env var reference
+- `docs/TROUBLESHOOTING.md` — common fixes
+- `docs/OPEN_QUESTIONS.md` — unknowns to resolve
