@@ -100,6 +100,7 @@ function gaia_space_weather_detail_shortcode($atts){
     // New dedicated space endpoints for history and flares
     $sw_history = gaiaeyes_http_get_json_api_cached($api_base . '/v1/space/history?hours=24', 'ge_sw_history', $ttl, $api_bearer);
     $sw_flares  = gaiaeyes_http_get_json_api_cached($api_base . '/v1/space/flares', 'ge_sw_flares', $ttl, $api_bearer);
+    $visuals   = gaiaeyes_http_get_json_api_cached($api_base . '/v1/space/visuals', 'ge_sw_visuals', $ttl, $api_bearer);
 
     // Shape a minimal legacy-compatible $sw/$fc for rendering
     $sw = [
@@ -112,6 +113,32 @@ function gaia_space_weather_detail_shortcode($atts){
       'alerts' => [],
       'impacts' => []
     ];
+    // Radiation (GOES ≥10 MeV) from /v1/space/visuals
+    if (is_array($visuals) && !empty($visuals['series']) && is_array($visuals['series'])) {
+      foreach ($visuals['series'] as $ser) {
+        if (($ser['key'] ?? '') === 'goes_protons' && !empty($ser['samples']) && is_array($ser['samples'])) {
+          $pfu = null; $ts = null;
+          for ($i = count($ser['samples']) - 1; $i >= 0; $i--) {
+            $s = $ser['samples'][$i];
+            $energy = is_array($s) ? ($s['energy'] ?? '') : '';
+            if (is_string($energy) && strpos($energy, '10') !== false) {
+              $val = $s['value'] ?? null;
+              if (is_numeric($val)) { $pfu = (float)$val; $ts = $s['ts'] ?? null; break; }
+            }
+          }
+          if ($pfu !== null) {
+            $scale = 'S0';
+            if ($pfu >= 100000) $scale = 'S5';
+            elseif ($pfu >= 10000) $scale = 'S4';
+            elseif ($pfu >= 1000)  $scale = 'S3';
+            elseif ($pfu >= 100)   $scale = 'S2';
+            elseif ($pfu >= 10)    $scale = 'S1';
+            $sw['radiation'] = ['pfu_10mev' => $pfu, 'scale' => $scale, 'ts' => $ts];
+          }
+          break;
+        }
+      }
+    }
     if (is_array($features)) {
       // tolerant extraction helpers (support nested {value:...} or strings)
       $pickNum = function($arr, $keys){
@@ -370,6 +397,27 @@ function gaia_space_weather_detail_shortcode($atts){
         ?>
       </article>
 
+      <!-- Card: Solar Radiation (Protons) -->
+      <article class="ge-card">
+        <h3 id="radiation">Solar Radiation Storm (≥10 MeV) <a class="anchor-link" href="#radiation" aria-label="Link to Solar Radiation Storm">🔗</a></h3>
+        <?php
+          $rad = isset($sw['radiation']) ? $sw['radiation'] : [];
+          $pfu = isset($rad['pfu_10mev']) ? (float)$rad['pfu_10mev'] : null;
+          $scl = isset($rad['scale']) ? $rad['scale'] : null;
+
+          echo ge_row('S-scale', ge_val_or_dash($scl));
+          echo ge_row('Proton flux', $pfu !== null ? ge_val_or_dash($pfu, 'pfu') : '—');
+        ?>
+        <div class="pfu-gauge" <?php if($pfu===null) echo 'style="display:none"'; ?>>
+          <canvas id="ge-pfu-gauge" height="140"></canvas>
+          <div class="pfu-gauge__center">
+            <div class="pfu-scale"><?php echo esc_html($scl ?: '—'); ?></div>
+            <div class="pfu-val"><?php echo esc_html( $pfu !== null ? ( (string) ge_val_or_dash($pfu,'pfu') ) : '—' ); ?></div>
+          </div>
+        </div>
+        <p class="ge-note">S-scale based on GOES ≥10 MeV proton flux (NOAA). S1 ≥ 10 pfu, S2 ≥ 100, S3 ≥ 1,000, S4 ≥ 10,000, S5 ≥ 100,000.</p>
+      </article>
+
       <!-- Card: Flares -->
       <article class="ge-card">
         <h3 id="flares">Solar Flares <a class="anchor-link" href="#flares" aria-label="Link to Solar Flares">🔗</a></h3>
@@ -529,6 +577,11 @@ function gaia_space_weather_detail_shortcode($atts){
       .ge-cta{margin-top:8px}
       .gaia-link{color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
       .gaia-link:hover{border-bottom-color:rgba(255,255,255,.6)}
+      .pfu-gauge{position:relative;width:100%;max-width:420px;margin:10px auto 0}
+      .pfu-gauge canvas{width:100%;height:140px}
+      .pfu-gauge__center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+      .pfu-gauge__center .pfu-scale{font-weight:700;font-size:1.2rem;margin-bottom:2px}
+      .pfu-gauge__center .pfu-val{opacity:.9;font-size:.9rem}
     </style>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha256-5l5wxg6rE6sBJP6opc0bDO3sTZ5yH5rICwW7X8P9qvo=" crossorigin="anonymous"></script>
@@ -612,6 +665,36 @@ function gaia_space_weather_detail_shortcode($atts){
             if (renderSpark('ge-spark-kp', sw.series24.kp || [], { xLabel:'Sample', yLabel:'Planetary Kp', units:'index', yMin:0, yMax:9, color:'#7fc8ff' })) rendered++;
             if (renderSpark('ge-spark-sw', sw.series24.sw || [], { xLabel:'Sample', yLabel:'Solar wind speed', units:'km/s', yMin:0, color:'#ffd089' })) rendered++;
             if (renderSpark('ge-spark-bz', sw.series24.bz || [], { xLabel:'Sample', yLabel:'IMF Bz', units:'nT', zeroLine:true, color:'#a7d3ff' })) rendered++;
+          }
+          // PFU gauge (GOES ≥10 MeV)
+          function renderPfuGauge(canvasId, pfu, scale){
+            const el = document.getElementById(canvasId);
+            if (!el || typeof Chart === 'undefined') return;
+            const minLog = 0, maxLog = 5;
+            const valueLog = Math.log10(Math.max(1, pfu));
+            const progress = Math.min(1, Math.max(0, (valueLog - minLog) / (maxLog - minLog)));
+            const COLORS = { S0:'#8aa1b9', S1:'#ffd089', S2:'#ffb15e', S3:'#ff6b6b', S4:'#c062ff', S5:'#8a1032' };
+            new Chart(el, {
+              type: 'doughnut',
+              data: {
+                datasets: [{
+                  data: [progress, 1-progress],
+                  backgroundColor: [COLORS[scale] || '#ffd089', '#1b2233'],
+                  borderWidth: 0,
+                  cutout: '72%',
+                  circumference: Math.PI,
+                  rotation: Math.PI
+                }]
+              },
+              options: {
+                responsive: true,
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                animation: { duration: 500 }
+              }
+            });
+          }
+          if (sw && sw.radiation && typeof sw.radiation.pfu_10mev === 'number') {
+            renderPfuGauge('ge-pfu-gauge', sw.radiation.pfu_10mev, sw.radiation.scale || 'S0');
           }
           if (rendered && wrap) wrap.style.display = 'block';
         } catch(e){}
