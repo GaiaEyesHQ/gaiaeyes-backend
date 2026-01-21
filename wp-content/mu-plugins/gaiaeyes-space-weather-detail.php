@@ -117,15 +117,35 @@ function gaia_space_weather_detail_shortcode($atts){
     if (is_array($visuals) && !empty($visuals['series']) && is_array($visuals['series'])) {
       foreach ($visuals['series'] as $ser) {
         if (($ser['key'] ?? '') === 'goes_protons' && !empty($ser['samples']) && is_array($ser['samples'])) {
-          $pfu = null; $ts = null;
+          $pfu = null; $ts = null; $band = null;
+
+          // Prefer the ≥10 MeV band explicitly. The previous test matched "10" which
+          // accidentally picked the ≥100 MeV series when it appeared last in the list.
           for ($i = count($ser['samples']) - 1; $i >= 0; $i--) {
             $s = $ser['samples'][$i];
-            $energy = is_array($s) ? ($s['energy'] ?? '') : '';
-            if (is_string($energy) && strpos($energy, '10') !== false) {
+            $energy = is_array($s) ? strtolower((string)($s['energy'] ?? '')) : '';
+            $isTenMeV = (strpos($energy, '>=10') !== false) || preg_match('/\b10\s*mev\b/i', $energy);
+            if ($isTenMeV) {
               $val = $s['value'] ?? null;
-              if (is_numeric($val)) { $pfu = (float)$val; $ts = $s['ts'] ?? null; break; }
+              if (is_numeric($val)) { $pfu = (float)$val; $ts = $s['ts'] ?? null; $band = $s['energy'] ?? '>=10 MeV'; }
+              break;
             }
           }
+
+          // If for some reason ≥10 MeV wasn't present, fall back to the first numeric band
+          // but only if it is clearly the 10 MeV band. This keeps us from showing ≥100 MeV
+          // values as the site-wide S-scale.
+          if ($pfu === null) {
+            foreach ($ser['samples'] as $s) {
+              $energy = strtolower((string)($s['energy'] ?? ''));
+              if (strpos($energy, '>=10') !== false || preg_match('/\b10\s*mev\b/i', $energy)) {
+                $val = $s['value'] ?? null;
+                if (is_numeric($val)) { $pfu = (float)$val; $ts = $s['ts'] ?? null; $band = $s['energy'] ?? '>=10 MeV'; }
+                break;
+              }
+            }
+          }
+
           if ($pfu !== null) {
             $scale = 'S0';
             if ($pfu >= 100000) $scale = 'S5';
@@ -133,7 +153,7 @@ function gaia_space_weather_detail_shortcode($atts){
             elseif ($pfu >= 1000)  $scale = 'S3';
             elseif ($pfu >= 100)   $scale = 'S2';
             elseif ($pfu >= 10)    $scale = 'S1';
-            $sw['radiation'] = ['pfu_10mev' => $pfu, 'scale' => $scale, 'ts' => $ts];
+            $sw['radiation'] = ['pfu_10mev' => $pfu, 'scale' => $scale, 'ts' => $ts, 'band' => $band];
           }
           break;
         }
