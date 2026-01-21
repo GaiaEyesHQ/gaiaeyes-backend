@@ -119,28 +119,50 @@ function gaia_space_weather_detail_shortcode($atts){
         if (($ser['key'] ?? '') === 'goes_protons' && !empty($ser['samples']) && is_array($ser['samples'])) {
           $pfu = null; $ts = null; $band = null;
 
-          // Prefer the ≥10 MeV band explicitly. The previous test matched "10" which
-          // accidentally picked the ≥100 MeV series when it appeared last in the list.
-          for ($i = count($ser['samples']) - 1; $i >= 0; $i--) {
-            $s = $ser['samples'][$i];
-            $energy = is_array($s) ? strtolower((string)($s['energy'] ?? '')) : '';
+          // Choose the *latest by timestamp* sample for the ≥10 MeV band across all satellites.
+          // The previous logic scanned from the end of the array, which could select an older
+          // ≥10 MeV point if the samples are grouped by energy then time. Here we compute the
+          // most recent ≥10 MeV entry explicitly.
+          $latestEpoch = null; $latestSample = null;
+          foreach ($ser['samples'] as $s) {
+            if (!is_array($s)) continue;
+            $energy = strtolower((string)($s['energy'] ?? ''));
             $isTenMeV = (strpos($energy, '>=10') !== false) || preg_match('/\b10\s*mev\b/i', $energy);
-            if ($isTenMeV) {
-              $val = $s['value'] ?? null;
-              if (is_numeric($val)) { $pfu = (float)$val; $ts = $s['ts'] ?? null; $band = $s['energy'] ?? '>=10 MeV'; }
-              break;
+            if (!$isTenMeV) continue;
+
+            $tsRaw = $s['ts'] ?? $s['time'] ?? null;
+            // Accept ISO strings or epoch seconds
+            $t = null;
+            if (is_string($tsRaw)) {
+              $t = strtotime($tsRaw);
+            } elseif (is_numeric($tsRaw)) {
+              $t = (int)$tsRaw;
+            }
+            if ($t === null || $t === false) continue;
+
+            if ($latestEpoch === null || $t > $latestEpoch) {
+              $latestEpoch = $t;
+              $latestSample = $s;
             }
           }
 
-          // If for some reason ≥10 MeV wasn't present, fall back to the first numeric band
-          // but only if it is clearly the 10 MeV band. This keeps us from showing ≥100 MeV
-          // values as the site-wide S-scale.
+          if ($latestSample) {
+            $val = $latestSample['value'] ?? null;
+            if (is_numeric($val)) {
+              $pfu = (float)$val;
+              $ts  = $latestSample['ts'] ?? $latestSample['time'] ?? null;
+              $band = $latestSample['energy'] ?? '>=10 MeV';
+            }
+          }
+
+          // If for some reason ≥10 MeV wasn't present, retain the old tolerant fallback but still
+          // ensure we only ever pick a ≥10 MeV band.
           if ($pfu === null) {
             foreach ($ser['samples'] as $s) {
               $energy = strtolower((string)($s['energy'] ?? ''));
               if (strpos($energy, '>=10') !== false || preg_match('/\b10\s*mev\b/i', $energy)) {
                 $val = $s['value'] ?? null;
-                if (is_numeric($val)) { $pfu = (float)$val; $ts = $s['ts'] ?? null; $band = $s['energy'] ?? '>=10 MeV'; }
+                if (is_numeric($val)) { $pfu = (float)$val; $ts = $s['ts'] ?? $s['time'] ?? null; $band = $s['energy'] ?? '>=10 MeV'; }
                 break;
               }
             }
@@ -153,9 +175,9 @@ function gaia_space_weather_detail_shortcode($atts){
             elseif ($pfu >= 1000)  $scale = 'S3';
             elseif ($pfu >= 100)   $scale = 'S2';
             elseif ($pfu >= 10)    $scale = 'S1';
-            $sw['radiation'] = ['pfu_10mev' => $pfu, 'scale' => $scale, 'ts' => $ts, 'band' => $band];
+            $sw['radiation'] = ['pfu_10mev' => $pfu, 'scale' => $scale, 'ts' => $ts, 'band' => $band, 'source' => 'visuals.goess_protons'];
           }
-          break;
+          break; // done once we handled goes_protons
         }
       }
     }
@@ -427,6 +449,14 @@ function gaia_space_weather_detail_shortcode($atts){
 
           echo ge_row('S-scale', ge_val_or_dash($scl));
           echo ge_row('Proton flux', $pfu !== null ? ge_val_or_dash($pfu, 'pfu') : '—');
+        ?>
+        <?php
+          // Debug: show exactly what the renderer used (appears only in page source)
+          echo "\n<!-- ge-rad-debug pfu=" . esc_html( (string)($pfu ?? 'null') ) .
+               " scale=" . esc_html( $scl ?? 'null' ) .
+               " band=" . esc_html( (string)($rad['band'] ?? '') ) .
+               " ts=" . esc_html( (string)($rad['ts'] ?? '') ) .
+               " -->\n";
         ?>
         <div class="pfu-gauge" <?php if($pfu===null) echo 'style="display:none"'; ?>>
           <canvas id="ge-pfu-gauge" height="140"></canvas>
