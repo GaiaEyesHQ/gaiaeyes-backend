@@ -179,6 +179,7 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
         'flares_url' => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/flares_cmes.json',
         'detail' => '/space-dashboard/',
         'cache'      => 5, // minutes
+        'series_embed' => 'false',
       ],
       $atts,
       'gaia_space_weather_bar'
@@ -228,6 +229,39 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
         $api_bearer,
         $api_dev
       );
+    }
+
+    // Pull Space Visuals bundle (images + series) to expose series for overlays/charts
+    $space_visuals = null;
+    if ( $api_base && function_exists('gaiaeyes_http_get_json_api_cached') ) {
+      $sv_endpoint = defined('GAIAEYES_SPACE_VISUALS_ENDPOINT') ? GAIAEYES_SPACE_VISUALS_ENDPOINT : ($api_base . '/v1/space/visuals');
+      $space_visuals = gaiaeyes_http_get_json_api_cached(
+        $sv_endpoint,
+        'ge_space_visuals_bundle',
+        $cache_secs,
+        $api_bearer,
+        $api_dev
+      );
+    }
+
+    // Decide whether to embed series JSON for front‑end overlays/charts
+    $embed_series   = ( isset($atts['series_embed']) && ( $atts['series_embed'] === true || strtolower((string)$atts['series_embed']) === 'true' ) );
+    $sv_series_json = '';
+    $sv_config_json = '';
+    if ( $embed_series && is_array($space_visuals) ) {
+      $series = $space_visuals['series'] ?? [];
+      if ( is_array($series) ) {
+        // Keep a compact subset most useful for overlays; extend as needed
+        $keep   = ['goes_protons','goes_electrons','goes_xray'];
+        $bundle = array_intersect_key( $series, array_flip($keep) );
+        if ( ! empty($bundle) ) {
+          $sv_series_json = wp_json_encode( $bundle );
+        }
+      }
+      $cdn_base = $space_visuals['cdn_base'] ?? ( defined('GAIA_MEDIA_BASE') ? GAIA_MEDIA_BASE : '' );
+      if ( $cdn_base ) {
+        $sv_config_json = wp_json_encode( ['cdn_base' => $cdn_base] );
+      }
     }
 
     // If neither JSON nor API provide anything, bail out
@@ -463,6 +497,12 @@ if ( ! function_exists( 'gaia_space_weather_bar' ) ) {
         .gaia-link{color:inherit;text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
         .gaia-link:hover{border-bottom-color:rgba(255,255,255,.6)}
       </style>
+      <?php if ( ! empty($sv_series_json) ): ?>
+        <script type="application/json" id="gaia-space-series"><?php echo $sv_series_json; ?></script>
+      <?php endif; ?>
+      <?php if ( ! empty($sv_config_json) ): ?>
+        <script type="application/json" id="gaia-space-config"><?php echo $sv_config_json; ?></script>
+      <?php endif; ?>
     </section>
     <?php
     return ob_get_clean();
@@ -806,7 +846,57 @@ add_shortcode('gaia_alert_banner', function($atts){
   };
   $sw=$get($a['sw_url'],'sw');
   $qk=$get($a['quakes_url'],'qk');
-  $banner_sw='';$banner_qk='';
+  $banner_sw='';$banner_qk='';$banner_rad='';
+  // --- Radiation (proton storm) banner from Space Visuals bundle ---
+  $api_base   = defined('GAIAEYES_API_BASE') ? rtrim(GAIAEYES_API_BASE, '/') : '';
+  $api_bearer = defined('GAIAEYES_API_BEARER') ? GAIAEYES_API_BEARER : '';
+  $api_dev    = defined('GAIAEYES_API_DEV_USERID') ? GAIAEYES_API_DEV_USERID : '';
+  $vis = null;
+  if ($api_base && function_exists('gaiaeyes_http_get_json_api_cached')) {
+    $sv_endpoint = defined('GAIAEYES_SPACE_VISUALS_ENDPOINT') ? GAIAEYES_SPACE_VISUALS_ENDPOINT : ($api_base . '/v1/space/visuals');
+    $vis = gaiaeyes_http_get_json_api_cached($sv_endpoint, 'ge_alert_vis', $ttl, $api_bearer, $api_dev);
+  } else if ($api_base) {
+    $endpoint = $api_base . '/v1/space/visuals';
+    $r = wp_remote_get( esc_url_raw($endpoint), ['timeout'=>8,'headers'=>['Accept'=>'application/json']] );
+    if (!is_wp_error($r) && wp_remote_retrieve_response_code($r)===200){
+      $vis = json_decode(wp_remote_retrieve_body($r), true);
+    }
+  }
+  if (is_array($vis)) {
+    // 1) Simple boolean flag when provided by backend
+    $ff = $vis['feature_flags'] ?? [];
+    if (!empty($ff['radiation_alerts'])) {
+      $banner_rad = "Solar radiation storm in progress";
+    }
+    // 2) Best‑effort S‑scale from GOES protons (>=10 MeV)
+    $pfu10 = null;
+    $series = $vis['series'] ?? [];
+    if (is_array($series)) {
+      foreach ($series as $s) {
+        if (($s['key'] ?? '') === 'goes_protons' && !empty($s['samples']) && is_array($s['samples'])) {
+          for ($i = count($s['samples']) - 1; $i >= 0; $i--) {
+            $row = $s['samples'][$i];
+            if (($row['energy'] ?? '') === '>=10 MeV' && is_numeric($row['value'] ?? null)) {
+              $pfu10 = floatval($row['value']);
+              break;
+            }
+          }
+          break;
+        }
+      }
+    }
+    if ($pfu10 !== null) {
+      $level = '';
+      if ($pfu10 >= 100000) { $level = 'S5'; }
+      elseif ($pfu10 >= 10000) { $level = 'S4'; }
+      elseif ($pfu10 >= 1000) { $level = 'S3'; }
+      elseif ($pfu10 >= 100) { $level = 'S2'; }
+      elseif ($pfu10 >= 10) { $level = 'S1'; }
+      if ($level) {
+        $banner_rad = "Solar radiation storm: {$level} (" . number_format($pfu10,0) . " pfu at ≥10 MeV)";
+      }
+    }
+  }
   if ( is_array( $sw ) ) {
     $kp = $sw['now']['kp'] ?? null; $g = '';
     if ( is_numeric( $kp ) ) {
@@ -829,9 +919,10 @@ add_shortcode('gaia_alert_banner', function($atts){
     foreach($events as $ev){$mag=isset($ev['mag'])?floatval($ev['mag']):0;if($mag>=6.0)$m6++;}
     if($m6>0)$banner_qk="Significant seismic activity: {$m6} event(s) M6.0+ in the last 72h";
   }
-  if(!$banner_sw&&!$banner_qk)return '';
+  if(!$banner_sw&&!$banner_qk&&!$banner_rad)return '';
   ob_start(); ?>
   <div class="ge-alerts" id="geAlertsWrap">
+    <?php if($banner_rad): ?><div class="ge-alert ge-alert--rad" data-key="rad"><strong><?php echo esc_html($banner_rad); ?></strong><a class="ge-alert__link" href="/space-dashboard/#protons">Details →</a><button type="button" class="ge-alert__close" aria-label="Dismiss">×</button></div><?php endif; ?>
     <?php if($banner_sw): ?><div class="ge-alert ge-alert--kp" data-key="kp"><strong><?php echo esc_html($banner_sw); ?></strong><a class="ge-alert__link" href="/space-dashboard/#kp">Details →</a><button type="button" class="ge-alert__close" aria-label="Dismiss">×</button></div><?php endif; ?>
     <?php if($banner_qk): ?><div class="ge-alert ge-alert--eq" data-key="eq"><strong><?php echo esc_html($banner_qk); ?></strong><a class="ge-alert__link" href="/earthquakes/#recent">Details →</a><button type="button" class="ge-alert__close" aria-label="Dismiss">×</button></div><?php endif; ?>
   </div>
@@ -839,6 +930,7 @@ add_shortcode('gaia_alert_banner', function($atts){
     .ge-alerts{margin:8px 0;display:grid;gap:8px}
     .ge-alert{display:flex;gap:10px;align-items:center;justify-content:space-between;background:#221c1c;color:#ffd6d6;border:1px solid #6e3a3a;border-radius:10px;padding:8px 10px}
     .ge-alert--kp{background:#1b2a22;color:#aef2c0;border-color:#2d624a}
+    .ge-alert--rad{background:#2f2613;color:#ffe0a3;border-color:#7a5a1a}
     .ge-alert__link{color:#bcd5ff;text-decoration:none;border-bottom:1px dashed #4b6aa1}
     .ge-alert__close{background:transparent;border:0;color:inherit;font-size:20px;cursor:pointer}
   </style>
@@ -861,9 +953,12 @@ add_shortcode('gaia_alert_banner', function($atts){
   <?php return ob_get_clean();
 });
 
-add_filter('the_content', function($content){
-  if(is_admin() || !in_the_loop() || !is_main_query()) return $content;
-  if(!function_exists('is_front_page') || !is_front_page()) return $content;
-  if(function_exists('has_shortcode') && has_shortcode($content, 'gaia_alert_banner')) return $content;
-  return do_shortcode('[gaia_alert_banner]') . $content;
-});
+
+if (!function_exists('gaia_render_alert_banner')) {
+  function gaia_render_alert_banner() {
+    if (is_admin()) return;
+    echo do_shortcode('[gaia_alert_banner]');
+  }
+}
+// Site‑wide banner injection near top of body
+add_action('wp_body_open', 'gaia_render_alert_banner');
