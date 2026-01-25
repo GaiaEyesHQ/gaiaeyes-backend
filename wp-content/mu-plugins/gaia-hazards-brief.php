@@ -359,22 +359,28 @@ function gaia_hazards_brief_shortcode($atts = []) {
 }
 add_shortcode('gaia_hazards_brief', 'gaia_hazards_brief_shortcode');
 
-
 /**
- * Auto-insert hazards brief on the front-page main query if not already present.
+ * Optional: Auto-insert hazards brief on the front page when GAIA_HAZARDS_AUTO_HOME is true.
+ * By default, this plugin is shortcode-only:
+ *   [gaia_hazards_brief limit="4"]
+ * To re-enable automatic insertion on the homepage, add to wp-config.php:
+ *   define('GAIA_HAZARDS_AUTO_HOME', true);
  */
-add_filter('the_content', function ($content) {
-    if (is_admin() || !in_the_loop() || !is_main_query()) {
-        return $content;
-    }
+if (defined('GAIA_HAZARDS_AUTO_HOME') && GAIA_HAZARDS_AUTO_HOME) {
+    function gaia_hazards_auto_insert($content) {
+        if (is_admin() || !in_the_loop() || !is_main_query()) {
+            return $content;
+        }
 
-    if (!function_exists('is_front_page') || !is_front_page()) {
-        return $content;
-    }
+        if (!function_exists('is_front_page') || !is_front_page()) {
+            return $content;
+        }
 
-    if (function_exists('has_shortcode') && has_shortcode($content, 'gaia_hazards_brief')) {
-        return $content;
-    }
+        if (function_exists('has_shortcode') && has_shortcode($content, 'gaia_hazards_brief')) {
+            return $content;
+        }
 
-    return do_shortcode('[gaia_hazards_brief]') . $content;
-});
+        return do_shortcode('[gaia_hazards_brief]') . $content;
+    }
+    add_filter('the_content', 'gaia_hazards_auto_insert');
+}
