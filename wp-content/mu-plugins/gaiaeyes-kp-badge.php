@@ -193,5 +193,87 @@ add_action( 'wp_footer', function () {
     }
 })();
 </script>
+<script id="gaia-alert-autoclear-js">
+(function(){
+  var VIS_URL = "<?php echo esc_js(defined('GAIAEYES_API_BASE') ? rtrim(GAIAEYES_API_BASE, '/') . '/v1/space/visuals' : ''); ?>";
+  if (!VIS_URL) return;
+
+  var POLL_MS = 5 * 60 * 1000; // 5 minutes
+  var MAX_AGE_MIN = 90;        // ignore stale data older than 90 min
+
+  function sFromPfu(pfu){
+    if (pfu >= 100000) return 5;
+    if (pfu >= 10000)  return 4;
+    if (pfu >= 1000)   return 3;
+    if (pfu >= 100)    return 2;
+    if (pfu >= 10)     return 1;
+    return 0;
+  }
+
+  function findBannerEls(){
+    // Try a few likely selectors; extend if your theme uses different ones.
+    var sels = [
+      '[data-gaia-alert="radiation"]',
+      '.gaia-alert--radiation',
+      '.gaia-site-alert--radiation',
+      '.gaia-site-alert.radiation',
+      '#gaia-alert-radiation',
+      '.radiation-alert'
+    ];
+    var els = [];
+    for (var i=0;i<sels.length;i++){
+      var qs = document.querySelectorAll(sels[i]);
+      for (var j=0;j<qs.length;j++){
+        if (els.indexOf(qs[j]) === -1) els.push(qs[j]);
+      }
+    }
+    return els;
+  }
+
+  function hideBanners(){
+    findBannerEls().forEach(function(el){
+      // Remove rather than just hide to avoid leaving a large spacer.
+      el.remove();
+    });
+    // Clear any cookie a banner component might have set.
+    document.cookie = "gaia_radiation_ack=; Max-Age=0; path=/";
+  }
+
+  async function tick(){
+    try{
+      var r = await fetch(VIS_URL + '?v=' + Date.now(), {cache:'no-store'});
+      if (!r.ok) throw new Error('http ' + r.status);
+      var j = await r.json();
+      var series = (j && j.series) || [];
+      var protons = null;
+      for (var i=0;i<series.length;i++){
+        if (series[i] && series[i].key === 'goes_protons'){ protons = series[i]; break; }
+      }
+      var last = protons && protons.samples && protons.samples[protons.samples.length-1];
+
+      var pfu  = last ? Number(last.value) : NaN;
+      var ts   = last ? new Date(last.ts) : null;
+      var fresh = ts ? ((Date.now() - ts.getTime())/60000) <= MAX_AGE_MIN : false;
+
+      var S = (!isFinite(pfu) || !fresh) ? 0 : sFromPfu(pfu);
+
+      if (S === 0){
+        hideBanners();
+      }
+    } catch(e){
+      // silent fail: never add a banner here
+    }
+  }
+
+  // Run once on load, then poll.
+  tick();
+  setInterval(tick, POLL_MS);
+
+  // Defensive: if a page element explicitly reports S0, clear immediately.
+  if (document.querySelector('[data-gaia-s="0"], [data-gaia-s="S0"]')){
+    hideBanners();
+  }
+})();
+</script>
 	<?php
 }, 99);
