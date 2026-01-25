@@ -210,68 +210,97 @@ add_action( 'wp_footer', function () {
     return 0;
   }
 
-  function findBannerEls(){
-    // Try a few likely selectors; extend if your theme uses different ones.
+  function uniq(nodes){
+    return Array.from(new Set(Array.from(nodes)));
+  }
+
+  // Find likely site-wide alert/announcement bars
+  function candidateNodes(){
     var sels = [
       '[data-gaia-alert="radiation"]',
       '.gaia-alert--radiation',
       '.gaia-site-alert--radiation',
       '.gaia-site-alert.radiation',
       '#gaia-alert-radiation',
-      '.radiation-alert'
+      '.radiation-alert',
+      // common theme bars / notices
+      '.nv-announcement-bar', '.nv-notice-bar', '#nv-notice', '#nv-notification-bar',
+      '.site-notice', '.sitewide-alert', '.site-alert', '.announcement-bar', '.announcement',
+      '[role="alert"]'
     ];
-    var els = [];
-    for (var i=0;i<sels.length;i++){
-      var qs = document.querySelectorAll(sels[i]);
-      for (var j=0;j<qs.length;j++){
-        if (els.indexOf(qs[j]) === -1) els.push(qs[j]);
-      }
-    }
-    return els;
+    return uniq(document.querySelectorAll(sels.join(',')));
   }
 
-  function hideBanners(){
-    findBannerEls().forEach(function(el){
-      // Remove rather than just hide to avoid leaving a large spacer.
-      el.remove();
+  function looksLikeRadiation(el){
+    var t = (el.textContent || '').toLowerCase();
+    // Only remove banners that mention radiation (avoid touching Kp/quakes)
+    return /\bradiation\b/.test(t) || /\bsolar\s+radiation\b/.test(t) || (/\bpfu\b/.test(t) && /s[0-5]\b/i.test(t));
+  }
+
+  function clearAlertCookies(){
+    document.cookie.split(';').forEach(function(c){
+      var k = c.split('=')[0].trim();
+      if (/radiation|gaia.*alert/i.test(k)){
+        document.cookie = k + '=; Max-Age=0; path=/; SameSite=Lax';
+      }
     });
-    // Clear any cookie a banner component might have set.
-    document.cookie = "gaia_radiation_ack=; Max-Age=0; path=/";
+  }
+
+  function hideRadiationBanners(){
+    candidateNodes().forEach(function(el){
+      try{
+        if (looksLikeRadiation(el)) el.remove();
+      }catch(e){}
+    });
+  }
+
+  function pickLatest10MeVSample(series){
+    if (!series || !Array.isArray(series.samples)) return null;
+    // keep only >=10 MeV channel (covers ">=10 MeV" or "≥10 MeV")
+    var samples = series.samples.filter(function(s){
+      var e = (s.energy || '').toString();
+      return e.indexOf('>=10') !== -1 || e.indexOf('≥10') !== -1 || /10\s*MeV/i.test(e);
+    });
+    if (!samples.length) return null;
+    samples.sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); });
+    return samples[samples.length - 1];
+  }
+
+  async function fetchPfu10(){
+    var r = await fetch(VIS_URL + '?v=' + Date.now(), {cache:'no-store'});
+    if (!r.ok) throw new Error('http ' + r.status);
+    var j = await r.json();
+    var series = (j && j.series) || [];
+    var goes = series.find(function(s){ return s && s.key === 'goes_protons'; });
+    var sample = pickLatest10MeVSample(goes);
+    if (!sample) return {pfu: NaN, fresh:false};
+    var p = Number(sample.value);
+    var ts = new Date(sample.ts);
+    var fresh = isFinite(ts.getTime()) && ((Date.now() - ts.getTime())/60000) <= MAX_AGE_MIN;
+    return {pfu:p, fresh:fresh};
   }
 
   async function tick(){
     try{
-      var r = await fetch(VIS_URL + '?v=' + Date.now(), {cache:'no-store'});
-      if (!r.ok) throw new Error('http ' + r.status);
-      var j = await r.json();
-      var series = (j && j.series) || [];
-      var protons = null;
-      for (var i=0;i<series.length;i++){
-        if (series[i] && series[i].key === 'goes_protons'){ protons = series[i]; break; }
-      }
-      var last = protons && protons.samples && protons.samples[protons.samples.length-1];
-
-      var pfu  = last ? Number(last.value) : NaN;
-      var ts   = last ? new Date(last.ts) : null;
-      var fresh = ts ? ((Date.now() - ts.getTime())/60000) <= MAX_AGE_MIN : false;
-
-      var S = (!isFinite(pfu) || !fresh) ? 0 : sFromPfu(pfu);
-
+      var res = await fetchPfu10();
+      var S = (!isFinite(res.pfu) || !res.fresh) ? 0 : sFromPfu(res.pfu);
       if (S === 0){
-        hideBanners();
+        hideRadiationBanners();
+        clearAlertCookies();
       }
     } catch(e){
-      // silent fail: never add a banner here
+      // Do not remove banners on fetch/parsing error
     }
   }
 
-  // Run once on load, then poll.
+  // Run once and then poll
   tick();
   setInterval(tick, POLL_MS);
 
-  // Defensive: if a page element explicitly reports S0, clear immediately.
+  // Defensive immediate clear if DOM declares S0
   if (document.querySelector('[data-gaia-s="0"], [data-gaia-s="S0"]')){
-    hideBanners();
+    hideRadiationBanners();
+    clearAlertCookies();
   }
 })();
 </script>
