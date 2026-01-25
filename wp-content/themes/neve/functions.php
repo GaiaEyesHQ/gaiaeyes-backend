@@ -969,4 +969,155 @@ if (!function_exists('gaia_render_alert_banner')) {
   }
 }
 // Site‑wide banner injection near top of body
-add_action('wp_body_open', 'gaia_render_alert_banner');
+add_action('wp_body_open', 'gaia_render_alert_badges');
+
+// Compact header badges for active alerts
+add_shortcode('gaia_alert_badges', function($atts){
+  $a = shortcode_atts([
+    'sw_url'     => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/space_weather.json',
+    'quakes_url' => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/quakes_latest.json',
+    'cache'      => 5,
+  ], $atts, 'gaia_alert_badges');
+
+  $ttl = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
+  $get = function($url,$key) use($ttl){
+    $k='ge_alert_badges_'.$key.'_'.md5($url);
+    $c=get_transient($k); if($c!==false)return $c;
+    $r=wp_remote_get(esc_url_raw($url),['timeout'=>8,'headers'=>['Accept'=>'application/json']]);
+    if(!is_wp_error($r)&&wp_remote_retrieve_response_code($r)===200){
+      $j=json_decode(wp_remote_retrieve_body($r),true);
+      if(is_array($j)){ set_transient($k,$j,$ttl); return $j; }
+    }
+    return null;
+  };
+
+  // --- Geomagnetic (Kp -> G-scale) ---
+  $sw = $get($a['sw_url'],'sw');
+  $glev = ''; $kp_now = null;
+  if (is_array($sw)) {
+    $kp = $sw['now']['kp'] ?? null;
+    if (is_numeric($kp)) {
+      $kp_now = (float)$kp;
+      if ($kp_now >= 9)      { $glev = 'G5'; }
+      elseif ($kp_now >= 8 ) { $glev = 'G4'; }
+      elseif ($kp_now >= 7 ) { $glev = 'G3'; }
+      elseif ($kp_now >= 6 ) { $glev = 'G2'; }
+      elseif ($kp_now >= 5 ) { $glev = 'G1'; }
+    }
+  }
+
+  // --- Radiation (GOES ≥10 MeV PFU -> S-scale) from Space Visuals bundle ---
+  $api_base   = defined('GAIAEYES_API_BASE') ? rtrim(GAIAEYES_API_BASE, '/') : '';
+  $api_bearer = defined('GAIAEYES_API_BEARER') ? GAIAEYES_API_BEARER : '';
+  $api_dev    = defined('GAIAEYES_API_DEV_USERID') ? GAIAEYES_API_DEV_USERID : '';
+  $vis = null;
+  if ($api_base && function_exists('gaiaeyes_http_get_json_api_cached')) {
+    $sv_endpoint = defined('GAIAEYES_SPACE_VISUALS_ENDPOINT') ? GAIAEYES_SPACE_VISUALS_ENDPOINT : ($api_base . '/v1/space/visuals');
+    $vis = gaiaeyes_http_get_json_api_cached($sv_endpoint, 'ge_alert_vis_badges', $ttl, $api_bearer, $api_dev);
+  } elseif ($api_base) {
+    $endpoint = $api_base . '/v1/space/visuals';
+    $r = wp_remote_get( esc_url_raw($endpoint), ['timeout'=>8,'headers'=>['Accept'=>'application/json']] );
+    if (!is_wp_error($r) && wp_remote_retrieve_response_code($r)===200){
+      $vis = json_decode(wp_remote_retrieve_body($r), true);
+    }
+  }
+
+  $slev = ''; $pfu10 = null; $last_ts = null;
+  if (is_array($vis) && !empty($vis['series']) && is_array($vis['series'])) {
+    foreach ($vis['series'] as $s) {
+      if (($s['key'] ?? '') === 'goes_protons' && !empty($s['samples']) && is_array($s['samples'])) {
+        for ($i = count($s['samples'])-1; $i>=0; $i--) {
+          $row = $s['samples'][$i];
+          if (($row['energy'] ?? '') === '>=10 MeV' && is_numeric($row['value'] ?? null)) {
+            $pfu10 = (float)$row['value'];
+            $last_ts = isset($row['ts']) ? strtotime((string)$row['ts']) : null;
+            break;
+          }
+        }
+        break;
+      }
+    }
+  }
+  if ($pfu10 !== null) {
+    $is_recent = $last_ts ? ((time() - $last_ts) <= 12*HOUR_IN_SECONDS) : true;
+    if ($is_recent) {
+      if ($pfu10 >= 100000)      { $slev = 'S5'; }
+      elseif ($pfu10 >= 10000 )  { $slev = 'S4'; }
+      elseif ($pfu10 >= 1000  )  { $slev = 'S3'; }
+      elseif ($pfu10 >= 100   )  { $slev = 'S2'; }
+      elseif ($pfu10 >= 10    )  { $slev = 'S1'; }
+    }
+  }
+
+  // --- Quakes (M6+ count in 72h) ---
+  $qk = $get($a['quakes_url'],'qk');
+  $m6 = 0;
+  if (is_array($qk)) {
+    $events = $qk['events'] ?? [];
+    if (is_array($events)) {
+      foreach ($events as $ev) {
+        $mag = isset($ev['mag']) ? floatval($ev['mag']) : 0;
+        if ($mag >= 6.0) $m6++;
+      }
+    }
+  }
+
+  // If nothing to show, return empty
+  if (!$glev && !$slev && $m6 === 0) return '';
+
+  ob_start(); ?>
+  <div class="ge-badges" id="geAlertBadges">
+    <?php if ($glev): ?>
+      <a class="ge-badge ge-badge--kp" href="/space-dashboard/#kp" title="Geomagnetic storm">
+        <strong><?php echo esc_html($glev); ?></strong><?php if ($kp_now!==null): ?> · Kp <?php echo esc_html(number_format($kp_now,1)); ?><?php endif; ?>
+      </a>
+    <?php endif; ?>
+    <?php if ($slev): ?>
+      <a class="ge-badge ge-badge--rad" href="/space-dashboard/#protons" title="Solar radiation storm">
+        <strong><?php echo esc_html($slev); ?></strong><?php if ($pfu10!==null): ?> · <?php echo esc_html(number_format($pfu10,0)); ?> pfu<?php endif; ?>
+      </a>
+    <?php endif; ?>
+    <?php if ($m6>0): ?>
+      <a class="ge-badge ge-badge--eq" href="/earthquakes/#recent" title="Significant seismic activity">
+        <strong>M6+</strong> · <?php echo intval($m6); ?>
+      </a>
+    <?php endif; ?>
+  </div>
+  <style>
+    .ge-badges{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap}
+    .ge-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;font-size:.78rem;line-height:1;border:1px solid;text-decoration:none}
+    .ge-badge--kp{background:#1b2a22;color:#aef2c0;border-color:#2d624a}
+    .ge-badge--rad{background:#2f2613;color:#ffe0a3;border-color:#7a5a1a}
+    .ge-badge--eq{background:#2a1f1f;color:#ffd6d6;border-color:#6e3a3a}
+    .ge-badge strong{margin-right:4px}
+    @media (max-width:480px){ .ge-badge{font-size:.74rem;padding:2px 7px} }
+    /* When the badges are moved inside the header, keep spacing tidy */
+    .ge-badges.in-header{margin:4px 0}
+  </style>
+  <script>
+    (function(){
+      // Try to tuck the badges inside the header area if present
+      function findHeaderTarget(){
+        return document.querySelector('header.site-header .container') ||
+               document.querySelector('header.site-header') ||
+               document.querySelector('header#header') ||
+               document.querySelector('.header-main-inner') ||
+               document.querySelector('.nv-navbar') ||
+               document.querySelector('.nv-header') ||
+               document.querySelector('header');
+      }
+      var badges = document.getElementById('geAlertBadges');
+      if(!badges) return;
+      var t = findHeaderTarget();
+      if(t){ t.appendChild(badges); badges.classList.add('in-header'); }
+    })();
+  </script>
+  <?php return ob_get_clean();
+});
+
+if (!function_exists('gaia_render_alert_badges')) {
+  function gaia_render_alert_badges() {
+    if (is_admin()) return;
+    echo do_shortcode('[gaia_alert_badges]');
+  }
+}
