@@ -96,6 +96,12 @@ function gaiaeyes_quakes_detail_shortcode($atts){
   $monthly_rows = [];
   if (!empty($hist_items) && is_array($hist_items)) {
     $months = $hist_items;
+    // Ensure months are sorted by 'month' ascending (YYYY-MM)
+    usort($months, function($a, $b) {
+      $am = isset($a['month']) ? substr((string)$a['month'], 0, 7) : '';
+      $bm = isset($b['month']) ? substr((string)$b['month'], 0, 7) : '';
+      return strcmp($am, $bm);
+    });
     // Build index of month (YYYY-MM) -> values for YoY/MoM lookup and collect available years
     $mon_idx = [];
     foreach ($months as $row) {
@@ -115,23 +121,20 @@ function gaiaeyes_quakes_detail_shortcode($atts){
     $year_list = array_keys($year_list);
     rsort($year_list);
 
-    // Choose subset of months for display
+    // Choose subset of months for display (months[] is ascending after usort above)
     if ($view_last6) {
-      // Last 6 (most recent) entries and display oldest→newest
-      $subset = array_slice($months, 0, 6);
-      $subset = array_reverse($subset);
+      // Last 6 months, oldest → newest
+      $subset = array_slice($months, -6);
     } else {
-      // All months in the selected year, oldest→newest
+      // All months in the selected year, already oldest → newest
       $subset = [];
       foreach ($months as $row) {
         $rawMonth = $row['month'] ?? '';
         if ($rawMonth === '') continue;
-        $year = substr($rawMonth, 0, 4);
-        if ($year === $selected_year) {
+        if (strpos($rawMonth, $selected_year) === 0) {
           $subset[] = $row;
         }
       }
-      $subset = array_reverse($subset);
     }
 
     foreach ($subset as $row) {
