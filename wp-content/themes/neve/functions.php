@@ -862,22 +862,19 @@ add_shortcode('gaia_alert_banner', function($atts){
       $vis = json_decode(wp_remote_retrieve_body($r), true);
     }
   }
-  if (is_array($vis)) {
-    // 1) Simple boolean flag when provided by backend
-    $ff = $vis['feature_flags'] ?? [];
-    if (!empty($ff['radiation_alerts'])) {
-      $banner_rad = "Solar radiation storm in progress";
-    }
-    // 2) Best‑effort S‑scale from GOES protons (>=10 MeV)
-    $pfu10 = null;
-    $series = $vis['series'] ?? [];
-    if (is_array($series)) {
-      foreach ($series as $s) {
-        if (($s['key'] ?? '') === 'goes_protons' && !empty($s['samples']) && is_array($s['samples'])) {
-          for ($i = count($s['samples']) - 1; $i >= 0; $i--) {
-            $row = $s['samples'][$i];
-            if (($row['energy'] ?? '') === '>=10 MeV' && is_numeric($row['value'] ?? null)) {
-              $pfu10 = floatval($row['value']);
+  if ( is_array( $vis ) ) {
+    // Determine current S-scale strictly from GOES ≥10 MeV proton channel.
+    $pfu10   = null;
+    $last_ts = null;
+    $series  = $vis['series'] ?? [];
+    if ( is_array( $series ) ) {
+      foreach ( $series as $s ) {
+        if ( ( $s['key'] ?? '' ) === 'goes_protons' && ! empty( $s['samples'] ) && is_array( $s['samples'] ) ) {
+          for ( $i = count( $s['samples'] ) - 1; $i >= 0; $i-- ) {
+            $row = $s['samples'][ $i ];
+            if ( ( $row['energy'] ?? '' ) === '>=10 MeV' && is_numeric( $row['value'] ?? null ) ) {
+              $pfu10   = (float) $row['value'];
+              $last_ts = isset( $row['ts'] ) ? strtotime( (string) $row['ts'] ) : null;
               break;
             }
           }
@@ -885,15 +882,26 @@ add_shortcode('gaia_alert_banner', function($atts){
         }
       }
     }
-    if ($pfu10 !== null) {
-      $level = '';
-      if ($pfu10 >= 100000) { $level = 'S5'; }
-      elseif ($pfu10 >= 10000) { $level = 'S4'; }
-      elseif ($pfu10 >= 1000) { $level = 'S3'; }
-      elseif ($pfu10 >= 100) { $level = 'S2'; }
-      elseif ($pfu10 >= 10) { $level = 'S1'; }
-      if ($level) {
-        $banner_rad = "Solar radiation storm: {$level} (" . number_format($pfu10,0) . " pfu at ≥10 MeV)";
+
+    // Only show a banner when S-scale is ≥ S1. Do not rely on feature flags.
+    if ( $pfu10 !== null ) {
+      // Optionally require recent data (≤ 12h); if timestamp missing, assume recent.
+      $is_recent = $last_ts ? ( ( time() - $last_ts ) <= 12 * HOUR_IN_SECONDS ) : true;
+
+      if ( $is_recent ) {
+        $level = '';
+        if ( $pfu10 >= 100000 ) { $level = 'S5'; }
+        elseif ( $pfu10 >= 10000 ) { $level = 'S4'; }
+        elseif ( $pfu10 >= 1000 )  { $level = 'S3'; }
+        elseif ( $pfu10 >= 100 )   { $level = 'S2'; }
+        elseif ( $pfu10 >= 10 )    { $level = 'S1'; }
+
+        if ( $level !== '' ) {
+          $banner_rad = "Solar radiation storm: {$level} (" . number_format( $pfu10, 0 ) . " pfu at ≥10 MeV)";
+        } else {
+          // Explicitly keep it empty when below S1 so stale banners won’t persist.
+          $banner_rad = '';
+        }
       }
     }
   }
