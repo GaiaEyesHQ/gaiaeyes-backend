@@ -49,10 +49,11 @@ function gaiaeyes_schumann_detail_shortcode($atts){
   $latest   = gaiaeyes_http_json_fallback($a['latest_url'], GAIAEYES_SCH_LATEST_MIRROR, 'ge_sch_latest', $ttl);
   $combined = null;
 
-  // Prepare 24h series endpoint (F1). Defaults to backend if GAIAEYES_API_BASE is available.
+  // Prepare 24h series endpoint (F1). Prefer configured backend; hard‑fallback to public Render base.
   $series_url_default = (defined('GAIAEYES_API_BASE')
     ? rtrim(GAIAEYES_API_BASE, '/') . '/v1/earth/schumann/series?hours=24&station=' . rawurlencode($a['station'])
-    : '');
+    : 'https://gaiaeyes-backend.onrender.com/v1/earth/schumann/series?hours=24&station=' . rawurlencode($a['station'])
+  );
   $series_url = !empty($a['series_url']) ? $a['series_url'] : $series_url_default;
 
   // Extract/derive combined block and source images
@@ -150,8 +151,9 @@ function gaiaeyes_schumann_detail_shortcode($atts){
 
       <article class="ge-card">
         <h3 id="chart">Last 24 hours (F1) <a class="anchor-link" href="#chart" aria-label="Link to 24h F1 chart">🔗</a></h3>
-        <div id="ge-sch-chart-wrap">
+        <div id="ge-sch-chart-wrap" data-series-url="<?php echo esc_attr($series_url); ?>">
           <canvas id="ge-sch-chart" height="220"></canvas>
+          <div id="ge-sch-fallback" class="ge-muted" aria-live="polite" style="display:none">No 24 h series available.</div>
         </div>
         <noscript>Enable JavaScript to see the live F1 chart.</noscript>
       </article>
@@ -184,6 +186,7 @@ function gaiaeyes_schumann_detail_shortcode($atts){
       .row .lab{opacity:.85}
       .row .val{font-weight:600}
       .note{margin-top:6px;opacity:.85}
+      .ge-muted{opacity:.75;font-size:.9rem;margin-top:6px}
       .img-grid{display:grid;gap:10px}
       @media(min-width:600px){.img-grid{grid-template-columns:repeat(3,1fr)}}
       .img-box{margin:0}
@@ -237,20 +240,32 @@ function gaiaeyes_schumann_detail_shortcode($atts){
     <script>
       (function(){
         var seriesUrl = <?php echo json_encode($series_url); ?>;
-        if (!seriesUrl) return;
+        var wrapEl = document.getElementById('ge-sch-chart-wrap');
+        if ((!seriesUrl || !seriesUrl.length) && wrapEl && wrapEl.dataset && wrapEl.dataset.seriesUrl) {
+          seriesUrl = wrapEl.dataset.seriesUrl;
+        }
+        if (!seriesUrl || !seriesUrl.length) {
+          // Nothing to render
+          var fb = document.getElementById('ge-sch-fallback');
+          if (fb) fb.style.display = 'block';
+          return;
+        }
         function normalize(data){
           var arr = Array.isArray(data) ? data
                    : (data && Array.isArray(data.series)) ? data.series
+                   : (data && Array.isArray(data.points)) ? data.points
                    : (data && Array.isArray(data.data)) ? data.data
                    : [];
           return arr.map(function(p){
             var t = p.ts || p.ts_utc || p.time || p.timestamp || p.t || p.day;
-            var v = p.f1 || p.f1_hz || p.fundamental_hz || p.value || p.hz;
+            var v = (p.f1 !== undefined ? p.f1 : (p.f1_hz !== undefined ? p.f1_hz : (p.fundamental_hz !== undefined ? p.fundamental_hz : (p.hz !== undefined ? p.hz : p.value))));
             if (!t || v === undefined || v === null) return null;
             return { t: t, v: Number(v) };
           }).filter(Boolean);
         }
         function initChart(points){
+          var fb = document.getElementById('ge-sch-fallback');
+          if (fb) fb.style.display = 'none';
           var el = document.getElementById('ge-sch-chart');
           if (!el) return;
           var labels = points.map(function(p){
@@ -278,18 +293,28 @@ function gaiaeyes_schumann_detail_shortcode($atts){
           });
         }
         function fetchAndRender(){
-          fetch(seriesUrl, { headers: { 'Accept': 'application/json' } })
+          fetch(seriesUrl, { headers: { 'Accept': 'application/json' }, mode: 'cors' })
             .then(function(r){ return r.json(); })
             .then(function(d){
               var pts = normalize(d);
-              if (pts.length) initChart(pts);
+              if (pts.length) {
+                initChart(pts);
+              } else {
+                var fb = document.getElementById('ge-sch-fallback');
+                if (fb) fb.style.display = 'block';
+                if (window.console && console.warn) console.warn('GE Schumann: empty series', seriesUrl);
+              }
             })
-            .catch(function(){ /* ignore */ });
+            .catch(function(err){
+              var fb = document.getElementById('ge-sch-fallback');
+              if (fb) fb.style.display = 'block';
+              if (window.console && console.error) console.error('GE Schumann: series fetch failed', seriesUrl, err);
+            });
         }
         function ensureChartJs(cb){
           if (window.Chart) return cb();
           var s = document.createElement('script');
-          s.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+          s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1';
           s.onload = cb;
           document.head.appendChild(s);
         }
