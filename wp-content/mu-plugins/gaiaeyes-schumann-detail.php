@@ -5,7 +5,12 @@
  * Version: 1.0.0
  */
 
+
 if (!defined('ABSPATH')) exit;
+// Ensure MINUTE_IN_SECONDS exists (in case this loads very early)
+if (!defined('MINUTE_IN_SECONDS')) {
+  define('MINUTE_IN_SECONDS', 60);
+}
 
 // Defaults (GitHub Pages + jsDelivr mirrors)
 if (!defined('GAIAEYES_SCH_COMBINED_URL')) {
@@ -21,19 +26,21 @@ if (!defined('GAIAEYES_SCH_LATEST_MIRROR')) {
   define('GAIAEYES_SCH_LATEST_MIRROR', 'https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/data/schumann_latest.json');
 }
 
-function gaiaeyes_http_json_fallback($primary, $mirror, $cache_key, $ttl){
-  $cached = get_transient($cache_key);
-  if ($cached !== false) return $cached;
-  $v = array('v' => floor(time()/600));
-  $resp = wp_remote_get(add_query_arg($v, esc_url_raw($primary)), ['timeout'=>10,'headers'=>['Accept'=>'application/json']]);
-  if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) {
-    $resp = wp_remote_get(add_query_arg($v, esc_url_raw($mirror)), ['timeout'=>10,'headers'=>['Accept'=>'application/json']]);
+if (!function_exists('gaiaeyes_http_json_fallback')) {
+  function gaiaeyes_http_json_fallback($primary, $mirror, $cache_key, $ttl){
+    $cached = get_transient($cache_key);
+    if ($cached !== false) return $cached;
+    $v = array('v' => floor(time()/600));
+    $resp = wp_remote_get(add_query_arg($v, esc_url_raw($primary)), ['timeout'=>10,'headers'=>['Accept'=>'application/json']]);
+    if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) {
+      $resp = wp_remote_get(add_query_arg($v, esc_url_raw($mirror)), ['timeout'=>10,'headers'=>['Accept'=>'application/json']]);
+    }
+    if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) return null;
+    $data = json_decode(wp_remote_retrieve_body($resp), true);
+    if (!is_array($data)) return null;
+    set_transient($cache_key, $data, $ttl);
+    return $data;
   }
-  if (is_wp_error($resp) || wp_remote_retrieve_response_code($resp) !== 200) return null;
-  $data = json_decode(wp_remote_retrieve_body($resp), true);
-  if (!is_array($data)) return null;
-  set_transient($cache_key, $data, $ttl);
-  return $data;
 }
 
 function gaiaeyes_schumann_detail_shortcode($atts){
