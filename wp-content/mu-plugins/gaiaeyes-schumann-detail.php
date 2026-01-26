@@ -56,6 +56,24 @@ function gaiaeyes_schumann_detail_shortcode($atts){
   );
   $series_url = !empty($a['series_url']) ? $a['series_url'] : $series_url_default;
 
+  // Fallback candidate URLs for JS chart
+  // 1. alt_station_url: swap cumiana/tomsk in station param
+  // 2. no_station_url: remove station param, only hours=24
+  $alt_station_url = $series_url;
+  if (preg_match('/station=([^&]+)/', $series_url, $m)) {
+    $station = strtolower($m[1]);
+    $alt = ($station === 'cumiana') ? 'tomsk' : 'cumiana';
+    $alt_station_url = preg_replace('/station=([^&]+)/', 'station='.$alt, $series_url);
+  }
+  $no_station_url = preg_replace('/([&?])station=[^&]+(&)?/', function($matches) {
+    // Remove the station param and any trailing & or ? if necessary
+    if ($matches[1] === '?' && empty($matches[2])) return '?';
+    if ($matches[1] === '&' && empty($matches[2])) return '';
+    return $matches[2] ? $matches[1] : '';
+  }, $series_url);
+  // Remove any trailing ? or & if left hanging
+  $no_station_url = preg_replace('/[?&]$/', '', $no_station_url);
+
   // Extract/derive combined block and source images
   $f1 = $delta = null; $method = $primary = '';
   $sources = [];
@@ -151,7 +169,10 @@ function gaiaeyes_schumann_detail_shortcode($atts){
 
       <article class="ge-card">
         <h3 id="chart">Last 24 hours (F1) <a class="anchor-link" href="#chart" aria-label="Link to 24h F1 chart">🔗</a></h3>
-        <div id="ge-sch-chart-wrap" data-series-url="<?php echo esc_attr($series_url); ?>">
+        <div id="ge-sch-chart-wrap"
+             data-series-url="<?php echo esc_attr($series_url); ?>"
+             data-alt-series-url="<?php echo esc_attr($alt_station_url); ?>"
+             data-no-station-url="<?php echo esc_attr($no_station_url); ?>">
           <canvas id="ge-sch-chart" height="220"></canvas>
           <div id="ge-sch-fallback" class="ge-muted" aria-live="polite" style="display:none">No 24 h series available.</div>
         </div>
@@ -239,27 +260,50 @@ function gaiaeyes_schumann_detail_shortcode($atts){
     </script>
     <script>
       (function(){
-        var seriesUrl = <?php echo json_encode($series_url); ?>;
+        var phpSeriesUrl = <?php echo json_encode($series_url); ?>;
         var wrapEl = document.getElementById('ge-sch-chart-wrap');
-        if ((!seriesUrl || !seriesUrl.length) && wrapEl && wrapEl.dataset && wrapEl.dataset.seriesUrl) {
-          seriesUrl = wrapEl.dataset.seriesUrl;
+        // Build ordered, de-duplicated candidate array
+        var candidates = [];
+        function addUnique(url) {
+          if (url && typeof url === 'string' && url.length && candidates.indexOf(url) === -1) candidates.push(url);
         }
-        if (!seriesUrl || !seriesUrl.length) {
-          // Nothing to render
-          var fb = document.getElementById('ge-sch-fallback');
-          if (fb) fb.style.display = 'block';
-          return;
+        addUnique(phpSeriesUrl);
+        if (wrapEl && wrapEl.dataset) {
+          addUnique(wrapEl.dataset.seriesUrl);
+          addUnique(wrapEl.dataset.altSeriesUrl);
+          addUnique(wrapEl.dataset.noStationUrl);
         }
+        // More permissive normalizer
         function normalize(data){
-          var arr = Array.isArray(data) ? data
-                   : (data && Array.isArray(data.series)) ? data.series
-                   : (data && Array.isArray(data.points)) ? data.points
-                   : (data && Array.isArray(data.data)) ? data.data
-                   : [];
+          var arr = [];
+          if (Array.isArray(data)) arr = data;
+          else if (data) {
+            if (Array.isArray(data.series)) arr = data.series;
+            else if (typeof data.series === 'object' && data.series !== null) {
+              if (Array.isArray(data.series.f1)) arr = data.series.f1;
+              else if (Array.isArray(data.series.points)) arr = data.series.points;
+            }
+            else if (Array.isArray(data.points)) arr = data.points;
+            else if (Array.isArray(data.data)) arr = data.data;
+            else if (Array.isArray(data.items)) arr = data.items;
+            else if (Array.isArray(data.rows)) arr = data.rows;
+            else if (Array.isArray(data.samples)) arr = data.samples;
+          }
           return arr.map(function(p){
-            var t = p.ts || p.ts_utc || p.time || p.timestamp || p.t || p.day;
-            var v = (p.f1 !== undefined ? p.f1 : (p.f1_hz !== undefined ? p.f1_hz : (p.fundamental_hz !== undefined ? p.fundamental_hz : (p.hz !== undefined ? p.hz : p.value))));
-            if (!t || v === undefined || v === null) return null;
+            if (!p || typeof p !== 'object') return null;
+            var t = p.ts || p.ts_utc || p.timestamp_utc || p.timestamp || p.time || p.t || p.day;
+            var v = (p.f1 !== undefined ? p.f1
+                    : (p.f1_hz !== undefined ? p.f1_hz
+                    : (p.fundamental_hz !== undefined ? p.fundamental_hz
+                    : (p.hz !== undefined ? p.hz
+                    : (p.value !== undefined ? p.value
+                    : (p.v !== undefined ? p.v
+                    : undefined))))));
+            if (v === undefined && p) {
+              // Try alternative keys
+              if (p['fundamental_hz'] !== undefined) v = p['fundamental_hz'];
+            }
+            if (t === undefined || t === null || v === undefined || v === null) return null;
             return { t: t, v: Number(v) };
           }).filter(Boolean);
         }
@@ -292,24 +336,39 @@ function gaiaeyes_schumann_detail_shortcode($atts){
             }
           });
         }
-        function fetchAndRender(){
-          fetch(seriesUrl, { headers: { 'Accept': 'application/json' }, mode: 'cors' })
-            .then(function(r){ return r.json(); })
-            .then(function(d){
-              var pts = normalize(d);
-              if (pts.length) {
-                initChart(pts);
-              } else {
-                var fb = document.getElementById('ge-sch-fallback');
-                if (fb) fb.style.display = 'block';
-                if (window.console && console.warn) console.warn('GE Schumann: empty series', seriesUrl);
-              }
-            })
-            .catch(function(err){
-              var fb = document.getElementById('ge-sch-fallback');
-              if (fb) fb.style.display = 'block';
-              if (window.console && console.error) console.error('GE Schumann: series fetch failed', seriesUrl, err);
-            });
+        function fetchSeriesCandidates(urls, onSuccess, onFail){
+          var i = 0;
+          function tryNext(){
+            if (i >= urls.length) {
+              if (typeof onFail === 'function') onFail();
+              return;
+            }
+            var url = urls[i++];
+            fetch(url, { headers: { 'Accept': 'application/json' }, mode: 'cors' })
+              .then(function(r){ return r.json(); })
+              .then(function(d){
+                var pts = normalize(d);
+                if (Array.isArray(pts) && pts.length >= 2) {
+                  onSuccess(pts);
+                } else {
+                  if (window.console && console.warn) {
+                    console.warn('GE Schumann: empty or insufficient series at', url, '(points:', pts.length, ')');
+                  }
+                  tryNext();
+                }
+              })
+              .catch(function(err){
+                if (window.console && console.error) {
+                  console.error('GE Schumann: series fetch/parse failed at', url, err);
+                }
+                tryNext();
+              });
+          }
+          tryNext();
+        }
+        function showFallback(){
+          var fb = document.getElementById('ge-sch-fallback');
+          if (fb) fb.style.display = 'block';
         }
         function ensureChartJs(cb){
           if (window.Chart) return cb();
@@ -318,7 +377,12 @@ function gaiaeyes_schumann_detail_shortcode($atts){
           s.onload = cb;
           document.head.appendChild(s);
         }
-        ensureChartJs(fetchAndRender);
+        ensureChartJs(function(){
+          if (!candidates.length) { showFallback(); return; }
+          fetchSeriesCandidates(candidates, function(points){
+            initChart(points);
+          }, showFallback);
+        });
       })();
     </script>
   </section>
