@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Gaia Eyes – Schumann Detail
- * Description: Scientific Schumann Resonance detail page with combined F1, delta, source images (Tomsk/Cumiana/HeartMath) and health notes.
+ * Description: Scientific Schumann Resonance detail page with combined F1, source images (Tomsk/Cumiana) and health notes.
  * Version: 1.0.0
  */
 
@@ -40,15 +40,20 @@ function gaiaeyes_schumann_detail_shortcode($atts){
   $a = shortcode_atts([
     'combined_url' => '',
     'latest_url'   => GAIAEYES_SCH_LATEST_URL,
+    'series_url'   => '',
+    'station'      => 'cumiana',
     'cache'        => 10,
   ], $atts, 'gaia_schumann_detail');
 
   $ttl = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
   $latest   = gaiaeyes_http_json_fallback($a['latest_url'], GAIAEYES_SCH_LATEST_MIRROR, 'ge_sch_latest', $ttl);
   $combined = null;
-  if (!empty($a['combined_url'])) {
-    $combined = gaiaeyes_http_json_fallback($a['combined_url'], GAIAEYES_SCH_COMBINED_MIRROR, 'ge_sch_combined', $ttl);
-  }
+
+  // Prepare 24h series endpoint (F1). Defaults to backend if GAIAEYES_API_BASE is available.
+  $series_url_default = (defined('GAIAEYES_API_BASE')
+    ? rtrim(GAIAEYES_API_BASE, '/') . '/v1/earth/schumann/series?hours=24&station=' . rawurlencode($a['station'])
+    : '');
+  $series_url = !empty($a['series_url']) ? $a['series_url'] : $series_url_default;
 
   // Extract/derive combined block and source images
   $f1 = $delta = null; $method = $primary = '';
@@ -69,7 +74,6 @@ function gaiaeyes_schumann_detail_shortcode($atts){
           // fallback to known image filenames in media repo
           if ($k==='tomsk') $img = $media_img_base.'tomsk_latest.png';
           if ($k==='cumiana') $img = $media_img_base.'cumiana_latest.png';
-          if ($k==='heartmath') $img = $media_img_base.'heartmath_latest.png';
         }
         $sources[$k] = [
           'label' => ucfirst($k),
@@ -101,7 +105,6 @@ function gaiaeyes_schumann_detail_shortcode($atts){
         $img = '';
         if ($k==='tomsk') $img = $media_img_base.'tomsk_latest.png';
         if ($k==='cumiana') $img = $media_img_base.'cumiana_latest.png';
-        if ($k==='heartmath') $img = $media_img_base.'heartmath_latest.png';
         $f1_src = null;
         if ($k==='tomsk' && $t_f1!==null) $f1_src = $t_f1;
         if ($k==='cumiana' && $c_f1!==null) $f1_src = $c_f1;
@@ -146,6 +149,14 @@ function gaiaeyes_schumann_detail_shortcode($atts){
       </article>
 
       <article class="ge-card">
+        <h3 id="chart">Last 24 hours (F1) <a class="anchor-link" href="#chart" aria-label="Link to 24h F1 chart">🔗</a></h3>
+        <div id="ge-sch-chart-wrap">
+          <canvas id="ge-sch-chart" height="220"></canvas>
+        </div>
+        <noscript>Enable JavaScript to see the live F1 chart.</noscript>
+      </article>
+
+      <article class="ge-card">
         <h3 id="health">Health context <a class="anchor-link" href="#health" aria-label="Link to Health Context">🔗</a></h3>
         <ul class="health-list">
           <li><strong>Nervous system:</strong> Shifts in EM environment can increase reactivity in sensitives; paced breathing and brief outdoor breaks may help.</li>
@@ -168,6 +179,7 @@ function gaiaeyes_schumann_detail_shortcode($atts){
       .ge-grid{display:grid;gap:12px}
       @media(min-width:900px){.ge-grid{grid-template-columns:repeat(2,1fr)}}
       .ge-card{background:#151a24;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:12px}
+      #ge-sch-chart-wrap{width:100%;min-height:220px}
       .row{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,.08)}
       .row .lab{opacity:.85}
       .row .val{font-weight:600}
@@ -220,6 +232,68 @@ function gaiaeyes_schumann_detail_shortcode($atts){
         document.querySelectorAll('.sch-lightbox-link').forEach(function(a){
           a.addEventListener('click', function(e){ e.preventDefault(); openLightbox(this.href, this.getAttribute('data-caption')); });
         });
+      })();
+    </script>
+    <script>
+      (function(){
+        var seriesUrl = <?php echo json_encode($series_url); ?>;
+        if (!seriesUrl) return;
+        function normalize(data){
+          var arr = Array.isArray(data) ? data
+                   : (data && Array.isArray(data.series)) ? data.series
+                   : (data && Array.isArray(data.data)) ? data.data
+                   : [];
+          return arr.map(function(p){
+            var t = p.ts || p.ts_utc || p.time || p.timestamp || p.t || p.day;
+            var v = p.f1 || p.f1_hz || p.fundamental_hz || p.value || p.hz;
+            if (!t || v === undefined || v === null) return null;
+            return { t: t, v: Number(v) };
+          }).filter(Boolean);
+        }
+        function initChart(points){
+          var el = document.getElementById('ge-sch-chart');
+          if (!el) return;
+          var labels = points.map(function(p){
+            try { return new Date(p.t).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+            catch(e){ return String(p.t); }
+          });
+          var data = points.map(function(p){ return p.v; });
+          var ctx = el.getContext('2d');
+          new (window.Chart)(ctx, {
+            type: 'line',
+            data: {
+              labels: labels,
+              datasets: [{ label: 'F1 (Hz)', data: data, borderWidth: 2, pointRadius: 0, tension: 0.25 }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                y: { title: { display: true, text: 'Hz' } }
+              },
+              plugins: {
+                legend: { display: true }
+              }
+            }
+          });
+        }
+        function fetchAndRender(){
+          fetch(seriesUrl, { headers: { 'Accept': 'application/json' } })
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+              var pts = normalize(d);
+              if (pts.length) initChart(pts);
+            })
+            .catch(function(){ /* ignore */ });
+        }
+        function ensureChartJs(cb){
+          if (window.Chart) return cb();
+          var s = document.createElement('script');
+          s.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+          s.onload = cb;
+          document.head.appendChild(s);
+        }
+        ensureChartJs(fetchAndRender);
       })();
     </script>
   </section>
