@@ -7,6 +7,7 @@ Posts Gaia Eyes daily content to FB/IG using the Graph API.
 Commands:
   post-square   – posts the square caption card with caption+hashtags
   post-carousel – posts a 3-image carousel (stats, affects, playbook)
+  post-carousel-fb – posts the 3-image set to Facebook as a multi-image feed post
 
 Reads caption/hashtags from Supabase content.daily_posts (platform=default),
 prefers metrics_json.sections.caption over plain caption, and resolves image URLs
@@ -89,8 +90,15 @@ def sb_select_latest_post(platform: str = "default") -> Optional[dict]:
   return data[0] if data else None
 
 # --------- Meta (Graph API) ----------
-def _require_meta():
-  missing = [k for k in ("FB_PAGE_ID","FB_ACCESS_TOKEN","IG_USER_ID") if not os.getenv(k)]
+def _require_meta(require_ig: bool = False):
+  """Ensure required Meta env vars exist. If require_ig=True, also require IG_USER_ID."""
+  missing = []
+  if not FB_PAGE_ID:
+    missing.append("FB_PAGE_ID")
+  if not FB_ACCESS_TOKEN:
+    missing.append("FB_ACCESS_TOKEN")
+  if require_ig and not IG_USER_ID:
+    missing.append("IG_USER_ID")
   if missing:
     raise RuntimeError(f"Missing env for Meta posting: {', '.join(missing)}")
 
@@ -134,8 +142,51 @@ def fb_post_photo(image_url: str, caption: str, dry_run: bool=False) -> dict:
     if r.status_code != 200:
       logging.error("FB post failed: %s %s", r.status_code, r.text[:200])
 
+
+def fb_post_multi_image(image_urls: List[str], caption: str, dry_run: bool=False) -> dict:
+  """
+  Publish a multi-image feed post to a Facebook Page.
+  Implementation:
+    1) Stage each image via /{page-id}/photos with published=false to get media FBIDs.
+    2) Create a single /{page-id}/feed post with attached_media[]= {"media_fbid": "..."} for each.
+  """
+  _require_meta()  # IG not required for FB
+  # 1) Stage images
+  media_ids: List[str] = []
+  for url in image_urls:
+    payload = {"url": url, "published": "false", "access_token": FB_ACCESS_TOKEN}
+    if dry_run:
+      logging.info("[DRY] FB stage photo %s", url)
+      media_ids.append("DRY_MEDIA_FBid")
+      continue
+    r = session.post(f"https://graph.facebook.com/v19.0/{FB_PAGE_ID}/photos", data=payload, timeout=30)
+    try:
+      j = r.json()
+    except Exception:
+      j = {}
+    if r.status_code != 200 or "id" not in j:
+      logging.error("FB stage failed for %s: %s %s", url, r.status_code, (r.text or "")[:200])
+      raise RuntimeError("FB stage photo failed")
+    media_ids.append(j["id"])
+
+  # 2) Publish feed post with attached_media
+  if dry_run:
+    logging.info("[DRY] FB multi-image feed message len=%d media_ids=%s", len(caption or ""), media_ids)
+    return {"dry": True, "attached_media": media_ids}
+
+  data = {"message": caption or "", "access_token": FB_ACCESS_TOKEN}
+  for i, mid in enumerate(media_ids):
+    data[f"attached_media[{i}]"] = json.dumps({"media_fbid": mid})
+
+  r = session.post(f"https://graph.facebook.com/v19.0/{FB_PAGE_ID}/feed", data=data, timeout=30)
+  try:
+    return r.json()
+  finally:
+    if r.status_code != 200:
+      logging.error("FB multi-image post failed: %s %s", r.status_code, (r.text or "")[:200])
+
 def ig_post_carousel(image_urls: List[str], caption: str, dry_run: bool=False) -> dict:
-  _require_meta()
+  _require_meta(require_ig=True)
   # Step 1: create child containers
   children = []
   for url in image_urls:
@@ -248,7 +299,7 @@ def derive_caption_and_hashtags(post: dict) -> (str, str):
 # --------- CLI ----------
 def main():
   ap = argparse.ArgumentParser()
-  ap.add_argument("cmd", choices=["post-square", "post-carousel"], help="What to publish")
+  ap.add_argument("cmd", choices=["post-square", "post-carousel", "post-carousel-fb"], help="What to publish")
   ap.add_argument("--date", default=today_in_tz().isoformat(), help="YYYY-MM-DD (defaults to GAIA_TIMEZONE today)")
   ap.add_argument("--platform", default="default", help="daily_posts.platform (default)")
   ap.add_argument("--dry-run", action="store_true")
@@ -296,6 +347,14 @@ def main():
     image_urls = [urls["stats"], urls["affects"], urls["play"]]
     resp_ig = ig_post_carousel(image_urls, caption, dry_run=args.dry_run)
     logging.info("IG resp: %s", resp_ig)
+    return
+
+  if args.cmd == "post-carousel-fb":
+    caption, _ = derive_caption_and_hashtags(post)
+    logging.info("Derived caption (len=%d): %s", len(caption), caption[:160])
+    image_urls = [urls["stats"], urls["affects"], urls["play"]]
+    resp_fb = fb_post_multi_image(image_urls, caption, dry_run=args.dry_run)
+    logging.info("FB resp: %s", resp_fb)
     return
 
 if __name__ == "__main__":

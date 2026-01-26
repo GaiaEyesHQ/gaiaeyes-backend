@@ -1241,7 +1241,9 @@ def render_stats_card_from_features(
     draw.text((x_val,     panel_top),   "VALUE",  fill=dim, font=font_h2)
 
     y = panel_top + 56
-    draw.line([(110, y), (W-110, y)], fill=(255,255,255,30), width=2)
+    # Header separator line under "METRIC / VALUE"
+    line_y = y + 6
+    draw.line([(panel_box[0] + 20, line_y), (panel_box[2] - 20, line_y)], fill=(235, 245, 255, 64), width=2)
     y += 22
 
     max_val_w = (W - 110) - (x_val)
@@ -1261,8 +1263,7 @@ def render_stats_card_from_features(
         draw.text((x_val,   y),   val_str, fill=fg, font=use_font)
 
         y += 54
-        if idx != len(rows)-1:
-            draw.line([(110, y+8), (W-110, y+8)], fill=(255,255,255,22), width=1)
+        # Removed separator line between rows for cleaner look
 
     # “Did you know” footer
     y += 40
