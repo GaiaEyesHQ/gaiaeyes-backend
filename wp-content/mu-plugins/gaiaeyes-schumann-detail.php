@@ -62,7 +62,7 @@ function gaiaeyes_schumann_detail_shortcode($atts){
     $method= isset($comb['method']) ? (string)$comb['method'] : '';
     $primary = isset($comb['primary']) ? (string)$comb['primary'] : '';
     $srcs = isset($combined['sources']) && is_array($combined['sources']) ? $combined['sources'] : [];
-    foreach (['tomsk','cumiana','heartmath'] as $k){
+    foreach (['tomsk','cumiana'] as $k){
       if (!empty($srcs[$k]) && is_array($srcs[$k])){
         $img = isset($srcs[$k]['image']) ? esc_url($srcs[$k]['image']) : '';
         if (!$img) {
@@ -96,7 +96,7 @@ function gaiaeyes_schumann_detail_shortcode($atts){
       $f1 = round($c_f1, 2); $method='derived_from_latest'; $primary='cumiana';
     }
     // Build sources images if not set
-    foreach (['tomsk','cumiana','heartmath'] as $k){
+    foreach (['tomsk','cumiana'] as $k){
       if (empty($sources[$k])) {
         $img = '';
         if ($k==='tomsk') $img = $media_img_base.'tomsk_latest.png';
@@ -128,14 +128,13 @@ function gaiaeyes_schumann_detail_shortcode($atts){
       <article class="ge-card">
         <h3 id="combined">Combined F1 <a class="anchor-link" href="#combined" aria-label="Link to Combined F1">🔗</a></h3>
         <div class="row"><span class="lab">F1 (combined)</span><span class="val"><?php echo $f1!==null? esc_html(number_format($f1,2)).' Hz' : '—'; ?></span></div>
-        <div class="row"><span class="lab">Δ (24h)</span><span class="val"><?php echo $delta!==null? esc_html(number_format($delta,2)).' Hz' : '—'; ?></span></div>
         <?php if ($method): ?><div class="note">Method: <?php echo esc_html($method); ?><?php if($primary) echo ' • primary: '.esc_html(ucfirst($primary)); ?></div><?php endif; ?>
       </article>
 
       <article class="ge-card">
         <h3 id="images">Source Images <a class="anchor-link" href="#images" aria-label="Link to Source Images">🔗</a></h3>
         <div class="img-grid">
-          <?php foreach (['tomsk','cumiana','heartmath'] as $k): if (!empty($sources[$k]['image'])): ?>
+          <?php foreach (['tomsk','cumiana'] as $k): if (!empty($sources[$k]['image'])): ?>
             <figure class="img-box">
               <a href="<?php echo esc_url($sources[$k]['image']); ?>" class="sch-lightbox-link" data-caption="<?php echo esc_attr(ucfirst($k)); ?><?php if($sources[$k]['f1_hz']!==null) echo ' • f1 '.esc_attr(number_format((float)$sources[$k]['f1_hz'],2)).' Hz'; ?>">
                 <img src="<?php echo esc_url($sources[$k]['image']); ?>" alt="<?php echo esc_attr(ucfirst($k)); ?> latest plot" loading="lazy" />
