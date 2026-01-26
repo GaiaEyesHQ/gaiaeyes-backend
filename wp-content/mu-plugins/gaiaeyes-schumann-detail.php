@@ -43,43 +43,41 @@ if (!function_exists('gaiaeyes_http_json_fallback')) {
   }
 }
 
-function gaiaeyes_schumann_detail_shortcode($atts){
-  $a = shortcode_atts([
-    'combined_url' => '',
-    'latest_url'   => GAIAEYES_SCH_LATEST_URL,
-    'series_url'   => '',
-    'station'      => 'cumiana',
-    'cache'        => 10,
-  ], $atts, 'gaia_schumann_detail');
+if (!function_exists('gaiaeyes_schumann_detail_shortcode')) {
+  function gaiaeyes_schumann_detail_shortcode($atts){
+    $a = shortcode_atts([
+      'combined_url' => '',
+      'latest_url'   => GAIAEYES_SCH_LATEST_URL,
+      'series_url'   => '',
+      'station'      => 'cumiana',
+      'cache'        => 10,
+    ], $atts, 'gaia_schumann_detail');
 
-  $ttl = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
-  $latest   = gaiaeyes_http_json_fallback($a['latest_url'], GAIAEYES_SCH_LATEST_MIRROR, 'ge_sch_latest', $ttl);
-  $combined = null;
+    $ttl = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
+    $latest   = gaiaeyes_http_json_fallback($a['latest_url'], GAIAEYES_SCH_LATEST_MIRROR, 'ge_sch_latest', $ttl);
+    $combined = null;
 
-  // Prepare 24h series endpoint (F1). Prefer configured backend; hard‑fallback to public Render base.
-  $series_url_default = (defined('GAIAEYES_API_BASE')
-    ? rtrim(GAIAEYES_API_BASE, '/') . '/v1/earth/schumann/series?hours=24&station=' . rawurlencode($a['station'])
-    : 'https://gaiaeyes-backend.onrender.com/v1/earth/schumann/series?hours=24&station=' . rawurlencode($a['station'])
-  );
-  $series_url = !empty($a['series_url']) ? $a['series_url'] : $series_url_default;
+    // Prepare 24h series endpoint (F1). Prefer configured backend; hard‑fallback to public Render base.
+    $series_url_default = (defined('GAIAEYES_API_BASE')
+      ? rtrim(GAIAEYES_API_BASE, '/') . '/v1/earth/schumann/series?hours=24&station=' . rawurlencode($a['station'])
+      : 'https://gaiaeyes-backend.onrender.com/v1/earth/schumann/series?hours=24&station=' . rawurlencode($a['station'])
+    );
+    $series_url = !empty($a['series_url']) ? $a['series_url'] : $series_url_default;
 
-  // Fallback candidate URLs for JS chart
-  // 1. alt_station_url: swap cumiana/tomsk in station param
-  // 2. no_station_url: remove station param, only hours=24
-  $alt_station_url = $series_url;
-  if (preg_match('/station=([^&]+)/', $series_url, $m)) {
-    $station = strtolower($m[1]);
-    $alt = ($station === 'cumiana') ? 'tomsk' : 'cumiana';
-    $alt_station_url = preg_replace('/station=([^&]+)/', 'station='.$alt, $series_url);
-  }
-  $no_station_url = preg_replace('/([&?])station=[^&]+(&)?/', function($matches) {
-    // Remove the station param and any trailing & or ? if necessary
-    if ($matches[1] === '?' && empty($matches[2])) return '?';
-    if ($matches[1] === '&' && empty($matches[2])) return '';
-    return $matches[2] ? $matches[1] : '';
-  }, $series_url);
-  // Remove any trailing ? or & if left hanging
-  $no_station_url = preg_replace('/[?&]$/', '', $no_station_url);
+    // Fallback candidate URLs for JS chart
+    // 1. alt_station_url: swap cumiana/tomsk in station param
+    // 2. no_station_url: remove station param, only hours=24
+    $alt_station_url = $series_url;
+    if (preg_match('/station=([^&]+)/', $series_url, $m)) {
+      $station = strtolower($m[1]);
+      $alt = ($station === 'cumiana') ? 'tomsk' : 'cumiana';
+      $alt_station_url = preg_replace('/station=([^&]+)/', 'station='.$alt, $series_url);
+    }
+    // Remove `station=` param without using a callback (PHP 8 requires preg_replace_callback for closures)
+    $no_station_url = preg_replace('/([&?])station=[^&]*/i', '$1', $series_url);
+    // Tidy up any leftover separators like `?&` or trailing `?`/`&`
+    $no_station_url = preg_replace('/\?&/', '?', $no_station_url);
+    $no_station_url = rtrim($no_station_url, '?&');
 
   // Extract/derive combined block and source images
   $f1 = $delta = null; $method = $primary = '';
@@ -394,6 +392,9 @@ function gaiaeyes_schumann_detail_shortcode($atts){
     </script>
   </section>
   <?php
-  return ob_get_clean();
+    return ob_get_clean();
+  }
 }
-add_shortcode('gaia_schumann_detail','gaiaeyes_schumann_detail_shortcode');
+if (function_exists('add_shortcode')) {
+  add_shortcode('gaia_schumann_detail','gaiaeyes_schumann_detail_shortcode');
+}
