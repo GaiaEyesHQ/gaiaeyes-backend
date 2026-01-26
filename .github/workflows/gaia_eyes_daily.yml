@@ -125,6 +125,7 @@ jobs:
       issues: write
     outputs:
       media_sha: ${{ steps.media_sha.outputs.sha }}
+      supabase_media_base: ${{ steps.supabase_base.outputs.base }}
     env:
       GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
@@ -138,6 +139,9 @@ jobs:
       LOGO_PATH:        ${{ github.workspace }}/bots/earthscope_post/GaiaEyesLogo.png
       EARTHSCOPE_USE_MEDIA: "true"
       EARTHSCOPE_MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_MEDIA_BASE: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/latest
     steps:
       - uses: actions/checkout@v4
       - name: Clone media repo
@@ -182,6 +186,44 @@ jobs:
           LOGO_PATH: ${{ env.LOGO_PATH }}
         run: |
           python gaia_eyes_viral_bot.py
+      - name: Upload rendered images to Supabase Storage (social/earthscope/latest)
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          IMG_DIR="${MEDIA_REPO_PATH}/images"
+          if [ ! -d "$IMG_DIR" ]; then
+            echo "No images directory at ${IMG_DIR}; nothing to upload."
+            exit 0
+          fi
+          echo "Uploading images from ${IMG_DIR} to ${SUPABASE_MEDIA_BASE}"
+          up_count=0
+          fail_count=0
+          for f in "${IMG_DIR}"/*.jpg "${IMG_DIR}"/*.jpeg "${IMG_DIR}"/*.png; do
+            [ -e "$f" ] || continue
+            name="$(basename "$f")"
+            ext="${name##*.}"
+            ct="image/jpeg"
+            if [ "${ext,,}" = "png" ]; then ct="image/png"; fi
+            url="${SUPABASE_URL}/storage/v1/object/space-visuals/social/earthscope/latest/${name}"
+            code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "x-upsert: true" \
+              -H "Content-Type: ${ct}" \
+              --data-binary @"${f}" \
+              "${url}")
+            if [ "$code" = "200" ] || [ "$code" = "201" ]; then
+              printf "[upload] %-28s -> %s/%s\n" "$name" "${SUPABASE_MEDIA_BASE}" "$name"
+              up_count=$((up_count+1))
+            else
+              echo "[upload] FAILED ($code) for ${name}"
+              fail_count=$((fail_count+1))
+            fi
+          done
+          echo "[upload] done ok=${up_count} fail=${fail_count}"
+      - name: Set Supabase media base output
+        id: supabase_base
+        run: echo "base=${SUPABASE_MEDIA_BASE}" >> "$GITHUB_OUTPUT"
       - name: Get media repo commit sha
         id: media_sha
         run: |
@@ -204,7 +246,7 @@ jobs:
       IG_USER_ID: ${{ secrets.IG_USER_ID }}
       MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
       MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
-      MEDIA_CDN_BASE:   https://cdn.jsdelivr.net/gh/${{ secrets.MEDIA_REPO_OWNER }}/${{ secrets.MEDIA_REPO_NAME }}@${{ needs.render.outputs.media_sha }}/images
+      MEDIA_CDN_BASE:   ${{ needs.render.outputs.supabase_media_base }}
     steps:
       - uses: actions/checkout@v4
       - name: Wait for CDN propagation
@@ -222,6 +264,25 @@ jobs:
       - name: Post square (FB)
         working-directory: bots/earthscope_post
         run: python meta_poster.py post-square
+      - name: Post carousel (FB)
+        working-directory: bots/earthscope_post
+        run: |
+          set -e
+          # Try the unified subcommand first; fall back if repo still uses legacy name
+          if python meta_poster.py post-carousel --platform fb; then
+            echo "Facebook carousel posted via --platform fb."
+          else
+            echo "Falling back to legacy 'post-carousel-fb' subcommand…"
+            python meta_poster.py post-carousel-fb
+          fi
       - name: Post carousel (IG)
         working-directory: bots/earthscope_post
-        run: python meta_poster.py post-carousel
+        run: |
+          set -e
+          # Try the unified subcommand first; fall back if repo still uses legacy name
+          if python meta_poster.py post-carousel --platform ig; then
+            echo "Instagram carousel posted via --platform ig."
+          else
+            echo "Falling back to legacy 'post-carousel-ig' subcommand…"
+            python meta_poster.py post-carousel-ig
+          fi
