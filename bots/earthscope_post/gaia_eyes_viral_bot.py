@@ -832,6 +832,31 @@ def _compose_bg(W: int, H: int, energy: Optional[str], kind: str = "square") -> 
     base = Image.composite(dark, base, inv)
     return base
 
+
+# Draw a subtle top-to-transparent gradient in-place to guarantee header readability.
+def _add_top_gradient(im: Image.Image, height: int = 240, alpha_top: int = 180) -> None:
+    """
+    Draw a subtle top-to-transparent gradient in-place to guarantee header readability.
+    """
+    W, H = im.size
+    h = max(40, min(height, H // 2))
+    overlay = Image.new("RGBA", (W, h), (0, 0, 0, 0))
+    g = ImageDraw.Draw(overlay)
+    # alpha decays from alpha_top at y=0 to ~0 at y=h
+    for y in range(h):
+        a = max(0, alpha_top - int(alpha_top * (y / h)))
+        g.line([(0, y), (W, y)], fill=(0, 0, 0, a))
+    im.alpha_composite(overlay, (0, 0))
+
+
+# Uppercase date for stronger typographic hierarchy (e.g., JAN 26, 2026).
+def _format_date_title(day: dt.date) -> str:
+    """Uppercase date for stronger typographic hierarchy (e.g., JAN 26, 2026)."""
+    try:
+        return day.strftime("%b %d, %Y").upper()
+    except Exception:
+        return ""
+
 def _safe_text(s: str) -> str:
     if not s:
         return s
@@ -894,27 +919,37 @@ def _shadowed_text(draw: ImageDraw.ImageDraw, xy: tuple[int,int], text: str, fon
     draw.text((x+offset[0], y+offset[1]), text, font=font, fill=shadow)
     draw.text((x, y), text, font=font, fill=fill)
 
-def _draw_badge(im: Image.Image, draw: ImageDraw.ImageDraw, text: str, xy: tuple[int,int], pad: tuple[int,int]=(24,12),
-                fill=(60,180,120,190), stroke=(0,0,0,140), font: Optional[ImageFont.ImageFont]=None) -> tuple[int,int,int,int]:
+def _draw_badge(im: Image.Image, draw: ImageDraw.ImageDraw, text: str, xy: tuple[int,int],
+                pad: tuple[int,int]=(20,10), fill=(60,180,120,200), stroke=(0,0,0,120),
+                font: Optional[ImageFont.ImageFont]=None, radius: Optional[int]=None, stroke_width: int = 2
+               ) -> tuple[int,int,int,int]:
+    """
+    Draw a rounded pill badge. Returns the bounding box.
+    - pad: (x, y) padding inside the pill
+    - radius: corner radius; defaults to half height for perfect pill
+    """
     x, y = xy
     f = font or ImageFont.load_default()
     tw = int(draw.textlength(text, font=f))
     w = tw + pad[0]*2
     h = f.size + pad[1]*2
-    r = h//2
+    r = radius if radius is not None else max(10, h // 2)
+
     box = (x, y, x+w, y+h)
-    badge = Image.new("RGBA", (w, h), (0,0,0,0))
-    bd = ImageDraw.Draw(badge)
-    bd.rounded_rectangle([0,0,w-1,h-1], radius=r, fill=fill, outline=stroke, width=2)
-    sh = Image.new("RGBA", (w, h), (0,0,0,0))
-    sd = ImageDraw.Draw(sh)
+    pill = Image.new("RGBA", (w, h), (0,0,0,0))
+    pd = ImageDraw.Draw(pill)
+    pd.rounded_rectangle([0,0,w-1,h-1], radius=r, fill=fill, outline=stroke, width=stroke_width)
+
+    shadow = Image.new("RGBA", (w, h), (0,0,0,0))
+    sd = ImageDraw.Draw(shadow)
     sd.rounded_rectangle([2,2,w-1,h-1], radius=r, fill=(0,0,0,90))
-    im.alpha_composite(sh, (x, y))
-    im.alpha_composite(badge, (x, y))
+    im.alpha_composite(shadow, (x, y))
+    im.alpha_composite(pill, (x, y))
+
     tx = x + (w - tw)//2
-    ty = y + (h - f.size)//2 - 4
+    ty = y + (h - f.size)//2 - 3
     draw.text((tx+1,ty+1), text, font=f, fill=(0,0,0,160))
-    draw.text((tx,ty), text, font=f, fill=(255,255,255,230))
+    draw.text((tx,ty), text, font=f, fill=(255,255,255,235))
     return box
 
 def _blur_panel(im: Image.Image, box: tuple[int,int,int,int], blur_radius: int = 6, panel_alpha: int = 80) -> None:
@@ -930,6 +965,7 @@ def render_card(energy_label: str, mood: str, sch: float, kp: float, kind: str =
     else:
         W, H = 1080, 1080
     im = _compose_bg(W, H, energy_label, kind)
+    _add_top_gradient(im, height=220, alpha_top=170)
     draw = ImageDraw.Draw(im)
     font_h1   = _load_font(["BebasNeue.ttf", "BebasNeue-Regular.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"], 68)
     font_h2   = _load_font(["Oswald-Bold.ttf", "AbrilFatface-Regular.ttf", "BebasNeue.ttf"], 46)
@@ -1126,6 +1162,7 @@ def build_stats_rows(
     return rows
 
 
+
 # ---------------------------------------
 # Stats card renderer
 # ---------------------------------------
@@ -1140,50 +1177,55 @@ def render_stats_card_from_features(
         W, H = 1080, 1350
     else:
         W, H = 1080, 1080
+
     im = _compose_bg(W, H, energy, kind)
+    _add_top_gradient(im, height=260, alpha_top=190)
+
     draw = ImageDraw.Draw(im)
-    font_h1   = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"], 68)
+    font_h1   = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"], 72)
     font_h2   = _load_font(["Oswald-Bold.ttf", "AbrilFatface-Regular.ttf"], 40)
     font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 36)
     fg = (235,245,255,255); dim=(190,205,230,255)
 
-    label = "avg"
-    has_t = feats.get("sch_fundamental_avg_hz") is not None
-    has_c = feats.get("sch_cumiana_fundamental_avg_hz") is not None
-    if has_t and not has_c: label = "Tomsk"
-    elif has_c and not has_t: label = "Cumiana"
+    # Header + date
+    x0, y0 = 80, 88
+    header_txt = "EARTHSCOPE • TODAY’S METRICS"
+    date_txt   = _format_date_title(day)
 
-    x0, y0 = 80, 96
-    header_txt = "EarthScope • Today’s Metrics"
-    date_txt   = day.strftime('%b %d, %Y')
     header_w = draw.textlength(header_txt, font=font_h1)
     date_w   = draw.textlength(date_txt,   font=font_h1)
     gap = 40; max_w = W - 2*x0
     if header_w + gap + date_w <= max_w:
         _shadowed_text(draw, (x0, y0), header_txt, font=font_h1, fill=fg)
         _shadowed_text(draw, (x0 + int(header_w + gap), y0), f" —  {date_txt}", font=font_h1, fill=fg)
-        y = y0 + 94
+        y = y0 + 96
     else:
         _shadowed_text(draw, (x0, y0), header_txt, font=font_h1, fill=fg)
-        date_x = x0 + max(0, int(min(header_w, max_w) - date_w))
-        _shadowed_text(draw, (date_x, y0 + 74), date_txt, font=font_h1, fill=fg)
-        y = y0 + 148
+        _shadowed_text(draw, (x0, y0 + 76), date_txt, font=font_h1, fill=fg)
+        y = y0 + 152
 
+    # Energy pill
     el = (energy or "").lower()
-    col = (59,201,168,190) if el=="calm" else ((243,193,75,190) if el=="elevated" else ((239,106,106,190) if el=="high" else (104,162,224,190)))
-    _draw_badge(im, draw, f"Energy: {energy}", (x0, y-10), fill=col, font=font_h2)
-    y += 70
+    col = (59,201,168,200) if el=="calm" else ((243,193,75,200) if el=="elevated" else ((239,106,106,200) if el=="high" else (104,162,224,200)))
+    _draw_badge(im, draw, f"Energy: {energy}", (x0, y-6), fill=col, font=font_h2, pad=(18,10))
+    y += 66
 
-    panel_top = max(180, y + 10)
+    # Panel
+    panel_top = max(180, y + 8)
     panel_box = (80, panel_top, W - 80, H - 140)
     _blur_panel(im, panel_box, blur_radius=6, panel_alpha=70)
 
-    rows = build_stats_rows(feats, label, pulse=pulse)
+    rows = build_stats_rows(
+        feats,
+        "avg" if feats.get("sch_cumiana_fundamental_avg_hz") and feats.get("sch_fundamental_avg_hz")
+        else ("Tomsk" if feats.get("sch_fundamental_avg_hz") is not None else "Cumiana"),
+        pulse=pulse
+    )
     font_val = _load_font(["Oswald-Bold.ttf", "Oswald-Regular.ttf", "Poppins-Regular.ttf", "Menlo.ttf", "Courier New.ttf"], 48)
     chip_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf", "Arial.ttf"], 26)
 
     def _chip(draw: ImageDraw.ImageDraw, x:int, y:int, color:tuple, txt:str):
-        r = 22
+        r = 18
         draw.ellipse([x, y, x+2*r, y+2*r], fill=color, outline=(0,0,0,140), width=2)
         tw = int(draw.textlength(txt, font=chip_font))
         tx = x + r - tw//2
@@ -1191,45 +1233,49 @@ def render_stats_card_from_features(
         draw.text((tx+1,ty+1), txt, font=chip_font, fill=(0,0,0,160))
         draw.text((tx,ty), txt, font=chip_font, fill=(255,255,255,235))
 
+    # Column heads
     x_label, x_val = 160, W//2 + 80
-    draw.text((x_label+2, y+2), "Metric", fill=(0,0,0,160), font=font_h2)
-    draw.text((x_val+2, y+2), "Value",  fill=(0,0,0,160), font=font_h2)
-    draw.text((x_label, y), "Metric", fill=dim, font=font_h2)
-    draw.text((x_val, y), "Value",  fill=dim, font=font_h2)
-    y += 56
-    draw.line([(110, y), (W-110, y)], fill=(255,255,255,30), width=2)
-    y += 24
+    draw.text((x_label+2, panel_top+2), "METRIC", fill=(0,0,0,160), font=font_h2)
+    draw.text((x_val+2,   panel_top+2), "VALUE",  fill=(0,0,0,160), font=font_h2)
+    draw.text((x_label,   panel_top),   "METRIC", fill=dim, font=font_h2)
+    draw.text((x_val,     panel_top),   "VALUE",  fill=dim, font=font_h2)
 
-    # Set available width for value column
+    y = panel_top + 56
+    draw.line([(110, y), (W-110, y)], fill=(255,255,255,30), width=2)
+    y += 22
+
     max_val_w = (W - 110) - (x_val)
 
-    for lab, val, colr, abbr, _ in rows:
-        _chip(draw, x_label-56, y+2, colr, abbr)
+    for idx, (lab, val, colr, abbr, _) in enumerate(rows):
+        _chip(draw, x_label-56, y+4, colr, abbr)
+
         draw.text((x_label+2, y+2), lab, fill=(0,0,0,160), font=font_body)
-        draw.text((x_label, y), lab, fill=fg, font=font_body)
-        # For long strings (e.g., Aurora), tighten font and ellipsize to fit
+        draw.text((x_label,   y),   lab, fill=fg, font=font_body)
+
         use_font = font_val
         val_str = str(val)
         if lab.lower().startswith("aurora"):
             use_font = _load_font(["Oswald-Regular.ttf","Poppins-Regular.ttf","Arial.ttf"], 40)
-            val_str = _ellipsize(draw, val_str, use_font, max_val_w)
-        else:
-            val_str = _ellipsize(draw, val_str, use_font, max_val_w)
+        val_str = _ellipsize(draw, val_str, use_font, max_val_w)
         draw.text((x_val+2, y+2), val_str, fill=(0,0,0,160), font=use_font)
-        draw.text((x_val, y), val_str, fill=fg, font=use_font)
-        y += 56
+        draw.text((x_val,   y),   val_str, fill=fg, font=use_font)
 
-    # Stats card Did you know:
+        y += 54
+        if idx != len(rows)-1:
+            draw.line([(110, y+8), (W-110, y+8)], fill=(255,255,255,22), width=1)
+
+    # “Did you know” footer
     y += 40
     did_font = _load_font(["Oswald-Bold.ttf", "Poppins-Regular.ttf"], 36)
     facts = [
         "Did you know? Solar storms can affect human heart-rate variability.",
-        "Did you know? Schumann resonance is linked to brainwave frequencies.",
+        "Did you know? Schumann resonance aligns with brainwave bands.",
         "Did you know? Geomagnetic activity may influence sleep quality.",
     ]
     fact = random.choice(facts)
     y = _draw_wrapped_multilines(draw, fact, did_font, x_label, y, W - x_label - 120, line_gap=56)
     y = min(y, H - 160)
+
     _overlay_logo_and_tagline(im, "Decode the unseen.")
     return im.convert("RGB")
 
@@ -1239,6 +1285,7 @@ def render_text_card(title: str, body: str, energy: Optional[str] = None, kind: 
     else:
         W, H = 1080, 1080
     im = _compose_bg(W, H, energy, kind)
+    _add_top_gradient(im, height=220, alpha_top=170)
     draw = ImageDraw.Draw(im)
     font_h1   = _load_font(["BebasNeue.ttf", "ChangeOne-Regular.ttf", "AbrilFatface-Regular.ttf", "Oswald-Bold.ttf"], 66)
     font_body = _load_font(["Oswald-Regular.ttf", "Poppins-Regular.ttf"], 36)
