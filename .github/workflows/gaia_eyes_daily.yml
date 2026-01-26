@@ -190,28 +190,43 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
+
           IMG_DIR="${MEDIA_REPO_PATH}/images"
           if [ ! -d "$IMG_DIR" ]; then
             echo "No images directory at ${IMG_DIR}; nothing to upload."
             exit 0
           fi
-          echo "Uploading images from ${IMG_DIR} to ${SUPABASE_MEDIA_BASE}"
+
+          # Normalize and validate SUPABASE_URL (trim spaces/CRLF and trailing slash)
+          SUPABASE_URL_TRIMMED="$(printf '%s' "${SUPABASE_URL:-}" | tr -d '\r' | sed -e 's/[[:space:]]\+$//' -e 's#/$##')"
+          if ! printf '%s' "${SUPABASE_URL_TRIMMED}" | grep -Eq '^https?://'; then
+            echo "[error] SUPABASE_URL looks invalid: '${SUPABASE_URL_TRIMMED}'"
+            exit 1
+          fi
+
+          OBJECT_PATH_BASE="/storage/v1/object/space-visuals/social/earthscope/latest"
+
+          echo "Uploading images from ${IMG_DIR} to ${SUPABASE_URL_TRIMMED}${OBJECT_PATH_BASE}"
           up_count=0
           fail_count=0
+
           for f in "${IMG_DIR}"/*.jpg "${IMG_DIR}"/*.jpeg "${IMG_DIR}"/*.png; do
             [ -e "$f" ] || continue
             name="$(basename "$f")"
             ext="${name##*.}"
             ct="image/jpeg"
             if [ "${ext,,}" = "png" ]; then ct="image/png"; fi
-            url="${SUPABASE_URL}/storage/v1/object/space-visuals/social/earthscope/latest/${name}"
-            code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+            url="${SUPABASE_URL_TRIMMED}${OBJECT_PATH_BASE}/${name}"
+
+            echo "[debug] PUT ${OBJECT_PATH_BASE}/${name}"
+            code=$(curl -sS -o /dev/null -w "%{http_code}" -X PUT \
               -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
               -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
               -H "x-upsert: true" \
               -H "Content-Type: ${ct}" \
               --data-binary @"${f}" \
               "${url}")
+
             if [ "$code" = "200" ] || [ "$code" = "201" ]; then
               printf "[upload] %-28s -> %s/%s\n" "$name" "${SUPABASE_MEDIA_BASE}" "$name"
               up_count=$((up_count+1))
@@ -220,7 +235,12 @@ jobs:
               fail_count=$((fail_count+1))
             fi
           done
+
           echo "[upload] done ok=${up_count} fail=${fail_count}"
+          if [ "$up_count" -eq 0 ]; then
+            echo "[upload] No files uploaded successfully."
+            exit 1
+          fi
       - name: Set Supabase media base output
         id: supabase_base
         run: echo "base=${SUPABASE_MEDIA_BASE}" >> "$GITHUB_OUTPUT"
