@@ -336,21 +336,40 @@ def main():
       MEDIA_BASE_OVERRIDE = args.media_base.strip().rstrip("/")
   logging.info("Using media base: %s", _resolve_media_base())
 
-  day = dt.date.fromisoformat(args.date)
-  post = sb_select_daily_post(day, platform=args.platform)
-  if not post:
-    logging.warning("No content.daily_posts found for day=%s platform=%s; trying latest", day, args.platform)
-    post = sb_select_latest_post(platform=args.platform)
-    if not post:
-      logging.error("No content.daily_posts available to post (date or latest)")
-      sys.exit(2)
-    else:
-      try:
-        day = dt.date.fromisoformat(post.get("day")) if isinstance(post.get("day"), str) else day
-      except Exception:
-        pass
+  # Resolve the post to use (with sensible fallbacks across platforms and dates)
+  day = dt.date.fromisoformat(my_date) if isinstance(my_date := args.date, str) else args.date
+  requested_platform = (args.platform or "default").strip() or "default"
 
-  logging.info("Post day=%s platform=%s caption[0:80]=%s", day, args.platform, (post.get("caption") or "")[:80])
+  def _coerce_day_from(post_obj, fallback_day: dt.date) -> dt.date:
+      try:
+          if isinstance(post_obj, dict) and isinstance(post_obj.get("day"), str):
+              return dt.date.fromisoformat(post_obj["day"])  # keep day in sync if we fell back to latest
+      except Exception:
+          pass
+      return fallback_day
+
+  post = sb_select_daily_post(day, requested_platform)
+  if not post and requested_platform != "default":
+      logging.warning("No content.daily_posts for day=%s platform=%s; trying same day on 'default'", day, requested_show := requested_platform)
+      post = sb_select_daily_post(day, "default")
+
+  if not post:
+      # Try latest for requested platform first
+      logging.warning("No exact-day post found; trying latest for platform=%s", requested_platform)
+      post = sb_select_latest_post(platform=requested_platform)
+
+  if not post and requested_platform != "default":
+      logging.warning("No latest for platform=%s; trying latest for 'default'", requested_platform)
+      post = sb_select_latest_post("default")
+
+  if not post:
+      logging.error("No content.daily_posts available (no matching or fallback rows)")
+      sys.exit(2)
+
+  # Normalize day to the post we actually chose
+  day = _coerce_day_from(post, day)
+  effective_platform = (post.get("platform") or requested_platform)
+  logging.info("Post resolved -> day=%s platform=%s caption[0:80]=%s", day, effective_weapon := effective_platform, (post.get("caption") or "")[:80])
 
   urls = default_image_urls()
 
