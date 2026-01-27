@@ -12,6 +12,7 @@ Commands:
 Reads caption/hashtags from Supabase content.daily_posts (platform=default),
 prefers metrics_json.sections.caption over plain caption, and resolves image URLs
 from your media repo (jsDelivr-style CDN by default).
+You can override the image base with the --media-base CLI flag or the MEDIA_CDN_BASE env var.
 """
 import os, sys, json, logging, argparse, datetime as dt
 from typing import Optional, List, Dict
@@ -32,6 +33,9 @@ SB_KEY              = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_A
 SB_USER_ID          = os.getenv("SUPABASE_USER_ID")
 MEDIA_CDN_BASE      = os.getenv("MEDIA_CDN_BASE", "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/images").rstrip("/")
 SUPABASE_URL        = os.getenv("SUPABASE_URL", "").rstrip("/")
+
+# CLI/runtime override for media base (set in main())
+MEDIA_BASE_OVERRIDE: Optional[str] = None
 
 FB_PAGE_ID          = os.getenv("FB_PAGE_ID")
 FB_ACCESS_TOKEN     = os.getenv("FB_ACCESS_TOKEN")
@@ -55,7 +59,7 @@ def _resolve_media_base() -> str:
        {SUPABASE_URL}/storage/v1/object/public/space-visuals/social/earthscope/latest
     3) Fallback to jsDelivr media repo (legacy)
   """
-  base = (MEDIA_CDN_BASE or "").strip().rstrip("/")
+  base = (MEDIA_BASE_OVERRIDE or MEDIA_CDN_BASE or "").strip().rstrip("/")
   if base and base.lower().startswith("http"):
     return base
   sb = (SUPABASE_URL or "").strip().rstrip("/")
@@ -323,7 +327,13 @@ def main():
   ap.add_argument("--date", default=today_in_tz().isoformat(), help="YYYY-MM-DD (defaults to GAIA_TIMEZONE today)")
   ap.add_argument("--platform", default="default", help="daily_posts.platform (default)")
   ap.add_argument("--dry-run", action="store_true")
+  ap.add_argument("--media-base", dest="media_base", default=None,
+                  help="Override image base URL (e.g., https://.../space-visuals/social/earthscope/latest)")
   args = ap.parse_args()
+  # Apply media-base override before any URL resolution/logging
+  global MEDIA_BASE_OVERRIDE
+  if args.media_base:
+      MEDIA_BASE_OVERRIDE = args.media_base.strip().rstrip("/")
   logging.info("Using media base: %s", _resolve_media_base())
 
   day = dt.date.fromisoformat(args.date)
