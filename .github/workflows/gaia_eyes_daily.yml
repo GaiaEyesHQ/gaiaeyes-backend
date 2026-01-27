@@ -213,10 +213,17 @@ jobs:
           for f in "${IMG_DIR}"/*.jpg "${IMG_DIR}"/*.jpeg "${IMG_DIR}"/*.png; do
             [ -e "$f" ] || continue
             name="$(basename "$f")"
+            # Guard against problematic filenames (spaces, etc.)
+            if [[ "$name" == *" "* ]]; then
+              echo "[upload] Skipping '$name' (contains spaces — not a post asset)"
+              continue
+            fi
+            # URL-encode the object name for the request URL
+            name_enc=$(python -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$name")
             ext="${name##*.}"
             ct="image/jpeg"
             if [ "${ext,,}" = "png" ]; then ct="image/png"; fi
-            url="${SUPABASE_URL_TRIMMED}${OBJECT_PATH_BASE}/${name}"
+            url="${SUPABASE_URL_TRIMMED}${OBJECT_PATH_BASE}/${name_enc}"
 
             echo "[debug] PUT ${OBJECT_PATH_BASE}/${name}"
             code=$(curl -sS -o /dev/null -w "%{http_code}" -X PUT \
