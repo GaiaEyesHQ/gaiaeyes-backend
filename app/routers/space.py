@@ -49,6 +49,12 @@ GOES_XRS_URL = os.getenv(
     "https://services.swpc.noaa.gov/json/goes/primary/xrays-1-day.json",
 )
 
+# Proton flux feed for S-scale
+GOES_PROTONS_URL = os.getenv(
+    "GOES_PROTONS_URL",
+    "https://services.swpc.noaa.gov/json/goes/primary/integral-protons-7-day.json",
+)
+
 router = APIRouter(prefix="/v1/space", tags=["space"])
 
 
@@ -83,6 +89,117 @@ def _flare_class_from_flux(flux: float) -> Optional[str]:
             # One decimal place to match typical notation (e.g., C3.4)
             return f"{letter}{factor:.1f}"
     return None
+
+
+# --- Helper functions for S, G, R scales and fetching proton flux ---
+def _s_scale_from_pfu(pfu: Optional[float]) -> str:
+    """
+    Return NOAA S-scale from ≥10 MeV proton flux (pfu).
+    S1 ≥ 10, S2 ≥ 100, S3 ≥ 1,000, S4 ≥ 10,000, S5 ≥ 100,000.
+    """
+    if pfu is None:
+        return "S0"
+    try:
+        v = float(pfu)
+    except (TypeError, ValueError):
+        return "S0"
+    if v >= 100000:
+        return "S5"
+    if v >= 10000:
+        return "S4"
+    if v >= 1000:
+        return "S3"
+    if v >= 100:
+        return "S2"
+    if v >= 10:
+        return "S1"
+    return "S0"
+
+
+def _g_from_kp(kp: Optional[float]) -> int:
+    """
+    Map Kp to NOAA G-scale integer (0..5).
+    """
+    if kp is None:
+        return 0
+    try:
+        v = float(kp)
+    except (TypeError, ValueError):
+        return 0
+    if v >= 9:
+        return 5
+    if v >= 8:
+        return 4
+    if v >= 7:
+        return 3
+    if v >= 6:
+        return 2
+    if v >= 5:
+        return 1
+    return 0
+
+
+def _r_from_flare_class(cls: Optional[str]) -> Optional[str]:
+    """
+    Rough R-scale mapping from a flare class string (e.g., C5.0, M1.2, X3.0).
+    R1: M1–M5, R2: M5–X1, R3: X1–X10, R4: X10–X20, R5: ≥X20
+    """
+    if not cls:
+        return None
+    s = cls.strip().upper()
+    if not s:
+        return None
+    band = s[0]
+    try:
+        mag = float(s[1:]) if len(s) > 1 else 0.0
+    except ValueError:
+        mag = 0.0
+
+    if band == "X":
+        if mag >= 20:
+            return "R5"
+        if mag >= 10:
+            return "R4"
+        return "R3"  # X1–X9.9
+    if band == "M":
+        if mag >= 5:
+            return "R2"
+        if mag >= 1:
+            return "R1"
+    return None
+
+
+def _fetch_json(url: str, ua: str = "GaiaEyes/space-alerts", timeout: int = 15) -> Optional[Any]:
+    try:
+        req = Request(url, headers={"User-Agent": ua})
+        with urlopen(req, timeout=timeout) as resp:
+            return json.load(resp)
+    except Exception:
+        return None
+
+
+def _latest_pfu_10mev_from_goes() -> Optional[Dict[str, Any]]:
+    """
+    Pull the latest ≥10 MeV proton flux sample from the GOES integral protons feed.
+    Returns {"ts": "...", "pfu": float} or None.
+    """
+    data = _fetch_json(GOES_PROTONS_URL, ua="GaiaEyes/space-protons")
+    if not isinstance(data, list):
+        return None
+    latest = None
+    for row in data:
+        # SWPC keys are typically: "time_tag", "proton_flux_gt_10_mev", etc.
+        pfu = row.get("proton_flux_gt_10_mev")
+        ts = row.get("time_tag")
+        try:
+            val = float(pfu) if pfu is not None else None
+        except (TypeError, ValueError):
+            val = None
+        if val is None or not ts:
+            continue
+        # walk forward; keep the most recent valid
+        latest = {"ts": ts, "pfu": val}
+    return latest
 
 
 def _goes_flares_summary() -> Dict[str, Any]:
@@ -476,3 +593,99 @@ async def magnetosphere(conn = Depends(get_db)):
     }
 
     return {"ok": True, "data": data, "error": None}
+
+
+# --- Unified alerts endpoint ---
+@router.get("/alerts")
+async def space_alerts(conn = Depends(get_db)):
+    """
+    Unified live alerts (radiation S-scale, geomagnetic G-scale, radio-blackout R-scale).
+    Mirrors the WP plugin sources but keeps graceful fallbacks.
+    Returns:
+      {
+        "ok": true,
+        "updated": "...Z",
+        "alerts": [ {key, severity, level, message, values}, ... ]
+      }
+    """
+    alerts: List[Dict[str, Any]] = []
+    updated = datetime.now(timezone.utc).isoformat()
+
+    # --- Geomagnetic (from ext.space_weather) ---
+    kp_now = None
+    kp_max24 = None
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute("set statement_timeout = 60000")
+            # latest kp
+            await cur.execute(
+                """
+                select ts_utc, kp_index
+                from ext.space_weather
+                where kp_index is not null
+                order by ts_utc desc
+                limit 1
+                """
+            )
+            row = await cur.fetchone()
+            if row:
+                kp_now = float(row.get("kp_index"))
+            # 24h max
+            await cur.execute(
+                """
+                select max(kp_index) as max_kp
+                from ext.space_weather
+                where ts_utc >= (now() at time zone 'utc') - interval '24 hours'
+                  and kp_index is not null
+                """
+            )
+            rowm = await cur.fetchone()
+            if rowm and rowm.get("max_kp") is not None:
+                kp_max24 = float(rowm.get("max_kp"))
+    except Exception:
+        pass
+
+    kp_ref = kp_now if kp_now is not None else kp_max24
+    g_now = _g_from_kp(kp_ref)
+    if g_now >= 1:
+        severity = "warn" if g_now >= 2 else "advisory"
+        alerts.append({
+            "key": "geomagnetic_g",
+            "severity": severity,
+            "level": f"G{g_now}",
+            "message": f"Geomagnetic activity: G{g_now} (Kp {kp_ref:.1f})",
+            "values": {"kp_now": kp_now, "kp_24h_max": kp_max24}
+        })
+
+    # --- Radiation (≥10 MeV PFU -> S-scale) ---
+    p = _latest_pfu_10mev_from_goes()
+    if p and p.get("pfu") is not None:
+        S = _s_scale_from_pfu(p["pfu"])
+        if S != "S0":
+            alerts.append({
+                "key": "radiation_s",
+                "severity": "warn",
+                "level": S,
+                "message": f"Solar radiation storm: {S} (≥10 MeV {p['pfu']:.2f} pfu)",
+                "values": {"pfu_10mev": p["pfu"], "ts": p.get("ts")}
+            })
+
+    # --- Radio blackouts (from flares summary; prefer GOES) ---
+    goes = _goes_flares_summary()
+    max_cls = goes.get("max_class")
+    if max_cls:
+        r = _r_from_flare_class(max_cls)
+        if r:
+            alerts.append({
+                "key": "radio_blackout_r",
+                "severity": "watch" if r == "R1" else "advisory",
+                "level": r,
+                "message": f"Radio blackout risk: {r} (24 h max {max_cls})",
+                "values": {"max_24h": max_cls}
+            })
+
+    # sort by severity importance
+    order = {"warn": 3, "advisory": 2, "watch": 1, "info": 0}
+    alerts.sort(key=lambda a: order.get(a["severity"], 0), reverse=True)
+
+    return {"ok": True, "updated": updated, "alerts": alerts}
