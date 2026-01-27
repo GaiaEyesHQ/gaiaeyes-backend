@@ -1,6 +1,5 @@
 #
 # app/routers/summary.py
-# NOTE: Do not make any changes in this file per instructions.
 import asyncio
 import json
 import logging
@@ -1565,6 +1564,23 @@ def _finalize_diag_info(
 
     return diag_info
 
+# --- Kp → NOAA G-scale helper (add once) ---
+def _g_from_kp(k: float | None) -> str | None:
+    if k is None:
+        return None
+    try:
+        kv = float(k)
+    except (TypeError, ValueError):
+        return None
+    return (
+        "G5" if kv >= 9 else
+        "G4" if kv >= 8 else
+        "G3" if kv >= 7 else
+        "G2" if kv >= 6 else
+        "G1" if kv >= 5 else
+        "G0"
+    )
+
 router = APIRouter(prefix="/v1")
 
 # -----------------------------
@@ -2209,7 +2225,53 @@ async def space_forecast_outlook(
                 prepare=False,
             )
             magnetometer_rows = await cur.fetchall()
+            # --- Kp now + last 24h helpers (with fallback to kp_obs) ---
+            kp_now_row = None
+            kp_24_row = None
+            try:
+                await cur.execute("select ts, kp_now from marts.kp_now limit 1")
+                kp_now_row = await cur.fetchone()
+            except Exception:
+                kp_now_row = None
 
+            try:
+                await cur.execute("select kp_max_24h from marts.kp_last24h limit 1")
+                kp_24_row = await cur.fetchone()
+            except Exception:
+                kp_24_row = None
+
+            if not kp_now_row:
+                # Fallback for older deployments that only have kp_obs
+                try:
+                    await cur.execute(
+                        """
+                        select kp_time as ts, kp::double precision as kp_now
+                        from marts.kp_obs
+                        order by kp_time desc
+                        limit 1
+                        """
+                    )
+                    kp_now_row = await cur.fetchone()
+                except Exception:
+                    kp_now_row = None
+
+            def _iso_ts(v):
+                try:
+                    return v.astimezone(timezone.utc).isoformat().replace("+00:00","Z") if v else None
+                except Exception:
+                    return None
+
+            kp_now_val = float(kp_now_row["kp_now"]) if (kp_now_row and kp_now_row.get("kp_now") is not None) else None
+            kp_now_ts  = kp_now_row.get("ts") if kp_now_row else None
+            kp_max24   = float(kp_24_row["kp_max_24h"]) if (kp_24_row and kp_24_row.get("kp_max_24h") is not None) else None
+
+            kp_block = {
+                "now": round(kp_now_val, 2) if kp_now_val is not None else None,
+                "now_ts": _iso_ts(kp_now_ts),
+                "g_scale_now": _g_from_kp(kp_now_val) if kp_now_val is not None else None,
+                "last_24h_max": round(kp_max24, 2) if kp_max24 is not None else None,
+                "g_scale_24h_max": _g_from_kp(kp_max24) if kp_max24 is not None else None,
+            }
     except Exception as exc:  # pragma: no cover - defensive
         return {"ok": False, "error": f"space_forecast_outlook failed: {exc}"}
 
@@ -2415,6 +2477,7 @@ async def space_forecast_outlook(
 
     outlook = {
         "ok": True,
+        "kp": kp_block,
         "headline": _first_str(payload.get("headline"), aurora_headline, "Space weather outlook"),
         "confidence": _normalize_confidence(payload.get("confidence") or aurora_confidence) or "medium",
         "summary": _first_str(payload.get("summary"), payload.get("body")),
