@@ -288,28 +288,46 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install requests python-dotenv
+      - name: Mirror default daily_post to IG platform
+        env:
+          REST_URL: ${{ env.SUPABASE_REST_URL }}
+          SERVICE_KEY: ${{ env.SUPABASE_SERVICE_KEY }}
+        run: |
+          set -euo pipefail
+          # Fetch latest 'default' daily_post
+          payload="$(curl -sS -H "apikey: ${SERVICE_KEY}" -H "Authorization: Bearer ${SERVICE_KEY}" \
+            "${REST_URL}/content/daily_posts?platform=eq.default&order=day.desc&limit=1")"
+          count="$(printf '%s' "$payload" | jq 'length')"
+          if [ "$count" -eq 0 ]; then
+            echo "No default daily_post to mirror; skipping."
+            exit 0
+          fi
+          # Rewrite platform to 'ig' and drop auto ids if present
+          ig_row="$(printf '%s' "$payload" | jq '.[0] | .platform="ig" | del(.id)')"
+          echo "Upserting IG platform daily_post for day=$(printf '%s' "$ig_row" | jq -r .day)"
+          curl -sS -X POST "${REST_URL}/content/daily_posts" \
+            -H "apikey: ${SERVICE_KEY}" \
+            -H "Authorization: Bearer ${SERVICE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: resolution=merge-duplicates" \
+            -d "[$ig_row]"
       - name: Post square (FB)
         working-directory: bots/earthscope_post
-        run: python meta_poster.py post-square
+        run: python meta_poster.py post-square --media-base "${{ needs.render.outputs.supabase_media_base }}"
       - name: Post carousel (FB)
         working-directory: bots/earthscope_post
         run: |
           set -e
           # Try the unified subcommand first; fall back if repo still uses legacy name
-          if python meta_poster.py post-carousel --platform fb; then
+          if python meta_poster.py post-carousel --platform fb --media-base "${{ needs.render.outputs.supabase_media_base }}"; then
             echo "Facebook carousel posted via --platform fb."
           else
             echo "Falling back to legacy 'post-carousel-fb' subcommand…"
-            python meta_poster.py post-carousel-fb
+            python meta_poster.py post-carousel-fb --media-base "${{ needs.render.outputs.supabase_media_base }}"
           fi
       - name: Post carousel (IG)
         working-directory: bots/earthscope_post
         run: |
           set -e
-          # Try the unified subcommand first; fall back if repo still uses legacy name
-          if python meta_poster.py post-carousel --platform ig; then
-            echo "Instagram carousel posted via --platform ig."
-          else
-            echo "Falling back to legacy 'post-carousel-ig' subcommand…"
-            python meta_poster.py post-carousel-ig
-          fi
+          # Use unified subcommand; IG content is mirrored from 'default' above
+          python meta_poster.py post-carousel --platform ig --media-base "${{ needs.render.outputs.supabase_media_base }}"
