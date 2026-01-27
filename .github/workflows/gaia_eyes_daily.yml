@@ -125,7 +125,6 @@ jobs:
       issues: write
     outputs:
       media_sha: ${{ steps.media_sha.outputs.sha }}
-      supabase_media_base: ${{ steps.supabase_base.outputs.base }}
     env:
       GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
@@ -248,9 +247,6 @@ jobs:
             echo "[upload] No files uploaded successfully."
             exit 1
           fi
-      - name: Set Supabase media base output
-        id: supabase_base
-        run: echo "base=${SUPABASE_MEDIA_BASE}" >> "$GITHUB_OUTPUT"
       - name: Get media repo commit sha
         id: media_sha
         run: |
@@ -273,7 +269,8 @@ jobs:
       IG_USER_ID: ${{ secrets.IG_USER_ID }}
       MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
       MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
-      MEDIA_CDN_BASE:   ${{ needs.render.outputs.supabase_media_base }}
+      SUPABASE_URL:     ${{ secrets.SUPABASE_URL }}
+      MEDIA_CDN_BASE:   ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/latest
     steps:
       - uses: actions/checkout@v4
       - name: Wait for CDN propagation
@@ -294,40 +291,75 @@ jobs:
           SERVICE_KEY: ${{ env.SUPABASE_SERVICE_KEY }}
         run: |
           set -euo pipefail
-          # Fetch latest 'default' daily_post
-          payload="$(curl -sS -H "apikey: ${SERVICE_KEY}" -H "Authorization: Bearer ${SERVICE_KEY}" \
-            "${REST_URL}/content/daily_posts?platform=eq.default&order=day.desc&limit=1")"
-          count="$(printf '%s' "$payload" | jq 'length')"
-          if [ "$count" -eq 0 ]; then
-            echo "No default daily_post to mirror; skipping."
+
+          echo "[mirror] REST_URL=${REST_URL}"
+          # Fetch latest 'default' daily_post as JSON (force array shape)
+          payload="$(curl -sS \
+            -H "apikey: ${SERVICE_KEY}" \
+            -H "Authorization: Bearer ${SERVICE_KEY}" \
+            -H "Accept: application/json" \
+            "${REST_URL}/content/daily_posts?select=*&platform=eq.default&order=day.desc&limit=1")"
+
+          # Log a short preview of the payload for troubleshooting
+          echo "[mirror] payload preview: $(printf '%s' "$payload" | tr -d '\n' | cut -c1-160)..."
+
+          # Normalize to a single row:
+          # - If it's an array with at least one item, take [0]
+          # - If it's an object that already looks like a row (has "day"), pass it through
+          # - Otherwise, treat as empty
+          row="$(
+            printf '%s' "$payload" | jq -c '
+              if type=="array" then
+                if length>0 then .[0] else empty end
+              elif (type=="object" and has("day")) then
+                .
+              else
+                empty
+              end
+            '
+          )"
+
+          if [ -z "${row}" ]; then
+            echo "[mirror] No default daily_post to mirror; skipping."
             exit 0
           fi
-          # Rewrite platform to 'ig' and drop auto ids if present
-          ig_row="$(printf '%s' "$payload" | jq '.[0] | .platform="ig" | del(.id)')"
-          echo "Upserting IG platform daily_post for day=$(printf '%s' "$ig_row" | jq -r .day)"
-          curl -sS -X POST "${REST_URL}/content/daily_posts" \
+
+          day="$(printf '%s' "$row" | jq -r '.day // empty')"
+          echo "[mirror] Mirroring day=${day:-unknown} to platform=ig"
+
+          # Rewrite platform, drop id if present
+          ig_row="$(printf '%s' "$row" | jq -c '.platform="ig" | del(.id)')"
+
+          # Upsert into content.daily_posts
+          status="$(curl -sS -o /dev/null -w "%{http_code}" -X POST "${REST_URL}/content/daily_posts" \
             -H "apikey: ${SERVICE_KEY}" \
             -H "Authorization: Bearer ${SERVICE_KEY}" \
             -H "Content-Type: application/json" \
             -H "Prefer: resolution=merge-duplicates" \
-            -d "[$ig_row]"
+            -d "[$ig_row]")"
+
+          if [ "$status" != "200" ] && [ "$status" != "201" ]; then
+            echo "[mirror] Upsert failed with HTTP ${status}"
+            exit 1
+          fi
+          echo "[mirror] Upsert OK for IG daily_post (day=${day:-unknown})"
       - name: Post square (FB)
         working-directory: bots/earthscope_post
-        run: python meta_poster.py post-square --media-base "${{ needs.render.outputs.supabase_media_base }}"
+        run: python meta_poster.py post-square --media-base "${{ env.MEDIA_CDN_BASE }}"
       - name: Post carousel (FB)
         working-directory: bots/earthscope_post
         run: |
           set -e
           # Try the unified subcommand first; fall back if repo still uses legacy name
-          if python meta_poster.py post-carousel --platform fb --media-base "${{ needs.render.outputs.supabase_media_base }}"; then
+          if python meta_poster.py post-carousel --platform fb --media-base "${{ env.MEDIA_CDN_BASE }}"; then
             echo "Facebook carousel posted via --platform fb."
           else
             echo "Falling back to legacy 'post-carousel-fb' subcommand…"
-            python meta_poster.py post-carousel-fb --media-base "${{ needs.render.outputs.supabase_media_base }}"
+            python meta_poster.py post-carousel-fb --media-base "${{ env.MEDIA_CDN_BASE }}"
           fi
       - name: Post carousel (IG)
         working-directory: bots/earthscope_post
         run: |
           set -e
           # Use unified subcommand; IG content is mirrored from 'default' above
-          python meta_poster.py post-carousel --platform ig --media-base "${{ needs.render.outputs.supabase_media_base }}"
+          python meta_poster.py post-carousel --platform ig --media-base "${{ env.MEDIA_CDN_BASE }}"
