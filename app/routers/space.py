@@ -599,7 +599,7 @@ async def magnetosphere(conn = Depends(get_db)):
 @router.get("/alerts")
 async def space_alerts(conn = Depends(get_db)):
     """
-    Unified live alerts (radiation S-scale, geomagnetic G-scale, radio-blackout R-scale).
+    Unified live alerts (radiation S-scale, geomagnetic G-scale, solar flare class, radio-blackout R-scale).
     Mirrors the WP plugin sources but keeps graceful fallbacks.
     Returns:
       {
@@ -670,10 +670,21 @@ async def space_alerts(conn = Depends(get_db)):
                 "values": {"pfu_10mev": p["pfu"], "ts": p.get("ts")}
             })
 
-    # --- Radio blackouts (from flares summary; prefer GOES) ---
+    # --- Solar flares (GOES XRS) and related radio blackout risk ---
     goes = _goes_flares_summary()
     max_cls = goes.get("max_class")
     if max_cls:
+        # Always report the strongest flare class seen in the last 24h
+        flare_severity = "warn" if max_cls.startswith("X") else ("advisory" if max_cls.startswith("M") else "info")
+        alerts.append({
+            "key": "solar_flare",
+            "severity": flare_severity,
+            "level": max_cls,
+            "message": f"Solar flare: {max_cls} in last 24h",
+            "values": {"max_24h": max_cls}
+        })
+
+        # Derive radio blackout (R-scale) from the flare class
         r = _r_from_flare_class(max_cls)
         if r:
             alerts.append({
