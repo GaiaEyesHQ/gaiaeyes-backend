@@ -96,6 +96,7 @@ def sb_select_daily_post(day: dt.date, platform: str = "default") -> Optional[di
   data = r.json()
   return data[0] if data else None
 
+
 def sb_select_latest_post(platform: str = "default") -> Optional[dict]:
   if not SUPABASE_REST_URL:
     return None
@@ -112,6 +113,43 @@ def sb_select_latest_post(platform: str = "default") -> Optional[dict]:
     return None
   data = r.json()
   return data[0] if data else None
+
+
+# --------- Fallback post selector ----------
+def _select_post_with_fallback(day: dt.date, platform: str) -> tuple[Optional[dict], str, dt.date]:
+  """
+  Resolve a daily_posts row using fallbacks:
+    1) exact (day, platform)
+    2) same day on 'default'
+    3) latest 'default' (any day)
+  Returns: (post_or_none, effective_platform, effective_day)
+  """
+  # 1) exact match
+  p = sb_select_daily_post(day, platform)
+  if p:
+    return p, platform, day
+
+  logging.warning("No content.daily_posts for day=%s platform=%s; trying same day on 'default'", day, platform)
+
+  # 2) same day, default platform
+  if platform != "default":
+    p_def = sb_select_daily_post(day, "default")
+    if p_def:
+      return p_def, "default", day
+
+  # 3) latest default
+  p_latest_def = sb_select_latest_post("default")
+  if p_latest_def:
+    eff_day = day
+    try:
+      if isinstance(p_latest_def.get("day"), str):
+        eff_day = dt.date.fromisoformat(p_latest_def["day"])  # reflect actual day of latest default
+    except Exception:
+      pass
+    logging.warning("Falling back to latest default daily_posts on %s", p_latest_def.get("day"))
+    return p_latest_def, "default", eff_day
+
+  return None, platform, day
 
 # --------- Meta (Graph API) ----------
 def _require_meta(require_ig: bool = False):
@@ -336,40 +374,13 @@ def main():
       MEDIA_BASE_OVERRIDE = args.media_base.strip().rstrip("/")
   logging.info("Using media base: %s", _resolve_media_base())
 
-  # Resolve the post to use (with sensible fallbacks across platforms and dates)
-  day = dt.date.fromisoformat(my_date) if isinstance(my_date := args.date, str) else args.date
-  requested_platform = (args.platform or "default").strip() or "default"
-
-  def _coerce_day_from(post_obj, fallback_day: dt.date) -> dt.date:
-      try:
-          if isinstance(post_obj, dict) and isinstance(post_obj.get("day"), str):
-              return dt.date.fromisoformat(post_obj["day"])  # keep day in sync if we fell back to latest
-      except Exception:
-          pass
-      return fallback_day
-
-  post = sb_select_daily_post(day, requested_platform)
-  if not post and requested_platform != "default":
-      logging.warning("No content.daily_posts for day=%s platform=%s; trying same day on 'default'", day, requested_show := requested_platform)
-      post = sb_select_daily_post(day, "default")
-
+  day = dt.date.fromisoformat(args.date)
+  post, effective_platform, effective_day = _select_post_with_fallback(day, args.platform)
   if not post:
-      # Try latest for requested platform first
-      logging.warning("No exact-day post found; trying latest for platform=%s", requested_platform)
-      post = sb_select_latest_post(platform=requested_platform)
-
-  if not post and requested_platform != "default":
-      logging.warning("No latest for platform=%s; trying latest for 'default'", requested_platform)
-      post = sb_select_latest_post("default")
-
-  if not post:
-      logging.error("No content.daily_posts available (no matching or fallback rows)")
-      sys.exit(2)
-
-  # Normalize day to the post we actually chose
-  day = _coerce_day_from(post, day)
-  effective_platform = (post.get("platform") or requested_platform)
-  logging.info("Post resolved -> day=%s platform=%s caption[0:80]=%s", day, effective_weapon := effective_platform, (post.get("caption") or "")[:80])
+    logging.error("No content.daily_posts available for day=%s (platform %s or default)", day, args.platform)
+    sys.exit(2)
+  day = effective_day
+  logging.info("Post day=%s platform=%s caption[0:80]=%s", day, effective_platform, (post.get("caption") or "")[:80])
 
   urls = default_image_urls()
 
@@ -392,11 +403,19 @@ def main():
     return
 
   if args.cmd == "post-carousel":
-    caption, _ = derive_caption_and_hashtags(post)  # reuse same caption/hashtags
+    caption, _ = derive_caption_and_hashtags(post)
     logging.info("Derived caption (len=%d): %s", len(caption), caption[:160])
     image_urls = [urls["stats"], urls["affects"], urls["play"]]
-    resp_ig = ig_post_carousel(image_urls, caption, dry_run=args.dry_run)
-    logging.info("IG resp: %s", resp_ig)
+
+    # Route by requested platform: FB -> multi-image feed; else IG carousel
+    if (args.platform or "").lower() in ("fb", "facebook"):
+      logging.info("Posting carousel to Facebook Page (multi-image feed)…")
+      resp = fb_post_multi_image(image_urls, caption, dry_run=args.dry_run)
+      logging.info("FB resp: %s", resp)
+    else:
+      logging.info("Posting carousel to Instagram…")
+      resp = ig_post_carousel(image_urls, caption, dry_run=args.dry_run)
+      logging.info("IG resp: %s", resp)
     return
 
   if args.cmd == "post-carousel-fb":
