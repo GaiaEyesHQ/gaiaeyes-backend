@@ -31,6 +31,7 @@ SUPABASE_REST_URL   = os.getenv("SUPABASE_REST_URL", "").rstrip("/")
 SB_KEY              = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY")
 SB_USER_ID          = os.getenv("SUPABASE_USER_ID")
 MEDIA_CDN_BASE      = os.getenv("MEDIA_CDN_BASE", "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/images").rstrip("/")
+SUPABASE_URL        = os.getenv("SUPABASE_URL", "").rstrip("/")
 
 FB_PAGE_ID          = os.getenv("FB_PAGE_ID")
 FB_ACCESS_TOKEN     = os.getenv("FB_ACCESS_TOKEN")
@@ -42,6 +43,25 @@ session = requests.Session()
 retries = Retry(total=3, backoff_factor=0.7, status_forcelist=[429,500,502,503,504])
 session.mount("https://", HTTPAdapter(max_retries=retries))
 session.mount("http://", HTTPAdapter(max_retries=retries))
+
+# --------- Media base resolver ----------
+def _resolve_media_base() -> str:
+  """
+  Resolve a fully-qualified base URL for rendered social images.
+
+  Priority:
+    1) MEDIA_CDN_BASE if it is a non-empty absolute URL
+    2) Derive from SUPABASE_URL bucket path we use for uploads:
+       {SUPABASE_URL}/storage/v1/object/public/space-visuals/social/earthscope/latest
+    3) Fallback to jsDelivr media repo (legacy)
+  """
+  base = (MEDIA_CDN_BASE or "").strip().rstrip("/")
+  if base and base.lower().startswith("http"):
+    return base
+  sb = (SUPABASE_URL or "").strip().rstrip("/")
+  if sb:
+    return f"{sb}/storage/v1/object/public/space-visuals/social/earthscope/latest"
+  return "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main/images"
 
 # --------- Supabase helpers ----------
 def _sb_headers(schema: str = "content") -> Dict[str,str]:
@@ -235,7 +255,7 @@ def today_in_tz() -> dt.date:
     return dt.datetime.utcnow().date()
 
 def default_image_urls() -> Dict[str,str]:
-  base = MEDIA_CDN_BASE.rstrip("/")
+  base = _resolve_media_base()
   return {
     "square": f"{base}/daily_caption.jpg",
     "stats":  f"{base}/daily_stats.jpg",
@@ -304,6 +324,7 @@ def main():
   ap.add_argument("--platform", default="default", help="daily_posts.platform (default)")
   ap.add_argument("--dry-run", action="store_true")
   args = ap.parse_args()
+  logging.info("Using media base: %s", _resolve_media_base())
 
   day = dt.date.fromisoformat(args.date)
   post = sb_select_daily_post(day, platform=args.platform)
