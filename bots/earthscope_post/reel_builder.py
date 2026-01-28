@@ -118,10 +118,16 @@ def _sb_select(path: str, params: dict, schema: str = "content"):
         return None
 
 def _latest_day_from_content(platform: str = "default") -> str:
-    # Expect a view that resolves the latest available day; fallback to today
-    res = _sb_select("daily_posts_latest_day", {"platform": f"eq.{platform}", "select": "day"}, schema="content")
+    # Try direct query: most recent day for platform, then fall back to 'default'
+    params = {"platform": f"eq.{platform}", "select": "day", "order": "day.desc", "limit": "1"}
+    res = _sb_select("daily_posts", params, schema="content")
     if isinstance(res, list) and res and "day" in res[0]:
         return res[0]["day"]
+    if platform != "default":
+        params["platform"] = "eq.default"
+        res = _sb_select("daily_posts", params, schema="content")
+        if isinstance(res, list) and res and "day" in res[0]:
+            return res[0]["day"]
     # fallback to UTC today
     return dt.datetime.utcnow().date().isoformat()
 
@@ -129,7 +135,7 @@ def fetch_post_for_day(day: str, platform: str = "default") -> Optional[dict]:
     params = {
         "day": f"eq.{day}",
         "platform": f"eq.{platform}",
-        "select": "day,platform,caption,overview,lead,short,cards"
+        "select": "*"
     }
     rows = _sb_select("daily_posts", params, schema="content")
     if isinstance(rows, list) and rows:
@@ -405,7 +411,7 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
             "-map", "[aout]",
             *common_video,
             "-c:a", "aac", "-b:a", "192k",
-            "-shortest",
+            "-t", duration_str,
             str(video_out)
         ]
         run(cmd)
@@ -421,7 +427,7 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
             "-map", "[aout]",
             *common_video,
             "-c:a", "aac", "-b:a", "192k",
-            "-shortest",
+            "-t", duration_str,
             str(video_out)
         ]
         run(cmd)
@@ -437,7 +443,7 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
             "-map", "[aout]",
             *common_video,
             "-c:a", "aac", "-b:a", "192k",
-            "-shortest",
+            "-t", duration_str,
             str(video_out)
         ]
         run(cmd)
