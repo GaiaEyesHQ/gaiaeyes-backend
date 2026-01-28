@@ -298,6 +298,7 @@ jobs:
             -H "apikey: ${SERVICE_KEY}" \
             -H "Authorization: Bearer ${SERVICE_KEY}" \
             -H "Accept: application/json" \
+            -H "Accept-Profile: content" \
             "${REST_URL}/content/daily_posts?select=*&platform=eq.default&order=day.desc&limit=1")"
 
           # Log a short preview of the payload for troubleshooting
@@ -331,10 +332,11 @@ jobs:
           ig_row="$(printf '%s' "$row" | jq -c '.platform="ig" | del(.id)')"
 
           # Upsert into content.daily_posts
-          status="$(curl -sS -o /dev/null -w "%{http_code}" -X POST "${REST_URL}/content/daily_posts" \
+          status="$(curl -sS -o /dev/null -w "%{http_code}" -X POST "${REST_URL}/content/daily_posts?on_conflict=day,platform" \
             -H "apikey: ${SERVICE_KEY}" \
             -H "Authorization: Bearer ${SERVICE_KEY}" \
             -H "Content-Type: application/json" \
+            -H "Content-Profile: content" \
             -H "Prefer: resolution=merge-duplicates" \
             -d "[$ig_row]")"
 
@@ -407,6 +409,7 @@ jobs:
             -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Accept: application/json" \
+            -H "Accept-Profile: content" \
             "${SUPABASE_REST_URL}/content/daily_posts?select=caption,day&platform=eq.default&order=day.desc&limit=1")"
           echo "[caption] payload preview: $(printf '%s' "$payload" | tr -d '\n' | cut -c1-160)..."
           caption="$(printf '%s' "$payload" | jq -r '.[0].caption // ""')"
