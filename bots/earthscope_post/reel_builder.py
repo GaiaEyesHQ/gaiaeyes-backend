@@ -37,6 +37,8 @@ import shlex
 from pathlib import Path
 from typing import List, Optional
 import requests
+from requests.adapters import HTTPAdapter, Retry
+import datetime as dt
 
 # ------------ Utilities ------------
 
@@ -76,6 +78,90 @@ SUPABASE_AUDIO_BASE = env_get(
     "SUPABASE_AUDIO_BASE",
     f"{SUPABASE_URL}/storage/v1/object/public/space-visuals/social/audio" if SUPABASE_URL else None
 )
+
+# ------------ Caption from Supabase (content.daily_posts) ------------
+# Optional envs; when present we'll try to fetch a caption VO from Supabase
+SUPABASE_REST_URL = os.getenv("SUPABASE_REST_URL", "").rstrip("/")
+SUPABASE_SERVICE_KEY = (os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY") or "").strip()
+
+def _sb_session():
+    s = requests.Session()
+    try:
+        retries = Retry(total=3, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
+        s.mount("https://", HTTPAdapter(max_retries=retries))
+    except Exception:
+        pass
+    return s
+
+def _sb_headers(schema: str = "content"):
+    h = {
+        "Accept": "application/json",
+        "Accept-Profile": schema,
+    }
+    if SUPABASE_SERVICE_KEY:
+        h["apikey"] = SUPABASE_SERVICE_KEY
+        h["Authorization"] = f"Bearer {SUPABASE_SERVICE_KEY}"
+    return h
+
+def _sb_select(path: str, params: dict, schema: str = "content"):
+    if not SUPABASE_REST_URL:
+        return None
+    url = f"{SUPABASE_REST_URL}/{path}"
+    r = _sb_session().get(url, headers=_sb_headers(schema), params=params, timeout=30)
+    if r.status_code != 200:
+        log(f"[caption] Supabase {path} failed {r.status_code}: {r.text[:160]}")
+        return None
+    try:
+        return r.json()
+    except Exception as e:
+        log(f"[caption] JSON parse error: {e}")
+        return None
+
+def _latest_day_from_content(platform: str = "default") -> str:
+    # Expect a view that resolves the latest available day; fallback to today
+    res = _sb_select("content.daily_posts_latest_day", {"platform": f"eq.{platform}", "select": "day"})
+    if isinstance(res, list) and res and "day" in res[0]:
+        return res[0]["day"]
+    # fallback to UTC today
+    return dt.datetime.utcnow().date().isoformat()
+
+def fetch_post_for_day(day: str, platform: str = "default") -> Optional[dict]:
+    params = {
+        "day": f"eq.{day}",
+        "platform": f"eq.{platform}",
+        "select": "day,platform,caption,overview,lead,short,cards"
+    }
+    rows = _sb_select("content.daily_posts", params)
+    if isinstance(rows, list) and rows:
+        return rows[0]
+    # fallback to default platform for the same day
+    if platform != "default":
+        params["platform"] = "eq.default"
+        rows = _sb_select("content.daily_posts", params)
+        if isinstance(rows, list) and rows:
+            return rows[0]
+    return None
+
+def resolve_caption(platform: str = "default", target_day: Optional[str] = None) -> Optional[str]:
+    if not SUPABASE_REST_URL:
+        return None
+    day = target_day or _latest_day_from_content(platform)
+    row = fetch_post_for_day(day, platform)
+    if not row:
+        return None
+    # Prefer explicit caption, then overview/lead/short, then cards.caption.text
+    for key in ("caption", "overview", "lead", "short"):
+        val = row.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    cards = row.get("cards")
+    if isinstance(cards, dict):
+        cap = cards.get("caption") or {}
+        if isinstance(cap, dict):
+            txt = cap.get("text") or cap.get("short")
+            if isinstance(txt, str) and txt.strip():
+                return txt.strip()
+    return None
 
 # Visual timing
 CLIP_DUR = 6.5   # seconds per still
@@ -394,7 +480,10 @@ def main():
     log(f"Total visual duration: {total_duration:.3f}s")
 
     # 4) VO (best-effort) and bed
-    vo_text = guess_vo_text(EARTHSCOPE_JSON)
+    platform = env_get("REEL_PLATFORM", "default")
+    target_day = env_get("TARGET_DAY")
+    caption_text = resolve_caption(platform=platform, target_day=target_day)
+    vo_text = caption_text or guess_vo_text(EARTHSCOPE_JSON)
     vo_wav = tmp_dir / "vo.wav"
     vo_ok = False
     if OPENAI_API_KEY:
