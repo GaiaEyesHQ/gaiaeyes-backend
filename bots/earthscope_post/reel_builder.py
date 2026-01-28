@@ -71,7 +71,7 @@ EARTHSCOPE_JSON = Path(env_get("EARTHSCOPE_OUTPUT_JSON_PATH", str(DATA_DIR / "ea
 OPENAI_API_KEY = env_get("OPENAI_API_KEY")
 REEL_TTS_VOICE = env_get("REEL_TTS_VOICE", "marin")
 REEL_MOOD = env_get("REEL_MOOD", None)
-REEL_OUT_PATH = Path(env_get("REEL_OUT_PATH", str(IMAGES_DIR / "reel.mp4")))
+REEL_OUT_PATH = Path(env_get("REEL_OUT_PATH", env_get("REEL_OUT", str(IMAGES_DIR / "reel.mp4"))))
 
 SUPABASE_URL = env_get("SUPABASE_URL")
 SUPABASE_AUDIO_BASE = env_get(
@@ -119,7 +119,7 @@ def _sb_select(path: str, params: dict, schema: str = "content"):
 
 def _latest_day_from_content(platform: str = "default") -> str:
     # Expect a view that resolves the latest available day; fallback to today
-    res = _sb_select("content.daily_posts_latest_day", {"platform": f"eq.{platform}", "select": "day"})
+    res = _sb_select("daily_posts_latest_day", {"platform": f"eq.{platform}", "select": "day"}, schema="content")
     if isinstance(res, list) and res and "day" in res[0]:
         return res[0]["day"]
     # fallback to UTC today
@@ -131,13 +131,13 @@ def fetch_post_for_day(day: str, platform: str = "default") -> Optional[dict]:
         "platform": f"eq.{platform}",
         "select": "day,platform,caption,overview,lead,short,cards"
     }
-    rows = _sb_select("content.daily_posts", params)
+    rows = _sb_select("daily_posts", params, schema="content")
     if isinstance(rows, list) and rows:
         return rows[0]
     # fallback to default platform for the same day
     if platform != "default":
         params["platform"] = "eq.default"
-        rows = _sb_select("content.daily_posts", params)
+        rows = _sb_select("daily_posts", params, schema="content")
         if isinstance(rows, list) and rows:
             return rows[0]
     return None
@@ -511,6 +511,7 @@ def main():
     mix_audio_with_video(vid_no_audio, REEL_OUT_PATH, vo_wav if vo_ok else None, bed_wav if bed_ok else None, total_duration)
 
     log(f"Reel written to: {REEL_OUT_PATH}")
+    return
 
 if __name__ == "__main__":
     main()

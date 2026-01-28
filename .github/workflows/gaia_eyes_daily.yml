@@ -299,7 +299,7 @@ jobs:
             -H "Authorization: Bearer ${SERVICE_KEY}" \
             -H "Accept: application/json" \
             -H "Accept-Profile: content" \
-            "${REST_URL}/content/daily_posts?select=*&platform=eq.default&order=day.desc&limit=1")"
+            "${REST_URL}/daily_posts?select=*&platform=eq.default&order=day.desc&limit=1")"
 
           # Log a short preview of the payload for troubleshooting
           echo "[mirror] payload preview: $(printf '%s' "$payload" | tr -d '\n' | cut -c1-160)..."
@@ -332,7 +332,7 @@ jobs:
           ig_row="$(printf '%s' "$row" | jq -c '.platform="ig" | del(.id)')"
 
           # Upsert into content.daily_posts
-          status="$(curl -sS -o /dev/null -w "%{http_code}" -X POST "${REST_URL}/content/daily_posts?on_conflict=day,platform" \
+          status="$(curl -sS -o /dev/null -w "%{http_code}" -X POST "${REST_URL}/daily_posts?on_conflict=day,platform" \
             -H "apikey: ${SERVICE_KEY}" \
             -H "Authorization: Bearer ${SERVICE_KEY}" \
             -H "Content-Type: application/json" \
