@@ -56,6 +56,30 @@ def which_ffmpeg() -> str:
         raise RuntimeError("ffmpeg not found in PATH. Install it in the job (apt-get install ffmpeg).")
     return path
 
+
+# ------------ Media duration probe ------------
+def probe_duration_seconds(media_path: Path) -> Optional[float]:
+    """
+    Use ffprobe to get duration in seconds (float). Returns None on failure.
+    """
+    try:
+        res = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(media_path),
+            ],
+            capture_output=True, text=True, check=False
+        )
+        if res.returncode == 0:
+            s = res.stdout.strip()
+            if s:
+                return float(s)
+    except Exception as e:
+        log(f"ffprobe duration failed for {media_path}: {e}")
+    return None
+
 def env_get(name: str, default: Optional[str] = None) -> Optional[str]:
     val = os.environ.get(name)
     if val is None or val == "":
@@ -514,6 +538,48 @@ def main():
             log("No track selected; skipping bed.")
     else:
         log("No tracks.json manifest available; skipping bed.")
+
+    # --- If the VO is longer than the visual chain, rebuild clips proportionally ---
+    # Optional padding after VO to avoid abrupt cut
+    vo_tail_pad = float(env_get("REEL_VO_TAIL_PAD_SEC", "1.2") or "1.2")
+
+    # Optional hard target duration override (seconds). If provided and larger than current, prefer it.
+    target_total_env = env_get("REEL_DURATION_SEC")
+    target_total = None
+    try:
+        if target_total_env:
+            target_total = float(target_total_env)
+    except Exception:
+        target_total = None
+
+    vo_secs = None
+    if vo_ok and vo_wav.exists():
+        vo_secs = probe_duration_seconds(vo_wav)
+
+    # Decide the required total duration
+    required_total = total_duration
+    if vo_secs:
+        required_total = max(required_total, vo_secs + vo_tail_pad)
+    if target_total:
+        required_total = max(required_total, target_total)
+
+    if required_total > total_duration + 0.05:
+        n = len(clips)
+        # Solve for per-clip duration so that: n * d - (n-1) * XFADE = required_total
+        new_clip_dur = (required_total + XFADE * (n - 1)) / n
+        log(f"VO ~{(vo_secs or 0.0):.2f}s, extending per-clip duration to {new_clip_dur:.2f}s for total ~{required_total:.2f}s")
+
+        # Rebuild clips with the new per-clip duration
+        clips = []
+        for i, img in enumerate(cards):
+            outc = tmp_dir / f"clip_{i}.mp4"
+            build_still_clip(img, outc, new_clip_dur, FPS)
+            clips.append(outc)
+
+        # Rebuild crossfade chain and recalc total
+        xfade_concat(clips, vid_no_audio, new_clip_dur, XFADE, FPS)
+        total_duration = max(0.0, new_clip_dur * n - XFADE * (n - 1))
+        log(f"Adjusted visual duration: {total_duration:.3f}s")
 
     # 5) Mix and mux
     mix_audio_with_video(vid_no_audio, REEL_OUT_PATH, vo_wav if vo_ok else None, bed_wav if bed_ok else None, total_duration)
