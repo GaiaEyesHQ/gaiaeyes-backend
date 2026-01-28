@@ -345,7 +345,8 @@ jobs:
             exit 1
           fi
           echo "[mirror] Upsert OK for IG daily_post (day=${day:-unknown})"
-      - name: Post square (FB)
+      - name: Post square (FB) — disabled
+        if: ${{ false }}  # temporarily disable square posts (both FB and IG via meta_poster)
         working-directory: bots/earthscope_post
         run: python meta_poster.py post-square --media-base "${{ env.MEDIA_CDN_BASE }}"
       - name: Post carousel (FB)
@@ -508,7 +509,7 @@ jobs:
               -H "Authorization: Bearer ${SERVICE_KEY}" \
               -H "Accept: application/json" \
               -H "Accept-Profile: content" \
-              "${REST_URL}/daily_posts?select=*&platform=eq.${plat}&order=day.desc&amp;limit=1"
+              "${REST_URL}/daily_posts?select=*&platform=eq.${plat}&order=day.desc&limit=1"
           }
 
           # Prefer IG-specific post; fall back to default
@@ -536,6 +537,7 @@ jobs:
             exit 0
           fi
 
+          # Create media container for the reel
           create_resp="$(
             curl -sS -X POST "https://graph.facebook.com/v20.0/${IG_USER_ID}/media" \
               -F "media_type=REELS" \
@@ -546,9 +548,33 @@ jobs:
           echo "IG create_resp: ${create_resp}"
           creation_id="$(printf '%s' "$create_resp" | jq -r '.id // empty')"
           if [ -z "$creation_id" ]; then
-            echo "No IG creation_id; skipping publish."
+            echo "No IG creation_id; cannot continue.";
+            exit 1
+          fi
+
+          # Poll container status until FINISHED (or bail on ERROR)
+          status=""
+          for attempt in $(seq 1 20); do
+            status_resp="$(curl -sS "https://graph.facebook.com/v20.0/${creation_id}?fields=status_code&access_token=${FB_ACCESS_TOKEN}")"
+            status="$(printf '%s' "$status_resp" | jq -r '.status_code // empty')"
+            echo "IG status attempt ${attempt}: ${status_resp}"
+
+            if [ "$status" = "FINISHED" ]; then
+              break
+            fi
+            if [ "$status" = "ERROR" ]; then
+              echo "IG container error state; aborting publish.";
+              exit 1
+            fi
+            sleep 10
+          done
+
+          if [ "$status" != "FINISHED" ]; then
+            echo "IG container not ready after waiting; skipping publish for now.";
             exit 0
           fi
+
+          # Publish once ready
           publish_resp="$(
             curl -sS -X POST "https://graph.facebook.com/v20.0/${IG_USER_ID}/media_publish" \
               -F "creation_id=${creation_id}" \
