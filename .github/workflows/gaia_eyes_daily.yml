@@ -401,6 +401,39 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           # Extras commonly required by the reel builder
           pip install moviepy pydub soundfile numpy pillow requests openai
+          pip install supabase
+
+      - name: Stage reel images from Supabase (latest)
+        run: |
+          set -euo pipefail
+          BASE="${MEDIA_CDN_BASE}"
+          OUT_DIR="${GITHUB_WORKSPACE}/reel_media/images"
+          mkdir -p "${OUT_DIR}"
+
+          fetch() {
+            local name="$1"
+            local url="${BASE}/${name}"
+            echo "[fetch] ${url}"
+            if curl -fSsL "${url}" -o "${OUT_DIR}/${name}"; then
+              echo "[ok] ${name}"
+            else
+              echo "[miss] ${name}"
+            fi
+          }
+
+          # Try the canonical cards (optional if some are missing)
+          fetch dailypost.jpg
+          fetch daily_stats.jpg
+          fetch daily_affects.jpg
+          fetch daily_playbook.jpg
+          fetch daily_caption.jpg
+
+          shopt -s nullglob
+          files=("${OUT_DIR}"/*.jpg "${OUT_DIR}"/*.png)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "[error] No cards available under ${OUT_DIR}"
+            exit 1
+          fi
 
       - name: Build reel (reel_builder.py)
         working-directory: bots/earthscope_post
@@ -409,14 +442,13 @@ jobs:
           REEL_BED_URL: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/music/bed01.wav
           REEL_OUT: ${{ github.workspace }}/reel.mp4
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          MEDIA_REPO_PATH: ${{ github.workspace }}/reel_media
         run: |
           set -euo pipefail
-          echo "Building reel — letting reel_builder fetch caption from Supabase…"
+          echo "Building reel — using staged images at ${GITHUB_WORKSPACE}/reel_media/images"
           python reel_builder.py \
-            --media-base "${REEL_MEDIA_BASE}" \
             --bed-url "${REEL_BED_URL}" \
-            --out "${REEL_OUT}" || \
-          python reel_builder.py
+            --out "${REEL_OUT}"
           test -s "${REEL_OUT}"
 
       - name: Upload reel to Supabase Storage (reels/latest)
