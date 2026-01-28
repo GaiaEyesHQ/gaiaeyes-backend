@@ -378,6 +378,7 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       MEDIA_CDN_BASE: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/latest
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
@@ -401,24 +402,6 @@ jobs:
           # Extras commonly required by the reel builder
           pip install moviepy pydub soundfile numpy pillow requests openai
 
-      - name: Fetch caption (latest default)
-        id: fetch_caption
-        run: |
-          set -euo pipefail
-          payload="$(curl -sS \
-            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-            -H "Accept: application/json" \
-            -H "Accept-Profile: content" \
-            "${SUPABASE_REST_URL}/content/daily_posts?select=caption,day&platform=eq.default&order=day.desc&limit=1")"
-          echo "[caption] payload preview: $(printf '%s' "$payload" | tr -d '\n' | cut -c1-160)..."
-          caption="$(printf '%s' "$payload" | jq -r '.[0].caption // ""')"
-          day="$(printf '%s' "$payload" | jq -r '.[0].day // ""')"
-          echo "caption<<EOF" >> "$GITHUB_OUTPUT"
-          printf '%s\n' "$caption" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-          echo "day=${day}" >> "$GITHUB_OUTPUT"
-
       - name: Build reel (reel_builder.py)
         working-directory: bots/earthscope_post
         env:
@@ -428,13 +411,10 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
-          CAPTION="${{ steps.fetch_caption.outputs.caption }}"
-          echo "Caption preview: $(printf '%s' "$CAPTION" | tr -d '\n' | cut -c1-120)..."
-          # Prefer CLI args if supported; env vars above act as fallback.
+          echo "Building reel — letting reel_builder fetch caption from Supabase…"
           python reel_builder.py \
             --media-base "${REEL_MEDIA_BASE}" \
             --bed-url "${REEL_BED_URL}" \
-            --caption "$CAPTION" \
             --out "${REEL_OUT}" || \
           python reel_builder.py
           test -s "${REEL_OUT}"
@@ -445,7 +425,7 @@ jobs:
           SUPABASE_URL_TRIMMED="$(printf '%s' "${SUPABASE_URL:-}" | tr -d '\r' | sed -e 's/[[:space:]]\+$//' -e 's#/$##')"
           OBJECT_BASE="/storage/v1/object/space-visuals/social/earthscope/reels/latest"
           ts="$(date -u +'%Y%m%dT%H%M%SZ')"
-          day="${{ steps.fetch_caption.outputs.day }}"
+          day="$(date -u +%F)"
           name="reel_${day:-${ts}}.mp4"
           url="${SUPABASE_URL_TRIMMED}${OBJECT_BASE}/${name}"
 
