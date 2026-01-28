@@ -69,7 +69,7 @@ IMAGES_DIR = MEDIA_REPO_PATH / "images"
 DATA_DIR = MEDIA_REPO_PATH / "data"
 EARTHSCOPE_JSON = Path(env_get("EARTHSCOPE_OUTPUT_JSON_PATH", str(DATA_DIR / "earthscope_daily.json")))
 OPENAI_API_KEY = env_get("OPENAI_API_KEY")
-REEL_TTS_VOICE = env_get("REEL_TTS_VOICE", "alloy")
+REEL_TTS_VOICE = env_get("REEL_TTS_VOICE", "marin")
 REEL_MOOD = env_get("REEL_MOOD", None)
 REEL_OUT_PATH = Path(env_get("REEL_OUT_PATH", str(IMAGES_DIR / "reel.mp4")))
 
@@ -305,7 +305,7 @@ def guess_vo_text(json_path: Path) -> str:
     # Fallback generic
     return "Gaia Eyes daily highlights. Check the latest cosmic weather and tips to feel your best today."
 
-def tts_to_wav(text: str, out_wav: Path, api_key: str, voice: str = "alloy", model: str = "gpt-4o-mini-tts") -> bool:
+def tts_to_wav(text: str, out_wav: Path, api_key: str, voice: str = "marin", model: str = "gpt-4o-mini-tts") -> bool:
     """
     Request TTS audio from OpenAI and write WAV. Returns True on success.
     """
