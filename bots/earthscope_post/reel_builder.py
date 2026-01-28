@@ -387,7 +387,7 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
     duration_str = f"{total_duration:.3f}"
 
     if vo_wav and bed_wav and vo_wav.exists() and bed_wav.exists():
-        # Loop/trim bed to exactly duration; then sidechain duck it under VO
+        # Loop/trim bed to exactly duration; then sidechain duck it under VO, resample/mix to stereo/44.1k, and limit peaks
         cmd = [
             "ffmpeg", "-y",
             "-i", str(video_in),
@@ -395,9 +395,11 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
             "-stream_loop", "-1", "-i", str(bed_wav),
             "-filter_complex",
             (
-                f"[2:a]atrim=0:{duration_str},asetpts=N/SR/TB,volume=-12dB[bed];"
-                f"[bed][1:a]sidechaincompress=threshold=0.05:ratio=8:attack=5:release=220:makeup=3[duck];"
-                f"[duck]alimiter=limit=0.98[aout]"
+                f"[1:a]aformat=sample_fmts=fltp:channel_layouts=stereo,aresample=44100,asplit=2[vo_sc][vo_mix];"
+                f"[2:a]atrim=0:{duration_str},asetpts=N/SR/TB,volume=-12dB,"
+                f"aformat=sample_fmts=fltp:channel_layouts=stereo,aresample=44100[bed];"
+                f"[bed][vo_sc]sidechaincompress=threshold=0.05:ratio=8:attack=5:release=220:makeup=3[duck];"
+                f"[duck][vo_mix]amix=inputs=2:duration=longest:dropout_transition=250,alimiter=limit=0.98[aout]"
             ),
             "-map", "0:v",
             "-map", "[aout]",
@@ -414,7 +416,7 @@ def mix_audio_with_video(video_in: Path, video_out: Path, vo_wav: Optional[Path]
             "ffmpeg", "-y",
             "-i", str(video_in),
             "-i", str(vo_wav),
-            "-filter_complex", "[1:a]alimiter=limit=0.98[aout]",
+            "-filter_complex", "[1:a]aformat=sample_fmts=fltp:channel_layouts=stereo,aresample=44100,alimiter=limit=0.98[aout]",
             "-map", "0:v",
             "-map", "[aout]",
             *common_video,
