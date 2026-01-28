@@ -86,6 +86,26 @@ def env_get(name: str, default: Optional[str] = None) -> Optional[str]:
         return default
     return val
 
+# ------------ Helper: Strip trailing metric/stat readouts from captions ------------
+def strip_metric_tail(text: str) -> str:
+    """
+    Remove trailing lines that look like metric/stat readouts
+    (e.g., KP/Bz/Schumann, PFU/MeV/Hz). We only strip from the tail
+    to preserve normal prose earlier in the caption.
+    """
+    if not text:
+        return text
+    lines = text.splitlines()
+    metric_tokens = ("kp", "bz", "schumann", "pfu", "mev", "hz", "f10.7", "goes")
+    # Drop any tail lines containing metric tokens
+    changed = False
+    while lines and any(tok in lines[-1].lower() for tok in metric_tokens):
+        lines.pop()
+        changed = True
+    # Also trim dangling separators at the very end
+    out = "\n".join(lines).rstrip(" —-|·.,;()[]")
+    return out if changed else text
+
 # ------------ Inputs & Defaults ------------
 
 MEDIA_REPO_PATH = Path(env_get("MEDIA_REPO_PATH", os.getcwd()))
@@ -102,6 +122,9 @@ SUPABASE_AUDIO_BASE = env_get(
     "SUPABASE_AUDIO_BASE",
     f"{SUPABASE_URL}/storage/v1/object/public/space-visuals/social/audio" if SUPABASE_URL else None
 )
+
+# Toggle: Strip trailing metric/stat lines from VO text
+STRIP_METRICS = env_get("REEL_VO_STRIP_METRICS", "1") != "0"
 
 # ------------ Caption from Supabase (content.daily_posts) ------------
 # Optional envs; when present we'll try to fetch a caption VO from Supabase
@@ -515,7 +538,10 @@ def main():
     platform = env_get("REEL_PLATFORM", "default")
     target_day = env_get("TARGET_DAY")
     caption_text = resolve_caption(platform=platform, target_day=target_day)
-    vo_text = caption_text or guess_vo_text(EARTHSCOPE_JSON)
+    vo_text_raw = caption_text or guess_vo_text(EARTHSCOPE_JSON)
+    vo_text = strip_metric_tail(vo_text_raw) if STRIP_METRICS else vo_text_raw
+    if vo_text != vo_text_raw:
+        log("Sanitized VO: removed trailing metric lines.")
     vo_wav = tmp_dir / "vo.wav"
     vo_ok = False
     if OPENAI_API_KEY:

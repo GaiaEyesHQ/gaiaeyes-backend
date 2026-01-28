@@ -381,6 +381,9 @@ jobs:
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       MEDIA_CDN_BASE: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/latest
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      IG_USER_ID: ${{ secrets.IG_USER_ID }}
+      FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+      FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -481,3 +484,89 @@ jobs:
             --data-binary @"${{ github.workspace }}/reel.mp4" \
             "${url_latest}")
           echo "[upload] latest.mp4 -> HTTP ${code_latest}"
+
+      - name: Wait for CDN (reel)
+        run: sleep 30
+
+      - name: Compose reel URL & caption
+        env:
+          REST_URL: ${{ env.SUPABASE_REST_URL }}
+          SERVICE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+
+          # Public URL of the just-uploaded reel
+          REEL_URL="${SUPABASE_URL}/storage/v1/object/public/space-visuals/social/earthscope/reels/latest/latest.mp4"
+          echo "REEL_URL=${REEL_URL}"
+          echo "REEL_URL=${REEL_URL}" >> "$GITHUB_ENV"
+
+          # Helper to fetch latest post row for a platform
+          fetch_cap() {
+            local plat="$1"
+            curl -sS \
+              -H "apikey: ${SERVICE_KEY}" \
+              -H "Authorization: Bearer ${SERVICE_KEY}" \
+              -H "Accept: application/json" \
+              -H "Accept-Profile: content" \
+              "${REST_URL}/daily_posts?select=*&platform=eq.${plat}&order=day.desc&amp;limit=1"
+          }
+
+          # Prefer IG-specific post; fall back to default
+          cap_json="$(fetch_cap ig || true)"
+          if [ -z "${cap_json}" ] || [ "$(printf '%s' "$cap_json" | jq 'type=="array" and length or 0')" = "false" ]; then
+            cap_json="$(fetch_cap default || true)"
+          fi
+
+          # Extract a reasonable caption; clamp to 2200 chars for IG
+          caption="$(
+            printf '%s' "$cap_json" | jq -r '
+              (if type=="array" and length>0 then .[0] else . end)
+              | (.caption // .social_caption // .short_overview // .summary // "")
+            ' 2>/dev/null || true
+          )"
+          caption="$(printf '%s' "$caption" | head -c 2200)"
+          printf '%s' "$caption" > caption.txt
+          echo "Caption preview: $(printf '%s' "$caption" | tr -d '\n' | cut -c1-160)..."
+
+      - name: Post Reel to Instagram (Graph API)
+        run: |
+          set -euo pipefail
+          if [ -z "${IG_USER_ID:-}" ] || [ -z "${FB_ACCESS_TOKEN:-}" ]; then
+            echo "Missing IG_USER_ID or FB_ACCESS_TOKEN; skipping IG reel post."
+            exit 0
+          fi
+
+          create_resp="$(
+            curl -sS -X POST "https://graph.facebook.com/v20.0/${IG_USER_ID}/media" \
+              -F "media_type=REELS" \
+              -F "video_url=${REEL_URL}" \
+              -F "caption=$(cat caption.txt)" \
+              -F "access_token=${FB_ACCESS_TOKEN}"
+          )"
+          echo "IG create_resp: ${create_resp}"
+          creation_id="$(printf '%s' "$create_resp" | jq -r '.id // empty')"
+          if [ -z "$creation_id" ]; then
+            echo "No IG creation_id; skipping publish."
+            exit 0
+          fi
+          publish_resp="$(
+            curl -sS -X POST "https://graph.facebook.com/v20.0/${IG_USER_ID}/media_publish" \
+              -F "creation_id=${creation_id}" \
+              -F "access_token=${FB_ACCESS_TOKEN}"
+          )"
+          echo "IG publish_resp: ${publish_resp}"
+
+      - name: Post Reel to Facebook Page (Graph API)
+        run: |
+          set -euo pipefail
+          if [ -z "${FB_PAGE_ID:-}" ] || [ -z "${FB_ACCESS_TOKEN:-}" ]; then
+            echo "Missing FB_PAGE_ID or FB_ACCESS_TOKEN; skipping FB video post."
+            exit 0
+          fi
+          fb_resp="$(
+            curl -sS -X POST "https://graph.facebook.com/v20.0/${FB_PAGE_ID}/videos" \
+              -F "file_url=${REEL_URL}" \
+              -F "description=$(cat caption.txt)" \
+              -F "access_token=${FB_ACCESS_TOKEN}"
+          )"
+          echo "FB video resp: ${fb_resp}"
