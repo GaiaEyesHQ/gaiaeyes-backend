@@ -443,6 +443,7 @@ jobs:
         working-directory: bots/earthscope_post
         env:
           REEL_MEDIA_BASE: ${{ env.MEDIA_CDN_BASE }}
+          REEL_VO_TAIL_PAD_SEC: "2.5"
           REEL_BED_URL: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/music/bed01.wav
           REEL_OUT: ${{ github.workspace }}/reel.mp4
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
