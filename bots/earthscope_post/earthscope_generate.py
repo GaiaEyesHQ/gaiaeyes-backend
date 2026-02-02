@@ -13,7 +13,7 @@ Notes:
 - If OpenAI key is missing, falls back to deterministic copy using numbers.
 """
 
-import os, json, argparse
+import os, sys, json, argparse
 import math
 import datetime as dt
 from datetime import datetime, timezone, timedelta
@@ -40,7 +40,21 @@ from dotenv import load_dotenv
 
 # Supabase
 from supabase import create_client
-from bots.earthscope_post.prompt_templates import build_messages
+# Robust import for prompt_templates: works when invoked as a module or as a script
+try:
+    # Package-style import when repo root is on sys.path
+    from bots.earthscope_post.prompt_templates import build_messages
+except ModuleNotFoundError:
+    # Ensure repo root is on sys.path, then retry; finally fall back to same-dir import
+    import sys as _sys
+    ROOT = Path(__file__).resolve().parents[2]
+    if str(ROOT) not in _sys.path:
+        _sys.path.insert(0, str(ROOT))
+    try:
+        from bots.earthscope_post.prompt_templates import build_messages  # retry after path fix
+    except ModuleNotFoundError:
+        # When executing from within bots/earthscope_post, import the sibling module
+        from prompt_templates import build_messages
 
 # Optional: OpenAI (LLM)
 try:
