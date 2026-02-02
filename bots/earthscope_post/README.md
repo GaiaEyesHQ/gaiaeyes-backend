@@ -46,6 +46,7 @@ Plan observability by deciding how to monitor worker runs and webhook deliveries
 The Earthscope Post Bot generates and upserts the daily Earthscope posts consumed by the Gaia Eyes app.
 
 - Reads `marts.space_weather_daily` (+ optional `ext.donki_event`)
+- Pulls consolidated space-weather context from `/v1/space/forecast/outlook` when available
 - Fetches 2–3 trending references (SolarHam, SpaceWeather, NASA, HeartMath)
 - Calls OpenAI to generate rich Daily Earthscope (sections + hashtags)
 - Upserts into `content.daily_posts` (idempotent)
@@ -60,6 +61,10 @@ These posts feed the app’s Earthscope card through the `/v1/features/today` en
 - `PLATFORM` (default `instagram`)
 - `USER_ID` (optional UUID; empty = global)
 - (optional) `TREND_*` URLs to override default sources
+- `GAIA_BACKEND_BASE` (outlook API base, default `https://gaiaeyes-backend.onrender.com`)
+- `STYLE_RULES_PATH` / `SYMPTOM_GUIDES_PATH` (writer style + correlation guides)
+- `WRITER_LENS` (scientific|mystical), `WRITER_HUMOR` (none|light|medium|high)
+- `WRITER_TEMP`, `FORCE_PRESSURE_NOTE`, `OPENAI_WRITER_MODEL`
 
 ### CLI helpers
 - `python bots/earthscope_post/gaia_eyes_viral_bot.py --mode stats --dry-run --kp 4 --bz -6.8 --sw 650 --outdir ./out`

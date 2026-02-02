@@ -11,6 +11,7 @@ Gaia Eyes combines a FastAPI backend, a Swift iOS app, and a WordPress front-end
 - **iOS app**: `/gaiaeyes-ios/ios`
 - **WordPress (site)**: `/wp-content`
 - **Docs**: `/docs` and root Markdown files
+- **Earthscope writer**: `/bots/earthscope_post` (daily_posts copy + card JSON)
 
 ## 3) Hard rules (do not violate)
 - Do **not** change naming conventions for tables, routes, env vars, or data keys.
@@ -27,6 +28,11 @@ Gaia Eyes combines a FastAPI backend, a Swift iOS app, and a WordPress front-end
 **Supabase access**
 - Backend writes directly to Supabase. Clients should prefer backend endpoints, not direct DB access.
 - Storage uploads use `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`.
+
+**Earthscope writer inputs**
+- Primary data source: `GAIA_BACKEND_BASE/v1/space/forecast/outlook` (fallbacks to marts + legacy JSON when missing).
+- Style/correlation guides live in `bots/earthscope_post/style_rules.json` and `bots/earthscope_post/symptom_guides.json`.
+- Key env toggles: `GAIA_BACKEND_BASE`, `STYLE_RULES_PATH`, `SYMPTOM_GUIDES_PATH`, `WRITER_LENS`, `WRITER_HUMOR`, `WRITER_TEMP`, `FORCE_PRESSURE_NOTE`, `OPENAI_WRITER_MODEL`.
 
 ## 5) API routing conventions (backend)
 Backend routes are grouped by domain under `app/routers/` and registered in `app/main.py`.

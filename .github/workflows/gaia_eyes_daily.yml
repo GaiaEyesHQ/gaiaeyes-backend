@@ -51,6 +51,14 @@ jobs:
       AURORA_REGION: "mid"
       EARTHSCOPE_OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/earthscope_daily.json
       EARTHSCOPE_PULSE_JSON: ${{ github.workspace }}/gaiaeyes-media/data/pulse.json
+      GAIA_BACKEND_BASE: "https://gaiaeyes-backend.onrender.com"
+      STYLE_RULES_PATH: "bots/earthscope_post/style_rules.json"
+      SYMPTOM_GUIDES_PATH: "bots/earthscope_post/symptom_guides.json"
+      WRITER_LENS: "scientific"
+      WRITER_HUMOR: "light"
+      WRITER_TEMP: "0.7"
+      FORCE_PRESSURE_NOTE: "0"
+      OPENAI_WRITER_MODEL: "gpt-5-mini"
     steps:
       - uses: actions/checkout@v4
       - name: Clone media repo (for JSON emit)

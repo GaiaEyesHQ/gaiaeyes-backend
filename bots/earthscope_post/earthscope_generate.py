@@ -15,6 +15,7 @@ Notes:
 
 import os, json, argparse
 import math
+import datetime as dt
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -39,6 +40,7 @@ from dotenv import load_dotenv
 
 # Supabase
 from supabase import create_client
+from bots.earthscope_post.prompt_templates import build_messages
 
 # Optional: OpenAI (LLM)
 try:
@@ -64,6 +66,12 @@ SR_TABLE     = os.getenv("SUPABASE_SR_TABLE", "schumann_daily")
 DAY_COLUMN   = os.getenv("SUPABASE_DAY_COLUMN", "day")
 PLATFORM     = os.getenv("EARTHSCOPE_PLATFORM", "default")
 USER_ID      = os.getenv("EARTHSCOPE_USER_ID", None)
+GAIA_BACKEND_BASE = os.getenv("GAIA_BACKEND_BASE", "https://gaiaeyes-backend.onrender.com").rstrip("/")
+STYLE_RULES_PATH = os.getenv("STYLE_RULES_PATH", "bots/earthscope_post/style_rules.json")
+SYMPTOM_GUIDES_PATH = os.getenv("SYMPTOM_GUIDES_PATH", "bots/earthscope_post/symptom_guides.json")
+HUMOR_LEVEL = os.getenv("WRITER_HUMOR", "light")               # none|light|medium|high
+LENS_MODE = os.getenv("WRITER_LENS", "scientific")             # scientific|mystical
+FORCE_WEATHER_NOTE = os.getenv("FORCE_PRESSURE_NOTE", "0") != "0"
 
 # Output JSON for website/app card (optional)
 EARTHSCOPE_OUTPUT_JSON = os.getenv("EARTHSCOPE_OUTPUT_JSON_PATH")  # e.g., ../gaiaeyes-media/data/earthscope_daily.json
@@ -82,6 +90,222 @@ EARTHSCOPE_DEBUG_REWRITE = os.getenv("EARTHSCOPE_DEBUG_REWRITE", "false").strip(
 def _dbg(msg: str) -> None:
     if EARTHSCOPE_DEBUG_REWRITE:
         print(f"[earthscope.debug] {msg}")
+
+
+def _get(url: str, timeout: int = 30) -> Optional[dict]:
+    try:
+        r = requests.get(url, timeout=timeout)
+        if r.status_code == 200:
+            return r.json()
+    except Exception:
+        pass
+    return None
+
+
+def fetch_outlook() -> Optional[dict]:
+    return _get(f"{GAIA_BACKEND_BASE}/v1/space/forecast/outlook")
+
+
+def pick_correlations(outlook: dict, guides: dict) -> Dict[str, List[str]]:
+    """Return {'symptoms': [...], 'tips': [...], 'notes': [...]} heuristically."""
+    got = {"symptoms": [], "tips": [], "notes": []}
+    if not outlook:
+        return got
+    kp_now = (outlook.get("kp") or {}).get("now") or 0.0
+    g_now = (outlook.get("kp") or {}).get("g_scale_now") or "G0"
+    sep = (outlook.get("data") or {}).get("sep") or {}
+
+    def add(tag: str) -> None:
+        rule = guides.get("triggers", {}).get(tag, {})
+        got["symptoms"] += rule.get("symptoms", [])[:2]
+        got["tips"] += rule.get("tips", [])[:2]
+
+    if kp_now >= 5 or g_now != "G0":
+        add("kp_gte_5")
+    # Simple Bz proxy: if kp elevated we imply coupling; refine later if Bz exposed
+    if kp_now >= 4:
+        add("bz_south")
+
+    # Solar radiation
+    if sep and (sep.get("s_scale") or "S0") not in ("S0", None):
+        add("solar_radiation_s1plus")
+
+    # DRAP elevated (use last 24h avg or max from outlook if present)
+    for d in (outlook.get("data") or {}).get("drap_absorption", []):
+        if d.get("day") and d.get("max_absorption_db", 0) >= 10:
+            add("drap_elevated")
+            break
+
+    # CME scoreboard earthward (headline has counts; if earth_directed_count > 0)
+    if ((outlook.get("cmes") or {}).get("stats") or {}).get("earth_directed_count", 0) > 0:
+        add("cme_recent_earthward")
+
+    # Rotate a small footer note occasionally
+    rot = guides.get("rotate_notes") or []
+    if FORCE_WEATHER_NOTE and rot:
+        got["notes"].append(rot[0])
+    elif rot:
+        if (dt.datetime.utcnow().toordinal() % 2) == 0:
+            got["notes"].append(rot[(dt.datetime.utcnow().day) % len(rot)])
+
+    # Deduplicate
+    got["symptoms"] = list(dict.fromkeys(got["symptoms"]))[:3]
+    got["tips"] = list(dict.fromkeys(got["tips"]))[:3]
+    got["notes"] = list(dict.fromkeys(got["notes"]))[:1]
+    return got
+
+
+def sanitize_prose(text: str, style: dict) -> str:
+    out = text or ""
+    for term in style.get("banned_terms", []):
+        find = term.get("find")
+        repls = term.get("replace_with") or []
+        if find and repls:
+            low = out.lower()
+            idx = low.find(find.lower())
+            if idx != -1:
+                out = out[:idx] + repls[0] + out[idx + len(find):]
+    return out
+
+
+def compose_payload(outlook: dict, guides: dict, style: dict, llm_texts: dict, platform: str) -> dict:
+    day = dt.datetime.utcnow().date().isoformat()
+    cards = {
+        "caption": {
+            "text": llm_texts["caption"],
+        },
+        "stats": {
+            "kp_now": (outlook.get("kp") or {}).get("now"),
+            "bz_hint": "south-coupling likely" if (outlook.get("kp") or {}).get("now", 0) >= 4 else "nominal",
+            "schumann": llm_texts.get("schumann"),
+        },
+        "playbook": {
+            "tips": llm_texts["tips"],
+        },
+        "affects": {
+            "may_feel": llm_texts["symptoms"],
+            "note": llm_texts.get("note"),
+        },
+    }
+    return {
+        "day": day,
+        "platform": platform,
+        "caption": llm_texts["caption"],
+        "overview": llm_texts["overview"],
+        "lead": llm_texts.get("lead"),
+        "cards": cards,
+    }
+
+
+def _g_scale_from_kp(kp: Optional[float]) -> str:
+    if kp is None:
+        return "G0"
+    if kp >= 9:
+        return "G5"
+    if kp >= 8:
+        return "G4"
+    if kp >= 7:
+        return "G3"
+    if kp >= 6:
+        return "G2"
+    if kp >= 5:
+        return "G1"
+    return "G0"
+
+
+def ensure_outlook_fallback(outlook: Optional[dict], ctx: Dict[str, Any]) -> dict:
+    out = outlook or {}
+    kp_block = dict(out.get("kp") or {})
+    kp_val = kp_block.get("now")
+    if kp_val is None:
+        kp_val = ctx.get("kp_max_24h") if ctx.get("kp_max_24h") is not None else ctx.get("kp_now")
+    kp_block.setdefault("now", kp_val)
+    kp_block.setdefault("g_scale_now", _g_scale_from_kp(kp_val))
+    out["kp"] = kp_block
+    legacy = dict(out.get("legacy") or {})
+    legacy.setdefault("kp_max_24h", ctx.get("kp_max_24h"))
+    legacy.setdefault("bz_min", ctx.get("bz_min"))
+    legacy.setdefault("solar_wind_kms", ctx.get("solar_wind_kms"))
+    legacy.setdefault("schumann_f0_hz", ctx.get("schumann_value_hz"))
+    out["legacy"] = legacy
+    return out
+
+
+def _strip_snapshot_label(text: str) -> str:
+    if not text:
+        return text
+    if text.lower().startswith("space weather snapshot"):
+        return text.split("\n", 1)[-1].strip()
+    return text
+
+
+def _sanitize_list(items: Optional[List[str]], style: dict) -> List[str]:
+    cleaned: List[str] = []
+    for item in items or []:
+        if not item:
+            continue
+        cleaned.append(sanitize_prose(str(item).strip(), style))
+    return cleaned
+
+
+def generate_outlook_content(
+    client: Optional["OpenAI"],
+    outlook: dict,
+    guides: dict,
+    style: dict,
+    ctx: Dict[str, Any],
+) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    if client:
+        try:
+            msgs = build_messages(outlook, guides, style, lens_mode=LENS_MODE, humor=HUMOR_LEVEL)
+            resp = client.chat.completions.create(
+                model=os.getenv("OPENAI_WRITER_MODEL", "gpt-5-mini"),
+                messages=msgs,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "earthscope_post",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "caption": {"type": "string"},
+                                "overview": {"type": "string"},
+                                "tips": {"type": "array", "items": {"type": "string"}},
+                                "symptoms": {"type": "array", "items": {"type": "string"}},
+                                "note": {"type": ["string", "null"]},
+                                "lead": {"type": ["string", "null"]},
+                            },
+                            "required": ["caption", "overview", "tips", "symptoms"],
+                        },
+                    },
+                },
+                temperature=float(os.getenv("WRITER_TEMP", "0.7")),
+            )
+            out = json.loads(resp.choices[0].message.content)
+        except Exception as e:
+            _dbg(f"outlook: LLM failed -> {e}")
+
+    if not out:
+        picks = pick_correlations(outlook, guides)
+        rc = _rule_copy(ctx)
+        overview = _strip_snapshot_label(_qualitative_snapshot(ctx))
+        out = {
+            "caption": rc.get("caption", "Space weather update."),
+            "overview": overview or "Today’s space weather is steady overall.",
+            "tips": picks.get("tips") or ["hydrate + electrolytes", "short outdoor breaks"],
+            "symptoms": picks.get("symptoms") or ["steady energy", "clear focus"],
+            "note": (picks.get("notes") or [None])[0],
+            "lead": None,
+        }
+
+    out["caption"] = sanitize_prose(out.get("caption", ""), style)
+    out["overview"] = sanitize_prose(out.get("overview", ""), style)
+    out["lead"] = sanitize_prose(out.get("lead"), style) if out.get("lead") else None
+    out["tips"] = _sanitize_list(out.get("tips"), style)
+    out["symptoms"] = _sanitize_list(out.get("symptoms"), style)
+    out["note"] = sanitize_prose(out.get("note"), style) if out.get("note") else None
+    return out
 PHRASE_VARIANTS = {
     "feel_stable": [
         "Steady backdrop—good window for structured work.",
@@ -1371,6 +1595,9 @@ def upsert_supabase_post(values: Dict[str, Any]) -> None:
         "platform": values.get("platform", PLATFORM),
         "title": values.get("title"),
         "caption": values.get("caption"),
+        "overview": values.get("overview"),
+        "lead": values.get("lead"),
+        "cards": values.get("cards"),
         "body_markdown": values.get("body_markdown"),
         "hashtags": values.get("hashtags"),
         "metrics_json": values.get("metrics_json"),
@@ -1456,9 +1683,37 @@ def main():
     except Exception as e:
         _dbg(f"earth_card: merge failed -> {e}")
 
-    # 2) Generate copy
-    short_caption, short_tags = generate_short_caption(ctx)
-    snapshot, affects, playbook, long_tags = generate_long_sections(ctx)
+    outlook_raw = fetch_outlook()
+    outlook = ensure_outlook_fallback(outlook_raw, ctx)
+    style = json.loads(Path(STYLE_RULES_PATH).read_text(encoding="utf-8"))
+    guides = json.loads(Path(SYMPTOM_GUIDES_PATH).read_text(encoding="utf-8"))
+
+    client = openai_client()
+    llm_out = generate_outlook_content(client, outlook, guides, style, ctx)
+
+    if not llm_out.get("note"):
+        picks = pick_correlations(outlook, guides)
+        llm_out["note"] = (picks.get("notes") or [None])[0]
+        llm_out["tips"] = list(dict.fromkeys(llm_out.get("tips", []) + picks.get("tips", [])))[:4]
+        llm_out["symptoms"] = list(dict.fromkeys(llm_out.get("symptoms", []) + picks.get("symptoms", [])))[:4]
+
+    llm_out["tips"] = llm_out.get("tips", [])[:4]
+    llm_out["symptoms"] = llm_out.get("symptoms", [])[:4]
+    llm_out["schumann"] = ctx.get("schumann_value_hz")
+
+    short_caption = llm_out["caption"]
+    overview = llm_out["overview"]
+    symptoms = llm_out.get("symptoms", [])
+    tips = llm_out.get("tips", [])
+    lead = llm_out.get("lead")
+
+    rc = _rule_copy(ctx)
+    short_tags = rc.get("hashtags", "#GaiaEyes #SpaceWeather #Earthscope")
+    long_tags = short_tags
+
+    snapshot = "Overview\n" + overview.strip()
+    affects = "How it may feel\n" + "\n".join(f"- {item}" for item in symptoms)
+    playbook = "Care notes\n" + "\n".join(f"- {item}" for item in tips)
 
     # === Structured sections payload for renderers (back-compat) ===
     tone = _tone_from_ctx(ctx)
@@ -1473,9 +1728,9 @@ def main():
         "affects": affects,
         "playbook": playbook,
     }
+    payload = compose_payload(outlook, guides, style, llm_out, args.platform)
 
     # Title via LLM (uses cached rewrite), with safe heuristic fallback
-    client = openai_client()
     llm_title = None
     if client:
         try:
@@ -1508,6 +1763,10 @@ def main():
         "cmes_24h": ctx.get("cmes_24h"),
         "schumann_value_hz": ctx.get("schumann_value_hz"),
         "harmonics": ctx.get("harmonics"),
+        "outlook": outlook,
+        "cards": payload.get("cards"),
+        "overview": payload.get("overview"),
+        "lead": payload.get("lead"),
         "space_json": {
             "kp_now": ctx.get("kp_now"),
             "bz_now": ctx.get("bz_min") if ctx.get("kp_now") is not None else None,
@@ -1524,6 +1783,7 @@ def main():
     sources_json = {
         "marts.space_weather_daily": True,
         "marts.schumann_daily": True,
+        "space.forecast.outlook": True if outlook_raw else False,
         "space_weather.json": Path(EARTHSCOPE_SPACE_JSON).name if EARTHSCOPE_SPACE_JSON else False,
     }
 
@@ -1540,8 +1800,8 @@ def main():
 
     # Build final body markdown and upsert (single row per date/platform)
     body_md = (
-        "Gaia Eyes — Daily EarthScope\n\n" +
-        "\n\n".join([snapshot, affects, playbook]).strip()
+        "Gaia Eyes — Daily EarthScope\n\n"
+        + "\n\n".join([snapshot, affects, playbook]).strip()
     )
 
     upsert_supabase_post({
@@ -1550,6 +1810,9 @@ def main():
         "platform": args.platform,
         "title": title,
         "caption": short_caption,
+        "overview": payload.get("overview"),
+        "lead": payload.get("lead"),
+        "cards": payload.get("cards"),
         "body_markdown": body_md,
         "hashtags": (long_tags or short_tags),
         "metrics_json": metrics_json,
