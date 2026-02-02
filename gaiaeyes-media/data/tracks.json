@@ -3,7 +3,14 @@
     "id": "bed01",
     "url": "beds/bed01.wav",
     "mood": "calm",
-    "bpm": 90,
+    "bpm": 120,
     "length_sec": 30
+  },
+  {
+    "id": "bed02",
+    "url": "beds/bed02.wav",
+    "mood": "calm",
+    "bpm": 120,
+    "length_sec": 35
   }
 ]
