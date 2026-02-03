@@ -64,7 +64,7 @@ except Exception:
     HAVE_OPENAI = False
 
 # ============================================================
-# Env / Clients
+# Env / Client
 # ============================================================
 BASE_DIR = Path(__file__).parent
 ENV_PATH = BASE_DIR / ".env"
