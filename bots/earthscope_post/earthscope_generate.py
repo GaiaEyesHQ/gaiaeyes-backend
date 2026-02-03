@@ -81,8 +81,8 @@ DAY_COLUMN   = os.getenv("SUPABASE_DAY_COLUMN", "day")
 PLATFORM     = os.getenv("EARTHSCOPE_PLATFORM", "default")
 USER_ID      = os.getenv("EARTHSCOPE_USER_ID", None)
 GAIA_BACKEND_BASE = os.getenv("GAIA_BACKEND_BASE", "https://gaiaeyes-backend.onrender.com").rstrip("/")
-STYLE_RULES_PATH = os.getenv("STYLE_RULES_PATH", "bots/earthscope_post/style_rules.json")
-SYMPTOM_GUIDES_PATH = os.getenv("SYMPTOM_GUIDES_PATH", "bots/earthscope_post/symptom_guides.json")
+STYLE_RULES_PATH = os.getenv("STYLE_RULES_PATH") or str((BASE_DIR / "style_rules.json").resolve())
+SYMPTOM_GUIDES_PATH = os.getenv("SYMPTOM_GUIDES_PATH") or str((BASE_DIR / "symptom_guides.json").resolve())
 HUMOR_LEVEL = os.getenv("WRITER_HUMOR", "light")               # none|light|medium|high
 LENS_MODE = os.getenv("WRITER_LENS", "scientific")             # scientific|mystical
 FORCE_WEATHER_NOTE = os.getenv("FORCE_PRESSURE_NOTE", "0") != "0"
@@ -104,8 +104,16 @@ EARTHSCOPE_DEBUG_REWRITE = os.getenv("EARTHSCOPE_DEBUG_REWRITE", "false").strip(
 def _dbg(msg: str) -> None:
     if EARTHSCOPE_DEBUG_REWRITE:
         print(f"[earthscope.debug] {msg}")
-
-
+        
+# --- Safe JSON loader + in-repo defaults (used if files are missing) ---
+def _load_json(path: str, fallback: dict) -> dict:
+    try:
+        p = Path(path)
+        if p.exists():
+            return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return fallback or {}
 def _get(url: str, timeout: int = 30) -> Optional[dict]:
     try:
         r = requests.get(url, timeout=timeout)
