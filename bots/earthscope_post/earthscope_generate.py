@@ -68,6 +68,8 @@ except Exception:
 # ============================================================
 BASE_DIR = Path(__file__).parent
 ENV_PATH = BASE_DIR / ".env"
+# Repository root (two parents up from this script)
+REPO_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(dotenv_path=ENV_PATH, override=True)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -81,8 +83,22 @@ DAY_COLUMN   = os.getenv("SUPABASE_DAY_COLUMN", "day")
 PLATFORM     = os.getenv("EARTHSCOPE_PLATFORM", "default")
 USER_ID      = os.getenv("EARTHSCOPE_USER_ID", None)
 GAIA_BACKEND_BASE = os.getenv("GAIA_BACKEND_BASE", "https://gaiaeyes-backend.onrender.com").rstrip("/")
-STYLE_RULES_PATH = os.getenv("STYLE_RULES_PATH") or str((BASE_DIR / "style_rules.json").resolve())
-SYMPTOM_GUIDES_PATH = os.getenv("SYMPTOM_GUIDES_PATH") or str((BASE_DIR / "symptom_guides.json").resolve())
+def _resolve_path_env_or_default(env_key: str, default_path: Path) -> Path:
+    val = os.getenv(env_key)
+    if val:
+        p = Path(val)
+        if p.is_absolute():
+            return p
+        # Try relative to the repository root first, then next to this script
+        p1 = (REPO_ROOT / p).resolve()
+        if p1.exists():
+            return p1
+        p2 = (default_path.parent / p.name).resolve()
+        return p2
+    return default_path.resolve()
+
+STYLE_RULES_PATH = _resolve_path_env_or_default("STYLE_RULES_PATH", BASE_DIR / "style_rules.json")
+SYMPTOM_GUIDES_PATH = _resolve_path_env_or_default("SYMPTOM_GUIDES_PATH", BASE_DIR / "symptom_guides.json")
 HUMOR_LEVEL = os.getenv("WRITER_HUMOR", "light")               # none|light|medium|high
 LENS_MODE = os.getenv("WRITER_LENS", "scientific")             # scientific|mystical
 FORCE_WEATHER_NOTE = os.getenv("FORCE_PRESSURE_NOTE", "0") != "0"
@@ -101,10 +117,11 @@ EARTHSCOPE_FIRST_PERSON = os.getenv("EARTHSCOPE_FIRST_PERSON", "true").strip().l
 # Debug flag for rewrite path tracing
 EARTHSCOPE_DEBUG_REWRITE = os.getenv("EARTHSCOPE_DEBUG_REWRITE", "false").strip().lower() in ("1","true","yes","on")
 
+
 def _dbg(msg: str) -> None:
     if EARTHSCOPE_DEBUG_REWRITE:
         print(f"[earthscope.debug] {msg}")
-        
+
 # --- Safe JSON loader + in-repo defaults (used if files are missing) ---
 def _load_json(path: str, fallback: dict) -> dict:
     try:
@@ -114,6 +131,25 @@ def _load_json(path: str, fallback: dict) -> dict:
     except Exception:
         pass
     return fallback or {}
+
+# Default style rules disabled by request — only applied if a style_rules.json is supplied.
+DEFAULT_STYLE_RULES = {}
+
+DEFAULT_SYMPTOM_GUIDES = {
+    "triggers": {
+        "kp_gte_5": {"symptoms": ["wired or jittery", "anxious", "restless sleep"], "tips": ["short breaks to recoup", "take a nap", "hydrate well"]},
+        "bz_south": {"symptoms": ["dips in focus", "headaches"], "tips": ["paced breathing 4:6", "don't overcommit"]},
+        "solar_radiation_s1plus": {"symptoms": ["head pressure", "fatigue"], "tips": ["limit high‑alt flights and limit sun exposure", "extra recovery time"]},
+        "drap_elevated": {"symptoms": ["Map glitches and Tech issues"], "tips": ["expect brief radio/GNSS variability"]},
+        "cme_recent_earthward": {"symptoms": ["fluctuating energy level", "sleep disturbances", "enhanced sensitivity", "increased pain"], "tips": ["take it easy", "early bend time"]},
+    },
+    "rotate_notes": [
+        "Local weather swings—pressure drops or sharp temperature shifts—can add to how you feel.",
+        "Hydration and consistent daylight exposure help buffer sensitivity on variable days."
+    ]
+}
+
+
 def _get(url: str, timeout: int = 30) -> Optional[dict]:
     try:
         r = requests.get(url, timeout=timeout)
@@ -1707,8 +1743,12 @@ def main():
 
     outlook_raw = fetch_outlook()
     outlook = ensure_outlook_fallback(outlook_raw, ctx)
-    style = json.loads(Path(STYLE_RULES_PATH).read_text(encoding="utf-8"))
-    guides = json.loads(Path(SYMPTOM_GUIDES_PATH).read_text(encoding="utf-8"))
+
+    _dbg(f"style_rules_path={STYLE_RULES_PATH} exists={STYLE_RULES_PATH.exists()} cwd={Path.cwd()}")
+    _dbg(f"symptom_guides_path={SYMPTOM_GUIDES_PATH} exists={SYMPTOM_GUIDES_PATH.exists()}")
+
+    style = _load_json(str(STYLE_RULES_PATH), DEFAULT_STYLE_RULES)
+    guides = _load_json(str(SYMPTOM_GUIDES_PATH), DEFAULT_SYMPTOM_GUIDES)
 
     client = openai_client()
     llm_out = generate_outlook_content(client, outlook, guides, style, ctx)
