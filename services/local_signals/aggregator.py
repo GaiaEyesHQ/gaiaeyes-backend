@@ -23,8 +23,11 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
     """
     lat, lon = zip_to_latlon(zip_code)
 
-    # NWS snapshot (temp/humidity/PoP/pressure); values already normalized
-    nws_snap = await nws.hourly_by_latlon(lat, lon) or {}
+    try:
+        nws_snap = await nws.hourly_by_latlon(lat, lon) or {}
+    except Exception as e:
+        print(f"[local_signals] NWS hourly error for zip={zip_code}: {e}")
+        nws_snap = {}
 
     temp_c = nws_snap.get("temp_c")
     rh_now = nws_snap.get("humidity_pct")
