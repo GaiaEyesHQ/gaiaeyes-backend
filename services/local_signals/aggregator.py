@@ -1,9 +1,9 @@
 from typing import Dict, Any
 from datetime import datetime, timezone
 from .cache import latest_and_ref
-from .geo.zip_lookup import zip_to_latlon
-from .external import nws, airnow
-from .time.moon import moon_phase
+from ..geo.zip_lookup import zip_to_latlon
+from ..external import nws, airnow
+from ..time.moon import moon_phase
 
 def _delta(curr, prev):
     try:
