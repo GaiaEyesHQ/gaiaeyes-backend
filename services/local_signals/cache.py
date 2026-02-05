@@ -13,7 +13,7 @@ def upsert_zip_payload(zip_code: str, payload: dict, asof: datetime | None = Non
     pg.execute(
         """
         insert into ext.local_signals_cache (zip, asof, payload, expires_at)
-        values ($1, $2, $3, $4)
+        values (%s, %s, %s, %s)
         on conflict (zip, asof)
         do update set payload = excluded.payload, expires_at = excluded.expires_at
         """,
@@ -28,7 +28,7 @@ def latest_for_zip(zip_code: str) -> dict | None:
     row = pg.fetchrow(
         """
         select payload from ext.local_signals_cache
-        where zip = $1 and expires_at > now()
+        where zip = %s and expires_at > now()
         order by asof desc limit 1
         """,
         zip_code,
