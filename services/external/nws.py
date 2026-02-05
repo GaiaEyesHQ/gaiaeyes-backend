@@ -1,5 +1,6 @@
 # services/external/nws.py
 import os
+import datetime as dt
 from typing import Any, Dict, Optional
 
 import httpx
@@ -24,6 +25,136 @@ async def _get_json(url: str) -> Dict[str, Any]:
 
 async def _points(lat: float, lon: float) -> Dict[str, Any]:
     return await _get_json(f"{BASE}/points/{lat:.4f},{lon:.4f}")
+
+
+# --- Helper functions for observations deltas and extraction ---
+
+async def _nearest_station_id(points: Dict[str, Any]) -> Optional[str]:
+    """
+    From a /points response, resolve the nearest observation station id (e.g., 'KSAT').
+    """
+    stations_url = points.get("properties", {}).get("observationStations")
+    if not stations_url:
+        return None
+    data = await _get_json(stations_url)
+    stations = data.get("features") or []
+    if not stations:
+        return None
+    return stations[0]["properties"]["stationIdentifier"]
+
+def _extract_pressure_hpa(props: Dict[str, Any]) -> Optional[float]:
+    """
+    Prefer seaLevelPressure.value (Pa), else barometricPressure.value (Pa) → hPa.
+    """
+    pa = None
+    slp = props.get("seaLevelPressure") or {}
+    if isinstance(slp, dict) and slp.get("value") is not None:
+        pa = slp.get("value")
+    if pa is None:
+        bp = props.get("barometricPressure") or {}
+        if isinstance(bp, dict) and bp.get("value") is not None:
+            pa = bp.get("value")
+    if isinstance(pa, (int, float)):
+        try:
+            return round(float(pa) / 100.0, 1)
+        except Exception:
+            return None
+    return None
+
+def _extract_temp_c_from_obs(props: Dict[str, Any]) -> Optional[float]:
+    """
+    Extract temperature in °C from an observations properties block.
+    NWS observations often expose 'temperature.value' (degC);
+    fall back to 'airTemperature.value' if present.
+    """
+    t = None
+    t_block = props.get("temperature") or {}
+    if isinstance(t_block, dict) and t_block.get("value") is not None:
+        t = t_block.get("value")
+    if t is None:
+        at = props.get("airTemperature") or {}
+        if isinstance(at, dict) and at.get("value") is not None:
+            t = at.get("value")
+    if isinstance(t, (int, float)):
+        try:
+            return float(t)
+        except Exception:
+            return None
+    return None
+
+async def _latest_obs_props(station_id: str) -> Dict[str, Any]:
+    """
+    Return properties of the latest observation for a station (require_qc).
+    """
+    data = await _get_json(f"{BASE}/stations/{station_id}/observations/latest?require_qc=true")
+    return data.get("properties") or {}
+
+async def _obs_props_in_window(station_id: str, start_iso: str, end_iso: str) -> Optional[Dict[str, Any]]:
+    """
+    Return the last good observation properties within [start, end].
+    """
+    data = await _get_json(f"{BASE}/stations/{station_id}/observations?require_qc=true&start={start_iso}&end={end_iso}")
+    feats = data.get("features") or []
+    if not feats:
+        return None
+    # choose the most recent in the window
+    props = feats[-1].get("properties") or {}
+    return props
+
+async def _pressure_snapshot(points: Dict[str, Any]) -> (Optional[float], Optional[float]):
+    """
+    Returns (pressure_hpa_now, baro_delta_24h_hpa).
+    Delta is current minus ~24h-ago in a 22–26h window for resilience.
+    """
+    sid = await _nearest_station_id(points)
+    if not sid:
+        return None, None
+    latest = await _latest_obs_props(sid)
+    now_hpa = _extract_pressure_hpa(latest)
+    ts_iso = latest.get("timestamp")
+    if now_hpa is None:
+        return None, None
+
+    # derive a window around 24h ago
+    if ts_iso:
+        now_dt = dt.datetime.fromisoformat(ts_iso.replace("Z", "+00:00"))
+    else:
+        now_dt = dt.datetime.now(dt.timezone.utc)
+    start = (now_dt - dt.timedelta(hours=26)).isoformat()
+    end = (now_dt - dt.timedelta(hours=22)).isoformat()
+    past = await _obs_props_in_window(sid, start, end)
+    if not past:
+        return now_hpa, None
+    past_hpa = _extract_pressure_hpa(past)
+    delta = round(now_hpa - past_hpa, 1) if past_hpa is not None else None
+    return now_hpa, delta
+
+async def _temp_delta_24h(points: Dict[str, Any]) -> Optional[float]:
+    """
+    Returns temperature delta over ~24h (current - 24h-ago) in °C using observations.
+    """
+    sid = await _nearest_station_id(points)
+    if not sid:
+        return None
+    latest = await _latest_obs_props(sid)
+    now_c = _extract_temp_c_from_obs(latest)
+    ts_iso = latest.get("timestamp")
+    if now_c is None:
+        return None
+
+    if ts_iso:
+        now_dt = dt.datetime.fromisoformat(ts_iso.replace("Z", "+00:00"))
+    else:
+        now_dt = dt.datetime.now(dt.timezone.utc)
+    start = (now_dt - dt.timedelta(hours=26)).isoformat()
+    end = (now_dt - dt.timedelta(hours=22)).isoformat()
+    past = await _obs_props_in_window(sid, start, end)
+    if not past:
+        return None
+    past_c = _extract_temp_c_from_obs(past)
+    if past_c is None:
+        return None
+    return round(now_c - past_c, 1)
 
 async def _latest_pressure_hpa(points: Dict[str, Any]) -> Optional[float]:
     """
@@ -68,18 +199,28 @@ async def hourly_by_latlon(lat: float, lon: float) -> Dict[str, Optional[float]]
       - humidity_pct    (float)
       - precip_prob_pct (float)
       - pressure_hpa    (float)
+      - temp_delta_24h_c      (float)
+      - baro_delta_24h_hpa    (float)
     """
     pts = await _points(lat, lon)
 
     # forecastHourly URL is provided by points
     fh_url = pts.get("properties", {}).get("forecastHourly")
     if not fh_url:
-        # No hourly URL; try to at least provide pressure
+        # No hourly URL; try to at least provide pressure and deltas
+        pressure_hpa = await _latest_pressure_hpa(pts)
+        # Add observational deltas
+        pressure_now_hpa, baro_delta_24h_hpa = await _pressure_snapshot(pts)
+        if pressure_now_hpa is not None:
+            pressure_hpa = pressure_now_hpa  # prefer observations result if present
+        temp_delta_24h_c = await _temp_delta_24h(pts)
         return {
             "temp_c": None,
             "humidity_pct": None,
             "precip_prob_pct": None,
-            "pressure_hpa": await _latest_pressure_hpa(pts),
+            "pressure_hpa": pressure_hpa,
+            "temp_delta_24h_c": temp_delta_24h_c,
+            "baro_delta_24h_hpa": baro_delta_24h_hpa,
         }
 
     fh = await _get_json(fh_url)
@@ -118,9 +259,17 @@ async def hourly_by_latlon(lat: float, lon: float) -> Dict[str, Optional[float]]
 
     pressure_hpa = await _latest_pressure_hpa(pts)
 
+    # Add observational deltas
+    pressure_now_hpa, baro_delta_24h_hpa = await _pressure_snapshot(pts)
+    if pressure_now_hpa is not None:
+        pressure_hpa = pressure_now_hpa  # prefer observations result if present
+    temp_delta_24h_c = await _temp_delta_24h(pts)
+
     return {
         "temp_c": temp_c,
         "humidity_pct": humidity_pct,
         "precip_prob_pct": precip_prob_pct,
         "pressure_hpa": pressure_hpa,
+        "temp_delta_24h_c": temp_delta_24h_c,
+        "baro_delta_24h_hpa": baro_delta_24h_hpa,
     }

@@ -1,6 +1,9 @@
 from typing import Dict, Any
 from datetime import datetime, timezone
 from .cache import latest_and_ref
+from .geo.zip_lookup import zip_to_latlon
+from .external import nws, airnow
+from .time.moon import moon_phase
 
 def _delta(curr, prev):
     try:
@@ -21,12 +24,16 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
     lat, lon = zip_to_latlon(zip_code)
 
     # NWS snapshot (temp/humidity/PoP/pressure); values already normalized
-    nws_snap = await nws.hourly_by_latlon(lat, lon)
+    nws_snap = await nws.hourly_by_latlon(lat, lon) or {}
 
     temp_c = nws_snap.get("temp_c")
     rh_now = nws_snap.get("humidity_pct")
     pop_now = nws_snap.get("precip_prob_pct")
     baro_now = nws_snap.get("pressure_hpa")
+
+    # Prefer NWS-provided deltas (computed from observations); fall back to cache
+    temp_delta = nws_snap.get("temp_delta_24h_c")
+    baro_delta = nws_snap.get("baro_delta_24h_hpa")
 
     # Try to pull a reference snapshot ~24h ago from cache to compute deltas
     prev_temp = None
@@ -40,6 +47,11 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
     except Exception:
         # Soft-fail: deltas remain None if cache is empty or unavailable
         pass
+
+    if temp_delta is None:
+        temp_delta = _delta(temp_c, prev_temp)
+    if baro_delta is None:
+        baro_delta = _delta(baro_now, prev_baro)
 
     # Air quality (pick the highest AQI among any pollutants returned)
     aq_list = await airnow.current_by_zip(zip_code)
@@ -58,11 +70,11 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
         "where": {"zip": zip_code, "lat": lat, "lon": lon},
         "weather": {
             "temp_c": temp_c,
-            "temp_delta_24h_c": _delta(temp_c, prev_temp),
+            "temp_delta_24h_c": temp_delta,
             "humidity_pct": rh_now,
             "precip_prob_pct": pop_now,
             "pressure_hpa": baro_now,
-            "baro_delta_24h_hpa": _delta(baro_now, prev_baro),
+            "baro_delta_24h_hpa": baro_delta,
         },
         "air": {"aqi": aqi, "category": category, "pollutant": pollutant},
         "moon": m,
