@@ -29,7 +29,7 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      GAIA_OPENAI_MODEL: "gpt-5-mini-latest"
+      GAIA_OPENAI_MODEL: "gpt-5-mini"
       PYTHONPATH: ${{ github.workspace }}
       EARTHSCOPE_DEBUG_REWRITE: "true"
       SUPABASE_POSTS_SCHEMA: content
@@ -58,9 +58,9 @@ jobs:
       SYMPTOM_GUIDES_PATH: "${{ github.workspace }}/bots/earthscope_post/symptom_guides.json"
       WRITER_LENS: "scientific"
       WRITER_HUMOR: "light"
-      WRITER_TEMP: "0.7"
+      WRITER_TEMP: ".7"
       FORCE_PRESSURE_NOTE: "0"
-      OPENAI_WRITER_MODEL: "gpt-5-mini-latest"
+      OPENAI_WRITER_MODEL: "gpt-5-mini"
     steps:
       - uses: actions/checkout@v4
       - name: Clone media repo (for JSON emit)
