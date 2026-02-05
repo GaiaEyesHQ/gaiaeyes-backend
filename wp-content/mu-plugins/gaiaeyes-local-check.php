@@ -83,7 +83,12 @@ add_shortcode('gaia_local_check', function ($atts) {
   );
 
   if (!is_array($payload) || empty($payload['ok'])) {
-    return '<div class="ge-card">Local health unavailable.</div>';
+    $err_msg = '';
+    if (is_array($payload) && !empty($payload['error'])) {
+      // Show a concise reason to help users/admins understand what's wrong (e.g., zip_not_found).
+      $err_msg = ' (' . esc_html( (string)$payload['error'] ) . ')';
+    }
+    return '<div class="ge-card">Local health unavailable' . $err_msg . '.</div>';
   }
 
   $weather = $payload['weather'] ?? [];
