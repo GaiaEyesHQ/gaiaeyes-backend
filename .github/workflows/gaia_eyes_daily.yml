@@ -29,8 +29,6 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      GAIA_OPENAI_MODEL: "gpt-5-mini"
-      PYTHONPATH: ${{ github.workspace }}
       EARTHSCOPE_DEBUG_REWRITE: "true"
       SUPABASE_POSTS_SCHEMA: content
       SUPABASE_POSTS_TABLE: daily_posts
@@ -53,14 +51,6 @@ jobs:
       AURORA_REGION: "mid"
       EARTHSCOPE_OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/earthscope_daily.json
       EARTHSCOPE_PULSE_JSON: ${{ github.workspace }}/gaiaeyes-media/data/pulse.json
-      GAIA_BACKEND_BASE: "https://gaiaeyes-backend.onrender.com"
-      STYLE_RULES_PATH: "${{ github.workspace }}/bots/earthscope_post/style_rules.json"
-      SYMPTOM_GUIDES_PATH: "${{ github.workspace }}/bots/earthscope_post/symptom_guides.json"
-      WRITER_LENS: "scientific"
-      WRITER_HUMOR: "light"
-      WRITER_TEMP: ".7"
-      FORCE_PRESSURE_NOTE: "0"
-      OPENAI_WRITER_MODEL: "gpt-5-mini"
     steps:
       - uses: actions/checkout@v4
       - name: Clone media repo (for JSON emit)
@@ -151,7 +141,6 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_MEDIA_BASE: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/latest
-      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
       - name: Clone media repo
@@ -282,7 +271,6 @@ jobs:
       MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
       SUPABASE_URL:     ${{ secrets.SUPABASE_URL }}
       MEDIA_CDN_BASE:   ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/latest
-      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
       - name: Wait for CDN propagation
@@ -397,7 +385,6 @@ jobs:
       IG_USER_ID: ${{ secrets.IG_USER_ID }}
       FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
       FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
-      PYTHONPATH: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
 

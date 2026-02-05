@@ -13,9 +13,8 @@ Notes:
 - If OpenAI key is missing, falls back to deterministic copy using numbers.
 """
 
-import os, sys, json, argparse
+import os, json, argparse
 import math
-import datetime as dt
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -40,21 +39,6 @@ from dotenv import load_dotenv
 
 # Supabase
 from supabase import create_client
-# Robust import for prompt_templates: works when invoked as a module or as a script
-try:
-    # Package-style import when repo root is on sys.path
-    from bots.earthscope_post.prompt_templates import build_messages
-except ModuleNotFoundError:
-    # Ensure repo root is on sys.path, then retry; finally fall back to same-dir import
-    import sys as _sys
-    ROOT = Path(__file__).resolve().parents[2]
-    if str(ROOT) not in _sys.path:
-        _sys.path.insert(0, str(ROOT))
-    try:
-        from bots.earthscope_post.prompt_templates import build_messages  # retry after path fix
-    except ModuleNotFoundError:
-        # When executing from within bots/earthscope_post, import the sibling module
-        from prompt_templates import build_messages
 
 # Optional: OpenAI (LLM)
 try:
@@ -63,38 +47,11 @@ try:
 except Exception:
     HAVE_OPENAI = False
 
-# --- Robust wrapper for OpenAI chat completions ---
-def _chat_create(client, model: str, messages: list, **params):
-    """Robust wrapper for chat.completions that retries with minimal params
-    when a model only supports default sampling (e.g., temperature must be 1)."""
-    try:
-        return client.chat.completions.create(model=model, messages=messages, **params)
-    except Exception as e:
-        s = str(e)
-        if "Unsupported value" in s or "unsupported_value" in s or ("invalid_request_error" in s and "temperature" in s):
-            try:
-                if os.getenv("EARTHSCOPE_DEBUG_REWRITE", "false").lower() in ("1","true","yes","on"):
-                    print("[earthscope.debug] chat fallback: retrying without sampling params")
-                # Retry with only safe params (keep max_tokens if provided)
-                safe = {}
-                if "max_tokens" in params:
-                    safe["max_tokens"] = params["max_tokens"]
-                return client.chat.completions.create(model=model, messages=messages, **safe)
-            except Exception as e2:
-                # Final minimal retry: no extra params at all
-                try:
-                    return client.chat.completions.create(model=model, messages=messages)
-                except Exception:
-                    raise e2
-        raise
-
 # ============================================================
-# Env / Client
+# Env / Clients
 # ============================================================
 BASE_DIR = Path(__file__).parent
 ENV_PATH = BASE_DIR / ".env"
-# Repository root (two parents up from this script)
-REPO_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(dotenv_path=ENV_PATH, override=True)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -107,28 +64,6 @@ SR_TABLE     = os.getenv("SUPABASE_SR_TABLE", "schumann_daily")
 DAY_COLUMN   = os.getenv("SUPABASE_DAY_COLUMN", "day")
 PLATFORM     = os.getenv("EARTHSCOPE_PLATFORM", "default")
 USER_ID      = os.getenv("EARTHSCOPE_USER_ID", None)
-GAIA_BACKEND_BASE = os.getenv("GAIA_BACKEND_BASE", "https://gaiaeyes-backend.onrender.com").rstrip("/")
-# Unified model resolver for all LLM calls:
-GAIA_MODEL = os.getenv("GAIA_OPENAI_MODEL") or os.getenv("OPENAI_WRITER_MODEL", "gpt-5-mini")
-def _resolve_path_env_or_default(env_key: str, default_path: Path) -> Path:
-    val = os.getenv(env_key)
-    if val:
-        p = Path(val)
-        if p.is_absolute():
-            return p
-        # Try relative to the repository root first, then next to this script
-        p1 = (REPO_ROOT / p).resolve()
-        if p1.exists():
-            return p1
-        p2 = (default_path.parent / p.name).resolve()
-        return p2
-    return default_path.resolve()
-
-STYLE_RULES_PATH = _resolve_path_env_or_default("STYLE_RULES_PATH", BASE_DIR / "style_rules.json")
-SYMPTOM_GUIDES_PATH = _resolve_path_env_or_default("SYMPTOM_GUIDES_PATH", BASE_DIR / "symptom_guides.json")
-HUMOR_LEVEL = os.getenv("WRITER_HUMOR", "light")               # none|light|medium|high
-LENS_MODE = os.getenv("WRITER_LENS", "scientific")             # scientific|mystical
-FORCE_WEATHER_NOTE = os.getenv("FORCE_PRESSURE_NOTE", "0") != "0"
 
 # Output JSON for website/app card (optional)
 EARTHSCOPE_OUTPUT_JSON = os.getenv("EARTHSCOPE_OUTPUT_JSON_PATH")  # e.g., ../gaiaeyes-media/data/earthscope_daily.json
@@ -144,270 +79,9 @@ EARTHSCOPE_FIRST_PERSON = os.getenv("EARTHSCOPE_FIRST_PERSON", "true").strip().l
 # Debug flag for rewrite path tracing
 EARTHSCOPE_DEBUG_REWRITE = os.getenv("EARTHSCOPE_DEBUG_REWRITE", "false").strip().lower() in ("1","true","yes","on")
 
-
 def _dbg(msg: str) -> None:
     if EARTHSCOPE_DEBUG_REWRITE:
         print(f"[earthscope.debug] {msg}")
-
-# --- Normalize chat messages for OpenAI Chat API ---
-def _normalize_chat_messages(msgs):
-    out = []
-    for m in msgs or []:
-        role = m.get("role", "user")
-        content = m.get("content")
-        # If content is a list of parts (e.g., [{'type':'text','text':'...'}] or list of strings)
-        if isinstance(content, list):
-            text_parts = []
-            for part in content:
-                if isinstance(part, dict) and part.get("type") == "text":
-                    text_parts.append(part.get("text") or "")
-                elif isinstance(part, str):
-                    # Some builders emit a list of raw strings; accept them.
-                    text_parts.append(part)
-            content = "\n".join([t for t in text_parts if t])
-        if content is None:
-            content = ""
-        elif not isinstance(content, str):
-            content = str(content)
-        out.append({"role": role, "content": content})
-    return out
-
-# --- Safe JSON loader + in-repo defaults (used if files are missing) ---
-def _load_json(path: str, fallback: dict) -> dict:
-    try:
-        p = Path(path)
-        if p.exists():
-            return json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
-        pass
-    return fallback or {}
-
-# Default style rules disabled by request — only applied if a style_rules.json is supplied.
-DEFAULT_STYLE_RULES = {}
-
-DEFAULT_SYMPTOM_GUIDES = {
-    "triggers": {
-        "kp_gte_5": {"symptoms": ["wired or jittery", "anxious", "restless sleep"], "tips": ["short breaks to recoup", "take a nap", "hydrate well"]},
-        "bz_south": {"symptoms": ["dips in focus", "headaches"], "tips": ["paced breathing 4:6", "don't overcommit"]},
-        "solar_radiation_s1plus": {"symptoms": ["head pressure", "fatigue"], "tips": ["limit high‑alt flights and limit sun exposure", "extra recovery time"]},
-        "drap_elevated": {"symptoms": ["Map glitches and Tech issues"], "tips": ["expect brief radio/GNSS variability"]},
-        "cme_recent_earthward": {"symptoms": ["fluctuating energy level", "sleep disturbances", "enhanced sensitivity", "increased pain"], "tips": ["take it easy", "early bend time"]},
-    },
-    "rotate_notes": [
-        "Local weather swings—pressure drops or sharp temperature shifts—can add to how you feel.",
-        "Hydration and consistent daylight exposure help buffer sensitivity on variable days."
-    ]
-}
-
-
-def _get(url: str, timeout: int = 30) -> Optional[dict]:
-    try:
-        r = requests.get(url, timeout=timeout)
-        if r.status_code == 200:
-            return r.json()
-    except Exception:
-        pass
-    return None
-
-
-def fetch_outlook() -> Optional[dict]:
-    return _get(f"{GAIA_BACKEND_BASE}/v1/space/forecast/outlook")
-
-
-def pick_correlations(outlook: dict, guides: dict) -> Dict[str, List[str]]:
-    """Return {'symptoms': [...], 'tips': [...], 'notes': [...]} heuristically."""
-    got = {"symptoms": [], "tips": [], "notes": []}
-    if not outlook:
-        return got
-    kp_now = (outlook.get("kp") or {}).get("now") or 0.0
-    g_now = (outlook.get("kp") or {}).get("g_scale_now") or "G0"
-    sep = (outlook.get("data") or {}).get("sep") or {}
-
-    def add(tag: str) -> None:
-        rule = guides.get("triggers", {}).get(tag, {})
-        got["symptoms"] += rule.get("symptoms", [])[:2]
-        got["tips"] += rule.get("tips", [])[:2]
-
-    if kp_now >= 5 or g_now != "G0":
-        add("kp_gte_5")
-    # Simple Bz proxy: if kp elevated we imply coupling; refine later if Bz exposed
-    if kp_now >= 4:
-        add("bz_south")
-
-    # Solar radiation
-    if sep and (sep.get("s_scale") or "S0") not in ("S0", None):
-        add("solar_radiation_s1plus")
-
-    # DRAP elevated (use last 24h avg or max from outlook if present)
-    for d in (outlook.get("data") or {}).get("drap_absorption", []):
-        if d.get("day") and d.get("max_absorption_db", 0) >= 10:
-            add("drap_elevated")
-            break
-
-    # CME scoreboard earthward (headline has counts; if earth_directed_count > 0)
-    if ((outlook.get("cmes") or {}).get("stats") or {}).get("earth_directed_count", 0) > 0:
-        add("cme_recent_earthward")
-
-    # Rotate a small footer note occasionally
-    rot = guides.get("rotate_notes") or []
-    if FORCE_WEATHER_NOTE and rot:
-        got["notes"].append(rot[0])
-    elif rot:
-        if (dt.datetime.utcnow().toordinal() % 2) == 0:
-            got["notes"].append(rot[(dt.datetime.utcnow().day) % len(rot)])
-
-    # Deduplicate
-    got["symptoms"] = list(dict.fromkeys(got["symptoms"]))[:3]
-    got["tips"] = list(dict.fromkeys(got["tips"]))[:3]
-    got["notes"] = list(dict.fromkeys(got["notes"]))[:1]
-    return got
-
-
-def sanitize_prose(text: str, style: dict) -> str:
-    out = text or ""
-    for term in style.get("banned_terms", []):
-        find = term.get("find")
-        repls = term.get("replace_with") or []
-        if find and repls:
-            low = out.lower()
-            idx = low.find(find.lower())
-            if idx != -1:
-                out = out[:idx] + repls[0] + out[idx + len(find):]
-    return out
-
-
-def compose_payload(outlook: dict, guides: dict, style: dict, llm_texts: dict, platform: str) -> dict:
-    day = dt.datetime.utcnow().date().isoformat()
-    cards = {
-        "caption": {
-            "text": llm_texts["caption"],
-        },
-        "stats": {
-            "kp_now": (outlook.get("kp") or {}).get("now"),
-            "bz_hint": "south-coupling likely" if (outlook.get("kp") or {}).get("now", 0) >= 4 else "nominal",
-            "schumann": llm_texts.get("schumann"),
-        },
-        "playbook": {
-            "tips": llm_texts["tips"],
-        },
-        "affects": {
-            "may_feel": llm_texts["symptoms"],
-            "note": llm_texts.get("note"),
-        },
-    }
-    return {
-        "day": day,
-        "platform": platform,
-        "caption": llm_texts["caption"],
-        "overview": llm_texts["overview"],
-        "lead": llm_texts.get("lead"),
-        "cards": cards,
-    }
-
-
-def _g_scale_from_kp(kp: Optional[float]) -> str:
-    if kp is None:
-        return "G0"
-    if kp >= 9:
-        return "G5"
-    if kp >= 8:
-        return "G4"
-    if kp >= 7:
-        return "G3"
-    if kp >= 6:
-        return "G2"
-    if kp >= 5:
-        return "G1"
-    return "G0"
-
-
-def ensure_outlook_fallback(outlook: Optional[dict], ctx: Dict[str, Any]) -> dict:
-    out = outlook or {}
-    kp_block = dict(out.get("kp") or {})
-    kp_val = kp_block.get("now")
-    if kp_val is None:
-        kp_val = ctx.get("kp_max_24h") if ctx.get("kp_max_24h") is not None else ctx.get("kp_now")
-    kp_block.setdefault("now", kp_val)
-    kp_block.setdefault("g_scale_now", _g_scale_from_kp(kp_val))
-    out["kp"] = kp_block
-    legacy = dict(out.get("legacy") or {})
-    legacy.setdefault("kp_max_24h", ctx.get("kp_max_24h"))
-    legacy.setdefault("bz_min", ctx.get("bz_min"))
-    legacy.setdefault("solar_wind_kms", ctx.get("solar_wind_kms"))
-    legacy.setdefault("schumann_f0_hz", ctx.get("schumann_value_hz"))
-    out["legacy"] = legacy
-    return out
-
-
-def _strip_snapshot_label(text: str) -> str:
-    if not text:
-        return text
-    if text.lower().startswith("space weather snapshot"):
-        return text.split("\n", 1)[-1].strip()
-    return text
-
-
-def _sanitize_list(items: Optional[List[str]], style: dict) -> List[str]:
-    cleaned: List[str] = []
-    for item in items or []:
-        if not item:
-            continue
-        cleaned.append(sanitize_prose(str(item).strip(), style))
-    return cleaned
-
-
-def generate_outlook_content(
-    client: Optional["OpenAI"],
-    outlook: dict,
-    guides: dict,
-    style: dict,
-    ctx: Dict[str, Any],
-) -> Dict[str, Any]:
-    out: Dict[str, Any] = {}
-    if client:
-        try:
-            # Build and normalize messages (force plain-text content parts)
-            msgs = build_messages(outlook, guides, style, lens_mode=LENS_MODE, humor=HUMOR_LEVEL)
-            msgs = _normalize_chat_messages(msgs)
-
-            # Call Chat Completions without schema forcing (some SDK builds reject list-of-strings parts)
-            resp = _chat_create(
-                client,
-                os.getenv("OPENAI_WRITER_MODEL", "gpt-5-mini"),
-                msgs,
-                temperature=float(os.getenv("WRITER_TEMP", "0.7")),
-            )
-            raw = (resp.choices[0].message.content or "").strip()
-
-            # Robust JSON parse: try strict first, then extract the first JSON object from free text
-            try:
-                out = json.loads(raw)
-            except Exception:
-                js = _extract_first_json_object(raw)
-                out = json.loads(js) if js else {}
-        except Exception as e:
-            _dbg(f"outlook: LLM failed -> {e}")
-
-    if not out:
-        picks = pick_correlations(outlook, guides)
-        rc = _rule_copy(ctx)
-        overview = _strip_snapshot_label(_qualitative_snapshot(ctx))
-        out = {
-            "caption": rc.get("caption", "Space weather update."),
-            "overview": overview or "Today’s space weather is steady overall.",
-            "tips": picks.get("tips") or ["hydrate + electrolytes", "short outdoor breaks"],
-            "symptoms": picks.get("symptoms") or ["steady energy", "clear focus"],
-            "note": (picks.get("notes") or [None])[0],
-            "lead": None,
-        }
-
-    out["caption"] = sanitize_prose(out.get("caption", ""), style)
-    out["overview"] = sanitize_prose(out.get("overview", ""), style)
-    out["lead"] = sanitize_prose(out.get("lead"), style) if out.get("lead") else None
-    out["tips"] = _sanitize_list(out.get("tips"), style)
-    out["symptoms"] = _sanitize_list(out.get("symptoms"), style)
-    out["note"] = sanitize_prose(out.get("note"), style) if out.get("note") else None
-    return out
 PHRASE_VARIANTS = {
     "feel_stable": [
         "Steady backdrop—good window for structured work.",
@@ -657,14 +331,13 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         "sections_excerpt": {k: (v[:160] if isinstance(v,str) else v) for k,v in sections.items() if k in ("caption","snapshot")}
     }
     try:
-        resp = _chat_create(
-            client,
-            GAIA_MODEL,
-            [{"role":"system","content":sys},{"role":"user","content":json.dumps(usr, ensure_ascii=False)}],
+        resp = client.chat.completions.create(
+            model=os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini"),
             temperature=0.65,
             top_p=0.9,
             presence_penalty=0.2,
             max_tokens=16,
+            messages=[{"role":"system","content":sys},{"role":"user","content":json.dumps(usr, ensure_ascii=False)}],
         )
         title = (resp.choices[0].message.content or "").strip()
         # Guardrails: strip quotes and trim length
@@ -950,21 +623,20 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         }
     }
 
-    model = GAIA_MODEL
+    model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
     try:
         _dbg("rewrite: request -> OpenAI (interpretive JSON)")
-        resp = _chat_create(
-            client,
-            model,
-            [
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
-            ],
+        resp = client.chat.completions.create(
+            model=model,
             temperature=0.75,
             top_p=0.9,
             presence_penalty=0.3,
             frequency_penalty=0.2,
             max_tokens=700,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
+            ],
         )
         text = (resp.choices[0].message.content or "").strip()
         _dbg("rewrite: response received; attempting JSON parse")
@@ -1526,12 +1198,15 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     sr     = ctx.get("schumann_value_hz")
     sr_note= ctx.get("schumann_note")
 
-    model = GAIA_MODEL
+    model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
     try:
-        resp = _chat_create(
-            client,
-            model,
-            [
+        resp = client.chat.completions.create(
+            model=model,
+            temperature=0.9,
+            presence_penalty=0.6,
+            frequency_penalty=0.4,
+            max_tokens=320,
+            messages=[
                 {"role":"system","content":(
                     "You are Gaia Eyes' space‑weather writer. Write an accurate, human, declarative caption. "
                     "Do not start with questions or phrases like 'Feeling', 'Are you', 'Ever feel', 'Ready to', 'Let’s'. "
@@ -1545,10 +1220,6 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
                     f"Kp max (24h): {kp_max}\nSolar wind (km/s): {wind}\nFlares (24h): {flr}\nCMEs (24h): {cme}\nSchumann: {sr} Hz ({sr_note})"
                 )},
             ],
-            temperature=0.9,
-            presence_penalty=0.6,
-            frequency_penalty=0.4,
-            max_tokens=320,
         )
         text = resp.choices[0].message.content.strip()
         lines = [l.strip() for l in text.splitlines() if l.strip()]
@@ -1607,7 +1278,7 @@ def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
     sr     = ctx.get("schumann_value_hz")
     sr_note= ctx.get("schumann_note")
 
-    model = GAIA_MODEL
+    model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
     prompt = f"""
 Using the data below, create a Gaia Eyes–branded daily forecast with THREE sections and a hashtags line:
 1) Space Weather Snapshot — bullet the numbers (Kp now/max, solar wind, flares/CMEs, Schumann). Omit any bullet whose value is missing/None.
@@ -1624,15 +1295,10 @@ Data:
 - Schumann: {sr} Hz ({sr_note})
 """.strip()
     try:
-        resp = _chat_create(
-            client,
-            model,
-            [
-                {"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, warm, and helpful. Balance science and mysticism."},
-                {"role":"user","content": prompt}
-            ],
-            temperature=0.75,
-            max_tokens=900,
+        resp = client.chat.completions.create(
+            model=model, temperature=0.75, max_tokens=900,
+            messages=[{"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, warm, and helpful. Balance science and mysticism."},
+                     {"role":"user","content": prompt}],
         )
         text = resp.choices[0].message.content.strip()
         # Try to carve out the three sections + hashtags
@@ -1705,9 +1371,6 @@ def upsert_supabase_post(values: Dict[str, Any]) -> None:
         "platform": values.get("platform", PLATFORM),
         "title": values.get("title"),
         "caption": values.get("caption"),
-        "overview": values.get("overview"),
-        "lead": values.get("lead"),
-        "cards": values.get("cards"),
         "body_markdown": values.get("body_markdown"),
         "hashtags": values.get("hashtags"),
         "metrics_json": values.get("metrics_json"),
@@ -1724,27 +1387,7 @@ def upsert_supabase_post(values: Dict[str, Any]) -> None:
               .execute()
         )
     except Exception as e:
-        msg = str(e)
         print(f"[WARN] Supabase posts upsert failed: {e}")
-        # If PostgREST says a column is missing (e.g., PGRST204), retry without optional fields.
-        optional_cols = ["cards", "overview", "lead"]
-        removed = []
-        if "PGRST204" in msg or "Could not find the" in msg:
-            for col in optional_cols:
-                if (f"'{col}'" in msg) or (col in msg):
-                    if col in payload:
-                        payload.pop(col, None)
-                        removed.append(col)
-            try:
-                (
-                    SB.schema(POSTS_SCHEMA)
-                      .table(POSTS_TABLE)
-                      .upsert(payload, on_conflict=conflict)
-                      .execute()
-                )
-                print(f"[INFO] Supabase posts upsert retry succeeded without: {', '.join(removed) if removed else 'none'}")
-            except Exception as e2:
-                print(f"[WARN] Supabase posts upsert retry failed: {e2}")
 
 # ============================================================
 # Main
@@ -1813,41 +1456,9 @@ def main():
     except Exception as e:
         _dbg(f"earth_card: merge failed -> {e}")
 
-    outlook_raw = fetch_outlook()
-    outlook = ensure_outlook_fallback(outlook_raw, ctx)
-
-    _dbg(f"style_rules_path={STYLE_RULES_PATH} exists={STYLE_RULES_PATH.exists()} cwd={Path.cwd()}")
-    _dbg(f"symptom_guides_path={SYMPTOM_GUIDES_PATH} exists={SYMPTOM_GUIDES_PATH.exists()}")
-
-    style = _load_json(str(STYLE_RULES_PATH), DEFAULT_STYLE_RULES)
-    guides = _load_json(str(SYMPTOM_GUIDES_PATH), DEFAULT_SYMPTOM_GUIDES)
-
-    client = openai_client()
-    llm_out = generate_outlook_content(client, outlook, guides, style, ctx)
-
-    if not llm_out.get("note"):
-        picks = pick_correlations(outlook, guides)
-        llm_out["note"] = (picks.get("notes") or [None])[0]
-        llm_out["tips"] = list(dict.fromkeys(llm_out.get("tips", []) + picks.get("tips", [])))[:4]
-        llm_out["symptoms"] = list(dict.fromkeys(llm_out.get("symptoms", []) + picks.get("symptoms", [])))[:4]
-
-    llm_out["tips"] = llm_out.get("tips", [])[:4]
-    llm_out["symptoms"] = llm_out.get("symptoms", [])[:4]
-    llm_out["schumann"] = ctx.get("schumann_value_hz")
-
-    short_caption = llm_out["caption"]
-    overview = llm_out["overview"]
-    symptoms = llm_out.get("symptoms", [])
-    tips = llm_out.get("tips", [])
-    lead = llm_out.get("lead")
-
-    rc = _rule_copy(ctx)
-    short_tags = rc.get("hashtags", "#GaiaEyes #SpaceWeather #Earthscope")
-    long_tags = short_tags
-
-    snapshot = "Overview\n" + overview.strip()
-    affects = "How it may feel\n" + "\n".join(f"- {item}" for item in symptoms)
-    playbook = "Care notes\n" + "\n".join(f"- {item}" for item in tips)
+    # 2) Generate copy
+    short_caption, short_tags = generate_short_caption(ctx)
+    snapshot, affects, playbook, long_tags = generate_long_sections(ctx)
 
     # === Structured sections payload for renderers (back-compat) ===
     tone = _tone_from_ctx(ctx)
@@ -1862,9 +1473,9 @@ def main():
         "affects": affects,
         "playbook": playbook,
     }
-    payload = compose_payload(outlook, guides, style, llm_out, args.platform)
 
     # Title via LLM (uses cached rewrite), with safe heuristic fallback
+    client = openai_client()
     llm_title = None
     if client:
         try:
@@ -1897,10 +1508,6 @@ def main():
         "cmes_24h": ctx.get("cmes_24h"),
         "schumann_value_hz": ctx.get("schumann_value_hz"),
         "harmonics": ctx.get("harmonics"),
-        "outlook": outlook,
-        "cards": payload.get("cards"),
-        "overview": payload.get("overview"),
-        "lead": payload.get("lead"),
         "space_json": {
             "kp_now": ctx.get("kp_now"),
             "bz_now": ctx.get("bz_min") if ctx.get("kp_now") is not None else None,
@@ -1917,7 +1524,6 @@ def main():
     sources_json = {
         "marts.space_weather_daily": True,
         "marts.schumann_daily": True,
-        "space.forecast.outlook": True if outlook_raw else False,
         "space_weather.json": Path(EARTHSCOPE_SPACE_JSON).name if EARTHSCOPE_SPACE_JSON else False,
     }
 
@@ -1934,8 +1540,8 @@ def main():
 
     # Build final body markdown and upsert (single row per date/platform)
     body_md = (
-        "Gaia Eyes — Daily EarthScope\n\n"
-        + "\n\n".join([snapshot, affects, playbook]).strip()
+        "Gaia Eyes — Daily EarthScope\n\n" +
+        "\n\n".join([snapshot, affects, playbook]).strip()
     )
 
     upsert_supabase_post({
@@ -1944,9 +1550,6 @@ def main():
         "platform": args.platform,
         "title": title,
         "caption": short_caption,
-        "overview": payload.get("overview"),
-        "lead": payload.get("lead"),
-        "cards": payload.get("cards"),
         "body_markdown": body_md,
         "hashtags": (long_tags or short_tags),
         "metrics_json": metrics_json,
