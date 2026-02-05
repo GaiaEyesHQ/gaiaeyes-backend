@@ -128,12 +128,15 @@ def _normalize_chat_messages(msgs):
     for m in msgs or []:
         role = m.get("role", "user")
         content = m.get("content")
-        # If content is a list of parts (e.g., [{'type':'text','text':'...'}])
+        # If content is a list of parts (e.g., [{'type':'text','text':'...'}] or list of strings)
         if isinstance(content, list):
             text_parts = []
             for part in content:
                 if isinstance(part, dict) and part.get("type") == "text":
                     text_parts.append(part.get("text") or "")
+                elif isinstance(part, str):
+                    # Some builders emit a list of raw strings; accept them.
+                    text_parts.append(part)
             content = "\n".join([t for t in text_parts if t])
         if content is None:
             content = ""
@@ -336,32 +339,24 @@ def generate_outlook_content(
     out: Dict[str, Any] = {}
     if client:
         try:
+            # Build and normalize messages (force plain-text content parts)
             msgs = build_messages(outlook, guides, style, lens_mode=LENS_MODE, humor=HUMOR_LEVEL)
             msgs = _normalize_chat_messages(msgs)
+
+            # Call Chat Completions without schema forcing (some SDK builds reject list-of-strings parts)
             resp = client.chat.completions.create(
                 model=os.getenv("OPENAI_WRITER_MODEL", "gpt-5-mini"),
                 messages=msgs,
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "earthscope_post",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "caption": {"type": "string"},
-                                "overview": {"type": "string"},
-                                "tips": {"type": "array", "items": {"type": "string"}},
-                                "symptoms": {"type": "array", "items": {"type": "string"}},
-                                "note": {"type": ["string", "null"]},
-                                "lead": {"type": ["string", "null"]},
-                            },
-                            "required": ["caption", "overview", "tips", "symptoms"],
-                        },
-                    },
-                },
                 temperature=float(os.getenv("WRITER_TEMP", "0.7")),
             )
-            out = json.loads(resp.choices[0].message.content)
+            raw = (resp.choices[0].message.content or "").strip()
+
+            # Robust JSON parse: try strict first, then extract the first JSON object from free text
+            try:
+                out = json.loads(raw)
+            except Exception:
+                js = _extract_first_json_object(raw)
+                out = json.loads(js) if js else {}
         except Exception as e:
             _dbg(f"outlook: LLM failed -> {e}")
 
