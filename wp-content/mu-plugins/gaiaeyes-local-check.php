@@ -72,6 +72,8 @@ add_shortcode('gaia_local_check', function ($atts) {
   $temp_delta = gaiaeyes_local_value($weather['temp_delta_24h_c'] ?? null, '°C');
   $humidity = gaiaeyes_local_value($weather['humidity_pct'] ?? null, '%');
   $precip = gaiaeyes_local_value($weather['precip_prob_pct'] ?? null, '%');
+  $pressure = gaiaeyes_local_value($weather['pressure_hpa'] ?? null, 'hPa');
+  $pressure_delta = gaiaeyes_local_value($weather['baro_delta_24h_hpa'] ?? null, 'hPa');
 
   $aqi = gaiaeyes_local_value($air['aqi'] ?? null);
   $aqi_category = gaiaeyes_local_value($air['category'] ?? null);
@@ -91,6 +93,8 @@ add_shortcode('gaia_local_check', function ($atts) {
         <div class="ge-row"><span>24h Δ</span><strong><?php echo esc_html($temp_delta); ?></strong></div>
         <div class="ge-row"><span>Humidity</span><strong><?php echo esc_html($humidity); ?></strong></div>
         <div class="ge-row"><span>Precip</span><strong><?php echo esc_html($precip); ?></strong></div>
+        <div class="ge-row"><span>Pressure</span><strong><?php echo esc_html($pressure); ?></strong></div>
+        <div class="ge-row"><span>Baro 24h Δ</span><strong><?php echo esc_html($pressure_delta); ?></strong></div>
       </div>
       <div class="ge-card">
         <h4>Air Quality</h4>
