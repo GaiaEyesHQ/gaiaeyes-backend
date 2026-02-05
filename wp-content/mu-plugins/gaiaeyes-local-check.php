@@ -110,12 +110,40 @@ add_shortcode('gaia_local_check', function ($atts) {
     else { $baro_trend_label = $baro_trend; }
   }
 
-  $temp = gaiaeyes_local_value($weather['temp_c'] ?? null, '°C');
-  $temp_delta = gaiaeyes_local_value($weather['temp_delta_24h_c'] ?? null, '°C');
+  // Temperature (°C) plus US (°F)
+  $temp_c_raw = $weather['temp_c'] ?? null;
+  $temp = gaiaeyes_local_value($temp_c_raw, '°C');
+  if (is_numeric($temp_c_raw)) {
+    $temp_f_val = ($temp_c_raw * 9/5) + 32;
+    $temp .= ' (' . number_format_i18n($temp_f_val, 1) . ' °F)';
+  }
+
+  // 24h Temperature delta (°C) plus US (°F)
+  $temp_d_c_raw = $weather['temp_delta_24h_c'] ?? null;
+  $temp_delta = gaiaeyes_local_value($temp_d_c_raw, '°C');
+  if (is_numeric($temp_d_c_raw)) {
+    $temp_d_f_val = ($temp_d_c_raw * 9/5);
+    $temp_delta .= ' (' . number_format_i18n($temp_d_f_val, 1) . ' °F)';
+  }
+
   $humidity = gaiaeyes_local_value($weather['humidity_pct'] ?? null, '%');
   $precip = gaiaeyes_local_value($weather['precip_prob_pct'] ?? null, '%');
-  $pressure = gaiaeyes_local_value($weather['pressure_hpa'] ?? null, 'hPa');
-  $pressure_delta = gaiaeyes_local_value($weather['baro_delta_24h_hpa'] ?? null, 'hPa');
+
+  // Pressure (hPa) plus US (inHg ≈ hPa * 0.02953)
+  $pressure_hpa_raw = $weather['pressure_hpa'] ?? null;
+  $pressure = gaiaeyes_local_value($pressure_hpa_raw, 'hPa');
+  if (is_numeric($pressure_hpa_raw)) {
+    $pressure_inhg = $pressure_hpa_raw * 0.02953;
+    $pressure .= ' (' . number_format_i18n($pressure_inhg, 2) . ' inHg)';
+  }
+
+  // 24h Pressure delta in hPa + inHg
+  $pressure_d_hpa_raw = $weather['baro_delta_24h_hpa'] ?? null;
+  $pressure_delta = gaiaeyes_local_value($pressure_d_hpa_raw, 'hPa');
+  if (is_numeric($pressure_d_hpa_raw)) {
+    $pressure_d_inhg = $pressure_d_hpa_raw * 0.02953;
+    $pressure_delta .= ' (' . number_format_i18n($pressure_d_inhg, 2) . ' inHg)';
+  }
 
   $aqi = gaiaeyes_local_value($air['aqi'] ?? null);
   $aqi_category = gaiaeyes_local_value($air['category'] ?? null);
