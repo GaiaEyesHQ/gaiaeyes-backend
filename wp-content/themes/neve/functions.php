@@ -968,8 +968,8 @@ if (!function_exists('gaia_render_alert_banner')) {
     echo do_shortcode('[gaia_alert_banner]');
   }
 }
-// Site‑wide banner injection near top of body
-add_action('wp_body_open', 'gaia_render_alert_badges');
+// Render alert badges late, then move them into the header via JS (no top-of-page flash)
+add_action('wp_footer', 'gaia_render_alert_badges');
 
 // Compact header badges for active alerts
 add_shortcode('gaia_alert_badges', function($atts){
@@ -1085,6 +1085,7 @@ add_shortcode('gaia_alert_badges', function($atts){
   </div>
   <style>
     .ge-badges{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap}
+    .ge-badges:not(.in-header){display:none}
     .ge-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;font-size:.78rem;line-height:1;border:1px solid;text-decoration:none}
     .ge-badge--kp{background:#1b2a22;color:#aef2c0;border-color:#2d624a}
     .ge-badge--rad{background:#2f2613;color:#ffe0a3;border-color:#7a5a1a}
@@ -1096,20 +1097,35 @@ add_shortcode('gaia_alert_badges', function($atts){
   </style>
   <script>
     (function(){
-      // Try to tuck the badges inside the header area if present
       function findHeaderTarget(){
-        return document.querySelector('header.site-header .container') ||
-               document.querySelector('header.site-header') ||
-               document.querySelector('header#header') ||
-               document.querySelector('.header-main-inner') ||
+        // Try the most specific Neve/Theme containers first, then fall back
+        return document.querySelector('.nv-navbar .container') ||
                document.querySelector('.nv-navbar') ||
+               document.querySelector('.header-main-inner') ||
+               document.querySelector('header.site-header .container') ||
                document.querySelector('.nv-header') ||
                document.querySelector('header');
       }
-      var badges = document.getElementById('geAlertBadges');
-      if(!badges) return;
-      var t = findHeaderTarget();
-      if(t){ t.appendChild(badges); badges.classList.add('in-header'); }
+      function moveBadges(){
+        var badges = document.getElementById('geAlertBadges');
+        if(!badges) return false;
+        var target = findHeaderTarget();
+        if(!target) return false;
+        target.appendChild(badges);
+        badges.classList.add('in-header'); // reveal after successful move
+        return true;
+      }
+      function onReady(fn){
+        if(document.readyState !== 'loading') fn();
+        else document.addEventListener('DOMContentLoaded', fn);
+      }
+      onReady(function(){
+        // Poll briefly in case the header is injected after badges
+        var tries = 0;
+        var t = setInterval(function(){
+          if (moveBadges() || ++tries > 40) clearInterval(t); // ~4s max
+        }, 100);
+      });
     })();
   </script>
   <?php return ob_get_clean();
