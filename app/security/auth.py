@@ -22,6 +22,7 @@ DEFAULT_PUBLIC_READ = [
     "/v1/space/visuals",
     "/v1/space/forecast/summary",
     "/v1/space/forecast/outlook",
+    "/v1/local/check",
     "/v1/quakes/daily",
     "/v1/quakes/monthly",
     "/v1/earth/schumann/latest",

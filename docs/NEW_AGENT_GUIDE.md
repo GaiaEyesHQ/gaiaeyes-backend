@@ -33,6 +33,7 @@ Backend routes are grouped by domain under `app/routers/` and registered in `app
 - Space/visuals: `/v1/space/*` and `/v1/space/visuals`
 - Quakes: `/v1/quakes/*`
 - Earth/Schumann: `/v1/earth/schumann/latest`
+- Local health: `/v1/local/*`
 - Features: `/v1/features/today`
 - Symptoms: `/v1/symptoms/*`
 - Ingest: `/v1/samples/batch`

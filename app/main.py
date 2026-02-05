@@ -10,6 +10,7 @@ from .routers import (
     health as health_router,
     hazards,
     ingest,
+    local,
     quakes,
     space,
     space_visuals,
@@ -128,6 +129,7 @@ app.include_router(earth.router, dependencies=[Depends(require_read_auth)])
 app.include_router(space.router, dependencies=[Depends(require_read_auth)])
 app.include_router(summary.router, dependencies=[Depends(require_read_auth)])
 app.include_router(space_forecasts.router, dependencies=[Depends(require_read_auth)])
+app.include_router(local.router, dependencies=[Depends(require_read_auth)])
 
 # Write routers (POST/PUT/DELETE)
 app.include_router(ingest.router, prefix="/v1", dependencies=[Depends(require_write_auth)])
