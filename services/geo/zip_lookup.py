@@ -8,7 +8,7 @@ DATA_CSV = Path("data/zip_centroids.csv")
 
 
 def zip_to_latlon(zip_code: str) -> Tuple[float, float]:
-    row = pg.fetchrow("select lat, lon from ext.zip_centroids where zip = $1", zip_code)
+    row = pg.fetchrow("select lat, lon from ext.zip_centroids where zip = %s", zip_code)
     if row:
         return float(row["lat"]), float(row["lon"])
 
