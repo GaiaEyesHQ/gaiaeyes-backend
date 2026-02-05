@@ -124,6 +124,27 @@ add_action( 'wp_footer', function () {
         if (kp >= 4) return {bg:"#0e6218", glow:"#34e07a", pulse:false};
         return {bg:"#222", glow:"#888", pulse:false};
     }
+    function gScaleFromKp(kp){
+        if (!isFinite(kp)) return 0;
+        var k = Math.floor(kp + 0.001);
+        if (k >= 9) return 5;
+        if (k >= 8) return 4;
+        if (k >= 7) return 3;
+        if (k >= 6) return 2;
+        if (k >= 5) return 1;
+        return 0;
+    }
+    // Hide any separate site-wide G-scale pill to avoid duplication once we append (G#) to the Kp badge.
+    function hideExternalGScalePills(){
+        var sels = ['[data-gaia-pill="g"]','.gaia-pill--g','.gaia-gpill','.gaia-pill.g-geomag'];
+        sels.forEach(function(sel){
+            document.querySelectorAll(sel).forEach(function(el){
+                if (!el.closest('#gaia-badges')){
+                    el.style.display = 'none';
+                }
+            });
+        });
+    }
     function colorizeF1(f1){
         if (f1 == null) return {bg:"#222", glow:"#888"};
         if (f1 >= 9.0)  return {bg:"#3a235d", glow:"#b58cff"};   // elevated vs ~7.8–8.0
@@ -148,7 +169,9 @@ add_action( 'wp_footer', function () {
 
                 if (!isNaN(kp)){
                     var kc = colorizeKp(kp);
-                    kpEl.textContent = "Kp " + kp.toFixed(1);
+                    var g = gScaleFromKp(kp);
+                    kpEl.textContent = "Kp " + kp.toFixed(1) + (g > 0 ? " (G" + g + ")" : "");
+                    kpEl.setAttribute('data-gaia-g-scale', String(g));
                     kpEl.style.background = kc.bg;
                     kpEl.style.boxShadow  = "0 0 10px " + kc.glow;
                     if (kc.pulse){ kpEl.classList.add('gaia-pulse'); } else { kpEl.classList.remove('gaia-pulse'); }
@@ -164,6 +187,8 @@ add_action( 'wp_footer', function () {
                 } else {
                     schEl.textContent = "F1 —";
                 }
+                // Remove any separate G-scale pill now that Kp shows (G#)
+                hideExternalGScalePills();
             })
             .catch(function(){
                 kpEl.textContent = "Kp —";
