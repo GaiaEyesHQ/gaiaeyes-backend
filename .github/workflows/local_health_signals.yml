@@ -1,0 +1,27 @@
+name: Local Health Signals
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  poll-and-cache:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      AIRNOW_API_KEY: ${{ secrets.AIRNOW_API_KEY }}
+      WEATHER_UA: ${{ secrets.WEATHER_UA }}
+      GAIA_LOG_LEVEL: INFO
+      LOCAL_SIGNALS_TTL_MINUTES: "60"
+      LOCAL_SIGNALS_AIRNOW_RADIUS_MI: "25"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Run local poller
+        run: python -m bots.local_health_poll

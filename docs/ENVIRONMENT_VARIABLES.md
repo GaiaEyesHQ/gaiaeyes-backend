@@ -7,6 +7,7 @@
 | --- | --- | --- | --- |
 | `DATABASE_URL` | Supabase Postgres connection | `postgresql://postgres:***@db.<project>.supabase.co:5432/postgres` | `app/db/__init__.py` |
 | `DIRECT_URL` | Optional direct Postgres fallback | `postgresql://postgres:***@db.<project>.supabase.co:5432/postgres` | `app/db/__init__.py` |
+| `SUPABASE_DB_URL` | Supabase pooled Postgres connection (scripts/bots) | `postgresql://postgres:***@db.<project>.supabase.co:6543/postgres` | `services/db.py` |
 | `SUPABASE_JWT_SECRET` | Validate Supabase JWTs | `supabase-jwt-secret` | `app/utils/auth.py` |
 | `SUPABASE_URL` | Supabase REST/Storage base URL | `https://<project>.supabase.co` | `app/utils/supabase_storage.py` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Storage uploads | `service-role-key` | `app/utils/supabase_storage.py` |
@@ -16,6 +17,11 @@
 | `DEV_BEARER` | Dev bearer token | `devtoken123` | `app/security/auth.py`, `app/db/__init__.py` |
 | `PUBLIC_READ_ENABLED` | Enable public read allowlist | `1` | `app/security/auth.py` |
 | `PUBLIC_READ_PATHS` | CSV allowlist of public GET paths | `/health,/v1/space/visuals` | `app/security/auth.py` |
+| `AIRNOW_API_KEY` | AirNow API access key | `airnow-key` | `services/external/airnow.py` |
+| `WEATHER_UA` | NWS user agent string | `(gaiaeyes.com, gaiaeyes7.83@gmail.com)` | `services/external/nws.py` |
+| `GAIA_LOG_LEVEL` | Logging level for bots | `INFO` | `bots/local_health_poll.py` |
+| `LOCAL_SIGNALS_TTL_MINUTES` | Local signals cache TTL | `60` | `services/local_signals/cache.py` |
+| `LOCAL_SIGNALS_AIRNOW_RADIUS_MI` | AirNow search radius in miles | `25` | `services/external/airnow.py` |
 | `CORS_ORIGINS` | CORS origin list | `*` | `app/db/__init__.py` |
 | `REDIS_URL` | Optional caching/queues | `redis://...` | `app/db/__init__.py` |
 | `FEATURES_CACHE_TTL_SECONDS` | Features cache TTL | `300` | `app/db/__init__.py` |

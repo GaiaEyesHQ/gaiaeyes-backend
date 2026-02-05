@@ -45,6 +45,9 @@
 - `GET /v1/quakes/monthly`
 - `GET /v1/quakes/history`
 
+### Local health
+- `GET /v1/local/check`
+
 ### Features + symptoms
 - `GET /v1/features/today` (daily features snapshot)
 - `POST /v1/symptoms` (log a symptom)

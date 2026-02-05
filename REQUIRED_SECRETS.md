@@ -11,6 +11,7 @@ sensitive entries (if any) should move to repository variables.
 
 | Name | Purpose | Source of truth |
 | ---- | ------- | ---------------- |
+| `AIRNOW_API_KEY` | AirNow API access key | GitHub org secret |
 | `EARTHSCOPE_USER_ID` | Earthscope integration user identifier | GitHub org secret |
 | `EARTHSCOPE_WEBHOOK_URL` | Earthscope webhook endpoint | GitHub org secret |
 | `FB_ACCESS_TOKEN` | Facebook Graph API token | GitHub org secret |
@@ -36,6 +37,7 @@ sensitive entries (if any) should move to repository variables.
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (duplicate) | GitHub org secret |
 | `SUPABASE_URL` | Supabase project URL | Consider moving to repository variable |
 | `SYMH_URL` | External SYMH data source | Consider moving to repository variable |
+| `WEATHER_UA` | weather.gov User-Agent policy string | GitHub org secret |
 | `WEBHOOK_SECRET` | Shared secret for webhook verification | GitHub org secret |
 | `WP_ALT_USERNAME` | Alternate WordPress account | GitHub org secret |
 | `WP_APP_PASSWORD` | WordPress application password | GitHub org secret |
