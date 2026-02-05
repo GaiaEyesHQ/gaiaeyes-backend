@@ -122,6 +122,26 @@ def _dbg(msg: str) -> None:
     if EARTHSCOPE_DEBUG_REWRITE:
         print(f"[earthscope.debug] {msg}")
 
+# --- Normalize chat messages for OpenAI Chat API ---
+def _normalize_chat_messages(msgs):
+    out = []
+    for m in msgs or []:
+        role = m.get("role", "user")
+        content = m.get("content")
+        # If content is a list of parts (e.g., [{'type':'text','text':'...'}])
+        if isinstance(content, list):
+            text_parts = []
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    text_parts.append(part.get("text") or "")
+            content = "\n".join([t for t in text_parts if t])
+        if content is None:
+            content = ""
+        elif not isinstance(content, str):
+            content = str(content)
+        out.append({"role": role, "content": content})
+    return out
+
 # --- Safe JSON loader + in-repo defaults (used if files are missing) ---
 def _load_json(path: str, fallback: dict) -> dict:
     try:
@@ -317,6 +337,7 @@ def generate_outlook_content(
     if client:
         try:
             msgs = build_messages(outlook, guides, style, lens_mode=LENS_MODE, humor=HUMOR_LEVEL)
+            msgs = _normalize_chat_messages(msgs)
             resp = client.chat.completions.create(
                 model=os.getenv("OPENAI_WRITER_MODEL", "gpt-5-mini"),
                 messages=msgs,
@@ -1672,7 +1693,27 @@ def upsert_supabase_post(values: Dict[str, Any]) -> None:
               .execute()
         )
     except Exception as e:
+        msg = str(e)
         print(f"[WARN] Supabase posts upsert failed: {e}")
+        # If PostgREST says a column is missing (e.g., PGRST204), retry without optional fields.
+        optional_cols = ["cards", "overview", "lead"]
+        removed = []
+        if "PGRST204" in msg or "Could not find the" in msg:
+            for col in optional_cols:
+                if (f"'{col}'" in msg) or (col in msg):
+                    if col in payload:
+                        payload.pop(col, None)
+                        removed.append(col)
+            try:
+                (
+                    SB.schema(POSTS_SCHEMA)
+                      .table(POSTS_TABLE)
+                      .upsert(payload, on_conflict=conflict)
+                      .execute()
+                )
+                print(f"[INFO] Supabase posts upsert retry succeeded without: {', '.join(removed) if removed else 'none'}")
+            except Exception as e2:
+                print(f"[WARN] Supabase posts upsert retry failed: {e2}")
 
 # ============================================================
 # Main
