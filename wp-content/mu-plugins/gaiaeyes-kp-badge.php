@@ -80,6 +80,38 @@ add_action( 'wp_head', function () {
 	      ].join(';');
 	      bar.appendChild(sch);
 	    }
+
+	    // Ensure a Radiation (S-scale) badge in the same bar
+	    if (!document.getElementById('gaia-s-badge')){
+	      var s = document.createElement('div');
+	      s.id = 'gaia-s-badge';
+	      s.textContent = 'S —';
+	      s.setAttribute('aria-live','polite');
+	      s.style.cssText = [
+	        'display:none', // hidden when S0
+	        'background:#111','color:#fff','border-radius:16px',
+	        'padding:4px 10px','font-size:13px',
+	        'font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif',
+	        'box-shadow:0 0 6px rgba(0,0,0,.3)','transition:background .3s, box-shadow .3s'
+	      ].join(';');
+	      bar.appendChild(s);
+	    }
+
+	    // Ensure an Earthquake (M6+) badge in the same bar
+	    if (!document.getElementById('gaia-quake-badge')){
+	      var q = document.createElement('div');
+	      q.id = 'gaia-quake-badge';
+	      q.textContent = 'M —';
+	      q.setAttribute('aria-live','polite');
+	      q.style.cssText = [
+	        'display:none', // hidden when no M6+ in window
+	        'background:#111','color:#fff','border-radius:16px',
+	        'padding:4px 10px','font-size:13px',
+	        'font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif',
+	        'box-shadow:0 0 6px rgba(0,0,0,.3)','transition:background .3s, box-shadow .3s'
+	      ].join(';');
+	      bar.appendChild(q);
+	    }
 	  }
 	  if (document.readyState === 'loading'){
 	    document.addEventListener('DOMContentLoaded', insert);
@@ -102,6 +134,9 @@ add_action( 'wp_footer', function () {
 		position:absolute; right:12px; top:50%; transform:translateY(-50%);
 		display:flex; gap:8px; align-items:center;
 	}
+	/* Allow all pills to share the same pulse animation class */
+	#gaia-s-badge.gaia-pulse,
+	#gaia-quake-badge.gaia-pulse{ animation:gaiaPulse 2s ease-in-out infinite; }
 	/* Storm pulse for KP>=5 */
 	#gaia-kp-badge.gaia-pulse{ animation:gaiaPulse 2s ease-in-out infinite; }
 	@keyframes gaiaPulse{
@@ -116,7 +151,9 @@ add_action( 'wp_footer', function () {
 </style>
 <script id="gaia-badges-js">
 (function(){
-    var BADGE_URL = "<?php echo esc_js(defined('GAIAEYES_API_BASE') ? rtrim(GAIAEYES_API_BASE, '/') . '/v1/badges/kp_schumann' : ''); ?>";
+    var API_BASE  = "<?php echo esc_js(defined('GAIAEYES_API_BASE') ? rtrim(GAIAEYES_API_BASE, '/') : ''); ?>";
+    var BADGE_URL = API_BASE ? API_BASE + "/v1/badges/kp_schumann" : "";
+    var VIS_URL   = API_BASE ? API_BASE + "/v1/space/visuals" : "";
 
     function colorizeKp(kp){
         if (kp >= 7) return {bg:"#a40000", glow:"#ff4f4f", pulse:true};
@@ -134,6 +171,19 @@ add_action( 'wp_footer', function () {
         if (k >= 5) return 1;
         return 0;
     }
+    function hideExternalAlertPills(){
+        var sels = [
+          '[data-gaia-pill="radiation"]','.gaia-pill--s','.gaia-spill','.gaia-pill.s-radiation',
+          '[data-gaia-pill="quake"]','.gaia-pill--m','.gaia-mpill','.gaia-pill.m-quake'
+        ];
+        sels.forEach(function(sel){
+          document.querySelectorAll(sel).forEach(function(el){
+            if (!el.closest('#gaia-badges')){
+              el.style.display = 'none';
+            }
+          });
+        });
+    }
     // Hide any separate site-wide G-scale pill to avoid duplication once we append (G#) to the Kp badge.
     function hideExternalGScalePills(){
         var sels = ['[data-gaia-pill="g"]','.gaia-pill--g','.gaia-gpill','.gaia-pill.g-geomag'];
@@ -150,6 +200,90 @@ add_action( 'wp_footer', function () {
         if (f1 >= 9.0)  return {bg:"#3a235d", glow:"#b58cff"};   // elevated vs ~7.8–8.0
         if (f1 <= 7.2)  return {bg:"#003a52", glow:"#7fd1ff"};   // subdued vs baseline
         return {bg:"#222", glow:"#888"};
+    }
+
+    // --- Radiation S-scale helpers (>=10 MeV PFU -> S0..S5) ---
+    function sFromPfu(pfu){
+      if (!(pfu >= 0)) return 0;
+      if (pfu >= 100000) return 5;
+      if (pfu >= 10000)  return 4;
+      if (pfu >= 1000)   return 3;
+      if (pfu >= 100)    return 2;
+      if (pfu >= 10)     return 1;
+      return 0;
+    }
+    function pickLatest10MeVSample(series){
+      if (!series || !Array.isArray(series.samples)) return null;
+      var samples = series.samples.filter(function(s){
+        var e = (s.energy || '').toString();
+        return e.indexOf('>=10') !== -1 || e.indexOf('≥10') !== -1 || /10\s*MeV/i.test(e);
+      });
+      if (!samples.length) return null;
+      samples.sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); });
+      return samples[samples.length - 1];
+    }
+    function updateRadiationPill(sEl){
+      if (!sEl) return;
+      if (!VIS_URL){
+        sEl.style.display = 'none';
+        return;
+      }
+      fetch(VIS_URL + "?v=" + Date.now(), {cache:"no-store"})
+        .then(function(r){ if(!r.ok) throw new Error("vis http "+r.status); return r.json(); })
+        .then(function(j){
+          var series = (j && j.series) || [];
+          var goes = series.find(function(s){ return s && s.key === 'goes_protons'; });
+          var sample = pickLatest10MeVSample(goes);
+          if (!sample){ sEl.style.display='none'; return; }
+          var pfu = Number(sample.value);
+          var S = sFromPfu(pfu);
+          if (S > 0){
+            sEl.textContent = "S" + S;
+            // color: S1=yellow, S2=orange, S3+=red
+            var bg  = S >= 3 ? "#a40000" : (S === 2 ? "#d98200" : "#7a6b00");
+            var glow= S >= 3 ? "#ff4f4f" : (S === 2 ? "#ffc84f" : "#ffd24f");
+            sEl.style.background = bg;
+            sEl.style.boxShadow  = "0 0 10px " + glow;
+            sEl.classList.add('gaia-pulse');
+            sEl.style.display = 'inline-block';
+          } else {
+            sEl.style.display = 'none';
+          }
+        })
+        .catch(function(){
+          sEl.style.display = 'none';
+        });
+    }
+
+    // --- Earthquake M6+ helpers (USGS public feed, last 24h) ---
+    var USGS_M6_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/6.0_day.geojson";
+    function updateQuakePill(qEl){
+      if (!qEl) return;
+      fetch(USGS_M6_URL, {cache:"no-store"})
+        .then(function(r){ if(!r.ok) throw new Error("usgs http "+r.status); return r.json(); })
+        .then(function(j){
+          var feats = (j && j.features) || [];
+          var cutoff = Date.now() - 24*60*60*1000;
+          var mags = feats
+            .map(function(f){ return f && f.properties && f.properties.mag; })
+            .filter(function(m){ return typeof m === 'number' && isFinite(m); });
+          // Filter by time window
+          mags = feats
+            .filter(function(f){ return f && f.properties && typeof f.properties.time === 'number' && f.properties.time >= cutoff; })
+            .map(function(f){ return f.properties.mag; })
+            .filter(function(m){ return typeof m === 'number' && isFinite(m); });
+
+          if (!mags.length){ qEl.style.display='none'; return; }
+          var maxMag = Math.max.apply(null, mags);
+          var bg  = maxMag >= 7 ? "#a40000" : "#d98200";
+          var glow= maxMag >= 7 ? "#ff4f4f" : "#ffc84f";
+          qEl.textContent = "M" + maxMag.toFixed(1);
+          qEl.style.background = bg;
+          qEl.style.boxShadow  = "0 0 10px " + glow;
+          qEl.classList.add('gaia-pulse');
+          qEl.style.display = 'inline-block';
+        })
+        .catch(function(){ qEl.style.display='none'; });
     }
 
     function updateBadges(kpEl, schEl){
@@ -189,6 +323,7 @@ add_action( 'wp_footer', function () {
                 }
                 // Remove any separate G-scale pill now that Kp shows (G#)
                 hideExternalGScalePills();
+                hideExternalAlertPills();
             })
             .catch(function(){
                 kpEl.textContent = "Kp —";
@@ -201,9 +336,15 @@ add_action( 'wp_footer', function () {
         attempt = attempt || 0;
         var kp  = document.getElementById('gaia-kp-badge');
         var sch = document.getElementById('gaia-sch-badge');
+        var sEl = document.getElementById('gaia-s-badge');
+        var qEl = document.getElementById('gaia-quake-badge');
         if (kp && sch){
             updateBadges(kp, sch);
-            setInterval(function(){ updateBadges(kp, sch); }, 600000); // 10 min
+            updateRadiationPill(sEl);
+            updateQuakePill(qEl);
+            // Refresh: kp/sch every 10 min, radiation/quakes every 5 min
+            setInterval(function(){ updateBadges(kp, sch); }, 600000);
+            setInterval(function(){ updateRadiationPill(sEl); updateQuakePill(qEl); }, 300000);
             return;
         }
         if (attempt < 40){
