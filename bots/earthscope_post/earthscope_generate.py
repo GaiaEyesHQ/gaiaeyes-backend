@@ -63,6 +63,31 @@ try:
 except Exception:
     HAVE_OPENAI = False
 
+# --- Robust wrapper for OpenAI chat completions ---
+def _chat_create(client, model: str, messages: list, **params):
+    """Robust wrapper for chat.completions that retries with minimal params
+    when a model only supports default sampling (e.g., temperature must be 1)."""
+    try:
+        return client.chat.completions.create(model=model, messages=messages, **params)
+    except Exception as e:
+        s = str(e)
+        if "Unsupported value" in s or "unsupported_value" in s or ("invalid_request_error" in s and "temperature" in s):
+            try:
+                if os.getenv("EARTHSCOPE_DEBUG_REWRITE", "false").lower() in ("1","true","yes","on"):
+                    print("[earthscope.debug] chat fallback: retrying without sampling params")
+                # Retry with only safe params (keep max_tokens if provided)
+                safe = {}
+                if "max_tokens" in params:
+                    safe["max_tokens"] = params["max_tokens"]
+                return client.chat.completions.create(model=model, messages=messages, **safe)
+            except Exception as e2:
+                # Final minimal retry: no extra params at all
+                try:
+                    return client.chat.completions.create(model=model, messages=messages)
+                except Exception:
+                    raise e2
+        raise
+
 # ============================================================
 # Env / Client
 # ============================================================
@@ -83,6 +108,8 @@ DAY_COLUMN   = os.getenv("SUPABASE_DAY_COLUMN", "day")
 PLATFORM     = os.getenv("EARTHSCOPE_PLATFORM", "default")
 USER_ID      = os.getenv("EARTHSCOPE_USER_ID", None)
 GAIA_BACKEND_BASE = os.getenv("GAIA_BACKEND_BASE", "https://gaiaeyes-backend.onrender.com").rstrip("/")
+# Unified model resolver for all LLM calls:
+GAIA_MODEL = os.getenv("GAIA_OPENAI_MODEL") or os.getenv("OPENAI_WRITER_MODEL", "gpt-5-mini")
 def _resolve_path_env_or_default(env_key: str, default_path: Path) -> Path:
     val = os.getenv(env_key)
     if val:
@@ -344,9 +371,10 @@ def generate_outlook_content(
             msgs = _normalize_chat_messages(msgs)
 
             # Call Chat Completions without schema forcing (some SDK builds reject list-of-strings parts)
-            resp = client.chat.completions.create(
-                model=os.getenv("OPENAI_WRITER_MODEL", "gpt-5-mini"),
-                messages=msgs,
+            resp = _chat_create(
+                client,
+                os.getenv("OPENAI_WRITER_MODEL", "gpt-5-mini"),
+                msgs,
                 temperature=float(os.getenv("WRITER_TEMP", "0.7")),
             )
             raw = (resp.choices[0].message.content or "").strip()
@@ -629,13 +657,14 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         "sections_excerpt": {k: (v[:160] if isinstance(v,str) else v) for k,v in sections.items() if k in ("caption","snapshot")}
     }
     try:
-        resp = client.chat.completions.create(
-            model=os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini"),
+        resp = _chat_create(
+            client,
+            GAIA_MODEL,
+            [{"role":"system","content":sys},{"role":"user","content":json.dumps(usr, ensure_ascii=False)}],
             temperature=0.65,
             top_p=0.9,
             presence_penalty=0.2,
             max_tokens=16,
-            messages=[{"role":"system","content":sys},{"role":"user","content":json.dumps(usr, ensure_ascii=False)}],
         )
         title = (resp.choices[0].message.content or "").strip()
         # Guardrails: strip quotes and trim length
@@ -921,20 +950,21 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         }
     }
 
-    model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
+    model = GAIA_MODEL
     try:
         _dbg("rewrite: request -> OpenAI (interpretive JSON)")
-        resp = client.chat.completions.create(
-            model=model,
+        resp = _chat_create(
+            client,
+            model,
+            [
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
+            ],
             temperature=0.75,
             top_p=0.9,
             presence_penalty=0.3,
             frequency_penalty=0.2,
             max_tokens=700,
-            messages=[
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
-            ],
         )
         text = (resp.choices[0].message.content or "").strip()
         _dbg("rewrite: response received; attempting JSON parse")
@@ -1496,15 +1526,12 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     sr     = ctx.get("schumann_value_hz")
     sr_note= ctx.get("schumann_note")
 
-    model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
+    model = GAIA_MODEL
     try:
-        resp = client.chat.completions.create(
-            model=model,
-            temperature=0.9,
-            presence_penalty=0.6,
-            frequency_penalty=0.4,
-            max_tokens=320,
-            messages=[
+        resp = _chat_create(
+            client,
+            model,
+            [
                 {"role":"system","content":(
                     "You are Gaia Eyes' space‑weather writer. Write an accurate, human, declarative caption. "
                     "Do not start with questions or phrases like 'Feeling', 'Are you', 'Ever feel', 'Ready to', 'Let’s'. "
@@ -1518,6 +1545,10 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
                     f"Kp max (24h): {kp_max}\nSolar wind (km/s): {wind}\nFlares (24h): {flr}\nCMEs (24h): {cme}\nSchumann: {sr} Hz ({sr_note})"
                 )},
             ],
+            temperature=0.9,
+            presence_penalty=0.6,
+            frequency_penalty=0.4,
+            max_tokens=320,
         )
         text = resp.choices[0].message.content.strip()
         lines = [l.strip() for l in text.splitlines() if l.strip()]
@@ -1576,7 +1607,7 @@ def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
     sr     = ctx.get("schumann_value_hz")
     sr_note= ctx.get("schumann_note")
 
-    model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
+    model = GAIA_MODEL
     prompt = f"""
 Using the data below, create a Gaia Eyes–branded daily forecast with THREE sections and a hashtags line:
 1) Space Weather Snapshot — bullet the numbers (Kp now/max, solar wind, flares/CMEs, Schumann). Omit any bullet whose value is missing/None.
@@ -1593,10 +1624,15 @@ Data:
 - Schumann: {sr} Hz ({sr_note})
 """.strip()
     try:
-        resp = client.chat.completions.create(
-            model=model, temperature=0.75, max_tokens=900,
-            messages=[{"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, warm, and helpful. Balance science and mysticism."},
-                     {"role":"user","content": prompt}],
+        resp = _chat_create(
+            client,
+            model,
+            [
+                {"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, warm, and helpful. Balance science and mysticism."},
+                {"role":"user","content": prompt}
+            ],
+            temperature=0.75,
+            max_tokens=900,
         )
         text = resp.choices[0].message.content.strip()
         # Try to carve out the three sections + hashtags
