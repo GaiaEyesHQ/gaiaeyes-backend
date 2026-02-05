@@ -34,6 +34,28 @@ function gaiaeyes_local_value($value, $suffix = '') {
   return $suffix ? $value . ' ' . $suffix : (string)$value;
 }
 
+function gaiaeyes_resolve_zip_default($atts_zip) {
+  // Priority: shortcode attr > ?zip= query > user meta > cookie > fallback
+  $zip_attr = preg_replace('/[^0-9A-Za-z]/', '', (string)$atts_zip);
+  if ($zip_attr) return $zip_attr;
+
+  $qzip = isset($_GET['zip']) ? preg_replace('/[^0-9A-Za-z]/', '', (string)$_GET['zip']) : '';
+  if ($qzip) return $qzip;
+
+  if (is_user_logged_in()) {
+    $user_zip = get_user_meta(get_current_user_id(), 'gaiaeyes_default_zip', true);
+    $user_zip = preg_replace('/[^0-9A-Za-z]/', '', (string)$user_zip);
+    if ($user_zip) return $user_zip;
+  }
+
+  if (!empty($_COOKIE['gaia_zip'])) {
+    $ck = preg_replace('/[^0-9A-Za-z]/', '', (string)$_COOKIE['gaia_zip']);
+    if ($ck) return $ck;
+  }
+
+  return '78209';
+}
+
 add_shortcode('gaia_local_check', function ($atts) {
   $a = shortcode_atts([
     'zip' => '78209',
@@ -43,7 +65,7 @@ add_shortcode('gaia_local_check', function ($atts) {
     'api_dev_userid' => GAIAEYES_API_DEV_USERID,
   ], $atts, 'gaia_local_check');
 
-  $zip = preg_replace('/[^0-9A-Za-z]/', '', (string)$a['zip']);
+  $zip = gaiaeyes_resolve_zip_default($a['zip']);
   $api_base = trim((string)$a['api_base']);
   if (!$api_base || !$zip) {
     return '<div class="ge-card">Local health unavailable.</div>';
@@ -143,4 +165,131 @@ add_shortcode('gaia_local_check', function ($atts) {
   </section>
   <?php
   return ob_get_clean();
+});
+
+add_shortcode('gaia_local_widget', function ($atts) {
+  $a = shortcode_atts([
+    'zip' => '',
+    'cache' => 10,
+    'api_base' => defined('GAIAEYES_API_BASE') ? GAIAEYES_API_BASE : '',
+    'api_bearer' => defined('GAIAEYES_API_BEARER') ? GAIAEYES_API_BEARER : '',
+    'api_dev_userid' => defined('GAIAEYES_API_DEV_USERID') ? GAIAEYES_API_DEV_USERID : '',
+  ], $atts, 'gaia_local_widget');
+
+  // Resolve ZIP via helper (attr / query / user meta / cookie)
+  $zip = gaiaeyes_resolve_zip_default($a['zip']);
+
+  // Persist to cookie on view (helps guests keep context)
+  if ($zip) {
+    setcookie('gaia_zip', $zip, time() + 60*60*24*180, COOKIEPATH ? COOKIEPATH : '/', COOKIE_DOMAIN, is_ssl(), true);
+  }
+
+  ob_start();
+  ?>
+  <form method="get" class="ge-zip-form" style="margin-bottom:12px; display:flex; gap:8px; align-items:center;">
+    <label for="ge_zip"><strong>Your ZIP:</strong></label>
+    <input id="ge_zip" name="zip" inputmode="numeric" pattern="[0-9A-Za-z]{3,10}" value="<?php echo esc_attr($zip); ?>" style="max-width:140px;">
+    <button type="submit">Check</button>
+    <?php if (is_user_logged_in()) : ?>
+      <button type="button" id="ge_save_zip">Save as my default</button>
+      <span id="ge_save_status" style="margin-left:8px; opacity:.8;"></span>
+    <?php endif; ?>
+  </form>
+
+  <?php
+    // Reuse the existing card renderer with the resolved ZIP
+    echo do_shortcode(sprintf('[gaia_local_check zip="%s" cache="%d" api_base="%s" api_bearer="%s" api_dev_userid="%s"]',
+      esc_attr($zip),
+      intval($a['cache']),
+      esc_attr($a['api_base']),
+      esc_attr($a['api_bearer']),
+      esc_attr($a['api_dev_userid'])
+    ));
+  ?>
+
+  <?php if (is_user_logged_in()) : ?>
+    <script>
+      (function() {
+        const btn = document.getElementById('ge_save_zip');
+        if (!btn) return;
+        btn.addEventListener('click', async function() {
+          const zipEl = document.getElementById('ge_zip');
+          const zip = (zipEl && zipEl.value || '').trim();
+          const statusEl = document.getElementById('ge_save_status');
+          if (!zip) { if (statusEl) statusEl.textContent = 'Enter a ZIP first.'; return; }
+          try {
+            const resp = await fetch('<?php echo esc_url_raw( rest_url('gaiaeyes/v1/local/save-zip') ); ?>', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-WP-Nonce': '<?php echo esc_js( wp_create_nonce('wp_rest') ); ?>'
+              },
+              body: JSON.stringify({ zip })
+            });
+            const data = await resp.json();
+            if (resp.ok && data && data.ok) {
+              if (statusEl) statusEl.textContent = 'Saved!';
+            } else {
+              if (statusEl) statusEl.textContent = (data && data.error) ? data.error : 'Save failed';
+            }
+          } catch (e) {
+            if (statusEl) statusEl.textContent = 'Network error';
+          }
+        });
+      })();
+    </script>
+  <?php endif; ?>
+
+  <style>
+    .ge-zip-form input { padding:6px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:inherit; }
+    .ge-zip-form button { padding:6px 10px; border-radius:6px; border:0; background:#2b7cff; color:#fff; cursor:pointer; }
+    .ge-zip-form button[type="button"] { background:#555; }
+  </style>
+  <?php
+  return ob_get_clean();
+});
+
+add_action('rest_api_init', function () {
+  register_rest_route('gaiaeyes/v1', '/local/save-zip', [
+    'methods'  => 'POST',
+    'permission_callback' => function() { return is_user_logged_in(); },
+    'callback' => function( WP_REST_Request $req ) {
+      $zip = preg_replace('/[^0-9A-Za-z]/', '', (string)$req->get_param('zip'));
+      if (!$zip) {
+        return new WP_REST_Response(['ok' => false, 'error' => 'Invalid ZIP'], 400);
+      }
+      $uid = get_current_user_id();
+      update_user_meta($uid, 'gaiaeyes_default_zip', $zip);
+      // Refresh cookie too
+      setcookie('gaia_zip', $zip, time() + 60*60*24*180, COOKIEPATH ? COOKIEPATH : '/', COOKIE_DOMAIN, is_ssl(), true);
+
+      // Optional: mirror to Supabase app.user_locations if keys are available
+      if (defined('SUPABASE_REST_URL') && defined('SUPABASE_SERVICE_ROLE_KEY') && SUPABASE_REST_URL && SUPABASE_SERVICE_ROLE_KEY) {
+        $endpoint = rtrim(SUPABASE_REST_URL, '/') . '/app.user_locations?on_conflict=user_id';
+        $row = [
+          'user_id'  => 'wp:' . $uid,
+          'provider' => 'wp',
+          'zip'      => $zip,
+          'updated_at' => gmdate('c'),
+        ];
+        $args = [
+          'headers' => [
+            'Content-Type' => 'application/json',
+            'apikey'       => SUPABASE_SERVICE_ROLE_KEY,
+            'Authorization'=> 'Bearer ' . SUPABASE_SERVICE_ROLE_KEY,
+            'Prefer'       => 'resolution=merge-duplicates'
+          ],
+          'body'    => wp_json_encode([$row]),
+          'timeout' => 10,
+        ];
+        $r = wp_remote_post($endpoint, $args);
+        if (is_wp_error($r)) {
+          // Log but don’t fail the request
+          error_log('[gaiaeyes] Supabase user_locations upsert failed: ' . $r->get_error_message());
+        }
+      }
+
+      return new WP_REST_Response(['ok' => true, 'zip' => $zip], 200);
+    }
+  ]);
 });
