@@ -23,3 +23,11 @@
 6. **Schumann latest endpoint source**
    - **Why needed**: `/v1/earth/schumann/latest` reads `marts.daily_features` columns (`f0..f5`) that are not present in the migration schema.
    - **Where to fill**: Confirm intended data source (marts.schumann_daily vs daily_features) and update schema or endpoint accordingly.
+
+7. **Website sections still JSON-only (News / Compare / Pulse)**
+   - **Why needed**: The WordPress site relies on `gaiaeyes-media` JSON for News, Compare, and Pulse, but the iOS app needs an API-first source to mirror these sections.
+   - **Where to fill**: Decide whether to (a) keep using the existing JSON snapshots in-app as a temporary source, or (b) add Supabase-backed tables + new backend endpoints.
+
+8. **Schumann series endpoint mismatch with WP**
+   - **Why needed**: WP calls `/v1/earth/schumann/series?hours=24&station=...`, but the backend endpoint currently accepts `limit` and `cols` only.
+   - **Where to fill**: Confirm expected query parameters and update the backend or WP/clients to match.

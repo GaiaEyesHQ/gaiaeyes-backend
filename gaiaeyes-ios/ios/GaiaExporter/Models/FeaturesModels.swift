@@ -83,6 +83,8 @@ struct FeaturesToday: Codable {
     let auroraPowerGw: Num?
     let auroraPowerNhGw: Num?
     let auroraPowerShGw: Num?
+    let auroraHpNorthGw: Num?
+    let auroraHpSouthGw: Num?
     let visualsOverlayCount: Num?
     let visualsUpdatedAt: String?
 

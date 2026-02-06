@@ -35,25 +35,33 @@ enum MediaPaths {
 
     static func captionImage() -> URL {
         MediaBase.cdn
-            .appendingPathComponent("images")
+            .appendingPathComponent("social")
+            .appendingPathComponent("earthscope")
+            .appendingPathComponent("latest")
             .appendingPathComponent("daily_caption.jpg")
     }
 
     static func statsImage() -> URL {
         MediaBase.cdn
-            .appendingPathComponent("images")
+            .appendingPathComponent("social")
+            .appendingPathComponent("earthscope")
+            .appendingPathComponent("latest")
             .appendingPathComponent("daily_stats.jpg")
     }
 
     static func affectsImage() -> URL {
         MediaBase.cdn
-            .appendingPathComponent("images")
+            .appendingPathComponent("social")
+            .appendingPathComponent("earthscope")
+            .appendingPathComponent("latest")
             .appendingPathComponent("daily_affects.jpg")
     }
 
     static func playbookImage() -> URL {
         MediaBase.cdn
-            .appendingPathComponent("images")
+            .appendingPathComponent("social")
+            .appendingPathComponent("earthscope")
+            .appendingPathComponent("latest")
             .appendingPathComponent("daily_playbook.jpg")
     }
 

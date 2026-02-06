@@ -53,6 +53,185 @@ private struct SchumannDay: Codable {
     let f2: Double?
 }
 
+private struct LocalCheckResponse: Codable {
+    let ok: Bool?
+    let whereInfo: LocalWhere?
+    let weather: LocalWeather?
+    let air: LocalAir?
+    let moon: LocalMoon?
+    let asof: String?
+    let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case ok, weather, air, moon, asof, error
+        case whereInfo = "where"
+    }
+}
+
+private struct LocalWhere: Codable {
+    let zip: String?
+    let lat: Double?
+    let lon: Double?
+}
+
+private struct LocalWeather: Codable {
+    let tempC: Double?
+    let tempDelta24hC: Double?
+    let humidityPct: Double?
+    let precipProbPct: Double?
+    let pressureHpa: Double?
+    let baroDelta24hHpa: Double?
+    let pressureTrend: String?
+    let baroTrend: String?
+}
+
+private struct LocalAir: Codable {
+    let aqi: Double?
+    let category: String?
+    let pollutant: String?
+}
+
+private struct LocalMoon: Codable {
+    let phase: String?
+    let illum: Double?
+    let cycle: Double?
+}
+
+private struct MagnetosphereResponse: Codable {
+    let ok: Bool?
+    let data: MagnetosphereData?
+    let error: String?
+}
+
+private struct MagnetosphereData: Codable {
+    let ts: String?
+    let kpis: MagnetosphereKpis?
+    let sw: MagnetosphereSw?
+    let trend: MagnetosphereTrend?
+    let chart: MagnetosphereChart?
+    let series: MagnetosphereSeries?
+}
+
+private struct MagnetosphereKpis: Codable {
+    let r0Re: Double?
+    let geoRisk: String?
+    let storminess: String?
+    let dbdt: String?
+    let lppRe: Double?
+    let kp: Double?
+}
+
+private struct MagnetosphereSw: Codable {
+    let nCm3: Double?
+    let vKms: Double?
+    let bzNt: Double?
+}
+
+private struct MagnetosphereTrend: Codable {
+    let r0: String?
+}
+
+private struct MagnetosphereChart: Codable {
+    let mode: String?
+    let amp: Double?
+}
+
+private struct MagnetosphereSeries: Codable {
+    let r0: [MagnetospherePoint]?
+}
+
+private struct MagnetospherePoint: Codable {
+    let t: String?
+    let v: Double?
+}
+
+private struct QuakesLatestResponse: Codable {
+    let ok: Bool?
+    let item: QuakeDaily?
+    let error: String?
+}
+
+private struct QuakeDaily: Codable {
+    let day: String?
+    let allQuakes: Int?
+    let m4p: Int?
+    let m5p: Int?
+    let m6p: Int?
+    let m7p: Int?
+}
+
+private struct QuakesEventsResponse: Codable {
+    let ok: Bool?
+    let items: [QuakeEvent]?
+    let error: String?
+}
+
+private struct QuakeEvent: Codable {
+    let timeUtc: String?
+    let mag: Double?
+    let depthKm: Double?
+    let lat: Double?
+    let lon: Double?
+    let place: String?
+    let source: String?
+    let url: String?
+    let id: String?
+}
+
+private struct HazardsBriefResponse: Codable {
+    let ok: Bool?
+    let generatedAt: String?
+    let items: [HazardItem]?
+    let error: String?
+}
+
+private struct HazardItem: Codable, Identifiable, Hashable {
+    let id: String
+    let title: String?
+    let url: String?
+    let source: String?
+    let kind: String?
+    let location: String?
+    let severity: String?
+    let startedAt: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case title, url, source, kind, location, severity, startedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        url = try container.decodeIfPresent(String.self, forKey: .url)
+        source = try container.decodeIfPresent(String.self, forKey: .source)
+        kind = try container.decodeIfPresent(String.self, forKey: .kind)
+        location = try container.decodeIfPresent(String.self, forKey: .location)
+        severity = try container.decodeIfPresent(String.self, forKey: .severity)
+        startedAt = try container.decodeIfPresent(String.self, forKey: .startedAt)
+
+        let base = url ?? title ?? location ?? UUID().uuidString
+        id = base
+    }
+
+    init(id: String = UUID().uuidString,
+         title: String? = nil,
+         url: String? = nil,
+         source: String? = nil,
+         kind: String? = nil,
+         location: String? = nil,
+         severity: String? = nil,
+         startedAt: String? = nil) {
+        self.id = id
+        self.title = title
+        self.url = url
+        self.source = source
+        self.kind = kind
+        self.location = location
+        self.severity = severity
+        self.startedAt = startedAt
+    }
+}
+
 private struct SpaceOutlookEntry: Codable, Identifiable, Hashable {
     let id: String
     let title: String?
@@ -137,10 +316,75 @@ private struct SpaceOutlookSection: Identifiable, Hashable, Codable {
     let entries: [SpaceOutlookEntry]
 }
 
+private struct OutlookKp: Codable, Hashable {
+    let now: Double?
+    let nowTs: String?
+    let gScaleNow: String?
+    let last24hMax: Double?
+    let gScale24hMax: String?
+}
+
+private struct OutlookImpacts: Codable, Hashable {
+    let gps: String?
+    let comms: String?
+    let grids: String?
+    let aurora: String?
+}
+
+private struct OutlookFlares: Codable, Hashable {
+    let max24h: String?
+    let total24h: Int?
+    let bands24h: [String: Int]?
+}
+
+private struct OutlookCmesStats: Codable, Hashable {
+    let total72h: Int?
+    let earthDirectedCount: Int?
+    let maxSpeedKms: Double?
+}
+
+private struct OutlookCmes: Codable, Hashable {
+    let headline: String?
+    let stats: OutlookCmesStats?
+}
+
+private struct OutlookSep: Codable, Hashable {
+    let ts: String?
+    let satellite: String?
+    let energyBand: String?
+    let flux: Double?
+    let sScale: String?
+    let sScaleIndex: Double?
+}
+
+private struct OutlookAurora: Codable, Hashable {
+    let validFrom: String?
+    let validTo: String?
+    let hemisphere: String?
+    let headline: String?
+    let powerGw: Double?
+    let wingKp: Double?
+    let confidence: String?
+}
+
+private struct OutlookData: Codable, Hashable {
+    let sep: OutlookSep?
+    let auroraOutlook: [OutlookAurora]?
+}
+
 private struct SpaceForecastOutlook: Codable {
     let issuedAt: String?
     let sections: [SpaceOutlookSection]
     let notes: [String]?
+    let kp: OutlookKp?
+    let headline: String?
+    let confidence: String?
+    let summary: String?
+    let alerts: [String]?
+    let impacts: OutlookImpacts?
+    let flares: OutlookFlares?
+    let cmes: OutlookCmes?
+    let data: OutlookData?
 
     private struct DynamicKey: CodingKey {
         var stringValue: String
@@ -154,6 +398,15 @@ private struct SpaceForecastOutlook: Codable {
         var tmpSections: [SpaceOutlookSection] = []
         var issued: String? = nil
         var notes: [String]? = nil
+        var kp: OutlookKp? = nil
+        var headline: String? = nil
+        var confidence: String? = nil
+        var summary: String? = nil
+        var alerts: [String]? = nil
+        var impacts: OutlookImpacts? = nil
+        var flares: OutlookFlares? = nil
+        var cmes: OutlookCmes? = nil
+        var data: OutlookData? = nil
 
         for key in container.allKeys {
             switch key.stringValue {
@@ -161,6 +414,24 @@ private struct SpaceForecastOutlook: Codable {
                 issued = try container.decodeIfPresent(String.self, forKey: key)
             case "notes":
                 notes = try container.decodeIfPresent([String].self, forKey: key)
+            case "kp":
+                kp = try? container.decode(OutlookKp.self, forKey: key)
+            case "headline":
+                headline = try? container.decode(String.self, forKey: key)
+            case "confidence":
+                confidence = try? container.decode(String.self, forKey: key)
+            case "summary":
+                summary = try? container.decode(String.self, forKey: key)
+            case "alerts":
+                alerts = try? container.decode([String].self, forKey: key)
+            case "impacts":
+                impacts = try? container.decode(OutlookImpacts.self, forKey: key)
+            case "flares":
+                flares = try? container.decode(OutlookFlares.self, forKey: key)
+            case "cmes":
+                cmes = try? container.decode(OutlookCmes.self, forKey: key)
+            case "data":
+                data = try? container.decode(OutlookData.self, forKey: key)
             default:
                 if let entries = try? container.decode([SpaceOutlookEntry].self, forKey: key), !entries.isEmpty {
                     let title = key.stringValue.replacingOccurrences(of: "_", with: " ").capitalized
@@ -172,6 +443,15 @@ private struct SpaceForecastOutlook: Codable {
         self.issuedAt = issued
         self.sections = tmpSections.sorted { $0.title < $1.title }
         self.notes = notes
+        self.kp = kp
+        self.headline = headline
+        self.confidence = confidence
+        self.summary = summary
+        self.alerts = alerts
+        self.impacts = impacts
+        self.flares = flares
+        self.cmes = cmes
+        self.data = data
     }
 
     func encode(to encoder: Encoder) throws {
@@ -182,6 +462,33 @@ private struct SpaceForecastOutlook: Codable {
         if let notes, let notesKey = DynamicKey(stringValue: "notes") {
             try container.encode(notes, forKey: notesKey)
         }
+        if let kp, let key = DynamicKey(stringValue: "kp") {
+            try container.encode(kp, forKey: key)
+        }
+        if let headline, let key = DynamicKey(stringValue: "headline") {
+            try container.encode(headline, forKey: key)
+        }
+        if let confidence, let key = DynamicKey(stringValue: "confidence") {
+            try container.encode(confidence, forKey: key)
+        }
+        if let summary, let key = DynamicKey(stringValue: "summary") {
+            try container.encode(summary, forKey: key)
+        }
+        if let alerts, let key = DynamicKey(stringValue: "alerts") {
+            try container.encode(alerts, forKey: key)
+        }
+        if let impacts, let key = DynamicKey(stringValue: "impacts") {
+            try container.encode(impacts, forKey: key)
+        }
+        if let flares, let key = DynamicKey(stringValue: "flares") {
+            try container.encode(flares, forKey: key)
+        }
+        if let cmes, let key = DynamicKey(stringValue: "cmes") {
+            try container.encode(cmes, forKey: key)
+        }
+        if let data, let key = DynamicKey(stringValue: "data") {
+            try container.encode(data, forKey: key)
+        }
         for section in sections {
             guard let key = DynamicKey(stringValue: section.id) else { continue }
             try container.encode(section.entries, forKey: key)
@@ -190,9 +497,11 @@ private struct SpaceForecastOutlook: Codable {
 }
 
 private enum SpaceDetailSection: Hashable {
+    case scientific
     case aurora
     case visuals
     case earthquakes
+    case schumann
 }
 
 struct ContentView: View {
@@ -266,6 +575,25 @@ struct ContentView: View {
     @State private var lastKnownSpaceVisuals: SpaceVisualsPayload? = nil
     @State private var spaceOutlook: SpaceForecastOutlook? = nil
     @State private var lastKnownSpaceOutlook: SpaceForecastOutlook? = nil
+
+    @AppStorage("local_health_zip") private var localHealthZip: String = "78209"
+    @State private var localHealth: LocalCheckResponse? = nil
+    @State private var localHealthLoading: Bool = false
+    @State private var localHealthError: String?
+    @State private var localZipRefreshTask: Task<Void, Never>? = nil
+
+    @State private var magnetosphere: MagnetosphereData? = nil
+    @State private var magnetosphereLoading: Bool = false
+    @State private var magnetosphereError: String?
+    @State private var showMagnetosphereDetail: Bool = false
+
+    @State private var quakeLatest: QuakeDaily? = nil
+    @State private var quakeEvents: [QuakeEvent] = []
+    @State private var quakeLoading: Bool = false
+    @State private var quakeError: String?
+    @State private var hazardsBrief: HazardsBriefResponse? = nil
+    @State private var hazardsLoading: Bool = false
+    @State private var hazardsError: String?
     
     @State private var symptomsToday: [SymptomEventToday] = []
     @State private var symptomDaily: [SymptomDailySummary] = []
@@ -554,23 +882,46 @@ struct ContentView: View {
     }
 
     private static var mediaBaseURL: URL? {
+        if let raw = Bundle.main.object(forInfoDictionaryKey: "MEDIA_BASE_URL") as? String {
+            let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !s.isEmpty { return URL(string: s.hasSuffix("/") ? String(s.dropLast()) : s) }
+        }
         let envBase = ProcessInfo.processInfo.environment["MEDIA_BASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let envBase, !envBase.isEmpty {
             return URL(string: envBase.hasSuffix("/") ? String(envBase.dropLast()) : envBase)
         }
-        return URL(string: "https://gaiaeyeshq.github.io/gaiaeyes-media")
+        return URL(string: "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals")
+    }
+
+    private static var legacyMediaBaseURL: URL? {
+        if let raw = Bundle.main.object(forInfoDictionaryKey: "LEGACY_MEDIA_BASE_URL") as? String {
+            let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !s.isEmpty { return URL(string: s.hasSuffix("/") ? String(s.dropLast()) : s) }
+        }
+        return URL(string: "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main")
     }
 
     private static func resolvedVisualURL(for image: SpaceVisualImage) -> URL? {
+        func join(base: URL, path: String) -> URL {
+            let rel = path.hasPrefix("/") ? String(path.dropFirst()) : path
+            return rel.split(separator: "/").reduce(base) { url, seg in
+                url.appendingPathComponent(String(seg))
+            }
+        }
         func normalizedURL(from raw: String) -> URL? {
-            guard !raw.isEmpty else { return nil }
-            if let direct = URL(string: raw), direct.scheme != nil { return direct }
-            if let base = mediaBaseURL { return URL(string: raw.hasPrefix("/") ? String(raw.dropFirst()) : raw, relativeTo: base)?.absoluteURL }
-            return nil
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            if let direct = URL(string: trimmed), direct.scheme != nil { return direct }
+            let rel = trimmed.hasPrefix("/") ? String(trimmed.dropFirst()) : trimmed
+            if rel.hasPrefix("images/space/"), let legacy = legacyMediaBaseURL {
+                return join(base: legacy, path: rel)
+            }
+            if let base = mediaBaseURL { return join(base: base, path: rel) }
+            return URL(string: trimmed)
         }
 
-        if let urlStr = image.url?.trimmingCharacters(in: .whitespacesAndNewlines), let url = normalizedURL(from: urlStr) { return url }
-        if let thumb = image.thumb?.trimmingCharacters(in: .whitespacesAndNewlines), let url = normalizedURL(from: thumb) { return url }
+        if let urlStr = image.url, let url = normalizedURL(from: urlStr) { return url }
+        if let thumb = image.thumb, let url = normalizedURL(from: thumb) { return url }
         if let metaPath = image.meta?["image_path"] ?? image.meta?["path"], let url = normalizedURL(from: metaPath) { return url }
         if let keyPath = image.key, let url = normalizedURL(from: keyPath) { return url }
         return nil
@@ -627,6 +978,136 @@ struct ContentView: View {
             } catch {
                 appLog("[UI] space outlook fallback decode failed: \(error.localizedDescription)")
             }
+        }
+    }
+
+    private func sanitizedZip(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filtered = trimmed.filter { $0.isLetter || $0.isNumber }
+        return filtered
+    }
+
+    private func scheduleLocalHealthRefresh() {
+        localZipRefreshTask?.cancel()
+        localZipRefreshTask = Task {
+            do {
+                try await Task.sleep(nanoseconds: 600_000_000)
+            } catch {
+                return
+            }
+            await fetchLocalHealth()
+        }
+    }
+
+    private func fetchLocalHealth() async {
+        let zip = sanitizedZip(localHealthZip)
+        guard !zip.isEmpty else {
+            await MainActor.run {
+                localHealth = nil
+                localHealthError = "Enter a ZIP code"
+            }
+            return
+        }
+        if zip != localHealthZip {
+            await MainActor.run { localHealthZip = zip }
+        }
+        await MainActor.run {
+            localHealthLoading = true
+            localHealthError = nil
+        }
+        let api = state.apiWithAuth()
+        do {
+            let payload: LocalCheckResponse = try await api.getJSON("v1/local/check?zip=\(zip)", as: LocalCheckResponse.self, perRequestTimeout: 30)
+            await MainActor.run {
+                if payload.ok == true {
+                    localHealth = payload
+                    localHealthError = nil
+                } else {
+                    localHealth = nil
+                    localHealthError = payload.error ?? "Local health unavailable"
+                }
+                localHealthLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                localHealth = nil
+                localHealthError = error.localizedDescription
+                localHealthLoading = false
+            }
+        }
+    }
+
+    private func fetchMagnetosphere() async {
+        await MainActor.run {
+            magnetosphereLoading = true
+            magnetosphereError = nil
+        }
+        let api = state.apiWithAuth()
+        do {
+            let payload: MagnetosphereResponse = try await api.getJSON("v1/space/magnetosphere", as: MagnetosphereResponse.self, perRequestTimeout: 30)
+            await MainActor.run {
+                if payload.ok == true {
+                    magnetosphere = payload.data
+                    magnetosphereError = nil
+                } else {
+                    magnetosphere = nil
+                    magnetosphereError = payload.error ?? "Magnetosphere unavailable"
+                }
+                magnetosphereLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                magnetosphere = nil
+                magnetosphereError = error.localizedDescription
+                magnetosphereLoading = false
+            }
+        }
+    }
+
+    private func fetchQuakes() async {
+        await MainActor.run {
+            quakeLoading = true
+            quakeError = nil
+        }
+        let api = state.apiWithAuth()
+        var hadError: String? = nil
+        do {
+            let latest: QuakesLatestResponse = try await api.getJSON("v1/quakes/latest", as: QuakesLatestResponse.self, perRequestTimeout: 30)
+            await MainActor.run { quakeLatest = latest.item }
+            if latest.ok != true, let err = latest.error { hadError = err }
+        } catch {
+            hadError = error.localizedDescription
+        }
+        do {
+            let events: QuakesEventsResponse = try await api.getJSON("v1/quakes/events", as: QuakesEventsResponse.self, perRequestTimeout: 30)
+            await MainActor.run { quakeEvents = events.items ?? [] }
+            if events.ok != true, let err = events.error { hadError = err }
+        } catch {
+            if hadError == nil { hadError = error.localizedDescription }
+        }
+        await MainActor.run {
+            quakeError = hadError
+            quakeLoading = false
+        }
+    }
+
+    private func fetchHazardsBrief() async {
+        await MainActor.run {
+            hazardsLoading = true
+            hazardsError = nil
+        }
+        let api = state.apiWithAuth()
+        var hadError: String? = nil
+        do {
+            let payload: HazardsBriefResponse = try await api.getJSON("v1/hazards/brief", as: HazardsBriefResponse.self, perRequestTimeout: 30)
+            await MainActor.run { hazardsBrief = payload }
+            if payload.ok != true, let err = payload.error { hadError = err }
+        } catch {
+            hadError = error.localizedDescription
+        }
+        await MainActor.run {
+            hazardsError = hadError
+            hazardsLoading = false
         }
     }
 
@@ -1571,9 +2052,20 @@ struct ContentView: View {
                         let visualsSnapshot = spaceVisuals ?? lastKnownSpaceVisuals
                         let overlayCount = visualOverlayCount(visualsSnapshot)
                         let overlayUpdated = latestVisualTimestamp(visualsSnapshot)
-                        let auroraPowerValue = current.auroraPowerGw?.value ?? current.auroraPowerNhGw?.value ?? current.auroraPowerShGw?.value ?? latestAuroraPower(from: visualsSnapshot)
-                        let earthquakeCount = current.earthquakeCount?.value.map { Int($0.rounded()) }
-                        let earthquakeMag = current.earthquakeMaxMag?.value
+                        let outlookPower = (spaceOutlook ?? lastKnownSpaceOutlook)?
+                            .data?
+                            .auroraOutlook?
+                            .first(where: { ($0.hemisphere ?? "").lowercased() == "north" })?.powerGw
+                            ?? (spaceOutlook ?? lastKnownSpaceOutlook)?.data?.auroraOutlook?.first?.powerGw
+                        let auroraPowerValue = current.auroraPowerGw?.value
+                            ?? current.auroraPowerNhGw?.value
+                            ?? current.auroraPowerShGw?.value
+                            ?? current.auroraHpNorthGw?.value
+                            ?? current.auroraHpSouthGw?.value
+                            ?? outlookPower
+                            ?? latestAuroraPower(from: visualsSnapshot)
+                        let earthquakeCount = quakeLatest?.allQuakes
+                        let earthquakeMag = quakeEvents.compactMap { $0.mag }.max()
                         SpaceWeatherCard(
                             kpMax: Int((current.kpMax?.value ?? 0).rounded()),
                             kpCurrent: current.kpCurrent?.value,
@@ -1602,7 +2094,10 @@ struct ContentView: View {
                                 visuals: visualsSnapshot ?? lastKnownSpaceVisuals,
                                 outlook: spaceOutlook ?? lastKnownSpaceOutlook,
                                 series: series ?? lastKnownSeries,
-                                initialSection: spaceDetailFocus
+                                initialSection: spaceDetailFocus,
+                                quakeLatest: quakeLatest,
+                                quakeEvents: quakeEvents,
+                                quakeError: quakeError
                             )
                         }
                         .padding(.horizontal)
@@ -1615,11 +2110,13 @@ struct ContentView: View {
                                     .padding(.bottom, 6)
                             }
                         }
+                        HazardsBriefCard(payload: hazardsBrief, isLoading: hazardsLoading, error: hazardsError)
+                            .padding(.horizontal)
                         // Aurora images (Nowcast / Tonight / Tomorrow)
                         do {
-                            let nowNorth = appResolveMediaURL("aurora/nowcast/nowcast-north.png")
-                            let tonightU = appResolveMediaURL("aurora/viewline/tonight.png")
-                            let tomorrowU = appResolveMediaURL("aurora/viewline/tomorrow.png")
+                            let nowNorth = URL(string: "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg")
+                            let tonightU = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png")
+                            let tomorrowU = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png")
                             if nowNorth != nil || tonightU != nil || tomorrowU != nil {
                                 GroupBox {
                                     VStack(alignment: .leading, spacing: 8) {
@@ -1711,9 +2208,29 @@ struct ContentView: View {
                             }
                         }
                         .padding(.horizontal)
-                        
+
+                        MagnetosphereCard(
+                            data: magnetosphere,
+                            isLoading: magnetosphereLoading,
+                            error: magnetosphereError,
+                            onOpenDetail: { showMagnetosphereDetail = true }
+                        )
+                        .padding(.horizontal)
+                        .sheet(isPresented: $showMagnetosphereDetail) {
+                            MagnetosphereDetailView(data: magnetosphere)
+                        }
+
                         EarthscopeCardV2(title: current.postTitle, caption: current.postCaption, images: current.earthscopeImages, bodyMarkdown: current.postBody)
                             .padding(.horizontal)
+
+                        LocalHealthCard(
+                            zip: $localHealthZip,
+                            snapshot: localHealth,
+                            isLoading: localHealthLoading,
+                            error: localHealthError,
+                            onRefresh: { Task { await fetchLocalHealth() } }
+                        )
+                        .padding(.horizontal)
                         
                         DisclosureGroup(isExpanded: $showTools) {
                             VStack(spacing: 12) {
@@ -1811,7 +2328,11 @@ struct ContentView: View {
                 async let f: Void = refreshSymptomPresets(api: api)
                 async let g: Void = fetchSpaceVisuals()
                 async let h: Void = fetchSpaceOutlook()
-                _ = await (a, b, c, d, e, f, g, h)
+                async let i: Void = fetchLocalHealth()
+                async let j: Void = fetchMagnetosphere()
+                async let k: Void = fetchQuakes()
+                async let l: Void = fetchHazardsBrief()
+                _ = await (a, b, c, d, e, f, g, h, i, j, k, l)
             }
             .refreshable {
                 await state.updateBackendDBFlag()
@@ -1824,14 +2345,18 @@ struct ContentView: View {
                 async let f: Void = refreshSymptomPresets(api: api)
                 async let g: Void = fetchSpaceVisuals()
                 async let h: Void = fetchSpaceOutlook()
+                async let i: Void = fetchLocalHealth()
+                async let j: Void = fetchMagnetosphere()
+                async let k: Void = fetchQuakes()
+                async let l: Void = fetchHazardsBrief()
                 if guardRemaining > 0 {
                     let remaining = max(1, Int(ceil(guardRemaining)))
                     appLog("[UI] pull-to-refresh: guard active (~\(remaining)s); skipping features refresh")
-                    _ = await (b, c, d, e, f, g, h)
+                    _ = await (b, c, d, e, f, g, h, i, j, k, l)
                     return
                 }
                 async let a: Void = fetchFeaturesToday(trigger: .refresh)
-                _ = await (a, b, c, d, e, f, g, h)
+                _ = await (a, b, c, d, e, f, g, h, i, j, k, l)
             }
             .onAppear {
                 state.refreshStatus()
@@ -1887,6 +2412,14 @@ struct ContentView: View {
                     spaceOutlook = decoded
                     appLog("[UI] space outlook updated from cache change")
                 }
+            }
+            .onChange(of: localHealthZip, initial: false) { _, newValue in
+                let sanitized = sanitizedZip(newValue)
+                if sanitized != newValue {
+                    localHealthZip = sanitized
+                    return
+                }
+                scheduleLocalHealthRefresh()
             }
             .onReceive(NotificationCenter.default.publisher(for: .featuresShouldRefresh).receive(on: RunLoop.main)) { _ in
                 pendingRefreshTask?.cancel()
@@ -2229,6 +2762,13 @@ struct ContentView: View {
             // Hard fallback to Supabase public bucket base so tiles render even if Info.plist is missing/mis-targeted
             return URL(string: "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals")
         }
+        private var legacyFallbackBaseURL: URL? {
+            if let raw = Bundle.main.object(forInfoDictionaryKey: "LEGACY_MEDIA_BASE_URL") as? String {
+                let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !s.isEmpty { return URL(string: s.hasSuffix("/") ? String(s.dropLast()) : s) }
+            }
+            return URL(string: "https://cdn.jsdelivr.net/gh/GaiaEyesHQ/gaiaeyes-media@main")
+        }
 
         @State private var previewPlayingURL: URL? = nil
         @State private var previewShowPlayer: Bool = false
@@ -2237,8 +2777,17 @@ struct ContentView: View {
         private func resolveMediaURL(_ path: String?) -> URL? {
             guard let s = path?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
             if let u = URL(string: s), u.scheme != nil { return u }  // already absolute
+            let rel = s.hasPrefix("/") ? String(s.dropFirst()) : s
+            func join(base: URL, path: String) -> URL {
+                return path.split(separator: "/").reduce(base) { url, seg in
+                    url.appendingPathComponent(String(seg))
+                }
+            }
+            if rel.hasPrefix("images/space/"), let legacy = legacyFallbackBaseURL {
+                return join(base: legacy, path: rel)
+            }
             guard let base = legacyMediaBaseURL else { return URL(string: s) }
-            return URL(string: s, relativeTo: base)
+            return join(base: base, path: rel)
         }
 
         private func normalizedKey(_ s: String) -> String {
@@ -2899,6 +3448,13 @@ struct ContentView: View {
                     Divider()
                     VStack(spacing: 8) {
                         SpaceStatRow(
+                            title: "Scientific Detail",
+                            subtitle: "Geomagnetic, radiation, flares, CMEs",
+                            badge: nil,
+                            icon: "list.bullet.rectangle",
+                            action: { onOpenDetail(.scientific) }
+                        )
+                        SpaceStatRow(
                             title: "Aurora",
                             subtitle: "Kp \(kpMax) · Power \(auroraPower.map { String(format: "%.1f GW", $0) } ?? "–")",
                             badge: auroraProbability,
@@ -2945,14 +3501,18 @@ struct ContentView: View {
         let outlook: SpaceForecastOutlook?
         let series: SpaceSeries?
         let initialSection: SpaceDetailSection?
+        let quakeLatest: QuakeDaily?
+        let quakeEvents: [QuakeEvent]
+        let quakeError: String?
 
         @Environment(\.dismiss) private var dismiss
-        @State private var selectedSection: SpaceDetailSection = .aurora
+        @State private var selectedSection: SpaceDetailSection = .scientific
         @State private var sourceFilter: String = "all"
         @State private var showSeriesOverlay: Bool = true
         @State private var showCredits: Bool = false
         @State private var detailPlayingURL: URL? = nil
         @State private var detailShowPlayer: Bool = false
+        @State private var auroraHemisphere: String = "north"
 
         private var overlayImages: [SpaceVisualImage] {
             let imgs = visuals?.images ?? []
@@ -2963,8 +3523,55 @@ struct ContentView: View {
                 let source = img.source?.lowercased() ?? key
                 return source.contains(sourceFilter)
             }
+            func dedupeKey(_ img: SpaceVisualImage) -> String {
+                if let raw = img.url?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+                    if let u = URL(string: raw), let host = u.host, !host.isEmpty {
+                        return u.path.lowercased()
+                    }
+                    return raw.lowercased()
+                }
+                if let path = img.imagePath?.trimmingCharacters(in: .whitespacesAndNewlines), !path.isEmpty {
+                    return path.lowercased()
+                }
+                if let key = img.key?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty {
+                    return key.lowercased()
+                }
+                return UUID().uuidString
+            }
+            var seen = Set<String>()
+            let deduped = filtered.filter { img in
+                let key = dedupeKey(img)
+                if seen.contains(key) { return false }
+                seen.insert(key)
+                return true
+            }
+            let hasEnlil = deduped.contains { img in
+                let key = (img.key ?? "").lowercased()
+                let url = (img.url ?? "").lowercased()
+                return key.contains("enlil") || url.contains("enlil")
+            }
+            var enriched = deduped
+            if !hasEnlil {
+                enriched.insert(
+                    SpaceVisualImage(
+                        key: "enlil_cme",
+                        url: "/nasa/enlil/latest.mp4",
+                        capturedAt: nil,
+                        caption: "ENLIL CME Propagation",
+                        source: "NOAA",
+                        credit: "NOAA/WSA–ENLIL+Cone",
+                        featureFlags: nil,
+                        imagePath: nil,
+                        thumb: nil,
+                        overlay: nil,
+                        mediaType: "video",
+                        meta: nil
+                    ),
+                    at: 0
+                )
+            }
             let fmt = ISO8601DateFormatter()
-            return filtered.sorted { a, b in
+            return enriched.sorted { a, b in
                 guard let ta = a.capturedAt.flatMap({ fmt.date(from: $0) }),
                       let tb = b.capturedAt.flatMap({ fmt.date(from: $0) }) else { return (a.key ?? "") < (b.key ?? "") }
                 return ta > tb
@@ -3047,6 +3654,26 @@ struct ContentView: View {
 
         private var outlookSections: [SpaceOutlookSection] { outlook?.sections ?? [] }
 
+        private func entryHasContent(_ entry: SpaceOutlookEntry) -> Bool {
+            let text = [
+                entry.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+                entry.summary?.trimmingCharacters(in: .whitespacesAndNewlines),
+                entry.driver?.trimmingCharacters(in: .whitespacesAndNewlines),
+                entry.metric?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ].compactMap { $0 }.filter { !$0.isEmpty }
+            let hasMeta = entry.value != nil
+                || entry.probability != nil
+                || (entry.severity?.isEmpty == false)
+                || (entry.region?.isEmpty == false)
+                || (entry.windowStart?.isEmpty == false)
+                || (entry.windowEnd?.isEmpty == false)
+                || (entry.confidence?.isEmpty == false)
+                || (entry.metric?.isEmpty == false)
+                || (entry.unit?.isEmpty == false)
+                || (entry.source?.isEmpty == false)
+            return !text.isEmpty || hasMeta
+        }
+
         private func outlookEntries(containing keywords: [String]) -> [SpaceOutlookEntry] {
             let lower = keywords.map { $0.lowercased() }
             return outlookSections.flatMap { section in
@@ -3057,15 +3684,30 @@ struct ContentView: View {
                     let text = (entry.title ?? entry.summary ?? entry.driver ?? "").lowercased()
                     return lower.contains(where: { text.contains($0) })
                 }
-                return sectionMatch ? section.entries : entries
+                let narrowed = sectionMatch ? section.entries : entries
+                return narrowed.filter { entryHasContent($0) }
             }
         }
 
-        private var outlookNotes: [String] { outlook?.notes ?? [] }
+        private var outlookNotes: [String] {
+            (outlook?.notes ?? []).compactMap { note in
+                let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }
+        }
 
         private var auroraPowerText: String {
-            if let power = features?.auroraPowerGw?.value ?? features?.auroraPowerNhGw?.value ?? features?.auroraPowerShGw?.value {
+            if let power = features?.auroraPowerGw?.value
+                ?? features?.auroraPowerNhGw?.value
+                ?? features?.auroraPowerShGw?.value
+                ?? features?.auroraHpNorthGw?.value
+                ?? features?.auroraHpSouthGw?.value {
                 return String(format: "%.1f GW", power)
+            }
+            if let outlookPower = outlook?.data?.auroraOutlook?
+                .first(where: { ($0.hemisphere ?? "").lowercased() == "north" })?.powerGw
+                ?? outlook?.data?.auroraOutlook?.first?.powerGw {
+                return String(format: "%.1f GW", outlookPower)
             }
             if let latest = visuals?.series?.first(where: { ($0.name ?? $0.label ?? "").lowercased().contains("aurora") })?.latestValue {
                 return String(format: "%.1f GW", latest)
@@ -3102,6 +3744,84 @@ struct ContentView: View {
             return nil
         }
 
+        private static let detailIsoFmt: ISO8601DateFormatter = {
+            let f = ISO8601DateFormatter()
+            f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return f
+        }()
+        private static let detailIsoFmtSimple: ISO8601DateFormatter = {
+            let f = ISO8601DateFormatter()
+            f.formatOptions = [.withInternetDateTime]
+            return f
+        }()
+
+        private func parseISODate(_ s: String?) -> Date? {
+            guard let s else { return nil }
+            return Self.detailIsoFmt.date(from: s) ?? Self.detailIsoFmtSimple.date(from: s)
+        }
+
+        private func spacePointsWithDates() -> [(Date, SpacePoint)] {
+            guard let pts = series?.spaceWeather else { return [] }
+            return pts.compactMap { point in
+                guard let ts = point.ts, let d = parseISODate(ts) else { return nil }
+                return (d, point)
+            }.sorted { $0.0 < $1.0 }
+        }
+
+        private var latestSpacePoint: SpacePoint? {
+            spacePointsWithDates().last?.1
+        }
+
+        private var last24hSpacePoints: [SpacePoint] {
+            let cutoff = Date().addingTimeInterval(-24 * 3600)
+            return spacePointsWithDates().filter { $0.0 >= cutoff }.map { $0.1 }
+        }
+
+        private var kpNowValue: Double? {
+            outlook?.kp?.now
+                ?? latestSpacePoint?.kp
+                ?? features?.kpCurrent?.value
+        }
+
+        private var kpMax24Value: Double? {
+            outlook?.kp?.last24hMax
+                ?? last24hSpacePoints.compactMap { $0.kp }.max()
+                ?? features?.kpMax?.value
+        }
+
+        private var swNowValue: Double? {
+            latestSpacePoint?.sw ?? features?.swSpeedAvg?.value
+        }
+
+        private var swMax24Value: Double? {
+            last24hSpacePoints.compactMap { $0.sw }.max()
+        }
+
+        private var bzNowValue: Double? {
+            latestSpacePoint?.bz
+        }
+
+        private var bzMin24Value: Double? {
+            last24hSpacePoints.compactMap { $0.bz }.min()
+                ?? features?.bzMin?.value
+        }
+
+        private func formatValue(_ value: Double?, decimals: Int = 1, suffix: String = "") -> String {
+            guard let value else { return "—" }
+            let base = String(format: "%.\(decimals)f", value)
+            return suffix.isEmpty ? base : "\(base) \(suffix)"
+        }
+
+        private func sScale(for flux: Double?) -> String? {
+            guard let f = flux else { return nil }
+            if f >= 100000 { return "S5" }
+            if f >= 10000 { return "S4" }
+            if f >= 1000 { return "S3" }
+            if f >= 100 { return "S2" }
+            if f >= 10 { return "S1" }
+            return "S0"
+        }
+
         private func outlookMetaParts(_ entry: SpaceOutlookEntry) -> [String] {
             var metaParts: [String] = []
             if let window = formattedOutlookWindow(start: entry.windowStart, end: entry.windowEnd) { metaParts.append(window) }
@@ -3122,7 +3842,7 @@ struct ContentView: View {
         private func outlookEntryRow(_ entry: SpaceOutlookEntry) -> some View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(entry.title ?? entry.driver ?? "Forecast")
+                    Text(entry.title ?? entry.driver ?? entry.metric ?? "Forecast")
                         .font(.subheadline)
                     if let severity = entry.severity { Text(severity.capitalized).font(.caption2).foregroundColor(.secondary) }
                     if let prob = entry.probability {
@@ -3149,9 +3869,10 @@ struct ContentView: View {
         }
 
         private var earthquakeSubtitle: String {
-            let count = features?.earthquakeCount?.value.map { Int($0.rounded()) }
-            let mag = features?.earthquakeMaxMag?.value
-            let region = features?.earthquakeMaxRegion
+            let count = quakeLatest?.allQuakes
+            let maxEvent = quakeEvents.max { ($0.mag ?? 0) < ($1.mag ?? 0) }
+            let mag = maxEvent?.mag
+            let region = maxEvent?.place
             var parts: [String] = []
             if let count { parts.append(count == 1 ? "1 quake" : "\(count) quakes") }
             if let mag { parts.append(String(format: "max M%.1f", mag)) }
@@ -3172,12 +3893,16 @@ struct ContentView: View {
                                 .foregroundColor(.secondary)
                         }
                         scrollChips(proxy: proxy)
+                        scientificSection
+                            .id(SpaceDetailSection.scientific)
                         auroraSection
                             .id(SpaceDetailSection.aurora)
                         visualsSection
                             .id(SpaceDetailSection.visuals)
                         earthquakesSection
                             .id(SpaceDetailSection.earthquakes)
+                        schumannSection
+                            .id(SpaceDetailSection.schumann)
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 20)
@@ -3198,7 +3923,7 @@ struct ContentView: View {
         @ViewBuilder
         private func scrollChips(proxy: ScrollViewProxy) -> some View {
             HStack(spacing: 8) {
-                ForEach([SpaceDetailSection.aurora, .visuals, .earthquakes], id: \.self) { section in
+                ForEach([SpaceDetailSection.scientific, .aurora, .visuals, .earthquakes, .schumann], id: \.self) { section in
                     Button {
                         selectedSection = section
                         withAnimation { proxy.scrollTo(section, anchor: .top) }
@@ -3216,27 +3941,229 @@ struct ContentView: View {
             }
         }
 
+        @ViewBuilder
+        private func detailRow(_ label: String, _ value: String) -> some View {
+            HStack {
+                Text(label)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(value)
+            }
+            .font(.caption)
+        }
+
+        @ViewBuilder
+        private func detailCard(title: String, @ViewBuilder content: () -> some View) -> some View {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                content()
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        }
+
+        private struct FallbackAsyncImage: View {
+            let primary: URL?
+            let fallback: URL?
+            let height: CGFloat
+            let cornerRadius: CGFloat
+
+            @State private var failedPrimary: Bool = false
+
+            private var activeURL: URL? {
+                failedPrimary ? fallback : primary
+            }
+
+            var body: some View {
+                AsyncImage(url: activeURL) { phase in
+                    switch phase {
+                    case .empty:
+                        ZStack { RoundedRectangle(cornerRadius: cornerRadius).fill(Color.gray.opacity(0.12)); ProgressView() }
+                            .frame(height: height)
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: height)
+                            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                    case .failure:
+                        if !failedPrimary, fallback != nil {
+                            DispatchQueue.main.async { failedPrimary = true }
+                            ZStack { RoundedRectangle(cornerRadius: cornerRadius).fill(Color.gray.opacity(0.12)); ProgressView() }
+                                .frame(height: height)
+                        } else {
+                            RoundedRectangle(cornerRadius: cornerRadius)
+                                .fill(Color.gray.opacity(0.12))
+                                .overlay { Image(systemName: "photo").foregroundColor(.secondary) }
+                                .frame(height: height)
+                        }
+                    @unknown default:
+                        EmptyView().frame(height: height)
+                    }
+                }
+            }
+        }
+
+        private var scientificSection: some View {
+            let sep = outlook?.data?.sep
+            let sepFlux = sep?.flux
+            let sepScale = sep?.sScale ?? sScale(for: sepFlux)
+            let sepBand = sep?.energyBand
+
+            let flareMax = outlook?.flares?.max24h
+            let flareTotal = outlook?.flares?.total24h ?? features?.flaresCount?.value.map { Int($0.rounded()) }
+            let flareBands = outlook?.flares?.bands24h ?? [:]
+
+            let cmeHeadline = outlook?.cmes?.headline
+            let cmeStats = outlook?.cmes?.stats
+
+            let auroraHeadline = outlook?.headline
+            let auroraConfidence = outlook?.confidence
+            let auroraAlerts = outlook?.alerts ?? []
+            let auroraImpacts = outlook?.impacts
+
+            return GroupBox {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Space Weather – Scientific Detail")
+                        .font(.headline)
+                    let cols = [GridItem(.adaptive(minimum: 180), spacing: 12)]
+                    LazyVGrid(columns: cols, spacing: 12) {
+                        detailCard(title: "Geomagnetic Conditions") {
+                            detailRow("Kp (now)", kpNowValue.map { formatValue($0, decimals: 1) } ?? "—")
+                            if let kpMax = kpMax24Value {
+                                detailRow("Kp (24h max)", formatValue(kpMax, decimals: 1))
+                            }
+                            detailRow("Solar wind (now)", swNowValue.map { formatValue($0, decimals: 0, suffix: "km/s") } ?? "—")
+                            if let swMax = swMax24Value {
+                                detailRow("Solar wind (24h max)", formatValue(swMax, decimals: 0, suffix: "km/s"))
+                            }
+                            let bzVal = bzNowValue ?? bzMin24Value
+                            detailRow("Bz (IMF)", bzVal.map { formatValue($0, decimals: 1, suffix: "nT") } ?? "—")
+                        }
+
+                        detailCard(title: "Solar Radiation Storm (≥10 MeV)") {
+                            detailRow("S-scale", sepScale ?? "—")
+                            detailRow("Proton flux", sepFlux.map { formatValue($0, decimals: 1, suffix: "pfu") } ?? "—")
+                            if let band = sepBand, !band.isEmpty {
+                                Text("Band: \(band)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        detailCard(title: "Solar Flares") {
+                            detailRow("Max class (24h)", flareMax ?? "—")
+                            if let total = flareTotal {
+                                detailRow("Total flares (24h)", "\(total)")
+                            }
+                            let bands = ["X", "M", "C", "B", "A"].compactMap { band -> String? in
+                                guard let val = flareBands[band], val > 0 else { return nil }
+                                return "\(band):\(val)"
+                            }
+                            if !bands.isEmpty {
+                                Text("Bands: \(bands.joined(separator: " "))")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        detailCard(title: "Coronal Mass Ejections") {
+                            detailRow("Headline", (cmeHeadline?.isEmpty == false) ? cmeHeadline! : "—")
+                            if let total = cmeStats?.total72h {
+                                detailRow("Total (72h)", "\(total)")
+                            }
+                            if let directed = cmeStats?.earthDirectedCount {
+                                detailRow("Earth-directed", "\(directed)")
+                            }
+                            if let vmax = cmeStats?.maxSpeedKms {
+                                detailRow("Max speed", formatValue(vmax, decimals: 0, suffix: "km/s"))
+                            }
+                        }
+
+                        detailCard(title: "Aurora & Forecast") {
+                            if let headline = auroraHeadline, !headline.isEmpty {
+                                Text(headline)
+                                    .font(.caption)
+                            }
+                            if let conf = auroraConfidence, !conf.isEmpty {
+                                detailRow("Confidence", conf)
+                            }
+                            if !auroraAlerts.isEmpty {
+                                Text("Alerts: \(auroraAlerts.joined(separator: ", "))")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            if let impacts = auroraImpacts {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Plain-language impacts")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                    detailRow("GPS/Navigation", impacts.gps ?? "—")
+                                    detailRow("Radio/Comms", impacts.comms ?? "—")
+                                    detailRow("Power Grids", impacts.grids ?? "—")
+                                    detailRow("Aurora Visibility", impacts.aurora ?? "—")
+                                }
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } label: {
+                Label("Scientific Detail", systemImage: "list.bullet.rectangle")
+            }
+        }
+
         private var auroraSection: some View {
             GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
-                    let kpNow = features?.kpCurrent?.value.map { String(format: "%.1f", $0) } ?? "–"
+                VStack(alignment: .leading, spacing: 12) {
+                    let kpNow = kpNowValue.map { String(format: "%.1f", $0) } ?? "–"
                     let prob = ContentView.auroraProbabilityText(from: features) ?? "Probability pending"
-                    let caption = features?.auroraProbability ?? features?.auroraProbabilityNh ?? features?.auroraProbabilitySh
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Kp now: \(kpNow)")
-                            Text("Hemispheric power: \(auroraPowerText)")
-                            Text(prob)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Kp now: \(kpNow)")
+                        Text("Hemispheric power: \(auroraPowerText)")
+                        Text(prob)
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                    Picker("Hemisphere", selection: $auroraHemisphere) {
+                        Text("North").tag("north")
+                        Text("South").tag("south")
+                    }
+                    .pickerStyle(.segmented)
+
+                    let nowcastPrimary = resolveMediaPath("aurora/nowcast/nowcast-\(auroraHemisphere).png")
+                    let nowcastFallback = URL(string: auroraHemisphere == "south"
+                                              ? "https://services.swpc.noaa.gov/images/animations/ovation/south/latest.jpg"
+                                              : "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg")
+                    FallbackAsyncImage(primary: nowcastPrimary, fallback: nowcastFallback, height: 220, cornerRadius: 12)
+
+                    let tonightPrimary = resolveMediaPath("aurora/viewline/tonight-\(auroraHemisphere).png")
+                        ?? resolveMediaPath("aurora/viewline/tonight.png")
+                    let tomorrowPrimary = resolveMediaPath("aurora/viewline/tomorrow-\(auroraHemisphere).png")
+                        ?? resolveMediaPath("aurora/viewline/tomorrow.png")
+                    let tonightFallback = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png")
+                    let tomorrowFallback = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png")
+
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Tonight (forecast)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            FallbackAsyncImage(primary: tonightPrimary, fallback: tonightFallback, height: 140, cornerRadius: 10)
                         }
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        Spacer()
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Tomorrow (forecast)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            FallbackAsyncImage(primary: tomorrowPrimary, fallback: tomorrowFallback, height: 140, cornerRadius: 10)
+                        }
                     }
-                    if let caption, caption.value != nil {
-                        Text("Aurora outlook cached from SWPC feeds; probability badge shows NH/SH split when available.")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
+
                     let auroraEntries = outlookEntries(containing: ["aurora", "kp", "hemispheric", "ovation"])
                     if !auroraEntries.isEmpty {
                         Divider()
@@ -3247,7 +4174,7 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } label: {
-                Label("Aurora", systemImage: "sparkles")
+                Label("Aurora Tracker", systemImage: "sparkles")
             }
         }
 
@@ -3285,42 +4212,59 @@ struct ContentView: View {
                     Toggle("Show credits", isOn: $showCredits)
                         .font(.caption)
                         .toggleStyle(.switch)
-                    // Grid of visuals (detail view), reusing the same resolver as dashboard preview
-                    let cols = [GridItem(.adaptive(minimum: 140), spacing: 12)]
-                    LazyVGrid(columns: cols, spacing: 12) {
-                        ForEach(Array(overlayImages.prefix(12).enumerated()), id: \.offset) { _, img in
-                            VStack(alignment: .leading, spacing: 6) {
-                                if let u = resolveMediaURL_Detail(img.url) {
-                                    AsyncImage(url: u) { phase in
-                                        switch phase {
-                                        case .empty:
-                                            ZStack { Rectangle().opacity(0.08); ProgressView().scaleEffect(0.9) }
-                                                .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 10))
-                                        case .success(let image):
-                                            image
-                                                .resizable()
-                                                .scaledToFill()
-                                                .frame(height: 120)
-                                                .clipped()
-                                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                        case .failure:
-                                            ZStack { Rectangle().opacity(0.08); Image(systemName: "exclamationmark.triangle").foregroundColor(.orange) }
-                                                .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 10))
-                                        @unknown default:
-                                            EmptyView().frame(height: 120)
+                    if overlayImages.isEmpty {
+                        Text("No overlays available yet. Cached gallery will appear here.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        // Grid of visuals (detail view), reusing the same resolver as dashboard preview
+                        let cols = [GridItem(.adaptive(minimum: 140), spacing: 12)]
+                        LazyVGrid(columns: cols, spacing: 12) {
+                            ForEach(Array(overlayImages.prefix(12).enumerated()), id: \.offset) { _, img in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    if let u = resolveMediaURL_Detail(img) {
+                                        let urlStr = u.absoluteString.lowercased()
+                                        if urlStr.hasSuffix(".mp4") || urlStr.contains(".mp4?") {
+                                            ZStack {
+                                                Rectangle().opacity(0.08)
+                                                Image(systemName: "play.circle.fill").font(.system(size: 36))
+                                            }
+                                            .frame(height: 120)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                                            .onTapGesture { detailPlayingURL = u; detailShowPlayer = true }
+                                        } else {
+                                            AsyncImage(url: u) { phase in
+                                                switch phase {
+                                                case .empty:
+                                                    ZStack { Rectangle().opacity(0.08); ProgressView().scaleEffect(0.9) }
+                                                        .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 10))
+                                                case .success(let image):
+                                                    image
+                                                        .resizable()
+                                                        .scaledToFill()
+                                                        .frame(height: 120)
+                                                        .clipped()
+                                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                                case .failure:
+                                                    ZStack { Rectangle().opacity(0.08); Image(systemName: "exclamationmark.triangle").foregroundColor(.orange) }
+                                                        .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 10))
+                                                @unknown default:
+                                                    EmptyView().frame(height: 120)
+                                                }
+                                            }
                                         }
+                                    } else {
+                                        ZStack { Rectangle().opacity(0.08); Image(systemName: "questionmark").foregroundColor(.secondary) }
+                                            .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 10))
                                     }
-                                } else {
-                                    ZStack { Rectangle().opacity(0.08); Image(systemName: "questionmark").foregroundColor(.secondary) }
-                                        .frame(height: 120).clipShape(RoundedRectangle(cornerRadius: 10))
-                                }
-                                HStack {
-                                    Text(img.key ?? "Visual").font(.footnote).lineLimit(1)
-                                    Spacer()
-                                    Text(formattedCapture(img.capturedAt)).font(.caption2).foregroundColor(.secondary)
-                                }
-                                if showCredits, let c = img.credit, !c.isEmpty {
-                                    Text(c).font(.caption2).foregroundColor(.secondary).lineLimit(1)
+                                    HStack {
+                                        Text(img.key ?? "Visual").font(.footnote).lineLimit(1)
+                                        Spacer()
+                                        Text(formattedCapture(img.capturedAt)).font(.caption2).foregroundColor(.secondary)
+                                    }
+                                    if showCredits, let c = img.credit, !c.isEmpty {
+                                        Text(c).font(.caption2).foregroundColor(.secondary).lineLimit(1)
+                                    }
                                 }
                             }
                         }
@@ -3360,81 +4304,9 @@ struct ContentView: View {
                             }
                         }
                     }
-                    if overlayImages.isEmpty {
-                        Text("No overlays available yet. Cached gallery will appear here.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    } else {
-                        let cols = [GridItem(.adaptive(minimum: 160), spacing: 12)]
-                        LazyVGrid(columns: cols, spacing: 16) {
-                            ForEach(Array(overlayImages.prefix(12).enumerated()), id: \.offset) { _, image in
-                                VStack(alignment: .leading, spacing: 6) {
-                                    if let url = resolveMediaURL_Detail(image) {
-                                        let urlStr = url.absoluteString.lowercased()
-                                        if urlStr.hasSuffix(".mp4") || urlStr.contains(".mp4?") {
-                                            ZStack {
-                                                Rectangle().opacity(0.08)
-                                                Image(systemName: "play.circle.fill").font(.system(size: 44))
-                                            }
-                                            .frame(height: 150)
-                                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                                            .onTapGesture { detailPlayingURL = url; detailShowPlayer = true }
-                                        } else {
-                                            AsyncImage(url: url) { phase in
-                                                switch phase {
-                                                case .empty:
-                                                    ZStack {
-                                                        Rectangle().opacity(0.08)
-                                                        ProgressView().scaleEffect(0.9)
-                                                    }
-                                                    .frame(height: 150)
-                                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                                case .success(let img):
-                                                    img
-                                                        .resizable()
-                                                        .scaledToFill()
-                                                        .frame(height: 150)
-                                                        .clipped()
-                                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                                case .failure:
-                                                    ZStack {
-                                                        Rectangle().opacity(0.08)
-                                                        Image(systemName: "exclamationmark.triangle").foregroundColor(.orange)
-                                                    }
-                                                    .frame(height: 150)
-                                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                                @unknown default:
-                                                    EmptyView().frame(height: 150)
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        ZStack {
-                                            Rectangle().opacity(0.08)
-                                            Image(systemName: "questionmark").foregroundColor(.secondary)
-                                        }
-                                        .frame(height: 150)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    }
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(image.caption ?? image.key ?? "Overlay")
-                                            .font(.subheadline)
-                                        Text(formattedCapture(image.capturedAt))
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                        if showCredits, let credit = image.credit {
-                                            Text(credit)
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .sheet(isPresented: $detailShowPlayer) {
-                            if let url = detailPlayingURL {
-                                VideoPlayer(player: AVPlayer(url: url)).ignoresSafeArea()
-                            }
+                    .sheet(isPresented: $detailShowPlayer) {
+                        if let url = detailPlayingURL {
+                            VideoPlayer(player: AVPlayer(url: url)).ignoresSafeArea()
                         }
                     }
                 }
@@ -3448,11 +4320,47 @@ struct ContentView: View {
             ContentView.resolvedVisualURL(for: image)
         }
 
+        private func resolveMediaPath(_ path: String?) -> URL? {
+            guard let raw = path?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+            if let u = URL(string: raw), u.scheme != nil { return u }
+            let rel = raw.hasPrefix("/") ? String(raw.dropFirst()) : raw
+            func join(base: URL, path: String) -> URL {
+                return path.split(separator: "/").reduce(base) { url, seg in
+                    url.appendingPathComponent(String(seg))
+                }
+            }
+            if let base = mediaBaseURL_Detail {
+                return join(base: base, path: rel)
+            }
+            return URL(string: raw)
+        }
+
         private var earthquakesSection: some View {
             GroupBox {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(earthquakeSubtitle)
                         .font(.subheadline)
+                    if let quakeError, !quakeError.isEmpty {
+                        Text(quakeError)
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                    if !quakeEvents.isEmpty {
+                        Divider()
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(Array(quakeEvents.prefix(5).enumerated()), id: \.offset) { _, event in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("M\(event.mag.map { String(format: "%.1f", $0) } ?? "—") • \(event.place ?? "Unknown location")")
+                                        .font(.caption)
+                                    if let t = event.timeUtc {
+                                        Text(t)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if let sch = series?.schumannDaily?.first?.station_id {
                         Text("Schumann context: \(sch)")
                             .font(.caption2)
@@ -3468,11 +4376,77 @@ struct ContentView: View {
             }
         }
 
+        private var schumannSection: some View {
+            let latest = series?.schumannDaily?.last
+            let f0 = latest?.f0.map { String(format: "%.2f Hz", $0) } ?? "—"
+            let f1 = latest?.f1.map { String(format: "%.2f Hz", $0) } ?? "—"
+            let f2 = latest?.f2.map { String(format: "%.2f Hz", $0) } ?? "—"
+            let station = latest?.station_id?.capitalized ?? "—"
+            let tomskURL = MediaBase.cdn.appendingPathComponent("images/tomsk_latest.png")
+            let cumianaURL = MediaBase.cdn.appendingPathComponent("images/cumiana_latest.png")
+
+            return GroupBox {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Schumann Resonance – Scientific Detail")
+                        .font(.headline)
+                    Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
+                        GridRow { Text("Station"); Text(station) }
+                        GridRow { Text("f0"); Text(f0) }
+                        GridRow { Text("f1"); Text(f1) }
+                        GridRow { Text("f2"); Text(f2) }
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                    HStack(spacing: 10) {
+                        ForEach([tomskURL, cumianaURL], id: \.self) { url in
+                            AsyncImage(url: url) { phase in
+                                switch phase {
+                                case .empty:
+                                    ZStack { RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.15)); ProgressView() }
+                                        .frame(width: 150, height: 100)
+                                case .success(let img):
+                                    img.resizable().scaledToFit().frame(width: 150, height: 100).clipShape(RoundedRectangle(cornerRadius: 8))
+                                case .failure:
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.gray.opacity(0.12))
+                                        .overlay { Image(systemName: "photo").foregroundColor(.secondary) }
+                                        .frame(width: 150, height: 100)
+                                @unknown default:
+                                    EmptyView().frame(width: 150, height: 100)
+                                }
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Health context")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("• Shifts in EM environment can increase reactivity in sensitives; paced breathing and short outdoor breaks may help.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("• Keep evenings low‑light and devices dimmed during elevated variability.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("• Some see HRV dips during geomagnetic activity; hydrate and take short daylight breaks.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } label: {
+                Label("Schumann Resonance", systemImage: "waveform.path.ecg")
+            }
+        }
+
         private func label(for section: SpaceDetailSection) -> String {
             switch section {
+            case .scientific: return "Detail"
             case .aurora: return "Aurora"
             case .visuals: return "Visuals"
             case .earthquakes: return "Earthquakes"
+            case .schumann: return "Schumann"
             }
         }
     }
@@ -3494,12 +4468,493 @@ struct ContentView: View {
         }
     }
 
+    private struct HazardsBriefCard: View {
+        let payload: HazardsBriefResponse?
+        let isLoading: Bool
+        let error: String?
+
+        private func formatUpdated(_ iso: String?) -> String? {
+            guard let iso else { return nil }
+            let fmt = ISO8601DateFormatter()
+            if let d = fmt.date(from: iso) {
+                return DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .short)
+            }
+            return iso
+        }
+
+        private func severityCounts(_ items: [HazardItem]) -> (red: Int, orange: Int, yellow: Int, info: Int) {
+            var counts = (red: 0, orange: 0, yellow: 0, info: 0)
+            for item in items {
+                let sev = item.severity?.lowercased() ?? ""
+                if sev.contains("red") { counts.red += 1 }
+                else if sev.contains("orange") { counts.orange += 1 }
+                else if sev.contains("yellow") { counts.yellow += 1 }
+                else { counts.info += 1 }
+            }
+            return counts
+        }
+
+        private func typeCounts(_ items: [HazardItem]) -> (quakes: Int, cyclones: Int, volcano: Int, other: Int) {
+            var counts = (quakes: 0, cyclones: 0, volcano: 0, other: 0)
+            for item in items {
+                let kind = item.kind?.lowercased() ?? ""
+                if kind.contains("quake") || kind.contains("earth") {
+                    counts.quakes += 1
+                } else if kind.contains("cyclone") || kind.contains("storm") || kind.contains("severe") {
+                    counts.cyclones += 1
+                } else if kind.contains("volcano") || kind.contains("ash") {
+                    counts.volcano += 1
+                } else {
+                    counts.other += 1
+                }
+            }
+            return counts
+        }
+
+        var body: some View {
+            let items = payload?.items ?? []
+            let sev = severityCounts(items)
+            let types = typeCounts(items)
+
+            GroupBox {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Global Hazards Brief")
+                            .font(.headline)
+                        Spacer()
+                        if isLoading { ProgressView().scaleEffect(0.8) }
+                    }
+                    if let updated = formatUpdated(payload?.generatedAt) {
+                        Text("Updated \(updated)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    if let error, !error.isEmpty {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    if items.isEmpty && !isLoading && (error == nil || error?.isEmpty == true) {
+                        Text("Global Hazards unavailable at the moment.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else if !items.isEmpty {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Severity (48h)").font(.subheadline)
+                                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
+                                    GridRow { Text("RED"); Text("\(sev.red)") }
+                                    GridRow { Text("ORANGE"); Text("\(sev.orange)") }
+                                    GridRow { Text("YELLOW"); Text("\(sev.yellow)") }
+                                    GridRow { Text("INFO"); Text("\(sev.info)") }
+                                }
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("By Type (48h)").font(.subheadline)
+                                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
+                                    GridRow { Text("Earthquakes"); Text("\(types.quakes)") }
+                                    GridRow { Text("Cyclones/Severe"); Text("\(types.cyclones)") }
+                                    GridRow { Text("Volcano/Ash"); Text("\(types.volcano)") }
+                                    GridRow { Text("Other"); Text("\(types.other)") }
+                                }
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            }
+                        }
+
+                        Divider()
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Recent Highlights")
+                                .font(.subheadline)
+                            ForEach(Array(items.prefix(4))) { item in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.title ?? item.location ?? "—")
+                                        .font(.caption)
+                                    if let severity = item.severity, !severity.isEmpty {
+                                        Text(severity)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } label: {
+                Label("Hazards", systemImage: "exclamationmark.triangle.fill")
+            }
+        }
+    }
+
+    private struct LocalHealthCard: View {
+        @Binding var zip: String
+        let snapshot: LocalCheckResponse?
+        let isLoading: Bool
+        let error: String?
+        let onRefresh: () -> Void
+
+        private func formatNumber(_ value: Double?, decimals: Int = 1) -> String {
+            guard let value else { return "—" }
+            return String(format: "%.\(decimals)f", value)
+        }
+
+        private func formatTemp(_ celsius: Double?) -> String {
+            guard let c = celsius else { return "—" }
+            let f = (c * 9.0/5.0) + 32.0
+            return "\(String(format: "%.1f", c)) °C (\(String(format: "%.1f", f)) °F)"
+        }
+
+        private func formatTempDelta(_ celsius: Double?) -> String {
+            guard let c = celsius else { return "—" }
+            let f = c * 9.0/5.0
+            return "\(String(format: "%.1f", c)) °C (\(String(format: "%.1f", f)) °F)"
+        }
+
+        private func formatPressure(_ hpa: Double?) -> String {
+            guard let hpa else { return "—" }
+            let inHg = hpa * 0.02953
+            return "\(String(format: "%.1f", hpa)) hPa (\(String(format: "%.2f", inHg)) inHg)"
+        }
+
+        private func formatPressureDelta(_ hpa: Double?) -> String {
+            guard let hpa else { return "—" }
+            let inHg = hpa * 0.02953
+            return "\(String(format: "%.1f", hpa)) hPa (\(String(format: "%.2f", inHg)) inHg)"
+        }
+
+        private func formatPercent(_ value: Double?) -> String {
+            guard let value else { return "—" }
+            return "\(String(format: "%.0f", value)) %"
+        }
+
+        private func formatBaroTrend(_ trend: String?) -> String {
+            guard let trend, !trend.isEmpty else { return "—" }
+            switch trend.lowercased() {
+            case "rising": return "↑ rising"
+            case "falling": return "↓ falling"
+            case "steady": return "→ steady"
+            default: return trend
+            }
+        }
+
+        private func asofText(_ iso: String?) -> String? {
+            guard let iso else { return nil }
+            let fmt = ISO8601DateFormatter()
+            if let d = fmt.date(from: iso) {
+                return DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .short)
+            }
+            return nil
+        }
+
+        var body: some View {
+            let weather = snapshot?.weather
+            let air = snapshot?.air
+            let moon = snapshot?.moon
+            GroupBox {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Text("Local Health (\(zip.isEmpty ? "ZIP" : zip))")
+                            .font(.headline)
+                        Spacer()
+                        if isLoading { ProgressView().scaleEffect(0.8) }
+                        Button("Refresh") { onRefresh() }
+                            .font(.caption)
+                    }
+                    HStack(spacing: 8) {
+                        TextField("ZIP", text: $zip)
+                            .keyboardType(.numbersAndPunctuation)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 120)
+                            .onSubmit { onRefresh() }
+                        if let asof = asofText(snapshot?.asof) {
+                            Text("as of \(asof)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    if let error, !error.isEmpty {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    if snapshot == nil && !isLoading && (error == nil || error?.isEmpty == true) {
+                        Text("Local health unavailable.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Weather").font(.subheadline)
+                        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
+                            GridRow { Text("Temp"); Text(formatTemp(weather?.tempC)) }
+                            GridRow { Text("24h Δ"); Text(formatTempDelta(weather?.tempDelta24hC)) }
+                            GridRow { Text("Humidity"); Text(formatPercent(weather?.humidityPct)) }
+                            GridRow { Text("Precip"); Text(formatPercent(weather?.precipProbPct)) }
+                            GridRow { Text("Pressure"); Text(formatPressure(weather?.pressureHpa)) }
+                            GridRow { Text("Baro 24h Δ"); Text(formatPressureDelta(weather?.baroDelta24hHpa)) }
+                            GridRow { Text("Baro trend"); Text(formatBaroTrend(weather?.pressureTrend ?? weather?.baroTrend)) }
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+
+                    Divider()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Air Quality").font(.subheadline)
+                        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
+                            GridRow { Text("AQI"); Text(formatNumber(air?.aqi, decimals: 0)) }
+                            GridRow { Text("Category"); Text(air?.category ?? "—") }
+                            GridRow { Text("Pollutant"); Text(air?.pollutant ?? "—") }
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+
+                    Divider()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Moon").font(.subheadline)
+                        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
+                            GridRow { Text("Phase"); Text(moon?.phase ?? "—") }
+                            GridRow {
+                                Text("Illumination")
+                                Text(moon?.illum.map { "\(String(format: "%.0f", $0 * 100)) %" } ?? "—")
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } label: {
+                Label("Local Health", systemImage: "location.fill")
+            }
+        }
+    }
+
+    private struct MagnetosphereCard: View {
+        let data: MagnetosphereData?
+        let isLoading: Bool
+        let error: String?
+        let onOpenDetail: () -> Void
+
+        private func formatValue(_ value: Double?, decimals: Int = 1, suffix: String = "") -> String {
+            guard let value else { return "—" }
+            let base = String(format: "%.\(decimals)f", value)
+            return suffix.isEmpty ? base : "\(base) \(suffix)"
+        }
+
+        private func formatTimestamp(_ iso: String?) -> String? {
+            guard let iso else { return nil }
+            let fmt = ISO8601DateFormatter()
+            if let d = fmt.date(from: iso) {
+                return DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .short)
+            }
+            return nil
+        }
+
+        var body: some View {
+            GroupBox {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Magnetosphere Status").font(.headline)
+                        Spacer()
+                        if isLoading { ProgressView().scaleEffect(0.8) }
+                        Button("View detail") { onOpenDetail() }
+                            .font(.caption)
+                    }
+                    if let stamp = formatTimestamp(data?.ts) {
+                        Text("Updated: \(stamp)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    if let error, !error.isEmpty {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    if data == nil && !isLoading && (error == nil || error?.isEmpty == true) {
+                        Text("Magnetosphere data unavailable.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    if let kpis = data?.kpis {
+                        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
+                            GridRow { Text("R0"); Text(formatValue(kpis.r0Re, suffix: "Re")) }
+                            GridRow { Text("Plasmapause"); Text(formatValue(kpis.lppRe, suffix: "Re")) }
+                            GridRow { Text("GEO risk"); Text(kpis.geoRisk ?? "—") }
+                            GridRow { Text("Storminess"); Text(kpis.storminess ?? "—") }
+                            GridRow { Text("GIC feel"); Text(kpis.dbdt ?? "—") }
+                            GridRow { Text("Kp"); Text(formatValue(kpis.kp, decimals: 1)) }
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+                    if let sw = data?.sw {
+                        Divider()
+                        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
+                            GridRow { Text("Density"); Text(formatValue(sw.nCm3, suffix: "cm^-3")) }
+                            GridRow { Text("Speed"); Text(formatValue(sw.vKms, decimals: 0, suffix: "km/s")) }
+                            GridRow { Text("Bz"); Text(formatValue(sw.bzNt, decimals: 1, suffix: "nT")) }
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } label: {
+                Label("Magnetosphere", systemImage: "shield.fill")
+            }
+        }
+    }
+
+    private struct MagnetosphereDetailView: View {
+        let data: MagnetosphereData?
+        @Environment(\.dismiss) private var dismiss
+
+        private func resolveMediaURL(_ path: String) -> URL? {
+            if let raw = Bundle.main.object(forInfoDictionaryKey: "MEDIA_BASE_URL") as? String {
+                let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !s.isEmpty {
+                    let base = URL(string: s.hasSuffix("/") ? String(s.dropLast()) : s)
+                    let rel = path.hasPrefix("/") ? String(path.dropFirst()) : path
+                    if let base {
+                        return rel.split(separator: "/").reduce(base) { url, seg in
+                            url.appendingPathComponent(String(seg))
+                        }
+                    }
+                }
+            }
+            let base = URL(string: "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals")
+            let rel = path.hasPrefix("/") ? String(path.dropFirst()) : path
+            if let base {
+                return rel.split(separator: "/").reduce(base) { url, seg in
+                    url.appendingPathComponent(String(seg))
+                }
+            }
+            return nil
+        }
+
+        private func chartPoints() -> [(Date, Double)] {
+            let fmt = ISO8601DateFormatter()
+            return (data?.series?.r0 ?? []).compactMap { point in
+                guard let t = point.t, let v = point.v, let d = fmt.date(from: t) else { return nil }
+                return (d, v)
+            }
+        }
+
+        var body: some View {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if data == nil {
+                            Text("No magnetosphere data available yet.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        if let ts = data?.ts {
+                            Text("Updated: \(ts)")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        if let kpis = data?.kpis {
+                            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
+                                GridRow { Text("R0"); Text(kpis.r0Re.map { String(format: "%.1f Re", $0) } ?? "—") }
+                                GridRow { Text("Plasmapause"); Text(kpis.lppRe.map { String(format: "%.1f Re", $0) } ?? "—") }
+                                GridRow { Text("GEO risk"); Text(kpis.geoRisk ?? "—") }
+                                GridRow { Text("Storminess"); Text(kpis.storminess ?? "—") }
+                                GridRow { Text("GIC feel"); Text(kpis.dbdt ?? "—") }
+                                GridRow { Text("Kp"); Text(kpis.kp.map { String(format: "%.1f", $0) } ?? "—") }
+                            }
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        }
+
+                        if !chartPoints().isEmpty {
+                            Text("Shield Edge (R0) - last 24h")
+                                .font(.subheadline)
+                            Chart(chartPoints(), id: \.0) { point in
+                                LineMark(
+                                    x: .value("Time", point.0),
+                                    y: .value("R0", point.1)
+                                )
+                                .interpolationMethod(.catmullRom)
+                            }
+                            .frame(height: 180)
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Geospace visuals")
+                                .font(.subheadline)
+                            HStack(spacing: 10) {
+                                ForEach(["magnetosphere/geospace/1d.png",
+                                         "magnetosphere/geospace/3h.png",
+                                         "magnetosphere/geospace/7d.png"], id: \.self) { path in
+                                    if let url = resolveMediaURL(path) {
+                                        AsyncImage(url: url) { phase in
+                                            switch phase {
+                                            case .empty:
+                                                ZStack { RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.15)); ProgressView() }
+                                                    .frame(width: 110, height: 80)
+                                            case .success(let img):
+                                                img.resizable().scaledToFit().frame(width: 110, height: 80).clipShape(RoundedRectangle(cornerRadius: 8))
+                                            case .failure:
+                                                RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.12)).overlay { Image(systemName: "photo").foregroundColor(.secondary) }
+                                                    .frame(width: 110, height: 80)
+                                            @unknown default:
+                                                EmptyView().frame(width: 110, height: 80)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                }
+                .navigationTitle("Magnetosphere")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { dismiss() }
+                    }
+                }
+            }
+        }
+    }
+
     private struct EarthscopeCardV2: View {
         let title: String?
         let caption: String?
         let images: Any?
         let bodyMarkdown: String?
         @State private var showFull: Bool = false
+        @State private var reelPlayer: AVPlayer? = nil
+
+        private func earthscopeBaseURL() -> URL? {
+            if let raw = Bundle.main.object(forInfoDictionaryKey: "MEDIA_BASE_URL") as? String {
+                let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !s.isEmpty { return URL(string: s.hasSuffix("/") ? String(s.dropLast()) : s) }
+            }
+            return URL(string: "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals")
+        }
+
+        private func resolveEarthscopeURL(_ raw: String?) -> URL? {
+            guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+            if let u = URL(string: raw), u.scheme != nil { return u }
+            let rel = raw.hasPrefix("/") ? String(raw.dropFirst()) : raw
+            guard let base = earthscopeBaseURL() else { return URL(string: raw) }
+            return rel.split(separator: "/").reduce(base) { url, seg in
+                url.appendingPathComponent(String(seg))
+            }
+        }
+
+        private var earthscopeReelURL: URL? {
+            resolveEarthscopeURL("social/earthscope/reels/latest/latest.mp4")
+        }
 
         // Extract URLs from multiple possible shapes
         private func extractImageURLs() -> [URL] {
@@ -3507,13 +4962,13 @@ struct ContentView: View {
             // 1) Direct dictionary [String:String]
             if let dict = images as? [String:String] {
                 ["caption","stats","affects","playbook"].forEach { k in
-                    if let s = dict[k]?.trimmingCharacters(in: .whitespacesAndNewlines), let u = URL(string: s) { urls.append(u) }
+                    if let u = resolveEarthscopeURL(dict[k]) { urls.append(u) }
                 }
             }
             // 2) Dictionary [String:Any]
             else if let dict = images as? [String:Any] {
                 ["caption","stats","affects","playbook"].forEach { k in
-                    if let s = (dict[k] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), let u = URL(string: s) { urls.append(u) }
+                    if let s = dict[k] as? String, let u = resolveEarthscopeURL(s) { urls.append(u) }
                 }
             }
             // 3) Reflect a struct with properties caption/stats/affects/playbook
@@ -3525,7 +4980,7 @@ struct ContentView: View {
                     if let s = child.value as? String { map[label] = s }
                 }
                 ["caption","stats","affects","playbook"].forEach { k in
-                    if let s = map[k]?.trimmingCharacters(in: .whitespacesAndNewlines), let u = URL(string: s) { urls.append(u) }
+                    if let s = map[k], let u = resolveEarthscopeURL(s) { urls.append(u) }
                 }
             }
             // De-duplicate while preserving order
@@ -3546,37 +5001,15 @@ struct ContentView: View {
                             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
                     }
 
-                    if !urls.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
-                                ForEach(urls, id: \.self) { url in
-                                    AsyncImage(url: url) { phase in
-                                        switch phase {
-                                        case .empty:
-                                            ZStack { RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.15)); ProgressView() }
-                                                .frame(width: 160, height: 100)
-                                                .transaction { $0.disablesAnimations = true }
-                                        case .success(let img):
-                                            img.resizable().scaledToFill()
-                                                .frame(width: 160, height: 100)
-                                                .clipped()
-                                                .cornerRadius(8)
-                                                .transaction { $0.disablesAnimations = true }
-                                        case .failure:
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .fill(Color.gray.opacity(0.12))
-                                                .overlay { Image(systemName: "photo").foregroundColor(.secondary) }
-                                                .frame(width: 160, height: 100)
-                                                .transaction { $0.disablesAnimations = true }
-                                        @unknown default:
-                                            EmptyView()
-                                        }
-                                    }
+                    if let reelURL = earthscopeReelURL {
+                        VideoPlayer(player: reelPlayer ?? AVPlayer(url: reelURL))
+                            .frame(height: 200)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .onAppear {
+                                if reelPlayer == nil {
+                                    reelPlayer = AVPlayer(url: reelURL)
                                 }
                             }
-                            .padding(.vertical, 2)
-                        }
-                        .frame(height: 110)
                     }
 
                     if let body = bodyMarkdown, !body.isEmpty {
@@ -3586,11 +5019,11 @@ struct ContentView: View {
                             .lineLimit(6)
                             .padding(8)
                             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-
-                        Button("Read more") { showFull = true }
-                            .font(.caption)
-                            .underline()
                     }
+
+                    Button("Read today's Earthscope") { showFull = true }
+                        .font(.caption)
+                        .underline()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } label: { Label("EarthScope", systemImage: "globe.americas.fill") }
@@ -3612,8 +5045,12 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         if let t = title, !t.isEmpty { Text(t).font(.title3).bold() }
                         if let c = caption, !c.isEmpty { Text(c).font(.subheadline).foregroundColor(.secondary) }
+                        if let b = bodyText, !b.isEmpty { Text(b).font(.body) }
                         if !urls.isEmpty {
-                            VStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Daily visuals")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                                 ForEach(urls, id: \.self) { url in
                                     AsyncImage(url: url) { phase in
                                         switch phase {
@@ -3626,7 +5063,6 @@ struct ContentView: View {
                                 }
                             }
                         }
-                        if let b = bodyText, !b.isEmpty { Text(b).font(.body) }
                     }
                     .padding()
                 }

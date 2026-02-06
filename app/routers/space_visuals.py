@@ -236,6 +236,34 @@ async def _build_visuals_payload(conn, media_base: str) -> dict:
             }
         )
 
+    # Ensure Earthscope daily images are exposed even if not in ext.space_visuals yet.
+    earthscope_assets = [
+        ("earthscope_caption", "Earthscope Daily Caption", "social/earthscope/latest/daily_caption.jpg"),
+        ("earthscope_stats", "Earthscope Daily Stats", "social/earthscope/latest/daily_stats.jpg"),
+        ("earthscope_affects", "Earthscope Daily Affects", "social/earthscope/latest/daily_affects.jpg"),
+        ("earthscope_playbook", "Earthscope Daily Playbook", "social/earthscope/latest/daily_playbook.jpg"),
+    ]
+    existing_keys = {(img.get("key") or "").lower() for img in images}
+    existing_urls = {(img.get("url") or "").lower() for img in images if img.get("url")}
+    base_prefix = media_base.rstrip("/") if media_base else ""
+    for key, title, rel_path in earthscope_assets:
+        url = f"{base_prefix}/{rel_path}" if base_prefix else f"/{rel_path}"
+        if key in existing_keys or url.lower() in existing_urls:
+            continue
+        images.append(
+            {
+                "key": key,
+                "captured_at": latest_ts,
+                "url": url,
+                "image_path": rel_path,
+                "instrument": None,
+                "credit": None,
+                "meta": {"title": title},
+                "feature_flags": {},
+                "asset_type": "image",
+            }
+        )
+
     images.sort(key=lambda item: (item.get("key") or "", item.get("captured_at") or ""))
     series.sort(key=lambda item: item.get("key") or "")
 

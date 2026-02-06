@@ -1845,10 +1845,10 @@ async def features_today(
         response["data"].setdefault(
             "earthscope_images",
             {
-                "caption": f"{media_base}/images/daily_caption.jpg",
-                "stats": f"{media_base}/images/daily_stats.jpg",
-                "affects": f"{media_base}/images/daily_affects.jpg",
-                "playbook": f"{media_base}/images/daily_playbook.jpg",
+                "caption": f"{media_base}/social/earthscope/latest/daily_caption.jpg",
+                "stats": f"{media_base}/social/earthscope/latest/daily_stats.jpg",
+                "affects": f"{media_base}/social/earthscope/latest/daily_affects.jpg",
+                "playbook": f"{media_base}/social/earthscope/latest/daily_playbook.jpg",
             },
         )
 
