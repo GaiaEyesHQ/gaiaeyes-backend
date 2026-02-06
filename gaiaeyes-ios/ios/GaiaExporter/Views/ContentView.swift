@@ -1973,13 +1973,15 @@ struct ContentView: View {
             .auroraOutlook?
             .first(where: { ($0.hemisphere ?? "").lowercased() == "north" })?.powerGw
             ?? (spaceOutlook ?? lastKnownSpaceOutlook)?.data?.auroraOutlook?.first?.powerGw
-        let auroraPowerValue = current.auroraPowerGw?.value
-            ?? current.auroraPowerNhGw?.value
-            ?? current.auroraPowerShGw?.value
-            ?? current.auroraHpNorthGw?.value
-            ?? current.auroraHpSouthGw?.value
-            ?? outlookPower
-            ?? latestAuroraPower(from: visualsSnapshot)
+        let auroraPowerValue: Double? = {
+            if let v = current.auroraPowerGw?.value { return v }
+            if let v = current.auroraPowerNhGw?.value { return v }
+            if let v = current.auroraPowerShGw?.value { return v }
+            if let v = current.auroraHpNorthGw?.value { return v }
+            if let v = current.auroraHpSouthGw?.value { return v }
+            if let v = outlookPower { return v }
+            return latestAuroraPower(from: visualsSnapshot)
+        }()
         let auroraProbability = ContentView.auroraProbabilityText(from: current)
         let earthquakeCount = quakeLatest?.allQuakes
         let earthquakeMag = quakeEvents.compactMap { $0.mag }.max()
