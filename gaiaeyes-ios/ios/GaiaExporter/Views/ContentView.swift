@@ -1957,10 +1957,21 @@ struct ContentView: View {
     // Extracted to avoid scope/brace ambiguity during recent merges
     @State private var showTrends: Bool = false
 
-    @ViewBuilder
     private func dashboardFeaturesView(_ f: FeaturesToday) -> some View {
         let todayStr = chicagoTodayString()
         let (current, usingYesterdayFallback) = selectDisplayFeatures(for: f)
+
+        return VStack(spacing: 16) {
+            dashboardSleepSection(current: current, todayStr: todayStr, usingYesterdayFallback: usingYesterdayFallback)
+            dashboardHealthStatsSection(current: current)
+            dashboardSymptomsSection(usingYesterdayFallback: usingYesterdayFallback)
+            dashboardSpaceWeatherSection(current: current, usingYesterdayFallback: usingYesterdayFallback)
+            dashboardToolsSection(current: current)
+        }
+    }
+
+    @ViewBuilder
+    private func dashboardSleepSection(current: FeaturesToday, todayStr: String, usingYesterdayFallback: Bool) -> some View {
         let total = Int((current.sleepTotalMinutes?.value ?? 0).rounded())
         let isToday = (current.day == todayStr)
         let titleText = isToday ? "Sleep (Today)" : "Sleep (\(current.day))"
@@ -1998,8 +2009,10 @@ struct ContentView: View {
                 .foregroundColor(.secondary)
                 .padding(.horizontal)
         }
+    }
 
-        // Health Stats card (steps, HR min, HR max, HRV, SpO2, BP)
+    @ViewBuilder
+    private func dashboardHealthStatsSection(current: FeaturesToday) -> some View {
         HealthStatsCard(
             steps: Int((current.stepsTotal?.value ?? 0).rounded()),
             hrMin: Int((current.hrMin?.value ?? 0).rounded()),
@@ -2019,7 +2032,10 @@ struct ContentView: View {
                     .padding(.bottom, 6)
             }
         }
+    }
 
+    @ViewBuilder
+    private func dashboardSymptomsSection(usingYesterdayFallback: Bool) -> some View {
         SymptomsTileView(
             todayCount: symptomsToday.count,
             queuedCount: state.symptomQueueCount,
@@ -2035,8 +2051,9 @@ struct ContentView: View {
                 .foregroundColor(.secondary)
                 .padding(.horizontal)
         }
+    }
 
-        // Space Weather card
+    private func dashboardSpaceWeatherSection(current: FeaturesToday, usingYesterdayFallback: Bool) -> some View {
         let visualsSnapshot = spaceVisuals ?? lastKnownSpaceVisuals
         let overlayCount = visualOverlayCount(visualsSnapshot)
         let overlayUpdated = latestVisualTimestamp(visualsSnapshot)
@@ -2054,6 +2071,44 @@ struct ContentView: View {
             ?? latestAuroraPower(from: visualsSnapshot)
         let earthquakeCount = quakeLatest?.allQuakes
         let earthquakeMag = quakeEvents.compactMap { $0.mag }.max()
+
+        return VStack(spacing: 16) {
+            spaceWeatherCardView(
+                current: current,
+                visualsSnapshot: visualsSnapshot,
+                overlayCount: overlayCount,
+                overlayUpdated: overlayUpdated,
+                auroraPowerValue: auroraPowerValue,
+                earthquakeCount: earthquakeCount,
+                earthquakeMag: earthquakeMag
+            )
+
+            HazardsBriefCard(payload: hazardsBrief, isLoading: hazardsLoading, error: hazardsError)
+                .padding(.horizontal)
+
+            auroraThumbsView(auroraPowerValue: auroraPowerValue)
+
+            visualsPreviewSection(visualsSnapshot: visualsSnapshot)
+
+            if usingYesterdayFallback {
+                Text("Showing yesterday’s data while today updates…")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal)
+            }
+
+            spaceWeatherAlertsForecastTrends(current: current)
+        }
+    }
+
+    @ViewBuilder
+    private func spaceWeatherCardView(current: FeaturesToday,
+                                      visualsSnapshot: SpaceVisualsPayload?,
+                                      overlayCount: Int,
+                                      overlayUpdated: String?,
+                                      auroraPowerValue: Double?,
+                                      earthquakeCount: Int?,
+                                      earthquakeMag: Double?) -> some View {
         SpaceWeatherCard(
             kpMax: Int((current.kpMax?.value ?? 0).rounded()),
             kpCurrent: current.kpCurrent?.value,
@@ -2098,69 +2153,69 @@ struct ContentView: View {
                     .padding(.bottom, 6)
             }
         }
+    }
 
-        HazardsBriefCard(payload: hazardsBrief, isLoading: hazardsLoading, error: hazardsError)
-            .padding(.horizontal)
-
-        // Aurora images (Nowcast / Tonight / Tomorrow)
-        do {
-            let nowNorth = URL(string: "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg")
-            let tonightU = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png")
-            let tomorrowU = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png")
-            if nowNorth != nil || tonightU != nil || tomorrowU != nil {
-                GroupBox {
-                    VStack(alignment: .leading, spacing: 8) {
-                        // Small summary row
-                        HStack(spacing: 8) {
-                            if let gw = auroraPowerValue {
-                                Text(String(format: "Power: %.0f GW", gw)).font(.subheadline)
-                            } else {
-                                Text("Aurora status").font(.subheadline)
-                            }
-                            Spacer()
+    @ViewBuilder
+    private func auroraThumbsView(auroraPowerValue: Double?) -> some View {
+        let nowNorth = URL(string: "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg")
+        let tonightU = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png")
+        let tomorrowU = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png")
+        if nowNorth != nil || tonightU != nil || tomorrowU != nil {
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    // Small summary row
+                    HStack(spacing: 8) {
+                        if let gw = auroraPowerValue {
+                            Text(String(format: "Power: %.0f GW", gw)).font(.subheadline)
+                        } else {
+                            Text("Aurora status").font(.subheadline)
                         }
-                        // Thumbnails row
-                        HStack(spacing: 10) {
-                            if let u = nowNorth {
-                                AsyncImage(url: u) { phase in
-                                    switch phase {
-                                    case .empty: ProgressView().frame(width: 110, height: 90)
-                                    case .success(let img): img.resizable().scaledToFit().frame(width: 110, height: 90).clipShape(RoundedRectangle(cornerRadius: 8))
-                                    case .failure: Image(systemName: "exclamationmark.triangle").frame(width: 110, height: 90)
-                                    @unknown default: EmptyView().frame(width: 110, height: 90)
-                                    }
+                        Spacer()
+                    }
+                    // Thumbnails row
+                    HStack(spacing: 10) {
+                        if let u = nowNorth {
+                            AsyncImage(url: u) { phase in
+                                switch phase {
+                                case .empty: ProgressView().frame(width: 110, height: 90)
+                                case .success(let img): img.resizable().scaledToFit().frame(width: 110, height: 90).clipShape(RoundedRectangle(cornerRadius: 8))
+                                case .failure: Image(systemName: "exclamationmark.triangle").frame(width: 110, height: 90)
+                                @unknown default: EmptyView().frame(width: 110, height: 90)
                                 }
-                                .accessibilityLabel("Aurora nowcast (north)")
                             }
-                            if let u = tonightU {
-                                AsyncImage(url: u) { phase in
-                                    switch phase {
-                                    case .empty: ProgressView().frame(width: 110, height: 90)
-                                    case .success(let img): img.resizable().scaledToFit().frame(width: 110, height: 90).clipShape(RoundedRectangle(cornerRadius: 8))
-                                    case .failure: Image(systemName: "exclamationmark.triangle").frame(width: 110, height: 90)
-                                    @unknown default: EmptyView().frame(width: 110, height: 90)
-                                    }
+                            .accessibilityLabel("Aurora nowcast (north)")
+                        }
+                        if let u = tonightU {
+                            AsyncImage(url: u) { phase in
+                                switch phase {
+                                case .empty: ProgressView().frame(width: 110, height: 90)
+                                case .success(let img): img.resizable().scaledToFit().frame(width: 110, height: 90).clipShape(RoundedRectangle(cornerRadius: 8))
+                                case .failure: Image(systemName: "exclamationmark.triangle").frame(width: 110, height: 90)
+                                @unknown default: EmptyView().frame(width: 110, height: 90)
                                 }
-                                .accessibilityLabel("Aurora forecast (tonight)")
                             }
-                            if let u = tomorrowU {
-                                AsyncImage(url: u) { phase in
-                                    switch phase {
-                                    case .empty: ProgressView().frame(width: 110, height: 90)
-                                    case .success(let img): img.resizable().scaledToFit().frame(width: 110, height: 90).clipShape(RoundedRectangle(cornerRadius: 8))
-                                    case .failure: Image(systemName: "exclamationmark.triangle").frame(width: 110, height: 90)
-                                    @unknown default: EmptyView().frame(width: 110, height: 90)
-                                    }
+                            .accessibilityLabel("Aurora forecast (tonight)")
+                        }
+                        if let u = tomorrowU {
+                            AsyncImage(url: u) { phase in
+                                switch phase {
+                                case .empty: ProgressView().frame(width: 110, height: 90)
+                                case .success(let img): img.resizable().scaledToFit().frame(width: 110, height: 90).clipShape(RoundedRectangle(cornerRadius: 8))
+                                case .failure: Image(systemName: "exclamationmark.triangle").frame(width: 110, height: 90)
+                                @unknown default: EmptyView().frame(width: 110, height: 90)
                                 }
-                                .accessibilityLabel("Aurora forecast (tomorrow)")
                             }
+                            .accessibilityLabel("Aurora forecast (tomorrow)")
                         }
                     }
-                } label: { Label("Aurora Now & Forecast", systemImage: "sparkles") }
-                .padding(.horizontal)
-            }
+                }
+            } label: { Label("Aurora Now & Forecast", systemImage: "sparkles") }
+            .padding(.horizontal)
         }
+    }
 
+    @ViewBuilder
+    private func visualsPreviewSection(visualsSnapshot: SpaceVisualsPayload?) -> some View {
         if AppConfig.showVisualsPreview, let vs = visualsSnapshot {
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
@@ -2173,14 +2228,10 @@ struct ContentView: View {
             } label: { Label("Visuals", systemImage: "photo.on.rectangle") }
             .padding(.horizontal)
         }
+    }
 
-        if usingYesterdayFallback {
-            Text("Showing yesterday’s data while today updates…")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
-        }
-
+    @ViewBuilder
+    private func spaceWeatherAlertsForecastTrends(current: FeaturesToday) -> some View {
         if (current.kpAlert ?? false) || (current.flareAlert ?? false) {
             SpaceAlertsCard(kpAlert: current.kpAlert ?? false, flareAlert: current.flareAlert ?? false)
                 .padding(.horizontal)
@@ -2200,46 +2251,50 @@ struct ContentView: View {
             }
         }
         .padding(.horizontal)
+    }
 
-        MagnetosphereCard(
-            data: magnetosphere,
-            isLoading: magnetosphereLoading,
-            error: magnetosphereError,
-            onOpenDetail: { showMagnetosphereDetail = true }
-        )
-        .padding(.horizontal)
-        .sheet(isPresented: $showMagnetosphereDetail) {
-            MagnetosphereDetailView(data: magnetosphere)
-        }
-
-        EarthscopeCardV2(title: current.postTitle, caption: current.postCaption, images: current.earthscopeImages, bodyMarkdown: current.postBody)
+    private func dashboardToolsSection(current: FeaturesToday) -> some View {
+        return VStack(spacing: 16) {
+            MagnetosphereCard(
+                data: magnetosphere,
+                isLoading: magnetosphereLoading,
+                error: magnetosphereError,
+                onOpenDetail: { showMagnetosphereDetail = true }
+            )
             .padding(.horizontal)
-
-        LocalHealthCard(
-            zip: $localHealthZip,
-            snapshot: localHealth,
-            isLoading: localHealthLoading,
-            error: localHealthError,
-            onRefresh: { Task { await fetchLocalHealth() } }
-        )
-        .padding(.horizontal)
-
-        DisclosureGroup(isExpanded: $showTools) {
-            VStack(spacing: 12) {
-                ConnectionSettingsSection(state: state, isExpanded: $showConnections)
-                DisclosureGroup(isExpanded: $showActions) {
-                    ActionsSection(state: state, onFetchVisuals: { Task { await fetchSpaceVisuals() } })
-                } label: { HStack { Image(systemName: "arrow.triangle.2.circlepath"); Text("HealthKit Sync & Actions"); Spacer() } }
-                DisclosureGroup(isExpanded: $showBle) {
-                    BleStatusSection(state: state)
-                } label: { HStack { Image(systemName: "antenna.radiowaves.left.and.right"); Text("Bluetooth / BLE"); Spacer() } }
-                DisclosureGroup(isExpanded: $showPolar) {
-                    PolarStatusSection(state: state)
-                } label: { HStack { Image(systemName: "waveform.path.ecg"); Text("Polar ECG"); Spacer() } }
+            .sheet(isPresented: $showMagnetosphereDetail) {
+                MagnetosphereDetailView(data: magnetosphere)
             }
-            .padding(.top, 8)
-        } label: { HStack { Image(systemName: "gearshape"); Text("Tools & Settings"); Spacer() } }
+
+            EarthscopeCardV2(title: current.postTitle, caption: current.postCaption, images: current.earthscopeImages, bodyMarkdown: current.postBody)
+                .padding(.horizontal)
+
+            LocalHealthCard(
+                zip: $localHealthZip,
+                snapshot: localHealth,
+                isLoading: localHealthLoading,
+                error: localHealthError,
+                onRefresh: { Task { await fetchLocalHealth() } }
+            )
             .padding(.horizontal)
+
+            DisclosureGroup(isExpanded: $showTools) {
+                VStack(spacing: 12) {
+                    ConnectionSettingsSection(state: state, isExpanded: $showConnections)
+                    DisclosureGroup(isExpanded: $showActions) {
+                        ActionsSection(state: state, onFetchVisuals: { Task { await fetchSpaceVisuals() } })
+                    } label: { HStack { Image(systemName: "arrow.triangle.2.circlepath"); Text("HealthKit Sync & Actions"); Spacer() } }
+                    DisclosureGroup(isExpanded: $showBle) {
+                        BleStatusSection(state: state)
+                    } label: { HStack { Image(systemName: "antenna.radiowaves.left.and.right"); Text("Bluetooth / BLE"); Spacer() } }
+                    DisclosureGroup(isExpanded: $showPolar) {
+                        PolarStatusSection(state: state)
+                    } label: { HStack { Image(systemName: "waveform.path.ecg"); Text("Polar ECG"); Spacer() } }
+                }
+                .padding(.top, 8)
+            } label: { HStack { Image(systemName: "gearshape"); Text("Tools & Settings"); Spacer() } }
+                .padding(.horizontal)
+        }
     }
 
     @ViewBuilder
