@@ -95,6 +95,54 @@ add_shortcode('gaia_local_check', function ($atts) {
   $air = $payload['air'] ?? [];
   $moon = $payload['moon'] ?? [];
 
+  // Optional derived health signals from backend (with client-side fallback)
+  $health         = $payload['health'] ?? [];
+  $health_flags   = $health['flags'] ?? [];
+  $health_messages= $health['messages'] ?? [];
+
+  // Fallback: derive simple flags if backend didn't provide them
+  if (empty($health_flags)) {
+    $health_flags = [];
+
+    // AQI severity
+    $aqi_val = isset($air['aqi']) ? (float)$air['aqi'] : null;
+    if (is_numeric($aqi_val)) {
+      $sev = 'ok';
+      if ($aqi_val >= 151) { $sev = 'alert'; }
+      elseif ($aqi_val >= 101) { $sev = 'elevated'; }
+      elseif ($aqi_val >= 51) { $sev = 'info'; }
+      $health_flags[] = ['kind' => 'aqi', 'label' => 'AQI ' . number_format_i18n($aqi_val, 0), 'severity' => $sev];
+    }
+
+    // Barometric pressure trend / delta
+    $trend = isset($weather['pressure_trend']) ? strtolower((string)$weather['pressure_trend'])
+            : (isset($weather['baro_trend']) ? strtolower((string)$weather['baro_trend']) : '');
+    $delta_hpa = isset($weather['baro_delta_24h_hpa']) ? (float)$weather['baro_delta_24h_hpa'] : null;
+    if ($trend === 'falling' || (is_numeric($delta_hpa) && $delta_hpa <= -3)) {
+      $sev = (is_numeric($delta_hpa) && $delta_hpa <= -6) ? 'alert' : 'elevated';
+      $label = 'Pressure ' . ($trend ? $trend : ($delta_hpa < 0 ? '↓' : ''));
+      $health_flags[] = ['kind' => 'pressure', 'label' => $label, 'severity' => $sev];
+    }
+
+    // Temperature swing (24h)
+    $temp_delta_c = isset($weather['temp_delta_24h_c']) ? (float)$weather['temp_delta_24h_c'] : null;
+    if (is_numeric($temp_delta_c) && abs($temp_delta_c) >= 8) {
+      $sev = (abs($temp_delta_c) >= 12) ? 'alert' : 'elevated';
+      $health_flags[] = [
+        'kind' => 'tempswing',
+        'label' => 'Temp Δ ' . number_format_i18n($temp_delta_c, 1) . '°C',
+        'severity' => $sev
+      ];
+    }
+
+    // Moon sensitivity (near full/new)
+    $illum = (isset($moon['illum']) && is_numeric($moon['illum'])) ? (float)$moon['illum'] : null;
+    $phase = strtolower((string)($moon['phase'] ?? ''));
+    if (is_numeric($illum) && ($illum >= 0.95 || $illum <= 0.05 || strpos($phase, 'full') !== false || strpos($phase, 'new') !== false)) {
+      $health_flags[] = ['kind' => 'moon', 'label' => ($moon['phase'] ?? 'Moon'), 'severity' => 'info'];
+    }
+  }
+
   // Optional "as of" display in site timezone
   $asof_raw = $payload['asof'] ?? null;
   $asof_display = $asof_raw ? wp_date('M j, g:ia', strtotime($asof_raw)) : null;
@@ -164,6 +212,27 @@ add_shortcode('gaia_local_check', function ($atts) {
         <small class="ge-asof">as of <?php echo esc_html($asof_display); ?></small>
       <?php endif; ?>
     </h3>
+    <?php if (!empty($health_flags) || !empty($health_messages)) : ?>
+      <div class="ge-pills" role="status" aria-label="Local health signals">
+        <?php foreach ((array)$health_flags as $f):
+          $label = is_array($f) ? ($f['label'] ?? ($f['kind'] ?? 'Flag')) : (string)$f;
+          $sev   = is_array($f) ? strtolower((string)($f['severity'] ?? 'info')) : 'info';
+          $cls   = 'ge-pill';
+          if ($sev === 'alert') { $cls .= ' ge-pill--alert'; }
+          elseif ($sev === 'elevated') { $cls .= ' ge-pill--elevated'; }
+          elseif ($sev === 'ok') { $cls .= ' ge-pill--ok'; }
+        ?>
+          <span class="<?php echo esc_attr($cls); ?>"><?php echo esc_html($label); ?></span>
+        <?php endforeach; ?>
+      </div>
+      <?php if (!empty($health_messages)): ?>
+        <div class="ge-mini-hints">
+          <?php foreach ((array)$health_messages as $m): ?>
+            <div class="ge-hint"><?php echo esc_html((string)$m); ?></div>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    <?php endif; ?>
     <div class="ge-grid">
       <div class="ge-card">
         <h4>Weather</h4>
@@ -194,6 +263,31 @@ add_shortcode('gaia_local_check', function ($atts) {
       .ge-local-health .ge-row { display: flex; justify-content: space-between; margin-top: 6px; }
       .ge-local-health h4 { margin-bottom: 8px; }
       .ge-local-health .ge-asof { font-weight: normal; font-size: 0.85em; margin-left: 8px; opacity: 0.8; }
+      .ge-local-health .ge-pills { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 10px; }
+      .ge-local-health .ge-pill {
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-weight: 600;
+        font-size: 0.85em;
+        background: rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.15);
+      }
+      .ge-local-health .ge-pill--elevated {
+        background: rgba(255,165,0,0.18);
+        border-color: rgba(255,165,0,0.35);
+        box-shadow: inset 0 0 10px rgba(255,165,0,0.25);
+      }
+      .ge-local-health .ge-pill--alert {
+        background: rgba(255,64,64,0.20);
+        border-color: rgba(255,64,64,0.45);
+        box-shadow: inset 0 0 12px rgba(255,64,64,0.30);
+      }
+      .ge-local-health .ge-pill--ok {
+        background: rgba(60,179,113,0.18);
+        border-color: rgba(60,179,113,0.35);
+      }
+      .ge-local-health .ge-mini-hints { font-size: .88em; opacity: .9; margin-bottom: 6px; }
+      .ge-local-health .ge-mini-hints .ge-hint { margin-top: 2px; }
     </style>
   </section>
   <?php

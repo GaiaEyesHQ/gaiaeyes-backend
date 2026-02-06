@@ -13,6 +13,60 @@ def _delta(curr, prev):
     except Exception:
         return None
 
+def _trend(delta: float | None, tol: float = 1.5) -> str | None:
+    """
+    Classify short-term change with a tolerance.
+    Returns 'rising', 'falling', 'steady', or None if delta is None.
+    """
+    if delta is None:
+        return None
+    try:
+        d = float(delta)
+    except Exception:
+        return None
+    if d >= tol:
+        return "rising"
+    if d <= -tol:
+        return "falling"
+    return "steady"
+
+def _aqi_bucket(aqi: Any, category_name: str | None) -> str | None:
+    """
+    Map AQI numeric or category name to a bucket: good/moderate/usg/unhealthy/very_unhealthy/hazardous.
+    """
+    try:
+        if aqi is not None:
+            n = float(aqi)
+            if n <= 50:
+                return "good"
+            if n <= 100:
+                return "moderate"
+            if n <= 150:
+                return "usg"  # Unhealthy for Sensitive Groups
+            if n <= 200:
+                return "unhealthy"
+            if n <= 300:
+                return "very_unhealthy"
+            return "hazardous"
+    except Exception:
+        pass
+    if not category_name:
+        return None
+    name = category_name.lower()
+    if "good" in name:
+        return "good"
+    if "moderate" in name:
+        return "moderate"
+    if "sensitive" in name or "usg" in name:
+        return "usg"
+    if "very" in name and "unhealthy" in name:
+        return "very_unhealthy"
+    if "unhealthy" in name:
+        return "unhealthy"
+    if "hazard" in name:
+        return "hazardous"
+    return None
+
 async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
     """
     Assemble a compact local-health snapshot for a ZIP.
@@ -56,6 +110,23 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
     if baro_delta is None:
         baro_delta = _delta(baro_now, prev_baro)
 
+    # Compute ~3h short-term deltas using cache reference
+    temp_delta_3h = None
+    baro_delta_3h = None
+    try:
+        _latest3, ref3 = latest_and_ref(zip_code, ref_hours=3, window_hours=2)
+        if ref3 and isinstance(ref3.get("payload"), dict):
+            prev3_weather = ref3["payload"].get("weather") or {}
+            prev3_temp = prev3_weather.get("temp_c")
+            prev3_baro = prev3_weather.get("pressure_hpa")
+            temp_delta_3h = _delta(temp_c, prev3_temp)
+            baro_delta_3h = _delta(baro_now, prev3_baro)
+    except Exception:
+        pass
+
+    temp_trend_3h = _trend(temp_delta_3h, tol=1.5)  # ≈ ±1.5°C ~ meaningful perceived change
+    baro_trend_3h = _trend(baro_delta_3h, tol=1.5)  # ≈ ±1.5 hPa over 3h
+
     # Air quality (pick the highest AQI among any pollutants returned)
     aq_list = await airnow.current_by_zip(zip_code)
     aqi = category = pollutant = None
@@ -65,8 +136,45 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
         category = (best.get("Category") or {}).get("Name")
         pollutant = best.get("ParameterName")
 
+    aqi_flag = _aqi_bucket(aqi, category)
+
     # Moon
     m = moon_phase(datetime.now(timezone.utc))
+
+    phase_str = (m or {}).get("phase") or ""
+    moon_sensitivity = None
+    if isinstance(phase_str, str):
+        lower = phase_str.lower()
+        if "full" in lower:
+            moon_sensitivity = "full"
+        elif "new" in lower:
+            moon_sensitivity = "new"
+
+    # Derived health flags & messages
+    flags: Dict[str, Any] = {
+        "temp_trend_3h": temp_trend_3h,          # 'rising' | 'falling' | 'steady' | None
+        "baro_trend_3h": baro_trend_3h,          # same as above
+        "pressure_rapid_drop": (baro_delta_3h is not None and baro_delta_3h <= -3.0),
+        "big_temp_shift_24h": (temp_delta is not None and abs(float(temp_delta)) >= 8.0),
+        "aqi_flag": aqi_flag,                    # bucket or None
+        "moon_sensitivity": moon_sensitivity,    # 'full' | 'new' | None
+    }
+
+    messages: list[str] = []
+    if flags["pressure_rapid_drop"]:
+        messages.append("Pressure falling quickly—headache/migraine risk; hydrate and pace.")
+    if flags["big_temp_shift_24h"]:
+        messages.append("Sharp 24h temperature swing—sleep & joint flare risk; layer and pre‑hydrate.")
+    if aqi_flag in ("usg", "unhealthy", "very_unhealthy", "hazardous"):
+        # Show the canonical category if available
+        cat_txt = category or aqi_flag.replace("_", " ").title()
+        messages.append(f"Air quality {cat_txt}—limit outdoor exertion.")
+    if moon_sensitivity == "full":
+        messages.append("Full Moon—sleep sensitivity is higher for many; wind down early.")
+    elif moon_sensitivity == "new":
+        messages.append("New Moon—sleep/wind‑down habits matter; dim evening light.")
+
+    health = {"flags": flags, "messages": messages}
 
     return {
         "ok": True,
@@ -81,5 +189,6 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
         },
         "air": {"aqi": aqi, "category": category, "pollutant": pollutant},
         "moon": m,
+        "health": health,
         "asof": datetime.now(timezone.utc).isoformat(),
     }
