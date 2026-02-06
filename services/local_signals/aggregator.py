@@ -83,6 +83,8 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
         print(f"[local_signals] NWS hourly error for zip={zip_code}: {e}")
         nws_snap = {}
 
+    obs_iso = nws_snap.get("obs_time")
+
     temp_c = nws_snap.get("temp_c")
     rh_now = nws_snap.get("humidity_pct")
     pop_now = nws_snap.get("precip_prob_pct")
@@ -185,10 +187,11 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
             "humidity_pct": rh_now,
             "precip_prob_pct": pop_now,
             "pressure_hpa": baro_now,
+            "obs_time": obs_iso,
             "baro_delta_24h_hpa": baro_delta,
         },
         "air": {"aqi": aqi, "category": category, "pollutant": pollutant},
         "moon": m,
         "health": health,
-        "asof": datetime.now(timezone.utc).isoformat(),
+        "asof": obs_iso or datetime.now(timezone.utc).isoformat(),
     }

@@ -124,6 +124,66 @@ async def _station_pressure_hpa(points: Dict[str, Any]) -> Optional[float]:
         return None
 
 
+def _parse_obs_props(props: Dict[str, Any]) -> Dict[str, Optional[float | str]]:
+    """
+    Extract temperature (C), humidity (%), barometric pressure (hPa), and timestamp
+    from an observations feature.properties block.
+    """
+    t = props.get("temperature", {}).get("value")
+    rh = props.get("relativeHumidity", {}).get("value")
+    pa = props.get("barometricPressure", {}).get("value")
+    ts = props.get("timestamp")
+    return {
+        "temp_c": float(t) if t is not None else None,
+        "humidity_pct": float(rh) if rh is not None else None,
+        "pressure_hpa": (float(pa) / 100.0) if isinstance(pa, (int, float)) else None,
+        "obs_time": ts,
+    }
+
+
+async def _station_latest_conditions(points: Dict[str, Any]) -> Dict[str, Optional[float | str]]:
+    """
+    Resolve latest **observed** conditions from the nearest station:
+      1) /observations/latest?require_qc=true
+      2) If missing or stale, /observations?require_qc=true&start=now-6h (no end param).
+    Returns: { temp_c, humidity_pct, pressure_hpa, obs_time } (all Optional, obs_time is ISO string)
+    """
+    sid = await _nearest_station_id(points)
+    out: Dict[str, Optional[float | str]] = {
+        "temp_c": None,
+        "humidity_pct": None,
+        "pressure_hpa": None,
+        "obs_time": None,
+    }
+    if not sid:
+        return out
+
+    # First try "latest"
+    try:
+        latest = await _get_json(f"{BASE}/stations/{sid}/observations/latest?require_qc=true")
+        cand = _parse_obs_props((latest or {}).get("properties") or {})
+        if cand.get("temp_c") is not None or cand.get("humidity_pct") is not None:
+            return cand
+    except httpx.HTTPError:
+        pass
+
+    # Then try a rolling 6h window (no 'end' → avoids 400s)
+    start_iso = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=6)).isoformat()
+    try:
+        data = await _get_json(f"{BASE}/stations/{sid}/observations?require_qc=true&start={start_iso}")
+        feats = (data or {}).get("features") or []
+        if feats:
+            # Pick the last (most recent) feature with usable fields
+            for feat in reversed(feats):
+                cand = _parse_obs_props((feat or {}).get("properties") or {})
+                if cand.get("temp_c") is not None or cand.get("humidity_pct") is not None:
+                    return cand
+    except httpx.HTTPError:
+        pass
+
+    return out
+
+
 async def _forecast_hourly_snapshot(points: Dict[str, Any]) -> Dict[str, Optional[float]]:
     """
     Fallback to forecastHourly for temp/humidity/PoP when gridpoints are unavailable.
@@ -162,50 +222,66 @@ async def _forecast_hourly_snapshot(points: Dict[str, Any]) -> Dict[str, Optiona
     return out
 
 
-async def hourly_by_latlon(lat: float, lon: float) -> Dict[str, Optional[float]]:
+async def hourly_by_latlon(lat: float, lon: float) -> Dict[str, Optional[float | str]]:
     """
-    Return a compact snapshot for the current hour (grid-first, station-fallback):
-      - temp_c              (float, from gridpoints.temperature; fallback forecastHourly)
-      - humidity_pct        (float, from gridpoints.relativeHumidity; fallback forecastHourly)
+    Return a compact snapshot for "now" (station-observed first, then grid/forecast fallbacks):
+      - temp_c              (float, prefer station observations; fallback gridpoints/forecastHourly)
+      - humidity_pct        (float, prefer station observations; fallback gridpoints/forecastHourly)
       - precip_prob_pct     (float, from gridpoints.probabilityOfPrecipitation; fallback forecastHourly)
-      - pressure_hpa        (float, from gridpoints.barometricPressure in Pa → hPa; fallback station obs)
+      - pressure_hpa        (float, prefer station observations; fallback gridpoints/forecastHourly, then station-only)
+      - obs_time            (ISO string; observation timestamp if available, else grid/forecast start time or now)
       - temp_delta_24h_c    (None; computed by aggregator cache when prior snapshot exists)
       - baro_delta_24h_hpa  (None; computed by aggregator cache when prior snapshot exists)
     """
     pts = await _points(lat, lon)
 
-    # Gridpoints first
-    temp_c = humidity_pct = precip_prob_pct = pressure_hpa = None
+    # 1) Try latest station observations for "now"
+    obs = await _station_latest_conditions(pts)
+    temp_c = obs.get("temp_c")
+    humidity_pct = obs.get("humidity_pct")
+    pressure_hpa = obs.get("pressure_hpa")
+    obs_time = obs.get("obs_time")  # may be None
+
+    precip_prob_pct: Optional[float] = None
+
+    # 2) Gridpoints fallbacks for missing fields (and PoP always comes from grid/forecast)
     try:
         grid = await _gridpoints(pts)
         gprops = grid.get("properties", {}) if grid else {}
-        temp_c = _grid_first_value(gprops, "temperature")
-        humidity_pct = _grid_first_value(gprops, "relativeHumidity")
-        precip_prob_pct = _grid_first_value(gprops, "probabilityOfPrecipitation")
 
-        pressure_pa = _grid_first_value(gprops, "barometricPressure")
-        if pressure_pa is not None:
-            pressure_hpa = round(pressure_pa / 100.0, 1)
+        if temp_c is None:
+            temp_c = _grid_first_value(gprops, "temperature")
+        if humidity_pct is None:
+            humidity_pct = _grid_first_value(gprops, "relativeHumidity")
+        if precip_prob_pct is None:
+            precip_prob_pct = _grid_first_value(gprops, "probabilityOfPrecipitation")
+        if pressure_hpa is None:
+            pressure_pa = _grid_first_value(gprops, "barometricPressure")
+            if pressure_pa is not None:
+                pressure_hpa = round(pressure_pa / 100.0, 1)
     except httpx.HTTPError:
-        # proceed to fallbacks
         pass
 
-    # Fallbacks for T/RH/PoP via hourly forecast if missing
-    if temp_c is None or humidity_pct is None or precip_prob_pct is None:
+    # 3) Forecast hourly fallback (for anything still missing and for a timestamp if needed)
+    if temp_c is None or humidity_pct is None or precip_prob_pct is None or obs_time is None:
         fh = await _forecast_hourly_snapshot(pts)
-        temp_c = temp_c if temp_c is not None else fh.get("temp_c")
-        humidity_pct = humidity_pct if humidity_pct is not None else fh.get("humidity_pct")
-        precip_prob_pct = precip_prob_pct if precip_prob_pct is not None else fh.get("precip_prob_pct")
-
-    # Pressure fallback via station observations if grid lacked it
-    if pressure_hpa is None:
-        pressure_hpa = await _station_pressure_hpa(pts)
+        if temp_c is None:
+            temp_c = fh.get("temp_c")
+        if humidity_pct is None:
+            humidity_pct = fh.get("humidity_pct")
+        if precip_prob_pct is None:
+            precip_prob_pct = fh.get("precip_prob_pct")
+        # Use forecast start time as a weak "asof" if we still lack an observation time
+        if obs_time is None:
+            # We don't have the precise forecast start on-hand, so approximate with now (UTC)
+            obs_time = dt.datetime.now(dt.timezone.utc).isoformat()
 
     return {
         "temp_c": temp_c,
         "humidity_pct": humidity_pct,
         "precip_prob_pct": precip_prob_pct,
         "pressure_hpa": pressure_hpa,
+        "obs_time": obs_time,
         # Leave deltas None; aggregator cache will compute when prior snapshot exists
         "temp_delta_24h_c": None,
         "baro_delta_24h_hpa": None,

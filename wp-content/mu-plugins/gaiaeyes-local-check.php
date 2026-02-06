@@ -193,9 +193,11 @@ add_shortcode('gaia_local_check', function ($atts) {
     }
   }
 
-  // Optional "as of" display in site timezone
-  $asof_raw = $payload['asof'] ?? null;
+  // Optional "as of" display (prefer actual observation timestamp if present)
+  $obs_iso = isset($weather['obs_time']) ? (string)$weather['obs_time'] : null;
+  $asof_raw = $obs_iso ?: ($payload['asof'] ?? null);
   $asof_display = $asof_raw ? wp_date('M j, g:ia', strtotime($asof_raw)) : null;
+  $asof_label = $obs_iso ? 'observed' : 'as of';
 
   // Optional barometric trend (derived by backend when available)
   $baro_trend = $weather['pressure_trend'] ?? ($weather['baro_trend'] ?? null);
@@ -271,7 +273,7 @@ add_shortcode('gaia_local_check', function ($atts) {
     <h3>
       Local Health (<?php echo esc_html($zip); ?>)
       <?php if ($asof_display) : ?>
-        <small class="ge-asof">as of <?php echo esc_html($asof_display); ?></small>
+        <small class="ge-asof"><?php echo esc_html($asof_label); ?> <?php echo esc_html($asof_display); ?></small>
       <?php endif; ?>
     </h3>
     <?php if (!empty($health_pills) || !empty($health_messages)) : ?>
