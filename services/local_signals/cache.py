@@ -178,3 +178,31 @@ def purge_old(retain_days: int = 14) -> None:
         "delete from ext.local_signals_cache where asof < now() - make_interval(days => %s)",
         retain_days,
     )
+
+
+# ---- Back-compat aliases & explicit exports ---------------------------------
+
+# Some code paths / older routers expect alternative symbol names.
+# Keep these aliases so imports like
+#   from services.local_signals.cache import latest_for_zip, upsert_zip_payload
+# ...or...
+#   from services.local_signals.cache import get_latest_for_zip, put_zip_payload
+# keep working even if upstream modules were written against older names.
+
+get_latest_for_zip = latest_for_zip
+put_zip_payload = upsert_zip_payload
+
+# Be explicit about the public API of this module.
+__all__ = [
+    "upsert_zip_payload",
+    "latest_for_zip",
+    "latest_row",
+    "nearest_row_to",
+    "upsert_snapshot",
+    "get_previous_approx",
+    "latest_and_ref",
+    "purge_old",
+    # Back-compat alias symbols:
+    "get_latest_for_zip",
+    "put_zip_payload",
+]
