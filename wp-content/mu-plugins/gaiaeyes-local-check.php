@@ -34,6 +34,14 @@ function gaiaeyes_local_value($value, $suffix = '') {
   return $suffix ? $value . ' ' . $suffix : (string)$value;
 }
 
+function gaiaeyes_trend_label($t) {
+  $t = strtolower((string)$t);
+  if ($t === 'rising') return '↑ rising';
+  if ($t === 'falling') return '↓ falling';
+  if ($t === 'steady') return '→ steady';
+  return $t ?: '—';
+}
+
 function gaiaeyes_resolve_zip_default($atts_zip) {
   // Priority: shortcode attr > ?zip= query > user meta > cookie > fallback
   $zip_attr = preg_replace('/[^0-9A-Za-z]/', '', (string)$atts_zip);
@@ -96,50 +104,92 @@ add_shortcode('gaia_local_check', function ($atts) {
   $moon = $payload['moon'] ?? [];
 
   // Optional derived health signals from backend (with client-side fallback)
-  $health         = $payload['health'] ?? [];
-  $health_flags   = $health['flags'] ?? [];
-  $health_messages= $health['messages'] ?? [];
+  $health           = $payload['health'] ?? [];
+  $health_messages  = $health['messages'] ?? [];
+  $health_flags_raw = $health['flags'] ?? [];
+  $health_pills     = [];
 
-  // Fallback: derive simple flags if backend didn't provide them
-  if (empty($health_flags)) {
-    $health_flags = [];
+  // If backend already provided pill descriptors, prefer them
+  if (isset($health['pills']) && is_array($health['pills']) && !empty($health['pills'])) {
+    $health_pills = $health['pills'];
+  } else {
+    // If 'flags' is an associative map, translate to pills
+    if (is_array($health_flags_raw) && array_keys($health_flags_raw) !== range(0, count($health_flags_raw) - 1)) {
+      // AQI flag → pill
+      $aqi_val  = isset($air['aqi']) ? (float)$air['aqi'] : null;
+      $aqi_flag = isset($health_flags_raw['aqi_flag']) ? strtolower((string)$health_flags_raw['aqi_flag']) : null;
+      if ($aqi_flag && is_numeric($aqi_val)) {
+        $sev = 'ok';
+        if (in_array($aqi_flag, ['unhealthy','very_unhealthy','hazardous'], true)) { $sev = 'alert'; }
+        elseif (in_array($aqi_flag, ['moderate','usg'], true)) { $sev = 'elevated'; }
+        $health_pills[] = ['kind' => 'aqi', 'label' => 'AQI ' . number_format_i18n($aqi_val, 0), 'severity' => $sev];
+      }
 
+      // Pressure rapid drop
+      if (!empty($health_flags_raw['pressure_rapid_drop'])) {
+        $health_pills[] = ['kind' => 'pressure', 'label' => 'Pressure ↓ fast', 'severity' => 'alert'];
+      }
+
+      // Big 24h temperature shift
+      if (!empty($health_flags_raw['big_temp_shift_24h'])) {
+        $td   = isset($weather['temp_delta_24h_c']) ? (float)$weather['temp_delta_24h_c'] : null;
+        $lbl  = 'Temp Δ';
+        if (is_numeric($td)) { $lbl .= ' ' . number_format_i18n($td, 1) . '°C'; }
+        $health_pills[] = ['kind' => 'tempswing', 'label' => $lbl, 'severity' => 'elevated'];
+      }
+
+      // 3h trends (informational)
+      if (!empty($health_flags_raw['baro_trend_3h'])) {
+        $health_pills[] = ['kind' => 'baro3h', 'label' => 'Baro ' . gaiaeyes_trend_label($health_flags_raw['baro_trend_3h']), 'severity' => 'info'];
+      }
+      if (!empty($health_flags_raw['temp_trend_3h'])) {
+        $health_pills[] = ['kind' => 'temp3h', 'label' => 'Temp ' . gaiaeyes_trend_label($health_flags_raw['temp_trend_3h']), 'severity' => 'info'];
+      }
+
+      // Moon proximity
+      if (!empty($health_flags_raw['moon_sensitivity'])) {
+        $health_pills[] = ['kind' => 'moon', 'label' => ($moon['phase'] ?? 'Moon'), 'severity' => 'info'];
+      }
+    } elseif (is_array($health_flags_raw) && !empty($health_flags_raw)) {
+      // Already a list of pill descriptors
+      $health_pills = $health_flags_raw;
+    }
+  }
+
+  // Final fallback: derive simple pills if still empty
+  if (empty($health_pills)) {
     // AQI severity
     $aqi_val = isset($air['aqi']) ? (float)$air['aqi'] : null;
     if (is_numeric($aqi_val)) {
       $sev = 'ok';
       if ($aqi_val >= 151) { $sev = 'alert'; }
       elseif ($aqi_val >= 101) { $sev = 'elevated'; }
-      elseif ($aqi_val >= 51) { $sev = 'info'; }
-      $health_flags[] = ['kind' => 'aqi', 'label' => 'AQI ' . number_format_i18n($aqi_val, 0), 'severity' => $sev];
+      elseif ($aqi_val >= 51)  { $sev = 'info'; }
+      $health_pills[] = ['kind' => 'aqi', 'label' => 'AQI ' . number_format_i18n($aqi_val, 0), 'severity' => $sev];
     }
 
-    // Barometric pressure trend / delta
-    $trend = isset($weather['pressure_trend']) ? strtolower((string)$weather['pressure_trend'])
-            : (isset($weather['baro_trend']) ? strtolower((string)$weather['baro_trend']) : '');
-    $delta_hpa = isset($weather['baro_delta_24h_hpa']) ? (float)$weather['baro_delta_24h_hpa'] : null;
-    if ($trend === 'falling' || (is_numeric($delta_hpa) && $delta_hpa <= -3)) {
-      $sev = (is_numeric($delta_hpa) && $delta_hpa <= -6) ? 'alert' : 'elevated';
-      $label = 'Pressure ' . ($trend ? $trend : ($delta_hpa < 0 ? '↓' : ''));
-      $health_flags[] = ['kind' => 'pressure', 'label' => $label, 'severity' => $sev];
+    // Pressure trend / delta
+    $trend    = isset($weather['pressure_trend']) ? strtolower((string)$weather['pressure_trend'])
+               : (isset($weather['baro_trend']) ? strtolower((string)$weather['baro_trend']) : '');
+    $delta_hp = isset($weather['baro_delta_24h_hpa']) ? (float)$weather['baro_delta_24h_hpa'] : null;
+    if ($trend === 'falling' || (is_numeric($delta_hp) && $delta_hp <= -3)) {
+      $sev   = (is_numeric($delta_hp) && $delta_hp <= -6) ? 'alert' : 'elevated';
+      $label = 'Pressure ' . ($trend ? $trend : ($delta_hp < 0 ? '↓' : ''));
+      $health_pills[] = ['kind' => 'pressure', 'label' => $label, 'severity' => $sev];
     }
 
     // Temperature swing (24h)
-    $temp_delta_c = isset($weather['temp_delta_24h_c']) ? (float)$weather['temp_delta_24h_c'] : null;
-    if (is_numeric($temp_delta_c) && abs($temp_delta_c) >= 8) {
-      $sev = (abs($temp_delta_c) >= 12) ? 'alert' : 'elevated';
-      $health_flags[] = [
-        'kind' => 'tempswing',
-        'label' => 'Temp Δ ' . number_format_i18n($temp_delta_c, 1) . '°C',
-        'severity' => $sev
-      ];
+    $temp_dc = isset($weather['temp_delta_24h_c']) ? (float)$weather['temp_delta_24h_c'] : null;
+    if (is_numeric($temp_dc) && abs($temp_dc) >= 8) {
+      $sev = (abs($temp_dc) >= 12) ? 'alert' : 'elevated';
+      $health_pills[] = ['kind' => 'tempswing', 'label' => 'Temp Δ ' . number_format_i18n($temp_dc, 1) . '°C', 'severity' => $sev];
     }
 
-    // Moon sensitivity (near full/new)
+    // Moon sensitivity
     $illum = (isset($moon['illum']) && is_numeric($moon['illum'])) ? (float)$moon['illum'] : null;
     $phase = strtolower((string)($moon['phase'] ?? ''));
     if (is_numeric($illum) && ($illum >= 0.95 || $illum <= 0.05 || strpos($phase, 'full') !== false || strpos($phase, 'new') !== false)) {
-      $health_flags[] = ['kind' => 'moon', 'label' => ($moon['phase'] ?? 'Moon'), 'severity' => 'info'];
+      $health_pills[] = ['kind' => 'moon', 'label' => ($moon['phase'] ?? 'Moon'), 'severity' => 'info'];
     }
   }
 
@@ -156,6 +206,18 @@ add_shortcode('gaia_local_check', function ($atts) {
     elseif ($t === 'falling') { $baro_trend_label = '↓ falling'; }
     elseif ($t === 'steady') { $baro_trend_label = '→ steady'; }
     else { $baro_trend_label = $baro_trend; }
+  }
+
+  // 3h trend labels (if backend provided flags)
+  $temp_trend_3h_label = null;
+  $baro_trend_3h_label = null;
+  if (isset($health_flags_raw) && is_array($health_flags_raw)) {
+    if (isset($health_flags_raw['temp_trend_3h'])) {
+      $temp_trend_3h_label = gaiaeyes_trend_label($health_flags_raw['temp_trend_3h']);
+    }
+    if (isset($health_flags_raw['baro_trend_3h'])) {
+      $baro_trend_3h_label = gaiaeyes_trend_label($health_flags_raw['baro_trend_3h']);
+    }
   }
 
   // Temperature (°C) plus US (°F)
@@ -212,9 +274,9 @@ add_shortcode('gaia_local_check', function ($atts) {
         <small class="ge-asof">as of <?php echo esc_html($asof_display); ?></small>
       <?php endif; ?>
     </h3>
-    <?php if (!empty($health_flags) || !empty($health_messages)) : ?>
+    <?php if (!empty($health_pills) || !empty($health_messages)) : ?>
       <div class="ge-pills" role="status" aria-label="Local health signals">
-        <?php foreach ((array)$health_flags as $f):
+        <?php foreach ((array)$health_pills as $f):
           $label = is_array($f) ? ($f['label'] ?? ($f['kind'] ?? 'Flag')) : (string)$f;
           $sev   = is_array($f) ? strtolower((string)($f['severity'] ?? 'info')) : 'info';
           $cls   = 'ge-pill';
@@ -243,6 +305,12 @@ add_shortcode('gaia_local_check', function ($atts) {
         <div class="ge-row"><span>Pressure</span><strong><?php echo esc_html($pressure); ?></strong></div>
         <div class="ge-row"><span>Baro 24h Δ</span><strong><?php echo esc_html($pressure_delta); ?></strong></div>
         <div class="ge-row"><span>Baro trend</span><strong><?php echo esc_html($baro_trend_label); ?></strong></div>
+        <?php if (!empty($temp_trend_3h_label)) : ?>
+          <div class="ge-row"><span>Temp trend (3h)</span><strong><?php echo esc_html($temp_trend_3h_label); ?></strong></div>
+        <?php endif; ?>
+        <?php if (!empty($baro_trend_3h_label)) : ?>
+          <div class="ge-row"><span>Baro trend (3h)</span><strong><?php echo esc_html($baro_trend_3h_label); ?></strong></div>
+        <?php endif; ?>
       </div>
       <div class="ge-card">
         <h4>Air Quality</h4>
