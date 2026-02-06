@@ -1956,316 +1956,322 @@ struct ContentView: View {
 #if os(iOS)
     // Extracted to avoid scope/brace ambiguity during recent merges
     @State private var showTrends: Bool = false
+
+    @ViewBuilder
+    private func dashboardFeaturesView(_ f: FeaturesToday) -> some View {
+        let todayStr = chicagoTodayString()
+        let (current, usingYesterdayFallback) = selectDisplayFeatures(for: f)
+        let total = Int((current.sleepTotalMinutes?.value ?? 0).rounded())
+        let isToday = (current.day == todayStr)
+        let titleText = isToday ? "Sleep (Today)" : "Sleep (\(current.day))"
+
+        SleepCard(
+            title: titleText,
+            totalMin: total,
+            remMin: Int((current.remM?.value ?? 0).rounded()),
+            coreMin: Int((current.coreM?.value ?? 0).rounded()),
+            deepMin: Int((current.deepM?.value ?? 0).rounded()),
+            awakeMin: Int((current.awakeM?.value ?? 0).rounded()),
+            inbedMin: Int((current.inbedM?.value ?? 0).rounded()),
+            efficiency: current.sleepEfficiency?.value
+        )
+        .padding(.horizontal)
+
+        if let banner = featuresCachedBannerText {
+            Label {
+                Text(banner)
+            } icon: {
+                Image(systemName: "clock.arrow.circlepath")
+            }
+            .font(.caption2)
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Color.secondary.opacity(0.12))
+            .cornerRadius(10)
+            .padding(.horizontal)
+        }
+
+        if usingYesterdayFallback {
+            Text("Showing yesterday’s data while today updates…")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
+        }
+
+        // Health Stats card (steps, HR min, HR max, HRV, SpO2, BP)
+        HealthStatsCard(
+            steps: Int((current.stepsTotal?.value ?? 0).rounded()),
+            hrMin: Int((current.hrMin?.value ?? 0).rounded()),
+            hrMax: Int((current.hrMax?.value ?? 0).rounded()),
+            hrvAvg: Int((current.hrvAvg?.value ?? 0).rounded()),
+            spo2Avg: current.spo2AvgDisplay,
+            bpSys: Int((current.bpSysAvg?.value ?? 0).rounded()),
+            bpDia: Int((current.bpDiaAvg?.value ?? 0).rounded())
+        )
+        .padding(.horizontal)
+        .overlay(alignment: .bottomLeading) {
+            if let ts = current.updatedAt, let txt = formatUpdated(ts) {
+                Text("Updated: \(txt)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 12)
+                    .padding(.bottom, 6)
+            }
+        }
+
+        SymptomsTileView(
+            todayCount: symptomsToday.count,
+            queuedCount: state.symptomQueueCount,
+            sparklinePoints: symptomSparkPoints(),
+            topSummary: topSymptomSummary(),
+            onLogTap: { showSymptomSheet = true }
+        )
+        .padding(.horizontal)
+
+        if usingYesterdayFallback {
+            Text("Showing yesterday’s data while today updates…")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
+        }
+
+        // Space Weather card
+        let visualsSnapshot = spaceVisuals ?? lastKnownSpaceVisuals
+        let overlayCount = visualOverlayCount(visualsSnapshot)
+        let overlayUpdated = latestVisualTimestamp(visualsSnapshot)
+        let outlookPower = (spaceOutlook ?? lastKnownSpaceOutlook)?
+            .data?
+            .auroraOutlook?
+            .first(where: { ($0.hemisphere ?? "").lowercased() == "north" })?.powerGw
+            ?? (spaceOutlook ?? lastKnownSpaceOutlook)?.data?.auroraOutlook?.first?.powerGw
+        let auroraPowerValue = current.auroraPowerGw?.value
+            ?? current.auroraPowerNhGw?.value
+            ?? current.auroraPowerShGw?.value
+            ?? current.auroraHpNorthGw?.value
+            ?? current.auroraHpSouthGw?.value
+            ?? outlookPower
+            ?? latestAuroraPower(from: visualsSnapshot)
+        let earthquakeCount = quakeLatest?.allQuakes
+        let earthquakeMag = quakeEvents.compactMap { $0.mag }.max()
+        SpaceWeatherCard(
+            kpMax: Int((current.kpMax?.value ?? 0).rounded()),
+            kpCurrent: current.kpCurrent?.value,
+            bzMin: current.bzMin?.value,
+            swSpeedAvg: current.swSpeedAvg?.value,
+            flares: Int((current.flaresCount?.value ?? 0).rounded()),
+            cmes: Int((current.cmesCount?.value ?? 0).rounded()),
+            schStation: current.schStation,
+            schF0: current.schF0Hz?.value,
+            schF1: current.schF1Hz?.value,
+            schF2: current.schF2Hz?.value,
+            auroraProbability: Self.auroraProbabilityText(from: current),
+            auroraPower: auroraPowerValue,
+            overlayCount: overlayCount,
+            overlayUpdated: overlayUpdated,
+            earthquakeCount: earthquakeCount,
+            earthquakeMaxMag: earthquakeMag,
+            onOpenDetail: { section in
+                spaceDetailFocus = section
+                showSpaceWeatherDetail = true
+            }
+        )
+        .navigationDestination(isPresented: $showSpaceWeatherDetail) {
+            SpaceWeatherDetailView(
+                features: current,
+                visuals: visualsSnapshot ?? lastKnownSpaceVisuals,
+                outlook: spaceOutlook ?? lastKnownSpaceOutlook,
+                series: series ?? lastKnownSeries,
+                initialSection: spaceDetailFocus,
+                quakeLatest: quakeLatest,
+                quakeEvents: quakeEvents,
+                quakeError: quakeError
+            )
+        }
+        .padding(.horizontal)
+        .overlay(alignment: .bottomLeading) {
+            if let ts = current.updatedAt, let txt = formatUpdated(ts) {
+                Text("Updated: \(txt)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 12)
+                    .padding(.bottom, 6)
+            }
+        }
+
+        HazardsBriefCard(payload: hazardsBrief, isLoading: hazardsLoading, error: hazardsError)
+            .padding(.horizontal)
+
+        // Aurora images (Nowcast / Tonight / Tomorrow)
+        do {
+            let nowNorth = URL(string: "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg")
+            let tonightU = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png")
+            let tomorrowU = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png")
+            if nowNorth != nil || tonightU != nil || tomorrowU != nil {
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Small summary row
+                        HStack(spacing: 8) {
+                            if let gw = auroraPowerValue {
+                                Text(String(format: "Power: %.0f GW", gw)).font(.subheadline)
+                            } else {
+                                Text("Aurora status").font(.subheadline)
+                            }
+                            Spacer()
+                        }
+                        // Thumbnails row
+                        HStack(spacing: 10) {
+                            if let u = nowNorth {
+                                AsyncImage(url: u) { phase in
+                                    switch phase {
+                                    case .empty: ProgressView().frame(width: 110, height: 90)
+                                    case .success(let img): img.resizable().scaledToFit().frame(width: 110, height: 90).clipShape(RoundedRectangle(cornerRadius: 8))
+                                    case .failure: Image(systemName: "exclamationmark.triangle").frame(width: 110, height: 90)
+                                    @unknown default: EmptyView().frame(width: 110, height: 90)
+                                    }
+                                }
+                                .accessibilityLabel("Aurora nowcast (north)")
+                            }
+                            if let u = tonightU {
+                                AsyncImage(url: u) { phase in
+                                    switch phase {
+                                    case .empty: ProgressView().frame(width: 110, height: 90)
+                                    case .success(let img): img.resizable().scaledToFit().frame(width: 110, height: 90).clipShape(RoundedRectangle(cornerRadius: 8))
+                                    case .failure: Image(systemName: "exclamationmark.triangle").frame(width: 110, height: 90)
+                                    @unknown default: EmptyView().frame(width: 110, height: 90)
+                                    }
+                                }
+                                .accessibilityLabel("Aurora forecast (tonight)")
+                            }
+                            if let u = tomorrowU {
+                                AsyncImage(url: u) { phase in
+                                    switch phase {
+                                    case .empty: ProgressView().frame(width: 110, height: 90)
+                                    case .success(let img): img.resizable().scaledToFit().frame(width: 110, height: 90).clipShape(RoundedRectangle(cornerRadius: 8))
+                                    case .failure: Image(systemName: "exclamationmark.triangle").frame(width: 110, height: 90)
+                                    @unknown default: EmptyView().frame(width: 110, height: 90)
+                                    }
+                                }
+                                .accessibilityLabel("Aurora forecast (tomorrow)")
+                            }
+                        }
+                    }
+                } label: { Label("Aurora Now & Forecast", systemImage: "sparkles") }
+                .padding(.horizontal)
+            }
+        }
+
+        if AppConfig.showVisualsPreview, let vs = visualsSnapshot {
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Solar Visuals (Preview)").font(.headline)
+                    VisualsPreviewGrid(visuals: vs, maxCount: 24) { item in
+                        prepareInteractiveViewer(for: item)
+                        showInteractiveViewer = true
+                    }
+                }
+            } label: { Label("Visuals", systemImage: "photo.on.rectangle") }
+            .padding(.horizontal)
+        }
+
+        if usingYesterdayFallback {
+            Text("Showing yesterday’s data while today updates…")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .padding(.horizontal)
+        }
+
+        if (current.kpAlert ?? false) || (current.flareAlert ?? false) {
+            SpaceAlertsCard(kpAlert: current.kpAlert ?? false, flareAlert: current.flareAlert ?? false)
+                .padding(.horizontal)
+        }
+
+        if let fc = forecast {
+            ForecastCard(summary: fc).padding(.horizontal)
+        }
+        DisclosureGroup(isExpanded: $showTrends) {
+            SpaceChartsCard(series: series ?? .empty, highlights: symptomHighlights())
+                .padding(.horizontal)
+        } label: {
+            HStack {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                Text("Weekly Trends (Kp, Bz, f0, HR)")
+                Spacer()
+            }
+        }
+        .padding(.horizontal)
+
+        MagnetosphereCard(
+            data: magnetosphere,
+            isLoading: magnetosphereLoading,
+            error: magnetosphereError,
+            onOpenDetail: { showMagnetosphereDetail = true }
+        )
+        .padding(.horizontal)
+        .sheet(isPresented: $showMagnetosphereDetail) {
+            MagnetosphereDetailView(data: magnetosphere)
+        }
+
+        EarthscopeCardV2(title: current.postTitle, caption: current.postCaption, images: current.earthscopeImages, bodyMarkdown: current.postBody)
+            .padding(.horizontal)
+
+        LocalHealthCard(
+            zip: $localHealthZip,
+            snapshot: localHealth,
+            isLoading: localHealthLoading,
+            error: localHealthError,
+            onRefresh: { Task { await fetchLocalHealth() } }
+        )
+        .padding(.horizontal)
+
+        DisclosureGroup(isExpanded: $showTools) {
+            VStack(spacing: 12) {
+                ConnectionSettingsSection(state: state, isExpanded: $showConnections)
+                DisclosureGroup(isExpanded: $showActions) {
+                    ActionsSection(state: state, onFetchVisuals: { Task { await fetchSpaceVisuals() } })
+                } label: { HStack { Image(systemName: "arrow.triangle.2.circlepath"); Text("HealthKit Sync & Actions"); Spacer() } }
+                DisclosureGroup(isExpanded: $showBle) {
+                    BleStatusSection(state: state)
+                } label: { HStack { Image(systemName: "antenna.radiowaves.left.and.right"); Text("Bluetooth / BLE"); Spacer() } }
+                DisclosureGroup(isExpanded: $showPolar) {
+                    PolarStatusSection(state: state)
+                } label: { HStack { Image(systemName: "waveform.path.ecg"); Text("Polar ECG"); Spacer() } }
+            }
+            .padding(.top, 8)
+        } label: { HStack { Image(systemName: "gearshape"); Text("Tools & Settings"); Spacer() } }
+            .padding(.horizontal)
+    }
+
+    @ViewBuilder
+    private var dashboardEmptyView: some View {
+        GroupBox {
+            Text("No features for today yet. Pull to refresh after the rollup, or try again in a minute.")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } label: { Text("Status") }
+            .padding(.horizontal)
+        DisclosureGroup(isExpanded: $showTools) {
+            VStack(spacing: 12) {
+                ConnectionSettingsSection(state: state, isExpanded: $showConnections)
+                DisclosureGroup(isExpanded: $showActions) { ActionsSection(state: state, onFetchVisuals: { Task { await fetchSpaceVisuals() } }) } label: { HStack { Image(systemName: "arrow.triangle.2.circlepath"); Text("HealthKit Sync & Actions"); Spacer() } }
+                DisclosureGroup(isExpanded: $showBle) { BleStatusSection(state: state) } label: { HStack { Image(systemName: "antenna.radiowaves.left.and.right"); Text("Bluetooth / BLE"); Spacer() } }
+                DisclosureGroup(isExpanded: $showPolar) { PolarStatusSection(state: state) } label: { HStack { Image(systemName: "waveform.path.ecg"); Text("Polar ECG"); Spacer() } }
+            }
+            .padding(.top, 8)
+        } label: { HStack { Image(systemName: "gearshape"); Text("Tools & Settings"); Spacer() } }
+            .padding(.horizontal)
+    }
+
     private var contentViewBody: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    
+
                     if let f = (features ?? lastKnownFeatures) {
-                        let todayStr = chicagoTodayString()
-                        let (current, usingYesterdayFallback) = selectDisplayFeatures(for: f)
-                        let total = Int((current.sleepTotalMinutes?.value ?? 0).rounded())
-                        let isToday = (current.day == todayStr)
-                        let titleText = isToday ? "Sleep (Today)" : "Sleep (\(current.day))"
-                        SleepCard(
-                            title: titleText,
-                            totalMin: total,
-                            remMin: Int((current.remM?.value ?? 0).rounded()),
-                            coreMin: Int((current.coreM?.value ?? 0).rounded()),
-                            deepMin: Int((current.deepM?.value ?? 0).rounded()),
-                            awakeMin: Int((current.awakeM?.value ?? 0).rounded()),
-                            inbedMin: Int((current.inbedM?.value ?? 0).rounded()),
-                            efficiency: current.sleepEfficiency?.value
-                        )
-                        .padding(.horizontal)
-                        
-                        if let banner = featuresCachedBannerText {
-                            Label {
-                                Text(banner)
-                            } icon: {
-                                Image(systemName: "clock.arrow.circlepath")
-                            }
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(Color.secondary.opacity(0.12))
-                            .cornerRadius(10)
-                            .padding(.horizontal)
-                        }
-                        
-                        if usingYesterdayFallback {
-                            Text("Showing yesterday’s data while today updates…")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal)
-                        }
-                        
-                        // Live HR badge (if available)
-
-
-                        // Health Stats card (steps, HR min, HR max, HRV, SpO2, BP)
-                        HealthStatsCard(
-                            steps: Int((current.stepsTotal?.value ?? 0).rounded()),
-                            hrMin: Int((current.hrMin?.value ?? 0).rounded()),
-                            hrMax: Int((current.hrMax?.value ?? 0).rounded()),
-                            hrvAvg: Int((current.hrvAvg?.value ?? 0).rounded()),
-                            spo2Avg: current.spo2AvgDisplay,
-                            bpSys: Int((current.bpSysAvg?.value ?? 0).rounded()),
-                            bpDia: Int((current.bpDiaAvg?.value ?? 0).rounded())
-                        )
-                        .padding(.horizontal)
-                        .overlay(alignment: .bottomLeading) {
-                            if let ts = current.updatedAt, let txt = formatUpdated(ts) {
-                                Text("Updated: \(txt)")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                    .padding(.leading, 12)
-                                    .padding(.bottom, 6)
-                            }
-                        }
-                        // Live HR badge (shows current BPM if available)
-
- 
-    // MARK: - Subviews
-
-    // Live HR badge (shows current BPM if available) ---
-
-                        
-                        SymptomsTileView(
-                            todayCount: symptomsToday.count,
-                            queuedCount: state.symptomQueueCount,
-                            sparklinePoints: symptomSparkPoints(),
-                            topSummary: topSymptomSummary(),
-                            onLogTap: { showSymptomSheet = true }
-                        )
-                        .padding(.horizontal)
-                        
-                        if usingYesterdayFallback {
-                            Text("Showing yesterday’s data while today updates…")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal)
-                        }
-                        
-                        // Space Weather card
-                        let visualsSnapshot = spaceVisuals ?? lastKnownSpaceVisuals
-                        let overlayCount = visualOverlayCount(visualsSnapshot)
-                        let overlayUpdated = latestVisualTimestamp(visualsSnapshot)
-                        let outlookPower = (spaceOutlook ?? lastKnownSpaceOutlook)?
-                            .data?
-                            .auroraOutlook?
-                            .first(where: { ($0.hemisphere ?? "").lowercased() == "north" })?.powerGw
-                            ?? (spaceOutlook ?? lastKnownSpaceOutlook)?.data?.auroraOutlook?.first?.powerGw
-                        let auroraPowerValue = current.auroraPowerGw?.value
-                            ?? current.auroraPowerNhGw?.value
-                            ?? current.auroraPowerShGw?.value
-                            ?? current.auroraHpNorthGw?.value
-                            ?? current.auroraHpSouthGw?.value
-                            ?? outlookPower
-                            ?? latestAuroraPower(from: visualsSnapshot)
-                        let earthquakeCount = quakeLatest?.allQuakes
-                        let earthquakeMag = quakeEvents.compactMap { $0.mag }.max()
-                        SpaceWeatherCard(
-                            kpMax: Int((current.kpMax?.value ?? 0).rounded()),
-                            kpCurrent: current.kpCurrent?.value,
-                            bzMin: current.bzMin?.value,
-                            swSpeedAvg: current.swSpeedAvg?.value,
-                            flares: Int((current.flaresCount?.value ?? 0).rounded()),
-                            cmes: Int((current.cmesCount?.value ?? 0).rounded()),
-                            schStation: current.schStation,
-                            schF0: current.schF0Hz?.value,
-                            schF1: current.schF1Hz?.value,
-                            schF2: current.schF2Hz?.value,
-                            auroraProbability: Self.auroraProbabilityText(from: current),
-                            auroraPower: auroraPowerValue,
-                            overlayCount: overlayCount,
-                            overlayUpdated: overlayUpdated,
-                            earthquakeCount: earthquakeCount,
-                            earthquakeMaxMag: earthquakeMag,
-                            onOpenDetail: { section in
-                                spaceDetailFocus = section
-                                showSpaceWeatherDetail = true
-                            }
-                        )
-                        .navigationDestination(isPresented: $showSpaceWeatherDetail) {
-                            SpaceWeatherDetailView(
-                                features: current,
-                                visuals: visualsSnapshot ?? lastKnownSpaceVisuals,
-                                outlook: spaceOutlook ?? lastKnownSpaceOutlook,
-                                series: series ?? lastKnownSeries,
-                                initialSection: spaceDetailFocus,
-                                quakeLatest: quakeLatest,
-                                quakeEvents: quakeEvents,
-                                quakeError: quakeError
-                            )
-                        }
-                        .padding(.horizontal)
-                        .overlay(alignment: .bottomLeading) {
-                            if let ts = current.updatedAt, let txt = formatUpdated(ts) {
-                                Text("Updated: \(txt)")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                    .padding(.leading, 12)
-                                    .padding(.bottom, 6)
-                            }
-                        }
-                        HazardsBriefCard(payload: hazardsBrief, isLoading: hazardsLoading, error: hazardsError)
-                            .padding(.horizontal)
-                        // Aurora images (Nowcast / Tonight / Tomorrow)
-                        do {
-                            let nowNorth = URL(string: "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg")
-                            let tonightU = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png")
-                            let tomorrowU = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png")
-                            if nowNorth != nil || tonightU != nil || tomorrowU != nil {
-                                GroupBox {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        // Small summary row
-                                        HStack(spacing: 8) {
-                                            if let gw = auroraPowerValue {
-                                                Text(String(format: "Power: %.0f GW", gw)).font(.subheadline)
-                                            } else {
-                                                Text("Aurora status").font(.subheadline)
-                                            }
-                                            Spacer()
-                                        }
-                                        // Thumbnails row
-                                        HStack(spacing: 10) {
-                                            if let u = nowNorth {
-                                                AsyncImage(url: u) { phase in
-                                                    switch phase {
-                                                    case .empty: ProgressView().frame(width: 110, height: 90)
-                                                    case .success(let img): img.resizable().scaledToFit().frame(width: 110, height: 90).clipShape(RoundedRectangle(cornerRadius: 8))
-                                                    case .failure: Image(systemName: "exclamationmark.triangle").frame(width: 110, height: 90)
-                                                    @unknown default: EmptyView().frame(width: 110, height: 90)
-                                                    }
-                                                }
-                                                .accessibilityLabel("Aurora nowcast (north)")
-                                            }
-                                            if let u = tonightU {
-                                                AsyncImage(url: u) { phase in
-                                                    switch phase {
-                                                    case .empty: ProgressView().frame(width: 110, height: 90)
-                                                    case .success(let img): img.resizable().scaledToFit().frame(width: 110, height: 90).clipShape(RoundedRectangle(cornerRadius: 8))
-                                                    case .failure: Image(systemName: "exclamationmark.triangle").frame(width: 110, height: 90)
-                                                    @unknown default: EmptyView().frame(width: 110, height: 90)
-                                                    }
-                                                }
-                                                .accessibilityLabel("Aurora forecast (tonight)")
-                                            }
-                                            if let u = tomorrowU {
-                                                AsyncImage(url: u) { phase in
-                                                    switch phase {
-                                                    case .empty: ProgressView().frame(width: 110, height: 90)
-                                                    case .success(let img): img.resizable().scaledToFit().frame(width: 110, height: 90).clipShape(RoundedRectangle(cornerRadius: 8))
-                                                    case .failure: Image(systemName: "exclamationmark.triangle").frame(width: 110, height: 90)
-                                                    @unknown default: EmptyView().frame(width: 110, height: 90)
-                                                    }
-                                                }
-                                                .accessibilityLabel("Aurora forecast (tomorrow)")
-                                            }
-                                        }
-                                    }
-                                } label: { Label("Aurora Now & Forecast", systemImage: "sparkles") }
-                                .padding(.horizontal)
-                            }
-                        }
-                        if AppConfig.showVisualsPreview, let vs = visualsSnapshot {
-                            GroupBox {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Solar Visuals (Preview)").font(.headline)
-                                    VisualsPreviewGrid(visuals: vs, maxCount: 24) { item in
-                                        prepareInteractiveViewer(for: item)
-                                        showInteractiveViewer = true
-                                    }
-                                }
-                            } label: { Label("Visuals", systemImage: "photo.on.rectangle") }
-                            .padding(.horizontal)
-                        }
-                        if usingYesterdayFallback {
-                            Text("Showing yesterday’s data while today updates…")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal)
-                        }
-                        
-                        if (current.kpAlert ?? false) || (current.flareAlert ?? false) {
-                            SpaceAlertsCard(kpAlert: current.kpAlert ?? false, flareAlert: current.flareAlert ?? false)
-                                .padding(.horizontal)
-                        }
-                        
-                        if let fc = forecast {
-                            ForecastCard(summary: fc).padding(.horizontal)
-                        }
-                        DisclosureGroup(isExpanded: $showTrends) {
-                            SpaceChartsCard(series: series ?? .empty, highlights: symptomHighlights())
-                                .padding(.horizontal)
-                        } label: {
-                            HStack {
-                                Image(systemName: "chart.line.uptrend.xyaxis")
-                                Text("Weekly Trends (Kp, Bz, f0, HR)")
-                                Spacer()
-                            }
-                        }
-                        .padding(.horizontal)
-
-                        MagnetosphereCard(
-                            data: magnetosphere,
-                            isLoading: magnetosphereLoading,
-                            error: magnetosphereError,
-                            onOpenDetail: { showMagnetosphereDetail = true }
-                        )
-                        .padding(.horizontal)
-                        .sheet(isPresented: $showMagnetosphereDetail) {
-                            MagnetosphereDetailView(data: magnetosphere)
-                        }
-
-                        EarthscopeCardV2(title: current.postTitle, caption: current.postCaption, images: current.earthscopeImages, bodyMarkdown: current.postBody)
-                            .padding(.horizontal)
-
-                        LocalHealthCard(
-                            zip: $localHealthZip,
-                            snapshot: localHealth,
-                            isLoading: localHealthLoading,
-                            error: localHealthError,
-                            onRefresh: { Task { await fetchLocalHealth() } }
-                        )
-                        .padding(.horizontal)
-                        
-                        DisclosureGroup(isExpanded: $showTools) {
-                            VStack(spacing: 12) {
-                                ConnectionSettingsSection(state: state, isExpanded: $showConnections)
-                                DisclosureGroup(isExpanded: $showActions) {
-                                    ActionsSection(state: state, onFetchVisuals: { Task { await fetchSpaceVisuals() } })
-                                } label: { HStack { Image(systemName: "arrow.triangle.2.circlepath"); Text("HealthKit Sync & Actions"); Spacer() } }
-                                DisclosureGroup(isExpanded: $showBle) {
-                                    BleStatusSection(state: state)
-                                } label: { HStack { Image(systemName: "antenna.radiowaves.left.and.right"); Text("Bluetooth / BLE"); Spacer() } }
-                                DisclosureGroup(isExpanded: $showPolar) {
-                                    PolarStatusSection(state: state)
-                                } label: { HStack { Image(systemName: "waveform.path.ecg"); Text("Polar ECG"); Spacer() } }
-                            }
-                            .padding(.top, 8)
-                        } label: { HStack { Image(systemName: "gearshape"); Text("Tools & Settings"); Spacer() } }
-                            .padding(.horizontal)
+                        dashboardFeaturesView(f)
                     } else {
-                        GroupBox {
-                            Text("No features for today yet. Pull to refresh after the rollup, or try again in a minute.")
-                                .font(.footnote)
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        } label: { Text("Status") }
-                            .padding(.horizontal)
-                        DisclosureGroup(isExpanded: $showTools) {
-                            VStack(spacing: 12) {
-                                ConnectionSettingsSection(state: state, isExpanded: $showConnections)
-                                DisclosureGroup(isExpanded: $showActions) { ActionsSection(state: state, onFetchVisuals: { Task { await fetchSpaceVisuals() } }) } label: { HStack { Image(systemName: "arrow.triangle.2.circlepath"); Text("HealthKit Sync & Actions"); Spacer() } }
-                                DisclosureGroup(isExpanded: $showBle) { BleStatusSection(state: state) } label: { HStack { Image(systemName: "antenna.radiowaves.left.and.right"); Text("Bluetooth / BLE"); Spacer() } }
-                                DisclosureGroup(isExpanded: $showPolar) { PolarStatusSection(state: state) } label: { HStack { Image(systemName: "waveform.path.ecg"); Text("Polar ECG"); Spacer() } }
-                            }
-                            .padding(.top, 8)
-                        } label: { HStack { Image(systemName: "gearshape"); Text("Tools & Settings"); Spacer() } }
-                            .padding(.horizontal)
+                        dashboardEmptyView
                     }
                     let debugFeaturesState = self.featureFetchState
                     if showDebug { DebugPanel(state: state, expandLog: $expandLog, featuresState: debugFeaturesState) }
@@ -3991,9 +3997,9 @@ struct ContentView: View {
                             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                     case .failure:
                         if !failedPrimary, fallback != nil {
-                            DispatchQueue.main.async { failedPrimary = true }
                             ZStack { RoundedRectangle(cornerRadius: cornerRadius).fill(Color.gray.opacity(0.12)); ProgressView() }
                                 .frame(height: height)
+                                .onAppear { failedPrimary = true }
                         } else {
                             RoundedRectangle(cornerRadius: cornerRadius)
                                 .fill(Color.gray.opacity(0.12))
@@ -4304,15 +4310,15 @@ struct ContentView: View {
                             }
                         }
                     }
-                    .sheet(isPresented: $detailShowPlayer) {
-                        if let url = detailPlayingURL {
-                            VideoPlayer(player: AVPlayer(url: url)).ignoresSafeArea()
-                        }
-                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } label: {
                 Label("Solar Visuals", systemImage: "photo.on.rectangle")
+            }
+            .sheet(isPresented: $detailShowPlayer) {
+                if let url = detailPlayingURL {
+                    VideoPlayer(player: AVPlayer(url: url)).ignoresSafeArea()
+                }
             }
         }
 
