@@ -106,6 +106,23 @@ def _parse_float(value: Any) -> float | None:
     return f
 
 
+# --- Local helpers for robust field extraction ---
+def _first_float(d: dict[str, Any], *keys: str) -> float | None:
+    for k in keys:
+        v = d.get(k)
+        f = _parse_float(v)
+        if f is not None:
+            return f
+    return None
+
+def _first_nonempty(d: dict[str, Any], *keys: str) -> Any:
+    for k in keys:
+        v = d.get(k)
+        if v is not None and v != "":
+            return v
+    return None
+
+
 def _coalesce(*values: Any) -> Any:
     for value in values:
         if value is not None:
@@ -653,18 +670,75 @@ async def ingest_enlil(
         for impact in entry.get("impactList") or []:
             if not isinstance(impact, dict):
                 continue
-            arrival = _parse_dt(impact.get("arrivalTime") or impact.get("arrival_time"))
+            # --- Robust extraction of arrival, speed, kp_est, confidence ---
+            # Arrival time
+            arrival = _parse_dt(
+                _first_nonempty(impact, "arrivalTime", "arrival_time", "impactArrivalTime", "impact_time")
+            )
             if arrival is None:
-                continue
-            kp_est = _parse_float(impact.get("kp"))
+                # Some feeds place arrival on nested keys or as 'time'
+                arrival = _parse_dt(_first_nonempty(impact, "time", "timestamp"))
+
+            # Speed (km/s) – accept multiple aliases; convert m/s if value is unusually large
+            cme_speed_kms = _first_float(
+                impact,
+                "speed", "cmeSpeed", "impactSpeed", "radialSpeed", "velocity", "v", "speed_kms",
+            )
+            if cme_speed_kms is not None and cme_speed_kms > 3000:
+                # looks like m/s, convert to km/s
+                cme_speed_kms = cme_speed_kms / 1000.0
+            # Sometimes speed sits on parent entry (simulation-level); try a gentle fallback
+            if cme_speed_kms is None:
+                cme_speed_kms = _first_float(entry, "speed", "cmeSpeed", "radialSpeed")
+
+            # Kp estimate – prefer the highest available among common keys
+            kp_candidates = []
+            for key in ("kp", "maxKp", "predictedMaxKp", "kp_prediction", "kp_predicted", "kp90", "kp_90", "kp_180"):
+                val = _parse_float(impact.get(key))
+                if val is not None:
+                    kp_candidates.append(val)
+            kp_est = max(kp_candidates) if kp_candidates else None
+
+            # Confidence – normalize to string; accept percentage or label
+            confidence_val = _first_nonempty(impact, "impactConfidence", "confidence", "confidenceInPercentage")
+            if isinstance(confidence_val, (int, float)):
+                confidence = f"{confidence_val}%"
+            else:
+                confidence = str(confidence_val) if confidence_val is not None else None
+
+            # Fallback: if Kp is missing, try to infer from ext.cme_scoreboard around the arrival window
+            if kp_est is None and arrival is not None and writer._conn is not None:
+                try:
+                    row = await writer._conn.fetchrow(
+                        """
+                        select max(kp_predicted) as kp
+                        from ext.cme_scoreboard
+                        where coalesce(predicted_arrival, observed_arrival) between $1 and $2
+                        """,
+                        arrival - timedelta(hours=6),
+                        arrival + timedelta(hours=6),
+                    )
+                    if row and row["kp"] is not None:
+                        kp_est = float(row["kp"])
+                except Exception as exc:
+                    logger.debug("scoreboard Kp fallback failed: %s", exc)
+
+            # Log missing fields for diagnostics
+            if arrival is None:
+                logger.debug("WSA-Enlil impact missing arrivalTime; simulation_id=%s keys=%s", simulation_id, list(impact.keys()))
+            if cme_speed_kms is None:
+                logger.debug("WSA-Enlil impact missing speed; simulation_id=%s", simulation_id)
+            if kp_est is None:
+                logger.debug("WSA-Enlil impact missing Kp estimate; simulation_id=%s", simulation_id)
+
             mart_rows.append(
                 {
                     "arrival_time": arrival,
                     "simulation_id": simulation_id,
                     "location": impact.get("location") or impact.get("impactTarget"),
-                    "cme_speed_kms": _parse_float(impact.get("speed")),
+                    "cme_speed_kms": cme_speed_kms,
                     "kp_estimate": kp_est,
-                    "confidence": impact.get("impactConfidence"),
+                    "confidence": confidence,
                     "raw": json.dumps(impact),
                     "created_at": now,
                 }
