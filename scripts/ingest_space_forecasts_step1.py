@@ -982,26 +982,76 @@ async def ingest_coronal_hole(
         if ts is None or ts < cutoff:
             continue
 
-        # The 1-min wind feed varies in field names; grab the common aliases.
-        speed_kms = _parse_float(
+        # --- Robust speed/density extraction with fallbacks ---
+        # Try scalar speed fields first
+        sp_scalar = _parse_float(
             _coalesce(
                 entry.get("proton_speed"),
+                entry.get("bulk_speed"),
                 entry.get("solar_wind_speed"),
                 entry.get("plasma_speed"),
                 entry.get("speed"),
                 entry.get("flow_speed"),
+                entry.get("bulk_speed_kms"),
+                entry.get("v_kms"),
             )
         )
+
+        # If no scalar, try vector components (vx, vy, vz) and compute magnitude
+        speed_kms = None
+        if sp_scalar is not None:
+            # Heuristic: if value looks like m/s, convert to km/s
+            speed_kms = sp_scalar / 1000.0 if sp_scalar > 3000 else sp_scalar
+        else:
+            vx = _parse_float(
+                _coalesce(
+                    entry.get("proton_vx_gse"),
+                    entry.get("proton_vx_gsm"),
+                    entry.get("vx_gse"),
+                    entry.get("vx"),
+                )
+            )
+            vy = _parse_float(
+                _coalesce(
+                    entry.get("proton_vy_gse"),
+                    entry.get("proton_vy_gsm"),
+                    entry.get("vy_gse"),
+                    entry.get("vy"),
+                )
+            )
+            vz = _parse_float(
+                _coalesce(
+                    entry.get("proton_vz_gse"),
+                    entry.get("proton_vz_gsm"),
+                    entry.get("vz_gse"),
+                    entry.get("vz"),
+                )
+            )
+            if vx is not None and vy is not None and vz is not None:
+                sp = math.sqrt(vx * vx + vy * vy + vz * vz)
+                speed_kms = sp / 1000.0 if sp > 3000 else sp
+
+        # Sanity clamp improbable speeds
+        if speed_kms is not None and not (50.0 <= speed_kms <= 3000.0):
+            logger.debug("RTSW speed out of plausible range: %s km/s (discarding)", speed_kms)
+            speed_kms = None
+
+        # Density aliases
         density_cm3 = _parse_float(
             _coalesce(
                 entry.get("proton_density"),
                 entry.get("plasma_density"),
                 entry.get("density"),
+                entry.get("n_cm3"),
             )
         )
 
-        # Only upsert if at least one metric is present
+        # Only upsert if at least one metric is present; log a hint if neither
         if speed_kms is None and density_cm3 is None:
+            logger.debug(
+                "RTSW row had no speed or density; sample keys=%s",
+                list(entry.keys())[:12],
+            )
             continue
 
         rows.append(
