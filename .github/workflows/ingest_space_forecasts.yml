@@ -5,6 +5,17 @@ on:
     # Run every 15 minutes (adjust as needed)
     - cron: "*/15 * * * *"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run mode"
+        type: choice
+        required: true
+        options: [normal, scoreboard_backfill]
+        default: normal
+      days:
+        description: "Lookback window (days) for backfill"
+        required: false
+        default: "30"
 
 jobs:
   ingest:
@@ -25,6 +36,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Step 1 Space Forecast Ingestion
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.mode == 'normal'
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           NASA_API_KEY: ${{ secrets.NASA_API_KEY }}
@@ -33,3 +45,27 @@ jobs:
           SWPC_API_EMAIL: ${{ secrets.SWPC_API_EMAIL }}
         run: |
           python scripts/ingest_space_forecasts_step1.py --days 3
+
+      - name: Backfill CME Scoreboard (manual)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'scoreboard_backfill'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python scripts/ingest_space_forecasts_step1.py --only scoreboard --days "${{ github.event.inputs.days }}"
+
+      - name: Refresh marts (CME earth-directed counts)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'scoreboard_backfill'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          python - <<'PY'
+          import os, psycopg
+          dsn = os.environ["SUPABASE_DB_URL"]
+          days = int("${{ github.event.inputs.days }}")
+          with psycopg.connect(dsn) as conn:
+              with conn.cursor() as cur:
+                  # Refresh earth-directed CME counts over the window
+                  cur.execute("select marts.refresh_space_weather_cme_ed(current_date - %s, current_date)", (days,))
+                  conn.commit()
+          print(f"Refreshed marts.refresh_space_weather_cme_ed for last {days} days.")
+          PY
