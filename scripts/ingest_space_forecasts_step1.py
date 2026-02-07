@@ -1517,7 +1517,8 @@ async def ingest_magnetometer(
     stations_filter = os.getenv(STATIONS_ENV)
 
     if not username:
-        logger.warning("%s is not configured; skipping magnetometer ingest", USERNAME_ENV)
+        logger.warning("%s is not configured; using proxy fallback from ext.magnetosphere_pulse", USERNAME_ENV)
+        await ingest_magnetometer_proxy(writer, days)
         return
 
     logger.info("Fetching AE/AL/PC magnetometer indices from %s", primary_url)
@@ -1578,8 +1579,9 @@ async def ingest_magnetometer(
         records = extract_records(data)
     if not records:
         logger.warning(
-            "SuperMAG response did not include records; skipping magnetometer ingest",
+            "SuperMAG response did not include records; falling back to proxy from ext.magnetosphere_pulse",
         )
+        await ingest_magnetometer_proxy(writer, days)
         return
 
     rows: list[dict[str, Any]] = []
@@ -1793,3 +1795,107 @@ def main(argv: Sequence[str] | None = None) -> None:
 
 if __name__ == "__main__":  # pragma: no cover - exercised via CLI
     main()
+
+async def ingest_magnetometer_proxy(
+    writer: SupabaseWriter,
+    days: int,
+) -> None:
+    """
+    Proxy fallback: derive coarse AE/AL/AU/PC-like indices from ext.magnetosphere_pulse.
+
+    This is *not* a replacement for SuperMAG and should be treated as an
+    approximation. We store the result into marts.magnetometer_regional with
+    region='global' and stations=["proxy:magnetosphere_pulse"] so downstream
+    refresh jobs can use it when true magnetometer data is unavailable.
+    """
+    if writer._conn is None:
+        logger.warning("Proxy magnetometer requires a DB connection; skipping")
+        return
+
+    end_ts = datetime.now(tz=UTC)
+    start_ts = end_ts - timedelta(days=days)
+
+    rows = await writer._conn.fetch(
+        """
+        select ts, bz_nt, v_kms, n_cm3
+        from ext.magnetosphere_pulse
+        where ts >= $1 and ts < $2
+        order by ts asc
+        """,
+        start_ts,
+        end_ts,
+    )
+    if not rows:
+        logger.info("magnetosphere_pulse had no rows in window; skipping proxy")
+        return
+
+    # Bucket by hour (UTC)
+    buckets: dict[datetime, list[tuple[float | None, float | None, float | None]]] = {}
+    for r in rows:
+        ts: datetime = r["ts"]
+        hour = ts.replace(minute=0, second=0, microsecond=0, tzinfo=UTC)
+        buckets.setdefault(hour, []).append(
+            (r["bz_nt"], r["v_kms"], r["n_cm3"])
+        )
+
+    def proxy_from_sample(bz: float | None, v: float | None, n: float | None) -> tuple[float, float, float]:
+        """
+        Heuristic proxies:
+          - AE ~ coupling from southward Bz + elevated wind + density bursts
+          - AL ~ ~60% of AE, negative (westward electrojet)
+          - PC ~ velocity * sqrt(density) scaling (order-units, not calibrated)
+        All outputs are clipped to non-pathological ranges.
+        """
+        bz_abs = abs(bz) if bz is not None else 0.0
+        south = max(0.0, -(bz or 0.0))
+        vv = v or 0.0
+        nn = max(0.0, n or 0.0)
+
+        ae = (south * 60.0) + max(0.0, vv - 300.0) * 0.5 + max(0.0, nn - 5.0) * 10.0
+        al = -0.6 * ae
+        pc = (vv * math.sqrt(nn)) / 400.0 if vv > 0 and nn > 0 else 0.0
+
+        # Clamp to reasonable ballpark ranges
+        ae = max(0.0, min(ae, 1500.0))
+        al = max(-1500.0, min(al, -10.0 if ae > 0 else 0.0))
+        pc = max(0.0, min(pc, 10.0))
+        return ae, al, pc
+
+    mart_rows: list[dict[str, Any]] = []
+    now = datetime.now(tz=UTC)
+    for hour, samples in buckets.items():
+        ae_vals: list[float] = []
+        al_vals: list[float] = []
+        pc_vals: list[float] = []
+        for bz, v, n in samples:
+            ae_p, al_p, pc_p = proxy_from_sample(bz, v, n)
+            ae_vals.append(ae_p)
+            al_vals.append(al_p)
+            pc_vals.append(pc_p)
+
+        if not ae_vals and not al_vals and not pc_vals:
+            continue
+
+        mart_rows.append(
+            {
+                "ts_utc": hour,
+                "region": "global",
+                "ae": max(ae_vals) if ae_vals else None,
+                "al": min(al_vals) if al_vals else None,
+                "au": max(ae_vals) * 0.5 if ae_vals else None,  # rough symmetry
+                "pc": max(pc_vals) if pc_vals else None,
+                "stations": json.dumps(["proxy:magnetosphere_pulse"]),
+                "created_at": now,
+            }
+        )
+
+    if mart_rows:
+        inserted = await writer.upsert_many(
+            "marts",
+            "magnetometer_regional",
+            mart_rows,
+            ["ts_utc", "region"],
+        )
+        logger.info("Upserted %d proxy rows into marts.magnetometer_regional", inserted)
+    else:
+        logger.info("Proxy magnetometer produced no rows; nothing to upsert")
