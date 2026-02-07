@@ -74,22 +74,24 @@ def _parse_dt(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        # Normalise trailing ``Z`` to ``+00:00`` for fromisoformat.
-        if value.endswith("Z"):
-            value = value[:-1] + "+00:00"
-        # Some feeds return fractional seconds but others do not; letting
-        # ``fromisoformat`` handle both makes the function robust.
-        return datetime.fromisoformat(value).astimezone(UTC)
+        # Normalise trailing Z and tolerate naive timestamps.
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return dt.astimezone(UTC)
     except ValueError:
         # Try a couple of common fallbacks (space separator, missing offset).
         try:
             return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
         except ValueError:
             try:
-                return datetime.strptime(value, "%Y-%m-%dT%H:%M").replace(tzinfo=UTC)
+                return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=UTC)
             except ValueError:
-                logger.debug("could not parse datetime value %s", value)
-                return None
+                try:
+                    return datetime.strptime(value, "%Y-%m-%dT%H:%M").replace(tzinfo=UTC)
+                except ValueError:
+                    logger.debug("could not parse datetime value %s", value)
+                    return None
 
 
 def _parse_float(value: Any) -> float | None:
@@ -955,34 +957,75 @@ async def ingest_coronal_hole(
     writer: SupabaseWriter,
     days: int,
 ) -> None:
-    logger.info("Fetching coronal-hole forecasts")
-    data = await fetch_json(
-        client,
-        "https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json",
-    )
+    """
+    Ingest a proxy for CH/HSS using SWPC real-time solar wind (1‑minute) feed.
+    We normalise timestamp, speed (km/s), and density (cm^-3) into ext.ch_forecast.
+    """
+    logger.info("Fetching coronal-hole / real-time wind proxies")
+    try:
+        data = await fetch_json(
+            client,
+            "https://services.swpc.noaa.gov/json/rtsw/rtsw_wind_1m.json",
+        )
+    except (httpx.HTTPError, json.JSONDecodeError) as exc:
+        logger.warning("RTSW wind feed failed: %s", exc)
+        return
+
     cutoff = datetime.now(tz=UTC) - timedelta(days=days)
     rows: list[dict[str, Any]] = []
+
     for entry in data or []:
         if not isinstance(entry, dict):
             continue
-        ts = _parse_dt(entry.get("time_tag") or entry.get("time"))
+
+        ts = _parse_dt(entry.get("time_tag") or entry.get("time") or entry.get("timestamp"))
         if ts is None or ts < cutoff:
             continue
+
+        # The 1-min wind feed varies in field names; grab the common aliases.
+        speed_kms = _parse_float(
+            _coalesce(
+                entry.get("proton_speed"),
+                entry.get("solar_wind_speed"),
+                entry.get("plasma_speed"),
+                entry.get("speed"),
+                entry.get("flow_speed"),
+            )
+        )
+        density_cm3 = _parse_float(
+            _coalesce(
+                entry.get("proton_density"),
+                entry.get("plasma_density"),
+                entry.get("density"),
+            )
+        )
+
+        # Only upsert if at least one metric is present
+        if speed_kms is None and density_cm3 is None:
+            continue
+
         rows.append(
             {
                 "forecast_time": ts,
-                "source": entry.get("source") or "swpc",
-                "speed_kms": _parse_float(entry.get("solar_wind_speed")),
-                "density_cm3": _parse_float(entry.get("proton_density")),
+                "source": "rtsw_wind_1m",
+                "speed_kms": speed_kms,
+                "density_cm3": density_cm3,
                 "raw": json.dumps(entry),
             }
         )
+
     if rows:
-        await writer.upsert_many(
+        inserted = await writer.upsert_many(
             "ext",
             "ch_forecast",
             rows,
             ["forecast_time", "source"],
+        )
+        logger.info("Upserted %d rows into ext.ch_forecast", inserted)
+    else:
+        logger.warning(
+            "No rows parsed for ext.ch_forecast; sample=%s",
+            (data[0] if isinstance(data, list) and data else None),
         )
 
 
@@ -991,45 +1034,161 @@ async def ingest_cme_scoreboard(
     writer: SupabaseWriter,
     days: int,
 ) -> None:
+    """
+    Ingest DONKI/CCMC CME Scoreboard predictions.
+
+    Handles common shapes:
+      - Top-level event fields: cmeID, observedTime, arrivalTime
+      - Nested predictions[] with predictedMethodName, predictedArrivalTime,
+        predictedMaxKpLowerRange/UpperRange, etc.
+    """
     logger.info("Fetching DONKI CME Scoreboard")
     now = datetime.now(tz=UTC)
-    # Use the CCMC CME Scoreboard API. Wing-style DONKI endpoint has been retired.
     params = {
         "CMEtimeStart": (now - timedelta(days=days)).strftime("%Y-%m-%d"),
         "CMEtimeEnd": now.strftime("%Y-%m-%d"),
-        # Include active and closed-out CMEs and do not skip “no arrival observed” events.
-        "skipNoArrivalObservedCMEs": "false",
-        "closeOutCMEsOnly": "false",
+        "format": "json",
     }
-    data = await fetch_json(
-        client,
-        "https://kauai.ccmc.gsfc.nasa.gov/CMEscoreboard/WS/get/predictions",
-        params,
-    )
-    rows: list[dict[str, Any]] = []
-    for entry in data or []:
-        if not isinstance(entry, dict):
-            continue
-        event_time = _parse_dt(entry.get("cmeTime"))
-        if event_time is None:
-            continue
-        rows.append(
-            {
-                "event_time": event_time,
-                "team_name": entry.get("teamName"),
-                "scoreboard_id": entry.get("scoreboardId"),
-                "predicted_arrival": _parse_dt(entry.get("predictedArrivalTime")),
-                "observed_arrival": _parse_dt(entry.get("observedArrivalTime")),
-                "kp_predicted": _parse_float(entry.get("kpPrediction")),
-                "raw": json.dumps(entry),
-            }
+
+    try:
+        data = await fetch_json(
+            client,
+            "https://kauai.ccmc.gsfc.nasa.gov/CMEscoreboard/WS/get/predictions",
+            params,
         )
+    except (httpx.HTTPError, json.JSONDecodeError) as exc:
+        logger.warning("CME Scoreboard fetch failed: %s", exc)
+        return
+
+    # Normalise to iterable of event dicts
+    if isinstance(data, list):
+        events = data
+    elif isinstance(data, dict):
+        # Some responses may wrap under various keys
+        for key in ("predictions", "result", "data", "records"):
+            block = data.get(key)
+            if isinstance(block, list):
+                events = block
+                break
+        else:
+            events = [data]
+    else:
+        events = []
+
+    rows: list[dict[str, Any]] = []
+    cutoff = now - timedelta(days=days)
+
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+
+        event_time = _parse_dt(
+            ev.get("observedTime")
+            or ev.get("cmeTime")
+            or ev.get("eventTime")
+            or ev.get("event_time")
+        )
+        if event_time is None or event_time < cutoff:
+            # If still no event timestamp, try any predicted-arrival as a proxy for filtering
+            candidate = _parse_dt(ev.get("arrivalTime") or ev.get("predictedArrivalTime"))
+            if candidate is None or candidate < cutoff:
+                continue
+
+        observed_arrival = _parse_dt(
+            ev.get("observedArrivalTime") or ev.get("arrivalTime")
+        )
+        scoreboard_id = ev.get("scoreboardId") or ev.get("cmeID") or ev.get("cmeId")
+
+        # Preferred: expand nested predictions
+        preds = ev.get("predictions") or []
+        if isinstance(preds, list) and preds:
+            for p in preds:
+                if not isinstance(p, dict):
+                    continue
+                predicted_arrival = _parse_dt(
+                    p.get("predictedArrivalTime")
+                    or p.get("arrivalTime")
+                    or p.get("predicted_arrival_time")
+                )
+                # Kp: prefer the upper bound; else lower; else single kp field.
+                kp_upper = _parse_float(
+                    _coalesce(
+                        p.get("predictedMaxKpUpperRange"),
+                        p.get("predictedMaxKpUpper"),
+                    )
+                )
+                kp_lower = _parse_float(
+                    _coalesce(
+                        p.get("predictedMaxKpLowerRange"),
+                        p.get("predictedMaxKpLower"),
+                    )
+                )
+                kp_pred = kp_upper if kp_upper is not None else kp_lower
+                team_name = (
+                    p.get("teamName")
+                    or p.get("predictedMethodName")
+                    or p.get("model")
+                    or "unknown"
+                )
+                # Skip obviously incomplete predictions
+                if predicted_arrival is None and kp_pred is None:
+                    continue
+                rows.append(
+                    {
+                        "event_time": event_time,
+                        "team_name": team_name,
+                        "scoreboard_id": scoreboard_id,
+                        "predicted_arrival": predicted_arrival,
+                        "observed_arrival": observed_arrival,
+                        "kp_predicted": kp_pred,
+                        "no_arrival_observed": (bool(ev.get("noArrivalObserved")) if ev.get("noArrivalObserved") is not None else None),
+                        "cme_note": ev.get("cmeNote") or ev.get("cme_note"),
+                        "prediction_note": p.get("predictionNote") or p.get("note"),
+                        "raw": json.dumps({"event": ev, "prediction": p}),
+                    }
+                )
+        else:
+            # Fallback: single-layer shape (rare)
+            predicted_arrival = _parse_dt(
+                ev.get("predictedArrivalTime") or ev.get("arrivalTime")
+            )
+            kp_pred = _parse_float(
+                _coalesce(
+                    ev.get("kpPrediction"),
+                    ev.get("kp_prediction"),
+                    ev.get("kp"),
+                )
+            )
+            team_name = ev.get("teamName") or "unknown"
+            if predicted_arrival is not None or kp_pred is not None:
+                rows.append(
+                    {
+                        "event_time": event_time,
+                        "team_name": team_name,
+                        "scoreboard_id": scoreboard_id,
+                        "predicted_arrival": predicted_arrival,
+                        "observed_arrival": observed_arrival,
+                        "kp_predicted": kp_pred,
+                        "no_arrival_observed": (bool(ev.get("noArrivalObserved")) if ev.get("noArrivalObserved") is not None else None),
+                        "cme_note": ev.get("cmeNote") or ev.get("cme_note"),
+                        "prediction_note": ev.get("predictionNote") or ev.get("note"),
+                        "raw": json.dumps(ev),
+                    }
+                )
+
     if rows:
-        await writer.upsert_many(
+        inserted = await writer.upsert_many(
             "ext",
             "cme_scoreboard",
             rows,
             ["event_time", "team_name"],
+        )
+        logger.info("Upserted %d rows into ext.cme_scoreboard", inserted)
+    else:
+        logger.warning(
+            "No CME scoreboard records parsed for %s → %s",
+            params["CMEtimeStart"],
+            params["CMEtimeEnd"],
         )
 
 
