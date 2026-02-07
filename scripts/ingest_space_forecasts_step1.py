@@ -319,6 +319,41 @@ def _extract_aurora_rows(data: Any) -> list[dict[str, Any]]:
     return rows
 
 
+# Helper to parse SWPC aurora hemi-power text table
+def _parse_aurora_hemi_table(text: str) -> list[dict[str, Any]]:
+    """
+    Parse SWPC hemi-power text table into structured rows.
+
+    Returns a list of dicts with:
+      {"obs": datetime, "fcst": datetime|None, "north": float|None, "south": float|None}
+    """
+    rows: list[dict[str, Any]] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or set(line) == {"-"}:
+            continue
+        # Expected tokens: OBS  FCST  NORTH  SOUTH
+        parts = re.split(r"\s+", line)
+        if len(parts) < 4:
+            continue
+        obs_s, fcst_s, north_s, south_s = parts[0], parts[1], parts[2], parts[3]
+        # Examples: 2026-02-07_00:00
+        def _ts(s: str) -> datetime | None:
+            try:
+                return datetime.strptime(s, "%Y-%m-%d_%H:%M").replace(tzinfo=UTC)
+            except Exception:
+                return _parse_dt(s)
+
+        obs_dt = _ts(obs_s)
+        fcst_dt = _ts(fcst_s)
+        north = _parse_float(north_s)
+        south = _parse_float(south_s)
+        if obs_dt is None:
+            continue
+        rows.append({"obs": obs_dt, "fcst": fcst_dt, "north": north, "south": south})
+    return rows
+
+
 _DRAP_PIVOT_COL = re.compile(r"(?P<region>[a-z]+)_(?P<freq>[0-9]+(?:\.[0-9]+)?)m?hz?")
 
 
@@ -809,38 +844,103 @@ async def ingest_aurora(
     client: httpx.AsyncClient,
     writer: SupabaseWriter,
 ) -> None:
-    logger.info("Fetching auroral power (OVATION JSON)")
-    aurora_data = await fetch_json(
-        client,
-        "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json",
-    )
-    rows = _extract_aurora_rows(aurora_data)
+    logger.info("Fetching auroral power (OVATION hemi-power text)")
+    ext_rows: list[dict[str, Any]] = []
+    outlook_rows: list[dict[str, Any]] = []
     now = datetime.now(tz=UTC)
-    if rows:
+
+    # 1) Prefer the concise hemi-power text table (north/south GW)
+    try:
+        text = await fetch_text(
+            client,
+            "https://services.swpc.noaa.gov/text/aurora-nowcast-hemi-power.txt",
+        )
+        hemi_records = _parse_aurora_hemi_table(text)
+        for rec in hemi_records:
+            obs = rec["obs"]
+            fcst = rec.get("fcst") or (obs + timedelta(hours=1))
+            for hemi in ("north", "south"):
+                power = rec.get(hemi)
+                if power is None:
+                    continue
+                ext_rows.append(
+                    {
+                        "ts_utc": obs,
+                        "hemisphere": hemi,
+                        "hemispheric_power_gw": power,
+                        "wing_kp": None,
+                        "raw": json.dumps(
+                            {
+                                "source": "aurora-nowcast-hemi-power.txt",
+                                "obs": obs.isoformat(),
+                                "fcst": fcst.isoformat() if isinstance(fcst, datetime) else None,
+                                "hemisphere": hemi,
+                                "power_gw": power,
+                            }
+                        ),
+                    }
+                )
+                outlook_rows.append(
+                    {
+                        "valid_from": obs,
+                        "valid_to": fcst if isinstance(fcst, datetime) else obs + timedelta(hours=1),
+                        "hemisphere": hemi,
+                        "headline": _aurora_headline(power, None),
+                        "power_gw": power,
+                        "wing_kp": None,
+                        "confidence": "medium" if (power is not None and power >= 40) else "low",
+                        "created_at": now,
+                    }
+                )
+    except httpx.HTTPError as exc:
+        logger.warning("Hemi-power text fetch failed (%s); will try JSON grid fallback", exc)
+
+    # 2) Fallback to the JSON grid if the table produced no rows
+    if not ext_rows:
+        logger.info("Falling back to OVATION JSON grid for auroral power")
+        try:
+            aurora_data = await fetch_json(
+                client,
+                "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json",
+            )
+            grid_rows = _extract_aurora_rows(aurora_data)
+            for row in grid_rows:
+                # _extract_aurora_rows already normalizes shape
+                ext_rows.append(
+                    {
+                        "ts_utc": row["ts_utc"],
+                        "hemisphere": row["hemisphere"],
+                        "hemispheric_power_gw": row.get("hemispheric_power_gw"),
+                        "wing_kp": row.get("wing_kp"),
+                        "raw": json.dumps(row),
+                    }
+                )
+                power = row.get("hemispheric_power_gw")
+                outlook_rows.append(
+                    {
+                        "valid_from": row["ts_utc"],
+                        "valid_to": row["ts_utc"] + timedelta(hours=1),
+                        "hemisphere": row["hemisphere"],
+                        "headline": _aurora_headline(power, row.get("wing_kp")),
+                        "power_gw": power,
+                        "wing_kp": row.get("wing_kp"),
+                        "confidence": "medium" if (power is not None and power >= 40) else "low",
+                        "created_at": now,
+                    }
+                )
+        except httpx.HTTPError as exc:
+            logger.warning("OVATION JSON fetch failed as well (%s); skipping aurora ingest", exc)
+
+    if ext_rows:
         await writer.upsert_many(
             "ext",
             "aurora_power",
-            rows,
+            ext_rows,
             ["ts_utc", "hemisphere"],
         )
+    else:
+        logger.warning("Aurora ingest produced no rows")
 
-    outlook_rows: list[dict[str, Any]] = []
-    for row in rows:
-        ts = row["ts_utc"]
-        hemisphere = row["hemisphere"]
-        power = row.get("hemispheric_power_gw")
-        outlook_rows.append(
-            {
-                "valid_from": ts,
-                "valid_to": ts + timedelta(hours=1),
-                "hemisphere": hemisphere,
-                "headline": _aurora_headline(power, None),
-                "power_gw": power,
-                "wing_kp": None,
-                "confidence": "medium" if power and power >= 40 else "low",
-                "created_at": now,
-            }
-        )
     if outlook_rows:
         await writer.upsert_many(
             "marts",

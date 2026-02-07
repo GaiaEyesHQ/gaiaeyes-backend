@@ -61,6 +61,8 @@ POSTS_TABLE  = os.getenv("SUPABASE_POSTS_TABLE", "daily_posts")
 SPACE_SCHEMA = os.getenv("SUPABASE_MARTS_SCHEMA", "marts")
 SW_TABLE     = os.getenv("SUPABASE_SW_TABLE", "space_weather_daily")
 SR_TABLE     = os.getenv("SUPABASE_SR_TABLE", "schumann_daily")
+# Kp obs mart table
+KPOBS_TABLE  = os.getenv("SUPABASE_KPOBS_TABLE", "kp_obs")
 DAY_COLUMN   = os.getenv("SUPABASE_DAY_COLUMN", "day")
 PLATFORM     = os.getenv("EARTHSCOPE_PLATFORM", "default")
 USER_ID      = os.getenv("EARTHSCOPE_USER_ID", None)
@@ -161,6 +163,28 @@ def _bz_desc(bz: float|None) -> str:
     if bz >= 8: return "strong northward"
     if bz >= 3: return "northward"
     return "near neutral"
+
+# --- Aurora headline from Kp helper ---
+def _derive_aurora_from_kp(kp: Optional[float]) -> tuple[str, str]:
+    """
+    Return (headline, severity) from a Kp-like value.
+    Severity is a coarse label: G0/G1/G2/G3+ used only for narrative hints.
+    """
+    if kp is None:
+        return ("Aurora mostly confined to polar regions", "G0")
+    try:
+        k = float(kp)
+    except Exception:
+        return ("Aurora mostly confined to polar regions", "G0")
+    if k >= 7:
+        return ("G3+ aurora possible", "G3+")
+    if k >= 6:
+        return ("G2 aurora possible", "G2")
+    if k >= 5:
+        return ("G1 aurora possible", "G1")
+    if k >= 4:
+        return ("High‑latitude aurora possible", "G0")
+    return ("Aurora mostly confined to polar regions", "G0")
 
 def _fmt_num(x, nd=1):
     try:
@@ -995,6 +1019,49 @@ def fetch_space_weather_from_marts(day: str) -> Dict[str, Any]:
         return {}
 
 
+# --- Fetch most-recent Kp value from marts.kp_obs ---
+def fetch_kp_now_from_marts(day: str) -> Optional[float]:
+    """
+    Get a 'now-ish' Kp value from marts.kp_obs.
+    Strategy:
+      1) Try the latest row within the last 12h.
+      2) Fallback to the latest row overall.
+    """
+    # Prefer last 12h
+    try:
+        since_iso = (datetime.utcnow() - timedelta(hours=12)).replace(microsecond=0, tzinfo=None).isoformat() + "Z"
+        res = (
+            SB.schema(SPACE_SCHEMA)
+              .table(KPOBS_TABLE)
+              .select("kp_time,kp")
+              .gte("kp_time", since_iso)
+              .order("kp_time", desc=True)
+              .limit(1)
+              .execute()
+        )
+        row = (res.data or [None])[0]
+        if row and row.get("kp") is not None:
+            return to_float(row["kp"])
+    except Exception as e:
+        print(f"[WARN] kp_obs recent fetch failed: {e}")
+    # Latest overall
+    try:
+        res2 = (
+            SB.schema(SPACE_SCHEMA)
+              .table(KPOBS_TABLE)
+              .select("kp_time,kp")
+              .order("kp_time", desc=True)
+              .limit(1)
+              .execute()
+        )
+        row2 = (res2.data or [None])[0]
+        if row2 and row2.get("kp") is not None:
+            return to_float(row2["kp"])
+    except Exception as e:
+        print(f"[WARN] kp_obs latest fetch failed: {e}")
+    return None
+
+
 def _avg_non_null(values: List[Optional[float]]) -> Optional[float]:
     vals = [v for v in values if v is not None]
     return round(sum(vals)/len(vals), 2) if vals else None
@@ -1418,6 +1485,14 @@ def main():
         "harmonics": sr.get("schumann_harmonics"),
     }
 
+    # Fill Kp 'now' from the marts if available
+    try:
+        kp_now_db = fetch_kp_now_from_marts(day)
+        if kp_now_db is not None:
+            ctx["kp_now"] = kp_now_db
+    except Exception as e:
+        print(f"[WARN] kp_now fetch failed: {e}")
+
     # Optional: merge space_weather signals (now KP/Bz/SW + aurora headline)
     try:
         sw_json_ctx = _load_space_weather(EARTHSCOPE_SPACE_JSON)
@@ -1455,6 +1530,15 @@ def main():
             _dbg("earth_card: merged into ctx")
     except Exception as e:
         _dbg(f"earth_card: merge failed -> {e}")
+
+    # If no aurora headline was provided by JSON/card, derive a coarse headline from Kp
+    if not ctx.get("aurora_headline"):
+        src_kp = ctx.get("kp_max_24h") if ctx.get("kp_max_24h") is not None else ctx.get("kp_now")
+        if src_kp is not None:
+            hed, sev = _derive_aurora_from_kp(src_kp)
+            ctx["aurora_headline"] = hed
+            ctx.setdefault("aurora_window", "Next 24h")
+            ctx["aurora_severity"] = sev
 
     # 2) Generate copy
     short_caption, short_tags = generate_short_caption(ctx)
@@ -1510,8 +1594,8 @@ def main():
         "harmonics": ctx.get("harmonics"),
         "space_json": {
             "kp_now": ctx.get("kp_now"),
-            "bz_now": ctx.get("bz_min") if ctx.get("kp_now") is not None else None,
-            "sw_now": ctx.get("solar_wind_kms") if ctx.get("kp_now") is not None else None,
+            "bz_now": ctx.get("bz_now"),
+            "sw_now": ctx.get("sw_now"),
             "aurora_headline": ctx.get("aurora_headline"),
             "aurora_window": ctx.get("aurora_window"),
         },
