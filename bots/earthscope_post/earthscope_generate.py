@@ -20,18 +20,18 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 STYLE_GUIDE = (
-    "Persona: holistic researcher who studies space/earth frequencies and their effects on physiology. "
+    "Persona: Humorous researcher who studies space/earth frequencies and their effects on physiology. "
     "Voice: Viral, plain‑language, humane, lightly empathic; first‑person is OK in short asides. "
-    "Audience: space weather and aurora enthusiasts and people who consider themselves sensitive (HRV, sleep, nerve/pain flares during storms). "
-    "Rules: facts first; never contradict provided metrics; no emojis; no rhetorical questions. "
-    "Prefer terms like 'geomagnetic activity', 'autonomic/HRV', 'sleep continuity', 'GNSS accuracy'. "
+    "Audience: Chronic pain sufferers and people who consider themselves sensitive (HRV, sleep, nerve/pain flares during storms). "
+    "Rules: Never contradict provided metrics; no emojis; no rhetorical questions. "
+    "Prefer terms like 'active geomagnetics', 'autonomic/HRV', 'sleep quality', 'nerve sensitivity'. "
     "Never claim deterministic health effects; use 'some may', 'can', 'tends to', 'I often see'. "
     "Keep sections compact and scannable."
 )
 BAN_PHRASES = [
     "energy is calm", "calm vibes", "mindful living", "cosmic vibes",
     "mother earth recharge", "sound bath", "tap into", "manifest", "alchemy",
-    "grounding energy", "soothe your soul"
+    "grounding energy", "soothe your soul", "textured"
 ]
 
 import requests
@@ -84,24 +84,24 @@ def _dbg(msg: str) -> None:
         print(f"[earthscope.debug] {msg}")
 PHRASE_VARIANTS = {
     "feel_stable": [
-        "Steady backdrop—good window for structured work.",
-        "Quieter field—use the clarity for deep tasks.",
-        "Stable profile—set a simple plan and move steadily."
+        "Steady field—good window for getting things done.",
+        "Quieter field—use the mental clarity to your advantage today.",
+        "Stable profile—set a simple plan and move steadily towards goals."
     ],
     "feel_unsettled": [
-        "Pulses and dips—short blocks, gentle pacing.",
-        "Variable flow—add margins around focus.",
-        "Bit of texture—aim for rhythm over intensity."
+        "Ups and Downs—work in short blocks, pace yourself.",
+        "Easily Distracted—add extra time for tasks and be patient with yourself.",
+        "Disruptions—aim for rhythm over intensity."
     ],
     "sleep_guard": [
-        "Dim light earlier; protect sleep continuity.",
+        "Dim light earlier; protect your sleep routine.",
         "Wind down on schedule; keep evenings warm‑lit.",
-        "Guard bedtime routine; keep screens softer."
+        "Say no to the extra caffeine and sugar today; keep screens softer."
     ],
     "nerve_note": [
-        "If you run sensitive, brief tingles or nerve heaviness can show—plan micro‑breaks.",
-        "Sensitives can feel more wired; keep shoulders relaxed, jaw unclenched.",
-        "If pain flares on stormy days, keep heat/contrast and pacing nearby."
+        "If you run sensitive, brief tingles or nerve flares can show—plan micro‑breaks.",
+        "Sensitives can feel more wired; keep shoulders relaxed, jaw unclenched. Try grounding",
+        "If pain flares on active days, apply heat, take it easy and ground."
     ],
 }
 def _pick_variant(key: str, seed_extra: int = 0) -> str:
@@ -196,35 +196,35 @@ HOOKS = {
         "Steady skies, steady mind.",
         "Low Kp, longer runway for clarity.",
         "Baseline is smooth—use your late‑morning window.",
-        "Stable backdrop—clean shots at focus blocks.",
-        "Quiet day upstairs—keep it simple and sharp.",
-        "Magnetic weather is tame—work the plan.",
+        "Stable backdrop—great for prolonged focus.",
+        "Quiet day upstairs—take advantage and get things done.",
+        "Magnetic weather is tame—work your plan.",
     ],
     "unsettled": [
-        "Small waves, not a storm—pace beats push.",
-        "Pulse‑and‑dip kind of day.",
-        "A few bumps on the line; keep cadence.",
-        "Unsettled doesn’t mean unworkable—buffer your peaks.",
-        "Short surges, brief dips—ride the middle.",
-        "Minor fluctuation day—aim for steady cadence.",
-        "Some texture in the field—stay rhythmic.",
-        "Patchy flow—tighten your timing windows.",
+        "Ride the waves, not a stormy, but active.",
+        "Spikes‑and‑dips kind of day.",
+        "A few bumps in the road; keep a steady pass and push on.",
+        "Unsettled doesn’t mean unworkable—buffer your tasks with breaks.",
+        "Short surges, brief dips—ride the middle line.",
+        "Minor fluctuation day—aim for a steady pace.",
+        "Today has a little attitude—be mindful of your energy.",
+        "Patchy energy—reduce your workload if possible today.",
     ],
     "stormy": [
-        "Charged air today—keep your cadence tight.",
-        "Storm‑leaning field—short bursts, longer recoveries.",
-        "Expect a punchy arc today.",
-        "Strong coupling window—step lightly.",
-        "Spiky profile—protect the edges of your day.",
-        "Lively magnetics—move with firm guardrails.",
-        "High‑gain conditions—keep resets close.",
-        "Aurora‑style volatility—work in clips, not sprints.",
+        "Charged air today—channel the energy.",
+        "Storm‑leaning field—work in bursts, expect longer recoveries.",
+        "Today might pack a punch.",
+        "Strong coupling window—guard your spoons today.",
+        "Prickly atmosphere—don't let it make you one.",
+        "The vibes are jivin;—proceed like your walking on eggshells.",
+        "Amplified everything—rest and reset.",
+        "Volatile day—work steady, not in sprints.",
     ],
     "neutral": [
-        "Straightforward field—set your tempo.",
-        "No big swings on the board.",
-        "Good canvas—paint a clear day.",
-        "Ordinary profile—make ordinary work count.",
+        "Neutral energy. You set the pace",
+        "Bland vibes—nothing too exciting.",
+        "Little influence—enjoy a clear day.",
+        "Ordinary—enjoy a normal day.",
         "Middle‑of‑the‑road day—consistency wins.",
         "Plain sailing—don’t overcomplicate it.",
     ],
@@ -321,7 +321,7 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
     }
     sections = rewrite or {}
     sys = (
-        "You title Gaia Eyes daily cards. Write a **concise 2–4 word title** that fits the day’s tone and context. "
+        "You title Gaia Eyes daily cards. Write a **concise and sometimes comical 2–4 word title** that fits the day’s tone and context. "
         "Do not include numbers, dates, emojis, or hashtags. Avoid generic phrases. Keep it evocative but calm. "
         "Output ONLY the title text with no quotes."
     )
@@ -396,13 +396,13 @@ def _rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
     if bz is not None: parts.append(f"Bz { _fmt_num(bz,1) } nT ({bz_txt})")
     cap_lead = " • ".join(parts) if parts else "Space weather update"
     if tone == "stormy":
-        trailing = "Expect geomagnetic sensitivity windows; protect focus blocks."
+        trailing = "Expect sensitivity and flares; readjust plans as necessary."
     elif tone == "unsettled":
-        trailing = "Some variability—schedule breaks and buffer critical tasks."
+        trailing = "Some variability—schedule breaks in your day and pace yourself with critical tasks."
     elif tone == "calm":
-        trailing = "Stable backdrop—good day for deep work and recovery."
+        trailing = "Ideal day—great day for playing catch up and recovery."
     else:
-        trailing = "Moderate profile—steady cadence tends to work best."
+        trailing = "Moderate conditions—steady and consistent tends to work best."
     caption = f"{cap_lead}. {trailing}"
 
     # Snapshot bullets (only present values)
@@ -418,18 +418,18 @@ def _rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
     # How it may feel (human clinical tone)
     feel = []
     if tone in ("stormy","unsettled"):
-        feel.append(f"- Focus/energy: {_pick_variant('feel_unsettled') or 'Expect ebbs/spikes; keep sprints short.'}")
+        feel.append(f"- Focus/energy: {_pick_variant('feel_unsettled') or 'Expect ebbs/spikes; keep tasks short.'}")
         feel.append("- Autonomic/HRV: Southward Bz or higher Kp can nudge HRV down in some; paced breathing helps.")
         feel.append(f"- Sleep: {_pick_variant('sleep_guard')}")
         if EARTHSCOPE_FIRST_PERSON:
             feel.append(f"- Clinician note: {_pick_variant('nerve_note', seed_extra=1)}")
         else:
             feel.append(f"- Sensitivity note: {_pick_variant('nerve_note', seed_extra=1)}")
-        feel.append("- Comms/GNSS: Minor accuracy or HF variability is possible at higher latitudes.")
+        feel.append("- Comms/GNSS: Tech may be glitchy today. Satellite based services, especially. Sensitivities may increase.")
     else:
-        feel.append(f"- Focus/energy: {_pick_variant('feel_stable') or 'Stable; good window for structured work.'}")
-        feel.append("- Autonomic/HRV: Conditions generally support recovery and coherence practices.")
-        feel.append("- Sleep: Keep evening light warm and low; usual hygiene works.")
+        feel.append(f"- Focus/energy: {_pick_variant('feel_stable') or 'Stable; good window to get things done.'}")
+        feel.append("- Autonomic/HRV: Great for recovery and healing practices.")
+        feel.append("- Sleep: Keep evening light warm and low.")
         if EARTHSCOPE_FIRST_PERSON:
             feel.append("- Clinician note: I see steadier HRV and less reactivity for many on days like this.")
     affects = "How it may feel\n" + "\n".join(feel)
@@ -438,7 +438,7 @@ def _rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
     care_lines = []
     if tone in ("stormy","unsettled"):
         care_lines.append("- 5–10 min paced breathing (e.g., 4:6) or brief HRV biofeedback")
-        care_lines.append("- Hydration + electrolytes; short daylight exposure; gentle mobility")
+        care_lines.append("- Hydration + electrolytes; short daylight exposure; move easy")
         care_lines.append("- Protect sleep: blue‑light filters and a consistent wind‑down")
         care_lines.append("- If sensitive, quick grounding/outdoor walk; warm pack for nerve flare windows")
     else:
@@ -586,7 +586,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "You are Gaia Eyes’ daily author. Interpret today’s space/earth conditions for humans. "
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
-        "Explain significance and likely felt effects in viral but plain language. "
+        "Explain significance and likely felt effects in viral, sometimes humorous, but plain language. "
         "Offer practical self-care suggestions. No emojis. No questions. "
         "Return ONLY a compact JSON object with EXACTLY these string keys: caption, snapshot, affects, playbook, hashtags. "
         "No markdown, no extra keys, no code fences."
@@ -601,8 +601,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "context": _summarize_context(facts),
         "draft": draft,
         "style": {
-            "persona": "researcher-coach",
-            "audience": "people tracking HRV, sleep, nervous-system sensitivity",
+            "persona": "researcher-coach-comedian",
+            "audience": "people tracking pain, HRV, sleep, nervous-system sensitivity",
             "opener_palette": HOOKS.get(facts.get("tone") or "neutral", HOOKS["neutral"]),
             "ban_phrases": BAN_PHRASES,
             "bullet_style": "short",
@@ -651,7 +651,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             return None
         # Make response robust: if hashtags missing, inject a sane default before validation
         if isinstance(obj, dict) and ("hashtags" not in obj or not isinstance(obj.get("hashtags"), str) or not obj.get("hashtags").strip()):
-            obj["hashtags"] = "#GaiaEyes #SpaceWeather #Schumann #HRV #Sleep #Wellness"
+            obj["hashtags"] = "#GaiaEyes #SpaceWeather #ChronicPain #Schumann #HRV #Sleep #Wellness"
         valid = _validate_rewrite(obj)
         _dbg("rewrite: JSON valid") if valid else _dbg("rewrite: JSON invalid by validator")
         if not valid:
@@ -725,10 +725,10 @@ def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: 
     qual_snap = _qualitative_snapshot(ctx)
     tone = _tone_from_ctx(ctx)
     cap_map = {
-        "stormy":   "Charged geomagnetics—short bursts, longer recoveries.",
-        "unsettled": "A few bumps in the field—pace beats push today.",
-        "calm":     "Steady magnetic backdrop—set a simple plan and move steadily.",
-        "neutral":  "Straightforward field—consistency wins today.",
+        "stormy":   "Charged atmosphere—work in bursts, expect longer recoveries.",
+        "unsettled": "A few bumps in the road—keep a slow and steady pace today.",
+        "calm":     "Steady magnetic backdrop—set your goals and enjoy the flow.",
+        "neutral":  "Standard energy field—consistency wins today.",
     }
     cap_out = cap_map.get(tone, cap_map["neutral"])
 
@@ -786,11 +786,11 @@ def _qualitative_snapshot(ctx: Dict[str, Any]) -> str:
     if tone == "stormy":
         lines.append("Magnetics lean punchy today—expect short surges and brief dips.")
     elif tone == "unsettled":
-        lines.append("Some texture in the field—small waves rather than a full storm.")
+        lines.append("Some texture in the field—small waves but not a full storm.")
     elif tone == "calm":
         lines.append("Steady magnetic backdrop—a good canvas for focused work and recovery.")
     else:
-        lines.append("Straightforward profile—ordinary variance without big swings.")
+        lines.append("Straightforward profile—ordinary day.")
 
     # Solar drivers without citing numbers
     driver_bits: List[str] = []
@@ -824,7 +824,7 @@ def _qualitative_snapshot(ctx: Dict[str, Any]) -> str:
         lines.append("Regional storm/flood alerts are active—check local guidance if you’re in the affected area.")
 
     # Close with guidance intent
-    lines.append("Plan a steady rhythm; if you run sensitive, keep a quick breath reset and short movement breaks.")
+    lines.append("Keep a steady rhythm; if you run sensitive, utilize quick breath resets and short movement breaks.")
 
     return "Space Weather Snapshot\n" + " ".join(lines)
 # ============================================================
@@ -1208,12 +1208,12 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
             max_tokens=320,
             messages=[
                 {"role":"system","content":(
-                    "You are Gaia Eyes' space‑weather writer. Write an accurate, human, declarative caption. "
+                    "You are Gaia Eyes' space‑weather writer. Write an accurate, human, slightly humorous caption. "
                     "Do not start with questions or phrases like 'Feeling', 'Are you', 'Ever feel', 'Ready to', 'Let’s'. "
                     "Never use emojis. Vary openings day‑to‑day."
                 )},
                 {"role":"user","content":(
-                    "Using the data below, write one short, viral‑friendly caption for Gaia Eyes. "
+                    "Using the data below, write one short, viral‑friendly humorous caption for Gaia Eyes. "
                     "Start with a declarative, data‑aware hook (4–10 words). No questions. No emojis. "
                     "Relate concisely (one sentence max) to mood/energy/heart/nervous system—only if consistent with the data (calm vs stormy). "
                     "On the final line include 4–6 relevant hashtags. ≤600 chars. Render flare/CME counts as integers.\n\n"
@@ -1248,7 +1248,7 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
             caption = f"{hook} {rest}".strip()
         # ensure hashtags exist
         if not hashtags:
-            hashtags = "#GaiaEyes #SpaceWeather #KpIndex #SolarWind #Aurora"
+            hashtags = "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #Health #localtriggers"
         caption = _scrub_banned_phrases(caption)
         return caption, hashtags
     except Exception:
@@ -1284,7 +1284,7 @@ Using the data below, create a Gaia Eyes–branded daily forecast with THREE sec
 1) Space Weather Snapshot — bullet the numbers (Kp now/max, solar wind, flares/CMEs, Schumann). Omit any bullet whose value is missing/None.
 2) How This Affects You — 4 concise bullets for mood, energy, heart, nervous system.
 3) Self-Care Playbook — 3–5 practical tips tailored to today.
-End with 4–6 hashtags on the last line. Tone: friendly, engaging, a bit viral. Avoid dates. Render flare/ CME counts as integers.
+End with 4–6 hashtags on the last line. Tone: friendly, funny, engaging, a bit viral. Avoid dates. Render flare/ CME counts as integers.
 
 Data:
 - Kp now: {kp_now}
@@ -1297,7 +1297,7 @@ Data:
     try:
         resp = client.chat.completions.create(
             model=model, temperature=0.75, max_tokens=900,
-            messages=[{"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, warm, and helpful. Balance science and mysticism."},
+            messages=[{"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, warm, and helpful. Balance science, humor and mysticism."},
                      {"role":"user","content": prompt}],
         )
         text = resp.choices[0].message.content.strip()
@@ -1320,10 +1320,10 @@ Data:
             elif cur == "play": playbook += b + "\n\n"
             else: snapshot += b + "\n\n"
         if not hashtags:
-            hashtags = "#GaiaEyes #SpaceWeather #Wellness #Mindfulness #HeartBrain"
+            hashtags = "#GaiaEyes #SpaceWeather #Wellness #Mindfulness #Frequency"
         # sanitize hashtags: ensure the final line is a real hashtag line
         if not hashtags or not hashtags.strip().startswith("#"):
-            hashtags = "#GaiaEyes #SpaceWeather #Wellness #HeartBrain #Mindfulness"
+            hashtags = "#GaiaEyes #SpaceWeather #Wellness #Frequency #ChronicPain"
         # Strip any duplicate self-added headers
         snapshot = _strip_intro_header(snapshot)
         affects  = _strip_intro_header(affects)

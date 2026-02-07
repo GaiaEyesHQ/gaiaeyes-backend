@@ -1,6 +1,9 @@
-name: Quakes Monthly Backfill (One-Time)
+name: Quakes Monthly Backfill
 
 on:
+  schedule:
+    # Run at 06:00 UTC on the 1st of each month (~midnight US Central in Standard Time)
+    - cron: "0 6 1 * *"
   workflow_dispatch: {}
 
 permissions:
@@ -20,9 +23,9 @@ jobs:
       OUTPUT_JSON_PATH: ${{ github.workspace }}/quakes_history.json
       HISTORY_JSON_PATH: ${{ github.workspace }}/quakes_history.json
 
-      # Control how much history to fetch
-      HISTORY_DAYS: "5110"          # ~10 years
-      HISTORY_MONTHS: "168"         # ~10 years of monthly data
+      # Only backfill the most recent month (keep a small day buffer to cross month boundaries)
+      HISTORY_DAYS: "40"            # ~1 month + buffer
+      HISTORY_MONTHS: "1"
 
     steps:
       - name: Checkout backend repo
