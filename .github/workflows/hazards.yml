@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      HAZARDS_SKIP_WP: "1"
 
     steps:
       - name: Checkout backend repo
@@ -27,6 +29,7 @@ jobs:
           pip install -r bots/hazards/requirements.txt
 
       - name: Validate WordPress secrets
+        if: env.HAZARDS_SKIP_WP != '1'
         env:
           WP_BASE_URL: ${{ secrets.WP_BASE_URL }}
           WP_USERNAME: ${{ secrets.WP_USERNAME }}

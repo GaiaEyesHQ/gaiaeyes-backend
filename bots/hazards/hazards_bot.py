@@ -764,13 +764,17 @@ def run_once() -> None:
     db_init()
     wp: Optional[WPClient] = None
     categories: Dict[str, int] = {}
-    try:
-        wp = WPClient()
-        categories = ensure_taxonomy(wp)
-    except Exception as exc:  # pragma: no cover - network/auth handling
-        print("[warn] WP taxonomy setup failed; skipping WP posts:", exc, file=sys.stderr)
-        wp = None
-        categories = {}
+    skip_wp = os.environ.get("HAZARDS_SKIP_WP", "1").lower() in ("1", "true", "yes")
+    if skip_wp:
+        print("[info] HAZARDS_SKIP_WP enabled; skipping WP posts.", file=sys.stderr)
+    else:
+        try:
+            wp = WPClient()
+            categories = ensure_taxonomy(wp)
+        except Exception as exc:  # pragma: no cover - network/auth handling
+            print("[warn] WP taxonomy setup failed; skipping WP posts:", exc, file=sys.stderr)
+            wp = None
+            categories = {}
 
     items: List[dict] = []
     try:
