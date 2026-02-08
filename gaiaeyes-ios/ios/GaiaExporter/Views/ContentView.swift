@@ -185,6 +185,33 @@ private struct HazardsBriefResponse: Codable {
     let error: String?
 }
 
+private struct GdacsFullResponse: Codable {
+    let ok: Bool?
+    let generatedAt: String?
+    let items: [GdacsFullItem]?
+    let error: String?
+}
+
+private struct GdacsFullItem: Codable, Identifiable, Hashable {
+    let id: String
+    let title: String?
+    let url: String?
+    let source: String?
+    let kind: String?
+    let location: String?
+    let severity: String?
+    let startedAt: String?
+    let endedAt: String?
+    let ingestedAt: String?
+    let details: String?
+    let lat: Double?
+    let lon: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, url, source, kind, location, severity, startedAt, endedAt, ingestedAt, details, lat, lon
+    }
+}
+
 private struct HazardItem: Codable, Identifiable, Hashable {
     let id: String
     let title: String?
@@ -322,6 +349,14 @@ private struct OutlookKp: Codable, Hashable {
     let gScaleNow: String?
     let last24hMax: Double?
     let gScale24hMax: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case now
+        case nowTs = "now_ts"
+        case gScaleNow = "g_scale_now"
+        case last24hMax = "last_24h_max"
+        case gScale24hMax = "g_scale_24h_max"
+    }
 }
 
 private struct OutlookImpacts: Codable, Hashable {
@@ -335,12 +370,24 @@ private struct OutlookFlares: Codable, Hashable {
     let max24h: String?
     let total24h: Int?
     let bands24h: [String: Int]?
+
+    private enum CodingKeys: String, CodingKey {
+        case max24h = "max_24h"
+        case total24h = "total_24h"
+        case bands24h = "bands_24h"
+    }
 }
 
 private struct OutlookCmesStats: Codable, Hashable {
     let total72h: Int?
     let earthDirectedCount: Int?
     let maxSpeedKms: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case total72h = "total_72h"
+        case earthDirectedCount = "earth_directed_count"
+        case maxSpeedKms = "max_speed_kms"
+    }
 }
 
 private struct OutlookCmes: Codable, Hashable {
@@ -355,6 +402,33 @@ private struct OutlookSep: Codable, Hashable {
     let flux: Double?
     let sScale: String?
     let sScaleIndex: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case ts
+        case satellite
+        case energyBand = "energy_band"
+        case flux
+        case sScale = "s_scale"
+        case sScaleIndex = "s_scale_index"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ts = try container.decodeIfPresent(String.self, forKey: .ts)
+        satellite = try container.decodeIfPresent(String.self, forKey: .satellite)
+        energyBand = try container.decodeIfPresent(String.self, forKey: .energyBand)
+        sScale = try container.decodeIfPresent(String.self, forKey: .sScale)
+        flux = Self.decodeDouble(container, forKey: .flux)
+        sScaleIndex = Self.decodeDouble(container, forKey: .sScaleIndex)
+    }
+
+    private static func decodeDouble(_ container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double? {
+        if let val = try? container.decodeIfPresent(Double.self, forKey: key) { return val }
+        if let str = try? container.decodeIfPresent(String.self, forKey: key) {
+            return Double(str.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return nil
+    }
 }
 
 private struct OutlookAurora: Codable, Hashable {
@@ -365,11 +439,42 @@ private struct OutlookAurora: Codable, Hashable {
     let powerGw: Double?
     let wingKp: Double?
     let confidence: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case validFrom = "valid_from"
+        case validTo = "valid_to"
+        case hemisphere
+        case headline
+        case powerGw = "power_gw"
+        case wingKp = "wing_kp"
+        case confidence
+    }
+}
+
+private struct SwpcBulletin: Codable, Hashable {
+    let issued: String?
+    let text: String?
+}
+
+private struct SwpcTextAlert: Codable, Hashable, Identifiable {
+    let id = UUID()
+    let ts: String?
+    let src: String?
+    let message: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case ts, src, message
+    }
 }
 
 private struct OutlookData: Codable, Hashable {
     let sep: OutlookSep?
     let auroraOutlook: [OutlookAurora]?
+
+    private enum CodingKeys: String, CodingKey {
+        case sep
+        case auroraOutlook = "aurora_outlook"
+    }
 }
 
 private struct SpaceForecastOutlook: Codable {
@@ -377,6 +482,9 @@ private struct SpaceForecastOutlook: Codable {
     let sections: [SpaceOutlookSection]
     let notes: [String]?
     let kp: OutlookKp?
+    let bzNow: Double?
+    let swSpeedNowKms: Double?
+    let swDensityNowCm3: Double?
     let headline: String?
     let confidence: String?
     let summary: String?
@@ -384,6 +492,8 @@ private struct SpaceForecastOutlook: Codable {
     let impacts: OutlookImpacts?
     let flares: OutlookFlares?
     let cmes: OutlookCmes?
+    let bulletins: [String: SwpcBulletin]?
+    let swpcTextAlerts: [SwpcTextAlert]?
     let data: OutlookData?
 
     private struct DynamicKey: CodingKey {
@@ -399,6 +509,9 @@ private struct SpaceForecastOutlook: Codable {
         var issued: String? = nil
         var notes: [String]? = nil
         var kp: OutlookKp? = nil
+        var bzNow: Double? = nil
+        var swSpeedNowKms: Double? = nil
+        var swDensityNowCm3: Double? = nil
         var headline: String? = nil
         var confidence: String? = nil
         var summary: String? = nil
@@ -406,6 +519,8 @@ private struct SpaceForecastOutlook: Codable {
         var impacts: OutlookImpacts? = nil
         var flares: OutlookFlares? = nil
         var cmes: OutlookCmes? = nil
+        var bulletins: [String: SwpcBulletin]? = nil
+        var swpcTextAlerts: [SwpcTextAlert]? = nil
         var data: OutlookData? = nil
 
         for key in container.allKeys {
@@ -416,6 +531,12 @@ private struct SpaceForecastOutlook: Codable {
                 notes = try container.decodeIfPresent([String].self, forKey: key)
             case "kp":
                 kp = try? container.decode(OutlookKp.self, forKey: key)
+            case "bz_now":
+                bzNow = try? container.decode(Double.self, forKey: key)
+            case "sw_speed_now_kms":
+                swSpeedNowKms = try? container.decode(Double.self, forKey: key)
+            case "sw_density_now_cm3":
+                swDensityNowCm3 = try? container.decode(Double.self, forKey: key)
             case "headline":
                 headline = try? container.decode(String.self, forKey: key)
             case "confidence":
@@ -430,6 +551,10 @@ private struct SpaceForecastOutlook: Codable {
                 flares = try? container.decode(OutlookFlares.self, forKey: key)
             case "cmes":
                 cmes = try? container.decode(OutlookCmes.self, forKey: key)
+            case "bulletins":
+                bulletins = try? container.decode([String: SwpcBulletin].self, forKey: key)
+            case "swpc_text_alerts":
+                swpcTextAlerts = try? container.decode([SwpcTextAlert].self, forKey: key)
             case "data":
                 data = try? container.decode(OutlookData.self, forKey: key)
             default:
@@ -444,6 +569,9 @@ private struct SpaceForecastOutlook: Codable {
         self.sections = tmpSections.sorted { $0.title < $1.title }
         self.notes = notes
         self.kp = kp
+        self.bzNow = bzNow
+        self.swSpeedNowKms = swSpeedNowKms
+        self.swDensityNowCm3 = swDensityNowCm3
         self.headline = headline
         self.confidence = confidence
         self.summary = summary
@@ -451,6 +579,8 @@ private struct SpaceForecastOutlook: Codable {
         self.impacts = impacts
         self.flares = flares
         self.cmes = cmes
+        self.bulletins = bulletins
+        self.swpcTextAlerts = swpcTextAlerts
         self.data = data
     }
 
@@ -464,6 +594,15 @@ private struct SpaceForecastOutlook: Codable {
         }
         if let kp, let key = DynamicKey(stringValue: "kp") {
             try container.encode(kp, forKey: key)
+        }
+        if let bzNow, let key = DynamicKey(stringValue: "bz_now") {
+            try container.encode(bzNow, forKey: key)
+        }
+        if let swSpeedNowKms, let key = DynamicKey(stringValue: "sw_speed_now_kms") {
+            try container.encode(swSpeedNowKms, forKey: key)
+        }
+        if let swDensityNowCm3, let key = DynamicKey(stringValue: "sw_density_now_cm3") {
+            try container.encode(swDensityNowCm3, forKey: key)
         }
         if let headline, let key = DynamicKey(stringValue: "headline") {
             try container.encode(headline, forKey: key)
@@ -486,6 +625,12 @@ private struct SpaceForecastOutlook: Codable {
         if let cmes, let key = DynamicKey(stringValue: "cmes") {
             try container.encode(cmes, forKey: key)
         }
+        if let bulletins, let key = DynamicKey(stringValue: "bulletins") {
+            try container.encode(bulletins, forKey: key)
+        }
+        if let swpcTextAlerts, let key = DynamicKey(stringValue: "swpc_text_alerts") {
+            try container.encode(swpcTextAlerts, forKey: key)
+        }
         if let data, let key = DynamicKey(stringValue: "data") {
             try container.encode(data, forKey: key)
         }
@@ -497,11 +642,86 @@ private struct SpaceForecastOutlook: Codable {
 }
 
 private enum SpaceDetailSection: Hashable {
-    case scientific
-    case aurora
     case visuals
-    case earthquakes
     case schumann
+}
+
+private struct MediaViewerPayload: Identifiable {
+    let id: String
+    let url: URL
+    let title: String?
+    let credit: String?
+    let isVideo: Bool
+}
+
+private struct MediaViewerSheet: View {
+    let payload: MediaViewerPayload
+    @Environment(\.dismiss) private var dismiss
+    @State private var player: AVPlayer? = nil
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VStack(spacing: 12) {
+                VStack(spacing: 2) {
+                    if let title = payload.title, !title.isEmpty {
+                        Text(title).font(.headline).foregroundColor(.white)
+                    }
+                    if let credit = payload.credit, !credit.isEmpty {
+                        Text(credit).font(.caption).foregroundColor(.white.opacity(0.7))
+                    }
+                }
+                .padding(.top, 16)
+                .padding(.horizontal, 16)
+
+                if payload.isVideo {
+                    VideoPlayer(player: player)
+                        .onAppear {
+                            if player == nil { player = AVPlayer(url: payload.url) }
+                            player?.play()
+                        }
+                        .onDisappear {
+                            player?.pause()
+                            player = nil
+                        }
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: 520)
+                } else {
+                    AsyncImage(url: payload.url) { phase in
+                        switch phase {
+                        case .empty:
+                            ProgressView().tint(.white)
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: .infinity, maxHeight: 520)
+                        case .failure:
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                }
+                Spacer()
+            }
+        }
+        .onTapGesture(count: 2) { dismiss() }
+        .safeAreaInset(edge: .top) {
+            HStack {
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title)
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(Color.black.opacity(0.35), in: Circle())
+                }
+                .padding(.trailing, 12)
+            }
+        }
+    }
 }
 
 struct ContentView: View {
@@ -617,6 +837,18 @@ struct ContentView: View {
         df.dateFormat = "yyyy-MM-dd"
         df.timeZone = TimeZone(identifier: "America/Chicago")
         return df.string(from: Date())
+    }
+
+    private func isCancellationError(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let uerr = error as? URLError, uerr.code == .cancelled { return true }
+        return false
+    }
+
+    private static func scrubError(_ error: String?) -> String? {
+        guard let raw = error?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        if raw.lowercased() == "cancelled" { return nil }
+        return raw
     }
     
     private static let symptomDayFormatter: DateFormatter = {
@@ -956,12 +1188,9 @@ struct ContentView: View {
     private func fetchSpaceOutlook() async {
         let api = state.apiWithAuth()
         do {
-            let env: Envelope<SpaceForecastOutlook> = try await api.getJSON("v1/space/forecast/outlook", as: Envelope<SpaceForecastOutlook>.self, perRequestTimeout: 30)
-            if let payload = env.payload {
-                await MainActor.run { applySpaceOutlook(payload) }
-            } else {
-                appLog("[UI] space outlook payload missing; keeping last snapshot")
-            }
+            let payload: SpaceForecastOutlook = try await api.getJSON("v1/space/forecast/outlook", as: SpaceForecastOutlook.self, perRequestTimeout: 30)
+            await MainActor.run { applySpaceOutlook(payload) }
+            return
         } catch is CancellationError {
             return
         } catch let uerr as URLError where uerr.code == .cancelled {
@@ -973,8 +1202,12 @@ struct ContentView: View {
                 return
             }
             do {
-                let payload: SpaceForecastOutlook = try await api.getJSON("v1/space/forecast/outlook", as: SpaceForecastOutlook.self, perRequestTimeout: 30)
-                await MainActor.run { applySpaceOutlook(payload) }
+                let env: Envelope<SpaceForecastOutlook> = try await api.getJSON("v1/space/forecast/outlook", as: Envelope<SpaceForecastOutlook>.self, perRequestTimeout: 30)
+                if let payload = env.payload {
+                    await MainActor.run { applySpaceOutlook(payload) }
+                } else {
+                    appLog("[UI] space outlook payload missing; keeping last snapshot")
+                }
             } catch {
                 appLog("[UI] space outlook fallback decode failed: \(error.localizedDescription)")
             }
@@ -1029,6 +1262,12 @@ struct ContentView: View {
                 localHealthLoading = false
             }
         } catch {
+            if isCancellationError(error) {
+                await MainActor.run {
+                    localHealthLoading = false
+                }
+                return
+            }
             await MainActor.run {
                 localHealth = nil
                 localHealthError = error.localizedDescription
@@ -1056,6 +1295,12 @@ struct ContentView: View {
                 magnetosphereLoading = false
             }
         } catch {
+            if isCancellationError(error) {
+                await MainActor.run {
+                    magnetosphereLoading = false
+                }
+                return
+            }
             await MainActor.run {
                 magnetosphere = nil
                 magnetosphereError = error.localizedDescription
@@ -1076,6 +1321,12 @@ struct ContentView: View {
             await MainActor.run { quakeLatest = latest.item }
             if latest.ok != true, let err = latest.error { hadError = err }
         } catch {
+            if isCancellationError(error) {
+                await MainActor.run {
+                    quakeLoading = false
+                }
+                return
+            }
             hadError = error.localizedDescription
         }
         do {
@@ -1083,6 +1334,12 @@ struct ContentView: View {
             await MainActor.run { quakeEvents = events.items ?? [] }
             if events.ok != true, let err = events.error { hadError = err }
         } catch {
+            if isCancellationError(error) {
+                await MainActor.run {
+                    quakeLoading = false
+                }
+                return
+            }
             if hadError == nil { hadError = error.localizedDescription }
         }
         await MainActor.run {
@@ -1099,10 +1356,16 @@ struct ContentView: View {
         let api = state.apiWithAuth()
         var hadError: String? = nil
         do {
-            let payload: HazardsBriefResponse = try await api.getJSON("v1/hazards/brief", as: HazardsBriefResponse.self, perRequestTimeout: 30)
+            let payload: HazardsBriefResponse = try await api.getJSON("v1/hazards/gdacs/full?since_hours=48&limit=100", as: HazardsBriefResponse.self, perRequestTimeout: 30)
             await MainActor.run { hazardsBrief = payload }
             if payload.ok != true, let err = payload.error { hadError = err }
         } catch {
+            if isCancellationError(error) {
+                await MainActor.run {
+                    hazardsLoading = false
+                }
+                return
+            }
             hadError = error.localizedDescription
         }
         await MainActor.run {
@@ -1169,7 +1432,7 @@ struct ContentView: View {
 
     private func prepareInteractiveViewer(for item: SpaceVisualItem) {
         interactiveBaseURL = visualsBaseURL
-        interactiveOverlaySeries = overlaySeries(from: item)
+        interactiveOverlaySeries = []
         interactiveVisualItem = item
     }
 
@@ -1968,11 +2231,12 @@ struct ContentView: View {
         let visualsSnapshot = spaceVisuals ?? lastKnownSpaceVisuals
         let overlayCount = visualOverlayCount(visualsSnapshot)
         let overlayUpdated = latestVisualTimestamp(visualsSnapshot)
-        let outlookPower = (spaceOutlook ?? lastKnownSpaceOutlook)?
+        let outlookAurora = (spaceOutlook ?? lastKnownSpaceOutlook)?
             .data?
             .auroraOutlook?
-            .first(where: { ($0.hemisphere ?? "").lowercased() == "north" })?.powerGw
-            ?? (spaceOutlook ?? lastKnownSpaceOutlook)?.data?.auroraOutlook?.first?.powerGw
+            .first(where: { ($0.hemisphere ?? "").lowercased() == "north" })
+            ?? (spaceOutlook ?? lastKnownSpaceOutlook)?.data?.auroraOutlook?.first
+        let outlookPower = outlookAurora?.powerGw
         let auroraPowerValue: Double? = {
             if let v = current.auroraPowerGw?.value { return v }
             if let v = current.auroraPowerNhGw?.value { return v }
@@ -1983,8 +2247,7 @@ struct ContentView: View {
             return latestAuroraPower(from: visualsSnapshot)
         }()
         let auroraProbability = ContentView.auroraProbabilityText(from: current)
-        let earthquakeCount = quakeLatest?.allQuakes
-        let earthquakeMag = quakeEvents.compactMap { $0.mag }.max()
+        let auroraWingKp = outlookAurora?.wingKp
         let seriesForCharts = series ?? lastKnownSeries ?? .empty
         let seriesDetail = series ?? lastKnownSeries
         let resolvedOutlook = spaceOutlook ?? lastKnownSpaceOutlook
@@ -2018,9 +2281,8 @@ struct ContentView: View {
                 overlayCount: overlayCount,
                 overlayUpdated: overlayUpdated,
                 auroraPowerValue: auroraPowerValue,
+                auroraWingKp: auroraWingKp,
                 auroraProbabilityText: auroraProbability,
-                earthquakeCount: earthquakeCount,
-                earthquakeMag: earthquakeMag,
                 updatedText: updatedText,
                 usingYesterdayFallback: usingYesterdayFallback,
                 hazardsBrief: hazardsBrief,
@@ -2173,9 +2435,8 @@ struct ContentView: View {
         let overlayCount: Int
         let overlayUpdated: String?
         let auroraPowerValue: Double?
+        let auroraWingKp: Double?
         let auroraProbabilityText: String?
-        let earthquakeCount: Int?
-        let earthquakeMag: Double?
         let updatedText: String?
         let usingYesterdayFallback: Bool
         let hazardsBrief: HazardsBriefResponse?
@@ -2202,16 +2463,9 @@ struct ContentView: View {
                     visualsSnapshot: visualsSnapshot,
                     overlayCount: overlayCount,
                     overlayUpdated: overlayUpdated,
-                    auroraPowerValue: auroraPowerValue,
-                    auroraProbabilityText: auroraProbabilityText,
-                    earthquakeCount: earthquakeCount,
-                    earthquakeMag: earthquakeMag,
                     updatedText: updatedText,
                     outlook: outlook,
                     seriesDetail: seriesDetail,
-                    quakeLatest: quakeLatest,
-                    quakeEvents: quakeEvents,
-                    quakeError: quakeError,
                     showSpaceWeatherDetail: $showSpaceWeatherDetail,
                     spaceDetailFocus: $spaceDetailFocus
                 )
@@ -2219,7 +2473,18 @@ struct ContentView: View {
                 HazardsBriefCard(payload: hazardsBrief, isLoading: hazardsLoading, error: hazardsError)
                     .padding(.horizontal)
 
-                AuroraThumbsSectionView(auroraPowerValue: auroraPowerValue)
+                EarthquakesSummaryCard(
+                    latest: quakeLatest,
+                    events: quakeEvents,
+                    error: quakeError
+                )
+                .padding(.horizontal)
+
+                AuroraThumbsSectionView(
+                    auroraPowerValue: auroraPowerValue,
+                    auroraWingKp: auroraWingKp,
+                    auroraProbabilityText: auroraProbabilityText
+                )
 
                 VisualsPreviewSectionView(
                     showVisualsPreview: showVisualsPreview,
@@ -2245,42 +2510,106 @@ struct ContentView: View {
         }
     }
 
+    private struct SpaceWeatherCardMetrics {
+        let kpNow: Double?
+        let kpMax: Double?
+        let bzNow: Double?
+        let swSpeedNow: Double?
+        let swSpeedMax: Double?
+        let sScale: String?
+        let protonFlux: Double?
+
+        private static let isoFmt: ISO8601DateFormatter = {
+            let f = ISO8601DateFormatter()
+            f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return f
+        }()
+
+        private static let isoFmtSimple: ISO8601DateFormatter = {
+            let f = ISO8601DateFormatter()
+            f.formatOptions = [.withInternetDateTime]
+            return f
+        }()
+
+        private static func parseISO(_ s: String?) -> Date? {
+            guard let s else { return nil }
+            return isoFmt.date(from: s) ?? isoFmtSimple.date(from: s)
+        }
+
+        private static func sScale(for flux: Double?) -> String? {
+            guard let f = flux else { return nil }
+            if f >= 100000 { return "S5" }
+            if f >= 10000 { return "S4" }
+            if f >= 1000 { return "S3" }
+            if f >= 100 { return "S2" }
+            if f >= 10 { return "S1" }
+            return "S0"
+        }
+
+        init(current: FeaturesToday, outlook: SpaceForecastOutlook?, series: SpaceSeries?) {
+            let points = series?.spaceWeather ?? []
+            let dated = points.compactMap { point -> (Date, SpacePoint)? in
+                guard let d = Self.parseISO(point.ts) else { return nil }
+                return (d, point)
+            }.sorted { $0.0 < $1.0 }
+
+            let latestPoint = dated.last?.1
+            let cutoff = Date().addingTimeInterval(-24 * 3600)
+            let last24 = dated.filter { $0.0 >= cutoff }.map { $0.1 }
+
+            let sepFlux = outlook?.data?.sep?.flux
+            let sepScaleIndex = outlook?.data?.sep?.sScaleIndex
+
+            kpNow = outlook?.kp?.now
+                ?? latestPoint?.kp
+                ?? current.kpCurrent?.value
+            kpMax = outlook?.kp?.last24hMax
+                ?? last24.compactMap { $0.kp }.max()
+                ?? current.kpMax?.value
+            bzNow = outlook?.bzNow
+                ?? latestPoint?.bz
+            swSpeedNow = outlook?.swSpeedNowKms
+                ?? latestPoint?.sw
+                ?? current.swSpeedAvg?.value
+            swSpeedMax = last24.compactMap { $0.sw }.max()
+                ?? swSpeedNow
+                ?? current.swSpeedAvg?.value
+            sScale = outlook?.data?.sep?.sScale
+                ?? sepScaleIndex.map { "S\(Int($0.rounded()))" }
+                ?? Self.sScale(for: sepFlux)
+            protonFlux = sepFlux
+        }
+    }
+
     private struct SpaceWeatherCardSectionView: View {
         let current: FeaturesToday
         let visualsSnapshot: SpaceVisualsPayload?
         let overlayCount: Int
         let overlayUpdated: String?
-        let auroraPowerValue: Double?
-        let auroraProbabilityText: String?
-        let earthquakeCount: Int?
-        let earthquakeMag: Double?
         let updatedText: String?
         let outlook: SpaceForecastOutlook?
         let seriesDetail: SpaceSeries?
-        let quakeLatest: QuakeDaily?
-        let quakeEvents: [QuakeEvent]
-        let quakeError: String?
         @Binding var showSpaceWeatherDetail: Bool
         @Binding var spaceDetailFocus: SpaceDetailSection?
 
         var body: some View {
+            let metrics = SpaceWeatherCardMetrics(current: current, outlook: outlook, series: seriesDetail)
             SpaceWeatherCard(
-                kpMax: Int((current.kpMax?.value ?? 0).rounded()),
-                kpCurrent: current.kpCurrent?.value,
-                bzMin: current.bzMin?.value,
-                swSpeedAvg: current.swSpeedAvg?.value,
+                kpMax: metrics.kpMax,
+                kpCurrent: metrics.kpNow,
+                bzNow: metrics.bzNow,
+                swSpeedNow: metrics.swSpeedNow,
+                swSpeedMax: metrics.swSpeedMax,
+                sScale: metrics.sScale,
+                protonFlux: metrics.protonFlux,
                 flares: Int((current.flaresCount?.value ?? 0).rounded()),
                 cmes: Int((current.cmesCount?.value ?? 0).rounded()),
                 schStation: current.schStation,
                 schF0: current.schF0Hz?.value,
                 schF1: current.schF1Hz?.value,
                 schF2: current.schF2Hz?.value,
-                auroraProbability: auroraProbabilityText,
-                auroraPower: auroraPowerValue,
                 overlayCount: overlayCount,
                 overlayUpdated: overlayUpdated,
-                earthquakeCount: earthquakeCount,
-                earthquakeMaxMag: earthquakeMag,
                 onOpenDetail: { section in
                     spaceDetailFocus = section
                     showSpaceWeatherDetail = true
@@ -2292,10 +2621,7 @@ struct ContentView: View {
                     visuals: visualsSnapshot,
                     outlook: outlook,
                     series: seriesDetail,
-                    initialSection: spaceDetailFocus,
-                    quakeLatest: quakeLatest,
-                    quakeEvents: quakeEvents,
-                    quakeError: quakeError
+                    initialSection: spaceDetailFocus
                 )
             }
             .padding(.horizontal)
@@ -2313,6 +2639,9 @@ struct ContentView: View {
 
     private struct AuroraThumbsSectionView: View {
         let auroraPowerValue: Double?
+        let auroraWingKp: Double?
+        let auroraProbabilityText: String?
+        @State private var viewerPayload: MediaViewerPayload? = nil
 
         var body: some View {
             let nowNorth = URL(string: "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg")
@@ -2322,14 +2651,25 @@ struct ContentView: View {
             if nowNorth != nil || tonightU != nil || tomorrowU != nil {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 8) {
-                            if let gw = auroraPowerValue {
-                                Text(String(format: "Power: %.0f GW", gw)).font(.subheadline)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Aurora status").font(.subheadline)
+                            if let kp = auroraWingKp {
+                                Text(String(format: "Wing Kp %.1f", kp))
                             } else {
-                                Text("Aurora status").font(.subheadline)
+                                Text("Wing Kp pending")
                             }
-                            Spacer()
+                            if let gw = auroraPowerValue {
+                                Text(String(format: "Power %.0f GW", gw))
+                            }
+                            if let prob = auroraProbabilityText {
+                                Text("Probability \(prob)")
+                            } else {
+                                Text("Probability pending")
+                            }
                         }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         HStack(spacing: 10) {
                             if let u = nowNorth {
                                 AsyncImage(url: u) { phase in
@@ -2341,6 +2681,15 @@ struct ContentView: View {
                                     }
                                 }
                                 .accessibilityLabel("Aurora nowcast (north)")
+                                .onTapGesture {
+                                    viewerPayload = MediaViewerPayload(
+                                        id: u.absoluteString,
+                                        url: u,
+                                        title: "Aurora Nowcast",
+                                        credit: "NOAA SWPC",
+                                        isVideo: false
+                                    )
+                                }
                             }
                             if let u = tonightU {
                                 AsyncImage(url: u) { phase in
@@ -2352,6 +2701,15 @@ struct ContentView: View {
                                     }
                                 }
                                 .accessibilityLabel("Aurora forecast (tonight)")
+                                .onTapGesture {
+                                    viewerPayload = MediaViewerPayload(
+                                        id: u.absoluteString,
+                                        url: u,
+                                        title: "Aurora Forecast (Tonight)",
+                                        credit: "NOAA SWPC",
+                                        isVideo: false
+                                    )
+                                }
                             }
                             if let u = tomorrowU {
                                 AsyncImage(url: u) { phase in
@@ -2363,11 +2721,24 @@ struct ContentView: View {
                                     }
                                 }
                                 .accessibilityLabel("Aurora forecast (tomorrow)")
+                                .onTapGesture {
+                                    viewerPayload = MediaViewerPayload(
+                                        id: u.absoluteString,
+                                        url: u,
+                                        title: "Aurora Forecast (Tomorrow)",
+                                        credit: "NOAA SWPC",
+                                        isVideo: false
+                                    )
+                                }
                             }
                         }
                     }
                 } label: { Label("Aurora Now & Forecast", systemImage: "sparkles") }
                 .padding(.horizontal)
+                .fullScreenCover(item: $viewerPayload) { payload in
+                    MediaViewerSheet(payload: payload)
+                        .ignoresSafeArea()
+                }
             }
         }
     }
@@ -3665,85 +4036,70 @@ struct ContentView: View {
     }
 
     private struct SpaceWeatherCard: View {
-        let kpMax: Int
+        let kpMax: Double?
         let kpCurrent: Double?
-        let bzMin: Double?
-        let swSpeedAvg: Double?
+        let bzNow: Double?
+        let swSpeedNow: Double?
+        let swSpeedMax: Double?
+        let sScale: String?
+        let protonFlux: Double?
         let flares: Int
         let cmes: Int
         let schStation: String?
         let schF0: Double?
         let schF1: Double?
         let schF2: Double?
-        let auroraProbability: String?
-        let auroraPower: Double?
         let overlayCount: Int
         let overlayUpdated: String?
-        let earthquakeCount: Int?
-        let earthquakeMaxMag: Double?
         let onOpenDetail: (SpaceDetailSection) -> Void
         var body: some View {
+            let kpMaxText = kpMax.map { String(format: "%.1f", $0) } ?? "-"
+            let kpNowText = kpCurrent.map { String(format: "%.1f", $0) } ?? "-"
+            let bzNowText = bzNow.map { String(format: "%.1f nT", $0) } ?? "-"
+            let swNowText = swSpeedNow.map { String(format: "%.0f km/s", $0) } ?? "-"
+            let swMaxText = swSpeedMax.map { String(format: "%.0f km/s", $0) } ?? "-"
+            let sScaleText = sScale ?? "—"
+            let pfuText = protonFlux.map { String(format: "%.1f pfu", $0) } ?? "—"
+            let schText = "\(schStation ?? "-") f0 \(schF0.map { String(format: "%.2f", $0) } ?? "-")"
+            let schRowSubtitle = "Station \(schStation ?? "—") · f0 \(schF0.map { String(format: "%.2f", $0) } ?? "—")"
+
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Space Weather").font(.headline)
                     Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
-                        GridRow { Text("Kp Max"); Text("\(kpMax)") }
-                        GridRow { Text("Kp Now"); Text(kpCurrent.map { String(format: "%.1f", $0) } ?? "-") }
-                        GridRow { Text("Bz Min"); Text(bzMin.map { String(format: "%.1f nT", $0) } ?? "-") }
-                        GridRow { Text("SW Speed"); Text(swSpeedAvg.map { String(format: "%.0f km/s", $0) } ?? "-") }
+                        GridRow { Text("Kp Max"); Text(kpMaxText) }
+                        GridRow { Text("Kp Now"); Text(kpNowText) }
+                        GridRow { Text("Bz Now"); Text(bzNowText) }
+                        GridRow { Text("SW Speed Now"); Text(swNowText) }
+                        GridRow { Text("SW Speed Max"); Text(swMaxText) }
+                        GridRow { Text("S‑Scale"); Text(sScaleText) }
+                        GridRow { Text("Proton Flux"); Text(pfuText) }
                         GridRow { Text("Flares"); Text("\(flares)") }
                         GridRow { Text("CMEs"); Text("\(cmes)") }
-                        GridRow { Text("Schumann"); Text("\(schStation ?? "-")  f0 \(schF0.map { String(format: "%.2f", $0) } ?? "-")") }
+                        GridRow { Text("Schumann"); Text(schText) }
                     }
                     .font(.caption)
                     .foregroundColor(.secondary)
                     Divider()
                     VStack(spacing: 8) {
                         SpaceStatRow(
-                            title: "Scientific Detail",
-                            subtitle: "Geomagnetic, radiation, flares, CMEs",
-                            badge: nil,
-                            icon: "list.bullet.rectangle",
-                            action: { onOpenDetail(.scientific) }
-                        )
-                        SpaceStatRow(
-                            title: "Aurora",
-                            subtitle: "Kp \(kpMax) · Power \(auroraPower.map { String(format: "%.1f GW", $0) } ?? "–")",
-                            badge: auroraProbability,
-                            icon: "sparkles",
-                            action: { onOpenDetail(.aurora) }
-                        )
-                        SpaceStatRow(
                             title: "Solar Visuals",
-                            subtitle: "\(overlayCount) overlays · \(overlayUpdated ?? "Latest unknown")",
+                            subtitle: "\(overlayCount) visuals · \(overlayUpdated ?? "Latest unknown")",
                             badge: nil,
                             icon: "photo.on.rectangle",
                             action: { onOpenDetail(.visuals) }
                         )
                         SpaceStatRow(
-                            title: "Earthquakes",
-                            subtitle: quakeSubtitle,
+                            title: "Schumann Resonance",
+                            subtitle: schRowSubtitle,
                             badge: nil,
-                            icon: "waveform.path",
-                            action: { onOpenDetail(.earthquakes) }
+                            icon: "waveform.path.ecg",
+                            action: { onOpenDetail(.schumann) }
                         )
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } label: { Label("Space", systemImage: "sparkles") }
-        }
-
-        private var quakeSubtitle: String {
-            let countText: String
-            if let count = earthquakeCount {
-                countText = count == 1 ? "1 quake" : "\(count) quakes"
-            } else {
-                countText = "Quakes"
-            }
-            if let mag = earthquakeMaxMag {
-                return "\(countText) · max M\(String(format: "%.1f", mag))"
-            }
-            return countText
         }
     }
 
@@ -3753,18 +4109,12 @@ struct ContentView: View {
         let outlook: SpaceForecastOutlook?
         let series: SpaceSeries?
         let initialSection: SpaceDetailSection?
-        let quakeLatest: QuakeDaily?
-        let quakeEvents: [QuakeEvent]
-        let quakeError: String?
 
         @Environment(\.dismiss) private var dismiss
-        @State private var selectedSection: SpaceDetailSection = .scientific
+        @State private var selectedSection: SpaceDetailSection = .visuals
         @State private var sourceFilter: String = "all"
-        @State private var showSeriesOverlay: Bool = true
         @State private var showCredits: Bool = false
-        @State private var detailPlayingURL: URL? = nil
-        @State private var detailShowPlayer: Bool = false
-        @State private var auroraHemisphere: String = "north"
+        @State private var detailMedia: MediaViewerPayload? = nil
 
         private var overlayImages: [SpaceVisualImage] {
             let imgs = visuals?.images ?? []
@@ -4120,18 +4470,6 @@ struct ContentView: View {
             .padding(.vertical, 4)
         }
 
-        private var earthquakeSubtitle: String {
-            let count = quakeLatest?.allQuakes
-            let maxEvent = quakeEvents.max { ($0.mag ?? 0) < ($1.mag ?? 0) }
-            let mag = maxEvent?.mag
-            let region = maxEvent?.place
-            var parts: [String] = []
-            if let count { parts.append(count == 1 ? "1 quake" : "\(count) quakes") }
-            if let mag { parts.append(String(format: "max M%.1f", mag)) }
-            if let region, !region.isEmpty { parts.append(region) }
-            return parts.isEmpty ? "Live quake feed" : parts.joined(separator: " · ")
-        }
-
         var body: some View {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -4145,14 +4483,8 @@ struct ContentView: View {
                                 .foregroundColor(.secondary)
                         }
                         scrollChips(proxy: proxy)
-                        scientificSection
-                            .id(SpaceDetailSection.scientific)
-                        auroraSection
-                            .id(SpaceDetailSection.aurora)
                         visualsSection
                             .id(SpaceDetailSection.visuals)
-                        earthquakesSection
-                            .id(SpaceDetailSection.earthquakes)
                         schumannSection
                             .id(SpaceDetailSection.schumann)
                     }
@@ -4175,7 +4507,7 @@ struct ContentView: View {
         @ViewBuilder
         private func scrollChips(proxy: ScrollViewProxy) -> some View {
             HStack(spacing: 8) {
-                ForEach([SpaceDetailSection.scientific, .aurora, .visuals, .earthquakes, .schumann], id: \.self) { section in
+                ForEach([SpaceDetailSection.visuals, .schumann], id: \.self) { section in
                     Button {
                         selectedSection = section
                         withAnimation { proxy.scrollTo(section, anchor: .top) }
@@ -4190,243 +4522,6 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                 }
-            }
-        }
-
-        @ViewBuilder
-        private func detailRow(_ label: String, _ value: String) -> some View {
-            HStack {
-                Text(label)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Text(value)
-            }
-            .font(.caption)
-        }
-
-        @ViewBuilder
-        private func detailCard(title: String, @ViewBuilder content: () -> some View) -> some View {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                content()
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-        }
-
-        private struct FallbackAsyncImage: View {
-            let primary: URL?
-            let fallback: URL?
-            let height: CGFloat
-            let cornerRadius: CGFloat
-
-            @State private var failedPrimary: Bool = false
-
-            private var activeURL: URL? {
-                failedPrimary ? fallback : primary
-            }
-
-            var body: some View {
-                AsyncImage(url: activeURL) { phase in
-                    switch phase {
-                    case .empty:
-                        ZStack { RoundedRectangle(cornerRadius: cornerRadius).fill(Color.gray.opacity(0.12)); ProgressView() }
-                            .frame(height: height)
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: height)
-                            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-                    case .failure:
-                        if !failedPrimary, fallback != nil {
-                            ZStack { RoundedRectangle(cornerRadius: cornerRadius).fill(Color.gray.opacity(0.12)); ProgressView() }
-                                .frame(height: height)
-                                .onAppear { failedPrimary = true }
-                        } else {
-                            RoundedRectangle(cornerRadius: cornerRadius)
-                                .fill(Color.gray.opacity(0.12))
-                                .overlay { Image(systemName: "photo").foregroundColor(.secondary) }
-                                .frame(height: height)
-                        }
-                    @unknown default:
-                        EmptyView().frame(height: height)
-                    }
-                }
-            }
-        }
-
-        private var scientificSection: some View {
-            let sep = outlook?.data?.sep
-            let sepFlux = sep?.flux
-            let sepScale = sep?.sScale ?? sScale(for: sepFlux)
-            let sepBand = sep?.energyBand
-
-            let flareMax = outlook?.flares?.max24h
-            let flareTotal = outlook?.flares?.total24h ?? features?.flaresCount?.value.map { Int($0.rounded()) }
-            let flareBands = outlook?.flares?.bands24h ?? [:]
-
-            let cmeHeadline = outlook?.cmes?.headline
-            let cmeStats = outlook?.cmes?.stats
-
-            let auroraHeadline = outlook?.headline
-            let auroraConfidence = outlook?.confidence
-            let auroraAlerts = outlook?.alerts ?? []
-            let auroraImpacts = outlook?.impacts
-
-            return GroupBox {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Space Weather – Scientific Detail")
-                        .font(.headline)
-                    let cols = [GridItem(.adaptive(minimum: 180), spacing: 12)]
-                    LazyVGrid(columns: cols, spacing: 12) {
-                        detailCard(title: "Geomagnetic Conditions") {
-                            detailRow("Kp (now)", kpNowValue.map { formatValue($0, decimals: 1) } ?? "—")
-                            if let kpMax = kpMax24Value {
-                                detailRow("Kp (24h max)", formatValue(kpMax, decimals: 1))
-                            }
-                            detailRow("Solar wind (now)", swNowValue.map { formatValue($0, decimals: 0, suffix: "km/s") } ?? "—")
-                            if let swMax = swMax24Value {
-                                detailRow("Solar wind (24h max)", formatValue(swMax, decimals: 0, suffix: "km/s"))
-                            }
-                            let bzVal = bzNowValue ?? bzMin24Value
-                            detailRow("Bz (IMF)", bzVal.map { formatValue($0, decimals: 1, suffix: "nT") } ?? "—")
-                        }
-
-                        detailCard(title: "Solar Radiation Storm (≥10 MeV)") {
-                            detailRow("S-scale", sepScale ?? "—")
-                            detailRow("Proton flux", sepFlux.map { formatValue($0, decimals: 1, suffix: "pfu") } ?? "—")
-                            if let band = sepBand, !band.isEmpty {
-                                Text("Band: \(band)")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-
-                        detailCard(title: "Solar Flares") {
-                            detailRow("Max class (24h)", flareMax ?? "—")
-                            if let total = flareTotal {
-                                detailRow("Total flares (24h)", "\(total)")
-                            }
-                            let bands = ["X", "M", "C", "B", "A"].compactMap { band -> String? in
-                                guard let val = flareBands[band], val > 0 else { return nil }
-                                return "\(band):\(val)"
-                            }
-                            if !bands.isEmpty {
-                                Text("Bands: \(bands.joined(separator: " "))")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-
-                        detailCard(title: "Coronal Mass Ejections") {
-                            detailRow("Headline", (cmeHeadline?.isEmpty == false) ? cmeHeadline! : "—")
-                            if let total = cmeStats?.total72h {
-                                detailRow("Total (72h)", "\(total)")
-                            }
-                            if let directed = cmeStats?.earthDirectedCount {
-                                detailRow("Earth-directed", "\(directed)")
-                            }
-                            if let vmax = cmeStats?.maxSpeedKms {
-                                detailRow("Max speed", formatValue(vmax, decimals: 0, suffix: "km/s"))
-                            }
-                        }
-
-                        detailCard(title: "Aurora & Forecast") {
-                            if let headline = auroraHeadline, !headline.isEmpty {
-                                Text(headline)
-                                    .font(.caption)
-                            }
-                            if let conf = auroraConfidence, !conf.isEmpty {
-                                detailRow("Confidence", conf)
-                            }
-                            if !auroraAlerts.isEmpty {
-                                Text("Alerts: \(auroraAlerts.joined(separator: ", "))")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                            if let impacts = auroraImpacts {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Plain-language impacts")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                    detailRow("GPS/Navigation", impacts.gps ?? "—")
-                                    detailRow("Radio/Comms", impacts.comms ?? "—")
-                                    detailRow("Power Grids", impacts.grids ?? "—")
-                                    detailRow("Aurora Visibility", impacts.aurora ?? "—")
-                                }
-                            }
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } label: {
-                Label("Scientific Detail", systemImage: "list.bullet.rectangle")
-            }
-        }
-
-        private var auroraSection: some View {
-            GroupBox {
-                VStack(alignment: .leading, spacing: 12) {
-                    let kpNow = kpNowValue.map { String(format: "%.1f", $0) } ?? "–"
-                    let prob = ContentView.auroraProbabilityText(from: features) ?? "Probability pending"
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Kp now: \(kpNow)")
-                        Text("Hemispheric power: \(auroraPowerText)")
-                        Text(prob)
-                    }
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                    Picker("Hemisphere", selection: $auroraHemisphere) {
-                        Text("North").tag("north")
-                        Text("South").tag("south")
-                    }
-                    .pickerStyle(.segmented)
-
-                    let nowcastPrimary = resolveMediaPath("aurora/nowcast/nowcast-\(auroraHemisphere).png")
-                    let nowcastFallback = URL(string: auroraHemisphere == "south"
-                                              ? "https://services.swpc.noaa.gov/images/animations/ovation/south/latest.jpg"
-                                              : "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg")
-                    FallbackAsyncImage(primary: nowcastPrimary, fallback: nowcastFallback, height: 220, cornerRadius: 12)
-
-                    let tonightPrimary = resolveMediaPath("aurora/viewline/tonight-\(auroraHemisphere).png")
-                        ?? resolveMediaPath("aurora/viewline/tonight.png")
-                    let tomorrowPrimary = resolveMediaPath("aurora/viewline/tomorrow-\(auroraHemisphere).png")
-                        ?? resolveMediaPath("aurora/viewline/tomorrow.png")
-                    let tonightFallback = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png")
-                    let tomorrowFallback = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png")
-
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Tonight (forecast)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            FallbackAsyncImage(primary: tonightPrimary, fallback: tonightFallback, height: 140, cornerRadius: 10)
-                        }
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Tomorrow (forecast)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            FallbackAsyncImage(primary: tomorrowPrimary, fallback: tomorrowFallback, height: 140, cornerRadius: 10)
-                        }
-                    }
-
-                    let auroraEntries = outlookEntries(containing: ["aurora", "kp", "hemispheric", "ovation"])
-                    if !auroraEntries.isEmpty {
-                        Divider()
-                        ForEach(auroraEntries, id: \.self) { entry in
-                            outlookEntryRow(entry)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } label: {
-                Label("Aurora Tracker", systemImage: "sparkles")
             }
         }
 
@@ -4446,26 +4541,11 @@ struct ContentView: View {
                         .pickerStyle(.segmented)
                         .labelsHidden()
                     }
-                    if showSeriesOverlay, !overlaySeriesSummaries.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Overlay series")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            ForEach(overlaySeriesSummaries, id: \.self) { line in
-                                Text(line)
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    Toggle("Show overlay series", isOn: $showSeriesOverlay)
-                        .font(.caption)
-                        .toggleStyle(.switch)
                     Toggle("Show credits", isOn: $showCredits)
                         .font(.caption)
                         .toggleStyle(.switch)
                     if overlayImages.isEmpty {
-                        Text("No overlays available yet. Cached gallery will appear here.")
+                        Text("No visuals available yet. Cached gallery will appear here.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     } else {
@@ -4483,7 +4563,15 @@ struct ContentView: View {
                                             }
                                             .frame(height: 120)
                                             .clipShape(RoundedRectangle(cornerRadius: 10))
-                                            .onTapGesture { detailPlayingURL = u; detailShowPlayer = true }
+                                            .onTapGesture {
+                                                detailMedia = MediaViewerPayload(
+                                                    id: u.absoluteString,
+                                                    url: u,
+                                                    title: img.key ?? img.caption ?? "Visual",
+                                                    credit: img.credit,
+                                                    isVideo: true
+                                                )
+                                            }
                                         } else {
                                             AsyncImage(url: u) { phase in
                                                 switch phase {
@@ -4504,6 +4592,15 @@ struct ContentView: View {
                                                     EmptyView().frame(height: 120)
                                                 }
                                             }
+                                            .onTapGesture {
+                                                detailMedia = MediaViewerPayload(
+                                                    id: u.absoluteString,
+                                                    url: u,
+                                                    title: img.key ?? img.caption ?? "Visual",
+                                                    credit: img.credit,
+                                                    isVideo: false
+                                                )
+                                            }
                                         }
                                     } else {
                                         ZStack { Rectangle().opacity(0.08); Image(systemName: "questionmark").foregroundColor(.secondary) }
@@ -4521,50 +4618,14 @@ struct ContentView: View {
                             }
                         }
                     }
-                    let solarEntries = Array(outlookEntries(containing: ["solar", "cme", "coronal", "flare", "enlil"]).prefix(5))
-                    let radiationEntries = Array(outlookEntries(containing: ["radiation", "sep", "belt"]).prefix(5))
-                    let absorptionEntries = Array(outlookEntries(containing: ["d-rap", "drap", "absorption"]).prefix(5))
-                    let magnetometerEntries = Array(outlookEntries(containing: ["magnetometer", "symh", "dst", "supermag"]).prefix(5))
-                    if !solarEntries.isEmpty || !radiationEntries.isEmpty || !absorptionEntries.isEmpty || !magnetometerEntries.isEmpty {
-                        Divider()
-                        VStack(alignment: .leading, spacing: 8) {
-                            if !solarEntries.isEmpty {
-                                Text("Solar & CME outlook").font(.caption).foregroundColor(.secondary)
-                                ForEach(solarEntries, id: \.self) { outlookEntryRow($0) }
-                            }
-                            if !radiationEntries.isEmpty {
-                                Text("Radiation/SEP").font(.caption).foregroundColor(.secondary)
-                                ForEach(radiationEntries, id: \.self) { outlookEntryRow($0) }
-                            }
-                            if !absorptionEntries.isEmpty {
-                                Text("D-RAP / absorption").font(.caption).foregroundColor(.secondary)
-                                ForEach(absorptionEntries, id: \.self) { outlookEntryRow($0) }
-                            }
-                            if !magnetometerEntries.isEmpty {
-                                Text("Magnetometer / geomagnetic").font(.caption).foregroundColor(.secondary)
-                                ForEach(magnetometerEntries, id: \.self) { outlookEntryRow($0) }
-                            }
-                        }
-                    }
-                    if !outlookNotes.isEmpty {
-                        Divider()
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(outlookNotes, id: \.self) { note in
-                                Text(note)
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } label: {
                 Label("Solar Visuals", systemImage: "photo.on.rectangle")
             }
-            .sheet(isPresented: $detailShowPlayer) {
-                if let url = detailPlayingURL {
-                    VideoPlayer(player: AVPlayer(url: url)).ignoresSafeArea()
-                }
+            .fullScreenCover(item: $detailMedia) { payload in
+                MediaViewerSheet(payload: payload)
+                    .ignoresSafeArea()
             }
         }
 
@@ -4585,47 +4646,6 @@ struct ContentView: View {
                 return join(base: base, path: rel)
             }
             return URL(string: raw)
-        }
-
-        private var earthquakesSection: some View {
-            GroupBox {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(earthquakeSubtitle)
-                        .font(.subheadline)
-                    if let quakeError, !quakeError.isEmpty {
-                        Text(quakeError)
-                            .font(.caption2)
-                            .foregroundColor(.orange)
-                    }
-                    if !quakeEvents.isEmpty {
-                        Divider()
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(Array(quakeEvents.prefix(5).enumerated()), id: \.offset) { _, event in
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("M\(event.mag.map { String(format: "%.1f", $0) } ?? "—") • \(event.place ?? "Unknown location")")
-                                        .font(.caption)
-                                    if let t = event.timeUtc {
-                                        Text(t)
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if let sch = series?.schumannDaily?.first?.station_id {
-                        Text("Schumann context: \(sch)")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    Text("Tap Earthscope on the dashboard for the full journal and quake context.")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } label: {
-                Label("Earthquakes", systemImage: "waveform.path")
-            }
         }
 
         private var schumannSection: some View {
@@ -4694,10 +4714,7 @@ struct ContentView: View {
 
         private func label(for section: SpaceDetailSection) -> String {
             switch section {
-            case .scientific: return "Detail"
-            case .aurora: return "Aurora"
             case .visuals: return "Visuals"
-            case .earthquakes: return "Earthquakes"
             case .schumann: return "Schumann"
             }
         }
@@ -4765,6 +4782,7 @@ struct ContentView: View {
 
         var body: some View {
             let items = payload?.items ?? []
+            let cleanError = ContentView.scrubError(error)
             let sev = severityCounts(items)
             let types = typeCounts(items)
 
@@ -4781,12 +4799,12 @@ struct ContentView: View {
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
-                    if let error, !error.isEmpty {
+                    if let error = cleanError, !error.isEmpty {
                         Text(error)
                             .font(.caption)
                             .foregroundColor(.orange)
                     }
-                    if items.isEmpty && !isLoading && (error == nil || error?.isEmpty == true) {
+                    if items.isEmpty && !isLoading && (cleanError == nil || cleanError?.isEmpty == true) {
                         Text("Global Hazards unavailable at the moment.")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -4838,6 +4856,148 @@ struct ContentView: View {
             } label: {
                 Label("Hazards", systemImage: "exclamationmark.triangle.fill")
             }
+        }
+    }
+
+    private struct EarthquakesSummaryCard: View {
+        let latest: QuakeDaily?
+        let events: [QuakeEvent]
+        let error: String?
+
+        private func summaryText() -> String {
+            let count = latest?.allQuakes
+            let maxEvent = events.max { ($0.mag ?? 0) < ($1.mag ?? 0) }
+            let mag = maxEvent?.mag
+            let region = maxEvent?.place
+            var parts: [String] = []
+            if let count { parts.append(count == 1 ? "1 quake" : "\(count) quakes") }
+            if let mag { parts.append(String(format: "max M%.1f", mag)) }
+            if let region, !region.isEmpty { parts.append(region) }
+            return parts.isEmpty ? "Live quake feed" : parts.joined(separator: " · ")
+        }
+
+        private func shortTime(_ iso: String?) -> String? {
+            guard let iso else { return nil }
+            let fmt = ISO8601DateFormatter()
+            let fmt2 = ISO8601DateFormatter()
+            fmt2.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let d = fmt2.date(from: iso) ?? fmt.date(from: iso) {
+                return DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .short)
+            }
+            return iso
+        }
+
+        var body: some View {
+            let cleanError = ContentView.scrubError(error)
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(summaryText())
+                        .font(.subheadline)
+                    if let error = cleanError, !error.isEmpty {
+                        Text(error)
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                    if !events.isEmpty {
+                        Divider()
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(Array(events.prefix(4).enumerated()), id: \.offset) { _, event in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("M\(event.mag.map { String(format: "%.1f", $0) } ?? "—") • \(event.place ?? "Unknown location")")
+                                        .font(.caption)
+                                    if let t = shortTime(event.timeUtc) {
+                                        Text(t)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    NavigationLink("View details") {
+                        EarthquakesDetailView(latest: latest, events: events, error: error)
+                    }
+                    .font(.caption)
+                    .underline()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } label: {
+                Label("Earthquakes", systemImage: "waveform.path")
+            }
+        }
+    }
+
+    private struct EarthquakesDetailView: View {
+        let latest: QuakeDaily?
+        let events: [QuakeEvent]
+        let error: String?
+
+        private func summaryText() -> String {
+            let count = latest?.allQuakes
+            let maxEvent = events.max { ($0.mag ?? 0) < ($1.mag ?? 0) }
+            let mag = maxEvent?.mag
+            let region = maxEvent?.place
+            var parts: [String] = []
+            if let count { parts.append(count == 1 ? "1 quake" : "\(count) quakes") }
+            if let mag { parts.append(String(format: "max M%.1f", mag)) }
+            if let region, !region.isEmpty { parts.append(region) }
+            return parts.isEmpty ? "Live quake feed" : parts.joined(separator: " · ")
+        }
+
+        private func shortTime(_ iso: String?) -> String? {
+            guard let iso else { return nil }
+            let fmt = ISO8601DateFormatter()
+            let fmt2 = ISO8601DateFormatter()
+            fmt2.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let d = fmt2.date(from: iso) ?? fmt.date(from: iso) {
+                return DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .short)
+            }
+            return iso
+        }
+
+        var body: some View {
+            let cleanError = ContentView.scrubError(error)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(summaryText())
+                        .font(.headline)
+                    if let error = cleanError, !error.isEmpty {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    if events.isEmpty {
+                        Text("No recent quake events available.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        ForEach(Array(events.prefix(20).enumerated()), id: \.offset) { _, event in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("M\(event.mag.map { String(format: "%.1f", $0) } ?? "—") • \(event.place ?? "Unknown location")")
+                                    .font(.subheadline)
+                                HStack(spacing: 10) {
+                                    if let t = shortTime(event.timeUtc) {
+                                        Text(t)
+                                    }
+                                    if let depth = event.depthKm {
+                                        Text(String(format: "%.0f km depth", depth))
+                                    }
+                                }
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    Text("Tap Earthscope on the dashboard for the full journal and quake context.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 6)
+                }
+                .padding()
+            }
+            .navigationTitle("Earthquakes")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
@@ -5009,6 +5169,7 @@ struct ContentView: View {
         }
 
         var body: some View {
+            let cleanError = ContentView.scrubError(error)
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
@@ -5023,12 +5184,12 @@ struct ContentView: View {
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
-                    if let error, !error.isEmpty {
+                    if let error = cleanError, !error.isEmpty {
                         Text(error)
                             .font(.caption)
                             .foregroundColor(.orange)
                     }
-                    if data == nil && !isLoading && (error == nil || error?.isEmpty == true) {
+                    if data == nil && !isLoading && (cleanError == nil || cleanError?.isEmpty == true) {
                         Text("Magnetosphere data unavailable.")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -5255,7 +5416,8 @@ struct ContentView: View {
 
                     if let reelURL = earthscopeReelURL {
                         VideoPlayer(player: reelPlayer ?? AVPlayer(url: reelURL))
-                            .frame(height: 200)
+                            .aspectRatio(9.0 / 16.0, contentMode: .fit)
+                            .frame(maxWidth: .infinity)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                             .onAppear {
                                 if reelPlayer == nil {

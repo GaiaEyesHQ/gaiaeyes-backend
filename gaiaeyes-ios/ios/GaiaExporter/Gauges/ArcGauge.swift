@@ -31,7 +31,7 @@ public struct ArcGauge: View {
         self.theme = theme
     }
     
-    private var clamped: Double { min(max(value, min), max) }
+    private var clamped: Double { Swift.min(Swift.max(value, min), max) }
     private var pct: Double { (clamped - min) / (max - min) }
     
     public var body: some View {
