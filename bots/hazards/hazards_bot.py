@@ -762,8 +762,15 @@ def instant_tags(wp: WPClient, item: dict) -> List[int]:
 
 def run_once() -> None:
     db_init()
-    wp = WPClient()
-    categories = ensure_taxonomy(wp)
+    wp: Optional[WPClient] = None
+    categories: Dict[str, int] = {}
+    try:
+        wp = WPClient()
+        categories = ensure_taxonomy(wp)
+    except Exception as exc:  # pragma: no cover - network/auth handling
+        print("[warn] WP taxonomy setup failed; skipping WP posts:", exc, file=sys.stderr)
+        wp = None
+        categories = {}
 
     items: List[dict] = []
     try:
@@ -811,7 +818,7 @@ def run_once() -> None:
             item.get("lon"),
         )
 
-        if item.get("severity") in ("red", "orange"):
+        if wp and categories and item.get("severity") in ("red", "orange"):
             slug = slugify_instant(item)
             title = compose_title(item)
             body = compose_body(item)
@@ -833,7 +840,7 @@ def run_once() -> None:
 
     current_time = now_utc()
     window_hours = 12
-    if current_time.hour in (0, 12) and current_time.minute <= 14:
+    if wp and categories and current_time.hour in (0, 12) and current_time.minute <= 14:
         recent_items = items_window(hours=window_hours)
         title, html, tag_names = compose_digest(recent_items, window_hours)
         slug = (
