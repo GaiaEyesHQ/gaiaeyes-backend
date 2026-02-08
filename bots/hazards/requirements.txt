@@ -3,3 +3,4 @@ python-dateutil==2.9.0.post0
 pytz==2024.2
 lxml==5.3.0
 RETRY==0.9.2
+feedparser==6.0.12
