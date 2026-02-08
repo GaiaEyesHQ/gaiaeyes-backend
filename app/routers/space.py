@@ -700,3 +700,324 @@ async def space_alerts(conn = Depends(get_db)):
     alerts.sort(key=lambda a: order.get(a["severity"], 0), reverse=True)
 
     return {"ok": True, "updated": updated, "alerts": alerts}
+
+
+# --- Outlook (daily snapshot + "now") ---
+@router.get("/forecast/outlook")
+async def space_forecast_outlook(conn = Depends(get_db)) -> Dict[str, Any]:
+    """
+    Unified daily outlook used by website/app writers.
+    Pulls the *daily snapshot* from marts.space_weather_daily (for today, UTC),
+    adds *now* values (kp/bz/sw) and a few short-range details.
+
+    Response shape (fields may be missing when sources are unavailable):
+      {
+        "ok": true,
+        "kp": {"now": 3.0, "now_ts": "...Z", "g_scale_now": "G0",
+               "last_24h_max": 4.0, "g_scale_24h_max": "G1"},
+        "headline": "Space weather outlook",
+        "confidence": "medium",
+        "summary": null,
+        "alerts": [ ... ],
+        "impacts": {"gps":"Normal","comms":"Normal","grids":"Normal","aurora":"Confined to polar regions"},
+        "flares": {"max_24h": "M1.0", "total_24h": 5, "bands_24h": {"C":4,"M":1,"X":0}},
+        "cmes": {"headline":"CME arrivals tracked","stats":{"total_72h": 0,
+                 "earth_directed_count": 0, "max_speed_kms": null}},
+        "data": {
+          "cme_arrivals":[{"arrival_time":"...","simulation_id":"...","location":"Earth",
+                           "kp_estimate":null,"cme_speed_kms":null,"confidence":null}],
+          "sep":{"ts":"...","satellite":"18","energy_band":">=100 MeV","flux":0.12,
+                 "s_scale":"S0","s_scale_index":0},
+          "radiation_belts":[{"day":"2026-02-05","satellite":"19","max_flux":1234.5,
+                              "avg_flux":567.8,"risk_level":"moderate"}],
+          "drap_absorption":[{"day":"2026-02-05","region":"global","max_absorption_db":10.0,
+                              "avg_absorption_db":2.1}]
+        }
+      }
+    """
+    today = datetime.now(timezone.utc).date()
+
+    daily: Dict[str, Any] = {}
+    kp_now_ts: Optional[str] = None
+
+    # Pull today's daily snapshot (plus some "now" fallbacks)
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute("set statement_timeout = 60000")
+
+            # space_weather_daily row for today
+            await cur.execute(
+                """
+                select day,
+                       kp_now, bz_now, sw_speed_now_kms, sw_density_now_cm3,
+                       kp_max, bz_min, sw_speed_avg,
+                       xray_max_class, flares_count, sep_s_max,
+                       belts_flux_gt2mev_max, belts_risk_level,
+                       drap_absorption_polar_db, drap_absorption_midlat_db,
+                       aurora_hp_north_gw, aurora_hp_south_gw,
+                       cmes_count, cmes_max_speed_kms,
+                       coalesce(updated_at, now()) as updated_at
+                  from marts.space_weather_daily
+                 where day = %s
+                 limit 1
+                """,
+                (today,)
+            )
+            daily = await cur.fetchone() or {}
+
+            # If we can, fetch a precise timestamp for "now" KP from ext.space_weather
+            await cur.execute(
+                """
+                select ts_utc, kp_index
+                  from ext.space_weather
+                 where kp_index is not null
+                 order by ts_utc desc
+                 limit 1
+                """
+            )
+            row_kp = await cur.fetchone()
+            if row_kp:
+                try:
+                    kp_now_ts = row_kp["ts_utc"].astimezone(timezone.utc).isoformat()
+                    # If daily.kp_now missing, adopt this latest
+                    if daily.get("kp_now") is None and row_kp.get("kp_index") is not None:
+                        daily["kp_now"] = float(row_kp["kp_index"])
+                except Exception:
+                    kp_now_ts = None
+
+            # Short-range CME arrivals (next 72h) from marts.cme_arrivals if present
+            await cur.execute(
+                """
+                select arrival_time, simulation_id, location, kp_estimate, cme_speed_kms, confidence
+                  from marts.cme_arrivals
+                 where arrival_time >= (now() at time zone 'utc') - interval '24 hours'
+                   and arrival_time < (now() at time zone 'utc') + interval '72 hours'
+                 order by arrival_time asc
+                """
+            )
+            cme_rows = await cur.fetchall() or []
+
+            # SEP latest (>=100 MeV) from ext.sep_flux, if available
+            await cur.execute(
+                """
+                select ts_utc, satellite, energy_band, flux, s_scale, s_scale_index
+                  from ext.sep_flux
+                 where lower(energy_band) like '%%100%%mev%%'
+                 order by ts_utc desc
+                 limit 1
+                """
+            )
+            sep_row = await cur.fetchone()
+
+            # Radiation belts last few daily aggregates if available
+            # Prefer a marts table if you add one later; otherwise rollup quickly here.
+            await cur.execute(
+                """
+                with by_day as (
+                  select (ts_utc at time zone 'utc')::date as day_key,
+                         satellite,
+                         max(flux) as max_flux,
+                         avg(nullif(flux,0)) as avg_flux
+                    from ext.radiation_belts
+                   where ts_utc >= (now() at time zone 'utc') - interval '8 days'
+                   group by 1,2
+                )
+                select day_key as day, satellite, max_flux, avg_flux,
+                       case
+                         when max_flux >= 10000 then 'elevated'
+                         when max_flux >= 2000  then 'moderate'
+                         when max_flux is null  then 'unknown'
+                         else 'quiet'
+                       end as risk_level
+                  from by_day
+                 order by day_key desc, satellite asc
+                """
+            )
+            belt_rows = await cur.fetchall() or []
+
+            # DRAP daily (global) last ~12 days if marts is populated
+            await cur.execute(
+                """
+                select day, region, max_absorption_db, avg_absorption_db
+                  from marts.drap_absorption_daily
+                 where region = 'global'
+                   and day >= (now() at time zone 'utc')::date - interval '12 days'
+                 order by day desc
+                """
+            )
+            drap_rows = await cur.fetchall() or []
+
+    except Exception as exc:
+        return {"ok": False, "error": f"outlook query failed: {exc}"}
+
+    # ---- Build KP block ----
+    kp_now = daily.get("kp_now")
+    kp24 = daily.get("kp_max")
+    kp_block = {
+        "now": None if kp_now is None else float(kp_now),
+        "now_ts": kp_now_ts,
+        "g_scale_now": f"G{_g_from_kp(kp_now)}" if kp_now is not None else "G0",
+        "last_24h_max": None if kp24 is None else float(kp24),
+        "g_scale_24h_max": f"G{_g_from_kp(kp24)}" if kp24 is not None else "G0",
+    }
+
+    # ---- Alerts (lightweight inline) ----
+    alerts: List[Dict[str, Any]] = []
+    ref_kp = kp_now if kp_now is not None else kp24
+    g_now = _g_from_kp(ref_kp)
+    if g_now >= 1:
+        alerts.append({
+            "key": "geomagnetic_g",
+            "severity": "warn" if g_now >= 2 else "advisory",
+            "level": f"G{g_now}",
+            "message": f"Geomagnetic activity: G{g_now} (Kp {ref_kp:.1f})"
+        })
+
+    # Radiation S-scale using GOES PFU feed
+    p = _latest_pfu_10mev_from_goes()
+    if p and p.get("pfu") is not None:
+        S = _s_scale_from_pfu(p["pfu"])
+        if S != "S0":
+            alerts.append({
+                "key": "radiation_s",
+                "severity": "warn",
+                "level": S,
+                "message": f"Solar radiation storm: {S} (≥10 MeV {p['pfu']:.2f} pfu)"
+            })
+
+    # Flares block: prefer daily xray_max_class, otherwise GOES summary
+    flares_total = daily.get("flares_count")
+    flares_max = daily.get("xray_max_class")
+    if not flares_max:
+        goes = _goes_flares_summary()
+        flares_max = goes.get("max_class")
+    flares_block = {
+        "max_24h": flares_max,
+        "total_24h": flares_total,
+        "bands_24h": {}  # you can expand later if needed
+    }
+
+    # Impacts (very rough heuristics)
+    impacts = {
+        "gps": "Normal" if (ref_kp is None or ref_kp < 6) else "Degraded",
+        "comms": "Normal",
+        "grids": "Normal" if (ref_kp is None or ref_kp < 7) else "Elevated risk",
+        "aurora": "Confined to polar regions" if (ref_kp is None or ref_kp < 5) else "Possible at mid‑latitudes"
+    }
+
+    # CME short stats
+    total_72h = 0
+    earth_directed = 0
+    max_speed = None
+    arrivals_fmt: List[Dict[str, Any]] = []
+    for r in (cme_rows or []):
+        total_72h += 1
+        loc = (r.get("location") or "").lower()
+        if loc in ("earth", "l1", "soho", "dscovr"):
+            earth_directed += 1
+        spd = r.get("cme_speed_kms")
+        try:
+            if spd is not None:
+                spd = float(spd)
+                max_speed = spd if (max_speed is None or spd > max_speed) else max_speed
+        except Exception:
+            pass
+        at = r.get("arrival_time")
+        at_str = at.astimezone(timezone.utc).isoformat() if isinstance(at, datetime) else str(at)
+        arrivals_fmt.append({
+            "arrival_time": at_str,
+            "simulation_id": r.get("simulation_id"),
+            "location": r.get("location"),
+            "kp_estimate": r.get("kp_estimate"),
+            "cme_speed_kms": r.get("cme_speed_kms"),
+            "confidence": r.get("confidence"),
+        })
+
+    cmes_block = {
+        "headline": "CME arrivals tracked",
+        "stats": {
+            "total_72h": total_72h,
+            "earth_directed_count": earth_directed,
+            "max_speed_kms": max_speed
+        }
+    }
+
+    # SEP latest
+    sep_block = None
+    if sep_row:
+        ts = sep_row.get("ts_utc")
+        sep_block = {
+            "ts": ts.astimezone(timezone.utc).isoformat() if isinstance(ts, datetime) else ts,
+            "satellite": sep_row.get("satellite"),
+            "energy_band": sep_row.get("energy_band"),
+            "flux": sep_row.get("flux"),
+            "s_scale": sep_row.get("s_scale"),
+            "s_scale_index": sep_row.get("s_scale_index"),
+        }
+
+    # Radiation belts & DRAP lists
+    belts_list = [
+        {
+            "day": (row.get("day").isoformat() if isinstance(row.get("day"), datetime) else str(row.get("day"))),
+            "satellite": row.get("satellite"),
+            "max_flux": row.get("max_flux"),
+            "avg_flux": row.get("avg_flux"),
+            "risk_level": row.get("risk_level"),
+        }
+        for row in belt_rows
+    ]
+    drap_list = [
+        {
+            "day": (row.get("day").isoformat() if isinstance(row.get("day"), datetime) else str(row.get("day"))),
+            "region": row.get("region"),
+            "max_absorption_db": row.get("max_absorption_db"),
+            "avg_absorption_db": row.get("avg_absorption_db"),
+        }
+        for row in drap_rows
+    ]
+
+    return {
+        "ok": True,
+        "kp": kp_block,
+        "headline": "Space weather outlook",
+        "confidence": "medium",
+        "summary": None,
+        "alerts": alerts,
+        "impacts": impacts,
+        "flares": flares_block,
+        "cmes": cmes_block,
+        "data": {
+            "cme_arrivals": arrivals_fmt,
+            "sep": sep_block,
+            "radiation_belts": belts_list,
+            "drap_absorption": drap_list,
+        }
+    }
+
+
+# --- Lightweight forecast summary endpoint ---
+@router.get("/forecast/summary")
+async def space_forecast_summary(conn = Depends(get_db)) -> Dict[str, Any]:
+    """
+    Backward‑compatible lightweight summary that wraps /v1/space/forecast/outlook.
+    Returns only the headline, KP block, alerts, impacts, confidence, and an updated timestamp.
+    """
+    try:
+        # Reuse the full outlook builder to guarantee consistent logic/thresholds.
+        outlook = await space_forecast_outlook(conn)
+    except Exception as exc:
+        return {"ok": False, "error": f"summary failed: {exc}"}
+
+    # If the outlook call itself failed, pass through its error if present.
+    if not isinstance(outlook, dict) or not outlook.get("ok"):
+        return outlook if isinstance(outlook, dict) else {"ok": False, "error": "outlook unavailable"}
+
+    return {
+        "ok": True,
+        "updated": datetime.now(timezone.utc).isoformat(),
+        "headline": outlook.get("headline"),
+        "confidence": outlook.get("confidence"),
+        "kp": outlook.get("kp"),
+        "alerts": outlook.get("alerts", []),
+        "impacts": outlook.get("impacts"),
+    }
