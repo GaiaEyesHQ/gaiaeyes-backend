@@ -621,6 +621,7 @@ async def fetch_json(client: httpx.AsyncClient, url: str, params: dict[str, Any]
     return resp.json()
 
 
+
 # Helper to fetch plain text (e.g., DRAP text products)
 async def fetch_text(
     client: httpx.AsyncClient,
@@ -631,6 +632,73 @@ async def fetch_text(
     resp = await client.get(url, params=params, timeout=60)
     resp.raise_for_status()
     return resp.text
+
+
+# Helper to prefetch DONKI CME speeds by activityID for fallback use in ENLIL ingest
+async def _fetch_donki_cme_speed_map(
+    client: httpx.AsyncClient,
+    start_date: str,
+    end_date: str,
+    api_key: str | None,
+) -> dict[str, float]:
+    """
+    Build a map of activityID -> plane-of-sky speed (km/s) from DONKI CME endpoint.
+    We take the max speed across any available analyses for the same activityID.
+    """
+    params = {
+        "startDate": start_date,
+        "endDate": end_date,
+        "api_key": api_key or os.getenv("NASA_API_KEY") or os.getenv("NASA_API") or "DEMO_KEY",
+    }
+    try:
+        payload = await fetch_json(client, "https://api.nasa.gov/DONKI/CME", params)
+    except Exception as exc:
+        logger.debug("DONKI CME fetch failed (%s); returning empty speed map", exc)
+        return {}
+
+    speeds: dict[str, float] = {}
+    records = payload if isinstance(payload, list) else [payload]
+    for rec in records:
+        if not isinstance(rec, dict):
+            continue
+        act_id = rec.get("activityID") or rec.get("activityId")
+        if not act_id:
+            continue
+
+        max_speed: float | None = None
+
+        # Preferred: analyses array with explicit speed
+        analyses = rec.get("cmeAnalyses") or rec.get("cmeAnalysis") or rec.get("analyses")
+        if isinstance(analyses, list):
+            for a in analyses:
+                if not isinstance(a, dict):
+                    continue
+                sp = _parse_float(
+                    a.get("speed")
+                    or a.get("estimatedVelocity")
+                    or a.get("radialSpeed")
+                    or a.get("radial_speed")
+                )
+                if sp is not None:
+                    # Convert m/s to km/s if erroneously large
+                    if sp > 3000:
+                        sp = sp / 1000.0
+                    max_speed = sp if (max_speed is None or sp > max_speed) else max_speed
+
+        # Fallback: top-level guesses
+        if max_speed is None:
+            sp2 = _parse_float(
+                rec.get("speed") or rec.get("estimatedVelocity") or rec.get("radialSpeed")
+            )
+            if sp2 is not None:
+                if sp2 > 3000:
+                    sp2 = sp2 / 1000.0
+                max_speed = sp2
+
+        if max_speed is not None:
+            speeds[str(act_id)] = float(max_speed)
+
+    return speeds
 
 
 async def ingest_enlil(
@@ -646,6 +714,16 @@ async def ingest_enlil(
         "api_key": os.getenv("NASA_API_KEY"),
     }
     data = await fetch_json(client, "https://api.nasa.gov/DONKI/WSAEnlilSimulations", params)
+
+    # Prefetch CME plane‑of‑sky speeds by activityID as a robust fallback
+    try:
+        speeds_map = await _fetch_donki_cme_speed_map(
+            client, params["startDate"], params["endDate"], os.getenv("NASA_API_KEY")
+        )
+    except Exception as exc:
+        logger.debug("CME speeds map fetch failed: %s", exc)
+        speeds_map = {}
+
     ext_rows: list[dict[str, Any]] = []
     mart_rows: list[dict[str, Any]] = []
     for entry in data or []:
@@ -656,11 +734,12 @@ async def ingest_enlil(
             # Fallback to the completion timestamp so that the row is not lost.
             simulation_id = (entry.get("modelCompletionTime") or "unknown").replace(" ", "_")
         model_run = _parse_dt(entry.get("modelCompletionTime"))
+        activity_id = entry.get("activityID") or entry.get("activityId")
         ext_rows.append(
             {
                 "simulation_id": simulation_id,
                 "model_run": model_run,
-                "activity_id": entry.get("activityID") or entry.get("activityId"),
+                "activity_id": activity_id,
                 "model_type": entry.get("modelType"),
                 "impact_count": len(entry.get("impactList") or []),
                 "raw": json.dumps(entry),
@@ -694,6 +773,12 @@ async def ingest_enlil(
             # Sometimes speed sits on parent entry (simulation-level); try a gentle fallback
             if cme_speed_kms is None:
                 cme_speed_kms = _first_float(entry, "arrivalSpeed", "arrival_speed", "speed", "cmeSpeed", "radialSpeed")
+
+            # Final fallback: look up plane‑of‑sky speed from DONKI CME map via activityID
+            if cme_speed_kms is None and activity_id:
+                sp_lookup = speeds_map.get(str(activity_id))
+                if sp_lookup is not None:
+                    cme_speed_kms = sp_lookup
 
             # Kp estimate – prefer the highest available among common keys
             kp_candidates = []
@@ -744,6 +829,13 @@ async def ingest_enlil(
                         confidence = "high" if n >= 5 else ("medium" if n >= 2 else "low")
                 except Exception as exc:
                     logger.debug("scoreboard confidence fallback failed: %s", exc)
+
+            # Last‑resort confidence if still missing:
+            if confidence is None:
+                if kp_est is not None and kp_est >= 5:
+                    confidence = "high"
+                elif arrival is not None:
+                    confidence = "low"
 
             # Log missing fields for diagnostics
             if arrival is None:
