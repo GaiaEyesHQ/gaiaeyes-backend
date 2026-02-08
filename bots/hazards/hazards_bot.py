@@ -11,6 +11,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
+import feedparser
 import requests
 from dateutil import parser as dtparse
 
@@ -62,6 +63,7 @@ GDACS_ENDPOINTS = [
     "https://www.gdacs.org/gdacsapi/api/events/geteventlist/json",
     "https://www.gdacs.org/gdacsapi/api/events/geteventlist",
 ]
+GDACS_RSS_URL = "https://www.gdacs.org/xml/rss.xml"
 
 
 # Helper to try multiple endpoints with fallback and friendly User-Agent
@@ -235,6 +237,11 @@ def ensure_taxonomy(wp: WPClient) -> Dict[str, int]:
             "Earthquake": wp.ensure_category("Earthquake"),
             "Cyclone": wp.ensure_category("Cyclone"),
             "Volcano/Ash": wp.ensure_category("Volcano/Ash", "volcano-ash"),
+            "Flood": wp.ensure_category("Flood"),
+            "Wildfire": wp.ensure_category("Wildfire"),
+            "Drought": wp.ensure_category("Drought"),
+            "Storm": wp.ensure_category("Storm"),
+            "Landslide": wp.ensure_category("Landslide"),
         }
     except Exception as e:  # pragma: no cover - network/auth handling
         raise RuntimeError(f"Failed to ensure categories via WP REST: {e}")
@@ -258,6 +265,40 @@ def severity_from_gdacs_color(color: str) -> str:
         return "orange"
     if normalized == "yellow":
         return "yellow"
+    return "info"
+
+
+def hazard_type_from_text(text: str) -> str:
+    t = (text or "").lower()
+    if any(w in t for w in ["earthquake"]):
+        return "quake"
+    if any(w in t for w in ["tropical cyclone", "hurricane", "typhoon", "cyclone"]):
+        return "cyclone"
+    if any(w in t for w in ["volcano", "volcanic", "ash"]):
+        return "ash"
+    if any(w in t for w in ["flood", "inundation", "flash flood"]):
+        return "flood"
+    if any(w in t for w in ["wildfire", "forest fire", "bushfire"]):
+        return "wildfire"
+    if any(w in t for w in ["drought"]):
+        return "drought"
+    if any(w in t for w in ["landslide", "mudslide"]):
+        return "landslide"
+    if any(w in t for w in ["storm", "severe storm", "windstorm", "gust"]):
+        return "storm"
+    return "other"
+
+
+def severity_from_text(text: str) -> str:
+    t = (text or "").lower()
+    if "red" in t:
+        return "red"
+    if "orange" in t:
+        return "orange"
+    if "yellow" in t:
+        return "yellow"
+    if "green" in t:
+        return "info"
     return "info"
 
 
@@ -314,6 +355,70 @@ def fetch_usgs() -> List[dict]:
 
 
 def fetch_gdacs() -> List[dict]:
+    """
+    Prefer the official GDACS RSS (includes floods, wildfires, droughts, etc.)
+    and fall back to the JSON event list if RSS parsing fails.
+    """
+    # --- Try RSS first ---
+    try:
+        headers = {
+            "User-Agent": "GaiaEyes-HazardsBot/1.0 (+https://gaiaeyes.com)",
+            "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
+        }
+        resp = requests.get(GDACS_RSS_URL, headers=headers, timeout=25)
+        resp.raise_for_status()
+        parsed = feedparser.parse(resp.text)
+
+        results: List[dict] = []
+        now_cut = now_utc() - timedelta(hours=48)
+
+        for entry in parsed.entries:
+            title = entry.get("title") or ""
+            link = entry.get("link")
+            summary = entry.get("summary") or entry.get("description") or ""
+            published = entry.get("published") or entry.get("updated") or ""
+            try:
+                ts = dtparse.parse(published).astimezone(UTC) if published else now_utc()
+            except Exception:
+                ts = now_utc()
+            if ts < now_cut:
+                continue
+
+            raw_txt = f"{title}\n{summary}"
+            hazard = hazard_type_from_text(raw_txt)
+            sev = severity_from_text(raw_txt)
+
+            # Light location heuristic from title ("… in <place>")
+            loc = None
+            lowered = title.lower()
+            if " in " in lowered:
+                loc = title[lowered.index(" in ") + 4 :].strip()
+
+            src_id = entry.get("id") or link or sha1(f"{title}|{published}")
+
+            # The 'details' are the RSS summary/description HTML snippet
+            results.append(
+                {
+                    "source": "gdacs",
+                    "id": src_id,
+                    "ts": iso(ts),
+                    "type": hazard,
+                    "severity": sev,
+                    "title": title,
+                    "body": (summary[:4000] if isinstance(summary, str) else ""),
+                    "details": (summary if isinstance(summary, str) else ""),
+                    "lat": None,
+                    "lon": None,
+                    "links": [link] if link else [],
+                    "location": loc,
+                }
+            )
+        if results:
+            return results
+    except Exception as e:
+        print("[warn] GDACS RSS fetch failed, falling back to JSON:", e, file=sys.stderr)
+
+    # --- Fallback: the JSON endpoints (existing behavior) ---
     data = fetch_json_any(GDACS_ENDPOINTS, timeout=25)
     if not data:
         return []
@@ -328,7 +433,7 @@ def fetch_gdacs() -> List[dict]:
             or properties.get("identifier")
             or properties.get("eventid")
         )
-        event_type = (properties.get("eventtype") or "").lower()
+        event_type_val = (properties.get("eventtype") or "").lower()
         name = (
             properties.get("eventname")
             or properties.get("title")
@@ -347,31 +452,39 @@ def fetch_gdacs() -> List[dict]:
             timestamp = now_utc()
         if timestamp < now_utc() - timedelta(hours=48):
             continue
+
         severity = severity_from_gdacs_color(alert)
-        hazard_type = {
+        hazard_map = {
             "eq": "quake",
             "tc": "cyclone",
             "vo": "ash",
-        }.get(event_type, "other")
-        title_base = f"{(alert or '').upper()} {event_type.upper()}"
-        payload = {
-            "source": "gdacs",
-            "id": event_id,
-            "ts": iso(timestamp),
-            "type": hazard_type,
-            "severity": severity,
-            "title": f"{title_base} — {name}" if name else title_base,
-            "body": f"GDACS {event_type.upper()} alert: {name or 'Unnamed'}",
-            "lat": lat,
-            "lon": lon,
-            "links": [properties.get("link")] if properties.get("link") else [],
-            "gdacs_color": alert,
+            "fl": "flood",
+            "wf": "wildfire",
+            "dr": "drought",
+            "ls": "landslide",
+            "st": "storm",
         }
-        if event_type == "eq":
-            payload["mag"] = properties.get("magnitude")
-        if event_type == "tc":
-            payload["stormname"] = name
-        results.append(payload)
+        hazard_type = hazard_map.get(event_type_val, "other")
+        title_base = f"{(alert or '').upper()} {event_type_val.upper() or 'EVENT'}"
+        details = properties.get("description") or properties.get("text") or ""
+
+        results.append(
+            {
+                "source": "gdacs",
+                "id": event_id,
+                "ts": iso(timestamp),
+                "type": hazard_type,
+                "severity": severity,
+                "title": f"{title_base} — {name}" if name else title_base,
+                "body": (details[:4000] if isinstance(details, str) else f"GDACS {event_type_val.upper()} alert"),
+                "details": details,
+                "lat": lat,
+                "lon": lon,
+                "links": [properties.get("link")] if properties.get("link") else [],
+                "gdacs_color": alert,
+                "location": properties.get("country") or properties.get("eventname"),
+            }
+        )
     return results
 
 
@@ -551,7 +664,7 @@ def compose_title(item: dict) -> str:
         return f"⚠️ {severity.upper()} — Cyclone {name}".strip()
     if item_type == "ash":
         return f"⚠️ {severity.upper()} — Volcanic Ash Advisory"
-    return f"⚠️ {severity.upper()} — Hazard Update"
+    return f"⚠️ {severity.upper()} — {item_type.capitalize() if item_type else 'Hazard'} — {item.get('title')}"
 
 
 def compose_body(item: dict) -> str:
@@ -561,6 +674,9 @@ def compose_body(item: dict) -> str:
             lines.append(f"<li><strong>Magnitude:</strong> M{item['mag']:.1f}</li>")
         if item.get("title"):
             lines.append(f"<li><strong>Summary:</strong> {item['title']}</li>")
+    details = item.get("details")
+    if details:
+        lines.append(f"<li><strong>Details:</strong> {details}</li>")
     if item.get("lat") is not None and item.get("lon") is not None:
         lines.append(f"<li><strong>Location:</strong> {item['lat']:.2f}, {item['lon']:.2f}</li>")
     lines.append(f"<li><strong>Time:</strong> {item['ts']}</li>")
@@ -615,12 +731,23 @@ def slugify_instant(item: dict) -> str:
 
 def instant_categories(categories: Dict[str, int], item: dict) -> List[int]:
     base: List[int] = []
-    if item.get("type") == "quake":
+    t = item.get("type")
+    if t == "quake":
         base.append(categories["Earthquake"])
-    elif item.get("type") == "cyclone":
+    elif t == "cyclone":
         base.append(categories["Cyclone"])
-    elif item.get("type") == "ash":
+    elif t == "ash":
         base.append(categories["Volcano/Ash"])
+    elif t == "flood":
+        base.append(categories["Flood"])
+    elif t == "wildfire":
+        base.append(categories["Wildfire"])
+    elif t == "drought":
+        base.append(categories["Drought"])
+    elif t == "storm":
+        base.append(categories["Storm"])
+    elif t == "landslide":
+        base.append(categories["Landslide"])
     return base
 
 
@@ -758,6 +885,7 @@ def run_once() -> None:
                 "title": title,
                 "location": loc,
                 "severity": sev,
+                "details": it.get("details"),
                 "payload": it,
                 "hash": h,
             }
