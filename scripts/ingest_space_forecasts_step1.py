@@ -682,14 +682,18 @@ async def ingest_enlil(
             # Speed (km/s) – accept multiple aliases; convert m/s if value is unusually large
             cme_speed_kms = _first_float(
                 impact,
-                "speed", "cmeSpeed", "impactSpeed", "radialSpeed", "velocity", "v", "speed_kms",
+                # common DONKI/impact aliases
+                "arrivalSpeed", "arrival_speed",
+                "impactSpeed", "impact_speed",
+                "radialSpeed", "radial_speed",
+                "speed_kms", "speed", "velocity", "v"
             )
             if cme_speed_kms is not None and cme_speed_kms > 3000:
                 # looks like m/s, convert to km/s
                 cme_speed_kms = cme_speed_kms / 1000.0
             # Sometimes speed sits on parent entry (simulation-level); try a gentle fallback
             if cme_speed_kms is None:
-                cme_speed_kms = _first_float(entry, "speed", "cmeSpeed", "radialSpeed")
+                cme_speed_kms = _first_float(entry, "arrivalSpeed", "arrival_speed", "speed", "cmeSpeed", "radialSpeed")
 
             # Kp estimate – prefer the highest available among common keys
             kp_candidates = []
@@ -722,6 +726,24 @@ async def ingest_enlil(
                         kp_est = float(row["kp"])
                 except Exception as exc:
                     logger.debug("scoreboard Kp fallback failed: %s", exc)
+
+            # Confidence fallback via number of Scoreboard predictions near the arrival window
+            if confidence is None and arrival is not None and writer._conn is not None:
+                try:
+                    rowc = await writer._conn.fetchrow(
+                        """
+                        select count(*) as n
+                        from ext.cme_scoreboard
+                        where coalesce(predicted_arrival, observed_arrival) between $1 and $2
+                        """,
+                        arrival - timedelta(hours=12),
+                        arrival + timedelta(hours=12),
+                    )
+                    if rowc and rowc["n"] is not None:
+                        n = int(rowc["n"])
+                        confidence = "high" if n >= 5 else ("medium" if n >= 2 else "low")
+                except Exception as exc:
+                    logger.debug("scoreboard confidence fallback failed: %s", exc)
 
             # Log missing fields for diagnostics
             if arrival is None:
