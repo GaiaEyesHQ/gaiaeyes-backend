@@ -34,7 +34,9 @@
 - `GET /v1/space/xray/history`
 - `GET /v1/space/magnetosphere`
 - `GET /v1/space/forecast/summary`
-- `GET /v1/space/forecast/outlook`
+- `GET /v1/space/forecast/outlook` (includes `bulletins` and `swpc_text_alerts` when available)
+- `GET /v1/space/forecast/bulletins`
+- `GET /v1/space/alerts/swpc`
 - `GET /v1/space/series` and `GET /v1/series` (legacy alias)
 
 ### Earth + quakes

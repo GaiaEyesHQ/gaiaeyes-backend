@@ -847,6 +847,32 @@ async def space_forecast_outlook(conn = Depends(get_db)) -> Dict[str, Any]:
             )
             drap_rows = await cur.fetchall() or []
 
+            # Latest SWPC textual bulletins (one per src) from ext.space_forecast
+            await cur.execute(
+                """
+                with latest as (
+                  select distinct on (src) src, fetched_at, body_text
+                    from ext.space_forecast
+                   order by src, fetched_at desc
+                )
+                select src, fetched_at, body_text
+                  from latest
+                 order by src asc
+                """
+            )
+            bulletin_rows = await cur.fetchall() or []
+
+            # Recent textual alerts from ext.space_alerts (last 48h)
+            await cur.execute(
+                """
+                select issued_at, src, message
+                  from ext.space_alerts
+                 where issued_at >= (now() at time zone 'utc') - interval '48 hours'
+                 order by issued_at desc
+                """
+            )
+            alerts_text_rows = await cur.fetchall() or []
+
     except Exception as exc:
         return {"ok": False, "error": f"outlook query failed: {exc}"}
 
@@ -976,6 +1002,35 @@ async def space_forecast_outlook(conn = Depends(get_db)) -> Dict[str, Any]:
         for row in drap_rows
     ]
 
+    # Normalize SWPC bulletins into a friendly keyed dict
+    bulletins: Dict[str, Any] = {}
+    for r in (bulletin_rows or []):
+        src = str(r.get("src") or "").lower()
+        item = {
+            "issued": _iso(r.get("fetched_at")) if isinstance(r.get("fetched_at"), datetime) else str(r.get("fetched_at")),
+            "text": r.get("body_text"),
+        }
+        key_map = {
+            "noaa-swpc": "three_day",
+            "swpc-3-day-forecast": "three_day",
+            "swpc-3day": "three_day",
+            "swpc-discussion": "discussion",
+            "swpc-weekly": "weekly",
+            "swpc-advisory-outlook": "advisory_outlook",
+        }
+        k = key_map.get(src, src.replace("swpc-", "").replace("noaa-", ""))
+        bulletins[k] = item
+
+    # Flatten recent textual alerts
+    swpc_text_alerts = [
+        {
+            "ts": _iso(r.get("issued_at")) if isinstance(r.get("issued_at"), datetime) else str(r.get("issued_at")),
+            "src": r.get("src"),
+            "message": r.get("message"),
+        }
+        for r in (alerts_text_rows or [])
+    ]
+
     return {
         "ok": True,
         "kp": kp_block,
@@ -986,6 +1041,8 @@ async def space_forecast_outlook(conn = Depends(get_db)) -> Dict[str, Any]:
         "impacts": impacts,
         "flares": flares_block,
         "cmes": cmes_block,
+        "bulletins": bulletins,
+        "swpc_text_alerts": swpc_text_alerts,
         "data": {
             "cme_arrivals": arrivals_fmt,
             "sep": sep_block,
@@ -995,29 +1052,105 @@ async def space_forecast_outlook(conn = Depends(get_db)) -> Dict[str, Any]:
     }
 
 
-# --- Lightweight forecast summary endpoint ---
+# --- Lightweight summary endpoint ---
 @router.get("/forecast/summary")
 async def space_forecast_summary(conn = Depends(get_db)) -> Dict[str, Any]:
     """
-    Backward‑compatible lightweight summary that wraps /v1/space/forecast/outlook.
-    Returns only the headline, KP block, alerts, impacts, confidence, and an updated timestamp.
+    Lightweight wrapper around /v1/space/forecast/outlook that returns only the
+    headline bits used by the writer/UX. Keeps the same semantics as outlook,
+    but trims the payload to: ok, updated, headline, confidence, kp, alerts, impacts.
     """
-    try:
-        # Reuse the full outlook builder to guarantee consistent logic/thresholds.
-        outlook = await space_forecast_outlook(conn)
-    except Exception as exc:
-        return {"ok": False, "error": f"summary failed: {exc}"}
+    # Reuse the outlook generator with the same DB cursor (FastAPI will inject `conn`)
+    resp = await space_forecast_outlook(conn)  # type: ignore
 
-    # If the outlook call itself failed, pass through its error if present.
-    if not isinstance(outlook, dict) or not outlook.get("ok"):
-        return outlook if isinstance(outlook, dict) else {"ok": False, "error": "outlook unavailable"}
+    # If outlook failed, bubble through the error
+    if not isinstance(resp, dict) or not resp.get("ok"):
+        return resp
 
+    updated = datetime.now(timezone.utc).isoformat()
     return {
         "ok": True,
-        "updated": datetime.now(timezone.utc).isoformat(),
-        "headline": outlook.get("headline"),
-        "confidence": outlook.get("confidence"),
-        "kp": outlook.get("kp"),
-        "alerts": outlook.get("alerts", []),
-        "impacts": outlook.get("impacts"),
+        "updated": updated,
+        "headline": resp.get("headline"),
+        "confidence": resp.get("confidence"),
+        "kp": resp.get("kp"),
+        "alerts": resp.get("alerts"),
+        "impacts": resp.get("impacts"),
     }
+
+
+# --- SWPC bulletins endpoint (compact) ---
+@router.get("/forecast/bulletins")
+async def space_forecast_bulletins(conn = Depends(get_db)) -> Dict[str, Any]:
+    """
+    Latest SWPC textual bulletins from ext.space_forecast (one per src).
+    Keys normalized to: three_day, discussion, weekly, advisory_outlook.
+    """
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute("set statement_timeout = 60000")
+            await cur.execute(
+                '''
+                with latest as (
+                  select distinct on (src) src, fetched_at, body_text
+                    from ext.space_forecast
+                   order by src, fetched_at desc
+                )
+                select src, fetched_at, body_text
+                  from latest
+                 order by src asc
+                '''
+            )
+            rows = await cur.fetchall() or []
+    except Exception as exc:
+        return {"ok": False, "error": f"bulletins query failed: {exc}"}
+
+    bulletins: Dict[str, Any] = {}
+    key_map = {
+        "noaa-swpc": "three_day",
+        "swpc-3-day-forecast": "three_day",
+        "swpc-3day": "three_day",
+        "swpc-discussion": "discussion",
+        "swpc-weekly": "weekly",
+        "swpc-advisory-outlook": "advisory_outlook",
+    }
+    for r in rows:
+        src = str(r.get("src") or "").lower()
+        k = key_map.get(src, src.replace("swpc-", "").replace("noaa-", ""))
+        bulletins[k] = {
+            "issued": _iso(r.get("fetched_at")) if isinstance(r.get("fetched_at"), datetime) else str(r.get("fetched_at")),
+            "text": r.get("body_text"),
+        }
+    return {"ok": True, "bulletins": bulletins}
+
+
+# --- SWPC textual alerts (last 48h) ---
+@router.get("/alerts/swpc")
+async def space_alerts_swpc(conn = Depends(get_db)) -> Dict[str, Any]:
+    """
+    Recent textual alerts/messages ingested to ext.space_alerts (last 48h).
+    """
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute("set statement_timeout = 60000")
+            await cur.execute(
+                """
+                select issued_at, src, message
+                  from ext.space_alerts
+                 where issued_at >= (now() at time zone 'utc') - interval '48 hours'
+                 order by issued_at desc
+                """
+            )
+            rows = await cur.fetchall() or []
+    except Exception as exc:
+        return {"ok": False, "error": f"swpc alerts query failed: {exc}"}
+
+    alerts = [
+        {
+            "ts": _iso(r.get("issued_at")) if isinstance(r.get("issued_at"), datetime) else str(r.get("issued_at")),
+            "src": r.get("src"),
+            "message": r.get("message"),
+        }
+        for r in rows
+    ]
+    return {"ok": True, "alerts": alerts}
