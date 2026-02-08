@@ -1690,6 +1690,143 @@ async def ingest_solar_cycle(
         )
 
 
+async def ingest_swpc_bulletins(
+    client: httpx.AsyncClient,
+    writer: SupabaseWriter,
+) -> None:
+    """
+    Ingest SWPC text bulletins into ext.space_forecast.
+
+    Sources:
+      - 3-day forecast
+      - advisory-outlook
+      - discussion
+      - weekly
+
+    We store the raw text and a stable `src` label so downstream routers can
+    pick the latest per-type.
+    """
+    logger.info("Fetching SWPC text bulletins")
+    now = datetime.now(tz=UTC)
+
+    endpoints = {
+        "noaa-swpc:3-day-forecast": "https://services.swpc.noaa.gov/text/3-day-forecast.txt",
+        "noaa-swpc:advisory-outlook": "https://services.swpc.noaa.gov/text/advisory-outlook.txt",
+        "noaa-swpc:discussion": "https://services.swpc.noaa.gov/text/discussion.txt",
+        "noaa-swpc:weekly": "https://services.swpc.noaa.gov/text/weekly.txt",
+    }
+
+    rows: list[dict[str, Any]] = []
+    for src, url in endpoints.items():
+        try:
+            body = await fetch_text(client, url)
+        except httpx.HTTPError as exc:
+            logger.warning("Bulletin fetch failed for %s (%s)", src, exc)
+            continue
+        # Trim leading/trailing whitespace but keep content intact.
+        body_text = body.strip()
+        if not body_text:
+            continue
+        rows.append(
+            {
+                "fetched_at": now,
+                "src": src,
+                "body_text": body_text,
+            }
+        )
+
+    if rows:
+        # ext.space_forecast has a PK on (fetched_at, src)
+        inserted = await writer.upsert_many(
+            "ext",
+            "space_forecast",
+            rows,
+            conflict_cols=None,
+            constraint="space_forecast_pkey",
+            skip_update_cols=["fetched_at", "src"],
+        )
+        logger.info("Upserted %d SWPC bulletins into ext.space_forecast", inserted)
+    else:
+        logger.info("No SWPC bulletins ingested (all fetches failed?)")
+
+
+async def ingest_swpc_alerts(
+    client: httpx.AsyncClient,
+    writer: SupabaseWriter,
+) -> None:
+    """
+    Ingest SWPC active alerts JSON into ext.space_alerts.
+
+    Source:
+      - https://services.swpc.noaa.gov/products/alerts.json
+
+    We try to normalize the timestamp and a human message; full record is kept in `meta`.
+    """
+    logger.info("Fetching SWPC active alerts")
+    try:
+        data = await fetch_json(client, "https://services.swpc.noaa.gov/products/alerts.json")
+    except (httpx.HTTPError, json.JSONDecodeError) as exc:
+        logger.warning("SWPC alerts fetch failed: %s", exc)
+        return
+
+    # The alerts feed is typically a list of dicts. Be defensive.
+    items = data if isinstance(data, list) else ([data] if isinstance(data, dict) else [])
+    rows: list[dict[str, Any]] = []
+
+    for rec in items:
+        if not isinstance(rec, dict):
+            continue
+
+        # Try a variety of timestamp keys commonly seen.
+        issued = _parse_dt(
+            rec.get("issueTime")
+            or rec.get("issued")
+            or rec.get("timeIssued")
+            or rec.get("product_issue_time")
+            or rec.get("timestamp")
+            or rec.get("time_tag")
+        )
+        if issued is None:
+            # Skip entries with no sensible time.
+            continue
+
+        # Message/headline extraction (fallback to a compact stringified payload).
+        message = (
+            rec.get("message")
+            or rec.get("headline")
+            or rec.get("event")
+            or rec.get("product_id")
+            or rec.get("alert")
+        )
+        if message is None:
+            # Last-resort message: a short JSON preview
+            try:
+                message = json.dumps({k: rec[k] for k in list(rec.keys())[:3]})
+            except Exception:
+                message = "SWPC alert"
+
+        rows.append(
+            {
+                "issued_at": issued,
+                "src": "noaa-swpc",
+                "message": str(message),
+                "meta": json.dumps(rec),
+            }
+        )
+
+    if not rows:
+        logger.info("SWPC alerts feed contained no usable records")
+        return
+
+    inserted = await writer.upsert_many(
+        "ext",
+        "space_alerts",
+        rows,
+        conflict_cols=["issued_at", "src", "message"],
+    )
+    logger.info("Upserted %d records into ext.space_alerts", inserted)
+
+
 async def ingest_magnetometer(
     client: httpx.AsyncClient,
     writer: SupabaseWriter,
@@ -1925,6 +2062,8 @@ async def run_ingestion(args: argparse.Namespace) -> None:
         "scoreboard": ingest_cme_scoreboard,
         "drap": ingest_drap,
         "solar": ingest_solar_cycle,
+        "bulletins": ingest_swpc_bulletins,
+        "alerts": ingest_swpc_alerts,
         "magnetometer": ingest_magnetometer,
     }
     selected = set(args.only or feeds.keys())
@@ -1956,6 +2095,10 @@ async def run_ingestion(args: argparse.Namespace) -> None:
                 await ingest_drap(client, writer, args.days)
             if "solar" in selected:
                 await ingest_solar_cycle(client, writer)
+            if "bulletins" in selected:
+                await ingest_swpc_bulletins(client, writer)
+            if "alerts" in selected:
+                await ingest_swpc_alerts(client, writer)
             if "magnetometer" in selected:
                 await ingest_magnetometer(client, writer, args.days)
 
@@ -1966,7 +2109,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--only",
         nargs="+",
-        help="subset of feeds to run (enlil, sep, radiation, xray, aurora, coronal, scoreboard, drap, solar, magnetometer)",
+        help="subset of feeds to run (enlil, sep, radiation, xray, aurora, coronal, scoreboard, drap, solar, bulletins, alerts, magnetometer)",
     )
     parser.add_argument("--dry-run", action="store_true", help="skip Supabase writes")
     return parser
