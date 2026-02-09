@@ -84,7 +84,8 @@ final class HealthKitBackgroundSync {
         healthStore.enableBackgroundDelivery(for: spo2Type, frequency: .immediate) { ok, err in appLog("[HK] bg delivery spo2: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
         healthStore.enableBackgroundDelivery(for: stepsType,frequency: .immediate) { ok, err in appLog("[HK] bg delivery step_count: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
         healthStore.enableBackgroundDelivery(for: hrvType,  frequency: .immediate) { ok, err in appLog("[HK] bg delivery hrv_sdnn: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
-        healthStore.enableBackgroundDelivery(for: bpType,   frequency: .immediate) { ok, err in appLog("[HK] bg delivery blood_pressure: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
+        // Blood pressure background delivery is not supported by HealthKit.
+        appLog("[HK] bg delivery blood_pressure: skipped (not supported)")
         healthStore.enableBackgroundDelivery(for: sleepType,frequency: .immediate) { ok, err in appLog("[HK] bg delivery sleep_stage: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
     }
 
@@ -625,4 +626,3 @@ private final class AnchorStore {
         for key in keys { UserDefaults.standard.removeObject(forKey: "hk_anchor_\(key)") }
     }
 }
-

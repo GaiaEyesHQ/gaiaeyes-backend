@@ -1159,6 +1159,16 @@ struct ContentView: View {
         return nil
     }
 
+    private static func resolvedMediaURL(_ path: String?) -> URL? {
+        guard let raw = path?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        if let direct = URL(string: raw), direct.scheme != nil { return direct }
+        let rel = raw.hasPrefix("/") ? String(raw.dropFirst()) : raw
+        guard let base = mediaBaseURL else { return URL(string: raw) }
+        return rel.split(separator: "/").reduce(base) { url, seg in
+            url.appendingPathComponent(String(seg))
+        }
+    }
+
     @MainActor
     private func applySpaceVisuals(_ payload: SpaceVisualsPayload) {
         spaceVisuals = payload
@@ -2644,9 +2654,9 @@ struct ContentView: View {
         @State private var viewerPayload: MediaViewerPayload? = nil
 
         var body: some View {
-            let nowNorth = URL(string: "https://services.swpc.noaa.gov/images/animations/ovation/north/latest.jpg")
-            let tonightU = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tonights_static_viewline_forecast.png")
-            let tomorrowU = URL(string: "https://services.swpc.noaa.gov/experimental/images/aurora_dashboard/tomorrow_nights_static_viewline_forecast.png")
+            let nowNorth = ContentView.resolvedMediaURL("aurora/viewline/tonight-north.png")
+            let tonightU = ContentView.resolvedMediaURL("aurora/viewline/tonight.png")
+            let tomorrowU = ContentView.resolvedMediaURL("aurora/viewline/tomorrow.png")
 
             if nowNorth != nil || tonightU != nil || tomorrowU != nil {
                 GroupBox {
@@ -2946,16 +2956,18 @@ struct ContentView: View {
                 async let a: Void = fetchFeaturesToday(trigger: .initial)
                 async let b: Void = fetchForecastSummary()
                 async let c: Void = fetchSpaceSeries(days: 30)
+                async let h: Void = fetchSpaceOutlook()
+                async let i: Void = fetchLocalHealth()
+                _ = await (a, b, c, h, i)
+                try? await Task.sleep(nanoseconds: 350_000_000)
                 async let d: Void = fetchSymptoms(api: api)
                 async let e: Void = state.flushQueuedSymptoms(api: api)
                 async let f: Void = refreshSymptomPresets(api: api)
                 async let g: Void = fetchSpaceVisuals()
-                async let h: Void = fetchSpaceOutlook()
-                async let i: Void = fetchLocalHealth()
                 async let j: Void = fetchMagnetosphere()
                 async let k: Void = fetchQuakes()
                 async let l: Void = fetchHazardsBrief()
-                _ = await (a, b, c, d, e, f, g, h, i, j, k, l)
+                _ = await (d, e, f, g, j, k, l)
             }
             .refreshable {
                 await state.updateBackendDBFlag()
@@ -2963,23 +2975,34 @@ struct ContentView: View {
                 let guardRemaining = await MainActor.run { featuresRefreshGuardUntil.timeIntervalSinceNow }
                 async let b: Void = fetchForecastSummary()
                 async let c: Void = fetchSpaceSeries(days: 30)
+                async let h: Void = fetchSpaceOutlook()
+                async let i: Void = fetchLocalHealth()
+                if guardRemaining > 0 {
+                    let remaining = max(1, Int(ceil(guardRemaining)))
+                    appLog("[UI] pull-to-refresh: guard active (~\(remaining)s); skipping features refresh")
+                    _ = await (b, c, h, i)
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    async let d: Void = fetchSymptoms(api: api)
+                    async let e: Void = state.flushQueuedSymptoms(api: api)
+                    async let f: Void = refreshSymptomPresets(api: api)
+                    async let g: Void = fetchSpaceVisuals()
+                    async let j: Void = fetchMagnetosphere()
+                    async let k: Void = fetchQuakes()
+                    async let l: Void = fetchHazardsBrief()
+                    _ = await (d, e, f, g, j, k, l)
+                    return
+                }
+                async let a: Void = fetchFeaturesToday(trigger: .refresh)
+                _ = await (a, b, c, h, i)
+                try? await Task.sleep(nanoseconds: 300_000_000)
                 async let d: Void = fetchSymptoms(api: api)
                 async let e: Void = state.flushQueuedSymptoms(api: api)
                 async let f: Void = refreshSymptomPresets(api: api)
                 async let g: Void = fetchSpaceVisuals()
-                async let h: Void = fetchSpaceOutlook()
-                async let i: Void = fetchLocalHealth()
                 async let j: Void = fetchMagnetosphere()
                 async let k: Void = fetchQuakes()
                 async let l: Void = fetchHazardsBrief()
-                if guardRemaining > 0 {
-                    let remaining = max(1, Int(ceil(guardRemaining)))
-                    appLog("[UI] pull-to-refresh: guard active (~\(remaining)s); skipping features refresh")
-                    _ = await (b, c, d, e, f, g, h, i, j, k, l)
-                    return
-                }
-                async let a: Void = fetchFeaturesToday(trigger: .refresh)
-                _ = await (a, b, c, d, e, f, g, h, i, j, k, l)
+                _ = await (d, e, f, g, j, k, l)
             }
             .onAppear {
                 state.refreshStatus()
@@ -4654,8 +4677,9 @@ struct ContentView: View {
             let f1 = latest?.f1.map { String(format: "%.2f Hz", $0) } ?? "—"
             let f2 = latest?.f2.map { String(format: "%.2f Hz", $0) } ?? "—"
             let station = latest?.station_id?.capitalized ?? "—"
-            let tomskURL = MediaBase.cdn.appendingPathComponent("images/tomsk_latest.png")
-            let cumianaURL = MediaBase.cdn.appendingPathComponent("images/cumiana_latest.png")
+            let tomskURL = ContentView.resolvedMediaURL("social/earthscope/latest/tomsk_latest.png")
+            let cumianaURL = ContentView.resolvedMediaURL("social/earthscope/latest/cumiana_latest.png")
+            let schumannURLs = [tomskURL, cumianaURL].compactMap { $0 }
 
             return GroupBox {
                 VStack(alignment: .leading, spacing: 10) {
@@ -4670,22 +4694,24 @@ struct ContentView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                    HStack(spacing: 10) {
-                        ForEach([tomskURL, cumianaURL], id: \.self) { url in
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case .empty:
-                                    ZStack { RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.15)); ProgressView() }
-                                        .frame(width: 150, height: 100)
-                                case .success(let img):
-                                    img.resizable().scaledToFit().frame(width: 150, height: 100).clipShape(RoundedRectangle(cornerRadius: 8))
-                                case .failure:
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color.gray.opacity(0.12))
-                                        .overlay { Image(systemName: "photo").foregroundColor(.secondary) }
-                                        .frame(width: 150, height: 100)
-                                @unknown default:
-                                    EmptyView().frame(width: 150, height: 100)
+                    if !schumannURLs.isEmpty {
+                        HStack(spacing: 10) {
+                            ForEach(schumannURLs, id: \.self) { url in
+                                AsyncImage(url: url) { phase in
+                                    switch phase {
+                                    case .empty:
+                                        ZStack { RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.15)); ProgressView() }
+                                            .frame(width: 150, height: 100)
+                                    case .success(let img):
+                                        img.resizable().scaledToFit().frame(width: 150, height: 100).clipShape(RoundedRectangle(cornerRadius: 8))
+                                    case .failure:
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color.gray.opacity(0.12))
+                                            .overlay { Image(systemName: "photo").foregroundColor(.secondary) }
+                                            .frame(width: 150, height: 100)
+                                    @unknown default:
+                                        EmptyView().frame(width: 150, height: 100)
+                                    }
                                 }
                             }
                         }

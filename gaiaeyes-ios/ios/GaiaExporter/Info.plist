@@ -5,6 +5,7 @@
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.gaiaexporter.refresh</string>
+		<string>com.gaiaexporter.processing</string>
 	</array>
 	<key>MEDIA_BASE_URL</key>
 	<string>https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals</string>
