@@ -831,6 +831,10 @@ struct ContentView: View {
     @State private var interactiveOverlaySeries: [OverlaySeries] = []
     @State private var interactiveBaseURL: URL? = nil
     @State private var showInteractiveViewer: Bool = false
+    @State private var showHazards: Bool = false
+    @State private var showQuakes: Bool = false
+    @State private var showAuroraForecast: Bool = false
+    @State private var showMagnetosphere: Bool = false
     
     private func chicagoTodayString() -> String {
         let df = DateFormatter()
@@ -2290,31 +2294,34 @@ struct ContentView: View {
                 visualsSnapshot: visualsSnapshot,
                 overlayCount: overlayCount,
                 overlayUpdated: overlayUpdated,
-                auroraPowerValue: auroraPowerValue,
-                auroraWingKp: auroraWingKp,
-                auroraProbabilityText: auroraProbability,
                 updatedText: updatedText,
                 usingYesterdayFallback: usingYesterdayFallback,
-                hazardsBrief: hazardsBrief,
-                hazardsLoading: hazardsLoading,
-                hazardsError: hazardsError,
                 forecast: forecast,
-                seriesForCharts: seriesForCharts,
                 outlook: resolvedOutlook,
                 seriesDetail: seriesDetail,
-                quakeLatest: quakeLatest,
-                quakeEvents: quakeEvents,
-                quakeError: quakeError,
-                symptomHighlights: symptomHighlightList,
                 showVisualsPreview: AppConfig.showVisualsPreview,
                 onSelectVisual: onSelectVisual,
                 showSpaceWeatherDetail: $showSpaceWeatherDetail,
-                spaceDetailFocus: $spaceDetailFocus,
-                showTrends: $showTrends
+                spaceDetailFocus: $spaceDetailFocus
             )
             DashboardToolsSectionView(
                 current: current,
                 state: state,
+                seriesForCharts: seriesForCharts,
+                symptomHighlights: symptomHighlightList,
+                showTrends: $showTrends,
+                hazardsBrief: hazardsBrief,
+                hazardsLoading: hazardsLoading,
+                hazardsError: hazardsError,
+                showHazards: $showHazards,
+                quakeLatest: quakeLatest,
+                quakeEvents: quakeEvents,
+                quakeError: quakeError,
+                showQuakes: $showQuakes,
+                auroraPowerValue: auroraPowerValue,
+                auroraWingKp: auroraWingKp,
+                auroraProbabilityText: auroraProbability,
+                showAuroraForecast: $showAuroraForecast,
                 magnetosphere: magnetosphere,
                 magnetosphereLoading: magnetosphereLoading,
                 magnetosphereError: magnetosphereError,
@@ -2329,7 +2336,8 @@ struct ContentView: View {
                 showActions: $showActions,
                 showBle: $showBle,
                 showPolar: $showPolar,
-                onFetchVisuals: { Task { await fetchSpaceVisuals() } }
+                onFetchVisuals: { Task { await fetchSpaceVisuals() } },
+                showMagnetosphere: $showMagnetosphere
             )
         }
     }
@@ -2444,27 +2452,15 @@ struct ContentView: View {
         let visualsSnapshot: SpaceVisualsPayload?
         let overlayCount: Int
         let overlayUpdated: String?
-        let auroraPowerValue: Double?
-        let auroraWingKp: Double?
-        let auroraProbabilityText: String?
         let updatedText: String?
         let usingYesterdayFallback: Bool
-        let hazardsBrief: HazardsBriefResponse?
-        let hazardsLoading: Bool
-        let hazardsError: String?
         let forecast: ForecastSummary?
-        let seriesForCharts: SpaceSeries
         let outlook: SpaceForecastOutlook?
         let seriesDetail: SpaceSeries?
-        let quakeLatest: QuakeDaily?
-        let quakeEvents: [QuakeEvent]
-        let quakeError: String?
-        let symptomHighlights: [SymptomHighlight]
         let showVisualsPreview: Bool
         let onSelectVisual: (SpaceVisualItem) -> Void
         @Binding var showSpaceWeatherDetail: Bool
         @Binding var spaceDetailFocus: SpaceDetailSection?
-        @Binding var showTrends: Bool
 
         var body: some View {
             VStack(spacing: 16) {
@@ -2478,22 +2474,6 @@ struct ContentView: View {
                     seriesDetail: seriesDetail,
                     showSpaceWeatherDetail: $showSpaceWeatherDetail,
                     spaceDetailFocus: $spaceDetailFocus
-                )
-
-                HazardsBriefCard(payload: hazardsBrief, isLoading: hazardsLoading, error: hazardsError)
-                    .padding(.horizontal)
-
-                EarthquakesSummaryCard(
-                    latest: quakeLatest,
-                    events: quakeEvents,
-                    error: quakeError
-                )
-                .padding(.horizontal)
-
-                AuroraThumbsSectionView(
-                    auroraPowerValue: auroraPowerValue,
-                    auroraWingKp: auroraWingKp,
-                    auroraProbabilityText: auroraProbabilityText
                 )
 
                 VisualsPreviewSectionView(
@@ -2511,10 +2491,7 @@ struct ContentView: View {
 
                 AlertsForecastTrendsSectionView(
                     current: current,
-                    forecast: forecast,
-                    series: seriesForCharts,
-                    symptomHighlights: symptomHighlights,
-                    showTrends: $showTrends
+                    forecast: forecast
                 )
             }
         }
@@ -2776,9 +2753,6 @@ struct ContentView: View {
     private struct AlertsForecastTrendsSectionView: View {
         let current: FeaturesToday
         let forecast: ForecastSummary?
-        let series: SpaceSeries
-        let symptomHighlights: [SymptomHighlight]
-        @Binding var showTrends: Bool
 
         var body: some View {
             VStack(spacing: 16) {
@@ -2790,17 +2764,6 @@ struct ContentView: View {
                 if let fc = forecast {
                     ForecastCard(summary: fc).padding(.horizontal)
                 }
-                DisclosureGroup(isExpanded: $showTrends) {
-                    SpaceChartsCard(series: series, highlights: symptomHighlights)
-                        .padding(.horizontal)
-                } label: {
-                    HStack {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                        Text("Weekly Trends (Kp, Bz, f0, HR)")
-                        Spacer()
-                    }
-                }
-                .padding(.horizontal)
             }
         }
     }
@@ -2808,6 +2771,21 @@ struct ContentView: View {
     private struct DashboardToolsSectionView: View {
         let current: FeaturesToday
         @ObservedObject var state: AppState
+        let seriesForCharts: SpaceSeries
+        let symptomHighlights: [SymptomHighlight]
+        @Binding var showTrends: Bool
+        let hazardsBrief: HazardsBriefResponse?
+        let hazardsLoading: Bool
+        let hazardsError: String?
+        @Binding var showHazards: Bool
+        let quakeLatest: QuakeDaily?
+        let quakeEvents: [QuakeEvent]
+        let quakeError: String?
+        @Binding var showQuakes: Bool
+        let auroraPowerValue: Double?
+        let auroraWingKp: Double?
+        let auroraProbabilityText: String?
+        @Binding var showAuroraForecast: Bool
         let magnetosphere: MagnetosphereData?
         let magnetosphereLoading: Bool
         let magnetosphereError: String?
@@ -2823,20 +2801,10 @@ struct ContentView: View {
         @Binding var showBle: Bool
         @Binding var showPolar: Bool
         let onFetchVisuals: () -> Void
+        @Binding var showMagnetosphere: Bool
 
         var body: some View {
             VStack(spacing: 16) {
-                MagnetosphereCard(
-                    data: magnetosphere,
-                    isLoading: magnetosphereLoading,
-                    error: magnetosphereError,
-                    onOpenDetail: { showMagnetosphereDetail = true }
-                )
-                .padding(.horizontal)
-                .sheet(isPresented: $showMagnetosphereDetail) {
-                    MagnetosphereDetailView(data: magnetosphere)
-                }
-
                 EarthscopeCardV2(title: current.postTitle, caption: current.postCaption, images: current.earthscopeImages, bodyMarkdown: current.postBody)
                     .padding(.horizontal)
 
@@ -2847,6 +2815,82 @@ struct ContentView: View {
                     error: localHealthError,
                     onRefresh: onRefreshLocalHealth
                 )
+                .padding(.horizontal)
+
+                DisclosureGroup(isExpanded: $showTrends) {
+                    SpaceChartsCard(series: seriesForCharts, highlights: symptomHighlights)
+                        .padding(.top, 6)
+                } label: {
+                    HStack {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                        Text("Weekly Trends (Kp, Bz, f0, HR)")
+                        Spacer()
+                    }
+                }
+                .padding(.horizontal)
+
+                DisclosureGroup(isExpanded: $showHazards) {
+                    HazardsBriefCard(payload: hazardsBrief, isLoading: hazardsLoading, error: hazardsError)
+                        .padding(.top, 6)
+                } label: {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                        Text("Global Hazards Brief")
+                        Spacer()
+                    }
+                }
+                .padding(.horizontal)
+
+                DisclosureGroup(isExpanded: $showQuakes) {
+                    EarthquakesSummaryCard(
+                        latest: quakeLatest,
+                        events: quakeEvents,
+                        error: quakeError
+                    )
+                    .padding(.top, 6)
+                } label: {
+                    HStack {
+                        Image(systemName: "waveform.path")
+                        Text("Earthquakes")
+                        Spacer()
+                    }
+                }
+                .padding(.horizontal)
+
+                DisclosureGroup(isExpanded: $showAuroraForecast) {
+                    AuroraThumbsSectionView(
+                        auroraPowerValue: auroraPowerValue,
+                        auroraWingKp: auroraWingKp,
+                        auroraProbabilityText: auroraProbabilityText
+                    )
+                    .padding(.top, 6)
+                } label: {
+                    HStack {
+                        Image(systemName: "sparkles")
+                        Text("Aurora Forecast")
+                        Spacer()
+                    }
+                }
+                .padding(.horizontal)
+
+                DisclosureGroup(isExpanded: $showMagnetosphere) {
+                    MagnetosphereCard(
+                        data: magnetosphere,
+                        isLoading: magnetosphereLoading,
+                        error: magnetosphereError,
+                        onOpenDetail: { showMagnetosphereDetail = true }
+                    )
+                    .padding(.top, 6)
+                    .sheet(isPresented: $showMagnetosphereDetail) {
+                        MagnetosphereDetailView(data: magnetosphere)
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: "shield.fill")
+                        Text("Magnetosphere")
+                        Spacer()
+                    }
+                }
                 .padding(.horizontal)
 
                 DisclosureGroup(isExpanded: $showTools) {
@@ -2964,10 +3008,10 @@ struct ContentView: View {
                 async let e: Void = state.flushQueuedSymptoms(api: api)
                 async let f: Void = refreshSymptomPresets(api: api)
                 async let g: Void = fetchSpaceVisuals()
-                async let j: Void = fetchMagnetosphere()
-                async let k: Void = fetchQuakes()
-                async let l: Void = fetchHazardsBrief()
-                _ = await (d, e, f, g, j, k, l)
+                _ = await (d, e, f, g)
+                if showHazards { await fetchHazardsBrief() }
+                if showQuakes { await fetchQuakes() }
+                if showMagnetosphere { await fetchMagnetosphere() }
             }
             .refreshable {
                 await state.updateBackendDBFlag()
@@ -2986,10 +3030,10 @@ struct ContentView: View {
                     async let e: Void = state.flushQueuedSymptoms(api: api)
                     async let f: Void = refreshSymptomPresets(api: api)
                     async let g: Void = fetchSpaceVisuals()
-                    async let j: Void = fetchMagnetosphere()
-                    async let k: Void = fetchQuakes()
-                    async let l: Void = fetchHazardsBrief()
-                    _ = await (d, e, f, g, j, k, l)
+                    _ = await (d, e, f, g)
+                    if showHazards { await fetchHazardsBrief() }
+                    if showQuakes { await fetchQuakes() }
+                    if showMagnetosphere { await fetchMagnetosphere() }
                     return
                 }
                 async let a: Void = fetchFeaturesToday(trigger: .refresh)
@@ -2999,10 +3043,10 @@ struct ContentView: View {
                 async let e: Void = state.flushQueuedSymptoms(api: api)
                 async let f: Void = refreshSymptomPresets(api: api)
                 async let g: Void = fetchSpaceVisuals()
-                async let j: Void = fetchMagnetosphere()
-                async let k: Void = fetchQuakes()
-                async let l: Void = fetchHazardsBrief()
-                _ = await (d, e, f, g, j, k, l)
+                _ = await (d, e, f, g)
+                if showHazards { await fetchHazardsBrief() }
+                if showQuakes { await fetchQuakes() }
+                if showMagnetosphere { await fetchMagnetosphere() }
             }
             .onAppear {
                 state.refreshStatus()
@@ -3066,6 +3110,24 @@ struct ContentView: View {
                     return
                 }
                 scheduleLocalHealthRefresh()
+            }
+            .onChange(of: showHazards, initial: false) { _, newValue in
+                guard newValue, !hazardsLoading else { return }
+                if hazardsBrief == nil || hazardsBrief?.ok != true {
+                    Task { await fetchHazardsBrief() }
+                }
+            }
+            .onChange(of: showQuakes, initial: false) { _, newValue in
+                guard newValue, !quakeLoading else { return }
+                if quakeEvents.isEmpty {
+                    Task { await fetchQuakes() }
+                }
+            }
+            .onChange(of: showMagnetosphere, initial: false) { _, newValue in
+                guard newValue, !magnetosphereLoading else { return }
+                if magnetosphere == nil {
+                    Task { await fetchMagnetosphere() }
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .featuresShouldRefresh).receive(on: RunLoop.main)) { _ in
                 pendingRefreshTask?.cancel()

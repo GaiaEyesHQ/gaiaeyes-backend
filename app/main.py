@@ -135,6 +135,8 @@ app.include_router(local.router, dependencies=[Depends(require_read_auth)])
 app.include_router(ingest.router, prefix="/v1", dependencies=[Depends(require_write_auth)])
 app.include_router(symptoms.router, prefix="/v1", dependencies=[Depends(require_write_auth)])
 
-# Webhooks are protected by HMAC middleware, not bearer auth
+# Webhooks are protected by HMAC middleware, not bearer auth.
+# Mount under /v1 so Stripe endpoint becomes /v1/webhooks/stripe and
+# entitlements endpoints live under /v1 as well.
 if webhooks_router is not None:
-    app.include_router(webhooks_router)
+    app.include_router(webhooks_router, prefix="/v1")

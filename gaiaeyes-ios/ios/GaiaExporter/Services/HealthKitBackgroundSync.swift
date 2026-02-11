@@ -56,6 +56,7 @@ final class HealthKitBackgroundSync {
     private let featuresRefresher = FeaturesRefreshDebouncer()
     private let processingGate = ProcessingGate()
     @MainActor private weak var appState: AppState?
+    private var didRegisterObservers = false
     private let iso: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -73,6 +74,11 @@ final class HealthKitBackgroundSync {
 
     // Register observers
     func registerObservers() throws {
+        guard !didRegisterObservers else {
+            appLog("[HK] registerObservers: skipped (already registered)")
+            return
+        }
+        didRegisterObservers = true
         try registerObserver(for: hrType, key: "heart_rate")
         try registerObserver(for: spo2Type, key: "spo2")
         try registerObserver(for: stepsType, key: "step_count")
