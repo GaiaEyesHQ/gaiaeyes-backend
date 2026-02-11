@@ -1,6 +1,7 @@
 import logging
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Request, Header
+from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -140,3 +141,19 @@ app.include_router(symptoms.router, prefix="/v1", dependencies=[Depends(require_
 # entitlements endpoints live under /v1 as well.
 if webhooks_router is not None:
     app.include_router(webhooks_router, prefix="/v1")
+else:
+    # Defensive fallback so the /docs show a Stripe webhook route even if the
+    # webhooks module couldn't be imported (e.g., wrong path or missing __init__.py).
+    # This helps you verify the endpoint path and eliminate 404s from Stripe while
+    # you fix the proper import/module layout. Safe to remove once real router is loaded.
+    from fastapi import APIRouter
+
+    fallback_webhooks = APIRouter(prefix="/webhooks", tags=["webhooks"])
+
+    @fallback_webhooks.post("/stripe")
+    async def stripe_webhook_placeholder(request: Request, stripe_signature: Optional[str] = Header(default=None, alias="Stripe-Signature")):
+        body = await request.body()
+        logger.warning("Stripe webhook hit but webhooks router not loaded. bytes=%d sig=%s", len(body or b""), bool(stripe_signature))
+        return {"ok": False, "error": "webhooks router not loaded; ensure app/api/webhooks.py defines `router` and app/api has __init__.py"}
+
+    app.include_router(fallback_webhooks, prefix="/v1")
