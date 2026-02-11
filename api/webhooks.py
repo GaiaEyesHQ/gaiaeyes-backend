@@ -67,6 +67,36 @@ def _upsert_user_entitlement(
         conn.commit()
 
 
+def _upsert_customer_map(customer_id: str, user_id: str) -> None:
+    """
+    Record (or update) the Stripe customer_id -> app user_id mapping.
+    Expects a table public.app_stripe_customers(customer_id text primary key, user_id text, updated_at timestamptz default now()).
+    """
+    with _db_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            insert into public.app_stripe_customers(customer_id, user_id)
+            values (%s, %s)
+            on conflict (customer_id) do update set user_id = excluded.user_id, updated_at = now()
+            """,
+            (customer_id, user_id),
+        )
+        conn.commit()
+
+
+def _resolve_user_id_from_customer(customer_id: str) -> Optional[str]:
+    """
+    Look up app user_id by Stripe customer_id, if we've seen a completed checkout.
+    """
+    with _db_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "select user_id from public.app_stripe_customers where customer_id = %s",
+            (customer_id,),
+        )
+        row = cur.fetchone()
+    return row[0] if row else None
+
+
 def _resolve_user_id_from_metadata(obj: dict) -> Optional[str]:
     """
     We expect you to pass user_id at checkout via either:
@@ -161,13 +191,34 @@ async def stripe_webhook(request: Request, stripe_signature: Optional[str] = Hea
     evt_type = event.get("type") or ""
     obj = (event.get("data") or {}).get("object") or {}
 
+    # Map Checkout Session -> (customer_id, user_id)
+    if evt_type == "checkout.session.completed":
+        # Session carries: customer, client_reference_id, metadata, etc.
+        customer_id = obj.get("customer")
+        if not customer_id:
+            raise HTTPException(status_code=400, detail="checkout.session.completed missing 'customer'")
+
+        user_id = _resolve_user_id_from_metadata(obj)
+        if not user_id:
+            # accept client_reference_id as a fallback if you set it on the pricing table element
+            user_id = obj.get("client_reference_id")
+        if not user_id:
+            raise HTTPException(status_code=400, detail="checkout.session.completed missing user_id (metadata/client_reference_id)")
+
+        _upsert_customer_map(customer_id, user_id)
+        return {"ok": True, "mapped": True, "event": evt_type, "customer": customer_id, "user_id": user_id}
+
     # We only handle subscription events that include items[].price.id inline.
     if evt_type.startswith("customer.subscription."):
         # Resolve the app user
         user_id = _resolve_user_id_from_metadata(obj)
         if not user_id:
-            # Advise: ensure you set subscription_data[metadata][user_id] when creating checkout sessions.
-            raise HTTPException(status_code=400, detail="Missing user_id in subscription metadata")
+            # Fallback to previously recorded customer → user mapping
+            cust = obj.get("customer")
+            if cust:
+                user_id = _resolve_user_id_from_customer(cust)
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Missing user_id (metadata/client_reference_id) and no customer mapping found. Ensure checkout uses client-reference-id or metadata.user_id.")
 
         # Extract price_id from the first item
         items = (obj.get("items") or {}).get("data") or []
