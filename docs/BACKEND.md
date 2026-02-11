@@ -55,6 +55,10 @@
   - Returns: `weather` (temp/humidity/precip_prob/pressure + 24h deltas when cached), `air` (AQI/category/pollutant from AirNow), `moon` (phase/illum), `where` (resolved coords), `asof`.
   - Notes: NOAA NWS requires a User‑Agent (see `WEATHER_UA`). Endpoint may be publicly readable when allowlisted.
 
+### Subscriptions & entitlements
+- `POST /webhooks/stripe` — see **Webhooks → Billing**; Stripe Checkout/Invoices/Subscriptions events are processed here.
+- `POST /webhooks/revenuecat` — see **Webhooks → Billing**; iOS in‑app purchases via RevenueCat are processed here.
+
 ### Features + symptoms
 - `GET /v1/features/today` (daily features snapshot)
 - `POST /v1/symptoms` (log a symptom)
@@ -67,7 +71,13 @@
 - `POST /samples/batch` (samples batch ingest)
 - `POST /v1/samples/batch` (compat alias)
 
-### Webhooks
+## Webhooks
+
+### Billing (subscriptions)
+- `POST /webhooks/stripe` — handles `checkout.session.completed`, `customer.subscription.*`, `invoice.payment_*`. Records Stripe ↔ user mapping and upserts entitlements.
+- `POST /webhooks/revenuecat` — handles RevenueCat/iOS purchase lifecycle events and upserts entitlements.
+
+### Bots / automation
 - `POST /hooks/earthscope`
 - `POST /hooks/social`
 
@@ -79,11 +89,19 @@
 - The backend connects directly to Supabase Postgres via `DATABASE_URL` (or `SUPABASE_DB_URL`) with optional `DIRECT_URL` failover.
 - Storage uploads use `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`.
 
+## Subscriptions integration (data flow)
+- Stripe Checkout (or the Customer Portal) posts to `/webhooks/stripe`. The backend writes:
+  - `public.app_stripe_customers(stripe_customer_id, user_id, created_at, updated_at)`
+  - `public.app_user_entitlements(user_id, entitlement_key, term, source, started_at, expires_at, is_active, updated_at)`
+- (Optional) RevenueCat posts to `/webhooks/revenuecat` with the same upsert behavior.
+- Clients do not call these endpoints directly; they read entitlements from Supabase (or via the app’s entitlements helper).
+
 ## Testing
 - `tests/` exists for backend-related tests.
 - No unified test runner is documented; if you add new tests, document the command in this file.
 
 ## Recent changes
+- New: `/webhooks/stripe` and `/webhooks/revenuecat` for subscription billing (Stripe/RevenueCat).
 - New: `/v1/hazards/gdacs` and `/v1/hazards/gdacs/full` (GDACS RSS upgrade; includes fires, floods, droughts, etc.).
 - New: `/v1/local/check` aggregates NWS hourly grid, AirNow AQI, and moon phase; supports ZIP or lat/lon; cached snapshots power 24h deltas.
 - Updated: `/v1/space/forecast/outlook` now includes real‑time `kp/bz/solar_wind` “now” fields from `marts.space_weather_daily`, and returns `bulletins`/SWPC text when available.
