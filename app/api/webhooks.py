@@ -322,6 +322,62 @@ def get_entitlements(user_id: str):
         } for r in rows
     ]}
 
+@router.get("/entitlements/health")
+def entitlements_health(user_id: str):
+    """
+    Lightweight entitlement check for WP/iOS.
+    Returns a simple tier ('free' | 'plus' | 'pro') and flags for each entitlement.
+    Prefers the view public.app_user_entitlements_active; falls back to base table if needed.
+    """
+    rows = []
+    # Try the active view first
+    try:
+        with _db_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                select entitlement_key, expires_at
+                from public.app_user_entitlements_active
+                where user_id = %s and is_active = true
+                """,
+                (user_id,),
+            )
+            rows = cur.fetchall()
+    except Exception:
+        # Fallback if the view doesn't exist; treat null expires_at as active
+        with _db_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                select entitlement_key, expires_at
+                from public.app_user_entitlements
+                where user_id = %s
+                  and coalesce(expires_at, now() + interval '100 years') > now()
+                """,
+                (user_id,),
+            )
+            rows = cur.fetchall()
+
+    flags = {"plus": False, "pro": False}
+    exp = {}
+    for key, expires_at in rows:
+        k = str(key).lower()
+        if k in flags:
+            flags[k] = True
+            exp[k] = expires_at.isoformat() if expires_at else None
+
+    tier = "free"
+    if flags.get("pro"):
+        tier = "pro"
+    elif flags.get("plus"):
+        tier = "plus"
+
+    return {
+        "ok": True,
+        "user_id": user_id,
+        "tier": tier,
+        "entitlements": flags,
+        "expires_at": exp,
+    }
+
 
 @router.post("/entitlements/manual-grant")
 def manual_grant(payload: ManualGrant):
