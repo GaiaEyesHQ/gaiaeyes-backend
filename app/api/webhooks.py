@@ -7,12 +7,20 @@ import hashlib
 import json
 import datetime as dt
 from typing import Optional, Tuple
+import uuid
 
 from fastapi import APIRouter, Header, HTTPException, Request, Depends, Query
 from pydantic import BaseModel
 import psycopg
 
 router = APIRouter()
+
+def _looks_like_uuid(s: str) -> bool:
+    try:
+        uuid.UUID(str(s))
+        return True
+    except Exception:
+        return False
 
 # --- Environment ---
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
@@ -67,19 +75,29 @@ def _upsert_user_entitlement(
         conn.commit()
 
 
-def _upsert_customer_map(customer_id: str, user_id: str) -> None:
+def _upsert_customer_map(customer_id: str, user_id: Optional[str], email: Optional[str]) -> None:
     """
-    Record (or update) the Stripe customer_id -> app user_id mapping.
-    Expects a table public.app_stripe_customers(customer_id text primary key, user_id text, updated_at timestamptz default now()).
+    Record (or update) the Stripe customer_id → app user mapping.
+    Expects table:
+      public.app_stripe_customers(
+        customer_id text primary key,
+        user_id uuid null,
+        email text null,
+        created_at timestamptz default now(),
+        updated_at timestamptz default now()
+      )
     """
     with _db_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            insert into public.app_stripe_customers(customer_id, user_id)
-            values (%s, %s)
-            on conflict (customer_id) do update set user_id = excluded.user_id, updated_at = now()
+            insert into public.app_stripe_customers(customer_id, user_id, email)
+            values (%s, %s, %s)
+            on conflict (customer_id) do update
+               set user_id = coalesce(excluded.user_id, public.app_stripe_customers.user_id),
+                   email   = coalesce(excluded.email, public.app_stripe_customers.email),
+                   updated_at = now()
             """,
-            (customer_id, user_id),
+            (customer_id, user_id, email),
         )
         conn.commit()
 
@@ -99,23 +117,33 @@ def _resolve_user_id_from_customer(customer_id: str) -> Optional[str]:
 
 def _resolve_user_id_from_metadata(obj: dict) -> Optional[str]:
     """
-    We expect you to pass user_id at checkout via either:
-      - subscription_data[metadata][user_id] (preferred), or
+    Prefer a real app user UUID passed via Stripe metadata:
+      - subscription_data[metadata][user_id] (preferred)
       - session metadata.user_id
-    As a fallback we also check client_reference_id (if you set it).
+    We intentionally do NOT trust client_reference_id as a user_id (it may be "wp-123").
     """
-    # Common locations Stripe may carry metadata through
     md = obj.get("metadata") or {}
-    if "user_id" in md and md["user_id"]:
-        return md["user_id"]
-
-    # Some events (e.g., checkout.session.*) have client_reference_id
-    if obj.get("client_reference_id"):
-        return obj["client_reference_id"]
-
-    # If you *must* fall back to email → auth.users lookup, add it here.
-    # We intentionally avoid email-based resolution to prevent mismatches.
+    uid = md.get("user_id")
+    if uid and _looks_like_uuid(uid):
+        return str(uid)
     return None
+
+def _find_user_uuid_by_email(email: Optional[str]) -> Optional[str]:
+    if not email:
+        return None
+    with _db_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select id::text
+            from auth.users
+            where lower(email) = lower(%s)
+            order by created_at desc
+            limit 1
+            """,
+            (email,),
+        )
+        row = cur.fetchone()
+    return row[0] if row else None
 
 
 # --- Stripe signature verification (no SDK) ---
@@ -198,27 +226,37 @@ async def stripe_webhook(request: Request, stripe_signature: Optional[str] = Hea
         if not customer_id:
             raise HTTPException(status_code=400, detail="checkout.session.completed missing 'customer'")
 
+        # Try to get a real app user UUID from metadata
         user_id = _resolve_user_id_from_metadata(obj)
-        if not user_id:
-            # accept client_reference_id as a fallback if you set it on the pricing table element
-            user_id = obj.get("client_reference_id")
-        if not user_id:
-            raise HTTPException(status_code=400, detail="checkout.session.completed missing user_id (metadata/client_reference_id)")
 
-        _upsert_customer_map(customer_id, user_id)
-        return {"ok": True, "mapped": True, "event": evt_type, "customer": customer_id, "user_id": user_id}
+        # Fallback: map by email (Stripe includes customer_details.email or customer_email)
+        email = None
+        cd = obj.get("customer_details") or {}
+        if isinstance(cd, dict):
+            email = cd.get("email")
+        if not email:
+            email = obj.get("customer_email")
+
+        if not user_id and email:
+            user_id = _find_user_uuid_by_email(email)
+
+        # Always upsert mapping; user_id may still be None (to be filled later when the user signs in)
+        _upsert_customer_map(customer_id, user_id, email)
+        return {"ok": True, "mapped": True, "event": evt_type, "customer": customer_id, "user_id": user_id, "email": email}
 
     # We only handle subscription events that include items[].price.id inline.
     if evt_type.startswith("customer.subscription."):
         # Resolve the app user
         user_id = _resolve_user_id_from_metadata(obj)
         if not user_id:
-            # Fallback to previously recorded customer → user mapping
             cust = obj.get("customer")
             if cust:
                 user_id = _resolve_user_id_from_customer(cust)
         if not user_id:
-            raise HTTPException(status_code=400, detail="Missing user_id (metadata/client_reference_id) and no customer mapping found. Ensure checkout uses client-reference-id or metadata.user_id.")
+            raise HTTPException(
+                status_code=400,
+                detail="No user mapping found for subscription. Ensure checkout.session.completed mapped the customer (or user has signed in so email→UUID can be resolved).",
+            )
 
         # Extract price_id from the first item
         items = (obj.get("items") or {}).get("data") or []
