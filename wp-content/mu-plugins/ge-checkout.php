@@ -69,3 +69,8 @@ add_action('wp_enqueue_scripts', function () {
         'backendBase' => $backend_base ? rtrim($backend_base, '/') : '',
     ]);
 });
+
+// Fallback: ensure shortcodes are parsed in page content and widgets.
+// Some themes/templates remove the default 'the_content' shortcode filter.
+add_filter('the_content', 'do_shortcode', 11);
+add_filter('widget_text', 'do_shortcode', 11);
