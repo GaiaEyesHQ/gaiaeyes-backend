@@ -15,11 +15,12 @@ add_action('init', function () {
         // Set these in wp-config.php (recommended):
         //   define('GAIA_IOS_TEAM_ID', 'ABCDE12345');
         //   define('GAIA_IOS_BUNDLE_ID', 'com.gaiaexporter');
-        $team   = defined('GAIA_IOS_TEAM_ID')   ? GAIA_IOS_TEAM_ID   : 'YOUR_TEAM_ID';
-        $bundle = defined('GAIA_IOS_BUNDLE_ID') ? GAIA_IOS_BUNDLE_ID : 'com.gaiaexporter';
+        $team   = defined('GAIA_IOS_TEAM_ID')   ? GAIA_IOS_TEAM_ID   : '6NS4AQC76Y';
+        $bundle = defined('GAIA_IOS_BUNDLE_ID') ? GAIA_IOS_BUNDLE_ID : 'com.gaiaeyes.GaiaExporter';
 
         // Paths the app will claim (add more if you need)
         $paths = apply_filters('gaia_aasa_paths', [
+            '/app-login',
             '/app-login/*',
         ]);
 

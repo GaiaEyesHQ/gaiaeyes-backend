@@ -71,6 +71,8 @@
 | `GAIA_AURORA_VIEWLINE_P_NORTH` | Viewline probability north | `50` | `wp-content/mu-plugins/gaia-aurora.php` |
 | `GAIA_AURORA_SMOOTH_WINDOW` | Smoothing window | `5` | `wp-content/mu-plugins/gaia-aurora.php` |
 | `GAIA_AURORA_ENABLE_JSON_EXPORT` | Enable JSON export | `0` | `wp-content/mu-plugins/gaia-aurora.php` |
+| `GAIA_IOS_TEAM_ID` | Apple Team ID for AASA | `ABCDE12345` | `wp-content/mu-plugins/gaiaeyes-aasa.php` |
+| `GAIA_IOS_BUNDLE_ID` | iOS bundle identifier for AASA | `com.gaiaexporter` | `wp-content/mu-plugins/gaiaeyes-aasa.php` |
 | `SUPABASE_URL` | Supabase project URL (client auth) | `https://<project>.supabase.co` | `wp-content/mu-plugins/ge-checkout.php` |
 | `SUPABASE_ANON_KEY` | Supabase anon key (client auth) | `anon-key` | `wp-content/mu-plugins/ge-checkout.php` |
 

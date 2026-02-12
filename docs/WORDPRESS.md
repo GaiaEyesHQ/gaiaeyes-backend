@@ -11,6 +11,7 @@
 ## Key mu-plugins + shortcodes
 - **Checkout (signed-in Stripe)** (`ge-checkout.php` + `ge-checkout.js`): shortcode `[ge_checkout plan="plus_monthly" label="Subscribe"]` uses Supabase auth + backend `/v1/billing/checkout`.
 - **Pricing table (legacy backup)** (`gaia-subscriptions.php`): shortcode `[ge_pricing_table]` for Stripe’s hosted pricing table (kept as fallback).
+- **AASA (Universal Links)** (`gaiaeyes-aasa.php`): serves Apple App Site Association JSON at `/.well-known/apple-app-site-association` and `/apple-app-site-association`.
 - **Space visuals** (`gaiaeyes-space-visuals.php`): uses backend API when configured, else `space_live.json`.
 - **Space weather detail** (`gaiaeyes-space-weather-detail.php`): API-first (features + forecast + history + flares), falls back to `space_weather.json` + `flares_cmes.json`.
 - **Magnetosphere card** (`gaiaeyes-magnetosphere.php`): API-first (`/v1/space/magnetosphere`), fallback `magnetosphere_latest.json`.
@@ -46,3 +47,4 @@
 ## Environment variables (WP)
 See `docs/ENVIRONMENT_VARIABLES.md` for required env vars like `GAIAEYES_API_BASE`, `GAIAEYES_API_BEARER`, `GAIA_MEDIA_BASE`, and space visuals overrides.
 The signed-in checkout flow also requires `SUPABASE_URL` + `SUPABASE_ANON_KEY` for Supabase auth on the Subscribe page.
+Universal links require `GAIA_IOS_TEAM_ID` + `GAIA_IOS_BUNDLE_ID` so the AASA file matches the iOS app.
