@@ -6,16 +6,43 @@ Version: 0.1
 */
 
 add_shortcode('ge_checkout', function ($atts) {
+    // Accept both legacy "plan" usage and explicit Stripe price IDs for monthly/yearly
     $a = shortcode_atts([
-        'plan' => 'plus_monthly',
-        'label' => 'Subscribe with Gaia Eyes',
+        'plan'           => '', // optional logical plan key (e.g., "plus" or "pro")
+        'monthly'        => '', // Stripe price_... for monthly
+        'yearly'         => '', // Stripe price_... for yearly
+        'label'          => 'Subscribe', // legacy single-button label
+        'label_monthly'  => 'Subscribe — Monthly',
+        'label_yearly'   => 'Subscribe — Yearly',
     ], $atts, 'ge_checkout');
 
-    ob_start(); ?>
-    <div class="ge-checkout">
-        <button class="ge-checkout-btn" data-plan="<?php echo esc_attr($a['plan']); ?>">
-            <?php echo esc_html($a['label']); ?>
-        </button>
+    ob_start();
+    ?>
+    <div class="ge-checkout" <?php if (!empty($a['plan'])) { ?>data-plan="<?php echo esc_attr($a['plan']); ?>"<?php } ?>>
+        <div class="ge-checkout-buttons">
+            <?php if (!empty($a['monthly']) || !empty($a['yearly'])): ?>
+                <?php if (!empty($a['monthly'])): ?>
+                    <button class="ge-checkout-btn"
+                            data-price-id="<?php echo esc_attr($a['monthly']); ?>"
+                            data-term="monthly">
+                        <?php echo esc_html($a['label_monthly']); ?>
+                    </button>
+                <?php endif; ?>
+                <?php if (!empty($a['yearly'])): ?>
+                    <button class="ge-checkout-btn"
+                            data-price-id="<?php echo esc_attr($a['yearly']); ?>"
+                            data-term="yearly">
+                        <?php echo esc_html($a['label_yearly']); ?>
+                    </button>
+                <?php endif; ?>
+            <?php else: ?>
+                <!-- Legacy single-button path using a logical plan key -->
+                <button class="ge-checkout-btn"
+                        data-plan="<?php echo esc_attr($a['plan'] ?: 'plus_monthly'); ?>">
+                    <?php echo esc_html($a['label']); ?>
+                </button>
+            <?php endif; ?>
+        </div>
         <div class="ge-checkout-msg" aria-live="polite" style="margin-top:8px;"></div>
     </div>
     <?php
