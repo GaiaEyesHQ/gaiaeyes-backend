@@ -16,6 +16,12 @@ add_shortcode('ge_checkout', function ($atts) {
         'label_yearly'   => 'Subscribe — Yearly',
     ], $atts, 'ge_checkout');
 
+    // Normalize attrs (trim whitespace and enforce label fallbacks)
+    $a['monthly'] = isset($a['monthly']) && is_string($a['monthly']) ? trim($a['monthly']) : '';
+    $a['yearly']  = isset($a['yearly'])  && is_string($a['yearly'])  ? trim($a['yearly'])  : '';
+    if (empty($a['label_monthly'])) { $a['label_monthly'] = 'Subscribe — Monthly'; }
+    if (empty($a['label_yearly']))  { $a['label_yearly']  = 'Subscribe — Yearly'; }
+
     ob_start();
     ?>
     <div class="ge-checkout" <?php if (!empty($a['plan'])) { ?>data-plan="<?php echo esc_attr($a['plan']); ?>"<?php } ?>>
@@ -69,8 +75,3 @@ add_action('wp_enqueue_scripts', function () {
         'backendBase' => $backend_base ? rtrim($backend_base, '/') : '',
     ]);
 });
-
-// Fallback: ensure shortcodes are parsed in page content and widgets.
-// Some themes/templates remove the default 'the_content' shortcode filter.
-add_filter('the_content', 'do_shortcode', 11);
-add_filter('widget_text', 'do_shortcode', 11);
