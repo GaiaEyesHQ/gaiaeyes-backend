@@ -10,6 +10,7 @@
 
 ## Key mu-plugins + shortcodes
 - **Checkout (signed-in Stripe)** (`ge-checkout.php` + `ge-checkout.js`): shortcode `[ge_checkout plan="plus"]` or `[ge_checkout plan="pro"]` renders monthly + yearly buttons using plan keys (backend expects plan keys, not Stripe price IDs). You can also use a single plan key like `plan="plus_monthly"`.
+- **Checkout plan cards** (`ge-checkout.php`): shortcode `[ge_checkout_plans]` renders Plus/Pro cards with pricing, features, and buttons. Override labels via attributes like `plus_price_monthly`, `pro_features`, etc.
 - **Pricing table (legacy backup)** (`gaia-subscriptions.php`): shortcode `[ge_pricing_table]` for Stripe’s hosted pricing table (kept as fallback).
 - **AASA (Universal Links)** (`gaiaeyes-aasa.php`): serves Apple App Site Association JSON at `/.well-known/apple-app-site-association` and `/apple-app-site-association`.
 - **Space visuals** (`gaiaeyes-space-visuals.php`): uses backend API when configured, else `space_live.json`.
