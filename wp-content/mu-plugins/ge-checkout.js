@@ -34,7 +34,28 @@
 
     const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnon);
 
-    const ensureToken = async (btn) => {
+    // If the user just completed magic-link sign-in in another tab, auto-resume the pending checkout
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const pending = (localStorage && localStorage.getItem('ge_pending_plan')) || '';
+        if (data && data.session && pending) {
+          try { localStorage.removeItem('ge_pending_plan'); } catch (_) {}
+          // Try to click the corresponding button so UX is consistent
+          const target =
+            document.querySelector(`.ge-checkout-btn[data-plan="${pending}"]`) ||
+            document.querySelector('.ge-checkout-btn');
+          if (target) {
+            // small delay so DOM is settled
+            setTimeout(() => target.click(), 150);
+          }
+        }
+      } catch (_) {
+        // no-op
+      }
+    })();
+
+    const ensureToken = async (btn, plan) => {
       const { data, error } = await supabase.auth.getSession();
       if (error) {
         setMsg(btn, "Sign-in failed: " + error.message);
@@ -48,6 +69,8 @@
         setMsg(btn, "Sign-in required to continue.");
         return null;
       }
+
+      try { localStorage.setItem('ge_pending_plan', plan || ''); } catch (_) {}
 
       const { error: signInError } = await supabase.auth.signInWithOtp({
         email,
@@ -69,10 +92,10 @@
         setMsg(btn, "");
 
         try {
-          const token = await ensureToken(btn);
+          const plan = btn.getAttribute("data-plan") || "plus_monthly";
+          const token = await ensureToken(btn, plan);
           if (!token) return;
 
-          const plan = btn.getAttribute("data-plan") || "plus_monthly";
           const res = await fetch(`${backendBase}/v1/billing/checkout`, {
             method: "POST",
             headers: {
@@ -88,7 +111,8 @@
 
           if (!res.ok || !json || !json.ok) {
             const err = json && (json.error || json.detail);
-            throw new Error(err || "Failed to start checkout.");
+            const hint = ` (HTTP ${res.status})`;
+            throw new Error((err || "Failed to start checkout.") + hint);
           }
           if (!json.url) {
             throw new Error("Checkout URL missing.");
