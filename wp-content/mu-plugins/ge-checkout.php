@@ -28,16 +28,18 @@ add_shortcode('ge_checkout', function ($atts) {
         <div class="ge-checkout-buttons">
             <?php if (!empty($a['monthly']) || !empty($a['yearly'])): ?>
                 <?php if (!empty($a['monthly'])): ?>
-                    <button class="ge-checkout-btn"
+                    <button class="ge-checkout-btn ge-checkout-btn--monthly"
                             data-price-id="<?php echo esc_attr($a['monthly']); ?>"
-                            data-term="monthly">
+                            data-term="monthly"
+                            data-label="<?php echo esc_attr($a['label_monthly']); ?>">
                         <?php echo esc_html($a['label_monthly']); ?>
                     </button>
                 <?php endif; ?>
                 <?php if (!empty($a['yearly'])): ?>
-                    <button class="ge-checkout-btn"
+                    <button class="ge-checkout-btn ge-checkout-btn--yearly"
                             data-price-id="<?php echo esc_attr($a['yearly']); ?>"
-                            data-term="yearly">
+                            data-term="yearly"
+                            data-label="<?php echo esc_attr($a['label_yearly']); ?>">
                         <?php echo esc_html($a['label_yearly']); ?>
                     </button>
                 <?php endif; ?>
