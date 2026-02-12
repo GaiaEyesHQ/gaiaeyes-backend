@@ -6,39 +6,59 @@ Version: 0.1
 */
 
 add_shortcode('ge_checkout', function ($atts) {
-    // Accept both legacy "plan" usage and explicit Stripe price IDs for monthly/yearly
+    // Accept plan keys (preferred) and optional monthly/yearly overrides
     $a = shortcode_atts([
-        'plan'           => '', // optional logical plan key (e.g., "plus" or "pro")
-        'monthly'        => '', // Stripe price_... for monthly
-        'yearly'         => '', // Stripe price_... for yearly
+        'plan'           => '', // "plus", "pro", or full plan key like "plus_monthly"
+        'monthly'        => '', // optional plan key override (e.g., "plus_monthly")
+        'yearly'         => '', // optional plan key override (e.g., "plus_yearly")
         'label'          => 'Subscribe', // legacy single-button label
-        'label_monthly'  => 'Subscribe — Monthly',
-        'label_yearly'   => 'Subscribe — Yearly',
+        'label_monthly'  => 'Subscribe - Monthly',
+        'label_yearly'   => 'Subscribe - Yearly',
     ], $atts, 'ge_checkout');
 
     // Normalize attrs (trim whitespace and enforce label fallbacks)
-    $a['monthly'] = isset($a['monthly']) && is_string($a['monthly']) ? trim($a['monthly']) : '';
-    $a['yearly']  = isset($a['yearly'])  && is_string($a['yearly'])  ? trim($a['yearly'])  : '';
-    if (empty($a['label_monthly'])) { $a['label_monthly'] = 'Subscribe — Monthly'; }
-    if (empty($a['label_yearly']))  { $a['label_yearly']  = 'Subscribe — Yearly'; }
+    $a['plan'] = isset($a['plan']) && is_string($a['plan']) ? trim(strtolower($a['plan'])) : '';
+    $a['monthly'] = isset($a['monthly']) && is_string($a['monthly']) ? trim(strtolower($a['monthly'])) : '';
+    $a['yearly']  = isset($a['yearly'])  && is_string($a['yearly'])  ? trim(strtolower($a['yearly']))  : '';
+    if (empty($a['label_monthly'])) { $a['label_monthly'] = 'Subscribe - Monthly'; }
+    if (empty($a['label_yearly']))  { $a['label_yearly']  = 'Subscribe - Yearly'; }
+
+    $allowed = [
+        'plus_monthly', 'plus_yearly', 'pro_monthly', 'pro_yearly',
+    ];
+    $monthly_plan = '';
+    $yearly_plan = '';
+    $single_plan = '';
+
+    if (in_array($a['plan'], ['plus', 'pro'], true)) {
+        $monthly_plan = $a['plan'] . '_monthly';
+        $yearly_plan = $a['plan'] . '_yearly';
+    } elseif (in_array($a['plan'], $allowed, true)) {
+        $single_plan = $a['plan'];
+    }
+
+    if (in_array($a['monthly'], $allowed, true)) {
+        $monthly_plan = $a['monthly'];
+    }
+    if (in_array($a['yearly'], $allowed, true)) {
+        $yearly_plan = $a['yearly'];
+    }
 
     ob_start();
     ?>
-    <div class="ge-checkout" <?php if (!empty($a['plan'])) { ?>data-plan="<?php echo esc_attr($a['plan']); ?>"<?php } ?>>
+    <div class="ge-checkout">
         <div class="ge-checkout-buttons">
-            <?php if (!empty($a['monthly']) || !empty($a['yearly'])): ?>
-                <?php if (!empty($a['monthly'])): ?>
+            <?php if (!empty($monthly_plan) || !empty($yearly_plan)): ?>
+                <?php if (!empty($monthly_plan)): ?>
                     <button class="ge-checkout-btn ge-checkout-btn--monthly"
-                            data-price-id="<?php echo esc_attr($a['monthly']); ?>"
-                            data-term="monthly"
+                            data-plan="<?php echo esc_attr($monthly_plan); ?>"
                             data-label="<?php echo esc_attr($a['label_monthly']); ?>">
                         <?php echo esc_html($a['label_monthly']); ?>
                     </button>
                 <?php endif; ?>
-                <?php if (!empty($a['yearly'])): ?>
+                <?php if (!empty($yearly_plan)): ?>
                     <button class="ge-checkout-btn ge-checkout-btn--yearly"
-                            data-price-id="<?php echo esc_attr($a['yearly']); ?>"
-                            data-term="yearly"
+                            data-plan="<?php echo esc_attr($yearly_plan); ?>"
                             data-label="<?php echo esc_attr($a['label_yearly']); ?>">
                         <?php echo esc_html($a['label_yearly']); ?>
                     </button>
@@ -46,7 +66,7 @@ add_shortcode('ge_checkout', function ($atts) {
             <?php else: ?>
                 <!-- Legacy single-button path using a logical plan key -->
                 <button class="ge-checkout-btn"
-                        data-plan="<?php echo esc_attr($a['plan'] ?: 'plus_monthly'); ?>">
+                        data-plan="<?php echo esc_attr($single_plan ?: 'plus_monthly'); ?>">
                     <?php echo esc_html($a['label']); ?>
                 </button>
             <?php endif; ?>
