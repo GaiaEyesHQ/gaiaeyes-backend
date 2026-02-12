@@ -2896,6 +2896,12 @@ struct ContentView: View {
                 DisclosureGroup(isExpanded: $showTools) {
                     VStack(spacing: 12) {
                         ConnectionSettingsSection(state: state, isExpanded: $showConnections)
+                        NavigationLink(destination: SubscribeView()) {
+                            Label("Subscribe", systemImage: "creditcard")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                         DisclosureGroup(isExpanded: $showActions) {
                             ActionsSection(state: state, onFetchVisuals: onFetchVisuals)
                         } label: { HStack { Image(systemName: "arrow.triangle.2.circlepath"); Text("HealthKit Sync & Actions"); Spacer() } }
@@ -2925,6 +2931,12 @@ struct ContentView: View {
         DisclosureGroup(isExpanded: $showTools) {
             VStack(spacing: 12) {
                 ConnectionSettingsSection(state: state, isExpanded: $showConnections)
+                NavigationLink(destination: SubscribeView()) {
+                    Label("Subscribe", systemImage: "creditcard")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
                 DisclosureGroup(isExpanded: $showActions) { ActionsSection(state: state, onFetchVisuals: { Task { await fetchSpaceVisuals() } }) } label: { HStack { Image(systemName: "arrow.triangle.2.circlepath"); Text("HealthKit Sync & Actions"); Spacer() } }
                 DisclosureGroup(isExpanded: $showBle) { BleStatusSection(state: state) } label: { HStack { Image(systemName: "antenna.radiowaves.left.and.right"); Text("Bluetooth / BLE"); Spacer() } }
                 DisclosureGroup(isExpanded: $showPolar) { PolarStatusSection(state: state) } label: { HStack { Image(systemName: "waveform.path.ecg"); Text("Polar ECG"); Spacer() } }

@@ -31,3 +31,11 @@
 8. **Schumann series endpoint mismatch with WP**
    - **Why needed**: WP calls `/v1/earth/schumann/series?hours=24&station=...`, but the backend endpoint currently accepts `limit` and `cols` only.
    - **Where to fill**: Confirm expected query parameters and update the backend or WP/clients to match.
+
+9. **iOS Supabase project values**
+   - **Why needed**: iOS billing auth now reads `SUPABASE_URL` + `SUPABASE_ANON_KEY` from `Info.plist`, but the concrete values must be filled in.
+   - **Where to fill**: Supabase dashboard → Project settings → API.
+
+10. **Magic link redirect URL + Associated Domains**
+   - **Why needed**: iOS Supabase magic links need a redirect target that reopens the app (universal link or custom scheme). The app now supports an optional `GAIA_MAGICLINK_REDIRECT` but the exact URL + associated-domain setup is still a human config.
+   - **Where to fill**: Apple Developer → Associated Domains + Supabase Auth redirect settings.

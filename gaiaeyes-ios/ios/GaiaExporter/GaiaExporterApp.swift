@@ -4,6 +4,7 @@ import BackgroundTasks
 @main
 struct GaiaExporterApp: App {
     @StateObject private var appState = AppState()
+    @StateObject private var auth = AuthManager.shared
 
     init() {
         // Register BG task and schedule the first refresh
@@ -19,6 +20,13 @@ struct GaiaExporterApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(appState)
+                .environmentObject(auth)
+                .onOpenURL { url in
+                    Task { _ = await DeepLinkHandler.handle(url: url) }
+                }
+                .task {
+                    auth.loadFromKeychain()
+                }
         }
     }
 }

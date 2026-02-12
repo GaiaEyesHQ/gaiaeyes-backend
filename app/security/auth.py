@@ -147,3 +147,19 @@ async def require_write_auth(request: Request, authorization: Optional[str] = He
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Missing or invalid Authorization header",
     )
+
+
+async def require_supabase_jwt(request: Request, authorization: Optional[str] = Header(None)):
+    """
+    Require a valid Supabase JWT (no dev/write token bypass).
+    Attaches request.state.user_id when verified.
+    """
+    if not settings.SUPABASE_JWT_SECRET:
+        raise HTTPException(status_code=500, detail="SUPABASE_JWT_SECRET not configured")
+    token = _extract_bearer(authorization)
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+    user_id = decode_supabase_token(token)
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Supabase JWT")
+    request.state.user_id = user_id

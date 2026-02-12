@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from .routers import (
     badges,
+    billing,
     earth,
     health as health_router,
     hazards,
@@ -136,6 +137,7 @@ app.include_router(local.router)
 # Write routers (POST/PUT/DELETE)
 app.include_router(ingest.router, prefix="/v1", dependencies=[Depends(require_write_auth)])
 app.include_router(symptoms.router, prefix="/v1", dependencies=[Depends(require_write_auth)])
+app.include_router(billing.router)
 
 # Webhooks are protected by HMAC middleware, not bearer auth.
 # Mount under /v1 so Stripe endpoint becomes /v1/webhooks/stripe and

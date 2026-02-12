@@ -37,6 +37,7 @@ Backend routes are grouped by domain under `app/routers/` and registered in `app
 - Features: `/v1/features/today`
 - Symptoms: `/v1/symptoms/*`
 - Ingest: `/v1/samples/batch`
+- Billing: `/v1/billing/*`
 
 Do not add routes in random files. Keep them in `app/routers/*` and include them in `app/main.py`.
 

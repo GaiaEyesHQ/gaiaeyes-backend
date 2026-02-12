@@ -2,7 +2,7 @@
 
 ## What lives in Supabase
 - **Postgres schemas**: `gaia`, `raw`, `dim`, `ext`, `marts`.
-- **Auth**: Supabase JWTs validated in backend (see `SUPABASE_JWT_SECRET`).
+- **Auth**: Supabase JWTs validated in backend (see `SUPABASE_JWT_SECRET`). iOS uses Supabase email magic links via `SUPABASE_URL` + `SUPABASE_ANON_KEY` for billing flows.
 - **Storage**: Used for media assets (space visuals), via `SUPABASE_SERVICE_ROLE_KEY` and bucket name.
 - **Subscriptions (public tables)**: Stripe/RevenueCat linkage and entitlements mapping (`public.app_stripe_customers`, `public.app_user_entitlements`, `public.app_price_map`).
 

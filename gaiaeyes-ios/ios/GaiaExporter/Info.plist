@@ -7,6 +7,12 @@
 		<string>com.gaiaexporter.refresh</string>
 		<string>com.gaiaexporter.processing</string>
 	</array>
+	<key>GAIA_API_BASE</key>
+	<string>https://gaiaeyes-backend.onrender.com</string>
+	<key>GAIA_BILLING_PORTAL_URL</key>
+	<string>https://billing.stripe.com/p/login/00w9AS5Yt5HfaCWffC6oo00</string>
+	<key>GAIA_MAGICLINK_REDIRECT</key>
+	<string>https://gaiaeyes.com/app-login/*</string>
 	<key>MEDIA_BASE_URL</key>
 	<string>https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals</string>
 	<key>NSAppTransportSecurity</key>
@@ -14,12 +20,17 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFhZHd6a3d1YmZiZnVzbGZ4a3psIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5ODgxOTEsImV4cCI6MjA3MTU2NDE5MX0.tS67xEsIyRJXXkqmnWJNfqv280WYbOPwTdMhCaudSQU</string>
+	<key>SUPABASE_URL</key>
+	<string>https://qadwzkwubfbfuslfxkzl.supabase.co</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
 		<string>processing</string>
 		<string>remote-notification</string>
 		<string>bluetooth-central</string>
+		<string>location</string>
 	</array>
 </dict>
 </plist>

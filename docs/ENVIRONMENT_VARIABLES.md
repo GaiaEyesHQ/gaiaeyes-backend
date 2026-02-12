@@ -32,6 +32,14 @@
 | `MART_REFRESH_DISABLE` | Disable mart refresh on ingest | `0` | `app/routers/ingest.py` |
 | `DEBUG_FEATURES_DIAG` | Enable features diagnostics | `1` | `app/routers/summary.py` |
 | `WEBHOOK_SECRET` | HMAC secret for `/hooks/*` | `webhook-secret` | `api/middleware.py`, `api/webhooks.py` |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret | `whsec_...` | `app/api/webhooks.py` |
+| `STRIPE_API_KEY` | Stripe secret key (server checkout) | `sk_live_...` | `app/routers/billing.py` |
+| `CHECKOUT_SUCCESS_URL` | Stripe Checkout success redirect | `https://gaiaeyes.com/account?success=1` | `app/routers/billing.py` |
+| `CHECKOUT_CANCEL_URL` | Stripe Checkout cancel redirect | `https://gaiaeyes.com/subscribe?canceled=1` | `app/routers/billing.py` |
+| `STRIPE_PRICE_PLUS_MONTHLY` | Stripe price id for Plus monthly | `price_...` | `app/routers/billing.py` |
+| `STRIPE_PRICE_PLUS_YEARLY` | Stripe price id for Plus yearly | `price_...` | `app/routers/billing.py` |
+| `STRIPE_PRICE_PRO_MONTHLY` | Stripe price id for Pro monthly | `price_...` | `app/routers/billing.py` |
+| `STRIPE_PRICE_PRO_YEARLY` | Stripe price id for Pro yearly | `price_...` | `app/routers/billing.py` |
 
 ## iOS (runtime/in-app)
 | Variable | Purpose | Where set |
@@ -40,6 +48,11 @@
 | `Bearer Token` | Backend bearer token | In-app settings |
 | `User UUID` | Supabase user id | In-app settings |
 | `MEDIA_BASE_URL` | CDN fallback base URL | Process env (if set) |
+| `SUPABASE_URL` | Supabase auth base | `Info.plist` |
+| `SUPABASE_ANON_KEY` | Supabase anon key | `Info.plist` |
+| `GAIA_API_BASE` | Backend base for billing flows | `Info.plist` |
+| `GAIA_BILLING_PORTAL_URL` | Stripe customer portal (optional) | `Info.plist` |
+| `GAIA_MAGICLINK_REDIRECT` | Magic link redirect URL (optional) | `Info.plist` |
 
 ## WordPress (wp-content)
 | Variable | Purpose | Example placeholder | Where used |
@@ -58,6 +71,8 @@
 | `GAIA_AURORA_VIEWLINE_P_NORTH` | Viewline probability north | `50` | `wp-content/mu-plugins/gaia-aurora.php` |
 | `GAIA_AURORA_SMOOTH_WINDOW` | Smoothing window | `5` | `wp-content/mu-plugins/gaia-aurora.php` |
 | `GAIA_AURORA_ENABLE_JSON_EXPORT` | Enable JSON export | `0` | `wp-content/mu-plugins/gaia-aurora.php` |
+| `SUPABASE_URL` | Supabase project URL (client auth) | `https://<project>.supabase.co` | `wp-content/mu-plugins/ge-checkout.php` |
+| `SUPABASE_ANON_KEY` | Supabase anon key (client auth) | `anon-key` | `wp-content/mu-plugins/ge-checkout.php` |
 
 ## Render
 Render-specific env vars are likely set in the dashboard (see `docs/OPEN_QUESTIONS.md`).

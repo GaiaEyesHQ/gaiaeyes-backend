@@ -24,8 +24,9 @@ flowchart LR
   API --> DB
   API --> Storage
 
-  %% Web: Stripe pricing table / checkout from WP
-  WP -->|Pricing table / checkout| STRIPE
+  %% Web: server-created Stripe Checkout from WP
+  WP -->|Supabase JWT + plan| API
+  API -->|Create Checkout Session| STRIPE
   STRIPE -->|Webhooks| API
 
   %% iOS: IAP via RevenueCat
@@ -87,20 +88,25 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   participant U as User (WP)
-  participant WP as WP (pricing table)
+  participant WP as WP (checkout button)
+  participant API as FastAPI /v1/billing/checkout
   participant Stripe as Stripe Checkout
-  participant API as FastAPI /webhooks/stripe
+  participant WH as FastAPI /webhooks/stripe
   participant DB as Supabase (app_*)
 
   U->>WP: Click "Subscribe"
-  WP->>Stripe: Open pricing table / Checkout (client_reference_id=user_id, customer_email)
+  WP->>API: POST /v1/billing/checkout (Supabase JWT, plan)
+  API->>Stripe: Create Checkout Session (metadata.user_id)
+  WP->>Stripe: Redirect to Checkout
   Stripe-->>U: Complete payment
-  Stripe->>API: webhook checkout.session.completed
-  API->>DB: upsert app_stripe_customers (customer_id ↔ user_id)
-  Stripe->>API: webhook customer.subscription.created/updated/deleted
-  API->>DB: upsert app_user_entitlements (plus/pro, term, is_active)
-  API-->>Stripe: 200 OK
+  Stripe->>WH: webhook checkout.session.completed
+  WH->>DB: upsert app_stripe_customers (customer_id ↔ user_id)
+  Stripe->>WH: webhook customer.subscription.created/updated/deleted
+  WH->>DB: upsert app_user_entitlements (plus/pro, term, is_active)
+  WH-->>Stripe: 200 OK
 ```
+
+Note: The iOS Subscribe view can use the same `/v1/billing/checkout` flow with a Supabase JWT for direct (non-IAP) subscriptions.
 
 ### Data flow: Subscriptions (iOS via RevenueCat)
 
@@ -143,6 +149,8 @@ sequenceDiagram
 - `/v1/space/forecast/summary` – short human-readable summary + flags
 - `/v1/hazards/gdacs` and `/v1/hazards/gdacs/full` – GDACS feed (recent + detailed)
 - `/v1/local/check?zip=XXXXX` – local health signals (NWS + AirNow + moon)
+- `/v1/billing/checkout` – server-created Stripe Checkout (requires Supabase JWT)
+- `/v1/billing/entitlements` – current entitlements for signed-in users
 - `/webhooks/stripe` – Stripe events (Checkout, Subscription)
 - `/webhooks/revenuecat` – RevenueCat events (IAP)
 - `/v1/auth/me/entitlements` – active entitlements for the current user

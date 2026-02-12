@@ -56,6 +56,8 @@
   - Notes: NOAA NWS requires a User‑Agent (see `WEATHER_UA`). Endpoint may be publicly readable when allowlisted.
 
 ### Subscriptions & entitlements
+- `POST /v1/billing/checkout` — server-created Stripe Checkout session. **Requires Supabase JWT** and stamps `metadata.user_id` (and `subscription_data.metadata.user_id`) for webhook mapping.
+- `GET /v1/billing/entitlements` — returns current entitlements for the signed-in Supabase user.
 - `POST /webhooks/stripe` — see **Webhooks → Billing**; Stripe Checkout/Invoices/Subscriptions events are processed here.
 - `POST /webhooks/revenuecat` — see **Webhooks → Billing**; iOS in‑app purchases via RevenueCat are processed here.
 
@@ -90,6 +92,7 @@
 - Storage uploads use `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Subscriptions integration (data flow)
+- Clients call `POST /v1/billing/checkout` with a Supabase JWT to create a Stripe Checkout Session (metadata includes the Supabase `user_id`).
 - Stripe Checkout (or the Customer Portal) posts to `/webhooks/stripe`. The backend writes:
   - `public.app_stripe_customers(stripe_customer_id, user_id, created_at, updated_at)`
   - `public.app_user_entitlements(user_id, entitlement_key, term, source, started_at, expires_at, is_active, updated_at)`
