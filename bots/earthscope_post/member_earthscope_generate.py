@@ -193,6 +193,12 @@ def _render_with_openai(
 
     client = OpenAI(api_key=api_key)
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    def _jsonable(obj: Any) -> Any:
+        try:
+            json.dumps(obj)
+            return obj
+        except Exception:
+            return json.loads(json.dumps(obj, default=str))
     prompt = {
         "task": "Write a personalized EarthScope member update.",
         "format": "Return strict JSON with keys: title, caption, body_markdown.",
@@ -204,7 +210,7 @@ def _render_with_openai(
             "Include the disclaimer verbatim at the end.",
         ],
         "data": {
-            "gauges": gauges_row,
+            "gauges": _jsonable(gauges_row),
             "active_states": active_states,
             "tags": tags,
             "symptoms": symptoms,
@@ -222,7 +228,7 @@ def _render_with_openai(
                     "role": "system",
                     "content": "You are Gaia Eyes’ member EarthScope writer. Keep it concise and supportive.",
                 },
-                {"role": "user", "content": json.dumps(prompt)},
+                {"role": "user", "content": json.dumps(prompt, default=str)},
             ],
         )
         obj = json.loads(resp.choices[0].message.content)
