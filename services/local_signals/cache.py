@@ -5,7 +5,30 @@ from datetime import datetime, timedelta, timezone
 
 from ..db import pg
 
+
 TTL_MIN = int(os.getenv("LOCAL_SIGNALS_TTL_MINUTES", "60"))
+
+_HAS_EXPIRES_AT: bool | None = None
+
+def _has_expires_at() -> bool:
+    global _HAS_EXPIRES_AT
+    if _HAS_EXPIRES_AT is not None:
+        return _HAS_EXPIRES_AT
+    try:
+        row = pg.fetchrow(
+            """
+            select 1
+            from information_schema.columns
+            where table_schema = 'ext'
+              and table_name = 'local_signals_cache'
+              and column_name = 'expires_at'
+            limit 1
+            """
+        )
+        _HAS_EXPIRES_AT = bool(row)
+    except Exception:
+        _HAS_EXPIRES_AT = False
+    return _HAS_EXPIRES_AT
 
 
 def _norm_zip(z: str) -> str:
@@ -16,6 +39,24 @@ def _norm_zip(z: str) -> str:
 def upsert_zip_payload(zip_code: str, payload: dict, asof: datetime | None = None) -> None:
     asof = asof or datetime.now(timezone.utc)
     z = _norm_zip(zip_code)
+
+    if _has_expires_at():
+        ttl = int(os.getenv("LOCAL_SIGNALS_TTL_MINUTES", str(TTL_MIN)))
+        expires_at = asof + timedelta(minutes=ttl)
+        pg.execute(
+            """
+            insert into ext.local_signals_cache (zip, asof, payload, expires_at)
+            values (%s, %s, %s, %s)
+            on conflict (zip, asof)
+            do update set payload = excluded.payload, expires_at = excluded.expires_at
+            """,
+            z,
+            asof,
+            json.dumps(payload),
+            expires_at,
+        )
+        return
+
     pg.execute(
         """
         insert into ext.local_signals_cache (zip, asof, payload)
@@ -31,14 +72,24 @@ def upsert_zip_payload(zip_code: str, payload: dict, asof: datetime | None = Non
 
 def latest_for_zip(zip_code: str) -> dict | None:
     z = _norm_zip(zip_code)
-    row = pg.fetchrow(
-        """
-        select payload from ext.local_signals_cache
-        where zip = %s
-        order by asof desc limit 1
-        """,
-        z,
-    )
+    if _has_expires_at():
+        row = pg.fetchrow(
+            """
+            select payload from ext.local_signals_cache
+            where zip = %s and expires_at > now()
+            order by asof desc limit 1
+            """,
+            z,
+        )
+    else:
+        row = pg.fetchrow(
+            """
+            select payload from ext.local_signals_cache
+            where zip = %s
+            order by asof desc limit 1
+            """,
+            z,
+        )
     if not row:
         return None
     payload = row["payload"]
@@ -50,20 +101,32 @@ def latest_for_zip(zip_code: str) -> dict | None:
 # New helper functions
 def latest_row(zip_code: str) -> dict | None:
     """
-    Return the newest non-expired row for a ZIP with both asof and payload.
+    Return the newest row for a ZIP with both asof and payload.
     Payload is JSON-decoded into a dict.
     """
     z = _norm_zip(zip_code)
-    row = pg.fetchrow(
-        """
-        select asof, payload
-        from ext.local_signals_cache
-        where zip = %s
-        order by asof desc
-        limit 1
-        """,
-        z,
-    )
+    if _has_expires_at():
+        row = pg.fetchrow(
+            """
+            select asof, payload
+            from ext.local_signals_cache
+            where zip = %s and expires_at > now()
+            order by asof desc
+            limit 1
+            """,
+            z,
+        )
+    else:
+        row = pg.fetchrow(
+            """
+            select asof, payload
+            from ext.local_signals_cache
+            where zip = %s
+            order by asof desc
+            limit 1
+            """,
+            z,
+        )
     if not row:
         return None
     payload = row["payload"]
@@ -106,10 +169,27 @@ def nearest_row_to(zip_code: str, target_asof: datetime, window_hours: int = 3) 
 def upsert_snapshot(zip_code: str, asof: datetime, payload: dict, ttl_minutes: int | None = None) -> None:
     """
     Convenience wrapper that mirrors upsert_zip_payload but takes explicit asof.
-    ttl_minutes is accepted for backward compatibility but ignored because the cache table
-    does not store expires_at in the current schema.
+    ttl_minutes is respected when expires_at exists; otherwise ignored.
     """
     z = _norm_zip(zip_code)
+
+    if _has_expires_at():
+        ttl = TTL_MIN if ttl_minutes is None else int(ttl_minutes)
+        expires_at = asof + timedelta(minutes=ttl)
+        pg.execute(
+            """
+            insert into ext.local_signals_cache (zip, asof, payload, expires_at)
+            values (%s, %s, %s, %s)
+            on conflict (zip, asof)
+            do update set payload = excluded.payload, expires_at = excluded.expires_at
+            """,
+            z,
+            asof,
+            json.dumps(payload),
+            expires_at,
+        )
+        return
+
     pg.execute(
         """
         insert into ext.local_signals_cache (zip, asof, payload)
@@ -164,6 +244,14 @@ def latest_and_ref(zip_code: str, ref_hours: int = 24, window_hours: int = 3) ->
         return None, None
     target = latest["asof"] - timedelta(hours=ref_hours)
     ref = nearest_row_to(zip_code, target, window_hours=window_hours)
+    if ref is None:
+        # Wider fallback window for irregular poll cadence
+        ref = get_previous_approx(
+            zip_code,
+            latest["asof"],
+            min_hours=max(1, ref_hours - 6),
+            max_hours=ref_hours + 12,
+        )
     return latest, ref
 
 
