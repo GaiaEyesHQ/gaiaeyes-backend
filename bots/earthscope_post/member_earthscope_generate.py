@@ -90,6 +90,19 @@ def _fetch_existing_inputs_hash(user_id: str, day: date) -> Optional[str]:
     return row.get("inputs_hash") if row else None
 
 
+def _fetch_existing_member_post(user_id: str, day: date) -> Optional[Dict[str, Any]]:
+    return pg.fetchrow(
+        """
+        select title, caption, body_markdown, updated_at
+          from content.daily_posts_user
+         where user_id = %s and day = %s and platform = 'member'
+         limit 1
+        """,
+        user_id,
+        day,
+    )
+
+
 def _highlight_gauges(definition: Dict[str, Any], gauges: Dict[str, Any]) -> List[Dict[str, Any]]:
     thresholds = (definition.get("normalization") or {}).get("alert_thresholds") or {}
     info = float(thresholds.get("info", 55))
@@ -147,6 +160,28 @@ def _default_actions(alerts: List[Dict[str, Any]]) -> List[str]:
         "gentle movement",
         "protect your sleep window",
     ]
+
+
+def _render_trigger_advisory(trigger_events: List[Dict[str, Any]], health_status: Optional[Any]) -> str:
+    lines = []
+    if health_status is not None:
+        lines.append(_health_status_line(health_status))
+    lines.append("Recent trigger(s):")
+    for ev in trigger_events:
+        title = ev.get("title") or ev.get("key")
+        sev = ev.get("severity")
+        lines.append(f"- {title} ({sev})")
+    actions = []
+    for ev in trigger_events:
+        for a in ev.get("suggested_actions") or []:
+            if a not in actions:
+                actions.append(a)
+    if actions:
+        lines.append("")
+        lines.append("Supportive actions:")
+        for a in actions[:5]:
+            lines.append(f"- {a}")
+    return "\n".join(lines)
 
 
 def _render_member_post(
@@ -273,6 +308,7 @@ def generate_member_post_for_user(
     day: str | date | None = None,
     *,
     force: bool = False,
+    trigger_events: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     definition, version = load_definition_base()
     day = _coerce_day(day)
@@ -298,6 +334,7 @@ def generate_member_post_for_user(
         "local_payload": local_payload,
         "tags": tags,
         "symptoms": symptoms,
+        "trigger_events": trigger_events or [],
     }
     inputs_hash = _hash_inputs(inputs_snapshot)
 
@@ -305,9 +342,26 @@ def generate_member_post_for_user(
     if existing_hash == inputs_hash and not force:
         return {"ok": True, "skipped": True}
 
-    rendered = _render_with_openai(definition, gauges_row, active_states, tags, symptoms)
-    if not rendered:
-        rendered = _render_member_post(definition, gauges_row, active_states, tags, symptoms)
+    existing = _fetch_existing_member_post(user_id, day)
+
+    rendered = None
+    if not trigger_events:
+        rendered = _render_with_openai(definition, gauges_row, active_states, tags, symptoms)
+        if not rendered:
+            rendered = _render_member_post(definition, gauges_row, active_states, tags, symptoms)
+    else:
+        # Triggered advisory: append to existing post if present
+        if existing and existing.get("body_markdown"):
+            rendered = {
+                "title": existing.get("title") or f"Your EarthScope — {day.isoformat()}",
+                "caption": existing.get("caption") or "Triggered advisory",
+                "body_markdown": existing.get("body_markdown"),
+            }
+        else:
+            rendered = _render_member_post(definition, gauges_row, active_states, tags, symptoms)
+
+        advisory = _render_trigger_advisory(trigger_events, gauges_row.get("health_status"))
+        rendered["body_markdown"] = f"{rendered.get('body_markdown')}\n\n## Triggered Advisory\n{advisory}\n"
 
     payload = {
         "user_id": user_id,
@@ -324,6 +378,16 @@ def generate_member_post_for_user(
 
     upsert_row("content", "daily_posts_user", payload, ["user_id", "day", "platform"])
     return {"ok": True, "skipped": False}
+
+
+def run_for_user(
+    user_id: str,
+    day: str | date | None = None,
+    *,
+    trigger_events: Optional[List[Dict[str, Any]]] = None,
+    force: bool = False,
+) -> Dict[str, Any]:
+    return generate_member_post_for_user(user_id, day, force=force, trigger_events=trigger_events)
 
 
 def main() -> None:

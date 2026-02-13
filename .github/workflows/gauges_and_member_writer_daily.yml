@@ -47,3 +47,10 @@ jobs:
         run: |
           set -euo pipefail
           python bots/earthscope_post/member_earthscope_generate.py
+
+      - name: Trigger engine (member updates)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          python bots/triggers/run_trigger_engine.py

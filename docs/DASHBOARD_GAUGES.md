@@ -88,6 +88,18 @@ Environment:
 - `OPENAI_MODEL` (optional, default `gpt-4o-mini`)
 - `ENTITLEMENT_KEYS` (optional, default `plus,pro`)
 
+## Hybrid Triggers (Alerts + Member Updates)
+- Trigger engine: `bots/triggers/run_trigger_engine.py`
+- Source: `marts.user_gauges_day.alerts_json` + `health_status`
+- State table: `app.user_trigger_state` (cooldown + escalation)
+- Default cooldowns:
+  - info: 12h
+  - watch: 6h
+  - high: 3h
+- Escalation-only: triggers fire immediately if severity increases
+
+When trigger events are detected for paid users, the engine appends a “Triggered Advisory” section to the member EarthScope post for that day.
+
 ## FastAPI Endpoints
 - `GET /v1/dashboard`
   - Uses `app.get_dashboard_payload(day)` RPC

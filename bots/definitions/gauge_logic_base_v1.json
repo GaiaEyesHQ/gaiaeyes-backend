@@ -189,6 +189,55 @@
         ]
       },
       {
+        "key": "earthweather.pressure_drop_3h",
+        "label": "Rapid Pressure Drop (3h)",
+        "category": "local_weather",
+        "unit": "hPa",
+        "activation": [
+          { "state": "watch", "rule": "baro_delta_3h_hpa <= -3.0 or pressure_rapid_drop == true" },
+          { "state": "high", "rule": "baro_delta_3h_hpa <= -5.0" }
+        ],
+        "confidence": "established",
+        "effects": [
+          {
+            "effect_tag": "pressure_sensitivity",
+            "direction": "up",
+            "weights_by_state": { "watch": 4, "high": 8 },
+            "gauges": ["pain", "sleep", "mood"]
+          },
+          {
+            "effect_tag": "headache",
+            "direction": "up",
+            "weights_by_state": { "watch": 3, "high": 6 },
+            "gauges": ["pain", "focus"]
+          }
+        ]
+      },
+      {
+        "key": "earthweather.pressure_swing_24h_big",
+        "label": "Big Pressure Swing (24h)",
+        "category": "local_weather",
+        "unit": "hPa",
+        "activation": [
+          { "state": "watch", "rule": "abs(baro_delta_24h_hpa) >= 8 and abs(baro_delta_24h_hpa) < 12" },
+          { "state": "high", "rule": "abs(baro_delta_24h_hpa) >= 12" }
+        ],
+        "confidence": "established",
+        "effects": []
+      },
+      {
+        "key": "earthweather.temp_swing_24h_big",
+        "label": "Big Temperature Swing (24h)",
+        "category": "local_weather",
+        "unit": "C",
+        "activation": [
+          { "state": "watch", "rule": "abs(temp_delta_24h_c) >= 8 and abs(temp_delta_24h_c) < 12" },
+          { "state": "high", "rule": "abs(temp_delta_24h_c) >= 12" }
+        ],
+        "confidence": "plausible",
+        "effects": []
+      },
+      {
         "key": "earthweather.air_quality",
         "label": "Air Quality (AQI)",
         "category": "local_weather",
@@ -426,6 +475,40 @@
           ]
         },
         {
+          "key": "alert.pressure_drop_3h",
+          "title": "Rapid pressure drop",
+          "severity_by_state": { "watch": "watch", "high": "high" },
+          "trigger": { "signal_key": "earthweather.pressure_drop_3h", "state_any_of": ["watch", "high"] },
+          "suggested_actions": [
+            "hydrate",
+            "nasal/steam support",
+            "protect sleep window",
+            "pace exertion"
+          ]
+        },
+        {
+          "key": "alert.pressure_swing_24h",
+          "title": "Pressure swing (24h)",
+          "severity_by_state": { "watch": "watch", "high": "high" },
+          "trigger": { "signal_key": "earthweather.pressure_swing_24h_big", "state_any_of": ["watch", "high"] },
+          "suggested_actions": [
+            "hydrate",
+            "protect sleep window",
+            "pace exertion"
+          ]
+        },
+        {
+          "key": "alert.temp_swing_24h",
+          "title": "Temperature swing (24h)",
+          "severity_by_state": { "watch": "watch", "high": "high" },
+          "trigger": { "signal_key": "earthweather.temp_swing_24h_big", "state_any_of": ["watch", "high"] },
+          "suggested_actions": [
+            "layer clothing",
+            "hydrate",
+            "protect sleep window"
+          ]
+        },
+        {
           "key": "alert.geomagnetic_active",
           "title": "Geomagnetic active",
           "severity_by_state": { "elevated": "watch", "storm": "high" },
@@ -437,10 +520,21 @@
           ]
         },
         {
+          "key": "alert.bz_coupling",
+          "title": "Southward Bz coupling",
+          "severity_by_state": { "active": "watch", "strong": "high" },
+          "trigger": { "signal_key": "spaceweather.bz_coupling", "state_any_of": ["active", "strong"] },
+          "suggested_actions": [
+            "reduce stimulation",
+            "protect sleep window",
+            "gentle movement"
+          ]
+        },
+        {
           "key": "alert.air_quality",
           "title": "Air quality",
-          "severity_by_state": { "moderate": "info", "usg": "watch", "unhealthy": "high" },
-          "trigger": { "signal_key": "earthweather.air_quality", "state_any_of": ["moderate", "usg", "unhealthy"] },
+          "severity_by_state": { "usg": "watch", "unhealthy": "high" },
+          "trigger": { "signal_key": "earthweather.air_quality", "state_any_of": ["usg", "unhealthy"] },
           "suggested_actions": [
             "limit outdoor exertion",
             "use an air filter if available",
@@ -450,8 +544,8 @@
         {
           "key": "alert.solar_wind_speed",
           "title": "Solar wind speed",
-          "severity_by_state": { "elevated": "info", "high": "watch", "very_high": "high" },
-          "trigger": { "signal_key": "spaceweather.sw_speed", "state_any_of": ["elevated", "high", "very_high"] },
+          "severity_by_state": { "high": "watch", "very_high": "high" },
+          "trigger": { "signal_key": "spaceweather.sw_speed", "state_any_of": ["high", "very_high"] },
           "suggested_actions": [
             "protect sleep window",
             "reduce stimulation",

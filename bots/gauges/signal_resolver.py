@@ -284,6 +284,7 @@ def resolve_signals(
     payload = _normalize_local_payload(local_payload or _fetch_local_payload(user_id, day))
     weather = payload.get("weather") or {}
     air = payload.get("air") or {}
+    health_flags = (payload.get("health") or {}).get("flags") or {}
 
     out: List[Dict[str, Any]] = []
 
@@ -314,6 +315,56 @@ def resolve_signals(
                 }
             )
 
+    # Rapid pressure drop (3h)
+    baro_delta_3h = _safe_float(weather.get("baro_delta_3h_hpa") or weather.get("pressure_delta_3h_hpa"))
+    rapid_drop = bool(health_flags.get("pressure_rapid_drop"))
+    drop_state = None
+    if baro_delta_3h is not None and baro_delta_3h <= -5.0:
+        drop_state = "high"
+    elif baro_delta_3h is not None and baro_delta_3h <= -3.0:
+        drop_state = "watch"
+    elif rapid_drop:
+        drop_state = "watch"
+    if drop_state:
+        sig = sig_defs.get("earthweather.pressure_drop_3h") or {}
+        out.append(
+            {
+                "signal_key": "earthweather.pressure_drop_3h",
+                "state": drop_state,
+                "value": baro_delta_3h if baro_delta_3h is not None else -3.0,
+                "confidence": sig.get("confidence"),
+                "evidence": {
+                    "source": "local_signals",
+                    "field": "baro_delta_3h_hpa" if baro_delta_3h is not None else "health.flags.pressure_rapid_drop",
+                    "ts": payload.get("asof") or payload.get("as_of"),
+                },
+            }
+        )
+
+    # Big 24h pressure swing
+    if delta_24h is not None:
+        abs_24h = abs(delta_24h)
+        state = None
+        if abs_24h >= 12:
+            state = "high"
+        elif abs_24h >= 8:
+            state = "watch"
+        if state:
+            sig = sig_defs.get("earthweather.pressure_swing_24h_big") or {}
+            out.append(
+                {
+                    "signal_key": "earthweather.pressure_swing_24h_big",
+                    "state": state,
+                    "value": delta_24h,
+                    "confidence": sig.get("confidence"),
+                    "evidence": {
+                        "source": "local_signals",
+                        "field": "baro_delta_24h_hpa",
+                        "ts": payload.get("asof") or payload.get("as_of"),
+                    },
+                }
+            )
+
     # Temperature swing (24h)
     temp_delta = _safe_float(weather.get("temp_delta_24h_c") or weather.get("temp_delta_24h"))
     if temp_delta is not None:
@@ -329,6 +380,28 @@ def resolve_signals(
                 {
                     "signal_key": "earthweather.temp_swing_24h",
                     "state": state,
+                    "value": temp_delta,
+                    "confidence": sig.get("confidence"),
+                    "evidence": {
+                        "source": "local_signals",
+                        "field": "temp_delta_24h_c",
+                        "ts": payload.get("asof") or payload.get("as_of"),
+                    },
+                }
+            )
+
+        # Big 24h temperature swing (alert-only)
+        state_big = None
+        if abs_delta >= 12:
+            state_big = "high"
+        elif abs_delta >= 8:
+            state_big = "watch"
+        if state_big:
+            sig = sig_defs.get("earthweather.temp_swing_24h_big") or {}
+            out.append(
+                {
+                    "signal_key": "earthweather.temp_swing_24h_big",
+                    "state": state_big,
                     "value": temp_delta,
                     "confidence": sig.get("confidence"),
                     "evidence": {
