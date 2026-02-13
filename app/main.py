@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from .routers import (
     badges,
     billing,
+    dashboard,
     earth,
     health as health_router,
     hazards,
@@ -131,6 +132,7 @@ app.include_router(earth.router, dependencies=[Depends(require_read_auth)])
 app.include_router(space.router, dependencies=[Depends(require_read_auth)])
 app.include_router(summary.router, dependencies=[Depends(require_read_auth)])
 app.include_router(space_forecasts.router, dependencies=[Depends(require_read_auth)])
+app.include_router(dashboard.router)
 # Local health check endpoints are public (used by WP card and iOS onboarding)
 app.include_router(local.router)
 

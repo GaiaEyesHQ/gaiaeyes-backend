@@ -1,0 +1,47 @@
+name: Gauges + Member EarthScope Daily
+permissions:
+  contents: read
+on:
+  schedule:
+    - cron: "15 14 * * *" # 14:15 UTC
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout backend repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+
+      - name: Location context snapshot
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          python bots/gauges/location_context_job.py
+
+      - name: Gauge scoring
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          python bots/gauges/gauge_scoring_job.py
+
+      - name: Member EarthScope writer
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: gpt-4o-mini
+        run: |
+          set -euo pipefail
+          python bots/earthscope_post/member_earthscope_generate.py

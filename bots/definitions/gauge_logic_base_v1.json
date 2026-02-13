@@ -1,0 +1,486 @@
+{
+  "gaia_eyes_logic_base": {
+    "version": "2026-02-09",
+    "global_disclaimer": "Exploratory wellness context only. Not medical advice, diagnosis, or treatment. Some associations are speculative. For severe, unusual, or persistent symptoms, seek professional care.",
+    "confidence_multiplier": {
+      "established": 1.0,
+      "plausible": 0.75,
+      "emerging": 0.5,
+      "speculative": 0.25
+    },
+    "normalization": {
+      "gauge_range": { "min": 0, "max": 100 },
+      "alert_thresholds": {
+        "info": 55,
+        "watch": 70,
+        "high": 85
+      },
+      "smoothing": {
+        "default": { "type": "ema", "alpha": 0.35 },
+        "event_override": { "type": "ema", "alpha": 0.65 }
+      }
+    },
+    "gauges": [
+      {
+        "key": "pain",
+        "label": "Pain",
+        "description": "Estimated flare-load based on environmental stressors plus user physiological data when available.",
+        "direction": "higher_is_more_risk",
+        "primary_effect_tags": ["pain_flare", "inflammation_sensitivity", "migraine", "headache"],
+        "support_effect_tags": ["sleep_quality", "autonomic_load", "stress_load"]
+      },
+      {
+        "key": "focus",
+        "label": "Focus",
+        "description": "Estimated cognitive steadiness and attention resilience under current conditions.",
+        "direction": "higher_is_more_risk",
+        "primary_effect_tags": ["brain_fog", "focus", "vigilance"],
+        "support_effect_tags": ["sleep_quality", "anxiety", "fatigue", "autonomic_load"]
+      },
+      {
+        "key": "heart",
+        "label": "Heart",
+        "description": "Estimated cardiovascular/autonomic load (not a diagnosis).",
+        "direction": "higher_is_more_risk",
+        "primary_effect_tags": ["hrv_down", "resting_hr_up", "blood_pressure_variability", "palpitations_awareness"],
+        "support_effect_tags": ["autonomic_load", "sleep_quality", "anxiety"]
+      },
+      {
+        "key": "stamina",
+        "label": "Stamina",
+        "description": "Estimated recovery and exertion tolerance under conditions.",
+        "direction": "higher_is_more_risk",
+        "primary_effect_tags": ["fatigue", "sleep_quality", "deep_sleep"],
+        "support_effect_tags": ["autonomic_load", "inflammation_sensitivity"]
+      },
+      {
+        "key": "energy",
+        "label": "Energy",
+        "description": "Estimated day energy stability and 'wired/tired' likelihood.",
+        "direction": "higher_is_more_risk",
+        "primary_effect_tags": ["fatigue", "sleep_quality", "mood_swings", "irritability"],
+        "support_effect_tags": ["anxiety", "autonomic_load"]
+      },
+      {
+        "key": "sleep",
+        "label": "Sleep",
+        "description": "Estimated sleep disruption potential from environment and physiology.",
+        "direction": "higher_is_more_risk",
+        "primary_effect_tags": ["sleep_quality", "sleep_onset", "deep_sleep", "dream_intensity"],
+        "support_effect_tags": ["temperature_stress", "pressure_sensitivity", "anxiety"]
+      },
+      {
+        "key": "mood",
+        "label": "Mood",
+        "description": "Estimated mood volatility or sensitivity under current conditions.",
+        "direction": "higher_is_more_risk",
+        "primary_effect_tags": ["anxiety", "mood_swings", "irritability", "sensory_sensitivity"],
+        "support_effect_tags": ["sleep_quality", "fatigue", "autonomic_load"]
+      }
+    ],
+    "effect_tags": [
+      "sleep_quality",
+      "sleep_onset",
+      "deep_sleep",
+      "dream_intensity",
+      "fatigue",
+      "headache",
+      "migraine",
+      "pain_flare",
+      "inflammation_sensitivity",
+      "anxiety",
+      "mood_swings",
+      "irritability",
+      "brain_fog",
+      "focus",
+      "vigilance",
+      "dizziness",
+      "palpitations_awareness",
+      "autonomic_load",
+      "hrv_down",
+      "resting_hr_up",
+      "blood_pressure_variability",
+      "sensory_sensitivity",
+      "temperature_stress",
+      "pressure_sensitivity",
+      "airway_irritation",
+      "gut_sensitivity",
+      "stress_load"
+    ],
+    "scoring_model": {
+      "base_score": 20,
+      "cap_per_signal": 18,
+      "combine_method": "sum_capped",
+      "notes": "Scores represent 'estimated stress/risk load' not outcomes. Higher score means more supportive care may be useful."
+    },
+    "signal_definitions": [
+      {
+        "key": "earthweather.pressure_swing_12h",
+        "label": "Barometric Pressure Swing (12h)",
+        "category": "local_weather",
+        "unit": "hPa",
+        "activation": [
+          { "state": "moderate", "rule": "abs(delta_12h_hpa) >= 6 and abs(delta_12h_hpa) < 10" },
+          { "state": "high", "rule": "abs(delta_12h_hpa) >= 10" }
+        ],
+        "confidence": "established",
+        "effects": [
+          {
+            "effect_tag": "pressure_sensitivity",
+            "direction": "up",
+            "weights_by_state": { "moderate": 10, "high": 16 },
+            "gauges": ["pain", "sleep", "mood"]
+          },
+          {
+            "effect_tag": "headache",
+            "direction": "up",
+            "weights_by_state": { "moderate": 8, "high": 14 },
+            "gauges": ["pain", "focus"]
+          },
+          {
+            "effect_tag": "migraine",
+            "direction": "up",
+            "weights_by_state": { "moderate": 6, "high": 12 },
+            "gauges": ["pain", "focus"]
+          },
+          {
+            "effect_tag": "dizziness",
+            "direction": "up",
+            "weights_by_state": { "moderate": 4, "high": 8 },
+            "gauges": ["focus", "mood"]
+          },
+          {
+            "effect_tag": "sleep_quality",
+            "direction": "down",
+            "weights_by_state": { "moderate": 5, "high": 9 },
+            "gauges": ["sleep", "energy", "stamina"]
+          }
+        ]
+      },
+      {
+        "key": "earthweather.temp_swing_24h",
+        "label": "Temperature Swing (24h)",
+        "category": "local_weather",
+        "unit": "C",
+        "activation": [
+          { "state": "moderate", "rule": "abs(delta_24h_c) >= 6 and abs(delta_24h_c) < 10" },
+          { "state": "high", "rule": "abs(delta_24h_c) >= 10" }
+        ],
+        "confidence": "plausible",
+        "effects": [
+          {
+            "effect_tag": "temperature_stress",
+            "direction": "up",
+            "weights_by_state": { "moderate": 8, "high": 14 },
+            "gauges": ["sleep", "stamina", "energy"]
+          },
+          {
+            "effect_tag": "fatigue",
+            "direction": "up",
+            "weights_by_state": { "moderate": 6, "high": 10 },
+            "gauges": ["energy", "stamina", "focus"]
+          },
+          {
+            "effect_tag": "pain_flare",
+            "direction": "up",
+            "weights_by_state": { "moderate": 4, "high": 8 },
+            "gauges": ["pain"]
+          }
+        ]
+      },
+      {
+        "key": "earthweather.air_quality",
+        "label": "Air Quality (AQI)",
+        "category": "local_weather",
+        "unit": "AQI",
+        "activation": [
+          { "state": "moderate", "rule": "aqi >= 51 and aqi < 101" },
+          { "state": "usg", "rule": "aqi >= 101 and aqi < 151" },
+          { "state": "unhealthy", "rule": "aqi >= 151" }
+        ],
+        "confidence": "established",
+        "effects": [
+          {
+            "effect_tag": "airway_irritation",
+            "direction": "up",
+            "weights_by_state": { "moderate": 6, "usg": 10, "unhealthy": 16 },
+            "gauges": ["sleep", "energy", "stamina", "mood"]
+          },
+          {
+            "effect_tag": "fatigue",
+            "direction": "up",
+            "weights_by_state": { "moderate": 4, "usg": 7, "unhealthy": 12 },
+            "gauges": ["energy", "stamina", "focus"]
+          },
+          {
+            "effect_tag": "sleep_quality",
+            "direction": "down",
+            "weights_by_state": { "moderate": 3, "usg": 6, "unhealthy": 10 },
+            "gauges": ["sleep", "energy"]
+          },
+          {
+            "effect_tag": "headache",
+            "direction": "up",
+            "weights_by_state": { "moderate": 2, "usg": 4, "unhealthy": 7 },
+            "gauges": ["pain", "focus"]
+          },
+          {
+            "effect_tag": "autonomic_load",
+            "direction": "up",
+            "weights_by_state": { "moderate": 2, "usg": 4, "unhealthy": 7 },
+            "gauges": ["heart", "energy"]
+          }
+        ]
+      },
+      {
+        "key": "spaceweather.kp",
+        "label": "Kp Index",
+        "category": "space_weather",
+        "unit": "index",
+        "activation": [
+          { "state": "elevated", "rule": "kp >= 4 and kp < 6" },
+          { "state": "storm", "rule": "kp >= 6" }
+        ],
+        "confidence": "emerging",
+        "effects": [
+          {
+            "effect_tag": "sleep_quality",
+            "direction": "down",
+            "weights_by_state": { "elevated": 5, "storm": 10 },
+            "gauges": ["sleep", "energy", "stamina"]
+          },
+          {
+            "effect_tag": "autonomic_load",
+            "direction": "up",
+            "weights_by_state": { "elevated": 4, "storm": 8 },
+            "gauges": ["heart", "mood", "energy"]
+          },
+          {
+            "effect_tag": "anxiety",
+            "direction": "up",
+            "weights_by_state": { "elevated": 3, "storm": 7 },
+            "gauges": ["mood", "focus"]
+          },
+          {
+            "effect_tag": "sensory_sensitivity",
+            "direction": "up",
+            "weights_by_state": { "elevated": 2, "storm": 6 },
+            "gauges": ["mood", "focus"]
+          }
+        ]
+      },
+      {
+        "key": "spaceweather.sw_speed",
+        "label": "Solar Wind Speed",
+        "category": "space_weather",
+        "unit": "km/s",
+        "activation": [
+          { "state": "elevated", "rule": "sw_speed >= 500 and sw_speed < 600" },
+          { "state": "high", "rule": "sw_speed >= 600 and sw_speed < 700" },
+          { "state": "very_high", "rule": "sw_speed >= 700" }
+        ],
+        "confidence": "emerging",
+        "stacking": {
+          "when_any_active": ["spaceweather.kp", "spaceweather.bz_coupling"],
+          "multiplier": 0.5,
+          "note": "Reduce solar wind speed contribution when Kp and/or southward Bz coupling are active to avoid double-counting geomagnetic load."
+        },
+        "effects": [
+          {
+            "effect_tag": "autonomic_load",
+            "direction": "up",
+            "weights_by_state": { "elevated": 4, "high": 7, "very_high": 10 },
+            "gauges": ["heart", "mood", "energy"]
+          },
+          {
+            "effect_tag": "sleep_quality",
+            "direction": "down",
+            "weights_by_state": { "elevated": 3, "high": 5, "very_high": 8 },
+            "gauges": ["sleep", "energy"]
+          },
+          {
+            "effect_tag": "stress_load",
+            "direction": "up",
+            "weights_by_state": { "elevated": 2, "high": 4, "very_high": 6 },
+            "gauges": ["focus", "mood"]
+          }
+        ]
+      },
+      {
+        "key": "spaceweather.bz_coupling",
+        "label": "Southward Bz Coupling",
+        "category": "space_weather",
+        "unit": "nT",
+        "activation": [
+          { "state": "active", "rule": "bz <= -5 for >= 20min" },
+          { "state": "strong", "rule": "bz <= -10 for >= 20min" }
+        ],
+        "confidence": "emerging",
+        "effects": [
+          {
+            "effect_tag": "autonomic_load",
+            "direction": "up",
+            "weights_by_state": { "active": 5, "strong": 9 },
+            "gauges": ["heart", "mood", "sleep"]
+          },
+          {
+            "effect_tag": "sleep_quality",
+            "direction": "down",
+            "weights_by_state": { "active": 4, "strong": 8 },
+            "gauges": ["sleep", "energy"]
+          }
+        ]
+      },
+      {
+        "key": "schumann.variability_24h",
+        "label": "Schumann Variability (Δf0 day-to-day)",
+        "category": "earth_em",
+        "unit": "hz_delta",
+        "metric": "abs_delta_f0_day_to_day",
+        "activation": [
+          { "state": "elevated", "rule": "zscore_30d >= 2.0 or pct_30d >= 0.9" }
+        ],
+        "activation_params": {
+          "lookback_days": 30,
+          "min_points": 14,
+          "zscore_threshold": 2.0,
+          "percentile_threshold": 0.9,
+          "preferred_station": "cumiana"
+        },
+        "confidence": "speculative",
+        "effects": [
+          {
+            "effect_tag": "sleep_quality",
+            "direction": "down",
+            "weights_by_state": { "elevated": 4 },
+            "gauges": ["sleep", "energy"]
+          },
+          {
+            "effect_tag": "dream_intensity",
+            "direction": "up",
+            "weights_by_state": { "elevated": 4 },
+            "gauges": ["sleep"]
+          },
+          {
+            "effect_tag": "sensory_sensitivity",
+            "direction": "up",
+            "weights_by_state": { "elevated": 3 },
+            "gauges": ["mood", "focus"]
+          }
+        ]
+      },
+      {
+        "key": "lunar.full_moon_window",
+        "label": "Full Moon Window",
+        "category": "lunar",
+        "unit": "phase",
+        "activation": [
+          { "state": "active", "rule": "days_to_full <= 2" }
+        ],
+        "confidence": "emerging",
+        "effects": [
+          {
+            "effect_tag": "sleep_onset",
+            "direction": "down",
+            "weights_by_state": { "active": 4 },
+            "gauges": ["sleep"]
+          },
+          {
+            "effect_tag": "sleep_quality",
+            "direction": "down",
+            "weights_by_state": { "active": 4 },
+            "gauges": ["sleep", "energy"]
+          }
+        ]
+      }
+    ],
+    "health_metrics_overlay": {
+      "purpose": "Compute a separate gauge that reflects current wearable/health status. This is distinct from environmental load.",
+      "inputs": [
+        { "key": "wearable.hrv", "label": "HRV", "direction": "lower_is_worse", "weight": 12 },
+        { "key": "wearable.resting_hr", "label": "Resting HR", "direction": "higher_is_worse", "weight": 10 },
+        { "key": "wearable.sleep_score", "label": "Sleep Score", "direction": "lower_is_worse", "weight": 14 },
+        { "key": "wearable.respiratory_rate", "label": "Respiratory Rate", "direction": "higher_is_worse", "weight": 6 },
+        { "key": "wearable.skin_temp_deviation", "label": "Temp Deviation", "direction": "higher_is_worse", "weight": 8 },
+        { "key": "user.symptom_log", "label": "Symptoms", "direction": "higher_is_worse", "weight": 14 }
+      ],
+      "output_gauge": { "key": "health_status", "label": "Health Status", "direction": "higher_is_more_risk" }
+    },
+    "alert_pills": {
+      "pill_template": {
+        "title": "",
+        "severity": "info|watch|high",
+        "triggered_by": [],
+        "suggested_actions": []
+      },
+      "rules": [
+        {
+          "key": "alert.pressure_swing",
+          "title": "Pressure swing",
+          "severity_by_state": { "moderate": "watch", "high": "high" },
+          "trigger": { "signal_key": "earthweather.pressure_swing_12h", "state_any_of": ["moderate", "high"] },
+          "suggested_actions": [
+            "hydrate",
+            "steam shower or saline rinse",
+            "early wind-down tonight"
+          ]
+        },
+        {
+          "key": "alert.geomagnetic_active",
+          "title": "Geomagnetic active",
+          "severity_by_state": { "elevated": "watch", "storm": "high" },
+          "trigger": { "signal_key": "spaceweather.kp", "state_any_of": ["elevated", "storm"] },
+          "suggested_actions": [
+            "reduce stimulation",
+            "protect sleep window",
+            "gentle movement"
+          ]
+        },
+        {
+          "key": "alert.air_quality",
+          "title": "Air quality",
+          "severity_by_state": { "moderate": "info", "usg": "watch", "unhealthy": "high" },
+          "trigger": { "signal_key": "earthweather.air_quality", "state_any_of": ["moderate", "usg", "unhealthy"] },
+          "suggested_actions": [
+            "limit outdoor exertion",
+            "use an air filter if available",
+            "hydrate and pace"
+          ]
+        },
+        {
+          "key": "alert.solar_wind_speed",
+          "title": "Solar wind speed",
+          "severity_by_state": { "elevated": "info", "high": "watch", "very_high": "high" },
+          "trigger": { "signal_key": "spaceweather.sw_speed", "state_any_of": ["elevated", "high", "very_high"] },
+          "suggested_actions": [
+            "protect sleep window",
+            "reduce stimulation",
+            "gentle movement"
+          ]
+        }
+      ]
+    },
+    "writer_outputs": {
+      "earthscope_sections": [
+        "Hook/Check-in",
+        "Today’s conditions (space + local)",
+        "What people may feel (conditional language)",
+        "Why this might matter (short mechanism)",
+        "Supportive actions (3–5)",
+        "Disclaimer"
+      ],
+      "triggered_update_rules": [
+        {
+          "key": "update.major_geomagnetic",
+          "when": "any alert pill severity == 'high' OR kp >= 7 OR bz <= -10 for >=20min",
+          "action": "Generate an additional short advisory post + in-app notification"
+        },
+        {
+          "key": "update.extreme_weather_swing",
+          "when": "abs(delta_12h_hpa) >= 10 OR abs(delta_24h_c) >= 12",
+          "action": "Generate a weather-body advisory post"
+        }
+      ]
+    }
+  }
+}

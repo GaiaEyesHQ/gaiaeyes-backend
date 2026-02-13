@@ -39,3 +39,7 @@
 10. **Magic link redirect URL + Associated Domains**
    - **Why needed**: iOS Supabase magic links need a redirect target that reopens the app (universal link or custom scheme). The app now supports an optional `GAIA_MAGICLINK_REDIRECT` but the exact URL + associated-domain setup is still a human config.
    - **Where to fill**: Apple Developer → Associated Domains + Supabase Auth redirect settings.
+
+11. **RPC signatures for dashboard + local signals**
+    - **Why needed**: The backend calls `app.get_local_signals_for_user` and `app.get_dashboard_payload`; it is unclear whether these require a `user_id` argument or rely on JWT context.
+    - **Where to fill**: Supabase SQL definitions for the RPCs (or runbook notes).

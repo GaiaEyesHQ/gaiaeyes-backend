@@ -158,7 +158,7 @@ def generate_daily_earthscope(
     prompt = {
         "task": "Render a Gaia Eyes 'Daily Earthscope' post with effects and self-care only.",
         "format": "Return strict JSON with keys: title, caption, body_markdown, hashtags.",
-        "voice": "calm, clear, credible, lightly poetic, never alarmist",
+        "voice": "calm, clear, credible, lightly poetic and humorous, never alarmist",
         "length_hints": {"caption_min_chars": 220, "caption_max_chars": 600, "hashtags_min": 6, "hashtags_max": 10},
         "sections_required": [
             "How This May Affect You (Mood, Energy, Heart, Nervous System)",
