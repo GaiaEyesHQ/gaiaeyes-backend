@@ -9,6 +9,8 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
     steps:
       - name: Checkout backend repo
         uses: actions/checkout@v4
