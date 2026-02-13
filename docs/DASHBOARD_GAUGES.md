@@ -61,7 +61,15 @@ Idempotency:
 - `inputs_hash = sha256(json.dumps(inputs_snapshot, sort_keys=True))`
 - If the stored hash matches, updates are skipped unless `force=true`.
 
-**Health status**: Currently left null unless explicit wearable baselines are defined (optional overlay).
+## Health Status Gauge (v1.1)
+- Baseline window: 30 days (excluding current day), minimum 14 usable days.
+- Metrics: sleep minutes/efficiency/deep, SpO2, hr_max, steps, optional BP + HRV.
+- Z-score per metric, clamp to [-3, 3], convert to “bad” direction, then weighted sum.
+- `health_status = min(100, round(load_raw * 30, 0))`
+- Symptom overlay: add `min(15, max_severity * 1.5)` when present.
+- If baseline is insufficient, `health_status = null` and an alert pill is added:
+  - `alert.health_calibrating` (severity `info`)
+- HRV auto-upgrades when data appears (from `marts.daily_features.hrv_avg`, or fallback `gaia.daily_summary` / `gaia.samples` if present).
 
 ## Member EarthScope Writer
 - Script: `bots/earthscope_post/member_earthscope_generate.py`

@@ -18,6 +18,22 @@ LOG_LEVEL = os.getenv("GAIA_LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
+_METRIC_SPECS = {
+    "sleep_total_minutes": {"weight": 0.25, "direction": "lower_is_worse"},
+    "sleep_efficiency": {"weight": 0.20, "direction": "lower_is_worse"},
+    "sleep_deep_minutes": {"weight": 0.15, "direction": "lower_is_worse"},
+    "spo2_avg": {"weight": 0.15, "direction": "lower_is_worse"},
+    "hr_max": {"weight": 0.10, "direction": "higher_is_worse"},
+    "steps_total": {"weight": 0.05, "direction": "lower_is_worse"},
+    "bp_sys_avg": {"weight": 0.05, "direction": "higher_is_worse"},
+    "bp_dia_avg": {"weight": 0.05, "direction": "higher_is_worse"},
+    "hrv_avg": {"weight": 0.10, "direction": "lower_is_worse"},
+}
+
+_HRV_CANDIDATES = ["hrv_avg", "hrv_rmssd", "rmssd", "hrv", "hrv_ms"]
+_DAY_CANDIDATES = ["day", "date", "day_local", "day_utc"]
+_TS_CANDIDATES = ["ts_utc", "ts", "sample_ts", "created_at", "timestamp"]
+
 
 def _coerce_day(value: str | date | None) -> date:
     if isinstance(value, date):
@@ -167,6 +183,213 @@ def fetch_local_health_summary(user_id: str) -> Optional[Dict[str, Any]]:
         return row if row else None
     except Exception:
         return None
+
+
+def fetch_daily_features(user_id: str, day: date) -> Dict[str, Any]:
+    cols = table_columns("marts", "daily_features")
+    if not cols:
+        return {}
+    metrics = [m for m in _METRIC_SPECS.keys() if m in cols]
+    if not metrics:
+        return {}
+    sql = f"""
+        select day, {', '.join(metrics)}
+          from marts.daily_features
+         where user_id = %s and day = %s
+         limit 1
+    """
+    return pg.fetchrow(sql, user_id, day) or {}
+
+
+def fetch_daily_features_baseline(
+    user_id: str,
+    day: date,
+    lookback_days: int = 30,
+) -> List[Dict[str, Any]]:
+    cols = table_columns("marts", "daily_features")
+    if not cols:
+        return []
+    metrics = [m for m in _METRIC_SPECS.keys() if m in cols]
+    if not metrics:
+        return []
+    start = day - timedelta(days=lookback_days)
+    sql = f"""
+        select day, {', '.join(metrics)}
+          from marts.daily_features
+         where user_id = %s
+           and day >= %s
+           and day < %s
+         order by day asc
+    """
+    return pg.fetch(sql, user_id, start, day) or []
+
+
+def fetch_hrv_fallback(
+    user_id: str,
+    day: date,
+    today_row: Optional[Dict[str, Any]] = None,
+) -> Tuple[Optional[float], Optional[str]]:
+    if today_row and today_row.get("hrv_avg") is not None:
+        return _safe_float(today_row.get("hrv_avg")), "marts.daily_features.hrv_avg"
+
+    cols = table_columns("gaia", "daily_summary")
+    if cols:
+        user_col = pick_column(cols, ["user_id"])
+        day_col = pick_column(cols, _DAY_CANDIDATES)
+        hrv_col = pick_column(cols, _HRV_CANDIDATES)
+        if user_col and day_col and hrv_col:
+            sql = f"""
+                select {hrv_col} as hrv
+                  from gaia.daily_summary
+                 where {user_col} = %s and {day_col} = %s
+                 limit 1
+            """
+            row = pg.fetchrow(sql, user_id, day)
+            if row and row.get("hrv") is not None:
+                return _safe_float(row.get("hrv")), f"gaia.daily_summary.{hrv_col}"
+
+    cols = table_columns("gaia", "samples")
+    if cols:
+        user_col = pick_column(cols, ["user_id"])
+        ts_col = pick_column(cols, _TS_CANDIDATES)
+        hrv_col = pick_column(cols, _HRV_CANDIDATES)
+        if user_col and ts_col and hrv_col:
+            start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+            end = start + timedelta(days=1)
+            sql = f"""
+                select avg({hrv_col}) as hrv
+                  from gaia.samples
+                 where {user_col} = %s
+                   and {ts_col} >= %s
+                   and {ts_col} < %s
+            """
+            row = pg.fetchrow(sql, user_id, start, end)
+            if row and row.get("hrv") is not None:
+                return _safe_float(row.get("hrv")), f"gaia.samples.{hrv_col}"
+
+    return None, None
+
+
+def _compute_baseline_stats(
+    baseline_rows: List[Dict[str, Any]],
+    metrics: List[str],
+) -> Tuple[int, Dict[str, Dict[str, float]]]:
+    baseline_days = 0
+    values: Dict[str, List[float]] = {m: [] for m in metrics}
+
+    for row in baseline_rows:
+        any_val = False
+        for m in metrics:
+            v = _safe_float(row.get(m))
+            if v is None:
+                continue
+            any_val = True
+            values[m].append(v)
+        if any_val:
+            baseline_days += 1
+
+    stats: Dict[str, Dict[str, float]] = {}
+    for m, vals in values.items():
+        if len(vals) < 2:
+            continue
+        mean = sum(vals) / len(vals)
+        var = sum((v - mean) ** 2 for v in vals) / (len(vals) - 1)
+        std = var ** 0.5
+        stats[m] = {"mean": mean, "std": std, "n": float(len(vals))}
+
+    return baseline_days, stats
+
+
+def compute_health_status(
+    today_row: Dict[str, Any],
+    baseline_rows: List[Dict[str, Any]],
+    symptoms: Dict[str, Any],
+    *,
+    hrv_value: Optional[float] = None,
+    hrv_source: Optional[str] = None,
+) -> Tuple[Optional[float], Dict[str, Any]]:
+    metrics = list(_METRIC_SPECS.keys())
+    baseline_days, stats = _compute_baseline_stats(baseline_rows, metrics)
+
+    if baseline_days < 14:
+        return None, {
+            "calibrating": True,
+            "baseline_days": baseline_days,
+            "metrics_used": [],
+            "hrv_source": hrv_source,
+        }
+
+    today_values: Dict[str, float] = {}
+    for m in metrics:
+        if m == "hrv_avg" and hrv_value is not None:
+            today_values[m] = float(hrv_value)
+            continue
+        v = _safe_float(today_row.get(m))
+        if v is not None:
+            today_values[m] = v
+
+    metric_inputs = {}
+    weights: Dict[str, float] = {}
+    for m, spec in _METRIC_SPECS.items():
+        if m not in today_values:
+            continue
+        stat = stats.get(m)
+        if not stat or not stat.get("std") or stat.get("std") == 0:
+            continue
+        weights[m] = float(spec["weight"])
+        metric_inputs[m] = {
+            "today": today_values[m],
+            "mean": stat["mean"],
+            "std": stat["std"],
+            "direction": spec["direction"],
+        }
+
+    if not weights:
+        return None, {
+            "calibrating": True,
+            "baseline_days": baseline_days,
+            "metrics_used": [],
+            "hrv_source": hrv_source,
+        }
+
+    weight_sum = sum(weights.values())
+    if weight_sum <= 0:
+        return None, {
+            "calibrating": True,
+            "baseline_days": baseline_days,
+            "metrics_used": [],
+            "hrv_source": hrv_source,
+        }
+
+    load_raw = 0.0
+    for m, spec in _METRIC_SPECS.items():
+        if m not in metric_inputs:
+            continue
+        w = weights[m] / weight_sum
+        today = metric_inputs[m]["today"]
+        mean = metric_inputs[m]["mean"]
+        std = metric_inputs[m]["std"]
+        z = (today - mean) / std
+        z = max(-3.0, min(3.0, z))
+        if spec["direction"] == "lower_is_worse":
+            bad = max(0.0, -z)
+        else:
+            bad = max(0.0, z)
+        load_raw += w * bad
+
+    health_status = min(100.0, round(load_raw * 30.0, 0))
+
+    severity_max = _safe_float(symptoms.get("max_severity"))
+    if severity_max:
+        health_status = min(100.0, health_status + min(15.0, severity_max * 1.5))
+
+    return health_status, {
+        "calibrating": False,
+        "baseline_days": baseline_days,
+        "metrics_used": list(metric_inputs.keys()),
+        "metric_inputs": metric_inputs,
+        "hrv_source": hrv_source,
+    }
 
 
 def _build_alerts(definition: Dict[str, Any], active_states: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -321,13 +544,32 @@ def score_user_day(
     tags = fetch_user_tags(user_id)
     symptoms = fetch_symptom_summary(user_id, day)
     wearable = fetch_local_health_summary(user_id)
+    today_features = fetch_daily_features(user_id, day)
+    baseline_rows = fetch_daily_features_baseline(user_id, day)
+    hrv_value, hrv_source = fetch_hrv_fallback(user_id, day, today_features)
+    health_status, health_meta = compute_health_status(
+        today_features,
+        baseline_rows,
+        symptoms,
+        hrv_value=hrv_value,
+        hrv_source=hrv_source,
+    )
 
     gauges = _score_gauges(definition, active_states)
 
-    # Health status is optional until we have clear wearable baselines.
-    health_status = None
-
     alerts = _build_alerts(definition, active_states)
+    if health_meta.get("calibrating"):
+        alerts.append(
+            {
+                "key": "alert.health_calibrating",
+                "title": "Calibrating health gauge",
+                "severity": "info",
+                "triggered_by": [{"signal_key": "health_status", "state": "calibrating"}],
+                "suggested_actions": [
+                    "keep logging sleep/health metrics to personalize your baseline"
+                ],
+            }
+        )
     trend = _compute_trend(user_id, day, {**gauges, "health_status": health_status})
 
     inputs_snapshot = {
@@ -338,6 +580,7 @@ def score_user_day(
         "tags": tags,
         "symptoms": symptoms,
         "wearable": wearable,
+        "health_status_inputs": health_meta,
     }
     inputs_hash = _hash_inputs(inputs_snapshot)
 

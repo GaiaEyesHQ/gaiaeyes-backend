@@ -117,6 +117,23 @@ def _highlight_gauges(definition: Dict[str, Any], gauges: Dict[str, Any]) -> Lis
     return labeled[:4]
 
 
+def _health_status_line(value: Optional[Any]) -> str:
+    if value is None:
+        return "Health Status: calibrating"
+    try:
+        v = float(value)
+    except Exception:
+        return "Health Status: calibrating"
+    label = "stable"
+    if v >= 85:
+        label = "high"
+    elif v >= 70:
+        label = "elevated"
+    elif v >= 55:
+        label = "moderate"
+    return f"Health Status: {int(round(v, 0))} ({label})"
+
+
 def _default_actions(alerts: List[Dict[str, Any]]) -> List[str]:
     actions = []
     for alert in alerts or []:
@@ -152,9 +169,12 @@ def _render_member_post(
         top = highlights[0]
         hook = f"Your top sensitivity today: {top['label']} ({top['value']})."
 
-    gauges_lines = "\n".join(
+    gauges_lines_parts = []
+    gauges_lines_parts.append(f"- {_health_status_line(gauges_row.get('health_status'))}")
+    gauges_lines_parts.extend(
         [f"- **{h['label']}**: {h['value']} ({h['severity']})" for h in highlights]
-    ) or "- No gauge highlights yet."
+    )
+    gauges_lines = "\n".join(gauges_lines_parts) or "- No gauge highlights yet."
 
     driver_lines = "\n".join(
         [
@@ -234,10 +254,14 @@ def _render_with_openai(
         obj = json.loads(resp.choices[0].message.content)
         if not all(k in obj for k in ("title", "caption", "body_markdown")):
             return None
+        health_line = _health_status_line(gauges_row.get("health_status"))
+        body = str(obj.get("body_markdown") or "").strip()
+        if health_line and "Health Status" not in body:
+            body = f"{body}\n\n{health_line}"
         return {
             "title": str(obj.get("title") or "").strip(),
             "caption": str(obj.get("caption") or "").strip(),
-            "body_markdown": str(obj.get("body_markdown") or "").strip(),
+            "body_markdown": body,
         }
     except Exception as exc:
         logger.warning("[member] OpenAI failed, using fallback: %s", exc)
