@@ -15,19 +15,17 @@ def _norm_zip(z: str) -> str:
 
 def upsert_zip_payload(zip_code: str, payload: dict, asof: datetime | None = None) -> None:
     asof = asof or datetime.now(timezone.utc)
-    expires_at = asof + timedelta(minutes=TTL_MIN)
     z = _norm_zip(zip_code)
     pg.execute(
         """
-        insert into ext.local_signals_cache (zip, asof, payload, expires_at)
-        values (%s, %s, %s, %s)
+        insert into ext.local_signals_cache (zip, asof, payload)
+        values (%s, %s, %s)
         on conflict (zip, asof)
-        do update set payload = excluded.payload, expires_at = excluded.expires_at
+        do update set payload = excluded.payload
         """,
         z,
         asof,
         json.dumps(payload),
-        expires_at,
     )
 
 
@@ -36,7 +34,7 @@ def latest_for_zip(zip_code: str) -> dict | None:
     row = pg.fetchrow(
         """
         select payload from ext.local_signals_cache
-        where zip = %s and expires_at > now()
+        where zip = %s
         order by asof desc limit 1
         """,
         z,
@@ -60,7 +58,7 @@ def latest_row(zip_code: str) -> dict | None:
         """
         select asof, payload
         from ext.local_signals_cache
-        where zip = %s and expires_at > now()
+        where zip = %s
         order by asof desc
         limit 1
         """,
@@ -107,22 +105,21 @@ def nearest_row_to(zip_code: str, target_asof: datetime, window_hours: int = 3) 
 
 def upsert_snapshot(zip_code: str, asof: datetime, payload: dict, ttl_minutes: int | None = None) -> None:
     """
-    Convenience wrapper that mirrors upsert_zip_payload but takes explicit asof and optional ttl override.
+    Convenience wrapper that mirrors upsert_zip_payload but takes explicit asof.
+    ttl_minutes is accepted for backward compatibility but ignored because the cache table
+    does not store expires_at in the current schema.
     """
-    ttl = int(os.getenv("LOCAL_SIGNALS_TTL_MINUTES", "60")) if ttl_minutes is None else int(ttl_minutes)
-    expires_at = asof + timedelta(minutes=ttl)
     z = _norm_zip(zip_code)
     pg.execute(
         """
-        insert into ext.local_signals_cache (zip, asof, payload, expires_at)
-        values (%s, %s, %s, %s)
+        insert into ext.local_signals_cache (zip, asof, payload)
+        values (%s, %s, %s)
         on conflict (zip, asof)
-        do update set payload = excluded.payload, expires_at = excluded.expires_at
+        do update set payload = excluded.payload
         """,
         z,
         asof,
         json.dumps(payload),
-        expires_at,
     )
 
 
