@@ -1,6 +1,6 @@
 from typing import Dict, Any
 from datetime import datetime, timezone
-from .cache import latest_and_ref
+from .cache import latest_and_ref, get_previous_approx
 from services.geo.zip_lookup import zip_to_latlon
 from ..external import nws, airnow
 from ..time.moon import moon_phase
@@ -99,18 +99,30 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
     prev_baro = None
     try:
         latest, ref = latest_and_ref(zip_code, ref_hours=24, window_hours=3)
+
+        # If no ref found in the tight window, fall back to an approximate previous snapshot
+        if not ref and latest and isinstance(latest.get("asof"), datetime):
+            ref = get_previous_approx(zip_code, latest["asof"], min_hours=18, max_hours=36)
+
+        # Defensive decode in case jsonb comes back as a string in some DB driver paths
+        if ref and isinstance(ref.get("payload"), str):
+            import json as _json
+            ref["payload"] = _json.loads(ref["payload"])
+
         if ref and isinstance(ref.get("payload"), dict):
             prev_weather = ref["payload"].get("weather") or {}
             prev_temp = prev_weather.get("temp_c")
             prev_baro = prev_weather.get("pressure_hpa")
-    except Exception:
+    except Exception as e:
         # Soft-fail: deltas remain None if cache is empty or unavailable
-        pass
+        print(f"[local_signals] cache ref lookup failed for zip={zip_code}: {e}")
 
     if temp_delta is None:
         temp_delta = _delta(temp_c, prev_temp)
     if baro_delta is None:
         baro_delta = _delta(baro_now, prev_baro)
+    if temp_delta is None and baro_delta is None and (prev_temp is not None or prev_baro is not None):
+        print(f"[local_signals] deltas still null zip={zip_code} temp_c={temp_c} prev_temp={prev_temp} baro={baro_now} prev_baro={prev_baro}")
 
     # Compute ~3h short-term deltas using cache reference
     temp_delta_3h = None
