@@ -144,7 +144,7 @@ def _highlight_gauges(definition: Dict[str, Any], gauges: Dict[str, Any]) -> Lis
     return labeled[:4]
 
 
-def _health_status_line(value: Optional[Any]) -> str:
+def _health_status_line(value: Optional[Any], *, include_value: bool = False) -> str:
     if value is None:
         return "Health Status: calibrating"
     try:
@@ -158,7 +158,9 @@ def _health_status_line(value: Optional[Any]) -> str:
         label = "elevated"
     elif v >= 55:
         label = "moderate"
-    return f"Health Status: {int(round(v, 0))} ({label})"
+    if include_value:
+        return f"Health Status: {int(round(v, 0))} ({label})"
+    return f"Health Status: {label}"
 
 
 def _default_actions(alerts: List[Dict[str, Any]]) -> List[str]:
@@ -179,7 +181,7 @@ def _default_actions(alerts: List[Dict[str, Any]]) -> List[str]:
 def _render_trigger_advisory(trigger_events: List[Dict[str, Any]], health_status: Optional[Any]) -> str:
     lines = []
     if health_status is not None:
-        lines.append(_health_status_line(health_status))
+        lines.append(_health_status_line(health_status, include_value=True))
     lines.append("Recent trigger(s):")
     for ev in trigger_events:
         title = ev.get("title") or ev.get("key")
@@ -216,14 +218,9 @@ def _render_member_post(
     hook = "Here is your EarthScope for today—focused on how conditions may feel for you."
     if highlights:
         top = highlights[0]
-        hook = f"Your top sensitivity today: {top['label']} ({top['value']})."
+        hook = f"Your top sensitivity today: {top['label']}."
 
-    gauges_lines_parts = []
-    gauges_lines_parts.append(f"- {_health_status_line(gauges_row.get('health_status'))}")
-    gauges_lines_parts.extend(
-        [f"- **{h['label']}**: {h['value']} ({h['severity']})" for h in highlights]
-    )
-    gauges_lines = "\n".join(gauges_lines_parts) or "- No gauge highlights yet."
+    health_line = _health_status_line(gauges_row.get("health_status"), include_value=False)
 
     driver_lines = "\n".join(
         [
@@ -237,8 +234,7 @@ def _render_member_post(
     disclaimer = definition.get("global_disclaimer") or ""
 
     body = (
-        f"## Today’s Check-in\n{hook}\n\n"
-        f"## Your Gauges Today\n{gauges_lines}\n\n"
+        f"## Today’s Check-in\n{hook}\n{health_line}\n\n"
         f"## Drivers\n{driver_lines}\n\n"
         f"## Supportive Actions\n{action_lines}\n\n"
         f"## Disclaimer\n{disclaimer}\n"
@@ -314,16 +310,24 @@ def _render_with_openai(
                 lines[idx] = f"{prefix}{health_line}"
                 return "\n".join(lines)
         health_bullet = f"- {health_line}"
-        if "## Your Gauges Today" in body:
-            before, after = body.split("## Your Gauges Today", 1)
+        if "## Today’s Check-in" in body:
+            before, after = body.split("## Today’s Check-in", 1)
             after = after.lstrip("\n")
-            return f"{before}## Your Gauges Today\n{health_bullet}\n{after}"
+            return f"{before}## Today’s Check-in\n{health_bullet}\n{after}"
         if "## Disclaimer" in body:
             return body.replace("## Disclaimer", f"{health_bullet}\n\n## Disclaimer", 1)
         return f"{body}\n\n{health_bullet}"
 
     def _has_required_sections(body: str) -> bool:
-        return "## Your Gauges Today" in body and "## Disclaimer" in body
+        if "## Today’s Check-in" not in body:
+            return False
+        if "## Drivers" not in body:
+            return False
+        if "## Supportive Actions" not in body:
+            return False
+        if "## Disclaimer" not in body:
+            return False
+        return "## Your Gauges Today" not in body
 
     prompt = {
         "task": "Write a personalized EarthScope member update.",
@@ -334,7 +338,8 @@ def _render_with_openai(
             "Do not provide medical advice or diagnosis.",
             "Include 3–5 supportive actions.",
             "Include the disclaimer verbatim at the end.",
-            "Use headings: ## Today’s Check-in, ## Your Gauges Today, ## Drivers, ## Supportive Actions, ## Disclaimer.",
+            "Use headings: ## Today’s Check-in, ## Drivers, ## Supportive Actions, ## Disclaimer.",
+            "Do not list gauges or numeric values; describe shifts qualitatively.",
             "Only mention changes vs prior day if trend.deltas contains that gauge.",
             "Use gauges_current values for current numbers; use trend.deltas for changes.",
             "If trend.deltas is empty, do not describe increases/decreases or comparisons.",
