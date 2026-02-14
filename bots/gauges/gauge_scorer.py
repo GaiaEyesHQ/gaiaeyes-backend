@@ -437,7 +437,10 @@ def _compute_trend(
             "curr": round(curr_val, 2),
             "delta": round(curr_val - prev_val, 2),
         }
-    return {"baseline_day": prev.get("day"), "gauges": gauges}
+    baseline_day = prev.get("day")
+    if isinstance(baseline_day, date):
+        baseline_day = baseline_day.isoformat()
+    return {"baseline_day": baseline_day, "gauges": gauges}
 
 
 def _score_gauges(
@@ -588,8 +591,8 @@ def score_user_day(
         "sleep": gauges.get("sleep"),
         "mood": gauges.get("mood"),
         "health_status": health_status,
-        "trend_json": json.dumps(trend),
-        "alerts_json": json.dumps(alerts),
+        "trend_json": json.dumps(trend, default=str),
+        "alerts_json": json.dumps(alerts, default=str),
         "inputs_hash": inputs_hash,
         "model_version": version,
         "updated_at": datetime.now(timezone.utc),
