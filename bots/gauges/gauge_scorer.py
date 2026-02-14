@@ -12,6 +12,7 @@ from services.db import pg
 from bots.definitions.load_definition_base import load_definition_base
 from bots.gauges.db_utils import pick_column, table_columns, upsert_row
 from bots.gauges.signal_resolver import resolve_signals
+from bots.gauges.local_payload import get_local_payload
 
 
 LOG_LEVEL = os.getenv("GAIA_LOG_LEVEL", "INFO").upper()
@@ -64,28 +65,7 @@ def _hash_inputs(snapshot: Dict[str, Any]) -> str:
 
 
 def fetch_local_payload(user_id: str, day: date) -> Optional[Dict[str, Any]]:
-    sqls = [
-        ("select app.get_local_signals_for_user(%s::uuid, %s::date) as payload", (user_id, day)),
-        ("select app.get_local_signals_for_user(%s::date, %s::uuid) as payload", (day, user_id)),
-        ("select app.get_local_signals_for_user(%s::date) as payload", (day,)),
-        ("select app.get_local_signals_for_user(%s::uuid) as payload", (user_id,)),
-    ]
-    for sql, params in sqls:
-        try:
-            row = pg.fetchrow(sql, *params)
-        except Exception:
-            continue
-        if not row:
-            continue
-        payload = row.get("payload")
-        if isinstance(payload, str):
-            try:
-                payload = json.loads(payload)
-            except Exception:
-                return None
-        if isinstance(payload, dict):
-            return payload
-    return None
+    return get_local_payload(user_id, day)
 
 
 def fetch_user_tags(user_id: str) -> List[Dict[str, Any]]:
