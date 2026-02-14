@@ -178,6 +178,12 @@ def _default_actions(alerts: List[Dict[str, Any]]) -> List[str]:
     ]
 
 
+def _light_wit_line(alerts: List[Dict[str, Any]]) -> str:
+    if alerts:
+        return ""
+    return "Cosmic note: steady cruise beats full burn; small adjustments win."
+
+
 def _render_trigger_advisory(trigger_events: List[Dict[str, Any]], health_status: Optional[Any]) -> str:
     lines = []
     if health_status is not None:
@@ -214,6 +220,7 @@ def _render_member_post(
     drivers = active_states[:4]
     alerts = gauges_row.get("alerts_json") or []
     actions = _default_actions(alerts)
+    wit_line = _light_wit_line(alerts)
 
     hook = "Here is your EarthScope for today—focused on how conditions may feel for you."
     if highlights:
@@ -233,8 +240,13 @@ def _render_member_post(
 
     disclaimer = definition.get("global_disclaimer") or ""
 
+    checkin_lines = [hook, health_line]
+    if wit_line:
+        checkin_lines.append(wit_line)
+    checkin_block = "\n".join([line for line in checkin_lines if line])
+
     body = (
-        f"## Today’s Check-in\n{hook}\n{health_line}\n\n"
+        f"## Today’s Check-in\n{checkin_block}\n\n"
         f"## Drivers\n{driver_lines}\n\n"
         f"## Supportive Actions\n{action_lines}\n\n"
         f"## Disclaimer\n{disclaimer}\n"
@@ -332,7 +344,7 @@ def _render_with_openai(
     prompt = {
         "task": "Write a personalized EarthScope member update.",
         "format": "Return strict JSON with keys: title, caption, body_markdown.",
-        "voice": "calm, grounded, practical, never alarmist",
+        "voice": "calm, grounded, practical, lightly witty, never alarmist",
         "rules": [
             "Use conditional language (may/can/for some).",
             "Do not provide medical advice or diagnosis.",
@@ -340,6 +352,7 @@ def _render_with_openai(
             "Include the disclaimer verbatim at the end.",
             "Use headings: ## Today’s Check-in, ## Drivers, ## Supportive Actions, ## Disclaimer.",
             "Do not list gauges or numeric values; describe shifts qualitatively.",
+            "Use at most one light, non-sarcastic line of humor; keep it gentle and optional.",
             "Only mention changes vs prior day if trend.deltas contains that gauge.",
             "Use gauges_current values for current numbers; use trend.deltas for changes.",
             "If trend.deltas is empty, do not describe increases/decreases or comparisons.",
