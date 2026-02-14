@@ -2,9 +2,11 @@ import os, json
 from typing import Any, Dict, List, Optional, Tuple
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from openai import OpenAI
+from services.openai_models import resolve_openai_model
 
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+OPENAI_MODEL = resolve_openai_model("public_writer")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 class LLMFailure(Exception):
     pass
@@ -124,6 +126,10 @@ def _deterministic_markdown(day_iso: str,
     retry=retry_if_exception_type(Exception),
 )
 def _call_llm(prompt: Dict[str, Any]) -> Dict[str, Any]:
+    if client is None:
+        raise LLMFailure("OPENAI_API_KEY missing")
+    if not OPENAI_MODEL:
+        raise LLMFailure("OpenAI model not configured")
     resp = client.chat.completions.create(
         model=OPENAI_MODEL,
         temperature=0.2,

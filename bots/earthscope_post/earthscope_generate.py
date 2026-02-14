@@ -36,6 +36,7 @@ BAN_PHRASES = [
 
 import requests
 from dotenv import load_dotenv
+from services.openai_models import resolve_openai_model
 
 # Supabase
 from supabase import create_client
@@ -84,6 +85,10 @@ EARTHSCOPE_DEBUG_REWRITE = os.getenv("EARTHSCOPE_DEBUG_REWRITE", "false").strip(
 def _dbg(msg: str) -> None:
     if EARTHSCOPE_DEBUG_REWRITE:
         print(f"[earthscope.debug] {msg}")
+
+
+def _writer_model() -> Optional[str]:
+    return resolve_openai_model("public_writer")
 PHRASE_VARIANTS = {
     "feel_stable": [
         "Steady field—good window for getting things done.",
@@ -355,8 +360,11 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         "sections_excerpt": {k: (v[:160] if isinstance(v,str) else v) for k,v in sections.items() if k in ("caption","snapshot")}
     }
     try:
+        model = _writer_model()
+        if not model:
+            return None
         resp = client.chat.completions.create(
-            model=os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini"),
+            model=model,
             temperature=0.65,
             top_p=0.9,
             presence_penalty=0.2,
@@ -647,7 +655,9 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         }
     }
 
-    model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
+    model = _writer_model()
+    if not model:
+        return None
     try:
         _dbg("rewrite: request -> OpenAI (interpretive JSON)")
         resp = client.chat.completions.create(
@@ -1265,7 +1275,10 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     sr     = ctx.get("schumann_value_hz")
     sr_note= ctx.get("schumann_note")
 
-    model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
+    model = _writer_model()
+    if not model:
+        rc = _rule_copy(ctx)
+        return rc["caption"], rc.get("hashtags", "#GaiaEyes #SpaceWeather")
     try:
         resp = client.chat.completions.create(
             model=model,
@@ -1345,7 +1358,10 @@ def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
     sr     = ctx.get("schumann_value_hz")
     sr_note= ctx.get("schumann_note")
 
-    model = os.getenv("GAIA_OPENAI_MODEL", "gpt-4o-mini")
+    model = _writer_model()
+    if not model:
+        rc = _rule_copy(ctx)
+        return rc["snapshot"], rc["affects"], rc["playbook"], rc["hashtags"]
     prompt = f"""
 Using the data below, create a Gaia Eyes–branded daily forecast with THREE sections and a hashtags line:
 1) Space Weather Snapshot — bullet the numbers (Kp now/max, solar wind, flares/CMEs, Schumann). Omit any bullet whose value is missing/None.

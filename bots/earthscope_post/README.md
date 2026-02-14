@@ -56,7 +56,9 @@ These posts feed the app’s Earthscope card through the `/v1/features/today` en
 ## Env
 - `SUPABASE_DB_URL` (pooled, ssl)
 - `OPENAI_API_KEY`
-- `OPENAI_MODEL` (default `gpt-4o-mini`)
+- `OPENAI_MODEL_MEMBER_WRITER` / `OPENAI_MODEL_PUBLIC_WRITER` (optional by writer type)
+- `OPENAI_MODEL_DEFAULT` (optional fallback)
+- `OPENAI_MODEL` / `GAIA_OPENAI_MODEL` (legacy fallback)
 - `PLATFORM` (default `instagram`)
 - `USER_ID` (optional UUID; empty = global)
 - (optional) `TREND_*` URLs to override default sources

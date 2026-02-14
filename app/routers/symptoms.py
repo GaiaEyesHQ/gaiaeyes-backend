@@ -33,7 +33,7 @@ def _require_user_id(request: Request) -> str:
 class SymptomEventIn(BaseModel):
     symptom_code: str = Field(..., min_length=1)
     ts_utc: Optional[datetime] = None
-    severity: Optional[conint(ge=1, le=5)] = None
+    severity: Optional[conint(ge=0, le=10)] = None
     free_text: Optional[str] = None
     tags: Optional[List[str]] = None
 

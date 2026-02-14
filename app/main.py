@@ -14,6 +14,7 @@ from .routers import (
     hazards,
     ingest,
     local,
+    profile,
     quakes,
     space,
     space_visuals,
@@ -133,6 +134,7 @@ app.include_router(space.router, dependencies=[Depends(require_read_auth)])
 app.include_router(summary.router, dependencies=[Depends(require_read_auth)])
 app.include_router(space_forecasts.router, dependencies=[Depends(require_read_auth)])
 app.include_router(dashboard.router)
+app.include_router(profile.router)
 # Local health check endpoints are public (used by WP card and iOS onboarding)
 app.include_router(local.router)
 

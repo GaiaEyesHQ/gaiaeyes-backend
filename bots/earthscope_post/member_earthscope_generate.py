@@ -10,6 +10,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from services.db import pg
+from services.openai_models import resolve_openai_model
 from bots.definitions.load_definition_base import load_definition_base
 from bots.gauges.gauge_scorer import (
     fetch_local_payload,
@@ -151,13 +152,15 @@ def _health_status_line(value: Optional[Any], *, include_value: bool = False) ->
         v = float(value)
     except Exception:
         return "Health Status: calibrating"
-    label = "stable"
-    if v >= 85:
-        label = "high"
-    elif v >= 70:
-        label = "elevated"
-    elif v >= 55:
-        label = "moderate"
+    label = "very low strain"
+    if v >= 86:
+        label = "very high strain"
+    elif v >= 71:
+        label = "high strain"
+    elif v >= 41:
+        label = "moderate strain"
+    elif v >= 21:
+        label = "low strain"
     if include_value:
         return f"Health Status: {int(round(v, 0))} ({label})"
     return f"Health Status: {label}"
@@ -182,6 +185,50 @@ def _light_wit_line(alerts: List[Dict[str, Any]]) -> str:
     if alerts:
         return ""
     return "Cosmic note: steady cruise beats full burn; small adjustments win."
+
+
+def _active_state_lines(active_states: List[Dict[str, Any]]) -> List[str]:
+    lines: List[str] = []
+    for state in active_states[:4]:
+        signal = (state.get("signal_key") or "").replace("_", " ")
+        signal = signal.replace(".", " ").strip()
+        state_name = str(state.get("state") or "active")
+        value = state.get("value")
+        if value is None:
+            lines.append(f"{signal.title() or 'Signal'} is {state_name}.")
+            continue
+        try:
+            numeric = float(value)
+            lines.append(f"{signal.title() or 'Signal'} is {state_name} ({numeric:.1f}).")
+        except Exception:
+            lines.append(f"{signal.title() or 'Signal'} is {state_name} ({value}).")
+    return lines
+
+
+def _local_context_lines(local_payload: Optional[Dict[str, Any]]) -> List[str]:
+    if not isinstance(local_payload, dict):
+        return []
+    lines: List[str] = []
+    weather = local_payload.get("weather") if isinstance(local_payload.get("weather"), dict) else {}
+    air = local_payload.get("air") if isinstance(local_payload.get("air"), dict) else {}
+
+    temp_delta = weather.get("temp_delta_24h_c")
+    if isinstance(temp_delta, (int, float)):
+        lines.append(f"Local temperature shifted {temp_delta:+.1f} C over 24h.")
+
+    baro_delta = weather.get("baro_delta_24h_hpa")
+    if isinstance(baro_delta, (int, float)):
+        lines.append(f"Barometric pressure moved {baro_delta:+.1f} hPa over 24h.")
+
+    aqi = air.get("aqi")
+    category = air.get("category")
+    if isinstance(aqi, (int, float)):
+        if category:
+            lines.append(f"AQI is {int(round(float(aqi), 0))} ({category}).")
+        else:
+            lines.append(f"AQI is {int(round(float(aqi), 0))}.")
+
+    return lines
 
 
 def _render_trigger_advisory(trigger_events: List[Dict[str, Any]], health_status: Optional[Any]) -> str:
@@ -210,6 +257,7 @@ def _render_member_post(
     definition: Dict[str, Any],
     gauges_row: Dict[str, Any],
     active_states: List[Dict[str, Any]],
+    local_payload: Optional[Dict[str, Any]],
     tags: List[Dict[str, Any]],
     symptoms: Dict[str, Any],
 ) -> Dict[str, str]:
@@ -229,12 +277,10 @@ def _render_member_post(
 
     health_line = _health_status_line(gauges_row.get("health_status"), include_value=False)
 
-    driver_lines = "\n".join(
-        [
-            f"- {d.get('signal_key')}: {d.get('state')} (value {d.get('value')})"
-            for d in drivers
-        ]
-    ) or "- No dominant drivers detected."
+    local_lines = _local_context_lines(local_payload)
+    state_lines = _active_state_lines(drivers)
+    all_driver_lines = state_lines + [line for line in local_lines if line not in state_lines]
+    driver_lines = "\n".join([f"- {line}" for line in all_driver_lines]) or "- No dominant drivers detected."
 
     action_lines = "\n".join([f"- {a}" for a in actions])
 
@@ -261,6 +307,7 @@ def _render_with_openai(
     definition: Dict[str, Any],
     gauges_row: Dict[str, Any],
     active_states: List[Dict[str, Any]],
+    local_payload: Optional[Dict[str, Any]],
     tags: List[Dict[str, Any]],
     symptoms: Dict[str, Any],
     trend: Optional[Dict[str, Any]],
@@ -270,7 +317,10 @@ def _render_with_openai(
         return None
 
     client = OpenAI(api_key=api_key)
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    model = resolve_openai_model("member_writer")
+    if not model:
+        logger.warning("[member] model not configured; using deterministic fallback.")
+        return None
     def _trend_for_prompt(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         if not raw:
             return {}
@@ -364,6 +414,7 @@ def _render_with_openai(
             ),
             "trend": trend_for_prompt,
             "active_states": active_states,
+            "local_context": _local_context_lines(local_payload),
             "tags": tags,
             "symptoms": symptoms,
             "disclaimer": definition.get("global_disclaimer"),
@@ -450,9 +501,9 @@ def generate_member_post_for_user(
 
     rendered = None
     if not trigger_events:
-        rendered = _render_with_openai(definition, gauges_row, active_states, tags, symptoms, trend)
+        rendered = _render_with_openai(definition, gauges_row, active_states, local_payload, tags, symptoms, trend)
         if not rendered:
-            rendered = _render_member_post(definition, gauges_row, active_states, tags, symptoms)
+            rendered = _render_member_post(definition, gauges_row, active_states, local_payload, tags, symptoms)
     else:
         # Triggered advisory: append to existing post if present
         if existing and existing.get("body_markdown"):
@@ -462,7 +513,7 @@ def generate_member_post_for_user(
                 "body_markdown": existing.get("body_markdown"),
             }
         else:
-            rendered = _render_member_post(definition, gauges_row, active_states, tags, symptoms)
+            rendered = _render_member_post(definition, gauges_row, active_states, local_payload, tags, symptoms)
 
         advisory = _render_trigger_advisory(trigger_events, gauges_row.get("health_status"))
         rendered["body_markdown"] = f"{rendered.get('body_markdown')}\n\n## Triggered Advisory\n{advisory}\n"

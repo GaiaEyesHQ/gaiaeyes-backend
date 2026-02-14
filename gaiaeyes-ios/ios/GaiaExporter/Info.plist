@@ -20,6 +20,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Gaia Eyes uses your location to estimate local weather and air quality signals for personalized insights.</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFhZHd6a3d1YmZiZnVzbGZ4a3psIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5ODgxOTEsImV4cCI6MjA3MTU2NDE5MX0.tS67xEsIyRJXXkqmnWJNfqv280WYbOPwTdMhCaudSQU</string>
 	<key>SUPABASE_URL</key>

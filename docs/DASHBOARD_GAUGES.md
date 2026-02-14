@@ -85,7 +85,10 @@ Idempotency:
 Environment:
 - `SUPABASE_DB_URL` (required)
 - `OPENAI_API_KEY` (optional)
-- `OPENAI_MODEL` (optional, default `gpt-4o-mini`)
+- `OPENAI_MODEL_MEMBER_WRITER` (optional)
+- `OPENAI_MODEL_PUBLIC_WRITER` (optional)
+- `OPENAI_MODEL_DEFAULT` (optional fallback)
+- `OPENAI_MODEL` / `GAIA_OPENAI_MODEL` (legacy fallback)
 - `ENTITLEMENT_KEYS` (optional, default `plus,pro`)
 
 ## Hybrid Triggers (Alerts + Member Updates)

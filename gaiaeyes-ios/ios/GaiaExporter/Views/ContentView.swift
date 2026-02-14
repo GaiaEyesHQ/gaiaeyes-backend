@@ -3,6 +3,9 @@ import AVKit
 #if canImport(UIKit)
 import UIKit
 #endif
+#if canImport(CoreLocation)
+import CoreLocation
+#endif
 import Foundation
 import WebKit
 import Charts
@@ -259,6 +262,129 @@ private struct HazardItem: Codable, Identifiable, Hashable {
     }
 }
 
+private struct DashboardGaugeSet: Codable, Hashable {
+    let pain: Double?
+    let focus: Double?
+    let heart: Double?
+    let stamina: Double?
+    let energy: Double?
+    let sleep: Double?
+    let mood: Double?
+    let healthStatus: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case pain, focus, heart, stamina, energy, sleep, mood
+        case healthStatus = "health_status"
+    }
+}
+
+private struct DashboardAlertItem: Codable, Hashable, Identifiable {
+    var id: String {
+        let parts = [key, title, severity].compactMap { $0 }.joined(separator: "|")
+        return parts.isEmpty ? "dashboard_alert" : parts
+    }
+    let key: String?
+    let title: String?
+    let severity: String?
+    let suggestedActions: [String]?
+
+    private enum CodingKeys: String, CodingKey {
+        case key, title, severity
+        case suggestedActions = "suggested_actions"
+    }
+}
+
+private struct DashboardEarthscopePost: Codable, Hashable {
+    let day: String?
+    let title: String?
+    let caption: String?
+    let bodyMarkdown: String?
+    let updatedAt: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case day, title, caption
+        case bodyMarkdown = "body_markdown"
+        case updatedAt = "updated_at"
+    }
+}
+
+private struct DashboardPayload: Codable {
+    let day: String?
+    let gauges: DashboardGaugeSet?
+    let alerts: [DashboardAlertItem]?
+    let personalPost: DashboardEarthscopePost?
+
+    private enum CodingKeys: String, CodingKey {
+        case day, gauges, alerts
+        case personalPost = "personal_post"
+    }
+}
+
+private struct MemberEarthscopeEnvelope: Codable {
+    let ok: Bool?
+    let post: DashboardEarthscopePost?
+}
+
+private struct ProfileLocation: Codable {
+    let zip: String?
+    let lat: Double?
+    let lon: Double?
+    let useGps: Bool?
+    let localInsightsEnabled: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case zip, lat, lon
+        case useGps = "use_gps"
+        case localInsightsEnabled = "local_insights_enabled"
+    }
+}
+
+private struct ProfileLocationEnvelope: Codable {
+    let ok: Bool?
+    let location: ProfileLocation?
+}
+
+private struct ProfileLocationUpsert: Codable {
+    let zip: String?
+    let lat: Double?
+    let lon: Double?
+    let useGps: Bool?
+    let localInsightsEnabled: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case zip, lat, lon
+        case useGps = "use_gps"
+        case localInsightsEnabled = "local_insights_enabled"
+    }
+}
+
+private struct TagCatalogItem: Codable, Hashable, Identifiable {
+    var id: String { tagKey }
+    let tagKey: String
+    let label: String?
+    let description: String?
+    let section: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case tagKey = "tag_key"
+        case label, description, section
+    }
+}
+
+private struct TagCatalogEnvelope: Codable {
+    let ok: Bool?
+    let items: [TagCatalogItem]?
+}
+
+private struct UserTagsEnvelope: Codable {
+    let ok: Bool?
+    let tags: [String]?
+}
+
+private struct UserTagsUpsert: Codable {
+    let tags: [String]
+}
+
 private struct SpaceOutlookEntry: Codable, Identifiable, Hashable {
     let id: String
     let title: String?
@@ -457,7 +583,10 @@ private struct SwpcBulletin: Codable, Hashable {
 }
 
 private struct SwpcTextAlert: Codable, Hashable, Identifiable {
-    let id = UUID()
+    var id: String {
+        let parts = [ts, src, message].compactMap { $0 }.joined(separator: "|")
+        return parts.isEmpty ? "swpc_text_alert" : parts
+    }
     let ts: String?
     let src: String?
     let message: String?
@@ -724,6 +853,54 @@ private struct MediaViewerSheet: View {
     }
 }
 
+#if canImport(CoreLocation)
+private final class OneShotLocationProvider: NSObject, CLLocationManagerDelegate {
+    private let manager = CLLocationManager()
+    private var continuation: CheckedContinuation<CLLocation?, Never>?
+
+    override init() {
+        super.init()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyKilometer
+    }
+
+    func requestLocation() async -> CLLocation? {
+        let status = manager.authorizationStatus
+        if status == .denied || status == .restricted {
+            return nil
+        }
+        return await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            if status == .notDetermined {
+                manager.requestWhenInUseAuthorization()
+            }
+            manager.requestLocation()
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let continuation else { return }
+        self.continuation = nil
+        continuation.resume(returning: locations.last)
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        guard let continuation else { return }
+        self.continuation = nil
+        continuation.resume(returning: nil)
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        if status == .denied || status == .restricted {
+            guard let continuation else { return }
+            self.continuation = nil
+            continuation.resume(returning: nil)
+        }
+    }
+}
+#endif
+
 struct ContentView: View {
 #if os(iOS)
     private struct FeatureFetchState {
@@ -797,10 +974,27 @@ struct ContentView: View {
     @State private var lastKnownSpaceOutlook: SpaceForecastOutlook? = nil
 
     @AppStorage("local_health_zip") private var localHealthZip: String = "78209"
+    @AppStorage("did_location_onboarding") private var didLocationOnboarding: Bool = false
     @State private var localHealth: LocalCheckResponse? = nil
     @State private var localHealthLoading: Bool = false
     @State private var localHealthError: String?
     @State private var localZipRefreshTask: Task<Void, Never>? = nil
+    @State private var showLocationOnboarding: Bool = false
+    @State private var profileUseGPS: Bool = false
+    @State private var profileLocalInsightsEnabled: Bool = true
+    @State private var profileLocationMessage: String?
+    @State private var profileLocationSaving: Bool = false
+#if canImport(CoreLocation)
+    @State private var locationProvider = OneShotLocationProvider()
+#endif
+    @State private var tagCatalog: [TagCatalogItem] = []
+    @State private var selectedTagKeys: Set<String> = []
+    @State private var tagSaveMessage: String?
+    @State private var tagsSaving: Bool = false
+    @State private var dashboardPayload: DashboardPayload? = nil
+    @State private var dashboardLoading: Bool = false
+    @State private var dashboardError: String?
+    @State private var memberEarthscopePost: DashboardEarthscopePost? = nil
 
     @State private var magnetosphere: MagnetosphereData? = nil
     @State private var magnetosphereLoading: Bool = false
@@ -1228,6 +1422,212 @@ struct ContentView: View {
         }
     }
 
+    private func putJSON<Body: Encodable, Resp: Decodable>(_ path: String, body: Body, as responseType: Resp.Type) async throws -> Resp {
+        let clean = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        guard var url = URL(string: state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            throw URLError(.badURL)
+        }
+        url.appendPathComponent(clean)
+        var req = URLRequest(url: url)
+        req.httpMethod = "PUT"
+        req.timeoutInterval = 30
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        if !state.bearer.isEmpty {
+            req.setValue("Bearer \(state.bearer)", forHTTPHeaderField: "Authorization")
+        }
+        let devUser = state.userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !devUser.isEmpty {
+            req.setValue(devUser, forHTTPHeaderField: "X-Dev-UserId")
+        }
+        let encoder = JSONEncoder()
+        req.httpBody = try encoder.encode(body)
+        let (data, response) = try await URLSession.shared.data(for: req)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200...299).contains(code) else {
+            throw DecodingPreviewError(endpoint: path, preview: String(data: data, encoding: .utf8) ?? "", underlying: URLError(.badServerResponse))
+        }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(Resp.self, from: data)
+    }
+
+    private func fetchDashboardPayload() async {
+        await MainActor.run {
+            dashboardLoading = true
+            dashboardError = nil
+        }
+        let api = state.apiWithAuth()
+        do {
+            let payload: DashboardPayload = try await api.getJSON("v1/dashboard", as: DashboardPayload.self, perRequestTimeout: 30)
+            await MainActor.run {
+                dashboardPayload = payload
+                dashboardLoading = false
+            }
+        } catch {
+            await MainActor.run {
+                dashboardError = error.localizedDescription
+                dashboardLoading = false
+            }
+            appLog("[UI] dashboard payload error: \(error.localizedDescription)")
+        }
+    }
+
+    private func fetchMemberEarthscope() async {
+        let api = state.apiWithAuth()
+        do {
+            let payload: MemberEarthscopeEnvelope = try await api.getJSON("v1/earthscope/member", as: MemberEarthscopeEnvelope.self, perRequestTimeout: 30)
+            await MainActor.run {
+                memberEarthscopePost = payload.post
+            }
+        } catch {
+            appLog("[UI] member earthscope error: \(error.localizedDescription)")
+        }
+    }
+
+    private func fetchProfileLocation() async {
+        let api = state.apiWithAuth()
+        do {
+            let payload: ProfileLocationEnvelope = try await api.getJSON("v1/profile/location", as: ProfileLocationEnvelope.self, perRequestTimeout: 20)
+            await MainActor.run {
+                if let loc = payload.location {
+                    if let zip = loc.zip, !zip.isEmpty {
+                        localHealthZip = zip
+                    }
+                    profileUseGPS = loc.useGps ?? profileUseGPS
+                    profileLocalInsightsEnabled = loc.localInsightsEnabled ?? profileLocalInsightsEnabled
+                    didLocationOnboarding = true
+                }
+            }
+        } catch {
+            appLog("[UI] profile location fetch error: \(error.localizedDescription)")
+        }
+    }
+
+    private func saveProfileLocation(markOnboardingComplete: Bool = false) async {
+        await MainActor.run {
+            profileLocationSaving = true
+            profileLocationMessage = nil
+        }
+        let resolved = await resolveLocationInput(zip: localHealthZip, useGPS: profileUseGPS)
+        let payload = ProfileLocationUpsert(
+            zip: resolved.zip,
+            lat: resolved.lat,
+            lon: resolved.lon,
+            useGps: profileUseGPS,
+            localInsightsEnabled: profileLocalInsightsEnabled
+        )
+        if profileLocalInsightsEnabled && profileUseGPS && resolved.usedGPS == false && (resolved.zip == nil || resolved.zip?.isEmpty == true) {
+            await MainActor.run {
+                profileLocationMessage = "GPS did not return a ZIP. Enter ZIP to continue."
+                profileLocationSaving = false
+            }
+            return
+        }
+        do {
+            let _: ProfileLocationEnvelope = try await putJSON("v1/profile/location", body: payload, as: ProfileLocationEnvelope.self)
+            await MainActor.run {
+                profileLocationMessage = "Location saved"
+                profileLocationSaving = false
+                if markOnboardingComplete {
+                    didLocationOnboarding = true
+                    showLocationOnboarding = false
+                }
+            }
+            await fetchLocalHealth()
+        } catch {
+            await MainActor.run {
+                profileLocationMessage = "Could not save location"
+                profileLocationSaving = false
+            }
+            appLog("[UI] save profile location error: \(error.localizedDescription)")
+        }
+    }
+
+    private func fetchTagCatalog() async {
+        let api = state.apiWithAuth()
+        do {
+            let payload: TagCatalogEnvelope = try await api.getJSON("v1/profile/tags/catalog", as: TagCatalogEnvelope.self, perRequestTimeout: 20)
+            await MainActor.run {
+                tagCatalog = payload.items ?? []
+            }
+        } catch {
+            appLog("[UI] tag catalog fetch error: \(error.localizedDescription)")
+        }
+    }
+
+    private func fetchSelectedTags() async {
+        let api = state.apiWithAuth()
+        do {
+            let payload: UserTagsEnvelope = try await api.getJSON("v1/profile/tags", as: UserTagsEnvelope.self, perRequestTimeout: 20)
+            await MainActor.run {
+                selectedTagKeys = Set((payload.tags ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+            }
+        } catch {
+            appLog("[UI] selected tags fetch error: \(error.localizedDescription)")
+        }
+    }
+
+    private func saveSelectedTags() async {
+        await MainActor.run {
+            tagsSaving = true
+            tagSaveMessage = nil
+        }
+        let payload = UserTagsUpsert(tags: Array(selectedTagKeys).sorted())
+        do {
+            let _: UserTagsEnvelope = try await putJSON("v1/profile/tags", body: payload, as: UserTagsEnvelope.self)
+            await MainActor.run {
+                tagsSaving = false
+                tagSaveMessage = "Sensitivities saved"
+            }
+        } catch {
+            await MainActor.run {
+                tagsSaving = false
+                tagSaveMessage = "Could not save sensitivities"
+            }
+            appLog("[UI] save sensitivities error: \(error.localizedDescription)")
+        }
+    }
+
+    private func fetchProfileSettings() async {
+        await fetchProfileLocation()
+        await fetchTagCatalog()
+        await fetchSelectedTags()
+    }
+
+    private func resolveLocationInput(zip: String, useGPS: Bool) async -> (zip: String?, lat: Double?, lon: Double?, usedGPS: Bool) {
+        let cleaned = sanitizedZip(zip)
+        if !useGPS {
+            return (cleaned.isEmpty ? nil : cleaned, nil, nil, false)
+        }
+#if canImport(CoreLocation)
+        let provider = await MainActor.run { locationProvider }
+        if let location = await provider.requestLocation() {
+            let lat = location.coordinate.latitude
+            let lon = location.coordinate.longitude
+            if let gpsZip = await reverseGeocodeZip(from: location), !gpsZip.isEmpty {
+                return (gpsZip, lat, lon, true)
+            }
+            if !cleaned.isEmpty {
+                return (cleaned, lat, lon, true)
+            }
+            return (nil, lat, lon, true)
+        }
+#endif
+        return (cleaned.isEmpty ? nil : cleaned, nil, nil, false)
+    }
+
+#if canImport(CoreLocation)
+    private func reverseGeocodeZip(from location: CLLocation) async -> String? {
+        await withCheckedContinuation { continuation in
+            CLGeocoder().reverseGeocodeLocation(location) { placemarks, _ in
+                let zip = placemarks?.first?.postalCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                continuation.resume(returning: zip.isEmpty ? nil : zip)
+            }
+        }
+    }
+#endif
+
     private func sanitizedZip(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let filtered = trimmed.filter { $0.isLetter || $0.isNumber }
@@ -1247,6 +1647,14 @@ struct ContentView: View {
     }
 
     private func fetchLocalHealth() async {
+        if !profileLocalInsightsEnabled {
+            await MainActor.run {
+                localHealth = nil
+                localHealthError = nil
+                localHealthLoading = false
+            }
+            return
+        }
         let zip = sanitizedZip(localHealthZip)
         guard !zip.isEmpty else {
             await MainActor.run {
@@ -2265,12 +2673,44 @@ struct ContentView: View {
         let seriesForCharts = series ?? lastKnownSeries ?? .empty
         let seriesDetail = series ?? lastKnownSeries
         let resolvedOutlook = spaceOutlook ?? lastKnownSpaceOutlook
+        let dashboardGauges = dashboardPayload?.gauges
+        let dashboardAlerts = dashboardPayload?.alerts ?? []
+        let dashboardEarthscope = memberEarthscopePost ?? dashboardPayload?.personalPost
         let onSelectVisual: (SpaceVisualItem) -> Void = { item in
             prepareInteractiveViewer(for: item)
             showInteractiveViewer = true
         }
 
         return VStack(spacing: 16) {
+            MissionControlSectionView(
+                gauges: dashboardGauges,
+                alerts: dashboardAlerts,
+                earthscope: dashboardEarthscope,
+                fallbackTitle: current.postTitle,
+                fallbackCaption: current.postCaption,
+                fallbackBody: current.postBody,
+                fallbackImages: current.earthscopeImages,
+                isLoading: dashboardLoading,
+                errorMessage: dashboardError
+            )
+            .padding(.horizontal)
+
+            MissionMenuSectionView(
+                onSymptoms: { showSymptomSheet = true },
+                onInsights: {
+                    showTrends = true
+                },
+                onSettings: { showTools = true },
+                onResearch: {
+#if canImport(UIKit)
+                    if let url = URL(string: "https://gaiaeyes.com/research/") {
+                        UIApplication.shared.open(url)
+                    }
+#endif
+                }
+            )
+            .padding(.horizontal)
+
             DashboardSleepSectionView(
                 current: current,
                 todayStr: todayStr,
@@ -2305,7 +2745,6 @@ struct ContentView: View {
                 spaceDetailFocus: $spaceDetailFocus
             )
             DashboardToolsSectionView(
-                current: current,
                 state: state,
                 seriesForCharts: seriesForCharts,
                 symptomHighlights: symptomHighlightList,
@@ -2331,6 +2770,16 @@ struct ContentView: View {
                 localHealthLoading: localHealthLoading,
                 localHealthError: localHealthError,
                 onRefreshLocalHealth: { Task { await fetchLocalHealth() } },
+                profileUseGPS: $profileUseGPS,
+                profileLocalInsightsEnabled: $profileLocalInsightsEnabled,
+                profileLocationMessage: profileLocationMessage,
+                profileLocationSaving: profileLocationSaving,
+                onSaveProfileLocation: { Task { await saveProfileLocation() } },
+                tagCatalog: tagCatalog,
+                selectedTagKeys: $selectedTagKeys,
+                tagSaveMessage: tagSaveMessage,
+                tagsSaving: tagsSaving,
+                onSaveTags: { Task { await saveSelectedTags() } },
                 showTools: $showTools,
                 showConnections: $showConnections,
                 showActions: $showActions,
@@ -2339,6 +2788,106 @@ struct ContentView: View {
                 onFetchVisuals: { Task { await fetchSpaceVisuals() } },
                 showMagnetosphere: $showMagnetosphere
             )
+        }
+    }
+
+    private struct MissionMenuSectionView: View {
+        let onSymptoms: () -> Void
+        let onInsights: () -> Void
+        let onSettings: () -> Void
+        let onResearch: () -> Void
+
+        var body: some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    Button(action: onSymptoms) { Label("Symptoms", systemImage: "plus.circle") }
+                    Button(action: onInsights) { Label("Insights", systemImage: "chart.xyaxis.line") }
+                    Button(action: onSettings) { Label("Settings", systemImage: "gearshape") }
+                    Button(action: onResearch) { Label("Research", systemImage: "book.closed") }
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+    }
+
+    private struct MissionControlSectionView: View {
+        let gauges: DashboardGaugeSet?
+        let alerts: [DashboardAlertItem]
+        let earthscope: DashboardEarthscopePost?
+        let fallbackTitle: String?
+        let fallbackCaption: String?
+        let fallbackBody: String?
+        let fallbackImages: [Any]?
+        let isLoading: Bool
+        let errorMessage: String?
+
+        private func gaugeRows(_ g: DashboardGaugeSet?) -> [(String, Double, ArcGauge.Theme)] {
+            guard let g else { return [] }
+            return [
+                ("Pain", g.pain ?? 0, .custom(Color(red: 0.95, green: 0.45, blue: 0.45))),
+                ("Focus", g.focus ?? 0, .custom(Color(red: 0.45, green: 0.78, blue: 0.95))),
+                ("Heart", g.heart ?? 0, .custom(Color(red: 1.0, green: 0.56, blue: 0.63))),
+                ("Stamina", g.stamina ?? 0, .custom(Color(red: 0.53, green: 0.88, blue: 0.56))),
+                ("Energy", g.energy ?? 0, .custom(Color(red: 0.98, green: 0.71, blue: 0.35))),
+                ("Sleep", g.sleep ?? 0, .custom(Color(red: 0.71, green: 0.67, blue: 0.98))),
+                ("Mood", g.mood ?? 0, .custom(Color(red: 0.45, green: 0.86, blue: 0.86))),
+                ("Health", g.healthStatus ?? 0, .custom(Color(red: 0.92, green: 0.86, blue: 0.57))),
+            ]
+        }
+
+        private func pillSeverity(_ raw: String?) -> StatusPill.Severity {
+            let s = (raw ?? "").lowercased()
+            if s == "high" || s == "alert" || s == "red" { return .alert }
+            if s == "watch" || s == "warn" || s == "orange" || s == "yellow" { return .warn }
+            return .ok
+        }
+
+        var body: some View {
+            GroupBox {
+                VStack(alignment: .leading, spacing: 12) {
+                    if isLoading {
+                        ProgressView("Loading dashboard…")
+                            .font(.caption)
+                    } else if let errorMessage, !errorMessage.isEmpty {
+                        Text("Dashboard refresh issue: \(errorMessage)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    let rows = gaugeRows(gauges)
+                    if rows.isEmpty {
+                        Text("Gauges are calibrating.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        let cols = [GridItem(.flexible()), GridItem(.flexible())]
+                        LazyVGrid(columns: cols, spacing: 10) {
+                            ForEach(rows, id: \.0) { row in
+                                ArcGauge(value: row.1, min: 0, max: 100, label: row.0, theme: row.2)
+                            }
+                        }
+                    }
+
+                    if !alerts.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(alerts) { alert in
+                                    StatusPill(alert.title ?? (alert.key ?? "Alert"), severity: pillSeverity(alert.severity))
+                                }
+                            }
+                        }
+                    }
+
+                    EarthscopeCardV2(
+                        title: earthscope?.title ?? fallbackTitle,
+                        caption: earthscope?.caption ?? fallbackCaption,
+                        images: fallbackImages,
+                        bodyMarkdown: earthscope?.bodyMarkdown ?? fallbackBody
+                    )
+                }
+            } label: {
+                Label("Mission Control", systemImage: "dial.medium")
+            }
         }
     }
 
@@ -2769,7 +3318,6 @@ struct ContentView: View {
     }
 
     private struct DashboardToolsSectionView: View {
-        let current: FeaturesToday
         @ObservedObject var state: AppState
         let seriesForCharts: SpaceSeries
         let symptomHighlights: [SymptomHighlight]
@@ -2795,6 +3343,16 @@ struct ContentView: View {
         let localHealthLoading: Bool
         let localHealthError: String?
         let onRefreshLocalHealth: () -> Void
+        @Binding var profileUseGPS: Bool
+        @Binding var profileLocalInsightsEnabled: Bool
+        let profileLocationMessage: String?
+        let profileLocationSaving: Bool
+        let onSaveProfileLocation: () -> Void
+        let tagCatalog: [TagCatalogItem]
+        @Binding var selectedTagKeys: Set<String>
+        let tagSaveMessage: String?
+        let tagsSaving: Bool
+        let onSaveTags: () -> Void
         @Binding var showTools: Bool
         @Binding var showConnections: Bool
         @Binding var showActions: Bool
@@ -2803,11 +3361,51 @@ struct ContentView: View {
         let onFetchVisuals: () -> Void
         @Binding var showMagnetosphere: Bool
 
+        private enum SensitivitySection: String {
+            case environmental = "Environmental Sensitivities"
+            case health = "Health Context"
+        }
+
+        private func sectionForTag(_ item: TagCatalogItem) -> SensitivitySection {
+            let section = (item.section ?? "").lowercased()
+            if section.contains("health") || section.contains("context") {
+                return .health
+            }
+            return .environmental
+        }
+
+        private func tags(in section: SensitivitySection) -> [TagCatalogItem] {
+            tagCatalog
+                .filter { sectionForTag($0) == section }
+                .sorted { (lhs, rhs) in
+                    (lhs.label ?? lhs.tagKey).localizedCaseInsensitiveCompare(rhs.label ?? rhs.tagKey) == .orderedAscending
+                }
+        }
+
+        private func toggleBinding(for key: String) -> Binding<Bool> {
+            Binding(
+                get: { selectedTagKeys.contains(key) },
+                set: { isOn in
+                    if isOn { selectedTagKeys.insert(key) } else { selectedTagKeys.remove(key) }
+                }
+            )
+        }
+
+        @ViewBuilder
+        private func tagToggle(_ item: TagCatalogItem) -> some View {
+            let key = item.tagKey
+            Toggle(isOn: toggleBinding(for: key)) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.label ?? key)
+                    if let desc = item.description, !desc.isEmpty {
+                        Text(desc).font(.caption2).foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+
         var body: some View {
             VStack(spacing: 16) {
-                EarthscopeCardV2(title: current.postTitle, caption: current.postCaption, images: current.earthscopeImages, bodyMarkdown: current.postBody)
-                    .padding(.horizontal)
-
                 LocalHealthCard(
                     zip: $localHealthZip,
                     snapshot: localHealth,
@@ -2815,6 +3413,88 @@ struct ContentView: View {
                     error: localHealthError,
                     onRefresh: onRefreshLocalHealth
                 )
+                .padding(.horizontal)
+
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Enable local insights")
+                            .font(.subheadline)
+                        TextField("ZIP code", text: $localHealthZip)
+                            .textFieldStyle(.roundedBorder)
+                            .keyboardType(.numberPad)
+                        Toggle("Use GPS (optional)", isOn: $profileUseGPS)
+                        Toggle("Enable local insights", isOn: $profileLocalInsightsEnabled)
+                        Button(action: onSaveProfileLocation) {
+                            HStack {
+                                if profileLocationSaving {
+                                    ProgressView().scaleEffect(0.8)
+                                }
+                                Text(profileLocationSaving ? "Saving..." : "Save Location")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(profileLocationSaving)
+                        if let msg = profileLocationMessage {
+                            Text(msg)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } label: {
+                    Label("Location Settings", systemImage: "location.fill")
+                }
+                .padding(.horizontal)
+
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if tagCatalog.isEmpty {
+                            Text("No sensitivity tags available yet.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            let environmentalTags = tags(in: .environmental)
+                            if !environmentalTags.isEmpty {
+                                Text(SensitivitySection.environmental.rawValue)
+                                    .font(.subheadline.weight(.semibold))
+                                ForEach(environmentalTags) { item in
+                                    tagToggle(item)
+                                }
+                            }
+
+                            let healthTags = tags(in: .health)
+                            if !healthTags.isEmpty {
+                                Divider()
+                                Text(SensitivitySection.health.rawValue + " (Optional)")
+                                    .font(.subheadline.weight(.semibold))
+                                ForEach(healthTags) { item in
+                                    tagToggle(item)
+                                }
+                                Text("Self-reported health context only. Not for diagnosis.")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        Button(action: onSaveTags) {
+                            HStack {
+                                if tagsSaving {
+                                    ProgressView().scaleEffect(0.8)
+                                }
+                                Text(tagsSaving ? "Saving..." : "Save Sensitivities")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(tagsSaving)
+                        if let msg = tagSaveMessage {
+                            Text(msg)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } label: {
+                    Label("Sensitivities", systemImage: "slider.horizontal.3")
+                }
                 .padding(.horizontal)
 
                 DisclosureGroup(isExpanded: $showTrends) {
@@ -3014,7 +3694,10 @@ struct ContentView: View {
                 async let c: Void = fetchSpaceSeries(days: 30)
                 async let h: Void = fetchSpaceOutlook()
                 async let i: Void = fetchLocalHealth()
-                _ = await (a, b, c, h, i)
+                async let j: Void = fetchDashboardPayload()
+                async let k: Void = fetchMemberEarthscope()
+                async let l: Void = fetchProfileSettings()
+                _ = await (a, b, c, h, i, j, k, l)
                 try? await Task.sleep(nanoseconds: 350_000_000)
                 async let d: Void = fetchSymptoms(api: api)
                 async let e: Void = state.flushQueuedSymptoms(api: api)
@@ -3033,10 +3716,12 @@ struct ContentView: View {
                 async let c: Void = fetchSpaceSeries(days: 30)
                 async let h: Void = fetchSpaceOutlook()
                 async let i: Void = fetchLocalHealth()
+                async let j: Void = fetchDashboardPayload()
+                async let k: Void = fetchMemberEarthscope()
                 if guardRemaining > 0 {
                     let remaining = max(1, Int(ceil(guardRemaining)))
                     appLog("[UI] pull-to-refresh: guard active (~\(remaining)s); skipping features refresh")
-                    _ = await (b, c, h, i)
+                    _ = await (b, c, h, i, j, k)
                     try? await Task.sleep(nanoseconds: 300_000_000)
                     async let d: Void = fetchSymptoms(api: api)
                     async let e: Void = state.flushQueuedSymptoms(api: api)
@@ -3049,7 +3734,7 @@ struct ContentView: View {
                     return
                 }
                 async let a: Void = fetchFeaturesToday(trigger: .refresh)
-                _ = await (a, b, c, h, i)
+                _ = await (a, b, c, h, i, j, k)
                 try? await Task.sleep(nanoseconds: 300_000_000)
                 async let d: Void = fetchSymptoms(api: api)
                 async let e: Void = state.flushQueuedSymptoms(api: api)
@@ -3082,6 +3767,9 @@ struct ContentView: View {
                     spaceOutlook = cached
                     lastKnownSpaceOutlook = cached
                     appLog("[UI] preloaded space outlook from persisted snapshot")
+                }
+                if !didLocationOnboarding {
+                    showLocationOnboarding = true
                 }
                 hydrateSymptomPresetsFromCache()
             }
@@ -3211,6 +3899,22 @@ struct ContentView: View {
                         let shouldDismiss = await logSymptomEvent(event)
                         await MainActor.run { isSubmittingSymptom = false; if shouldDismiss { showSymptomSheet = false } }
                     }
+                }
+            )
+        }
+        .sheet(isPresented: $showLocationOnboarding) {
+            LocationOnboardingSheet(
+                zip: $localHealthZip,
+                useGPS: $profileUseGPS,
+                localInsightsEnabled: $profileLocalInsightsEnabled,
+                isSaving: profileLocationSaving,
+                message: profileLocationMessage,
+                onSave: {
+                    Task { await saveProfileLocation(markOnboardingComplete: true) }
+                },
+                onSkip: {
+                    didLocationOnboarding = true
+                    showLocationOnboarding = false
                 }
             )
         }
@@ -3722,6 +4426,52 @@ struct ContentView: View {
                 .shadow(radius: 3)
         }
     }
+
+    private struct LocationOnboardingSheet: View {
+        @Binding var zip: String
+        @Binding var useGPS: Bool
+        @Binding var localInsightsEnabled: Bool
+        let isSaving: Bool
+        let message: String?
+        let onSave: () -> Void
+        let onSkip: () -> Void
+
+        var body: some View {
+            NavigationStack {
+                Form {
+                    Section("Enable local insights") {
+                        TextField("ZIP code", text: $zip)
+                            .keyboardType(.numberPad)
+                        Toggle("Use GPS (optional)", isOn: $useGPS)
+                        Toggle("Enable local insights", isOn: $localInsightsEnabled)
+                    }
+                    Section {
+                        if let message {
+                            Text(message)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .navigationTitle("Local Insights")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Skip") { onSkip() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(action: onSave) {
+                            if isSaving {
+                                ProgressView()
+                            } else {
+                                Text("Continue")
+                            }
+                        }
+                        .disabled(isSaving)
+                    }
+                }
+            }
+        }
+    }
     
     private struct SymptomsLogSheet: View {
         @Environment(\.dismiss) private var dismiss
@@ -3736,6 +4486,7 @@ struct ContentView: View {
         @State private var includeSeverity: Bool = false
         @State private var severityValue: Double = 3
         @State private var freeText: String = ""
+        @State private var occurredAt: Date = Date()
         @FocusState private var notesFocused: Bool
         
         private var trimmedFreeText: String {
@@ -3769,6 +4520,13 @@ struct ContentView: View {
                         
                         Text("Choose a symptom")
                             .font(.headline)
+
+                        DatePicker(
+                            "When did this occur?",
+                            selection: $occurredAt,
+                            displayedComponents: [.date, .hourAndMinute]
+                        )
+                        .datePickerStyle(.compact)
                         
                         let columns = [GridItem(.adaptive(minimum: 110), spacing: 12)]
                         LazyVGrid(columns: columns, spacing: 12) {
@@ -3806,12 +4564,12 @@ struct ContentView: View {
                                 
                                 if includeSeverity {
                                     VStack(alignment: .leading) {
-                                        Slider(value: $severityValue, in: 1...5, step: 1) {
+                                        Slider(value: $severityValue, in: 0...10, step: 1) {
                                             Text("Severity")
                                         } minimumValueLabel: {
-                                            Text("1")
+                                            Text("0")
                                         } maximumValueLabel: {
-                                            Text("5")
+                                            Text("10")
                                         }
                                         Text("Selected: \(Int(severityValue))")
                                             .font(.caption)
@@ -3836,7 +4594,7 @@ struct ContentView: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Save") {
                             let code = selectedPreset?.code ?? SymptomCodeHelper.fallbackCode
-                            var event = SymptomQueuedEvent(symptomCode: code)
+                            var event = SymptomQueuedEvent(symptomCode: code, tsUtc: occurredAt)
                             if includeSeverity { event.severity = Int(severityValue) }
                             if !trimmedFreeText.isEmpty { event.freeText = trimmedFreeText }
                             if let tags = selectedPreset?.tags { event.tags = tags }
@@ -3851,6 +4609,7 @@ struct ContentView: View {
                 includeSeverity = false
                 severityValue = 3
                 freeText = ""
+                occurredAt = Date()
                 notesFocused = false
                 selectedPreset = nil
             }
