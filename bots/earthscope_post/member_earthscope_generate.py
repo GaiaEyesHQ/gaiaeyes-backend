@@ -302,8 +302,17 @@ def _render_with_openai(
         return any(p in lowered for p in phrases)
 
     def _ensure_health_line(body: str, health_line: str) -> str:
-        if not health_line or "health status" in body.lower():
+        if not health_line:
             return body
+        lines = body.splitlines()
+        for idx, line in enumerate(lines):
+            if "health status" in line.lower():
+                stripped = line.lstrip()
+                prefix = ""
+                if stripped.startswith(("-", "*", "•")):
+                    prefix = f"{line[:len(line) - len(stripped)]}{stripped[0]} "
+                lines[idx] = f"{prefix}{health_line}"
+                return "\n".join(lines)
         health_bullet = f"- {health_line}"
         if "## Your Gauges Today" in body:
             before, after = body.split("## Your Gauges Today", 1)
