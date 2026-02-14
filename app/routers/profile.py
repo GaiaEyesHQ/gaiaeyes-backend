@@ -207,7 +207,7 @@ async def _fetch_catalog_rows(conn) -> List[Dict[str, Any]]:
     key_col = _pick(cols, ["tag_key", "key", "code", "slug", "id"])
     label_col = _pick(cols, ["label", "name", "title"])
     desc_col = _pick(cols, ["description", "details", "help_text"])
-    section_col = _pick(cols, ["section", "category", "group_name", "group"])
+    section_col = _pick(cols, ["section", "tag_type", "category", "group_name", "group"])
     active_col = _pick(cols, ["is_active", "active", "enabled"])
     if not key_col:
         return []
@@ -311,4 +311,3 @@ async def profile_tags_upsert(
             )
 
     return {"ok": True, "tags": cleaned}
-

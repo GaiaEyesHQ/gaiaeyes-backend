@@ -75,6 +75,49 @@
     return response.json();
   };
 
+  const hashParams = () => {
+    const hash = (window.location.hash || "").replace(/^#/, "");
+    if (!hash) return new URLSearchParams();
+    return new URLSearchParams(hash);
+  };
+
+  const cleanURLHash = () => {
+    if (!window.location.hash) return;
+    const clean = `${window.location.pathname}${window.location.search}`;
+    window.history.replaceState({}, document.title, clean);
+  };
+
+  const localDayISO = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const hydrateSessionFromHash = async (supabase) => {
+    const params = hashParams();
+    const hashError = params.get("error");
+    if (hashError) {
+      const description = params.get("error_description") || hashError;
+      cleanURLHash();
+      return { error: description };
+    }
+
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+    if (!accessToken || !refreshToken) {
+      return { error: null };
+    }
+
+    const { error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    cleanURLHash();
+    return { error: error ? error.message || String(error) : null };
+  };
+
   const renderDashboard = (root, payload) => {
     const title = root.dataset.title || "Mission Control";
     const gaugesRaw = payload.gauges || {};
@@ -90,9 +133,9 @@
     ];
 
     const alerts = Array.isArray(payload.alerts) ? payload.alerts : [];
-    const isPaid = !!payload.memberPost;
+    const isPaid = payload.entitled === true || !!payload.memberPost;
     const displayRows = isPaid ? gaugeRows : gaugeRows.slice(0, 4);
-    const earthscope = payload.memberPost || payload.publicPost || null;
+    const earthscope = isPaid ? payload.memberPost || payload.publicPost || null : payload.publicPost || payload.memberPost || null;
 
     root.innerHTML = `
       <div class="gaia-dashboard__head">
@@ -137,10 +180,10 @@
     `;
   };
 
-  const renderSignInPrompt = (root, supabase) => {
+  const renderSignInPrompt = (root, supabase, statusText) => {
     root.innerHTML = `
       <div class="gaia-dashboard__signin">
-        <span class="gaia-dashboard__status">Sign in to view your dashboard.</span>
+        <span class="gaia-dashboard__status">${esc(statusText || "Sign in to view your dashboard.")}</span>
         <button class="gaia-dashboard__btn" type="button">Sign in with email</button>
       </div>
     `;
@@ -154,7 +197,11 @@
       try {
         const { error } = await supabase.auth.signInWithOtp({
           email,
-          options: { emailRedirectTo: cfg.redirectUrl || window.location.href },
+          options: {
+            emailRedirectTo:
+              cfg.redirectUrl ||
+              `${window.location.origin}${window.location.pathname}${window.location.search}`,
+          },
         });
         if (error) throw error;
         root.querySelector(".gaia-dashboard__status").textContent =
@@ -185,6 +232,12 @@
     }
 
     const supabase = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnon);
+    const hashResult = await hydrateSessionFromHash(supabase);
+    if (hashResult.error) {
+      renderSignInPrompt(root, supabase, `Sign-in link issue: ${hashResult.error}`);
+      return;
+    }
+
     const { data, error } = await supabase.auth.getSession();
     if (error) {
       root.innerHTML = `<div class="gaia-dashboard__status">${esc(error.message || "Session check failed.")}</div>`;
@@ -197,24 +250,19 @@
     }
 
     try {
-      const [dashboard, member, features] = await Promise.all([
-        fetchJson(`${backendBase}/v1/dashboard`, token),
-        fetchJson(`${backendBase}/v1/earthscope/member`, token).catch(() => null),
-        fetchJson(`${backendBase}/v1/features/today`, token).catch(() => null),
-      ]);
+      const started = Date.now();
+      const day = localDayISO();
+      const dashboard = await fetchJson(`${backendBase}/v1/dashboard?day=${encodeURIComponent(day)}`, token);
+      const elapsed = Date.now() - started;
+      console.info("[gaia-dashboard] loaded payload in ms=", elapsed);
 
       const payload = {
         gauges: dashboard && dashboard.gauges ? dashboard.gauges : null,
         alerts: dashboard && Array.isArray(dashboard.alerts) ? dashboard.alerts : [],
-        memberPost: member && member.ok && member.post ? member.post : null,
-        publicPost:
-          features && (features.post_body || features.post_title)
-            ? {
-                title: features.post_title || "EarthScope Daily",
-                caption: features.post_caption || "",
-                body_markdown: features.post_body || "",
-              }
-            : null,
+        entitled: dashboard ? dashboard.entitled : null,
+        memberPost:
+          (dashboard && (dashboard.member_post || dashboard.memberPost || dashboard.personal_post || dashboard.personalPost)) || null,
+        publicPost: (dashboard && (dashboard.public_post || dashboard.publicPost)) || null,
       };
       renderDashboard(root, payload);
     } catch (err) {

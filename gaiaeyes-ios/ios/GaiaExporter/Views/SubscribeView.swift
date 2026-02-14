@@ -92,7 +92,7 @@ struct SubscribeView: View {
         .task {
             await refreshEntitlementsIfNeeded()
         }
-        .onChange(of: auth.supabaseAccessToken) { _ in
+        .onChange(of: auth.supabaseAccessToken) { _, _ in
             Task { await refreshEntitlementsIfNeeded() }
         }
     }

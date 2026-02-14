@@ -21,12 +21,14 @@ add_action('wp_enqueue_scripts', function () {
     $supabase_url = defined('SUPABASE_URL') ? SUPABASE_URL : getenv('SUPABASE_URL');
     $supabase_anon = defined('SUPABASE_ANON_KEY') ? SUPABASE_ANON_KEY : getenv('SUPABASE_ANON_KEY');
     $backend_base = defined('GAIAEYES_API_BASE') ? GAIAEYES_API_BASE : getenv('GAIAEYES_API_BASE');
+    $request_uri = isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '/';
+    $redirect_url = esc_url_raw(home_url($request_uri));
 
     wp_localize_script('gaia-dashboard', 'GAIA_DASHBOARD_CFG', [
         'supabaseUrl' => $supabase_url ? rtrim($supabase_url, '/') : '',
         'supabaseAnon' => $supabase_anon ? trim($supabase_anon) : '',
         'backendBase' => $backend_base ? rtrim($backend_base, '/') : '',
-        'redirectUrl' => home_url(add_query_arg([])),
+        'redirectUrl' => $redirect_url,
     ]);
 
     wp_register_style('gaia-dashboard', false);
@@ -55,7 +57,8 @@ add_action('wp_enqueue_scripts', function () {
     ');
 });
 
-add_shortcode('gaia_dashboard', function ($atts = []) {
+if (!function_exists('gaia_dashboard_shortcode_render')) {
+function gaia_dashboard_shortcode_render($atts = []) {
     $a = shortcode_atts([
         'title' => 'Mission Control',
     ], $atts, 'gaia_dashboard');
@@ -71,4 +74,18 @@ add_shortcode('gaia_dashboard', function ($atts = []) {
     </section>
     <?php
     return ob_get_clean();
+}
+}
+
+add_action('init', function () {
+    if (!shortcode_exists('gaia_dashboard')) {
+        add_shortcode('gaia_dashboard', 'gaia_dashboard_shortcode_render');
+    }
 });
+
+add_filter('the_content', function ($content) {
+    if (strpos($content, '[gaia_dashboard') === false) {
+        return $content;
+    }
+    return do_shortcode($content);
+}, 20);

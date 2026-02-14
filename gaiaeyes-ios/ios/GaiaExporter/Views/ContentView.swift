@@ -274,7 +274,7 @@ private struct DashboardGaugeSet: Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case pain, focus, heart, stamina, energy, sleep, mood
-        case healthStatus = "health_status"
+        case healthStatus
     }
 }
 
@@ -290,7 +290,7 @@ private struct DashboardAlertItem: Codable, Hashable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case key, title, severity
-        case suggestedActions = "suggested_actions"
+        case suggestedActions
     }
 }
 
@@ -303,8 +303,8 @@ private struct DashboardEarthscopePost: Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case day, title, caption
-        case bodyMarkdown = "body_markdown"
-        case updatedAt = "updated_at"
+        case bodyMarkdown
+        case updatedAt
     }
 }
 
@@ -312,11 +312,16 @@ private struct DashboardPayload: Codable {
     let day: String?
     let gauges: DashboardGaugeSet?
     let alerts: [DashboardAlertItem]?
+    let entitled: Bool?
+    let memberPost: DashboardEarthscopePost?
+    let publicPost: DashboardEarthscopePost?
     let personalPost: DashboardEarthscopePost?
 
     private enum CodingKeys: String, CodingKey {
-        case day, gauges, alerts
-        case personalPost = "personal_post"
+        case day, gauges, alerts, entitled
+        case memberPost
+        case publicPost
+        case personalPost
     }
 }
 
@@ -334,8 +339,8 @@ private struct ProfileLocation: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case zip, lat, lon
-        case useGps = "use_gps"
-        case localInsightsEnabled = "local_insights_enabled"
+        case useGps
+        case localInsightsEnabled
     }
 }
 
@@ -366,8 +371,26 @@ private struct TagCatalogItem: Codable, Hashable, Identifiable {
     let section: String?
 
     private enum CodingKeys: String, CodingKey {
-        case tagKey = "tag_key"
+        case tagKey
+        case tagKeySnake = "tag_key"
         case label, description, section
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        tagKey =
+            (try c.decodeIfPresent(String.self, forKey: .tagKey))
+            ?? (try c.decodeIfPresent(String.self, forKey: .tagKeySnake))
+            ?? ""
+        if tagKey.isEmpty {
+            throw DecodingError.keyNotFound(
+                CodingKeys.tagKey,
+                DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Missing tagKey/tag_key")
+            )
+        }
+        label = try c.decodeIfPresent(String.self, forKey: .label)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        section = try c.decodeIfPresent(String.self, forKey: .section)
     }
 }
 
@@ -991,10 +1014,16 @@ struct ContentView: View {
     @State private var selectedTagKeys: Set<String> = []
     @State private var tagSaveMessage: String?
     @State private var tagsSaving: Bool = false
+    @AppStorage("dashboard_payload_cache_json") private var dashboardPayloadCacheJSON: String = ""
     @State private var dashboardPayload: DashboardPayload? = nil
+    @State private var lastNonNilDashboardGauges: DashboardGaugeSet? = nil
     @State private var dashboardLoading: Bool = false
     @State private var dashboardError: String?
-    @State private var memberEarthscopePost: DashboardEarthscopePost? = nil
+    @State private var dashboardFetchInFlight: Bool = false
+    @State private var dashboardLastFetchAt: Date = .distantPast
+    @State private var dashboardLastUpdatedText: String? = nil
+    @State private var showMissionSettingsSheet: Bool = false
+    @State private var showMissionInsightsSheet: Bool = false
 
     @State private var magnetosphere: MagnetosphereData? = nil
     @State private var magnetosphereLoading: Bool = false
@@ -1030,11 +1059,18 @@ struct ContentView: View {
     @State private var showAuroraForecast: Bool = false
     @State private var showMagnetosphere: Bool = false
     
-    private func chicagoTodayString() -> String {
+    private func chicagoDayString(offsetDays: Int = 0) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/Chicago") ?? .current
+        let base = cal.date(byAdding: .day, value: offsetDays, to: Date()) ?? Date()
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
         df.timeZone = TimeZone(identifier: "America/Chicago")
-        return df.string(from: Date())
+        return df.string(from: base)
+    }
+
+    private func chicagoTodayString() -> String {
+        chicagoDayString(offsetDays: 0)
     }
 
     private func isCancellationError(_ error: Error) -> Bool {
@@ -1452,37 +1488,119 @@ struct ContentView: View {
         return try decoder.decode(Resp.self, from: data)
     }
 
-    private func fetchDashboardPayload() async {
-        await MainActor.run {
-            dashboardLoading = true
-            dashboardError = nil
-        }
-        let api = state.apiWithAuth()
-        do {
-            let payload: DashboardPayload = try await api.getJSON("v1/dashboard", as: DashboardPayload.self, perRequestTimeout: 30)
-            await MainActor.run {
-                dashboardPayload = payload
-                dashboardLoading = false
-            }
-        } catch {
-            await MainActor.run {
-                dashboardError = error.localizedDescription
-                dashboardLoading = false
-            }
-            appLog("[UI] dashboard payload error: \(error.localizedDescription)")
-        }
+    private func decodeDashboardPayload(from json: String) -> DashboardPayload? {
+        guard !json.isEmpty, let data = json.data(using: .utf8) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try? decoder.decode(DashboardPayload.self, from: data)
     }
 
-    private func fetchMemberEarthscope() async {
-        let api = state.apiWithAuth()
-        do {
-            let payload: MemberEarthscopeEnvelope = try await api.getJSON("v1/earthscope/member", as: MemberEarthscopeEnvelope.self, perRequestTimeout: 30)
-            await MainActor.run {
-                memberEarthscopePost = payload.post
+    private func fetchDashboardPayload(force: Bool = false) async {
+        let shouldStart = await MainActor.run { () -> Bool in
+            if dashboardFetchInFlight { return false }
+            if !force, dashboardPayload != nil, Date().timeIntervalSince(dashboardLastFetchAt) < 60 {
+                return false
             }
-        } catch {
-            appLog("[UI] member earthscope error: \(error.localizedDescription)")
+            dashboardFetchInFlight = true
+            dashboardLoading = true
+            dashboardError = nil
+            return true
         }
+        guard shouldStart else { return }
+
+        defer {
+            Task { @MainActor in
+                dashboardFetchInFlight = false
+                dashboardLoading = false
+            }
+        }
+
+        let api = state.apiWithAuth()
+        let dashboardDay = chicagoTodayString()
+        let fallbackDay = chicagoDayString(offsetDays: -1)
+        let endpoint = "v1/dashboard?day=\(dashboardDay)"
+        let startedAt = Date()
+        let backoffs: [UInt64] = [500_000_000, 1_500_000_000]
+        var lastError: Error?
+
+        for attempt in 0..<3 {
+            do {
+                let payload: DashboardPayload = try await api.getJSON(endpoint, as: DashboardPayload.self, perRequestTimeout: 15)
+                var resolvedPayload = payload
+                var fallbackUsed = false
+
+                if payload.gauges == nil || (payload.memberPost == nil && payload.personalPost == nil) {
+                    let fallbackEndpoint = "v1/dashboard?day=\(fallbackDay)"
+                    if let older: DashboardPayload = try? await api.getJSON(fallbackEndpoint, as: DashboardPayload.self, perRequestTimeout: 15) {
+                        let hasUsefulFallback =
+                            older.gauges != nil ||
+                            older.memberPost != nil ||
+                            older.personalPost != nil ||
+                            older.publicPost != nil
+                        if hasUsefulFallback {
+                            resolvedPayload = DashboardPayload(
+                                day: payload.day ?? older.day,
+                                gauges: payload.gauges ?? older.gauges,
+                                alerts: (payload.alerts?.isEmpty == false) ? payload.alerts : older.alerts,
+                                entitled: payload.entitled ?? older.entitled,
+                                memberPost: payload.memberPost ?? payload.personalPost ?? older.memberPost ?? older.personalPost,
+                                publicPost: payload.publicPost ?? older.publicPost,
+                                personalPost: payload.personalPost ?? older.personalPost
+                            )
+                            fallbackUsed = true
+                        }
+                    }
+                }
+
+                let encoded = try? JSONEncoder().encode(resolvedPayload)
+                let json = encoded.flatMap { String(data: $0, encoding: .utf8) }
+                let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000.0)
+                await MainActor.run {
+                    if let g = resolvedPayload.gauges {
+                        lastNonNilDashboardGauges = g
+                    }
+                    let gaugesForRender = resolvedPayload.gauges ?? lastNonNilDashboardGauges
+                    let effectivePayload = DashboardPayload(
+                        day: resolvedPayload.day,
+                        gauges: gaugesForRender,
+                        alerts: resolvedPayload.alerts,
+                        entitled: resolvedPayload.entitled,
+                        memberPost: resolvedPayload.memberPost,
+                        publicPost: resolvedPayload.publicPost,
+                        personalPost: resolvedPayload.personalPost
+                    )
+                    dashboardPayload = effectivePayload
+                    if let json {
+                        dashboardPayloadCacheJSON = json
+                    }
+                    dashboardError = nil
+                    dashboardLastFetchAt = Date()
+                    let out = DateFormatter()
+                    out.dateStyle = .none
+                    out.timeStyle = .short
+                    dashboardLastUpdatedText = out.string(from: dashboardLastFetchAt)
+                }
+                appLog(
+                    "[UI] dashboard ok: day=\(dashboardDay) ms=\(durationMs) gauges=\(resolvedPayload.gauges != nil) alerts=\(resolvedPayload.alerts?.count ?? 0) member=\(resolvedPayload.memberPost != nil || resolvedPayload.personalPost != nil) public=\(resolvedPayload.publicPost != nil) entitled=\(String(describing: resolvedPayload.entitled)) fallback=\(fallbackUsed)"
+                )
+                return
+            } catch {
+                if isCancellationError(error) { return }
+                lastError = error
+                if attempt < backoffs.count {
+                    try? await Task.sleep(nanoseconds: backoffs[attempt])
+                }
+            }
+        }
+
+        await MainActor.run {
+            dashboardError = lastError?.localizedDescription ?? "dashboard fetch failed"
+            if dashboardPayload == nil, let cached = decodeDashboardPayload(from: dashboardPayloadCacheJSON) {
+                dashboardPayload = cached
+                dashboardLastUpdatedText = "cached"
+            }
+        }
+        appLog("[UI] dashboard payload error: \(lastError?.localizedDescription ?? "unknown")")
     }
 
     private func fetchProfileLocation() async {
@@ -2642,65 +2760,33 @@ struct ContentView: View {
     // Extracted to avoid scope/brace ambiguity during recent merges
     @State private var showTrends: Bool = false
 
-    private func dashboardFeaturesView(_ f: FeaturesToday) -> some View {
-        let todayStr = chicagoTodayString()
-        let (current, usingYesterdayFallback) = selectDisplayFeatures(for: f)
-        let updatedText = current.updatedAt.flatMap { formatUpdated($0) }
-        let symptomPoints = symptomSparkPoints()
-        let symptomSummary = topSymptomSummary()
-        let symptomHighlightList = symptomHighlights()
-
-        let visualsSnapshot = spaceVisuals ?? lastKnownSpaceVisuals
-        let overlayCount = visualOverlayCount(visualsSnapshot)
-        let overlayUpdated = latestVisualTimestamp(visualsSnapshot)
-        let outlookAurora = (spaceOutlook ?? lastKnownSpaceOutlook)?
-            .data?
-            .auroraOutlook?
-            .first(where: { ($0.hemisphere ?? "").lowercased() == "north" })
-            ?? (spaceOutlook ?? lastKnownSpaceOutlook)?.data?.auroraOutlook?.first
-        let outlookPower = outlookAurora?.powerGw
-        let auroraPowerValue: Double? = {
-            if let v = current.auroraPowerGw?.value { return v }
-            if let v = current.auroraPowerNhGw?.value { return v }
-            if let v = current.auroraPowerShGw?.value { return v }
-            if let v = current.auroraHpNorthGw?.value { return v }
-            if let v = current.auroraHpSouthGw?.value { return v }
-            if let v = outlookPower { return v }
-            return latestAuroraPower(from: visualsSnapshot)
-        }()
-        let auroraProbability = ContentView.auroraProbabilityText(from: current)
-        let auroraWingKp = outlookAurora?.wingKp
-        let seriesForCharts = series ?? lastKnownSeries ?? .empty
-        let seriesDetail = series ?? lastKnownSeries
-        let resolvedOutlook = spaceOutlook ?? lastKnownSpaceOutlook
-        let dashboardGauges = dashboardPayload?.gauges
+    private func dashboardFeaturesView(_ fallbackFeatures: FeaturesToday?) -> some View {
+        let dashboardGauges = dashboardPayload?.gauges ?? lastNonNilDashboardGauges
         let dashboardAlerts = dashboardPayload?.alerts ?? []
-        let dashboardEarthscope = memberEarthscopePost ?? dashboardPayload?.personalPost
-        let onSelectVisual: (SpaceVisualItem) -> Void = { item in
-            prepareInteractiveViewer(for: item)
-            showInteractiveViewer = true
-        }
+        let resolvedEarthscope: DashboardEarthscopePost? = {
+            return dashboardPayload?.memberPost
+                ?? dashboardPayload?.personalPost
+                ?? dashboardPayload?.publicPost
+        }()
 
         return VStack(spacing: 16) {
             MissionControlSectionView(
                 gauges: dashboardGauges,
                 alerts: dashboardAlerts,
-                earthscope: dashboardEarthscope,
-                fallbackTitle: current.postTitle,
-                fallbackCaption: current.postCaption,
-                fallbackBody: current.postBody,
-                fallbackImages: current.earthscopeImages,
+                earthscope: resolvedEarthscope,
+                fallbackTitle: fallbackFeatures?.postTitle,
+                fallbackCaption: fallbackFeatures?.postCaption,
+                fallbackBody: fallbackFeatures?.postBody,
                 isLoading: dashboardLoading,
-                errorMessage: dashboardError
+                errorMessage: ContentView.scrubError(dashboardError),
+                lastUpdatedText: dashboardLastUpdatedText
             )
             .padding(.horizontal)
 
             MissionMenuSectionView(
                 onSymptoms: { showSymptomSheet = true },
-                onInsights: {
-                    showTrends = true
-                },
-                onSettings: { showTools = true },
+                onInsights: { showMissionInsightsSheet = true },
+                onSettings: { showMissionSettingsSheet = true },
                 onResearch: {
 #if canImport(UIKit)
                     if let url = URL(string: "https://gaiaeyes.com/research/") {
@@ -2710,84 +2796,6 @@ struct ContentView: View {
                 }
             )
             .padding(.horizontal)
-
-            DashboardSleepSectionView(
-                current: current,
-                todayStr: todayStr,
-                usingYesterdayFallback: usingYesterdayFallback,
-                bannerText: featuresCachedBannerText
-            )
-            DashboardHealthStatsSectionView(
-                current: current,
-                updatedText: updatedText
-            )
-            DashboardSymptomsSectionView(
-                todayCount: symptomsToday.count,
-                queuedCount: state.symptomQueueCount,
-                sparklinePoints: symptomPoints,
-                topSummary: symptomSummary,
-                usingYesterdayFallback: usingYesterdayFallback,
-                showSymptomSheet: $showSymptomSheet
-            )
-            DashboardSpaceWeatherSectionView(
-                current: current,
-                visualsSnapshot: visualsSnapshot,
-                overlayCount: overlayCount,
-                overlayUpdated: overlayUpdated,
-                updatedText: updatedText,
-                usingYesterdayFallback: usingYesterdayFallback,
-                forecast: forecast,
-                outlook: resolvedOutlook,
-                seriesDetail: seriesDetail,
-                showVisualsPreview: AppConfig.showVisualsPreview,
-                onSelectVisual: onSelectVisual,
-                showSpaceWeatherDetail: $showSpaceWeatherDetail,
-                spaceDetailFocus: $spaceDetailFocus
-            )
-            DashboardToolsSectionView(
-                state: state,
-                seriesForCharts: seriesForCharts,
-                symptomHighlights: symptomHighlightList,
-                showTrends: $showTrends,
-                hazardsBrief: hazardsBrief,
-                hazardsLoading: hazardsLoading,
-                hazardsError: hazardsError,
-                showHazards: $showHazards,
-                quakeLatest: quakeLatest,
-                quakeEvents: quakeEvents,
-                quakeError: quakeError,
-                showQuakes: $showQuakes,
-                auroraPowerValue: auroraPowerValue,
-                auroraWingKp: auroraWingKp,
-                auroraProbabilityText: auroraProbability,
-                showAuroraForecast: $showAuroraForecast,
-                magnetosphere: magnetosphere,
-                magnetosphereLoading: magnetosphereLoading,
-                magnetosphereError: magnetosphereError,
-                showMagnetosphereDetail: $showMagnetosphereDetail,
-                localHealthZip: $localHealthZip,
-                localHealth: localHealth,
-                localHealthLoading: localHealthLoading,
-                localHealthError: localHealthError,
-                onRefreshLocalHealth: { Task { await fetchLocalHealth() } },
-                profileUseGPS: $profileUseGPS,
-                profileLocalInsightsEnabled: $profileLocalInsightsEnabled,
-                profileLocationMessage: profileLocationMessage,
-                profileLocationSaving: profileLocationSaving,
-                onSaveProfileLocation: { Task { await saveProfileLocation() } },
-                tagCatalog: tagCatalog,
-                selectedTagKeys: $selectedTagKeys,
-                tagSaveMessage: tagSaveMessage,
-                tagsSaving: tagsSaving,
-                onSaveTags: { Task { await saveSelectedTags() } },
-                showTools: $showTools,
-                showConnections: $showConnections,
-                showActions: $showActions,
-                showBle: $showBle,
-                showPolar: $showPolar,
-                onFetchVisuals: { Task { await fetchSpaceVisuals() } },
-                showMagnetosphere: $showMagnetosphere
-            )
         }
     }
 
@@ -2798,13 +2806,18 @@ struct ContentView: View {
         let onResearch: () -> Void
 
         var body: some View {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    Button(action: onSymptoms) { Label("Symptoms", systemImage: "plus.circle") }
-                    Button(action: onInsights) { Label("Insights", systemImage: "chart.xyaxis.line") }
-                    Button(action: onSettings) { Label("Settings", systemImage: "gearshape") }
-                    Button(action: onResearch) { Label("Research", systemImage: "book.closed") }
+            VStack(alignment: .leading, spacing: 6) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        Button(action: onSymptoms) { Label("Symptoms", systemImage: "plus.circle") }
+                        Button(action: onInsights) { Label("Insights", systemImage: "chart.xyaxis.line") }
+                        Button(action: onSettings) { Label("Settings", systemImage: "gearshape") }
+                        Button(action: onResearch) { Label("Research", systemImage: "book.closed") }
+                    }
                 }
+                Text("Detailed cards were moved to Insights and Settings.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -2818,9 +2831,9 @@ struct ContentView: View {
         let fallbackTitle: String?
         let fallbackCaption: String?
         let fallbackBody: String?
-        let fallbackImages: [Any]?
         let isLoading: Bool
         let errorMessage: String?
+        let lastUpdatedText: String?
 
         private func gaugeRows(_ g: DashboardGaugeSet?) -> [(String, Double, ArcGauge.Theme)] {
             guard let g else { return [] }
@@ -2881,9 +2894,15 @@ struct ContentView: View {
                     EarthscopeCardV2(
                         title: earthscope?.title ?? fallbackTitle,
                         caption: earthscope?.caption ?? fallbackCaption,
-                        images: fallbackImages,
+                        images: nil,
                         bodyMarkdown: earthscope?.bodyMarkdown ?? fallbackBody
                     )
+
+                    if let lastUpdatedText, !lastUpdatedText.isEmpty {
+                        Text("Last updated: \(lastUpdatedText)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
             } label: {
                 Label("Mission Control", systemImage: "dial.medium")
@@ -3630,51 +3649,49 @@ struct ContentView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    dashboardFeaturesView(features ?? lastKnownFeatures)
 
-                    if let f = (features ?? lastKnownFeatures) {
-                        dashboardFeaturesView(f)
-                    } else {
-                        dashboardEmptyView
-                    }
-                    let debugFeaturesState = self.featureFetchState
-                    if showDebug { DebugPanel(state: state, expandLog: $expandLog, featuresState: debugFeaturesState) }
+                    if showDebug {
+                        let debugFeaturesState = self.featureFetchState
+                        DebugPanel(state: state, expandLog: $expandLog, featuresState: debugFeaturesState)
 
-                    GroupBox {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Label("Features Diagnostics", systemImage: "wrench.and.screwdriver")
-                                Spacer()
-                                if featuresDiagnosticsLoading {
-                                    ProgressView()
-                                        .scaleEffect(0.8)
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Label("Features Diagnostics", systemImage: "wrench.and.screwdriver")
+                                    Spacer()
+                                    if featuresDiagnosticsLoading {
+                                        ProgressView()
+                                            .scaleEffect(0.8)
+                                    }
+                                    Button("Refresh") {
+                                        Task { await fetchFeaturesDiagnostics() }
+                                    }
+                                    .disabled(featuresDiagnosticsLoading)
                                 }
-                                Button("Refresh") {
-                                    Task { await fetchFeaturesDiagnostics() }
+                                if let error = featuresDiagnosticsError {
+                                    Text(error)
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
                                 }
-                                .disabled(featuresDiagnosticsLoading)
+                                if let diagnostics = featuresDiagnostics {
+                                    FeaturesDiagnosticsPanel(
+                                        diag: diagnostics,
+                                        onCopyTrace: { copyTrace(diagnostics.trace ?? []) },
+                                        onShareTrace: { shareTrace(diagnostics.trace ?? []) },
+                                        onCopyToStatus: { appendTraceToStatus(diagnostics.trace ?? []) }
+                                    )
+                                } else if !featuresDiagnosticsLoading {
+                                    Text("No diagnostics yet. Tap Refresh.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
-                            if let error = featuresDiagnosticsError {
-                                Text(error)
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
-                            }
-                            if let diagnostics = featuresDiagnostics {
-                                FeaturesDiagnosticsPanel(
-                                    diag: diagnostics,
-                                    onCopyTrace: { copyTrace(diagnostics.trace ?? []) },
-                                    onShareTrace: { shareTrace(diagnostics.trace ?? []) },
-                                    onCopyToStatus: { appendTraceToStatus(diagnostics.trace ?? []) }
-                                )
-                            } else if !featuresDiagnosticsLoading {
-                                Text("No diagnostics yet. Tap Refresh.")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
+                        } label: {
+                            Text("Diagnostics")
                         }
-                    } label: {
-                        Text("Diagnostics")
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal)
 
                     Spacer(minLength: 10)
                 }
@@ -3689,61 +3706,22 @@ struct ContentView: View {
                 didRunInitialTasks = true
                 await state.updateBackendDBFlag()
                 let api = state.apiWithAuth()
-                async let a: Void = fetchFeaturesToday(trigger: .initial)
-                async let b: Void = fetchForecastSummary()
-                async let c: Void = fetchSpaceSeries(days: 30)
-                async let h: Void = fetchSpaceOutlook()
-                async let i: Void = fetchLocalHealth()
-                async let j: Void = fetchDashboardPayload()
-                async let k: Void = fetchMemberEarthscope()
-                async let l: Void = fetchProfileSettings()
-                _ = await (a, b, c, h, i, j, k, l)
-                try? await Task.sleep(nanoseconds: 350_000_000)
-                async let d: Void = fetchSymptoms(api: api)
-                async let e: Void = state.flushQueuedSymptoms(api: api)
-                async let f: Void = refreshSymptomPresets(api: api)
-                async let g: Void = fetchSpaceVisuals()
-                _ = await (d, e, f, g)
-                if showHazards { await fetchHazardsBrief() }
-                if showQuakes { await fetchQuakes() }
-                if showMagnetosphere { await fetchMagnetosphere() }
+                async let a: Void = fetchDashboardPayload(force: true)
+                async let b: Void = fetchProfileSettings()
+                _ = await (a, b)
+                async let c: Void = state.flushQueuedSymptoms(api: api)
+                async let d: Void = refreshSymptomPresets(api: api)
+                _ = await (c, d)
             }
             .refreshable {
                 await state.updateBackendDBFlag()
                 let api = state.apiWithAuth()
-                let guardRemaining = await MainActor.run { featuresRefreshGuardUntil.timeIntervalSinceNow }
-                async let b: Void = fetchForecastSummary()
-                async let c: Void = fetchSpaceSeries(days: 30)
-                async let h: Void = fetchSpaceOutlook()
-                async let i: Void = fetchLocalHealth()
-                async let j: Void = fetchDashboardPayload()
-                async let k: Void = fetchMemberEarthscope()
-                if guardRemaining > 0 {
-                    let remaining = max(1, Int(ceil(guardRemaining)))
-                    appLog("[UI] pull-to-refresh: guard active (~\(remaining)s); skipping features refresh")
-                    _ = await (b, c, h, i, j, k)
-                    try? await Task.sleep(nanoseconds: 300_000_000)
-                    async let d: Void = fetchSymptoms(api: api)
-                    async let e: Void = state.flushQueuedSymptoms(api: api)
-                    async let f: Void = refreshSymptomPresets(api: api)
-                    async let g: Void = fetchSpaceVisuals()
-                    _ = await (d, e, f, g)
-                    if showHazards { await fetchHazardsBrief() }
-                    if showQuakes { await fetchQuakes() }
-                    if showMagnetosphere { await fetchMagnetosphere() }
-                    return
-                }
-                async let a: Void = fetchFeaturesToday(trigger: .refresh)
-                _ = await (a, b, c, h, i, j, k)
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                async let d: Void = fetchSymptoms(api: api)
-                async let e: Void = state.flushQueuedSymptoms(api: api)
-                async let f: Void = refreshSymptomPresets(api: api)
-                async let g: Void = fetchSpaceVisuals()
-                _ = await (d, e, f, g)
-                if showHazards { await fetchHazardsBrief() }
-                if showQuakes { await fetchQuakes() }
-                if showMagnetosphere { await fetchMagnetosphere() }
+                async let a: Void = fetchDashboardPayload(force: true)
+                async let b: Void = fetchProfileSettings()
+                _ = await (a, b)
+                async let c: Void = state.flushQueuedSymptoms(api: api)
+                async let d: Void = refreshSymptomPresets(api: api)
+                _ = await (c, d)
             }
             .onAppear {
                 state.refreshStatus()
@@ -3767,6 +3745,14 @@ struct ContentView: View {
                     spaceOutlook = cached
                     lastKnownSpaceOutlook = cached
                     appLog("[UI] preloaded space outlook from persisted snapshot")
+                }
+                if dashboardPayload == nil, let cached = decodeDashboardPayload(from: dashboardPayloadCacheJSON) {
+                    dashboardPayload = cached
+                    if let g = cached.gauges {
+                        lastNonNilDashboardGauges = g
+                    }
+                    dashboardLastUpdatedText = "cached"
+                    appLog("[UI] preloaded dashboard payload from persisted snapshot")
                 }
                 if !didLocationOnboarding {
                     showLocationOnboarding = true
@@ -3803,6 +3789,17 @@ struct ContentView: View {
                     appLog("[UI] space outlook updated from cache change")
                 }
             }
+            .onChange(of: dashboardPayloadCacheJSON, initial: false) { oldValue, newValue in
+                guard newValue != oldValue, !newValue.isEmpty, let decoded = decodeDashboardPayload(from: newValue) else { return }
+                if let g = decoded.gauges {
+                    lastNonNilDashboardGauges = g
+                }
+                if dashboardPayload == nil {
+                    dashboardPayload = decoded
+                    dashboardLastUpdatedText = "cached"
+                    appLog("[UI] dashboard payload updated from cache change")
+                }
+            }
             .onChange(of: localHealthZip, initial: false) { _, newValue in
                 let sanitized = sanitizedZip(newValue)
                 if sanitized != newValue {
@@ -3827,6 +3824,29 @@ struct ContentView: View {
                 guard newValue, !magnetosphereLoading else { return }
                 if magnetosphere == nil {
                     Task { await fetchMagnetosphere() }
+                }
+            }
+            .onChange(of: showMissionInsightsSheet, initial: false) { _, newValue in
+                guard newValue else { return }
+                Task {
+                    let api = state.apiWithAuth()
+                    async let a: Void = fetchFeaturesToday(trigger: .initial)
+                    async let b: Void = fetchForecastSummary()
+                    async let c: Void = fetchSpaceSeries(days: 30)
+                    async let d: Void = fetchSpaceOutlook()
+                    async let e: Void = fetchSpaceVisuals()
+                    async let f: Void = fetchSymptoms(api: api)
+                    _ = await (a, b, c, d, e, f)
+                    if hazardsBrief == nil { await fetchHazardsBrief() }
+                    if quakeEvents.isEmpty { await fetchQuakes() }
+                    if magnetosphere == nil { await fetchMagnetosphere() }
+                }
+            }
+            .onChange(of: showMissionSettingsSheet, initial: false) { _, newValue in
+                guard newValue else { return }
+                Task {
+                    await fetchProfileSettings()
+                    await fetchLocalHealth()
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .featuresShouldRefresh).receive(on: RunLoop.main)) { _ in
@@ -3887,6 +3907,326 @@ struct ContentView: View {
                 pendingRefreshTask = nil
             }
         }
+        .sheet(isPresented: $showMissionInsightsSheet) {
+            let baseFeatures = features ?? lastKnownFeatures
+            let selected: (FeaturesToday, Bool)? = baseFeatures.map { selectDisplayFeatures(for: $0) }
+            let current = selected?.0
+            let usingYesterdayFallback = selected?.1 ?? false
+            let updatedText = current?.updatedAt.flatMap { formatUpdated($0) }
+            let visualsSnapshot = spaceVisuals ?? lastKnownSpaceVisuals
+            let overlayCount = visualOverlayCount(visualsSnapshot)
+            let overlayUpdated = latestVisualTimestamp(visualsSnapshot)
+            let seriesDetail = series ?? lastKnownSeries
+            let resolvedOutlook = spaceOutlook ?? lastKnownSpaceOutlook
+            let symptomPoints = symptomSparkPoints()
+            let symptomSummary = topSymptomSummary()
+            let symptomHighlightList = symptomHighlights()
+            let seriesForCharts = series ?? lastKnownSeries ?? .empty
+            let onSelectVisual: (SpaceVisualItem) -> Void = { item in
+                prepareInteractiveViewer(for: item)
+                showInteractiveViewer = true
+            }
+            let outlookAurora = resolvedOutlook?
+                .data?
+                .auroraOutlook?
+                .first(where: { ($0.hemisphere ?? "").lowercased() == "north" })
+                ?? resolvedOutlook?.data?.auroraOutlook?.first
+            let auroraPowerValue: Double? = {
+                if let current {
+                    if let v = current.auroraPowerGw?.value { return v }
+                    if let v = current.auroraPowerNhGw?.value { return v }
+                    if let v = current.auroraPowerShGw?.value { return v }
+                    if let v = current.auroraHpNorthGw?.value { return v }
+                    if let v = current.auroraHpSouthGw?.value { return v }
+                }
+                if let v = outlookAurora?.powerGw { return v }
+                return latestAuroraPower(from: visualsSnapshot)
+            }()
+            let auroraProbability = current.flatMap { ContentView.auroraProbabilityText(from: $0) }
+            let auroraWingKp = outlookAurora?.wingKp
+
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        if let current {
+                            DashboardSleepSectionView(
+                                current: current,
+                                todayStr: chicagoTodayString(),
+                                usingYesterdayFallback: usingYesterdayFallback,
+                                bannerText: featuresCachedBannerText
+                            )
+
+                            DashboardHealthStatsSectionView(
+                                current: current,
+                                updatedText: updatedText
+                            )
+
+                            DashboardSymptomsSectionView(
+                                todayCount: symptomsToday.count,
+                                queuedCount: state.symptomQueueCount,
+                                sparklinePoints: symptomPoints,
+                                topSummary: symptomSummary,
+                                usingYesterdayFallback: usingYesterdayFallback,
+                                showSymptomSheet: $showSymptomSheet
+                            )
+
+                            DashboardSpaceWeatherSectionView(
+                                current: current,
+                                visualsSnapshot: visualsSnapshot,
+                                overlayCount: overlayCount,
+                                overlayUpdated: overlayUpdated,
+                                updatedText: updatedText,
+                                usingYesterdayFallback: usingYesterdayFallback,
+                                forecast: forecast,
+                                outlook: resolvedOutlook,
+                                seriesDetail: seriesDetail,
+                                showVisualsPreview: AppConfig.showVisualsPreview,
+                                onSelectVisual: onSelectVisual,
+                                showSpaceWeatherDetail: $showSpaceWeatherDetail,
+                                spaceDetailFocus: $spaceDetailFocus
+                            )
+                        } else {
+                            GroupBox {
+                                Text("Insights are loading. Pull to refresh in a moment.")
+                                    .font(.footnote)
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            } label: {
+                                Text("Insights")
+                            }
+                            .padding(.horizontal)
+                        }
+
+                        SpaceChartsCard(series: seriesForCharts, highlights: symptomHighlightList)
+                            .padding(.horizontal)
+
+                        HazardsBriefCard(payload: hazardsBrief, isLoading: hazardsLoading, error: hazardsError)
+                            .padding(.horizontal)
+
+                        EarthquakesSummaryCard(
+                            latest: quakeLatest,
+                            events: quakeEvents,
+                            error: quakeError
+                        )
+                        .padding(.horizontal)
+
+                        AuroraThumbsSectionView(
+                            auroraPowerValue: auroraPowerValue,
+                            auroraWingKp: auroraWingKp,
+                            auroraProbabilityText: auroraProbability
+                        )
+
+                        MagnetosphereCard(
+                            data: magnetosphere,
+                            isLoading: magnetosphereLoading,
+                            error: magnetosphereError,
+                            onOpenDetail: { showMagnetosphereDetail = true }
+                        )
+                        .padding(.horizontal)
+                    }
+                    .padding(.vertical, 16)
+                }
+                .navigationTitle("Insights")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+        .sheet(isPresented: $showMissionSettingsSheet) {
+            let sortedTags = tagCatalog.sorted {
+                ($0.label ?? $0.tagKey).localizedCaseInsensitiveCompare($1.label ?? $1.tagKey) == .orderedAscending
+            }
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        LocalHealthCard(
+                            zip: $localHealthZip,
+                            snapshot: localHealth,
+                            isLoading: localHealthLoading,
+                            error: localHealthError,
+                            onRefresh: { Task { await fetchLocalHealth() } }
+                        )
+                        .padding(.horizontal)
+
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Enable local insights")
+                                    .font(.subheadline)
+                                TextField("ZIP code", text: $localHealthZip)
+                                    .textFieldStyle(.roundedBorder)
+                                    .keyboardType(.numberPad)
+                                Toggle("Use GPS (optional)", isOn: $profileUseGPS)
+                                Toggle("Enable local insights", isOn: $profileLocalInsightsEnabled)
+                                Button(action: { Task { await saveProfileLocation() } }) {
+                                    HStack {
+                                        if profileLocationSaving {
+                                            ProgressView().scaleEffect(0.8)
+                                        }
+                                        Text(profileLocationSaving ? "Saving..." : "Save Location")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(profileLocationSaving)
+                                if let msg = profileLocationMessage {
+                                    Text(msg)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        } label: {
+                            Label("Location Settings", systemImage: "location.fill")
+                        }
+                        .padding(.horizontal)
+
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 10) {
+                                if sortedTags.isEmpty {
+                                    Text("Catalog not loaded.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Button("Refresh catalog") {
+                                        Task {
+                                            await fetchTagCatalog()
+                                            await fetchSelectedTags()
+                                        }
+                                    }
+                                    .buttonStyle(.bordered)
+                                } else {
+                                    ForEach(sortedTags) { item in
+                                        Toggle(isOn: Binding(
+                                            get: { selectedTagKeys.contains(item.tagKey) },
+                                            set: { isOn in
+                                                if isOn {
+                                                    selectedTagKeys.insert(item.tagKey)
+                                                } else {
+                                                    selectedTagKeys.remove(item.tagKey)
+                                                }
+                                            }
+                                        )) {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(item.label ?? item.tagKey)
+                                                if let desc = item.description, !desc.isEmpty {
+                                                    Text(desc)
+                                                        .font(.caption2)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Text("Self-reported health context only. Not for diagnosis.")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                Button(action: { Task { await saveSelectedTags() } }) {
+                                    HStack {
+                                        if tagsSaving {
+                                            ProgressView().scaleEffect(0.8)
+                                        }
+                                        Text(tagsSaving ? "Saving..." : "Save Sensitivities")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(tagsSaving)
+                                if let msg = tagSaveMessage {
+                                    Text(msg)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        } label: {
+                            Label("Sensitivities", systemImage: "slider.horizontal.3")
+                        }
+                        .padding(.horizontal)
+
+                        ConnectionSettingsSection(state: state, isExpanded: $showConnections)
+
+                        NavigationLink(destination: SubscribeView()) {
+                            Label("Subscribe", systemImage: "creditcard")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .padding(.horizontal)
+
+                        DisclosureGroup(isExpanded: $showActions) {
+                            ActionsSection(state: state, onFetchVisuals: { Task { await fetchSpaceVisuals() } })
+                                .padding(.top, 6)
+                        } label: {
+                            HStack {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                Text("HealthKit Sync & Actions")
+                                Spacer()
+                            }
+                        }
+                        .padding(.horizontal)
+
+                        DisclosureGroup(isExpanded: $showBle) {
+                            BleStatusSection(state: state)
+                                .padding(.top, 6)
+                        } label: {
+                            HStack {
+                                Image(systemName: "antenna.radiowaves.left.and.right")
+                                Text("Bluetooth / BLE")
+                                Spacer()
+                            }
+                        }
+                        .padding(.horizontal)
+
+                        DisclosureGroup(isExpanded: $showPolar) {
+                            PolarStatusSection(state: state)
+                                .padding(.top, 6)
+                        } label: {
+                            HStack {
+                                Image(systemName: "waveform.path.ecg")
+                                Text("Polar ECG")
+                                Spacer()
+                            }
+                        }
+                        .padding(.horizontal)
+
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Label("Features Diagnostics", systemImage: "wrench.and.screwdriver")
+                                    Spacer()
+                                    if featuresDiagnosticsLoading {
+                                        ProgressView()
+                                            .scaleEffect(0.8)
+                                    }
+                                    Button("Refresh") {
+                                        Task { await fetchFeaturesDiagnostics() }
+                                    }
+                                    .disabled(featuresDiagnosticsLoading)
+                                }
+                                if let error = featuresDiagnosticsError {
+                                    Text(error)
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
+                                }
+                                if let diagnostics = featuresDiagnostics {
+                                    FeaturesDiagnosticsPanel(
+                                        diag: diagnostics,
+                                        onCopyTrace: { copyTrace(diagnostics.trace ?? []) },
+                                        onShareTrace: { shareTrace(diagnostics.trace ?? []) },
+                                        onCopyToStatus: { appendTraceToStatus(diagnostics.trace ?? []) }
+                                    )
+                                } else if !featuresDiagnosticsLoading {
+                                    Text("No diagnostics yet. Tap Refresh.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        } label: {
+                            Text("Diagnostics")
+                        }
+                        .padding(.horizontal)
+                    }
+                    .padding(.vertical, 16)
+                }
+                .navigationTitle("Settings")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
         .sheet(isPresented: $showSymptomSheet) {
             SymptomsLogSheet(
                 presets: symptomPresets,
@@ -3917,6 +4257,9 @@ struct ContentView: View {
                     showLocationOnboarding = false
                 }
             )
+        }
+        .sheet(isPresented: $showMagnetosphereDetail) {
+            MagnetosphereDetailView(data: magnetosphere)
         }
         .fullScreenCover(isPresented: $showInteractiveViewer) {
             if let item = interactiveVisualItem {
