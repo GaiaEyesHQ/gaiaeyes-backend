@@ -178,7 +178,19 @@ def fetch_daily_features(user_id: str, day: date) -> Dict[str, Any]:
          where user_id = %s and day = %s
          limit 1
     """
-    return pg.fetchrow(sql, user_id, day) or {}
+    row = pg.fetchrow(sql, user_id, day)
+    if row:
+        return row
+
+    # Fallback: use most recent available row <= day (handles timezone/day-boundary shifts)
+    sql_latest = f"""
+        select day, {', '.join(metrics)}
+          from marts.daily_features
+         where user_id = %s and day <= %s
+         order by day desc
+         limit 1
+    """
+    return pg.fetchrow(sql_latest, user_id, day) or {}
 
 
 def fetch_daily_features_baseline(
@@ -254,19 +266,15 @@ def _compute_baseline_stats(
     baseline_rows: List[Dict[str, Any]],
     metrics: List[str],
 ) -> Tuple[int, Dict[str, Dict[str, float]]]:
-    baseline_days = 0
+    baseline_days = len(baseline_rows)
     values: Dict[str, List[float]] = {m: [] for m in metrics}
 
     for row in baseline_rows:
-        any_val = False
         for m in metrics:
             v = _safe_float(row.get(m))
             if v is None:
                 continue
-            any_val = True
             values[m].append(v)
-        if any_val:
-            baseline_days += 1
 
     stats: Dict[str, Dict[str, float]] = {}
     for m, vals in values.items():
@@ -330,6 +338,7 @@ def compute_health_status(
             "baseline_days": baseline_days,
             "metrics_used": [],
             "hrv_source": hrv_source,
+            "reason": "no_metrics",
         }
 
     weight_sum = sum(weights.values())
@@ -339,6 +348,7 @@ def compute_health_status(
             "baseline_days": baseline_days,
             "metrics_used": [],
             "hrv_source": hrv_source,
+            "reason": "no_weights",
         }
 
     load_raw = 0.0
