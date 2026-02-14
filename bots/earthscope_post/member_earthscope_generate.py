@@ -45,6 +45,20 @@ def _hash_inputs(snapshot: Dict[str, Any]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _parse_json_value(raw: Any) -> Optional[Dict[str, Any]]:
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+    return None
+
+
 def _fetch_paid_users() -> List[str]:
     keys = [k.strip() for k in os.getenv("ENTITLEMENT_KEYS", "plus,pro").split(",") if k.strip()]
     try:
@@ -241,6 +255,7 @@ def _render_with_openai(
     active_states: List[Dict[str, Any]],
     tags: List[Dict[str, Any]],
     symptoms: Dict[str, Any],
+    trend: Optional[Dict[str, Any]],
 ) -> Optional[Dict[str, str]]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not (HAVE_OPENAI and api_key):
@@ -248,12 +263,40 @@ def _render_with_openai(
 
     client = OpenAI(api_key=api_key)
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    has_trend = bool(trend and (trend.get("gauges") or {}))
+
     def _jsonable(obj: Any) -> Any:
         try:
             json.dumps(obj)
             return obj
         except Exception:
             return json.loads(json.dumps(obj, default=str))
+
+    def _mentions_comparison(text: str) -> bool:
+        lowered = (text or "").lower()
+        phrases = [
+            "up from",
+            "down from",
+            "compared to",
+            "higher than",
+            "lower than",
+            "rose from",
+            "fell from",
+        ]
+        return any(p in lowered for p in phrases)
+
+    def _ensure_health_line(body: str, health_line: str) -> str:
+        if not health_line or "health status" in body.lower():
+            return body
+        health_bullet = f"- {health_line}"
+        if "## Your Gauges Today" in body:
+            before, after = body.split("## Your Gauges Today", 1)
+            after = after.lstrip("\n")
+            return f"{before}## Your Gauges Today\n{health_bullet}\n{after}"
+        if "## Disclaimer" in body:
+            return body.replace("## Disclaimer", f"{health_bullet}\n\n## Disclaimer", 1)
+        return f"{body}\n\n{health_bullet}"
+
     prompt = {
         "task": "Write a personalized EarthScope member update.",
         "format": "Return strict JSON with keys: title, caption, body_markdown.",
@@ -263,9 +306,12 @@ def _render_with_openai(
             "Do not provide medical advice or diagnosis.",
             "Include 3–5 supportive actions.",
             "Include the disclaimer verbatim at the end.",
+            "Only mention changes vs prior day if trend.gauges contains that gauge.",
+            "If trend.gauges is empty, do not describe increases/decreases or comparisons.",
         ],
         "data": {
             "gauges": _jsonable(gauges_row),
+            "trend": trend or {},
             "active_states": active_states,
             "tags": tags,
             "symptoms": symptoms,
@@ -291,8 +337,10 @@ def _render_with_openai(
             return None
         health_line = _health_status_line(gauges_row.get("health_status"))
         body = str(obj.get("body_markdown") or "").strip()
-        if health_line and "Health Status" not in body:
-            body = f"{body}\n\n{health_line}"
+        if not has_trend and _mentions_comparison(body):
+            logger.warning("[member] OpenAI output used comparisons without trend data; falling back.")
+            return None
+        body = _ensure_health_line(body, health_line)
         return {
             "title": str(obj.get("title") or "").strip(),
             "caption": str(obj.get("caption") or "").strip(),
@@ -324,12 +372,14 @@ def generate_member_post_for_user(
     active_states = resolve_signals(user_id, day, local_payload=local_payload, definition=definition)
     tags = fetch_user_tags(user_id)
     symptoms = fetch_symptom_summary(user_id, day)
+    trend = _parse_json_value(gauges_row.get("trend_json"))
 
     inputs_snapshot = {
         "definition_version": version,
         "day": day.isoformat(),
         "gauges": {k: gauges_row.get(k) for k in ["pain", "focus", "heart", "stamina", "energy", "sleep", "mood", "health_status"]},
         "alerts": gauges_row.get("alerts_json"),
+        "trend": trend or {},
         "active_states": active_states,
         "local_payload": local_payload,
         "tags": tags,
@@ -346,7 +396,7 @@ def generate_member_post_for_user(
 
     rendered = None
     if not trigger_events:
-        rendered = _render_with_openai(definition, gauges_row, active_states, tags, symptoms)
+        rendered = _render_with_openai(definition, gauges_row, active_states, tags, symptoms, trend)
         if not rendered:
             rendered = _render_member_post(definition, gauges_row, active_states, tags, symptoms)
     else:
