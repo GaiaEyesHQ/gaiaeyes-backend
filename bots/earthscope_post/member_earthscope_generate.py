@@ -263,7 +263,23 @@ def _render_with_openai(
 
     client = OpenAI(api_key=api_key)
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    has_trend = bool(trend and (trend.get("gauges") or {}))
+    def _trend_for_prompt(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        if not raw:
+            return {}
+        gauges = raw.get("gauges") or {}
+        deltas: Dict[str, Any] = {}
+        for key, item in gauges.items():
+            if not isinstance(item, dict):
+                continue
+            if "delta" in item:
+                deltas[key] = item.get("delta")
+        out: Dict[str, Any] = {"deltas": deltas}
+        if raw.get("baseline_day"):
+            out["baseline_day"] = raw.get("baseline_day")
+        return out
+
+    trend_for_prompt = _trend_for_prompt(trend)
+    has_trend = bool(trend_for_prompt.get("deltas"))
 
     def _jsonable(obj: Any) -> Any:
         try:
@@ -297,6 +313,9 @@ def _render_with_openai(
             return body.replace("## Disclaimer", f"{health_bullet}\n\n## Disclaimer", 1)
         return f"{body}\n\n{health_bullet}"
 
+    def _has_required_sections(body: str) -> bool:
+        return "## Your Gauges Today" in body and "## Disclaimer" in body
+
     prompt = {
         "task": "Write a personalized EarthScope member update.",
         "format": "Return strict JSON with keys: title, caption, body_markdown.",
@@ -306,12 +325,17 @@ def _render_with_openai(
             "Do not provide medical advice or diagnosis.",
             "Include 3–5 supportive actions.",
             "Include the disclaimer verbatim at the end.",
-            "Only mention changes vs prior day if trend.gauges contains that gauge.",
-            "If trend.gauges is empty, do not describe increases/decreases or comparisons.",
+            "Use headings: ## Today’s Check-in, ## Your Gauges Today, ## Drivers, ## Supportive Actions, ## Disclaimer.",
+            "Only mention changes vs prior day if trend.deltas contains that gauge.",
+            "Use gauges_current values for current numbers; use trend.deltas for changes.",
+            "If trend.deltas is empty, do not describe increases/decreases or comparisons.",
+            "Avoid generic greetings like 'Hello, EarthScope member'.",
         ],
         "data": {
-            "gauges": _jsonable(gauges_row),
-            "trend": trend or {},
+            "gauges_current": _jsonable(
+                {k: gauges_row.get(k) for k in ["pain", "focus", "heart", "stamina", "energy", "sleep", "mood", "health_status"]}
+            ),
+            "trend": trend_for_prompt,
             "active_states": active_states,
             "tags": tags,
             "symptoms": symptoms,
@@ -339,6 +363,9 @@ def _render_with_openai(
         body = str(obj.get("body_markdown") or "").strip()
         if not has_trend and _mentions_comparison(body):
             logger.warning("[member] OpenAI output used comparisons without trend data; falling back.")
+            return None
+        if not _has_required_sections(body):
+            logger.warning("[member] OpenAI output missing required sections; falling back.")
             return None
         body = _ensure_health_line(body, health_line)
         return {
