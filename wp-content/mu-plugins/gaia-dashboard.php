@@ -21,6 +21,10 @@ add_action('wp_enqueue_scripts', function () {
     $supabase_url = defined('SUPABASE_URL') ? SUPABASE_URL : getenv('SUPABASE_URL');
     $supabase_anon = defined('SUPABASE_ANON_KEY') ? SUPABASE_ANON_KEY : getenv('SUPABASE_ANON_KEY');
     $backend_base = defined('GAIAEYES_API_BASE') ? GAIAEYES_API_BASE : getenv('GAIAEYES_API_BASE');
+    $media_base = defined('MEDIA_BASE_URL') ? MEDIA_BASE_URL : getenv('MEDIA_BASE_URL');
+    if (!$media_base && $supabase_url) {
+        $media_base = rtrim($supabase_url, '/') . '/storage/v1/object/public/space-visuals';
+    }
     $request_uri = isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '/';
     $redirect_url = esc_url_raw(home_url($request_uri));
 
@@ -28,6 +32,7 @@ add_action('wp_enqueue_scripts', function () {
         'supabaseUrl' => $supabase_url ? rtrim($supabase_url, '/') : '',
         'supabaseAnon' => $supabase_anon ? trim($supabase_anon) : '',
         'backendBase' => $backend_base ? rtrim($backend_base, '/') : '',
+        'mediaBase' => $media_base ? rtrim($media_base, '/') : '',
         'redirectUrl' => $redirect_url,
     ]);
 
@@ -49,9 +54,13 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__pill--high{background:#3b1e23;color:#ffadb8}
         .gaia-dashboard__earthscope{margin-top:12px;padding:12px;border-radius:12px;background:#151c28}
         .gaia-dashboard__earthscope h4{margin:0 0 8px;font-size:18px}
-        .gaia-dashboard__markdown h2,.gaia-dashboard__markdown h3{margin:12px 0 6px;font-size:16px}
-        .gaia-dashboard__markdown p{margin:8px 0}
-        .gaia-dashboard__markdown ul{margin:8px 0;padding-left:18px}
+        .gaia-dashboard__es-grid{display:grid;grid-template-columns:1fr;gap:10px}
+        @media(min-width:900px){.gaia-dashboard__es-grid{grid-template-columns:1fr 1fr}}
+        .gaia-dashboard__es-block{position:relative;overflow:hidden;border-radius:12px;min-height:150px;background:#0f1a2b;background-size:cover;background-position:center}
+        .gaia-dashboard__es-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.32),rgba(0,0,0,.72))}
+        .gaia-dashboard__es-content{position:relative;z-index:1;padding:12px;color:#fff}
+        .gaia-dashboard__es-title{margin:0 0 8px;font-size:15px;line-height:1.25}
+        .gaia-dashboard__es-body{margin:0;white-space:pre-line;line-height:1.45;font-size:14px}
         .gaia-dashboard__signin{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
         .gaia-dashboard__btn{border:0;border-radius:999px;padding:8px 14px;background:#2b8cff;color:#fff;font-weight:600;cursor:pointer}
     ');

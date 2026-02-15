@@ -24,43 +24,171 @@
     return String(Math.round(Number(value)));
   };
 
-  const markdownToHtml = (markdown) => {
-    const lines = String(markdown || "").split(/\r?\n/);
-    const out = [];
-    let listOpen = false;
+  const sectionOrder = ["checkin", "drivers", "summary", "actions"];
+  const sectionTitles = {
+    checkin: "Today's Check-in",
+    drivers: "Drivers",
+    summary: "Summary Note",
+    actions: "Supportive Actions",
+  };
 
-    const closeList = () => {
-      if (listOpen) {
-        out.push("</ul>");
-        listOpen = false;
-      }
-    };
+  const sectionDefaults = {
+    checkin: "Today's check-in is still being prepared.",
+    drivers: "No primary driver is highlighted right now.",
+    summary: "Keep an eye on your gauges for the latest context.",
+    actions: "• Hydrate\n• Keep your sleep window steady\n• Use gentle movement",
+  };
+
+  const mediaBase = () => {
+    const fromCfg = normalizeBase(cfg.mediaBase);
+    if (fromCfg) return fromCfg;
+    const supabase = normalizeBase(cfg.supabaseUrl);
+    if (supabase) return `${supabase}/storage/v1/object/public/space-visuals`;
+    return "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals";
+  };
+
+  const sectionKeyForHeading = (heading) => {
+    const h = String(heading || "").toLowerCase();
+    if (h.includes("check") || h.includes("today")) return "checkin";
+    if (h.includes("driver")) return "drivers";
+    if (h.includes("supportive action") || h === "actions" || h.includes("action")) return "actions";
+    if (h.includes("summary") || h.includes("note")) return "summary";
+    return null;
+  };
+
+  const cleanMarkdownLine = (line) =>
+    String(line || "")
+      .trim()
+      .replace(/\*\*/g, "")
+      .replace(/__/g, "")
+      .replace(/^[-*]\s+/, "")
+      .replace(/^\d+\.\s+/, "")
+      .trim();
+
+  const parseEarthscopeSections = (markdown) => {
+    const buckets = { checkin: [], drivers: [], summary: [], actions: [] };
+    if (!markdown || !String(markdown).trim()) {
+      return {
+        checkin: sectionDefaults.checkin,
+        drivers: sectionDefaults.drivers,
+        summary: sectionDefaults.summary,
+        actions: sectionDefaults.actions,
+      };
+    }
+
+    const lines = String(markdown).replace(/\r\n/g, "\n").split("\n");
+    let current = null;
+    let hasActionItems = false;
+    const unknown = [];
 
     for (const raw of lines) {
-      const line = raw.trim();
-      if (!line) {
-        closeList();
+      const trimmed = String(raw || "").trim();
+      if (!trimmed) continue;
+
+      if (trimmed.startsWith("#")) {
+        const heading = trimmed.replace(/^#+\s*/, "");
+        current = sectionKeyForHeading(heading);
         continue;
       }
-      if (line.startsWith("## ")) {
-        closeList();
-        out.push(`<h2>${esc(line.slice(3))}</h2>`);
-      } else if (line.startsWith("### ")) {
-        closeList();
-        out.push(`<h3>${esc(line.slice(4))}</h3>`);
-      } else if (line.startsWith("- ")) {
-        if (!listOpen) {
-          out.push("<ul>");
-          listOpen = true;
-        }
-        out.push(`<li>${esc(line.slice(2))}</li>`);
+
+      const cleaned = cleanMarkdownLine(trimmed);
+      if (!cleaned) continue;
+
+      const isListItem = /^[-*]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed);
+      if (current === "actions" && !isListItem && hasActionItems) {
+        buckets.summary.push(cleaned);
+        continue;
+      }
+
+      if (current && buckets[current]) {
+        buckets[current].push(cleaned);
+        if (current === "actions" && isListItem) hasActionItems = true;
       } else {
-        closeList();
-        out.push(`<p>${esc(line)}</p>`);
+        unknown.push(cleaned);
       }
     }
-    closeList();
-    return out.join("");
+
+    if (!buckets.summary.length && unknown.length) {
+      buckets.summary = unknown.slice();
+    }
+    if (!buckets.checkin.length && buckets.summary.length) {
+      buckets.checkin = buckets.summary.slice(0, 2);
+      buckets.summary = buckets.summary.slice(Math.min(2, buckets.summary.length));
+    }
+
+    return {
+      checkin: buckets.checkin.length ? buckets.checkin.join(" ") : sectionDefaults.checkin,
+      drivers: buckets.drivers.length ? buckets.drivers.join(" ") : sectionDefaults.drivers,
+      summary: buckets.summary.length ? buckets.summary.join(" ") : sectionDefaults.summary,
+      actions: buckets.actions.length
+        ? buckets.actions.map((line) => `• ${line}`).join("\n")
+        : sectionDefaults.actions,
+    };
+  };
+
+  const backgroundCandidates = (key) => {
+    const namesByKey = {
+      checkin: ["checkin", "today_checkin", "todays_checkin"],
+      drivers: ["drivers"],
+      summary: ["summary", "note"],
+      actions: ["actions", "supportive_actions"],
+    };
+    const names = namesByKey[key] || [key];
+    const exts = ["png", "jpg", "PNG", "JPG"];
+    const base = mediaBase();
+    const out = [];
+    names.forEach((name) => {
+      exts.forEach((ext) => out.push(`${base}/social/earthscope/backgrounds/${name}.${ext}`));
+    });
+    return out;
+  };
+
+  const loadFirstImage = (urls, index = 0) =>
+    new Promise((resolve) => {
+      if (!urls || index >= urls.length) {
+        resolve(null);
+        return;
+      }
+      const img = new Image();
+      img.onload = () => resolve(urls[index]);
+      img.onerror = () => {
+        loadFirstImage(urls, index + 1).then(resolve);
+      };
+      img.src = urls[index];
+    });
+
+  const applyEarthscopeBackgrounds = (root) => {
+    root.querySelectorAll("[data-bg-candidates]").forEach((node) => {
+      const raw = node.getAttribute("data-bg-candidates");
+      if (!raw) return;
+      const candidates = raw
+        .split("|")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (!candidates.length) return;
+      loadFirstImage(candidates).then((url) => {
+        if (!url) return;
+        node.style.backgroundImage = `url("${url}")`;
+      });
+    });
+  };
+
+  const renderEarthscopeBlocks = (earthscope) => {
+    const sections = parseEarthscopeSections(earthscope && earthscope.body_markdown);
+    return sectionOrder
+      .map((key) => {
+        const candidates = backgroundCandidates(key).join("|");
+        return `
+          <article class="gaia-dashboard__es-block gaia-dashboard__es-block--${esc(key)}" data-bg-candidates="${esc(candidates)}">
+            <div class="gaia-dashboard__es-overlay"></div>
+            <div class="gaia-dashboard__es-content">
+              <h5 class="gaia-dashboard__es-title">${esc(sectionTitles[key] || key)}</h5>
+              <p class="gaia-dashboard__es-body">${esc(sections[key] || sectionDefaults[key] || "")}</p>
+            </div>
+          </article>
+        `;
+      })
+      .join("");
   };
 
   const fetchJson = async (url, token) => {
@@ -173,11 +301,10 @@
             ? `<p class="gaia-dashboard__muted">${esc(earthscope.caption)}</p>`
             : ""
         }
-        <div class="gaia-dashboard__markdown">${
-          earthscope && earthscope.body_markdown ? markdownToHtml(earthscope.body_markdown) : "<p>EarthScope is updating.</p>"
-        }</div>
+        <div class="gaia-dashboard__es-grid">${renderEarthscopeBlocks(earthscope)}</div>
       </div>
     `;
+    applyEarthscopeBackgrounds(root);
   };
 
   const renderSignInPrompt = (root, supabase, statusText) => {

@@ -325,9 +325,22 @@ private struct DashboardPayload: Codable {
     }
 }
 
-private struct MemberEarthscopeEnvelope: Codable {
+private struct MemberEarthscopeMetricsPayload: Decodable {
+    let gauges: DashboardGaugeSet?
+}
+
+private struct MemberEarthscopePostPayload: Decodable {
+    let day: String?
+    let title: String?
+    let caption: String?
+    let bodyMarkdown: String?
+    let updatedAt: String?
+    let metricsJson: MemberEarthscopeMetricsPayload?
+}
+
+private struct MemberEarthscopeEnvelope: Decodable {
     let ok: Bool?
-    let post: DashboardEarthscopePost?
+    let post: MemberEarthscopePostPayload?
 }
 
 private struct ProfileLocation: Codable {
@@ -363,7 +376,7 @@ private struct ProfileLocationUpsert: Codable {
     }
 }
 
-private struct TagCatalogItem: Codable, Hashable, Identifiable {
+private struct TagCatalogItem: Decodable, Hashable, Identifiable {
     var id: String { tagKey }
     let tagKey: String
     let label: String?
@@ -378,23 +391,23 @@ private struct TagCatalogItem: Codable, Hashable, Identifiable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        tagKey =
-            (try c.decodeIfPresent(String.self, forKey: .tagKey))
-            ?? (try c.decodeIfPresent(String.self, forKey: .tagKeySnake))
-            ?? ""
-        if tagKey.isEmpty {
+        let camelKey = try c.decodeIfPresent(String.self, forKey: .tagKey)
+        let snakeKey = try c.decodeIfPresent(String.self, forKey: .tagKeySnake)
+        let resolvedKey = (camelKey ?? snakeKey ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if resolvedKey.isEmpty {
             throw DecodingError.keyNotFound(
                 CodingKeys.tagKey,
                 DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Missing tagKey/tag_key")
             )
         }
+        tagKey = resolvedKey
         label = try c.decodeIfPresent(String.self, forKey: .label)
         description = try c.decodeIfPresent(String.self, forKey: .description)
         section = try c.decodeIfPresent(String.self, forKey: .section)
     }
 }
 
-private struct TagCatalogEnvelope: Codable {
+private struct TagCatalogEnvelope: Decodable {
     let ok: Bool?
     let items: [TagCatalogItem]?
 }
@@ -1517,7 +1530,6 @@ struct ContentView: View {
 
         let api = state.apiWithAuth()
         let dashboardDay = chicagoTodayString()
-        let fallbackDay = chicagoDayString(offsetDays: -1)
         let endpoint = "v1/dashboard?day=\(dashboardDay)"
         let startedAt = Date()
         let backoffs: [UInt64] = [500_000_000, 1_500_000_000]
@@ -1528,27 +1540,83 @@ struct ContentView: View {
                 let payload: DashboardPayload = try await api.getJSON(endpoint, as: DashboardPayload.self, perRequestTimeout: 15)
                 var resolvedPayload = payload
                 var fallbackUsed = false
+                var fallbackSourceDay: String? = nil
 
                 if payload.gauges == nil || (payload.memberPost == nil && payload.personalPost == nil) {
-                    let fallbackEndpoint = "v1/dashboard?day=\(fallbackDay)"
-                    if let older: DashboardPayload = try? await api.getJSON(fallbackEndpoint, as: DashboardPayload.self, perRequestTimeout: 15) {
+                    for offset in [-1, -2, -3, -4, -5, -6, -7] {
+                        let fallbackDay = chicagoDayString(offsetDays: offset)
+                        let fallbackEndpoint = "v1/dashboard?day=\(fallbackDay)"
+                        guard let older: DashboardPayload = try? await api.getJSON(fallbackEndpoint, as: DashboardPayload.self, perRequestTimeout: 15) else {
+                            continue
+                        }
                         let hasUsefulFallback =
                             older.gauges != nil ||
                             older.memberPost != nil ||
                             older.personalPost != nil ||
                             older.publicPost != nil
-                        if hasUsefulFallback {
-                            resolvedPayload = DashboardPayload(
-                                day: payload.day ?? older.day,
-                                gauges: payload.gauges ?? older.gauges,
-                                alerts: (payload.alerts?.isEmpty == false) ? payload.alerts : older.alerts,
-                                entitled: payload.entitled ?? older.entitled,
-                                memberPost: payload.memberPost ?? payload.personalPost ?? older.memberPost ?? older.personalPost,
-                                publicPost: payload.publicPost ?? older.publicPost,
-                                personalPost: payload.personalPost ?? older.personalPost
-                            )
-                            fallbackUsed = true
-                        }
+                        guard hasUsefulFallback else { continue }
+
+                        resolvedPayload = DashboardPayload(
+                            day: payload.day ?? older.day,
+                            gauges: payload.gauges ?? older.gauges,
+                            alerts: (payload.alerts?.isEmpty == false) ? payload.alerts : older.alerts,
+                            entitled: payload.entitled ?? older.entitled,
+                            memberPost: payload.memberPost ?? payload.personalPost ?? older.memberPost ?? older.personalPost,
+                            publicPost: payload.publicPost ?? older.publicPost,
+                            personalPost: payload.personalPost ?? older.personalPost
+                        )
+                        fallbackUsed = true
+                        fallbackSourceDay = fallbackDay
+                        break
+                    }
+                }
+
+                if resolvedPayload.gauges == nil || (resolvedPayload.memberPost == nil && resolvedPayload.personalPost == nil) {
+                    if let memberEnv: MemberEarthscopeEnvelope = try? await api.getJSON(
+                        "v1/earthscope/member?day=\(dashboardDay)",
+                        as: MemberEarthscopeEnvelope.self,
+                        perRequestTimeout: 15
+                    ),
+                    memberEnv.ok == true,
+                    let memberPost = memberEnv.post {
+                        let normalizedMember = DashboardEarthscopePost(
+                            day: memberPost.day,
+                            title: memberPost.title,
+                            caption: memberPost.caption,
+                            bodyMarkdown: memberPost.bodyMarkdown,
+                            updatedAt: memberPost.updatedAt
+                        )
+                        resolvedPayload = DashboardPayload(
+                            day: resolvedPayload.day,
+                            gauges: resolvedPayload.gauges ?? memberPost.metricsJson?.gauges,
+                            alerts: resolvedPayload.alerts,
+                            entitled: resolvedPayload.entitled,
+                            memberPost: resolvedPayload.memberPost ?? normalizedMember,
+                            publicPost: resolvedPayload.publicPost,
+                            personalPost: resolvedPayload.personalPost
+                        )
+                    }
+                }
+
+                if resolvedPayload.memberPost == nil && resolvedPayload.personalPost == nil && resolvedPayload.publicPost == nil {
+                    if let features: FeaturesToday = try? await api.getJSON("v1/features/today", as: FeaturesToday.self, perRequestTimeout: 15),
+                       (features.postTitle != nil || features.postCaption != nil || features.postBody != nil) {
+                        let fallbackPublic = DashboardEarthscopePost(
+                            day: features.day,
+                            title: features.postTitle,
+                            caption: features.postCaption,
+                            bodyMarkdown: features.postBody,
+                            updatedAt: features.updatedAt
+                        )
+                        resolvedPayload = DashboardPayload(
+                            day: resolvedPayload.day,
+                            gauges: resolvedPayload.gauges,
+                            alerts: resolvedPayload.alerts,
+                            entitled: resolvedPayload.entitled,
+                            memberPost: resolvedPayload.memberPost,
+                            publicPost: fallbackPublic,
+                            personalPost: resolvedPayload.personalPost
+                        )
                     }
                 }
 
@@ -1581,7 +1649,7 @@ struct ContentView: View {
                     dashboardLastUpdatedText = out.string(from: dashboardLastFetchAt)
                 }
                 appLog(
-                    "[UI] dashboard ok: day=\(dashboardDay) ms=\(durationMs) gauges=\(resolvedPayload.gauges != nil) alerts=\(resolvedPayload.alerts?.count ?? 0) member=\(resolvedPayload.memberPost != nil || resolvedPayload.personalPost != nil) public=\(resolvedPayload.publicPost != nil) entitled=\(String(describing: resolvedPayload.entitled)) fallback=\(fallbackUsed)"
+                    "[UI] dashboard ok: day=\(dashboardDay) ms=\(durationMs) gauges=\(resolvedPayload.gauges != nil) alerts=\(resolvedPayload.alerts?.count ?? 0) member=\(resolvedPayload.memberPost != nil || resolvedPayload.personalPost != nil) public=\(resolvedPayload.publicPost != nil) entitled=\(String(describing: resolvedPayload.entitled)) fallback=\(fallbackUsed) fallback_day=\(fallbackSourceDay ?? "-")"
                 )
                 return
             } catch {
@@ -2894,7 +2962,6 @@ struct ContentView: View {
                     EarthscopeCardV2(
                         title: earthscope?.title ?? fallbackTitle,
                         caption: earthscope?.caption ?? fallbackCaption,
-                        images: nil,
                         bodyMarkdown: earthscope?.bodyMarkdown ?? fallbackBody
                     )
 
@@ -6541,70 +6608,269 @@ struct ContentView: View {
         }
     }
 
-    private struct EarthscopeCardV2: View {
-        let title: String?
-        let caption: String?
-        let images: Any?
-        let bodyMarkdown: String?
-        @State private var showFull: Bool = false
-        @State private var reelPlayer: AVPlayer? = nil
+    private struct EarthscopeBriefingSection: Identifiable {
+        let id: String
+        let key: String
+        let title: String
+        let body: String
+    }
 
-        private func earthscopeBaseURL() -> URL? {
-            if let raw = Bundle.main.object(forInfoDictionaryKey: "MEDIA_BASE_URL") as? String {
-                let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !s.isEmpty { return URL(string: s.hasSuffix("/") ? String(s.dropLast()) : s) }
+    private enum EarthscopeBriefingKey: String, CaseIterable {
+        case checkin
+        case drivers
+        case summary
+        case actions
+    }
+
+    private struct EarthscopeBriefingParser {
+        private static let listMarkerRegex = try? NSRegularExpression(pattern: #"^\d+\.\s+"#)
+
+        private static func sectionKey(for heading: String) -> EarthscopeBriefingKey? {
+            let h = heading.lowercased()
+            if h.contains("check") || h.contains("today") { return .checkin }
+            if h.contains("driver") { return .drivers }
+            if h.contains("supportive action") || h == "actions" || h.contains("action") { return .actions }
+            if h.contains("summary") || h.contains("note") { return .summary }
+            return nil
+        }
+
+        private static func cleanLine(_ line: String) -> String {
+            var out = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            out = out.replacingOccurrences(of: "**", with: "")
+            out = out.replacingOccurrences(of: "__", with: "")
+            if out.hasPrefix("- ") || out.hasPrefix("* ") {
+                out = String(out.dropFirst(2))
             }
-            return URL(string: "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals")
+            if let regex = listMarkerRegex {
+                let range = NSRange(location: 0, length: out.utf16.count)
+                out = regex.stringByReplacingMatches(in: out, options: [], range: range, withTemplate: "")
+            }
+            return out.trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        private func resolveEarthscopeURL(_ raw: String?) -> URL? {
-            guard let raw, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-            if let u = URL(string: raw), u.scheme != nil { return u }
-            let rel = raw.hasPrefix("/") ? String(raw.dropFirst()) : raw
-            guard let base = earthscopeBaseURL() else { return URL(string: raw) }
-            return rel.split(separator: "/").reduce(base) { url, seg in
-                url.appendingPathComponent(String(seg))
+        private static func sectionTitle(_ key: EarthscopeBriefingKey) -> String {
+            switch key {
+            case .checkin: return "Today's Check-in"
+            case .drivers: return "Drivers"
+            case .summary: return "Summary Note"
+            case .actions: return "Supportive Actions"
             }
         }
 
-        private var earthscopeReelURL: URL? {
-            resolveEarthscopeURL("social/earthscope/reels/latest/latest.mp4")
+        private static func defaultBody(_ key: EarthscopeBriefingKey) -> String {
+            switch key {
+            case .checkin:
+                return "Today's check-in is still being prepared."
+            case .drivers:
+                return "No primary driver is highlighted right now."
+            case .summary:
+                return "Keep an eye on your gauges for the latest context."
+            case .actions:
+                return "• Hydrate\n• Keep your sleep window steady\n• Use gentle movement"
+            }
         }
 
-        // Extract URLs from multiple possible shapes
-        private func extractImageURLs() -> [URL] {
+        private static func defaultSections() -> [EarthscopeBriefingSection] {
+            EarthscopeBriefingKey.allCases.map { key in
+                EarthscopeBriefingSection(
+                    id: key.rawValue,
+                    key: key.rawValue,
+                    title: sectionTitle(key),
+                    body: defaultBody(key)
+                )
+            }
+        }
+
+        static func parse(_ markdown: String?) -> [EarthscopeBriefingSection] {
+            guard let markdown, !markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return defaultSections()
+            }
+
+            let normalized = markdown.replacingOccurrences(of: "\r\n", with: "\n")
+            let lines = normalized.components(separatedBy: "\n")
+            var buckets: [EarthscopeBriefingKey: [String]] = [:]
+            for key in EarthscopeBriefingKey.allCases { buckets[key] = [] }
+
+            var current: EarthscopeBriefingKey? = nil
+            var unknown: [String] = []
+            var hasActionItems = false
+
+            for raw in lines {
+                let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty { continue }
+
+                if trimmed.hasPrefix("#") {
+                    let heading = trimmed.replacingOccurrences(of: #"^#+\s*"#, with: "", options: .regularExpression)
+                    current = sectionKey(for: heading)
+                    continue
+                }
+
+                let cleaned = cleanLine(trimmed)
+                if cleaned.isEmpty { continue }
+
+                let isListItem = trimmed.hasPrefix("- ")
+                    || trimmed.hasPrefix("* ")
+                    || trimmed.range(of: #"^\d+\.\s+"#, options: .regularExpression) != nil
+
+                if current == .actions, !isListItem, hasActionItems {
+                    buckets[.summary, default: []].append(cleaned)
+                    continue
+                }
+
+                if let key = current {
+                    buckets[key, default: []].append(cleaned)
+                    if key == .actions, isListItem { hasActionItems = true }
+                } else {
+                    unknown.append(cleaned)
+                }
+            }
+
+            if (buckets[.summary] ?? []).isEmpty, !unknown.isEmpty {
+                buckets[.summary] = unknown
+            }
+            if (buckets[.checkin] ?? []).isEmpty, !(buckets[.summary] ?? []).isEmpty {
+                let summary = buckets[.summary] ?? []
+                buckets[.checkin] = Array(summary.prefix(2))
+                buckets[.summary] = Array(summary.dropFirst(min(2, summary.count)))
+            }
+
+            var sections: [EarthscopeBriefingSection] = []
+            for key in EarthscopeBriefingKey.allCases {
+                let linesForKey = buckets[key] ?? []
+                let body: String
+                if !linesForKey.isEmpty, key == .actions {
+                    body = linesForKey.map { "• \($0)" }.joined(separator: "\n")
+                } else if !linesForKey.isEmpty {
+                    body = linesForKey.joined(separator: " ")
+                } else {
+                    body = defaultBody(key)
+                }
+                sections.append(
+                    EarthscopeBriefingSection(
+                        id: key.rawValue,
+                        key: key.rawValue,
+                        title: sectionTitle(key),
+                        body: body
+                    )
+                )
+            }
+            return sections.isEmpty ? defaultSections() : sections
+        }
+    }
+
+    private struct EarthscopeBackgroundLayer: View {
+        let candidates: [URL]
+        @State private var index: Int = 0
+
+        var body: some View {
+            ZStack {
+                if index < candidates.count {
+                    AsyncImage(url: candidates[index]) { phase in
+                        switch phase {
+                        case .empty:
+                            Color.black.opacity(0.25)
+                        case .success(let image):
+                            image.resizable().scaledToFill()
+                        case .failure:
+                            Color.black.opacity(0.25)
+                                .onAppear {
+                                    if index < candidates.count - 1 {
+                                        index += 1
+                                    }
+                                }
+                        @unknown default:
+                            Color.black.opacity(0.25)
+                        }
+                    }
+                } else {
+                    LinearGradient(
+                        colors: [Color(red: 0.08, green: 0.11, blue: 0.18), Color(red: 0.11, green: 0.16, blue: 0.25)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                }
+                LinearGradient(
+                    colors: [Color.black.opacity(0.26), Color.black.opacity(0.68)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+        }
+    }
+
+    private struct EarthscopeBriefingBlock: View {
+        let section: EarthscopeBriefingSection
+        let compact: Bool
+
+        private func backgroundCandidates() -> [URL] {
+            let names: [String]
+            switch section.key {
+            case "checkin":
+                names = ["checkin", "today_checkin", "todays_checkin"]
+            case "drivers":
+                names = ["drivers"]
+            case "summary":
+                names = ["summary", "note"]
+            case "actions":
+                names = ["actions", "supportive_actions"]
+            default:
+                names = [section.key]
+            }
+
             var urls: [URL] = []
-            // 1) Direct dictionary [String:String]
-            if let dict = images as? [String:String] {
-                ["caption","stats","affects","playbook"].forEach { k in
-                    if let u = resolveEarthscopeURL(dict[k]) { urls.append(u) }
+            for n in names {
+                for ext in ["png", "jpg", "PNG", "JPG"] {
+                    if let u = ContentView.resolvedMediaURL("social/earthscope/backgrounds/\(n).\(ext)") {
+                        urls.append(u)
+                    }
                 }
             }
-            // 2) Dictionary [String:Any]
-            else if let dict = images as? [String:Any] {
-                ["caption","stats","affects","playbook"].forEach { k in
-                    if let s = dict[k] as? String, let u = resolveEarthscopeURL(s) { urls.append(u) }
-                }
-            }
-            // 3) Reflect a struct with properties caption/stats/affects/playbook
-            else if let imgs = images {
-                let m = Mirror(reflecting: imgs)
-                var map: [String:String] = [:]
-                for child in m.children {
-                    guard let label = child.label else { continue }
-                    if let s = child.value as? String { map[label] = s }
-                }
-                ["caption","stats","affects","playbook"].forEach { k in
-                    if let s = map[k], let u = resolveEarthscopeURL(s) { urls.append(u) }
-                }
-            }
-            // De-duplicate while preserving order
             var seen: Set<URL> = []
             return urls.filter { seen.insert($0).inserted }
         }
 
+        private func lineLimitForCompact() -> Int {
+            switch section.key {
+            case "actions": return 6
+            case "summary": return 4
+            default: return 5
+            }
+        }
+
         var body: some View {
-            let urls = extractImageURLs()
+            ZStack(alignment: .topLeading) {
+                EarthscopeBackgroundLayer(candidates: backgroundCandidates())
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(section.title)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text(section.body)
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.95))
+                        .lineSpacing(2)
+                        .lineLimit(compact ? lineLimitForCompact() : nil)
+                        .multilineTextAlignment(.leading)
+                }
+                .padding(12)
+            }
+            .frame(minHeight: compact ? 140 : 170)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
+            )
+        }
+    }
+
+    private struct EarthscopeCardV2: View {
+        let title: String?
+        let caption: String?
+        let bodyMarkdown: String?
+        @State private var showFull: Bool = false
+
+        var body: some View {
+            let sections = EarthscopeBriefingParser.parse(bodyMarkdown)
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) {
                     if let t = title, !t.isEmpty { Text(t).font(.headline) }
@@ -6616,35 +6882,22 @@ struct ContentView: View {
                             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
                     }
 
-                    if let reelURL = earthscopeReelURL {
-                        VideoPlayer(player: reelPlayer ?? AVPlayer(url: reelURL))
-                            .aspectRatio(9.0 / 16.0, contentMode: .fit)
-                            .frame(maxWidth: .infinity)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .onAppear {
-                                if reelPlayer == nil {
-                                    reelPlayer = AVPlayer(url: reelURL)
-                                }
-                            }
+                    ForEach(sections) { section in
+                        EarthscopeBriefingBlock(section: section, compact: true)
                     }
 
-                    if let body = bodyMarkdown, !body.isEmpty {
-                        Text(body)
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                            .lineLimit(6)
-                            .padding(8)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-                    }
-
-                    Button("Read today's Earthscope") { showFull = true }
+                    Button("Read full briefing") { showFull = true }
                         .font(.caption)
                         .underline()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } label: { Label("EarthScope", systemImage: "globe.americas.fill") }
             .sheet(isPresented: $showFull) {
-                EarthscopeFullSheetV2(title: title, caption: caption, bodyText: bodyMarkdown, urls: urls)
+                EarthscopeFullSheetV2(
+                    title: title,
+                    caption: caption,
+                    bodyText: bodyMarkdown
+                )
             }
         }
     }
@@ -6653,38 +6906,30 @@ struct ContentView: View {
         let title: String?
         let caption: String?
         let bodyText: String?
-        let urls: [URL]
         @Environment(\.dismiss) private var dismiss
+
         var body: some View {
+            let sections = EarthscopeBriefingParser.parse(bodyText)
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         if let t = title, !t.isEmpty { Text(t).font(.title3).bold() }
                         if let c = caption, !c.isEmpty { Text(c).font(.subheadline).foregroundColor(.secondary) }
-                        if let b = bodyText, !b.isEmpty { Text(b).font(.body) }
-                        if !urls.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Daily visuals")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                ForEach(urls, id: \.self) { url in
-                                    AsyncImage(url: url) { phase in
-                                        switch phase {
-                                        case .empty: ZStack { RoundedRectangle(cornerRadius: 10).fill(Color.gray.opacity(0.15)); ProgressView() }.frame(height: 180)
-                                        case .success(let img): img.resizable().scaledToFit().cornerRadius(10)
-                                        case .failure: RoundedRectangle(cornerRadius: 10).fill(Color.gray.opacity(0.12)).overlay { Image(systemName: "photo").foregroundColor(.secondary) }.frame(height: 180)
-                                        @unknown default: EmptyView()
-                                        }
-                                    }
-                                }
-                            }
+
+                        ForEach(sections) { section in
+                            EarthscopeBriefingBlock(section: section, compact: false)
                         }
+
                     }
                     .padding()
                 }
                 .navigationTitle("EarthScope")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { dismiss() }
+                    }
+                }
             }
         }
     }
