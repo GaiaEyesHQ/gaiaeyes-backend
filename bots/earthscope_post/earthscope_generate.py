@@ -17,6 +17,7 @@ import os, json, argparse
 import math
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+import sys
 from typing import Optional, Dict, Any, List
 
 STYLE_GUIDE = (
@@ -36,6 +37,11 @@ BAN_PHRASES = [
 
 import requests
 from dotenv import load_dotenv
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from services.openai_models import resolve_openai_model
 
 # Supabase

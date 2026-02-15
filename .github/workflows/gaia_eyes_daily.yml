@@ -24,6 +24,7 @@ jobs:
       contents: write
       issues: write
     env:
+      PYTHONPATH: ${{ github.workspace }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -126,6 +127,7 @@ jobs:
     outputs:
       media_sha: ${{ steps.media_sha.outputs.sha }}
     env:
+      PYTHONPATH: ${{ github.workspace }}
       GAIA_TIMEZONE: ${{ secrets.GAIA_TIMEZONE }}
       SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
