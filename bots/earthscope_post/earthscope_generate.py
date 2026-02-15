@@ -369,12 +369,13 @@ def _llm_title_from_context(client: Optional["OpenAI"], ctx: Dict[str, Any], rew
         model = _writer_model()
         if not model:
             return None
-        resp = client.chat.completions.create(
+        resp = _chat_create_compat(
+            client,
             model=model,
             temperature=0.65,
             top_p=0.9,
             presence_penalty=0.2,
-            max_tokens=16,
+            max_completion_tokens=16,
             messages=[{"role":"system","content":sys},{"role":"user","content":json.dumps(usr, ensure_ascii=False)}],
         )
         title = (resp.choices[0].message.content or "").strip()
@@ -667,13 +668,14 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         return None
     try:
         _dbg("rewrite: request -> OpenAI (interpretive JSON)")
-        resp = client.chat.completions.create(
+        resp = _chat_create_compat(
+            client,
             model=model,
             temperature=0.75,
             top_p=0.9,
             presence_penalty=0.3,
             frequency_penalty=0.2,
-            max_tokens=700,
+            max_completion_tokens=700,
             messages=[
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
@@ -1219,6 +1221,25 @@ def openai_client() -> Optional[OpenAI]:
     except Exception:
         return None
 
+def _chat_create_compat(client: "OpenAI", **kwargs):
+    """
+    Compatibility wrapper for model families that require either
+    max_completion_tokens or max_tokens.
+    """
+    try:
+        return client.chat.completions.create(**kwargs)
+    except Exception as e:
+        msg = str(e)
+        if "Unsupported parameter: 'max_completion_tokens'" in msg and "max_completion_tokens" in kwargs:
+            retry_kwargs = dict(kwargs)
+            retry_kwargs["max_tokens"] = retry_kwargs.pop("max_completion_tokens")
+            return client.chat.completions.create(**retry_kwargs)
+        if "Unsupported parameter: 'max_tokens'" in msg and "max_tokens" in kwargs:
+            retry_kwargs = dict(kwargs)
+            retry_kwargs["max_completion_tokens"] = retry_kwargs.pop("max_tokens")
+            return client.chat.completions.create(**retry_kwargs)
+        raise
+
 # --- Single-call rewrite cache (avoid double API calls in one run) ---
 _REWRITE_CACHE: Optional[Dict[str, str]] = None
 
@@ -1287,12 +1308,13 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
         rc = _rule_copy(ctx)
         return rc["caption"], rc.get("hashtags", "#GaiaEyes #SpaceWeather")
     try:
-        resp = client.chat.completions.create(
+        resp = _chat_create_compat(
+            client,
             model=model,
             temperature=0.9,
             presence_penalty=0.6,
             frequency_penalty=0.4,
-            max_tokens=320,
+            max_completion_tokens=320,
             messages=[
                 {"role":"system","content":(
                     "You are Gaia Eyes' space‑weather writer. Write an accurate, human, slightly humorous caption. "
@@ -1385,8 +1407,9 @@ Data:
 - Schumann: {sr} Hz ({sr_note})
 """.strip()
     try:
-        resp = client.chat.completions.create(
-            model=model, temperature=0.75, max_tokens=900,
+        resp = _chat_create_compat(
+            client,
+            model=model, temperature=0.75, max_completion_tokens=900,
             messages=[{"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, warm, and helpful. Balance science, humor and mysticism."},
                      {"role":"user","content": prompt}],
         )
