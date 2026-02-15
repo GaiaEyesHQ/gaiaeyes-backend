@@ -1224,27 +1224,44 @@ def openai_client() -> Optional[OpenAI]:
 def _chat_create_compat(client: "OpenAI", **kwargs):
     """
     Compatibility wrapper for model families that require either
-    max_completion_tokens or max_tokens.
+    max_completion_tokens or max_tokens, and may not allow custom
+    sampling/penalty parameters.
     """
-    try:
-        return client.chat.completions.create(**kwargs)
-    except Exception as e:
-        msg = str(e)
-        if (
-            "Unsupported parameter: 'max_completion_tokens'" in msg
-            or "unexpected keyword argument 'max_completion_tokens'" in msg
-        ) and "max_completion_tokens" in kwargs:
-            retry_kwargs = dict(kwargs)
-            retry_kwargs["max_tokens"] = retry_kwargs.pop("max_completion_tokens")
-            return client.chat.completions.create(**retry_kwargs)
-        if (
-            "Unsupported parameter: 'max_tokens'" in msg
-            or "unexpected keyword argument 'max_tokens'" in msg
-        ) and "max_tokens" in kwargs:
-            retry_kwargs = dict(kwargs)
-            retry_kwargs["max_completion_tokens"] = retry_kwargs.pop("max_tokens")
-            return client.chat.completions.create(**retry_kwargs)
-        raise
+    attempt_kwargs = dict(kwargs)
+    for _ in range(5):
+        try:
+            return client.chat.completions.create(**attempt_kwargs)
+        except Exception as e:
+            msg = str(e)
+            changed = False
+
+            if (
+                "Unsupported parameter: 'max_completion_tokens'" in msg
+                or "unexpected keyword argument 'max_completion_tokens'" in msg
+            ) and "max_completion_tokens" in attempt_kwargs:
+                attempt_kwargs["max_tokens"] = attempt_kwargs.pop("max_completion_tokens")
+                changed = True
+
+            if (
+                "Unsupported parameter: 'max_tokens'" in msg
+                or "unexpected keyword argument 'max_tokens'" in msg
+            ) and "max_tokens" in attempt_kwargs:
+                attempt_kwargs["max_completion_tokens"] = attempt_kwargs.pop("max_tokens")
+                changed = True
+
+            for param in ("temperature", "top_p", "presence_penalty", "frequency_penalty"):
+                if (
+                    f"Unsupported parameter: '{param}'" in msg
+                    or f"unexpected keyword argument '{param}'" in msg
+                    or f"Unsupported value: '{param}'" in msg
+                ) and param in attempt_kwargs:
+                    attempt_kwargs.pop(param, None)
+                    changed = True
+
+            if changed:
+                continue
+            raise
+    raise RuntimeError("openai chat completion compatibility retries exhausted")
 
 # --- Single-call rewrite cache (avoid double API calls in one run) ---
 _REWRITE_CACHE: Optional[Dict[str, str]] = None
