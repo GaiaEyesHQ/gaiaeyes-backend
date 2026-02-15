@@ -81,6 +81,9 @@ EARTHSCOPE_PULSE_JSON = os.getenv("EARTHSCOPE_PULSE_JSON", str((BASE_DIR / ".." 
 EARTHSCOPE_SPACE_JSON = os.getenv("EARTHSCOPE_SPACE_JSON", str((BASE_DIR / ".." / ".." / "gaiaeyes-media" / "data" / "space_weather.json").resolve()))
 # Optional: consolidated earthscope card JSON (sections + metrics) to merge and pass through
 EARTHSCOPE_CARD_JSON = os.getenv("EARTHSCOPE_CARD_JSON", str((BASE_DIR / ".." / ".." / "gaiaeyes-media" / "data" / "earthscope.json").resolve()))
+EARTHSCOPE_API_BASE = (os.getenv("GAIAEYES_API_BASE") or "https://gaiaeyes-backend.onrender.com").rstrip("/")
+EARTHSCOPE_OUTLOOK_PATH = os.getenv("EARTHSCOPE_OUTLOOK_PATH", "/v1/space/forecast/outlook")
+EARTHSCOPE_API_BEARER = (os.getenv("EARTHSCOPE_API_BEARER") or os.getenv("READ_TOKEN") or "").strip()
 EARTHSCOPE_FORCE_RULES = os.getenv("EARTHSCOPE_FORCE_RULES", "false").strip().lower() in ("1","true","yes","on")
 # Toggle for first-person clinical asides in affects/playbook
 EARTHSCOPE_FIRST_PERSON = os.getenv("EARTHSCOPE_FIRST_PERSON", "true").strip().lower() in ("1","true","yes","on")
@@ -676,6 +679,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             presence_penalty=0.3,
             frequency_penalty=0.2,
             max_completion_tokens=700,
+            response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
@@ -953,6 +957,70 @@ def _load_space_weather(space_path: str) -> Dict[str, Any]:
         return out
     except Exception as e:
         _dbg(f"space_json: failed to load -> {e}")
+        return {}
+
+def _fetch_space_outlook_context() -> Dict[str, Any]:
+    """
+    Pull compact context from backend outlook endpoint:
+      /v1/space/forecast/outlook
+    """
+    if not EARTHSCOPE_API_BASE:
+        return {}
+
+    def _dig(obj: Any, *path: str) -> Any:
+        cur = obj
+        for key in path:
+            if not isinstance(cur, dict):
+                return None
+            cur = cur.get(key)
+            if cur is None:
+                return None
+        return cur
+
+    suffix = EARTHSCOPE_OUTLOOK_PATH if EARTHSCOPE_OUTLOOK_PATH.startswith("/") else f"/{EARTHSCOPE_OUTLOOK_PATH}"
+    url = f"{EARTHSCOPE_API_BASE}{suffix}"
+    headers = {"Accept": "application/json"}
+    if EARTHSCOPE_API_BEARER:
+        headers["Authorization"] = f"Bearer {EARTHSCOPE_API_BEARER}"
+
+    try:
+        r = requests.get(url, headers=headers, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, dict):
+            return {}
+
+        out: Dict[str, Any] = {}
+        kp_now = _dig(data, "kp", "now")
+        kp_max = _dig(data, "kp", "last_24h_max")
+        if kp_now is not None:
+            out["kp_now"] = to_float(kp_now)
+        if kp_max is not None:
+            out["kp_max_24h"] = to_float(kp_max)
+
+        bz_now = data.get("bz_now")
+        sw_now = data.get("sw_speed_now_kms")
+        if bz_now is not None:
+            out["bz_now"] = to_float(bz_now)
+        if sw_now is not None:
+            out["solar_wind_kms_now"] = to_float(sw_now)
+
+        # Optional enrichers for narrative context if present
+        impacts_aurora = _dig(data, "impacts", "aurora")
+        if isinstance(impacts_aurora, str) and impacts_aurora.strip():
+            out["aurora_headline"] = impacts_aurora.strip()
+            out["aurora_window"] = "Next 72h"
+
+        # cme count fallback if endpoint includes it
+        cme_count = data.get("earth_directed_cme_count_24h")
+        if cme_count is None:
+            cme_count = _dig(data, "cme", "earth_directed_count_24h")
+        if cme_count is not None:
+            out["cmes_24h"] = to_float(cme_count)
+
+        return out
+    except Exception as e:
+        _dbg(f"outlook_api: fetch failed -> {e}")
         return {}
 
 # ============================================================
@@ -1258,6 +1326,14 @@ def _chat_create_compat(client: "OpenAI", **kwargs):
                     attempt_kwargs.pop(param, None)
                     changed = True
 
+            if (
+                "Unsupported parameter: 'response_format'" in msg
+                or "unexpected keyword argument 'response_format'" in msg
+                or "Unsupported value: 'response_format'" in msg
+            ) and "response_format" in attempt_kwargs:
+                attempt_kwargs.pop("response_format", None)
+                changed = True
+
             if changed:
                 continue
             raise
@@ -1562,45 +1638,34 @@ def main():
     except Exception as e:
         print(f"[WARN] kp_now fetch failed: {e}")
 
-    # Optional: merge space_weather signals (now KP/Bz/SW + aurora headline)
+    # Merge /v1/space/forecast/outlook signals (now KP/Bz/SW + impacts)
+    outlook_ctx = {}
     try:
-        sw_json_ctx = _load_space_weather(EARTHSCOPE_SPACE_JSON)
-        if sw_json_ctx:
-            # Prefer now-values as fallbacks when daily marts are missing
-            if ctx.get("kp_max_24h") is None and sw_json_ctx.get("kp_now") is not None:
-                ctx["kp_max_24h"] = sw_json_ctx.get("kp_now")
-            if ctx.get("solar_wind_kms") is None and sw_json_ctx.get("solar_wind_kms_now") is not None:
-                ctx["solar_wind_kms"] = sw_json_ctx.get("solar_wind_kms_now")
-            if ctx.get("bz_min") is None and sw_json_ctx.get("bz_now") is not None:
-                ctx["bz_min"] = sw_json_ctx.get("bz_now")
-            # Always allow aurora headline/window as narrative context
-            if sw_json_ctx.get("aurora_headline"):
-                ctx["aurora_headline"] = sw_json_ctx.get("aurora_headline")
-                ctx["aurora_window"] = sw_json_ctx.get("aurora_window")
-            _dbg("space_json: merged into ctx")
+        outlook_ctx = _fetch_space_outlook_context()
+        if outlook_ctx:
+            # Prefer mart-derived daily values; use outlook as fallback/now-context
+            if ctx.get("kp_now") is None and outlook_ctx.get("kp_now") is not None:
+                ctx["kp_now"] = outlook_ctx.get("kp_now")
+            if ctx.get("kp_max_24h") is None and outlook_ctx.get("kp_max_24h") is not None:
+                ctx["kp_max_24h"] = outlook_ctx.get("kp_max_24h")
+            if ctx.get("solar_wind_kms") is None and outlook_ctx.get("solar_wind_kms_now") is not None:
+                ctx["solar_wind_kms"] = outlook_ctx.get("solar_wind_kms_now")
+            if ctx.get("bz_min") is None and outlook_ctx.get("bz_now") is not None:
+                ctx["bz_min"] = outlook_ctx.get("bz_now")
+            if outlook_ctx.get("solar_wind_kms_now") is not None:
+                ctx["sw_now"] = outlook_ctx.get("solar_wind_kms_now")
+            if outlook_ctx.get("bz_now") is not None:
+                ctx["bz_now"] = outlook_ctx.get("bz_now")
+            if ctx.get("cmes_24h") is None and outlook_ctx.get("cmes_24h") is not None:
+                ctx["cmes_24h"] = outlook_ctx.get("cmes_24h")
+            if outlook_ctx.get("aurora_headline"):
+                ctx["aurora_headline"] = outlook_ctx.get("aurora_headline")
+                ctx["aurora_window"] = outlook_ctx.get("aurora_window")
+            _dbg("outlook_api: merged into ctx")
     except Exception as e:
-        _dbg(f"space_json: merge failed -> {e}")
+        _dbg(f"outlook_api: merge failed -> {e}")
 
-    # Optional: merge consolidated earthscope card (sections + metrics + quakes)
-    try:
-        card_ctx = _load_earthscope_card(EARTHSCOPE_CARD_JSON)
-        if card_ctx:
-            # Only fill missing numeric fields; avoid overriding marts values
-            if ctx.get("schumann_value_hz") is None and card_ctx.get("schumann_value_hz") is not None:
-                ctx["schumann_value_hz"] = card_ctx["schumann_value_hz"]
-            # Always allow aurora hints for narrative
-            if card_ctx.get("aurora_headline"):
-                ctx["aurora_headline"] = card_ctx.get("aurora_headline")
-            if card_ctx.get("aurora_window"):
-                ctx["aurora_window"] = card_ctx.get("aurora_window")
-            # Quakes count for narrative context
-            if card_ctx.get("quakes_count") is not None:
-                ctx["quakes_count"] = card_ctx.get("quakes_count")
-            _dbg("earth_card: merged into ctx")
-    except Exception as e:
-        _dbg(f"earth_card: merge failed -> {e}")
-
-    # If no aurora headline was provided by JSON/card, derive a coarse headline from Kp
+    # If no aurora headline was provided by outlook/ctx, derive a coarse headline from Kp
     if not ctx.get("aurora_headline"):
         src_kp = ctx.get("kp_max_24h") if ctx.get("kp_max_24h") is not None else ctx.get("kp_now")
         if src_kp is not None:
@@ -1668,8 +1733,7 @@ def main():
             "aurora_headline": ctx.get("aurora_headline"),
             "aurora_window": ctx.get("aurora_window"),
         },
-        # Pass-through consolidated earthscope.json (if present) so overlays can read a single source
-        "earthscope_json": _load_earthscope_card(EARTHSCOPE_CARD_JSON),
+        "space_outlook": outlook_ctx or None,
         "tone": tone,
         "bands": bands,
         "sections": sections_struct,
@@ -1677,7 +1741,7 @@ def main():
     sources_json = {
         "marts.space_weather_daily": True,
         "marts.schumann_daily": True,
-        "space_weather.json": Path(EARTHSCOPE_SPACE_JSON).name if EARTHSCOPE_SPACE_JSON else False,
+        "api.v1.space.forecast.outlook": bool(outlook_ctx),
     }
 
     # 4) Emit optional JSON for web/app card

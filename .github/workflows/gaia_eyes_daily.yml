@@ -40,35 +40,12 @@ jobs:
       SUPABASE_SR_TABLE: schumann_daily
       SUPABASE_DAY_COLUMN: day
       EARTHSCOPE_PLATFORM: ${{ github.event.inputs.platform || 'default' }}
-      # Media repo for JSON emit + unified inputs
-      MEDIA_REPO_OWNER: ${{ secrets.MEDIA_REPO_OWNER }}
-      MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
-      MEDIA_REPO_TOKEN: ${{ secrets.GAIAEYES_MEDIA_TOKEN }}
-      MEDIA_REPO_PATH:  ${{ github.workspace }}/gaiaeyes-media
-
-      # Earthscope generator toggles
-      EARTHSCOPE_USE_MEDIA: "true"
-      EARTHSCOPE_MEDIA_DIR: ${{ github.workspace }}/gaiaeyes-media
+      GAIAEYES_API_BASE: https://gaiaeyes-backend.onrender.com
       EARTHSCOPE_HYBRID_REWRITE: "true"
       EARTHSCOPE_FORCE_RULES: "false"
       AURORA_REGION: "mid"
-      EARTHSCOPE_OUTPUT_JSON_PATH: ${{ github.workspace }}/gaiaeyes-media/data/earthscope_daily.json
-      EARTHSCOPE_PULSE_JSON: ${{ github.workspace }}/gaiaeyes-media/data/pulse.json
     steps:
       - uses: actions/checkout@v4
-      - name: Clone media repo (for JSON emit)
-        run: |
-          set -euo pipefail
-          if [ -d "${MEDIA_REPO_PATH}/.git" ]; then
-            git -C "${MEDIA_REPO_PATH}" remote set-url origin "https://x-access-token:${MEDIA_REPO_TOKEN}@github.com/${MEDIA_REPO_OWNER}/${MEDIA_REPO_NAME}.git"
-            git -C "${MEDIA_REPO_PATH}" fetch --prune --depth=1 origin
-            git -C "${MEDIA_REPO_PATH}" checkout -B main
-            git -C "${MEDIA_REPO_PATH}" reset --hard origin/main
-            git -C "${MEDIA_REPO_PATH}" clean -fdx
-          else
-            rm -rf "${MEDIA_REPO_PATH}" || true
-            git clone --depth 1 "https://x-access-token:${MEDIA_REPO_TOKEN}@github.com/${MEDIA_REPO_OWNER}/${MEDIA_REPO_NAME}.git" "${MEDIA_REPO_PATH}"
-          fi
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -85,39 +62,6 @@ jobs:
           DATE_ARG=""
           if [ -n "${{ github.event.inputs.date }}" ]; then DATE_ARG="--date ${{ github.event.inputs.date }}"; fi
           python earthscope_generate.py $DATE_ARG --platform ${{ env.EARTHSCOPE_PLATFORM }}
-      - name: Commit & push earthscope_daily.json
-        if: always()
-        run: |
-          set -euo pipefail
-          cd "${MEDIA_REPO_PATH}"
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config pull.rebase true
-          # Stage JSON if present
-          if [ -f "data/earthscope_daily.json" ]; then
-            git add data/earthscope_daily.json
-          fi
-          # Commit only if there are changes
-          if git diff --cached --quiet; then
-            echo "No earthscope_daily.json changes to commit."
-            exit 0
-          fi
-          ts="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          git commit -m "earthscope daily card ${ts} [skip ci]"
-          git fetch origin main || true
-          git pull --rebase origin main || true
-          for attempt in 1 2 3; do
-            if git push origin HEAD:main; then
-              echo "Push succeeded on attempt ${attempt}."
-              exit 0
-            fi
-            echo "Push failed on attempt ${attempt}; rebasing and retrying…"
-            git fetch origin main || true
-            git pull --rebase origin main || true
-            sleep $((RANDOM % 4 + 2))
-          done
-          echo "ERROR: Could not push after 3 attempts."
-          exit 1
 
   render:
     name: Render Images → Media Repo
