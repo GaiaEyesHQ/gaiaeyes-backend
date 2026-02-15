@@ -678,7 +678,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             top_p=0.9,
             presence_penalty=0.3,
             frequency_penalty=0.2,
-            max_completion_tokens=700,
+            reasoning_effort="low",
+            max_completion_tokens=1800,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system_msg},
@@ -694,16 +695,23 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         _dbg(f"rewrite: finish_reason={finish_reason} text_len={len(text)}")
         if not text:
             _dbg("rewrite: empty content; issuing compact retry")
+            compact_draft = {
+                "caption": str(draft.get("caption") or "")[:220],
+                "snapshot": str(draft.get("snapshot") or "")[:320],
+                "affects": str(draft.get("affects") or "")[:320],
+                "playbook": str(draft.get("playbook") or "")[:320],
+            }
             compact_user = {
                 "facts": _summarize_context(facts),
-                "draft": draft,
+                "draft_hint": compact_draft,
                 "required_keys": ["caption", "snapshot", "affects", "playbook", "hashtags"],
                 "instructions": "Return only one JSON object.",
             }
             resp = _chat_create_compat(
                 client,
                 model=model,
-                max_completion_tokens=900,
+                reasoning_effort="low",
+                max_completion_tokens=2400,
                 response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": "Return only valid JSON with keys caption,snapshot,affects,playbook,hashtags."},
@@ -716,6 +724,29 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             except Exception:
                 finish_reason = None
             _dbg(f"rewrite: compact finish_reason={finish_reason} text_len={len(text)}")
+            if not text:
+                _dbg("rewrite: compact empty; issuing plain-json final retry")
+                final_user = {
+                    "context": _summarize_context(facts),
+                    "required_keys": ["caption", "snapshot", "affects", "playbook", "hashtags"],
+                    "constraints": "Return a compact JSON object only; no markdown; no prose outside JSON.",
+                }
+                resp = _chat_create_compat(
+                    client,
+                    model=model,
+                    reasoning_effort="low",
+                    max_completion_tokens=3000,
+                    messages=[
+                        {"role": "system", "content": "Output strict JSON with exactly keys caption,snapshot,affects,playbook,hashtags."},
+                        {"role": "user", "content": json.dumps(final_user, ensure_ascii=False)},
+                    ],
+                )
+                text = _chat_text(resp).strip()
+                try:
+                    finish_reason = getattr(resp.choices[0], "finish_reason", None)
+                except Exception:
+                    finish_reason = None
+                _dbg(f"rewrite: final finish_reason={finish_reason} text_len={len(text)}")
         _dbg("rewrite: response received; attempting JSON parse")
         try:
             raw = _extract_first_json_object(text)
@@ -1347,7 +1378,7 @@ def _chat_create_compat(client: "OpenAI", **kwargs):
                 attempt_kwargs["max_completion_tokens"] = attempt_kwargs.pop("max_tokens")
                 changed = True
 
-            for param in ("temperature", "top_p", "presence_penalty", "frequency_penalty"):
+            for param in ("temperature", "top_p", "presence_penalty", "frequency_penalty", "reasoning_effort"):
                 if (
                     f"Unsupported parameter: '{param}'" in msg
                     or f"unexpected keyword argument '{param}'" in msg
