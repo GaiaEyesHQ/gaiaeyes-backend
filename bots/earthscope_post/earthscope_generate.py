@@ -663,6 +663,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
 
     model = _writer_model()
     if not model:
+        _dbg("rewrite: no model configured (OPENAI_MODEL_PUBLIC_WRITER/OPENAI_MODEL_DEFAULT/OPENAI_MODEL/GAIA_OPENAI_MODEL)")
         return None
     try:
         _dbg("rewrite: request -> OpenAI (interpretive JSON)")
