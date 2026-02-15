@@ -685,7 +685,37 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
                 {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
             ],
         )
-        text = (resp.choices[0].message.content or "").strip()
+        text = _chat_text(resp).strip()
+        finish_reason = None
+        try:
+            finish_reason = getattr(resp.choices[0], "finish_reason", None)
+        except Exception:
+            pass
+        _dbg(f"rewrite: finish_reason={finish_reason} text_len={len(text)}")
+        if not text:
+            _dbg("rewrite: empty content; issuing compact retry")
+            compact_user = {
+                "facts": _summarize_context(facts),
+                "draft": draft,
+                "required_keys": ["caption", "snapshot", "affects", "playbook", "hashtags"],
+                "instructions": "Return only one JSON object.",
+            }
+            resp = _chat_create_compat(
+                client,
+                model=model,
+                max_completion_tokens=900,
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": "Return only valid JSON with keys caption,snapshot,affects,playbook,hashtags."},
+                    {"role": "user", "content": json.dumps(compact_user, ensure_ascii=False)},
+                ],
+            )
+            text = _chat_text(resp).strip()
+            try:
+                finish_reason = getattr(resp.choices[0], "finish_reason", None)
+            except Exception:
+                finish_reason = None
+            _dbg(f"rewrite: compact finish_reason={finish_reason} text_len={len(text)}")
         _dbg("rewrite: response received; attempting JSON parse")
         try:
             raw = _extract_first_json_object(text)
@@ -1338,6 +1368,50 @@ def _chat_create_compat(client: "OpenAI", **kwargs):
                 continue
             raise
     raise RuntimeError("openai chat completion compatibility retries exhausted")
+
+def _chat_text(resp: Any) -> str:
+    """Extract text safely from a chat completion response across SDK shapes."""
+    try:
+        choice0 = resp.choices[0]
+    except Exception:
+        return ""
+    msg = getattr(choice0, "message", None)
+    if msg is None:
+        return ""
+
+    content = getattr(msg, "content", None)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: List[str] = []
+        for item in content:
+            txt = None
+            if isinstance(item, dict):
+                txt = item.get("text") or item.get("content")
+            else:
+                txt = getattr(item, "text", None) or getattr(item, "content", None)
+            if isinstance(txt, str) and txt.strip():
+                parts.append(txt.strip())
+        if parts:
+            return "\n".join(parts)
+
+    # Rare fallback: function/tool argument payloads
+    fc = getattr(msg, "function_call", None)
+    if fc is not None:
+        args = getattr(fc, "arguments", None)
+        if isinstance(args, str):
+            return args
+    tool_calls = getattr(msg, "tool_calls", None)
+    if tool_calls:
+        try:
+            first = tool_calls[0]
+            fn = first.get("function") if isinstance(first, dict) else getattr(first, "function", None)
+            args = fn.get("arguments") if isinstance(fn, dict) else getattr(fn, "arguments", None)
+            if isinstance(args, str):
+                return args
+        except Exception:
+            pass
+    return ""
 
 # --- Single-call rewrite cache (avoid double API calls in one run) ---
 _REWRITE_CACHE: Optional[Dict[str, str]] = None
