@@ -32,6 +32,7 @@ add_action('wp_enqueue_scripts', function () {
         'supabaseUrl' => $supabase_url ? rtrim($supabase_url, '/') : '',
         'supabaseAnon' => $supabase_anon ? trim($supabase_anon) : '',
         'backendBase' => $backend_base ? rtrim($backend_base, '/') : '',
+        'dashboardProxy' => esc_url_raw(rest_url('gaia/v1/dashboard')),
         'mediaBase' => $media_base ? rtrim($media_base, '/') : '',
         'redirectUrl' => $redirect_url,
     ]);
@@ -98,3 +99,71 @@ add_filter('the_content', function ($content) {
     }
     return do_shortcode($content);
 }, 20);
+
+if (!function_exists('gaia_dashboard_proxy_backend')) {
+function gaia_dashboard_proxy_backend(WP_REST_Request $request) {
+    $backend_base = defined('GAIAEYES_API_BASE') ? GAIAEYES_API_BASE : getenv('GAIAEYES_API_BASE');
+    $backend_base = $backend_base ? rtrim((string) $backend_base, '/') : '';
+    if (!$backend_base) {
+        return new WP_REST_Response(['ok' => false, 'error' => 'GAIAEYES_API_BASE is not configured'], 500);
+    }
+
+    $day = sanitize_text_field((string) ($request->get_param('day') ?: ''));
+    if (!$day) {
+        $day = gmdate('Y-m-d');
+    }
+
+    $url = add_query_arg(['day' => $day], $backend_base . '/v1/dashboard');
+
+    $auth = (string) $request->get_header('authorization');
+    if (!$auth && isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $auth = (string) wp_unslash($_SERVER['HTTP_AUTHORIZATION']);
+    }
+
+    $headers = ['Accept' => 'application/json'];
+    if ($auth !== '') {
+        $headers['Authorization'] = $auth;
+    }
+
+    $resp = wp_remote_get($url, [
+        'timeout' => 20,
+        'headers' => $headers,
+    ]);
+
+    if (is_wp_error($resp)) {
+        return new WP_REST_Response([
+            'ok' => false,
+            'error' => 'dashboard proxy fetch failed',
+            'detail' => $resp->get_error_message(),
+        ], 502);
+    }
+
+    $status = (int) wp_remote_retrieve_response_code($resp);
+    $body = (string) wp_remote_retrieve_body($resp);
+    $decoded = json_decode($body, true);
+
+    if (!is_array($decoded)) {
+        return new WP_REST_Response([
+            'ok' => false,
+            'error' => 'dashboard proxy invalid JSON',
+            'status' => $status,
+        ], 502);
+    }
+
+    return new WP_REST_Response($decoded, $status > 0 ? $status : 200);
+}
+}
+
+add_action('rest_api_init', function () {
+    register_rest_route('gaia/v1', '/dashboard', [
+        'methods' => WP_REST_Server::READABLE,
+        'permission_callback' => '__return_true',
+        'callback' => 'gaia_dashboard_proxy_backend',
+        'args' => [
+            'day' => [
+                'required' => false,
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+        ],
+    ]);
+});

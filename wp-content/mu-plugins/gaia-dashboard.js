@@ -2,6 +2,7 @@
   const cfg = window.GAIA_DASHBOARD_CFG || {};
   const normalizeBase = (value) => (value || "").replace(/\/+$/, "");
   const backendBase = normalizeBase(cfg.backendBase);
+  const dashboardProxy = normalizeBase(cfg.dashboardProxy);
 
   const esc = (value) =>
     String(value || "")
@@ -194,13 +195,28 @@
   const fetchJson = async (url, token) => {
     const response = await fetch(url, {
       method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${token}`,
       },
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return response.json();
+    const raw = await response.text();
+    let parsed = null;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch {
+      parsed = null;
+    }
+    if (!response.ok) {
+      const detail =
+        (parsed && (parsed.error || parsed.detail || parsed.message)) ||
+        (raw ? raw.slice(0, 180) : "");
+      throw new Error(`HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
+    }
+    if (parsed != null) return parsed;
+    throw new Error("Invalid JSON response");
   };
 
   const hashParams = () => {
@@ -345,7 +361,7 @@
     const missing = [];
     if (!cfg.supabaseUrl) missing.push("SUPABASE_URL");
     if (!cfg.supabaseAnon) missing.push("SUPABASE_ANON_KEY");
-    if (!backendBase) missing.push("GAIAEYES_API_BASE");
+    if (!dashboardProxy && !backendBase) missing.push("GAIAEYES_API_BASE or dashboardProxy");
     if (missing.length) {
       root.innerHTML = `<div class="gaia-dashboard__status">Dashboard config missing: ${esc(
         missing.join(", ")
@@ -379,7 +395,27 @@
     try {
       const started = Date.now();
       const day = localDayISO();
-      const dashboard = await fetchJson(`${backendBase}/v1/dashboard?day=${encodeURIComponent(day)}`, token);
+      const urls = [];
+      if (dashboardProxy) {
+        urls.push(`${dashboardProxy}?day=${encodeURIComponent(day)}`);
+      }
+      if (backendBase) {
+        urls.push(`${backendBase}/v1/dashboard?day=${encodeURIComponent(day)}`);
+      }
+      let dashboard = null;
+      let lastErr = null;
+      for (const url of urls) {
+        try {
+          dashboard = await fetchJson(url, token);
+          break;
+        } catch (err) {
+          lastErr = err;
+          console.warn("[gaia-dashboard] fetch failed:", url, err && err.message ? err.message : String(err));
+        }
+      }
+      if (!dashboard) {
+        throw lastErr || new Error("Failed to fetch");
+      }
       const elapsed = Date.now() - started;
       console.info("[gaia-dashboard] loaded payload in ms=", elapsed);
 
