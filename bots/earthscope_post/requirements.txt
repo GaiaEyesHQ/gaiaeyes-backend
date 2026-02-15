@@ -1,7 +1,7 @@
 requests==2.32.4
 python-dotenv==1.0.1
 Pillow==10.4.0
-openai==1.37.0
+openai>=1.60.0
 supabase
 asyncpg==0.29.0
 python-dateutil==2.9.0.post0

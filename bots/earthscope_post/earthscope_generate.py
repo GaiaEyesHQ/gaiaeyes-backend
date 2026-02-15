@@ -1230,11 +1230,17 @@ def _chat_create_compat(client: "OpenAI", **kwargs):
         return client.chat.completions.create(**kwargs)
     except Exception as e:
         msg = str(e)
-        if "Unsupported parameter: 'max_completion_tokens'" in msg and "max_completion_tokens" in kwargs:
+        if (
+            "Unsupported parameter: 'max_completion_tokens'" in msg
+            or "unexpected keyword argument 'max_completion_tokens'" in msg
+        ) and "max_completion_tokens" in kwargs:
             retry_kwargs = dict(kwargs)
             retry_kwargs["max_tokens"] = retry_kwargs.pop("max_completion_tokens")
             return client.chat.completions.create(**retry_kwargs)
-        if "Unsupported parameter: 'max_tokens'" in msg and "max_tokens" in kwargs:
+        if (
+            "Unsupported parameter: 'max_tokens'" in msg
+            or "unexpected keyword argument 'max_tokens'" in msg
+        ) and "max_tokens" in kwargs:
             retry_kwargs = dict(kwargs)
             retry_kwargs["max_completion_tokens"] = retry_kwargs.pop("max_tokens")
             return client.chat.completions.create(**retry_kwargs)

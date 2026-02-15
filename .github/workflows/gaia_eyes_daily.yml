@@ -78,7 +78,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install openai supabase
+          pip install --upgrade openai supabase
       - name: Run generator (earthscope_generate.py)
         working-directory: bots/earthscope_post
         run: |
@@ -408,8 +408,8 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           # Extras commonly required by the reel builder
-          pip install moviepy pydub soundfile numpy pillow requests openai
-          pip install supabase
+          pip install --upgrade moviepy pydub soundfile numpy pillow requests openai
+          pip install --upgrade supabase
 
       - name: Stage reel images from Supabase (latest)
         run: |
