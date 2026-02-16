@@ -64,6 +64,7 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__es-body{margin:0;white-space:pre-line;line-height:1.45;font-size:14px}
         .gaia-dashboard__signin{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
         .gaia-dashboard__btn{border:0;border-radius:999px;padding:8px 14px;background:#2b8cff;color:#fff;font-weight:600;cursor:pointer}
+        .gaia-dashboard__btn--ghost{background:#1f2a3a;color:#d7e6ff}
     ');
 });
 

@@ -25,6 +25,16 @@
     return String(Math.round(Number(value)));
   };
 
+  const hasGaugeData = (gauges) => {
+    if (!gauges || typeof gauges !== "object") return false;
+    return Object.values(gauges).some((value) => Number.isFinite(Number(value)));
+  };
+
+  const extractErrorMessage = (obj) => {
+    if (!obj || typeof obj !== "object") return "";
+    return String(obj.detail || obj.error || obj.message || "").trim();
+  };
+
   const sectionOrder = ["checkin", "drivers", "summary", "actions"];
   const sectionTitles = {
     checkin: "Today's Check-in",
@@ -262,7 +272,7 @@
     return { error: error ? error.message || String(error) : null };
   };
 
-  const renderDashboard = (root, payload) => {
+  const renderDashboard = (root, payload, authCtx) => {
     const title = root.dataset.title || "Mission Control";
     const gaugesRaw = payload.gauges || {};
     const gaugeRows = [
@@ -280,12 +290,24 @@
     const isPaid = payload.entitled === true || !!payload.memberPost;
     const displayRows = isPaid ? gaugeRows : gaugeRows.slice(0, 4);
     const earthscope = isPaid ? payload.memberPost || payload.publicPost || null : payload.publicPost || payload.memberPost || null;
+    const hasData = hasGaugeData(gaugesRaw) || !!earthscope;
 
+    const email = authCtx && authCtx.email ? authCtx.email : "";
     root.innerHTML = `
       <div class="gaia-dashboard__head">
         <h2 class="gaia-dashboard__title">${esc(title)}</h2>
-        <span class="gaia-dashboard__mode">${isPaid ? "Member" : "Free"}</span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+          <span class="gaia-dashboard__mode">${isPaid ? "Member" : "Free"}</span>
+          ${email ? `<span class="gaia-dashboard__muted">${esc(email)}</span>` : ""}
+          <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-switch>Email link</button>
+          <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-signout>Sign out</button>
+        </div>
       </div>
+      ${
+        hasData
+          ? ""
+          : '<div class="gaia-dashboard__muted" style="margin-bottom:10px">No dashboard data yet for this account. Use a magic link for another email, or refresh shortly.</div>'
+      }
       <div class="gaia-dashboard__gauges">
         ${displayRows
           .map(
@@ -321,6 +343,14 @@
       </div>
     `;
     applyEarthscopeBackgrounds(root);
+    const signOutBtn = root.querySelector("[data-gaia-signout]");
+    if (signOutBtn && authCtx && typeof authCtx.onSignOut === "function") {
+        signOutBtn.addEventListener("click", authCtx.onSignOut);
+    }
+    const switchBtn = root.querySelector("[data-gaia-switch]");
+    if (switchBtn && authCtx && typeof authCtx.onSwitch === "function") {
+      switchBtn.addEventListener("click", authCtx.onSwitch);
+    }
   };
 
   const renderSignInPrompt = (root, supabase, statusText) => {
@@ -419,6 +449,14 @@
       const elapsed = Date.now() - started;
       console.info("[gaia-dashboard] loaded payload in ms=", elapsed);
 
+      if (
+        dashboard &&
+        typeof dashboard === "object" &&
+        extractErrorMessage(dashboard).toLowerCase().includes("authorization")
+      ) {
+        throw new Error(extractErrorMessage(dashboard));
+      }
+
       const payload = {
         gauges: dashboard && dashboard.gauges ? dashboard.gauges : null,
         alerts: dashboard && Array.isArray(dashboard.alerts) ? dashboard.alerts : [],
@@ -427,11 +465,49 @@
           (dashboard && (dashboard.member_post || dashboard.memberPost || dashboard.personal_post || dashboard.personalPost)) || null,
         publicPost: (dashboard && (dashboard.public_post || dashboard.publicPost)) || null,
       };
-      renderDashboard(root, payload);
+      const user = data && data.session && data.session.user ? data.session.user : null;
+      renderDashboard(root, payload, {
+        email: user && user.email ? user.email : "",
+        onSignOut: async () => {
+          try {
+            await supabase.auth.signOut();
+          } finally {
+            renderSignInPrompt(root, supabase, "Signed out. Sign in with email.");
+          }
+        },
+        onSwitch: async () => {
+          const email = window.prompt("Use this email for a new magic link:");
+          if (!email) return;
+          try {
+            const { error: signErr } = await supabase.auth.signInWithOtp({
+              email,
+              options: {
+                emailRedirectTo:
+                  cfg.redirectUrl ||
+                  `${window.location.origin}${window.location.pathname}${window.location.search}`,
+              },
+            });
+            if (signErr) throw signErr;
+            window.alert("Magic link sent. Open your email, then return to this page.");
+          } catch (switchErr) {
+            window.alert(`Could not send magic link: ${switchErr && switchErr.message ? switchErr.message : switchErr}`);
+          }
+        },
+      });
     } catch (err) {
-      root.innerHTML = `<div class="gaia-dashboard__status">Failed to load dashboard: ${esc(
-        err.message || String(err)
-      )}</div>`;
+      const msg = err && err.message ? String(err.message) : String(err);
+      const authErr =
+        msg.includes("401") ||
+        msg.includes("403") ||
+        msg.toLowerCase().includes("authorization");
+      if (authErr) {
+        try {
+          await supabase.auth.signOut();
+        } catch (_) {}
+        renderSignInPrompt(root, supabase, "Session expired. Sign in with email.");
+      } else {
+        root.innerHTML = `<div class="gaia-dashboard__status">Failed to load dashboard: ${esc(msg)}</div>`;
+      }
     }
   };
 
