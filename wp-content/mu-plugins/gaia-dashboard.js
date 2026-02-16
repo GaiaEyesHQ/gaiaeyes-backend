@@ -249,6 +249,11 @@
     return `${y}-${m}-${day}`;
   };
 
+  const isDebugEnabled = () => {
+    const qp = new URLSearchParams(window.location.search || "");
+    return qp.get("gaia_debug") === "1";
+  };
+
   const hydrateSessionFromHash = async (supabase) => {
     const params = hashParams();
     const hashError = params.get("error");
@@ -425,12 +430,17 @@
     try {
       const started = Date.now();
       const day = localDayISO();
+      const debug = isDebugEnabled();
       const urls = [];
       if (dashboardProxy) {
-        urls.push(`${dashboardProxy}?day=${encodeURIComponent(day)}`);
+        urls.push(
+          `${dashboardProxy}?day=${encodeURIComponent(day)}${debug ? "&debug=1" : ""}`
+        );
       }
       if (backendBase) {
-        urls.push(`${backendBase}/v1/dashboard?day=${encodeURIComponent(day)}`);
+        urls.push(
+          `${backendBase}/v1/dashboard?day=${encodeURIComponent(day)}${debug ? "&debug=1" : ""}`
+        );
       }
       let dashboard = null;
       let lastErr = null;
@@ -448,6 +458,9 @@
       }
       const elapsed = Date.now() - started;
       console.info("[gaia-dashboard] loaded payload in ms=", elapsed);
+      if (debug && dashboard && dashboard._debug) {
+        console.info("[gaia-dashboard] _debug:", dashboard._debug);
+      }
 
       if (
         dashboard &&

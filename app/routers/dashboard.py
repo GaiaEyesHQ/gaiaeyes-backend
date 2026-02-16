@@ -41,6 +41,10 @@ async def _call_dashboard_payload(conn, user_id: str, day: date) -> Dict[str, An
                     return payload
         except Exception as exc:
             last_exc = exc
+            try:
+                await conn.rollback()
+            except Exception:
+                pass
             continue
     raise RuntimeError(f"get_dashboard_payload failed: {last_exc}")
 
@@ -340,6 +344,10 @@ async def _probe_paid_user(conn, user_id: str) -> Dict[str, Any]:
             saw_error = True
             err_text = str(exc)
             logger.warning("[dashboard] entitlement check '%s' failed for user=%s: %s", label, user_id, exc)
+            try:
+                await conn.rollback()
+            except Exception:
+                pass
         check_results.append(
             {
                 "strategy": label,
