@@ -149,6 +149,7 @@ async def _fetch_latest_gauges(conn, user_id: str, day: date) -> Dict[str, Any]:
 async def dashboard(
     request: Request,
     day: Optional[date] = Query(None),
+    debug: bool = Query(False),
     conn=Depends(get_db),
 ):
     started = time.perf_counter()
@@ -160,7 +161,8 @@ async def dashboard(
     if not isinstance(payload, dict):
         payload = {}
 
-    entitled = await _is_paid_user(conn, user_id)
+    paid_probe = await _probe_paid_user(conn, user_id)
+    entitled = paid_probe.get("entitled")
     public_post = await _fetch_public_post(conn, day)
     member_post = await _fetch_member_post(conn, user_id, day)
     personal_post = payload.get("personal_post")
@@ -180,15 +182,28 @@ async def dashboard(
     if not out.get("day") and gauge_fallback.get("day"):
         out["day"] = gauge_fallback.get("day")
 
+    if debug:
+        out["_debug"] = {
+            "user_id": user_id,
+            "requested_day": day.isoformat(),
+            "entitlement_probe": paid_probe,
+            "payload_keys": sorted(payload.keys()) if isinstance(payload, dict) else [],
+            "used_gauge_fallback": bool(
+                (not payload.get("gauges") and gauge_fallback.get("gauges"))
+                or (not payload.get("alerts") and gauge_fallback.get("alerts"))
+            ),
+        }
+
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)
     logger.info(
-        "[dashboard] user=%s day=%s ms=%s gauges=%s alerts=%s entitled=%s member=%s public=%s",
+        "[dashboard] user=%s day=%s ms=%s gauges=%s alerts=%s entitled=%s probe=%s member=%s public=%s",
         user_id,
         day.isoformat(),
         elapsed_ms,
         bool(out.get("gauges")),
         len(out.get("alerts") or []),
         out.get("entitled"),
+        paid_probe.get("matched_strategy"),
         bool(out.get("member_post")),
         bool(out.get("public_post")),
     )
@@ -245,7 +260,7 @@ async def earthscope_member(
     }
 
 
-async def _is_paid_user(conn, user_id: str) -> Optional[bool]:
+async def _probe_paid_user(conn, user_id: str) -> Dict[str, Any]:
     checks = [
         (
             "active_view_with_is_active",
@@ -312,21 +327,43 @@ async def _is_paid_user(conn, user_id: str) -> Optional[bool]:
     ]
 
     saw_error = False
+    check_results: list[Dict[str, Any]] = []
     for label, sql, params in checks:
+        row_found = False
+        err_text: Optional[str] = None
         try:
             async with conn.cursor(row_factory=dict_row) as cur:
                 await cur.execute(sql, params, prepare=False)
                 row = await cur.fetchone()
-                if row:
-                    return True
+                row_found = bool(row)
         except Exception as exc:
             saw_error = True
+            err_text = str(exc)
             logger.warning("[dashboard] entitlement check '%s' failed for user=%s: %s", label, user_id, exc)
-            continue
+        check_results.append(
+            {
+                "strategy": label,
+                "matched": row_found,
+                "error": err_text,
+            }
+        )
+        if row_found:
+            return {
+                "entitled": True,
+                "matched_strategy": label,
+                "checks": check_results,
+            }
 
-    if saw_error:
-        return None
-    return False
+    return {
+        "entitled": (None if saw_error else False),
+        "matched_strategy": None,
+        "checks": check_results,
+    }
+
+
+async def _is_paid_user(conn, user_id: str) -> Optional[bool]:
+    probe = await _probe_paid_user(conn, user_id)
+    return probe.get("entitled")
 
 
 @router.post("/earthscope/member/regenerate", dependencies=[Depends(require_write_auth)])

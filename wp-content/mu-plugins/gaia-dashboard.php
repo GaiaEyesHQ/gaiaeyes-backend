@@ -113,8 +113,14 @@ function gaia_dashboard_proxy_backend(WP_REST_Request $request) {
     if (!$day) {
         $day = gmdate('Y-m-d');
     }
+    $debug = $request->get_param('debug');
 
-    $url = add_query_arg(['day' => $day], $backend_base . '/v1/dashboard');
+    $query_args = ['day' => $day];
+    if ($debug !== null && $debug !== '' && $debug !== '0' && $debug !== 0 && $debug !== false) {
+        $query_args['debug'] = '1';
+    }
+
+    $url = add_query_arg($query_args, $backend_base . '/v1/dashboard');
 
     $auth = (string) $request->get_header('authorization');
     if (!$auth && isset($_SERVER['HTTP_AUTHORIZATION'])) {
@@ -162,6 +168,10 @@ add_action('rest_api_init', function () {
         'callback' => 'gaia_dashboard_proxy_backend',
         'args' => [
             'day' => [
+                'required' => false,
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'debug' => [
                 'required' => false,
                 'sanitize_callback' => 'sanitize_text_field',
             ],
