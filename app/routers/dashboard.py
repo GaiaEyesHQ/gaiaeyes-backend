@@ -246,40 +246,87 @@ async def earthscope_member(
 
 
 async def _is_paid_user(conn, user_id: str) -> Optional[bool]:
-    try:
-        async with conn.cursor(row_factory=dict_row) as cur:
-            await cur.execute(
-                """
-                select 1
-                  from public.app_user_entitlements_active
-                 where user_id = %s
-                   and is_active = true
-                 limit 1
-                """,
-                (user_id,),
-                prepare=False,
+    checks = [
+        (
+            "active_view_with_is_active",
+            """
+            select 1
+              from public.app_user_entitlements_active
+             where user_id = %s
+               and is_active = true
+             limit 1
+            """,
+            (user_id,),
+        ),
+        (
+            "active_view_without_is_active",
+            """
+            select 1
+              from public.app_user_entitlements_active
+             where user_id = %s
+             limit 1
+            """,
+            (user_id,),
+        ),
+        (
+            "base_table_active_and_not_expired",
+            """
+            select 1
+              from public.app_user_entitlements
+             where user_id = %s
+               and coalesce(is_active, true) = true
+               and coalesce(expires_at, now() + interval '100 years') > now()
+             limit 1
+            """,
+            (user_id,),
+        ),
+        (
+            "base_table_not_expired_only",
+            """
+            select 1
+              from public.app_user_entitlements
+             where user_id = %s
+               and coalesce(expires_at, now() + interval '100 years') > now()
+             limit 1
+            """,
+            (user_id,),
+        ),
+        (
+            "email_mapped_entitlement",
+            """
+            with me as (
+                select lower(email) as email
+                  from auth.users
+                 where id = %s::uuid
             )
-            row = await cur.fetchone()
-            return bool(row)
-    except Exception:
+            select 1
+              from public.app_stripe_customers sc
+              join me on lower(sc.email) = me.email
+              join public.app_user_entitlements ue on ue.user_id = sc.user_id
+             where coalesce(ue.expires_at, now() + interval '100 years') > now()
+               and coalesce(ue.is_active, true) = true
+             limit 1
+            """,
+            (user_id,),
+        ),
+    ]
+
+    saw_error = False
+    for label, sql, params in checks:
         try:
             async with conn.cursor(row_factory=dict_row) as cur:
-                await cur.execute(
-                    """
-                    select 1
-                      from public.app_user_entitlements
-                     where user_id = %s
-                       and coalesce(is_active, true) = true
-                       and coalesce(expires_at, now() + interval '100 years') > now()
-                     limit 1
-                    """,
-                    (user_id,),
-                    prepare=False,
-                )
+                await cur.execute(sql, params, prepare=False)
                 row = await cur.fetchone()
-                return bool(row)
-        except Exception:
-            return None
+                if row:
+                    return True
+        except Exception as exc:
+            saw_error = True
+            logger.warning("[dashboard] entitlement check '%s' failed for user=%s: %s", label, user_id, exc)
+            continue
+
+    if saw_error:
+        return None
+    return False
 
 
 @router.post("/earthscope/member/regenerate", dependencies=[Depends(require_write_auth)])
