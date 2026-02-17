@@ -303,6 +303,22 @@ def load_earthscope_card() -> Optional[dict]:
             logging.warning(f"EarthScope card read failed {p}: {e}")
     return None
 
+
+def _card_day_iso(card: Optional[dict]) -> Optional[str]:
+    """Return YYYY-MM-DD from a media card day field when present."""
+    if not isinstance(card, dict):
+        return None
+    raw = card.get("day")
+    if not raw:
+        return None
+    text = str(raw).strip()
+    if len(text) >= 10:
+        text = text[:10]
+    try:
+        return dt.date.fromisoformat(text).isoformat()
+    except Exception:
+        return None
+
 # -------------------------
 # TARGET DAY
 # -------------------------
@@ -1575,8 +1591,14 @@ def main(args: Optional[argparse.Namespace] = None):
 
     # Try loading media EarthScope card JSON for sections/metrics if Supabase post is missing or outdated
     media_card = load_earthscope_card()
-    # Prefer EarthScope media metrics when available (more reliable for flares/CMEs)
-    media_metrics = (media_card or {}).get("metrics") if isinstance(media_card, dict) else None
+    media_card_day = _card_day_iso(media_card)
+    use_media_card = bool(isinstance(media_card, dict) and media_card_day and media_card_day == day.isoformat())
+    if media_card and not use_media_card:
+        logging.warning(
+            "Media EarthScope card day mismatch or missing day: card=%s target=%s (ignoring media-card fallbacks)",
+            media_card_day or "-",
+            day.isoformat(),
+        )
     # Prefer metrics from content.daily_posts.metrics_json when available
     metrics = {}
     if post and post.get("metrics_json"):
@@ -1613,55 +1635,20 @@ def main(args: Optional[argparse.Namespace] = None):
                 f0 = float(m["schumann_value_hz"]) 
                 feats["sch_any_fundamental_avg_hz"] = f0
             except Exception: pass
-                    # Prefer media metrics overrides if present
-        if isinstance(media_metrics, dict):
-            if media_metrics.get("flares_24h") is not None:
-                try: feats["flares_count"] = int(media_metrics["flares_24h"])
-                except Exception: pass
-            if media_metrics.get("cmes_24h") is not None:
-                try: feats["cmes_count"] = int(media_metrics["cmes_24h"])
-                except Exception: pass
-            if media_metrics.get("kp_max_24h") is not None and feats.get("kp_max") is None:
-                try: feats["kp_max"] = float(media_metrics["kp_max_24h"])
-                except Exception: pass
-            if media_metrics.get("bz_min") is not None and feats.get("bz_min") is None:
-                try: feats["bz_min"] = float(media_metrics["bz_min"])
-                except Exception: pass
-            if media_metrics.get("solar_wind_kms") is not None and feats.get("sw_speed_avg") is None:
-                try: feats["sw_speed_avg"] = float(media_metrics["solar_wind_kms"])
-                except Exception: pass
-            if media_metrics.get("schumann_value_hz") is not None and feats.get("sch_any_fundamental_avg_hz") is None:
-                try: feats["sch_any_fundamental_avg_hz"] = float(media_metrics["schumann_value_hz"])
-                except Exception: pass
         # Optional harmonics structure (not drawn currently)
         # metrics.get("harmonics") can be kept if needed later
 
-    # If metrics/sections are still empty, prefer media_card contents (new pipeline)
-    if (not metrics or not isinstance(metrics, dict) or not metrics.get("sections")) and isinstance(media_card, dict):
-        # Seed metrics from media_card if empty
-        if media_card.get("metrics") and not metrics:
-            metrics = dict(media_card["metrics"])  # seed directly from media card
-
-        # Map a minimal metrics view from media card if available
+    # If metrics/sections are still empty, use media_card for TEXT sections only.
+    if (not metrics or not isinstance(metrics, dict) or not metrics.get("sections")) and use_media_card:
         m2 = media_card.get("metrics") or {}
         if isinstance(m2, dict):
             metrics = metrics or {}
-            # Copy over numeric fields if present
-            for k_old, k_new in [
-                ("kp_max_24h","kp_max_24h"),
-                ("solar_wind_kms","solar_wind_kms"),
-                ("flares_24h","flares_24h"),
-                ("cmes_24h","cmes_24h"),
-                ("schumann_value_hz","schumann_value_hz"),
-            ]:
-                if m2.get(k_old) is not None and metrics.get(k_new) is None:
-                    metrics[k_new] = m2.get(k_old)
-            # Deltas/bands/tone may also be present
-            if m2.get("deltas"): metrics["deltas"] = m2["deltas"]
-            if m2.get("g_headline"): metrics["g_headline"] = m2["g_headline"]
-            if m2.get("sections"): metrics["sections"] = m2["sections"]  # pass-through if exists
-            if m2.get("bands"): metrics["bands"] = m2["bands"]
-            if m2.get("tone"): metrics["tone"] = m2["tone"]
+            if m2.get("sections") and not metrics.get("sections"):
+                metrics["sections"] = m2["sections"]
+            if m2.get("bands") and not metrics.get("bands"):
+                metrics["bands"] = m2["bands"]
+            if m2.get("tone") and not metrics.get("tone"):
+                metrics["tone"] = m2["tone"]
 
     # Prefer structured sections from metrics_json (caption/affects/playbook) when available
     sections = None
@@ -1709,7 +1696,7 @@ def main(args: Optional[argparse.Namespace] = None):
     # Override text from structured sections if present
     if isinstance(sections, dict):
         caption_text = sections.get("caption") or caption_text
-    elif isinstance(media_card, dict):
+    elif use_media_card:
         # media_card may use top-level keys (caption/affects/playbook) or a sections{} block
         sec_mc = media_card.get("sections")
         if not isinstance(sec_mc, dict):
@@ -1747,7 +1734,7 @@ def main(args: Optional[argparse.Namespace] = None):
     if isinstance(sections, dict):
         affects_txt  = sections.get("affects")  or affects_txt
         playbook_txt = sections.get("playbook") or playbook_txt
-    elif isinstance(media_card, dict):
+    elif use_media_card:
         # media_card may have sections{} or top-level keys
         sec_mc = media_card.get("sections")
         if not isinstance(sec_mc, dict):
@@ -1780,54 +1767,27 @@ def main(args: Optional[argparse.Namespace] = None):
 
     caption_text = strip_hashtags_and_emojis(_safe_text(caption_text))
     body_md = _safe_text(body_md)
-    # Build stats rows from consolidated EarthScope card (daily) if available
-    stats_feats = {}
+    # Build stats rows from Supabase/post/resolved API metrics (single source-of-truth path).
+    stats_feats = dict(feats or {})
     pulse_like  = {}
-    if isinstance(media_card, dict):
-        mm = media_card.get("metrics") or {}
-        if isinstance(mm, dict):
-            # Map to stats renderer keys
-            if mm.get("kp_max_24h") is not None:
-                try: stats_feats["kp_max"] = float(mm["kp_max_24h"])
-                except Exception: pass
-            if mm.get("bz_min") is not None:
-                try: stats_feats["bz_min"] = float(mm["bz_min"])
-                except Exception: pass
-            if mm.get("solar_wind_kms") is not None:
-                try: stats_feats["sw_speed_avg"] = float(mm["solar_wind_kms"])
-                except Exception: pass
-            if mm.get("schumann_value_hz") is not None:
-                try: stats_feats["sch_any_fundamental_avg_hz"] = float(mm["schumann_value_hz"])
-                except Exception: pass
-            if mm.get("flares_24h") is not None:
-                try: stats_feats["flares_count"] = int(mm["flares_24h"])
-                except Exception: pass
-            if mm.get("cmes_24h") is not None:
-                try: stats_feats["cmes_count"] = int(mm["cmes_24h"])
-                except Exception: pass
-            # Aurora hints (for a chip row)
-            sx = mm.get("space_json") or {}
-            if isinstance(sx, dict):
-                if sx.get("aurora_headline"):
-                    pulse_like["aurora_headline"] = str(sx.get("aurora_headline"))
-                if sx.get("aurora_window"):
-                    pulse_like["aurora_window"]   = str(sx.get("aurora_window"))
-        # Quakes count (optional indicator)
-        qk = media_card.get("quakes") or {}
-        if isinstance(qk, dict) and qk.get("total_24h"):
-            pulse_like["quakes_count"] = int(qk.get("total_24h"))
+    if isinstance(metrics, dict):
+        sx = metrics.get("space_json") or {}
+        if isinstance(sx, dict):
+            if sx.get("aurora_headline"):
+                pulse_like["aurora_headline"] = str(sx.get("aurora_headline"))
+            if sx.get("aurora_window"):
+                pulse_like["aurora_window"] = str(sx.get("aurora_window"))
     if metrics_now.get("kp") is not None:
-        stats_feats.setdefault("kp_max", stats_feats.get("kp_max") or feats.get("kp_max") or metrics_now["kp"])
+        stats_feats.setdefault("kp_max", stats_feats.get("kp_max") or metrics_now["kp"])
         stats_feats.setdefault("kp_current", metrics_now["kp"])
     if metrics_now.get("bz") is not None:
         stats_feats["bz_current"] = metrics_now["bz"]
-        stats_feats.setdefault("bz_min", feats.get("bz_min"))
+        stats_feats.setdefault("bz_min", stats_feats.get("bz_min"))
     if metrics_now.get("sw") is not None:
         stats_feats["sw_speed_current"] = metrics_now["sw"]
-        stats_feats.setdefault("sw_speed_avg", feats.get("sw_speed_avg"))
+        stats_feats.setdefault("sw_speed_avg", stats_feats.get("sw_speed_avg"))
 
-    # Fallback: if we didn’t assemble anything from media, reuse feats mapped from Supabase above
-    base_feats = stats_feats or (feats or {})
+    base_feats = stats_feats
     stats_im   = render_stats_card_from_features(day, base_feats, energy, kind="tall", pulse=pulse_like)
     if isinstance(caption_text, (dict, list)):
         caption_text = json.dumps(caption_text, ensure_ascii=False)
@@ -1837,7 +1797,7 @@ def main(args: Optional[argparse.Namespace] = None):
     # Override energy label from tone/bands if provided by metrics_json
     if tone_band_energy:
         energy = tone_band_energy
-    elif isinstance(media_card, dict):
+    elif use_media_card:
         m2 = media_card.get("metrics") or {}
         bands2 = m2.get("bands") or {}
         tone2  = (m2.get("tone") or "").lower()

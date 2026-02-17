@@ -306,16 +306,18 @@ def default_image_urls() -> Dict[str,str]:
   }
 
 def derive_caption_and_hashtags(post: dict) -> (str, str):
-  """Return (caption, hashtags) preferring metrics_json.sections.caption; fallback to plain fields or JSON in caption/body."""
+  """Return (caption, hashtags) preferring plain caption, with JSON/sections fallback when needed."""
   cap = (post.get("caption") or "")
   tags = (post.get("hashtags") or "").strip()
+  cap_stripped = cap.strip()
+  prefer_sections = (not cap_stripped) or (cap_stripped.startswith("{") and '"sections"' in cap_stripped)
 
-  # 1) Prefer sections from metrics_json when available
+  # 1) Prefer sections from metrics_json only when plain caption is missing/invalid JSON.
   try:
     metrics = post.get("metrics_json")
     if isinstance(metrics, str):
       metrics = json.loads(metrics)
-    if isinstance(metrics, dict):
+    if prefer_sections and isinstance(metrics, dict):
       sec = metrics.get("sections") or {}
       if isinstance(sec, dict):
         cap2 = sec.get("caption")

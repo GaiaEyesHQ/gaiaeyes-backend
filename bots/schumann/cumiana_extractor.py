@@ -162,6 +162,82 @@ def detect_frontier(img, roi, guard_px=DEFAULT_GUARD_PX, exclude_right_px=DEFAUL
     return int(x)
 
 
+# -------------------------- amplitude / pseudo-spectrogram --------------------------
+
+def _stripe_v_mean(img_bgr, x_center, y0, y1, half_w=3):
+    """Mean HSV-V over a thin vertical stripe centered at x_center and rows [y0,y1)."""
+    h, w = img_bgr.shape[:2]
+    xc = int(np.clip(x_center, 0, w - 1))
+    xL = int(max(0, xc - int(half_w)))
+    xR = int(min(w - 1, xc + int(half_w)))
+
+    y0i = int(np.clip(y0, 0, h - 1))
+    y1i = int(np.clip(y1, y0i + 1, h))
+
+    patch = img_bgr[y0i:y1i, xL:xR + 1]
+    if patch.size == 0:
+        return 0.0
+    hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV)
+    v = hsv[:, :, 2].astype(np.float32) / 255.0
+    return float(np.clip(v.mean(), 0.0, 1.0))
+
+
+def compute_amplitude_idx(img_bgr, roi, x_sample, *, band_defs=None, stripe_half_w=3):
+    """Compute band intensity proxies (0..1) from the Cumiana spectrogram image."""
+    x0, y0, x1, y1 = roi
+    if band_defs is None:
+        # Cumiana shows 0..20 Hz
+        band_defs = {
+            "sr_total_0_20": (0.0, 20.0),
+            "band_7_9": (7.0, 9.0),
+            "band_13_15": (13.0, 15.0),
+            # Cumiana axis tops at 20 Hz; use a practical high-band proxy
+            "band_18_20": (18.0, 20.0),
+        }
+
+    out = {}
+
+    # Total band uses full ROI rows
+    out["sr_total_0_20"] = _stripe_v_mean(img_bgr, x_sample, y0, y1, half_w=stripe_half_w)
+
+    for name, (hz_lo, hz_hi) in band_defs.items():
+        if name == "sr_total_0_20":
+            continue
+        y_top = hz_to_y(hz_hi, roi)
+        y_bot = hz_to_y(hz_lo, roi)
+        ya, yb = min(y_top, y_bot), max(y_top, y_bot)
+        # Expand slightly to be resilient to rounding
+        ya = max(y0, ya - 1)
+        yb = min(y1, yb + 1)
+        if yb <= ya:
+            out[name] = 0.0
+        else:
+            out[name] = _stripe_v_mean(img_bgr, x_sample, ya, yb, half_w=stripe_half_w)
+
+    return out
+
+
+def compute_spectrogram_bins(img_bgr, roi, x_sample, *, n_bins=160, stripe_half_w=2):
+    """Compute a 1D pseudo-spectrogram column: intensity by frequency bin (0..1).
+
+    We sample HSV-V down the ROI at x_sample and downsample to n_bins bins.
+    """
+    x0, y0, x1, y1 = roi
+    h = max(1, int(y1 - y0))
+    n = int(max(16, n_bins))
+
+    # Map bins linearly across the ROI rows
+    edges = np.linspace(0, h, n + 1)
+    bins = []
+    for i in range(n):
+        ya = int(y0 + np.floor(edges[i]))
+        yb = int(y0 + np.ceil(edges[i + 1]))
+        yb = max(ya + 1, yb)
+        bins.append(_stripe_v_mean(img_bgr, x_sample, ya, yb, half_w=stripe_half_w))
+
+    return bins
+
+
 # -------------------------- detection & sampling --------------------------
 
 def local_row_avg(img_bgr, y, x_now, half=3):
@@ -489,6 +565,36 @@ def main():
     if True:  # SKIP_TRACES
         traces, pos = ({"yellow_hz": None}, None)
 
+    # Sample LEFT of the now-line to avoid red bleed
+    x_sample = int(np.clip(x_now - int(args.trace_x_offset), ROI[0] + 6, ROI[2] - 6))
+
+    # Compute amplitude proxies and a 160-bin pseudo-spectrogram column
+    amplitude_idx = compute_amplitude_idx(img, ROI, x_sample, stripe_half_w=3)
+    spectrogram_bins = compute_spectrogram_bins(img, ROI, x_sample, n_bins=160, stripe_half_w=2)
+
+    # Basic quality gating (conservative)
+    quality_reasons = []
+    quality_score = 1.0
+    mean_intensity = float(np.mean(spectrogram_bins)) if spectrogram_bins else 0.0
+
+    if mean_intensity < 0.01:
+        quality_score -= 0.60
+        quality_reasons.append("low_mean_intensity")
+
+    # If we had to fallback to frontier due to missing redrail in auto/redrail mode, slightly reduce.
+    if "fallback" in str(x_now_source):
+        quality_score -= 0.10
+        quality_reasons.append("anchor_fallback")
+
+    quality_score = float(np.clip(quality_score, 0.0, 1.0))
+    usable = bool(quality_score >= 0.35)
+    if not usable:
+        quality_reasons.append("below_min_quality")
+
+    # Frequency axis metadata for bins (Cumiana is 0..20 Hz, top is max)
+    freq_start_hz = float(AXIS_HZ_MIN)
+    freq_step_hz = float((AXIS_HZ_MAX - AXIS_HZ_MIN) / max(1, (160 - 1)))
+
     # ---- frequency detectors
     f2_hz, f2_band = detect_yellow_f2_hz(
         img, ROI, x_now,
@@ -550,12 +656,19 @@ def main():
         "last_modified": parse_last_modified(last_mod),
         "fundamental_hz": fvals.get("F1", None),
         "harmonics_hz": {k: v for k, v in fvals.items() if not k.endswith("_det")},
-        "amplitude_idx": {},
+        "amplitude_idx": amplitude_idx,
+        "spectrogram_bins": spectrogram_bins,
+        "freq_start_hz": freq_start_hz,
+        "freq_step_hz": freq_step_hz,
+        "quality_score": quality_score,
+        "usable": usable,
+        "quality_reasons": quality_reasons,
         "confidence": "ok-visual",
         "overlay_path": args.overlay,
         "raw": {
             "spectrogram_url": CUMIANA_IMG,
             "x_now_pixel": int(x_now),
+            "x_sample_pixel": int(x_sample),
             "plot_roi": {"x0": ROI[0], "y0": ROI[1], "x1": ROI[2], "y1": ROI[3]},
             "y_axis_hz": {"min": AXIS_HZ_MIN, "max": AXIS_HZ_MAX, "top_is_max": True},
             "strategy": "yellow_F2" if pick_source == "yellow" else "ridge_F1",
