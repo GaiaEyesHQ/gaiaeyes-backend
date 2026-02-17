@@ -20,7 +20,7 @@ jobs:
       WORKDIR: backend/bots/schumann
       MEDIA_DIR: media
       PYTHON_VERSION: "3.10"
-      PREFER: "tomsk,cumiana"
+      PREFER: "cumiana,tomsk"
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
 
@@ -275,37 +275,52 @@ jobs:
 
           TS_ISO="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
+          # Determine which source is primary from the merged payload (if present)
+          PRIMARY_SOURCE=""
+          if [ -f runs/schumann_now.json ]; then
+            PRIMARY_SOURCE="$(jq -r '.primary // ""' runs/schumann_now.json)"
+          fi
+          echo "Primary source: ${PRIMARY_SOURCE:-<none>}"
+
           build_rows() {
             local SRC_JSON="$1"   # runs/tomsk_now.json or runs/cumiana_now.json
             local STATION="$2"    # 'tomsk' or 'cumiana'
             local TS="$3"
+            local PRIMARY="$4"    # e.g. 'cumiana' or 'tomsk'
 
             local STATUS
             STATUS=$(jq -r '.status // "down"' "$SRC_JSON")
 
-            jq --arg station "$STATION" --arg ts "$TS" --arg status "$STATUS" '
+            jq --arg station "$STATION" --arg ts "$TS" --arg status "$STATUS" --arg primary "$PRIMARY" '
               . as $root
               | ($root.harmonics_hz // {}) as $h
-              | ["F1","F2","F3","F4","F5"]
+              | ["fundamental_hz","F1","F2","F3","F4","F5"]
               | map({
                   station_id: $station,
                   ts_utc: $ts,
                   channel: .,
-                  value_num: ( if $status == "ok" then ($h[.] // null) else null end ),
+                  value_num: (
+                    if $status != "ok" then null
+                    elif . == "fundamental_hz" then ($root.fundamental_hz // null)
+                    else ($h[.] // null)
+                    end
+                  ),
                   unit: "Hz",
                   meta: {
                     status: $status,
                     overlay_path: ($root.overlay_path // null),
+                    primary_source: (if $primary == "" then null else $primary end),
+                    is_primary: ( $primary != "" and $station == $primary ),
                     raw: $root
                   }
                 })
             ' "$SRC_JSON"
           }
 
-          # Build combined payload (Tomsk + Cumiana)
+          # Build combined rows payload (Tomsk + Cumiana)
           jq -s '.[0] + .[1]' \
-            <(build_rows runs/tomsk_now.json tomsk   "$TS_ISO") \
-            <(build_rows runs/cumiana_now.json cumiana "$TS_ISO") \
+            <(build_rows runs/tomsk_now.json tomsk     "$TS_ISO" "$PRIMARY_SOURCE") \
+            <(build_rows runs/cumiana_now.json cumiana "$TS_ISO" "$PRIMARY_SOURCE") \
             > rows_ext.json
 
           # Insert (append-only) into ext.schumann via REST. Ensure ext schema is exposed.

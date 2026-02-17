@@ -68,6 +68,25 @@ add_action('wp_enqueue_scripts', function () {
     ');
 });
 
+add_action('wp_head', function () {
+    ?>
+    <script id="gaia-auth-hash-guard">
+    (function () {
+      try {
+        var h = window.location.hash || "";
+        if (!h || h.length < 2) return;
+        var frag = h.slice(1);
+        if (frag.indexOf("access_token=") === -1 && frag.indexOf("refresh_token=") === -1) return;
+        try { sessionStorage.setItem("gaia_auth_fragment", frag); } catch (e) {}
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        }
+      } catch (e) {}
+    })();
+    </script>
+    <?php
+}, 1);
+
 if (!function_exists('gaia_dashboard_shortcode_render')) {
 function gaia_dashboard_shortcode_render($atts = []) {
     $a = shortcode_atts([

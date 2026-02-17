@@ -230,12 +230,24 @@
   };
 
   const hashParams = () => {
-    const hash = (window.location.hash || "").replace(/^#/, "");
+    let hash = (window.location.hash || "").replace(/^#/, "");
+    if (!hash) {
+      try {
+        hash = (window.sessionStorage && window.sessionStorage.getItem("gaia_auth_fragment")) || "";
+      } catch (_) {
+        hash = "";
+      }
+    }
     if (!hash) return new URLSearchParams();
     return new URLSearchParams(hash);
   };
 
   const cleanURLHash = () => {
+    try {
+      if (window.sessionStorage) {
+        window.sessionStorage.removeItem("gaia_auth_fragment");
+      }
+    } catch (_) {}
     if (!window.location.hash) return;
     const clean = `${window.location.pathname}${window.location.search}`;
     window.history.replaceState({}, document.title, clean);
@@ -460,6 +472,16 @@
       console.info("[gaia-dashboard] loaded payload in ms=", elapsed);
       if (debug && dashboard && dashboard._debug) {
         console.info("[gaia-dashboard] _debug:", dashboard._debug);
+      } else if (debug) {
+        const keys =
+          dashboard && typeof dashboard === "object"
+            ? Object.keys(dashboard)
+            : [];
+        console.info("[gaia-dashboard] debug requested but _debug missing; payload keys:", keys);
+      }
+
+      if (dashboard && dashboard.ok === false) {
+        throw new Error(extractErrorMessage(dashboard) || "Dashboard returned ok=false");
       }
 
       if (

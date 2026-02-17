@@ -80,18 +80,129 @@ def pick_primary(prefer_order, statuses):
     """
     prefer_order: list like ["tomsk", "cumiana"]
     statuses: dict name -> payload
-    Return the first source in prefer_order whose payload has status "ok".
-    If none ok, return first in prefer_order present in statuses.
+    Return the first source in prefer_order whose payload has status "ok" and usable True.
+    If none ok and usable, return first in prefer_order present in statuses.
     """
     for name in prefer_order:
         p = statuses.get(name)
-        if p and str(p.get("status","")).lower() == "ok":
+        if not p or not isinstance(p, dict):
+            continue
+        if str(p.get("status", "")).lower() != "ok":
+            continue
+        # Require usable if present; default to True only when missing.
+        if bool(p.get("usable", True)):
             return name
     for name in prefer_order:
         if name in statuses:
             return name
     # fallback to any
     return next(iter(statuses.keys())) if statuses else None
+
+
+# --- Quality/Usable helpers ---
+
+def _get_nested(d, path, default=None):
+    cur = d
+    for k in path:
+        if not isinstance(cur, dict) or k not in cur:
+            return default
+        cur = cur[k]
+    return cur
+
+
+def infer_quality_and_usable(name: str, payload: dict, peer_payload: dict | None = None) -> tuple[float, bool, list[str]]:
+    """Infer a conservative quality_score (0..1) and usable flag.
+
+    This is designed to protect downstream charts from occasional Tomsk time misalignment.
+    - If extractors later emit `usable`/`quality_score`, those are respected.
+    - Otherwise we infer from available debug fields and optional cross-station checks.
+    """
+    reasons: list[str] = []
+
+    if not isinstance(payload, dict):
+        return 0.0, False, ["payload_not_dict"]
+
+    status = str(payload.get("status", "")).lower()
+    if status != "ok":
+        return 0.0, False, [f"status_{status or 'missing'}"]
+
+    # Respect explicit flags if present
+    if "quality_score" in payload or "usable" in payload:
+        qs = float(payload.get("quality_score", 1.0))
+        usable = bool(payload.get("usable", True))
+        return max(0.0, min(1.0, qs)), usable, reasons
+
+    # Start optimistic and apply conservative penalties
+    qs = 1.0
+
+    # Common fields
+    confidence = str(payload.get("confidence", "")).lower()
+    if confidence and confidence.startswith("low"):
+        qs -= 0.25
+        reasons.append("low_confidence")
+
+    # Tomsk-specific: tick metrics + staleness (if present)
+    if name == "tomsk":
+        tick_count = _get_nested(payload, ["raw", "debug", "tick_count"], None)
+        tick_quality = _get_nested(payload, ["raw", "debug", "tick_quality"], None)
+        stale_hours = _get_nested(payload, ["raw", "debug", "stale_hours"], None)
+
+        # If tick detection failed, reduce confidence (still may be usable)
+        if tick_count is not None and int(tick_count) == 0:
+            qs -= 0.20
+            reasons.append("tick_count_0")
+        if tick_quality is not None:
+            try:
+                tq = float(tick_quality)
+                if tq <= 0:
+                    qs -= 0.15
+                    reasons.append("tick_quality_0")
+                elif tq < 0.5:
+                    qs -= 0.10
+                    reasons.append("tick_quality_low")
+            except Exception:
+                qs -= 0.10
+                reasons.append("tick_quality_parse")
+
+        if stale_hours is not None:
+            try:
+                sh = float(stale_hours)
+                if sh >= 6:
+                    qs -= 0.20
+                    reasons.append("stale_hours_ge_6")
+                elif sh >= 3:
+                    qs -= 0.10
+                    reasons.append("stale_hours_ge_3")
+            except Exception:
+                qs -= 0.05
+                reasons.append("stale_hours_parse")
+
+        # Cross-station sanity: if Cumiana is OK, Tomsk fundamental should be reasonably close.
+        if peer_payload and isinstance(peer_payload, dict) and str(peer_payload.get("status", "")).lower() == "ok":
+            try:
+                tf0 = float(payload.get("fundamental_hz"))
+                cf0 = float(peer_payload.get("fundamental_hz"))
+                diff = abs(tf0 - cf0)
+                # If we're sampling the wrong time slice, this can jump noticeably.
+                if diff > 0.6:
+                    qs -= 0.60
+                    reasons.append(f"f0_mismatch_vs_cumiana_{diff:.2f}")
+                elif diff > 0.4:
+                    qs -= 0.30
+                    reasons.append(f"f0_mismatch_vs_cumiana_{diff:.2f}")
+            except Exception:
+                # If we can't compare, do nothing
+                pass
+
+    qs = max(0.0, min(1.0, qs))
+
+    # Usable gate: require a minimum score. Tomsk is stricter because misalignment corrupts downstream.
+    min_qs = 0.45 if name == "tomsk" else 0.30
+    usable = qs >= min_qs
+    if not usable:
+        reasons.append("below_min_quality")
+
+    return qs, usable, reasons
 
 def main():
     ap = argparse.ArgumentParser(description="Run Tomsk + Cumiana and merge outputs")
@@ -191,6 +302,21 @@ def main():
                 payload_cumiana["overlay_path"] = cumiana_overlay
             sources["cumiana"] = payload_cumiana
 
+    # Infer and attach quality/usable flags before primary selection
+    # Cumiana is treated as a stable anchor for cross-checking Tomsk when both are available.
+    if isinstance(sources.get("cumiana"), dict):
+        qs_c, use_c, reasons_c = infer_quality_and_usable("cumiana", sources["cumiana"], None)
+        sources["cumiana"]["quality_score"] = qs_c
+        sources["cumiana"]["usable"] = use_c
+        sources["cumiana"]["quality_reasons"] = reasons_c
+
+    if isinstance(sources.get("tomsk"), dict):
+        peer = sources.get("cumiana") if isinstance(sources.get("cumiana"), dict) else None
+        qs_t, use_t, reasons_t = infer_quality_and_usable("tomsk", sources["tomsk"], peer)
+        sources["tomsk"]["quality_score"] = qs_t
+        sources["tomsk"]["usable"] = use_t
+        sources["tomsk"]["quality_reasons"] = reasons_t
+
     # Determine overall status
     any_ok = any(str(p.get("status","")).lower() == "ok" for p in sources.values())
     overall_status = "ok" if any_ok else "no_fresh_source"
@@ -208,6 +334,8 @@ def main():
         "status": overall_status,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "primary": primary,
+        "primary_quality_score": (sources.get(primary, {}).get("quality_score") if primary else None),
+        "primary_quality_reasons": (sources.get(primary, {}).get("quality_reasons") if primary else None),
         "overlay_path": overlay_path,
         "sources": sources,
     }
