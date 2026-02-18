@@ -680,14 +680,15 @@ async def _fetch_schumann_row(conn, day_local: date) -> Dict[str, Any]:
     }
 
 
-async def _fetch_daily_post(conn, day_local: date) -> Dict[str, Optional[str]]:
+async def _fetch_daily_post(conn, day_local: date) -> Dict[str, Any]:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
             """
             select p0.title as post_title,
                    p0.caption as post_caption,
                    p0.body_markdown as post_body,
-                   p0.hashtags as post_hashtags
+                   p0.hashtags as post_hashtags,
+                   p0.metrics_json as post_metrics_json
             from content.daily_posts p0
             where p0.platform = 'default' and p0.day <= %s
             order by p0.day desc, p0.updated_at desc
@@ -701,6 +702,7 @@ async def _fetch_daily_post(conn, day_local: date) -> Dict[str, Optional[str]]:
         "post_caption": row.get("post_caption"),
         "post_body": row.get("post_body"),
         "post_hashtags": row.get("post_hashtags"),
+        "post_metrics_json": row.get("post_metrics_json"),
     }
 
 
@@ -818,6 +820,7 @@ _FEATURE_DEFAULTS: Dict[str, Any] = {
     "post_caption": None,
     "post_body": None,
     "post_hashtags": None,
+    "post_metrics_json": None,
     "updated_at": None,
     "source": "snapshot",
     "xray_peak_flux_wm2": None,

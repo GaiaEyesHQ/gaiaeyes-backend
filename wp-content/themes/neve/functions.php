@@ -662,7 +662,19 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
       $post_title = trim((string) ($features['post_title'] ?? ''));
       $post_caption = trim((string) ($features['post_caption'] ?? ''));
       $post_body = (string) ($features['post_body'] ?? '');
-      if ( $post_title !== '' || $post_caption !== '' || trim($post_body) !== '' ) {
+      $post_metrics = $features['post_metrics_json'] ?? null;
+      if ( is_string($post_metrics) && trim($post_metrics) !== '' ) {
+        $decoded_metrics = json_decode($post_metrics, true);
+        if ( is_array($decoded_metrics) ) {
+          $post_metrics = $decoded_metrics;
+        }
+      }
+      if (
+        $post_title !== '' ||
+        $post_caption !== '' ||
+        trim($post_body) !== '' ||
+        (is_array($post_metrics) && !empty($post_metrics))
+      ) {
         $has_api_payload = true;
         $title = $post_title;
         $caption = $post_caption;
@@ -690,6 +702,41 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
             'Summary',
             'Space weather snapshot',
           ]);
+        }
+        // Additional tolerant parsing for plain-text writer sections.
+        if ( ($affects === '' || $playbook === '') && $post_body !== '' ) {
+          $body_norm = str_replace("\r\n", "\n", $post_body);
+          if ( $affects === '' ) {
+            if ( preg_match(
+              '/(?:^|\n)\s*(?:how this affects you|how this might affect you|how it may feel|drivers)\s*(?:[:—-])?\s*\n(.*?)(?=\n\s*(?:care notes|self[\x{2011}\x{2013}\x{2014}\- ]*care playbook|supportive actions|disclaimer)\b|\z)/isu',
+              $body_norm,
+              $m_aff
+            ) ) {
+              $affects = trim((string) ($m_aff[1] ?? ''));
+            }
+          }
+          if ( $playbook === '' ) {
+            if ( preg_match(
+              '/(?:^|\n)\s*(?:care notes|self[\x{2011}\x{2013}\x{2014}\- ]*care playbook|supportive actions)\s*(?:[:—-])?\s*\n(.*?)(?=\n\s*(?:disclaimer)\b|\z)/isu',
+              $body_norm,
+              $m_play
+            ) ) {
+              $playbook = trim((string) ($m_play[1] ?? ''));
+            }
+          }
+        }
+        // Prefer structured sections from metrics_json when present.
+        if ( is_array($post_metrics) && is_array($post_metrics['sections'] ?? null) ) {
+          $post_sections = $post_metrics['sections'];
+          if ( $caption === '' && !empty($post_sections['caption']) ) {
+            $caption = trim((string) $post_sections['caption']);
+          }
+          if ( $affects === '' && !empty($post_sections['affects']) ) {
+            $affects = trim((string) $post_sections['affects']);
+          }
+          if ( $playbook === '' && !empty($post_sections['playbook']) ) {
+            $playbook = trim((string) $post_sections['playbook']);
+          }
         }
         if ( isset($features['sch_f0_hz']) && $features['sch_f0_hz'] !== null ) {
           $sch_f1 = floatval($features['sch_f0_hz']);
