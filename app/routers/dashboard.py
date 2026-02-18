@@ -22,7 +22,7 @@ def _coerce_day(value: Optional[date]) -> date:
     return value or datetime.now(timezone.utc).date()
 
 
-async def _call_dashboard_payload(conn, user_id: str, day: date) -> Dict[str, Any]:
+async def _call_dashboard_payload(conn, user_id: str, day: date) -> tuple[Dict[str, Any], bool]:
     sqls = [
         ("select app.get_dashboard_payload(%s::uuid, %s::date) as payload", (user_id, day)),
         ("select app.get_dashboard_payload(%s::date, %s::uuid) as payload", (day, user_id)),
@@ -37,7 +37,7 @@ async def _call_dashboard_payload(conn, user_id: str, day: date) -> Dict[str, An
                 if isinstance(payload, str):
                     payload = json.loads(payload)
                 if isinstance(payload, dict):
-                    return payload
+                    return payload, False
         except Exception as exc:
             last_exc = exc
             try:
@@ -51,7 +51,7 @@ async def _call_dashboard_payload(conn, user_id: str, day: date) -> Dict[str, An
             last_exc,
         )
     # Do not hard-fail dashboard rendering when the RPC signature differs across environments.
-    return {}
+    return {}, True
 
 
 def _post_row_to_payload(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -166,7 +166,7 @@ async def dashboard(
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id missing from request context")
     day = _coerce_day(day)
-    payload = await _call_dashboard_payload(conn, user_id, day)
+    payload, rpc_fallback_used = await _call_dashboard_payload(conn, user_id, day)
     if not isinstance(payload, dict):
         payload = {}
 
@@ -197,6 +197,7 @@ async def dashboard(
             "requested_day": day.isoformat(),
             "entitlement_probe": paid_probe,
             "payload_keys": sorted(payload.keys()) if isinstance(payload, dict) else [],
+            "rpc_fallback_used": rpc_fallback_used,
             "used_gauge_fallback": bool(
                 (not payload.get("gauges") and gauge_fallback.get("gauges"))
                 or (not payload.get("alerts") and gauge_fallback.get("alerts"))

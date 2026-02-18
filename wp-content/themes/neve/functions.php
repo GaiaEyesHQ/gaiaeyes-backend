@@ -513,6 +513,9 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
   function gaia_earthscope_banner( $atts ) {
     $atts = shortcode_atts(
       [
+        'api_base'        => '',
+        'api_bearer'      => '',
+        'api_dev_user'    => '',
         'daily_url'       => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope_daily.json',
         'url'             => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json',
         'space_detail'    => '/space-dashboard/',
@@ -526,6 +529,31 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
       'gaia_earthscope_banner'
     );
     $cache_secs = max(1, intval($atts['cache'])) * MINUTE_IN_SECONDS;
+    $api_base = trim((string) $atts['api_base']);
+    if ( $api_base === '' ) {
+      if ( defined('GAIAEYES_API_BASE') ) {
+        $api_base = (string) GAIAEYES_API_BASE;
+      } else {
+        $api_base = (string) getenv('GAIAEYES_API_BASE');
+      }
+    }
+    $api_base = rtrim($api_base, '/');
+    $api_bearer = trim((string) $atts['api_bearer']);
+    if ( $api_bearer === '' ) {
+      if ( defined('GAIAEYES_API_BEARER') ) {
+        $api_bearer = (string) GAIAEYES_API_BEARER;
+      } else {
+        $api_bearer = (string) getenv('GAIAEYES_API_BEARER');
+      }
+    }
+    $api_dev = trim((string) $atts['api_dev_user']);
+    if ( $api_dev === '' ) {
+      if ( defined('GAIAEYES_API_DEV_USERID') ) {
+        $api_dev = (string) GAIAEYES_API_DEV_USERID;
+      } else {
+        $api_dev = (string) getenv('GAIAEYES_API_DEV_USERID');
+      }
+    }
 
     $fetch_json = function( $url, $key ) use ( $cache_secs ) {
       $k = 'gaia_es_card_' . $key . '_' . md5( $url );
@@ -539,6 +567,24 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
       }
       return $json ? json_decode( $json, true ) : null;
     };
+    $extract_md_section = function( $markdown, $headings ) {
+      if ( ! is_string($markdown) || trim($markdown) === '' || ! is_array($headings) || empty($headings) ) {
+        return '';
+      }
+      $escaped = [];
+      foreach ( $headings as $h ) {
+        $h = trim((string) $h);
+        if ( $h !== '' ) {
+          $escaped[] = preg_quote($h, '/');
+        }
+      }
+      if ( empty($escaped) ) return '';
+      $pattern = '/^\s{0,3}#{1,6}\s*(?:' . implode('|', $escaped) . ')\s*$\R?(.*?)(?=^\s{0,3}#{1,6}\s+\S|\z)/imsu';
+      if ( ! preg_match($pattern, str_replace("\r\n", "\n", $markdown), $m) ) {
+        return '';
+      }
+      return trim((string) ($m[1] ?? ''));
+    };
 
     // Trailing slash variables for detail links
     $space_detail = trailingslashit( $atts['space_detail'] );
@@ -546,21 +592,82 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
     $aurora_detail = trailingslashit( $atts['aurora_detail'] );
     $quakes_detail = trailingslashit( $atts['quakes_detail'] );
 
-    // Prefer daily (new schema), fallback to legacy
-    $d = $fetch_json( $atts['daily_url'], 'daily' );
-    $is_daily = is_array($d) && ( isset($d['caption']) || isset($d['sections']) );
-    if ( ! $is_daily ) {
-      $d = $fetch_json( $atts['url'], 'legacy' );
-      if ( ! is_array($d) ) return '<section class="gaia-es">EarthScope: unavailable</section>';
-    }
-
     // Normalize fields
     $title = '';
     $caption = ''; $affects = ''; $playbook = '';
     $sch_f1 = null; $sch_delta = null;
     $aurora_chip = '';
+    $quakes_pill = '';
+    $has_api_payload = false;
 
-    if ( $is_daily ) {
+    // Prefer Supabase-backed backend payload first.
+    $features = null;
+    if ( $api_base && function_exists('gaiaeyes_http_get_json_api_cached') ) {
+      $features = gaiaeyes_http_get_json_api_cached(
+        $api_base . '/v1/features/today',
+        'ge_es_features_today',
+        $cache_secs,
+        $api_bearer,
+        $api_dev
+      );
+    }
+    if ( is_array($features) ) {
+      $post_title = trim((string) ($features['post_title'] ?? ''));
+      $post_caption = trim((string) ($features['post_caption'] ?? ''));
+      $post_body = (string) ($features['post_body'] ?? '');
+      if ( $post_title !== '' || $post_caption !== '' || trim($post_body) !== '' ) {
+        $has_api_payload = true;
+        $title = $post_title;
+        $caption = $post_caption;
+        $affects = $extract_md_section($post_body, [
+          'How This Affects You',
+          'How this affects you',
+          'How This Might Affect You',
+          'How this might affect you',
+          'How it may feel',
+          'Drivers',
+        ]);
+        $playbook = $extract_md_section($post_body, [
+          'Self-Care Playbook',
+          'Self‑Care Playbook',
+          'Self–Care Playbook',
+          'Self—Care Playbook',
+          'Self Care Playbook',
+          'Care notes',
+          'Supportive Actions',
+        ]);
+        if ( $caption === '' && $post_body !== '' ) {
+          $caption = $extract_md_section($post_body, [
+            "Today's Check-in",
+            'Today’s Check-in',
+            'Summary',
+          ]);
+        }
+        if ( isset($features['sch_f0_hz']) && $features['sch_f0_hz'] !== null ) {
+          $sch_f1 = floatval($features['sch_f0_hz']);
+        }
+        if ( isset($features['kp_max']) && $features['kp_max'] !== null ) {
+          $kp_max = floatval($features['kp_max']);
+          if ( $kp_max >= 5.0 ) {
+            $title = $title !== '' ? $title : 'Active Geomagnetics';
+          }
+        }
+      }
+    }
+
+    // Legacy JSON fallback (media repo) only when API-backed content is missing.
+    $d = null;
+    $is_daily = false;
+    if ( ! $has_api_payload ) {
+      $d = $fetch_json( $atts['daily_url'], 'daily' );
+      $is_daily = is_array($d) && ( isset($d['caption']) || isset($d['sections']) );
+      if ( ! $is_daily ) {
+        $d = $fetch_json( $atts['url'], 'legacy' );
+        if ( ! is_array($d) ) return '<section class="gaia-es">EarthScope: unavailable</section>';
+      }
+    }
+
+    if ( ! $has_api_payload && $is_daily ) {
       $title   = isset($d['title']) ? trim( (string)$d['title'] ) : '';
       $sec     = is_array($d['sections'] ?? null) ? $d['sections'] : [];
       $caption = (string) ( $sec['caption'] ?? $d['caption'] ?? '' );
@@ -579,7 +686,6 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         }
       }
       // Quakes pill from daily JSON or pass-through earthscope_json
-      $quakes_pill = '';
       if (!empty($d['quakes']) && is_array($d['quakes'])) {
         $q24 = $d['quakes']['total_24h'] ?? null;
         if ($q24) { $quakes_pill = 'Quakes: ' . intval($q24) . ' in 24h'; }
@@ -587,7 +693,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         $q = $m['earthscope_json']['quakes'] ?? [];
         if (!empty($q['total_24h'])) { $quakes_pill = 'Quakes: ' . intval($q['total_24h']) . ' in 24h'; }
       }
-    } else {
+    } else if ( ! $has_api_payload ) {
       // legacy compact fallback
       $mode = strtolower($atts['mode']) === 'scientific' ? 'sci' : 'mystical';
       $lines = $d[$mode] ?? [];
@@ -596,9 +702,11 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
     }
 
     // Best-effort sections fallback
-    if ( empty($caption) && isset($d['sections']['caption']) ) $caption = (string) $d['sections']['caption'];
-    if ( empty($affects) && isset($d['sections']['affects']) ) $affects = (string) $d['sections']['affects'];
-    if ( empty($playbook) && isset($d['sections']['playbook']) ) $playbook = (string) $d['sections']['playbook'];
+    if ( is_array($d) ) {
+      if ( empty($caption) && isset($d['sections']['caption']) ) $caption = (string) $d['sections']['caption'];
+      if ( empty($affects) && isset($d['sections']['affects']) ) $affects = (string) $d['sections']['affects'];
+      if ( empty($playbook) && isset($d['sections']['playbook']) ) $playbook = (string) $d['sections']['playbook'];
+    }
 
     // Build Schumann pill text
     $sch_pill = '';
@@ -608,8 +716,9 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         $sch_pill .= ' • Δ≈' . number_format(floatval($sch_delta), 2) . ' Hz';
       }
     }
-    // Ensure $quakes_pill is always defined
+    // Ensure pills are always defined
     if (!isset($quakes_pill)) $quakes_pill = '';
+    if (!isset($aurora_chip)) $aurora_chip = '';
 
     ob_start(); ?>
     <section class="gaia-es">
@@ -968,4 +1077,3 @@ if (!function_exists('gaia_render_alert_banner')) {
     echo do_shortcode('[gaia_alert_banner]');
   }
 }
-
