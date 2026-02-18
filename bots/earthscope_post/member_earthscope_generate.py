@@ -190,18 +190,49 @@ def _light_wit_line(alerts: List[Dict[str, Any]]) -> str:
 def _active_state_lines(active_states: List[Dict[str, Any]]) -> List[str]:
     lines: List[str] = []
     for state in active_states[:4]:
-        signal = (state.get("signal_key") or "").replace("_", " ")
-        signal = signal.replace(".", " ").strip()
+        signal_key = str(state.get("signal_key") or "")
         state_name = str(state.get("state") or "active")
         value = state.get("value")
+        if signal_key == "earthweather.air_quality":
+            if value is None:
+                lines.append(f"Air quality is {state_name}.")
+            else:
+                try:
+                    lines.append(f"Air quality is {state_name} (AQI {int(round(float(value), 0))}).")
+                except Exception:
+                    lines.append(f"Air quality is {state_name} (AQI {value}).")
+            continue
+        if signal_key == "spaceweather.sw_speed":
+            if value is None:
+                lines.append(f"Solar wind speed is {state_name}.")
+            else:
+                try:
+                    lines.append(f"Solar wind speed is {state_name} ({int(round(float(value), 0))} km/s).")
+                except Exception:
+                    lines.append(f"Solar wind speed is {state_name} ({value}).")
+            continue
+        if signal_key == "earthweather.temp_swing_24h":
+            if value is None:
+                lines.append(f"24-hour temperature swing is {state_name}.")
+            else:
+                try:
+                    lines.append(f"24-hour temperature swing is {state_name} ({float(value):+.1f} C).")
+                except Exception:
+                    lines.append(f"24-hour temperature swing is {state_name} ({value}).")
+            continue
+        if signal_key == "schumann.variability_24h":
+            lines.append("Schumann variability is elevated compared with recent baseline.")
+            continue
+
+        signal = signal_key.replace("_", " ").replace(".", " ").strip()
         if value is None:
             lines.append(f"{signal.title() or 'Signal'} is {state_name}.")
-            continue
-        try:
-            numeric = float(value)
-            lines.append(f"{signal.title() or 'Signal'} is {state_name} ({numeric:.1f}).")
-        except Exception:
-            lines.append(f"{signal.title() or 'Signal'} is {state_name} ({value}).")
+        else:
+            try:
+                numeric = float(value)
+                lines.append(f"{signal.title() or 'Signal'} is {state_name} ({numeric:.1f}).")
+            except Exception:
+                lines.append(f"{signal.title() or 'Signal'} is {state_name} ({value}).")
     return lines
 
 
@@ -227,6 +258,16 @@ def _local_context_lines(local_payload: Optional[Dict[str, Any]]) -> List[str]:
             lines.append(f"AQI is {int(round(float(aqi), 0))} ({category}).")
         else:
             lines.append(f"AQI is {int(round(float(aqi), 0))}.")
+
+    health = local_payload.get("health") if isinstance(local_payload.get("health"), dict) else {}
+    messages = health.get("messages") if isinstance(health.get("messages"), list) else []
+    for msg in messages[:2]:
+        if isinstance(msg, str) and msg.strip():
+            lines.append(msg.strip())
+    flags = health.get("flags") if isinstance(health.get("flags"), dict) else {}
+    moon_sensitivity = flags.get("moon_sensitivity")
+    if isinstance(moon_sensitivity, str) and moon_sensitivity.strip():
+        lines.append(f"Lunar context: {moon_sensitivity.strip()} phase sensitivity window.")
 
     return lines
 
@@ -370,15 +411,54 @@ def _render_with_openai(
                 if stripped.startswith(("-", "*", "•")):
                     prefix = f"{line[:len(line) - len(stripped)]}{stripped[0]} "
                 lines[idx] = f"{prefix}{health_line}"
+                if idx + 1 < len(lines) and lines[idx + 1].strip() != "":
+                    lines.insert(idx + 1, "")
                 return "\n".join(lines)
         health_bullet = f"- {health_line}"
         if "## Today’s Check-in" in body:
             before, after = body.split("## Today’s Check-in", 1)
             after = after.lstrip("\n")
-            return f"{before}## Today’s Check-in\n{health_bullet}\n{after}"
+            return f"{before}## Today’s Check-in\n{health_bullet}\n\n{after}"
         if "## Disclaimer" in body:
             return body.replace("## Disclaimer", f"{health_bullet}\n\n## Disclaimer", 1)
         return f"{body}\n\n{health_bullet}"
+
+    def _extract_section(body: str, heading: str) -> str:
+        marker = f"## {heading}"
+        idx = body.find(marker)
+        if idx < 0:
+            return ""
+        rest = body[idx + len(marker):]
+        next_idx = rest.find("\n## ")
+        if next_idx >= 0:
+            rest = rest[:next_idx]
+        return rest.strip().lower()
+
+    def _drivers_reference_observed_signals(body: str, states: List[Dict[str, Any]]) -> bool:
+        drivers = _extract_section(body, "Drivers")
+        if not drivers:
+            return False
+        token_map = {
+            "earthweather.air_quality": ["aqi", "air quality"],
+            "spaceweather.sw_speed": ["solar wind", "km/s", "wind speed"],
+            "earthweather.temp_swing_24h": ["temperature", "24-hour", "24h", "swing"],
+            "schumann.variability_24h": ["schumann"],
+            "spaceweather.kp": ["kp", "geomagnetic"],
+            "spaceweather.bz_coupling": ["bz", "magnetic field"],
+        }
+        wanted: List[List[str]] = []
+        for st in states[:4]:
+            key = str(st.get("signal_key") or "")
+            if key in token_map:
+                wanted.append(token_map[key])
+        if not wanted:
+            return True
+        hits = 0
+        for options in wanted:
+            if any(tok in drivers for tok in options):
+                hits += 1
+        needed = 1 if len(wanted) == 1 else min(2, len(wanted))
+        return hits >= needed
 
     def _has_required_sections(body: str) -> bool:
         if "## Today’s Check-in" not in body:
@@ -446,6 +526,10 @@ def _render_with_openai(
             logger.warning("[member] OpenAI output missing required sections; falling back.")
             return None
         body = _ensure_health_line(body, health_line)
+        if not _drivers_reference_observed_signals(body, active_states):
+            logger.warning(
+                "[member] OpenAI output did not explicitly mention active driver signals; keeping OpenAI output."
+            )
         return {
             "title": str(obj.get("title") or "").strip(),
             "caption": str(obj.get("caption") or "").strip(),

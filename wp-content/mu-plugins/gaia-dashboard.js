@@ -128,9 +128,9 @@
     }
 
     return {
-      checkin: buckets.checkin.length ? buckets.checkin.join(" ") : sectionDefaults.checkin,
-      drivers: buckets.drivers.length ? buckets.drivers.join(" ") : sectionDefaults.drivers,
-      summary: buckets.summary.length ? buckets.summary.join(" ") : sectionDefaults.summary,
+      checkin: buckets.checkin.length ? buckets.checkin.join("\n") : sectionDefaults.checkin,
+      drivers: buckets.drivers.length ? buckets.drivers.join("\n") : sectionDefaults.drivers,
+      summary: buckets.summary.length ? buckets.summary.join("\n") : sectionDefaults.summary,
       actions: buckets.actions.length
         ? buckets.actions.map((line) => `• ${line}`).join("\n")
         : sectionDefaults.actions,
