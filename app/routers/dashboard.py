@@ -26,7 +26,6 @@ async def _call_dashboard_payload(conn, user_id: str, day: date) -> Dict[str, An
     sqls = [
         ("select app.get_dashboard_payload(%s::uuid, %s::date) as payload", (user_id, day)),
         ("select app.get_dashboard_payload(%s::date, %s::uuid) as payload", (day, user_id)),
-        ("select app.get_dashboard_payload(%s::date) as payload", (day,)),
     ]
     last_exc: Optional[Exception] = None
     for sql, params in sqls:
@@ -46,7 +45,13 @@ async def _call_dashboard_payload(conn, user_id: str, day: date) -> Dict[str, An
             except Exception:
                 pass
             continue
-    raise RuntimeError(f"get_dashboard_payload failed: {last_exc}")
+    if last_exc is not None:
+        logger.warning(
+            "[dashboard] get_dashboard_payload RPC unavailable for user/day fallback path: %s",
+            last_exc,
+        )
+    # Do not hard-fail dashboard rendering when the RPC signature differs across environments.
+    return {}
 
 
 def _post_row_to_payload(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
