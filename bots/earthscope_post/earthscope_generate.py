@@ -1496,7 +1496,7 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
             if sr is not None:
                 footer.append(f"Schumann {_fmt_num(sr,2)} Hz")
             if footer:
-                cap += f"\n\n— {'  •  '.join(footer)}"
+                cap += f"\n\n— {'  •  '.join(footer)} (snapshot at write time)"
             return cap, out.get("hashtags", rc.get("hashtags", "#GaiaEyes #SpaceWeather"))
 
     kp_now = ctx.get("kp_now")

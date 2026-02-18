@@ -573,7 +573,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
       }
       return $json ? json_decode( $json, true ) : null;
     };
-    $extract_md_section = function( $markdown, $headings ) {
+    $extract_section = function( $markdown, $headings ) {
       if ( ! is_string($markdown) || trim($markdown) === '' || ! is_array($headings) || empty($headings) ) {
         return '';
       }
@@ -587,7 +587,39 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
       if ( empty($escaped) ) return '';
       $pattern = '/^\s{0,3}#{1,6}\s*(?:' . implode('|', $escaped) . ')\s*$\R?(.*?)(?=^\s{0,3}#{1,6}\s+\S|\z)/imsu';
       if ( ! preg_match($pattern, str_replace("\r\n", "\n", $markdown), $m) ) {
-        return '';
+        // Fallback for plain-text section headers (non-markdown)
+        $all_known = [
+          'Gaia Eyes — Daily EarthScope',
+          'Gaia Eyes - Daily EarthScope',
+          'Space weather snapshot',
+          'How This Affects You',
+          'How this affects you',
+          'How This Might Affect You',
+          'How this might affect you',
+          'How it may feel',
+          'Drivers',
+          'Care notes',
+          'Self-Care Playbook',
+          'Self‑Care Playbook',
+          'Self–Care Playbook',
+          'Self—Care Playbook',
+          'Self Care Playbook',
+          'Supportive Actions',
+          'Disclaimer',
+        ];
+        $escaped_all = [];
+        foreach ( $all_known as $h2 ) {
+          $h2 = trim((string) $h2);
+          if ( $h2 !== '' ) {
+            $escaped_all[] = preg_quote($h2, '/');
+          }
+        }
+        if ( empty($escaped_all) ) return '';
+        $pattern2 = '/(?:^|\R)\s*(?:' . implode('|', $escaped) . ')\s*\R(.*?)(?=\R\s*(?:' . implode('|', $escaped_all) . ')\s*(?:\R|$)|\z)/imsu';
+        if ( ! preg_match($pattern2, str_replace("\r\n", "\n", $markdown), $m2) ) {
+          return '';
+        }
+        return trim((string) ($m2[1] ?? ''));
       }
       return trim((string) ($m[1] ?? ''));
     };
@@ -634,7 +666,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         $has_api_payload = true;
         $title = $post_title;
         $caption = $post_caption;
-        $affects = $extract_md_section($post_body, [
+        $affects = $extract_section($post_body, [
           'How This Affects You',
           'How this affects you',
           'How This Might Affect You',
@@ -642,7 +674,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
           'How it may feel',
           'Drivers',
         ]);
-        $playbook = $extract_md_section($post_body, [
+        $playbook = $extract_section($post_body, [
           'Self-Care Playbook',
           'Self‑Care Playbook',
           'Self–Care Playbook',
@@ -652,10 +684,11 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
           'Supportive Actions',
         ]);
         if ( $caption === '' && $post_body !== '' ) {
-          $caption = $extract_md_section($post_body, [
+          $caption = $extract_section($post_body, [
             "Today's Check-in",
             'Today’s Check-in',
             'Summary',
+            'Space weather snapshot',
           ]);
         }
         if ( isset($features['sch_f0_hz']) && $features['sch_f0_hz'] !== null ) {
@@ -747,9 +780,6 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
           <?php endif; ?>
           <?php if ( $aurora_chip ): ?>
             <span class="gaia-es__badge gaia-es__badge--aurora"><a class="gaia-link" href="<?php echo esc_url( $aurora_detail . '#map' ); ?>"><?php echo esc_html($aurora_chip); ?></a></span>
-          <?php endif; ?>
-          <?php if ( $sch_pill ): ?>
-            <span class="gaia-es__badge gaia-es__badge--sch"><a class="gaia-link" href="<?php echo esc_url( $sch_detail . '#combined' ); ?>"><?php echo esc_html($sch_pill); ?></a></span>
           <?php endif; ?>
           <?php if ( !empty($quakes_pill) ): ?>
             <span class="gaia-es__badge gaia-es__badge--quakes"><a class="gaia-link" href="<?php echo esc_url( $quakes_detail . '#recent' ); ?>"><?php echo esc_html($quakes_pill); ?></a></span>
