@@ -183,8 +183,8 @@ def _default_actions(alerts: List[Dict[str, Any]]) -> List[str]:
 
 def _light_wit_line(alerts: List[Dict[str, Any]]) -> str:
     if alerts:
-        return ""
-    return "Cosmic note: steady cruise beats full burn; small adjustments win."
+        return "Cosmic note: today is a trim-tabs day, not a full-throttle day."
+    return "Cosmic note: even calm days run better with a little maintenance."
 
 
 def _active_state_lines(active_states: List[Dict[str, Any]]) -> List[str]:
@@ -243,32 +243,66 @@ def _local_context_lines(local_payload: Optional[Dict[str, Any]]) -> List[str]:
     weather = local_payload.get("weather") if isinstance(local_payload.get("weather"), dict) else {}
     air = local_payload.get("air") if isinstance(local_payload.get("air"), dict) else {}
 
+    health = local_payload.get("health") if isinstance(local_payload.get("health"), dict) else {}
+    flags = health.get("flags") if isinstance(health.get("flags"), dict) else {}
+
+    # Only include local weather/air in drivers when flagged as elevated.
     temp_delta = weather.get("temp_delta_24h_c")
-    if isinstance(temp_delta, (int, float)):
-        lines.append(f"Local temperature shifted {temp_delta:+.1f} C over 24h.")
+    if flags.get("big_temp_shift_24h") and isinstance(temp_delta, (int, float)):
+        lines.append(f"24-hour temperature swing is notable ({float(temp_delta):+.1f} C).")
 
     baro_delta = weather.get("baro_delta_24h_hpa")
-    if isinstance(baro_delta, (int, float)):
-        lines.append(f"Barometric pressure moved {baro_delta:+.1f} hPa over 24h.")
+    if flags.get("pressure_rapid_drop") and isinstance(baro_delta, (int, float)):
+        lines.append(f"Barometric pressure is dropping quickly ({float(baro_delta):+.1f} hPa / 24h).")
 
     aqi = air.get("aqi")
     category = air.get("category")
-    if isinstance(aqi, (int, float)):
+    try:
+        aqi_value = float(aqi) if aqi is not None else None
+    except Exception:
+        aqi_value = None
+    if aqi_value is not None and aqi_value >= 101:
         if category:
-            lines.append(f"AQI is {int(round(float(aqi), 0))} ({category}).")
+            lines.append(f"Air quality is elevated (AQI {int(round(aqi_value, 0))}, {category}).")
         else:
-            lines.append(f"AQI is {int(round(float(aqi), 0))}.")
+            lines.append(f"Air quality is elevated (AQI {int(round(aqi_value, 0))}).")
 
-    health = local_payload.get("health") if isinstance(local_payload.get("health"), dict) else {}
     messages = health.get("messages") if isinstance(health.get("messages"), list) else []
     for msg in messages[:2]:
         if isinstance(msg, str) and msg.strip():
             lines.append(msg.strip())
-    flags = health.get("flags") if isinstance(health.get("flags"), dict) else {}
     moon_sensitivity = flags.get("moon_sensitivity")
     if isinstance(moon_sensitivity, str) and moon_sensitivity.strip():
         lines.append(f"Lunar context: {moon_sensitivity.strip()} phase sensitivity window.")
 
+    return lines
+
+
+def _observed_driver_lines(
+    active_states: List[Dict[str, Any]],
+    alerts: List[Dict[str, Any]],
+    local_payload: Optional[Dict[str, Any]],
+) -> List[str]:
+    lines: List[str] = []
+    for alert in alerts[:3]:
+        title = str(alert.get("title") or alert.get("key") or "").strip()
+        severity = str(alert.get("severity") or "").strip()
+        if not title:
+            continue
+        if severity:
+            lines.append(f"{title} ({severity}).")
+        else:
+            lines.append(f"{title}.")
+
+    for line in _active_state_lines(active_states):
+        if line not in lines:
+            lines.append(line)
+    for line in _local_context_lines(local_payload):
+        if line not in lines:
+            lines.append(line)
+
+    if not lines:
+        lines.append("No major external drivers are flagged right now.")
     return lines
 
 
@@ -301,12 +335,11 @@ def _render_member_post(
     local_payload: Optional[Dict[str, Any]],
     tags: List[Dict[str, Any]],
     symptoms: Dict[str, Any],
-) -> Dict[str, str]:
+) -> Dict[str, Any]:
     day = gauges_row.get("day")
     day_str = day.isoformat() if isinstance(day, date) else str(day)
 
     highlights = _highlight_gauges(definition, gauges_row)
-    drivers = active_states[:4]
     alerts = gauges_row.get("alerts_json") or []
     actions = _default_actions(alerts)
     wit_line = _light_wit_line(alerts)
@@ -314,23 +347,25 @@ def _render_member_post(
     hook = "Here is your EarthScope for today—focused on how conditions may feel for you."
     if highlights:
         top = highlights[0]
-        hook = f"Your top sensitivity today: {top['label']}."
+        try:
+            if float(top.get("value") or 0) >= 30:
+                hook = f"Your top sensitivity today: {top['label']}."
+        except Exception:
+            pass
 
     health_line = _health_status_line(gauges_row.get("health_status"), include_value=False)
 
-    local_lines = _local_context_lines(local_payload)
-    state_lines = _active_state_lines(drivers)
-    all_driver_lines = state_lines + [line for line in local_lines if line not in state_lines]
-    driver_lines = "\n".join([f"- {line}" for line in all_driver_lines]) or "- No dominant drivers detected."
+    all_driver_lines = _observed_driver_lines(active_states, alerts, local_payload)
+    driver_lines = "\n".join([f"- {line}" for line in all_driver_lines])
 
     action_lines = "\n".join([f"- {a}" for a in actions])
 
     disclaimer = definition.get("global_disclaimer") or ""
 
-    checkin_lines = [hook, health_line]
+    checkin_parts = [health_line, "", hook]
     if wit_line:
-        checkin_lines.append(wit_line)
-    checkin_block = "\n".join([line for line in checkin_lines if line])
+        checkin_parts.extend(["", wit_line])
+    checkin_block = "\n".join(checkin_parts)
 
     body = (
         f"## Today’s Check-in\n{checkin_block}\n\n"
@@ -341,17 +376,22 @@ def _render_member_post(
 
     title = f"Your EarthScope — {day_str}"
     caption = hook
-    return {"title": title, "caption": caption, "body_markdown": body}
+    return {
+        "title": title,
+        "caption": caption,
+        "body_markdown": body,
+        "driver_lines": all_driver_lines,
+        "actions": actions,
+        "health_line": health_line,
+    }
 
 
 def _render_with_openai(
     definition: Dict[str, Any],
     gauges_row: Dict[str, Any],
     active_states: List[Dict[str, Any]],
-    local_payload: Optional[Dict[str, Any]],
-    tags: List[Dict[str, Any]],
-    symptoms: Dict[str, Any],
     trend: Optional[Dict[str, Any]],
+    deterministic: Dict[str, Any],
 ) -> Optional[Dict[str, str]]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not (HAVE_OPENAI and api_key):
@@ -362,6 +402,7 @@ def _render_with_openai(
     if not model:
         logger.warning("[member] model not configured; using deterministic fallback.")
         return None
+
     def _trend_for_prompt(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         if not raw:
             return {}
@@ -379,13 +420,6 @@ def _render_with_openai(
 
     trend_for_prompt = _trend_for_prompt(trend)
     has_trend = bool(trend_for_prompt.get("deltas"))
-
-    def _jsonable(obj: Any) -> Any:
-        try:
-            json.dumps(obj)
-            return obj
-        except Exception:
-            return json.loads(json.dumps(obj, default=str))
 
     def _mentions_comparison(text: str) -> bool:
         lowered = (text or "").lower()
@@ -471,73 +505,108 @@ def _render_with_openai(
             return False
         return "## Your Gauges Today" not in body
 
-    prompt = {
-        "task": "Write a personalized EarthScope member update.",
-        "format": "Return strict JSON with keys: title, caption, body_markdown.",
-        "voice": "calm, grounded, practical, lightly witty, never alarmist",
-        "rules": [
-            "Use conditional language (may/can/for some).",
-            "Do not provide medical advice or diagnosis.",
-            "Include 3–5 supportive actions.",
-            "Include the disclaimer verbatim at the end.",
-            "Use headings: ## Today’s Check-in, ## Drivers, ## Supportive Actions, ## Disclaimer.",
-            "Do not list gauges or numeric values; describe shifts qualitatively.",
-            "Use at most one light, non-sarcastic line of humor; keep it gentle and optional.",
-            "Only mention changes vs prior day if trend.deltas contains that gauge.",
-            "Use gauges_current values for current numbers; use trend.deltas for changes.",
-            "If trend.deltas is empty, do not describe increases/decreases or comparisons.",
-            "Avoid generic greetings like 'Hello, EarthScope member'.",
-        ],
-        "data": {
-            "gauges_current": _jsonable(
-                {k: gauges_row.get(k) for k in ["pain", "focus", "heart", "stamina", "energy", "sleep", "mood", "health_status"]}
-            ),
-            "trend": trend_for_prompt,
-            "active_states": active_states,
-            "local_context": _local_context_lines(local_payload),
-            "tags": tags,
-            "symptoms": symptoms,
-            "disclaimer": definition.get("global_disclaimer"),
-        },
-    }
+    def _drivers_within_allowed(body: str, allowed_lines: List[str]) -> bool:
+        drivers = _extract_section(body, "Drivers")
+        if not drivers:
+            return False
+        allowed_text = " ".join((allowed_lines or [])).lower()
+        domain_terms = [
+            "temperature",
+            "temp",
+            "barometric",
+            "pressure",
+            "aqi",
+            "air quality",
+            "solar wind",
+            "km/s",
+            "schumann",
+            "kp",
+            "geomagnetic",
+            "bz",
+            "aurora",
+            "lunar",
+            "moon",
+        ]
+        for term in domain_terms:
+            if term in drivers and term not in allowed_text:
+                return False
+        if "no major external drivers are flagged right now" in allowed_text:
+            if any(term in drivers for term in domain_terms):
+                return False
+        return True
 
-    try:
-        resp = client.chat.completions.create(
-            model=model,
-            temperature=0.3,
-            response_format={"type": "json_object"},
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are Gaia Eyes’ member EarthScope writer. Keep it concise and supportive.",
-                },
-                {"role": "user", "content": json.dumps(prompt, default=str)},
-            ],
-        )
-        obj = json.loads(resp.choices[0].message.content)
-        if not all(k in obj for k in ("title", "caption", "body_markdown")):
-            return None
-        health_line = _health_status_line(gauges_row.get("health_status"))
-        body = str(obj.get("body_markdown") or "").strip()
-        if not has_trend and _mentions_comparison(body):
-            logger.warning("[member] OpenAI output used comparisons without trend data; falling back.")
-            return None
-        if not _has_required_sections(body):
-            logger.warning("[member] OpenAI output missing required sections; falling back.")
-            return None
-        body = _ensure_health_line(body, health_line)
-        if not _drivers_reference_observed_signals(body, active_states):
-            logger.warning(
-                "[member] OpenAI output did not explicitly mention active driver signals; keeping OpenAI output."
-            )
-        return {
-            "title": str(obj.get("title") or "").strip(),
-            "caption": str(obj.get("caption") or "").strip(),
-            "body_markdown": body,
+    health_line = _health_status_line(gauges_row.get("health_status"))
+    draft_body = str(deterministic.get("body_markdown") or "").strip()
+    driver_lines = deterministic.get("driver_lines") or []
+    actions = deterministic.get("actions") or []
+
+    for attempt in range(2):
+        strict = attempt == 1
+        prompt = {
+            "task": "Rewrite this deterministic EarthScope draft in a human, warm tone.",
+            "format": "Return strict JSON with keys: title, caption, body_markdown.",
+            "voice": "grounded, practical, lightly witty, never alarmist",
+            "rules": [
+                "Preserve facts exactly. Do not add any new facts.",
+                "Keep headings: ## Today’s Check-in, ## Drivers, ## Supportive Actions, ## Disclaimer.",
+                "Keep the Health Status line and leave a blank line after it.",
+                "Use at most one light, non-sarcastic humor line.",
+                "Do not invent environmental drivers.",
+                "Only mention changes if trend.deltas includes that gauge.",
+                "If trend.deltas is empty, avoid comparisons.",
+                "Use only the provided drivers and actions; no extra driver claims.",
+            ] + (["STRICT MODE: If unsure, keep original draft wording."] if strict else []),
+            "data": {
+                "trend": trend_for_prompt,
+                "active_states": active_states,
+                "allowed_driver_lines": driver_lines,
+                "allowed_actions": actions,
+                "health_line": health_line,
+                "disclaimer": definition.get("global_disclaimer"),
+                "draft_title": deterministic.get("title"),
+                "draft_caption": deterministic.get("caption"),
+                "draft_body_markdown": draft_body,
+            },
         }
-    except Exception as exc:
-        logger.warning("[member] OpenAI failed, using fallback: %s", exc)
-        return None
+
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                response_format={"type": "json_object"},
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are Gaia Eyes’ member EarthScope editor. Rewrite for tone only; preserve facts.",
+                    },
+                    {"role": "user", "content": json.dumps(prompt, default=str)},
+                ],
+            )
+            obj = json.loads(resp.choices[0].message.content)
+            if not all(k in obj for k in ("title", "caption", "body_markdown")):
+                continue
+            body = str(obj.get("body_markdown") or "").strip()
+            if not has_trend and _mentions_comparison(body):
+                logger.warning("[member] OpenAI rewrite used comparisons without trend data (attempt %s).", attempt + 1)
+                continue
+            if not _has_required_sections(body):
+                logger.warning("[member] OpenAI rewrite missing required sections (attempt %s).", attempt + 1)
+                continue
+            if not _drivers_reference_observed_signals(body, active_states):
+                logger.warning("[member] OpenAI rewrite drivers do not reference observed signals (attempt %s).", attempt + 1)
+                continue
+            if not _drivers_within_allowed(body, driver_lines):
+                logger.warning("[member] OpenAI rewrite introduced non-allowed driver claims (attempt %s).", attempt + 1)
+                continue
+            body = _ensure_health_line(body, health_line)
+            return {
+                "title": str(obj.get("title") or deterministic.get("title") or "").strip(),
+                "caption": str(obj.get("caption") or deterministic.get("caption") or "").strip(),
+                "body_markdown": body,
+            }
+        except Exception as exc:
+            logger.warning("[member] OpenAI rewrite failed (attempt %s): %s", attempt + 1, exc)
+
+    return None
 
 
 def generate_member_post_for_user(
@@ -583,11 +652,12 @@ def generate_member_post_for_user(
 
     existing = _fetch_existing_member_post(user_id, day)
 
-    rendered = None
+    deterministic = _render_member_post(definition, gauges_row, active_states, local_payload, tags, symptoms)
+    rendered: Optional[Dict[str, Any]] = None
     if not trigger_events:
-        rendered = _render_with_openai(definition, gauges_row, active_states, local_payload, tags, symptoms, trend)
+        rendered = _render_with_openai(definition, gauges_row, active_states, trend, deterministic)
         if not rendered:
-            rendered = _render_member_post(definition, gauges_row, active_states, local_payload, tags, symptoms)
+            rendered = deterministic
     else:
         # Triggered advisory: append to existing post if present
         if existing and existing.get("body_markdown"):
@@ -597,7 +667,7 @@ def generate_member_post_for_user(
                 "body_markdown": existing.get("body_markdown"),
             }
         else:
-            rendered = _render_member_post(definition, gauges_row, active_states, local_payload, tags, symptoms)
+            rendered = deterministic
 
         advisory = _render_trigger_advisory(trigger_events, gauges_row.get("health_status"))
         rendered["body_markdown"] = f"{rendered.get('body_markdown')}\n\n## Triggered Advisory\n{advisory}\n"
