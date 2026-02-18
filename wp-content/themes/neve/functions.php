@@ -516,6 +516,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         'api_base'        => '',
         'api_bearer'      => '',
         'api_dev_user'    => '',
+        'allow_legacy_fallback' => 'false',
         'daily_url'       => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope_daily.json',
         'url'             => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json',
         'space_detail'    => '/space-dashboard/',
@@ -554,6 +555,11 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         $api_dev = (string) getenv('GAIAEYES_API_DEV_USERID');
       }
     }
+    $allow_legacy_fallback = in_array(
+      strtolower(trim((string) $atts['allow_legacy_fallback'])),
+      ['1', 'true', 'yes', 'on'],
+      true
+    );
 
     $fetch_json = function( $url, $key ) use ( $cache_secs ) {
       $k = 'gaia_es_card_' . $key . '_' . md5( $url );
@@ -601,15 +607,24 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
     $has_api_payload = false;
 
     // Prefer Supabase-backed backend payload first.
+    $features_response = null;
     $features = null;
     if ( $api_base && function_exists('gaiaeyes_http_get_json_api_cached') ) {
-      $features = gaiaeyes_http_get_json_api_cached(
+      $features_response = gaiaeyes_http_get_json_api_cached(
         $api_base . '/v1/features/today',
         'ge_es_features_today',
         $cache_secs,
         $api_bearer,
         $api_dev
       );
+    }
+    if ( is_array($features_response) ) {
+      // /v1/features/today returns {"ok":true,"data":{...},"error":null}
+      if ( isset($features_response['data']) && is_array($features_response['data']) ) {
+        $features = $features_response['data'];
+      } else {
+        $features = $features_response;
+      }
     }
     if ( is_array($features) ) {
       $post_title = trim((string) ($features['post_title'] ?? ''));
@@ -658,13 +673,15 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
     // Legacy JSON fallback (media repo) only when API-backed content is missing.
     $d = null;
     $is_daily = false;
-    if ( ! $has_api_payload ) {
+    if ( ! $has_api_payload && $allow_legacy_fallback ) {
       $d = $fetch_json( $atts['daily_url'], 'daily' );
       $is_daily = is_array($d) && ( isset($d['caption']) || isset($d['sections']) );
       if ( ! $is_daily ) {
         $d = $fetch_json( $atts['url'], 'legacy' );
         if ( ! is_array($d) ) return '<section class="gaia-es">EarthScope: unavailable</section>';
       }
+    } elseif ( ! $has_api_payload ) {
+      return '<section class="gaia-es">EarthScope: unavailable (API payload missing).</section>';
     }
 
     if ( ! $has_api_payload && $is_daily ) {
