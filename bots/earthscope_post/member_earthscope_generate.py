@@ -175,9 +175,11 @@ def _default_actions(alerts: List[Dict[str, Any]]) -> List[str]:
     if actions:
         return actions[:5]
     return [
-        "hydrate and pace",
-        "gentle movement",
-        "protect your sleep window",
+        "hydrate steadily and pace your workload",
+        "work in short focused blocks with brief resets",
+        "add gentle movement every 60–90 minutes",
+        "protect your evening wind-down and sleep window",
+        "keep late caffeine and extra stimulation lighter",
     ]
 
 
@@ -306,6 +308,76 @@ def _observed_driver_lines(
     return lines
 
 
+def _join_labels(labels: List[str]) -> str:
+    cleaned = [str(x).strip() for x in labels if str(x).strip()]
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return cleaned[0]
+    if len(cleaned) == 2:
+        return f"{cleaned[0]} and {cleaned[1]}"
+    return f"{', '.join(cleaned[:-1])}, and {cleaned[-1]}"
+
+
+def _trend_insight(trend: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(trend, dict):
+        return {"deltas": {}, "mean": 0.0, "notable": []}
+    raw = trend.get("gauges") if isinstance(trend.get("gauges"), dict) else {}
+    deltas: Dict[str, float] = {}
+    for key, payload in raw.items():
+        if not isinstance(payload, dict):
+            continue
+        try:
+            delta = float(payload.get("delta"))
+        except Exception:
+            continue
+        deltas[str(key)] = delta
+    if not deltas:
+        return {"deltas": {}, "mean": 0.0, "notable": []}
+    mean_delta = sum(deltas.values()) / max(len(deltas), 1)
+    ranked = sorted(deltas.items(), key=lambda kv: abs(kv[1]), reverse=True)
+    notable = [k for k, v in ranked if abs(v) >= 5][:3]
+    return {"deltas": deltas, "mean": mean_delta, "notable": notable}
+
+
+def _checkin_hook(trend: Optional[Dict[str, Any]]) -> str:
+    insight = _trend_insight(trend)
+    mean_delta = float(insight.get("mean") or 0.0)
+    if mean_delta <= -6:
+        return "Today may feel lower-voltage than yesterday, so shorter sprints and extra resets may help."
+    if mean_delta >= 6:
+        return "Today may carry more momentum than yesterday; steady pacing can help you use it well."
+    if insight.get("notable"):
+        return "Today looks mixed versus yesterday, so keep your plan flexible and adjust in small steps."
+    return "Today looks relatively steady, so consistency should carry most of the load."
+
+
+def _summary_note(trend: Optional[Dict[str, Any]], drivers: List[str]) -> str:
+    insight = _trend_insight(trend)
+    label_map = {
+        "energy": "energy",
+        "sleep": "sleep",
+        "focus": "focus",
+        "mood": "mood",
+        "stamina": "stamina",
+        "pain": "pain",
+        "heart": "heart",
+        "health_status": "health status",
+    }
+    notable_labels = [label_map.get(k, k.replace("_", " ")) for k in insight.get("notable") or []]
+    lines: List[str] = []
+    if notable_labels:
+        lines.append(f"The clearest shifts since yesterday are in {_join_labels(notable_labels)}.")
+    else:
+        lines.append("Compared with yesterday, your gauges are mostly steady.")
+
+    if drivers and drivers[0] != "No major external drivers are flagged right now.":
+        lines.append("Use today’s drivers as context, not destiny; small course-corrections usually matter most.")
+    else:
+        lines.append("With no major external drivers flagged, routine and recovery habits should carry extra weight today.")
+    return " ".join(lines).strip()
+
+
 def _render_trigger_advisory(trigger_events: List[Dict[str, Any]], health_status: Optional[Any]) -> str:
     lines = []
     if health_status is not None:
@@ -335,6 +407,7 @@ def _render_member_post(
     local_payload: Optional[Dict[str, Any]],
     tags: List[Dict[str, Any]],
     symptoms: Dict[str, Any],
+    trend: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     day = gauges_row.get("day")
     day_str = day.isoformat() if isinstance(day, date) else str(day)
@@ -344,12 +417,12 @@ def _render_member_post(
     actions = _default_actions(alerts)
     wit_line = _light_wit_line(alerts)
 
-    hook = "Here is your EarthScope for today—focused on how conditions may feel for you."
+    hook = _checkin_hook(trend)
     if highlights:
         top = highlights[0]
         try:
-            if float(top.get("value") or 0) >= 30:
-                hook = f"Your top sensitivity today: {top['label']}."
+            if float(top.get("value") or 0) >= 45:
+                hook = f"The gauge to watch most today is {top['label'].lower()}."
         except Exception:
             pass
 
@@ -359,6 +432,7 @@ def _render_member_post(
     driver_lines = "\n".join([f"- {line}" for line in all_driver_lines])
 
     action_lines = "\n".join([f"- {a}" for a in actions])
+    summary = _summary_note(trend, all_driver_lines)
 
     disclaimer = definition.get("global_disclaimer") or ""
 
@@ -370,6 +444,7 @@ def _render_member_post(
     body = (
         f"## Today’s Check-in\n{checkin_block}\n\n"
         f"## Drivers\n{driver_lines}\n\n"
+        f"## Summary Note\n{summary}\n\n"
         f"## Supportive Actions\n{action_lines}\n\n"
         f"## Disclaimer\n{disclaimer}\n"
     )
@@ -433,6 +508,9 @@ def _render_with_openai(
             "fell from",
         ]
         return any(p in lowered for p in phrases)
+
+    def _word_count(text: str) -> int:
+        return len([w for w in str(text or "").strip().split() if w])
 
     def _ensure_health_line(body: str, health_line: str) -> str:
         if not health_line:
@@ -499,6 +577,8 @@ def _render_with_openai(
             return False
         if "## Drivers" not in body:
             return False
+        if "## Summary Note" not in body:
+            return False
         if "## Supportive Actions" not in body:
             return False
         if "## Disclaimer" not in body:
@@ -548,13 +628,14 @@ def _render_with_openai(
             "voice": "grounded, practical, lightly witty, never alarmist",
             "rules": [
                 "Preserve facts exactly. Do not add any new facts.",
-                "Keep headings: ## Today’s Check-in, ## Drivers, ## Supportive Actions, ## Disclaimer.",
+                "Keep headings: ## Today’s Check-in, ## Drivers, ## Summary Note, ## Supportive Actions, ## Disclaimer.",
                 "Keep the Health Status line and leave a blank line after it.",
                 "Use at most one light, non-sarcastic humor line.",
                 "Do not invent environmental drivers.",
                 "Only mention changes if trend.deltas includes that gauge.",
                 "If trend.deltas is empty, avoid comparisons.",
                 "Use only the provided drivers and actions; no extra driver claims.",
+                "Keep content substantial (roughly 120-220 words total) and do not collapse into one-liners.",
             ] + (["STRICT MODE: If unsure, keep original draft wording."] if strict else []),
             "data": {
                 "trend": trend_for_prompt,
@@ -585,6 +666,9 @@ def _render_with_openai(
             if not all(k in obj for k in ("title", "caption", "body_markdown")):
                 continue
             body = str(obj.get("body_markdown") or "").strip()
+            if _word_count(body) < 110:
+                logger.warning("[member] OpenAI rewrite too short; retrying (attempt %s).", attempt + 1)
+                continue
             if not has_trend and _mentions_comparison(body):
                 logger.warning("[member] OpenAI rewrite used comparisons without trend data (attempt %s).", attempt + 1)
                 continue
@@ -652,7 +736,7 @@ def generate_member_post_for_user(
 
     existing = _fetch_existing_member_post(user_id, day)
 
-    deterministic = _render_member_post(definition, gauges_row, active_states, local_payload, tags, symptoms)
+    deterministic = _render_member_post(definition, gauges_row, active_states, local_payload, tags, symptoms, trend)
     rendered: Optional[Dict[str, Any]] = None
     if not trigger_events:
         rendered = _render_with_openai(definition, gauges_row, active_states, trend, deterministic)
