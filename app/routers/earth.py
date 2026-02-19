@@ -127,6 +127,14 @@ async def _fetch_series_ext_primary(conn, limit: int) -> List[Dict]:
         return await cur.fetchall()
 
 
+def _all_harmonics_null(row: Optional[Dict]) -> bool:
+    """Return True when a marts/latest row exists but contains no usable harmonic values."""
+    if not row or not isinstance(row, dict):
+        return True
+    keys = ("f0", "f1", "f2", "f3", "f4", "f5", "combined_f1")
+    return all(row.get(k) is None for k in keys)
+
+
 @router.get("/earth/schumann/latest")
 async def schumann_latest(conn=Depends(get_db)):
     """
@@ -151,6 +159,8 @@ async def schumann_latest(conn=Depends(get_db)):
                 prepare=False,
             )
             row = await cur.fetchone()
+            if _all_harmonics_null(row):
+                row = None
     except Exception:
         row = None
 
@@ -168,6 +178,8 @@ async def schumann_latest(conn=Depends(get_db)):
                     prepare=False,
                 )
                 row = await cur.fetchone()
+                if _all_harmonics_null(row):
+                    row = None
         except Exception:
             row = None
 
@@ -193,6 +205,9 @@ async def schumann_latest(conn=Depends(get_db)):
                     r = await cur.fetchone()
                     if r:
                         row = r
+                        if _all_harmonics_null(row):
+                            row = None
+                            continue
                         break
             except Exception:
                 continue

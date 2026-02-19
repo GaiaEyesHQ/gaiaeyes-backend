@@ -28,6 +28,8 @@ DEFAULT_PUBLIC_READ = [
     "/v1/quakes/daily",
     "/v1/quakes/monthly",
     "/v1/earth/schumann/latest",
+    "/v1/earth/schumann/series",
+    "/v1/earth/schumann/heatmap48h",
     "/v1/local/check",
     # diag endpoints are optional; uncomment if you want them public:
     # "/v1/space/visuals/diag",

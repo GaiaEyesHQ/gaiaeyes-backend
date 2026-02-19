@@ -110,7 +110,7 @@ PHRASE_VARIANTS = {
         "Disruptions—aim for rhythm over intensity."
     ],
     "sleep_guard": [
-        "Dim light earlier; protect your sleep routine.",
+        "Dim lights earlier; protect your sleep routine.",
         "Wind down on schedule; keep evenings warm‑lit.",
         "Say no to the extra caffeine and sugar today; keep screens softer."
     ],
@@ -239,9 +239,9 @@ HOOKS = {
         "Magnetic weather is tame—work your plan.",
     ],
     "unsettled": [
-        "Ride the waves, not a stormy, but active.",
+        "Ride the waves, not stormy, but active.",
         "Spikes‑and‑dips kind of day.",
-        "A few bumps in the road; keep a steady pass and push on.",
+        "A few bumps in the road; keep a steady pace and push on.",
         "Unsettled doesn’t mean unworkable—buffer your tasks with breaks.",
         "Short surges, brief dips—ride the middle line.",
         "Minor fluctuation day—aim for a steady pace.",
@@ -892,13 +892,13 @@ def _qualitative_snapshot(ctx: Dict[str, Any]) -> str:
 
     # Lead sentence based on tone/bands
     if tone == "stormy":
-        lines.append("Magnetics lean punchy today—expect short surges and brief dips.")
+        lines.append("Magnetics are packing a punch today—expect short surges and  dips in energy.")
     elif tone == "unsettled":
-        lines.append("Some texture in the field—small waves but not a full storm.")
+        lines.append("The atmosphere is buzzing—lively waves but not a full storm.")
     elif tone == "calm":
-        lines.append("Steady magnetic backdrop—a good canvas for focused work and recovery.")
+        lines.append("Steady magnetic backdrop—a good day for focused work and recovery.")
     else:
-        lines.append("Straightforward profile—ordinary day.")
+        lines.append("Steady as she goes—ordinary day.")
 
     # Solar drivers without citing numbers
     driver_bits: List[str] = []
@@ -1521,7 +1521,7 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
             max_completion_tokens=320,
             messages=[
                 {"role":"system","content":(
-                    "You are Gaia Eyes' space‑weather writer. Write an accurate, human, slightly humorous caption. "
+                    "You are Gaia Eyes' space‑weather writer. Write an accurate, human, relatable and slightly humorous caption. "
                     "Do not start with questions or phrases like 'Feeling', 'Are you', 'Ever feel', 'Ready to', 'Let’s'. "
                     "Never use emojis. Vary openings day‑to‑day."
                 )},

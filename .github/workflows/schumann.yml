@@ -294,7 +294,16 @@ jobs:
             jq --arg station "$STATION" --arg ts "$TS" --arg status "$STATUS" --arg primary "$PRIMARY" '
               . as $root
               | ($root.harmonics_hz // {}) as $h
-              | ["fundamental_hz","F1","F2","F3","F4","F5"]
+              | ($root.amplitude_idx // {}) as $a
+              | (
+                  ["fundamental_hz","F1","F2","F3","F4","F5"]
+                  + (if ($a | type) == "object" and (($a | keys) | length) > 0 then
+                        ["sr_total_0_20","band_7_9","band_13_15","band_18_20"]
+                     else
+                        []
+                     end)
+                )
+              | unique
               | map({
                   station_id: $station,
                   ts_utc: $ts,
@@ -302,10 +311,18 @@ jobs:
                   value_num: (
                     if $status != "ok" then null
                     elif . == "fundamental_hz" then ($root.fundamental_hz // null)
-                    else ($h[.] // null)
+                    elif (. | startswith("F")) then ($h[.] // null)
+                    # amplitude channels (0..1 intensity proxies)
+                    elif (. == "sr_total_0_20") then ($a.sr_total_0_20 // null)
+                    elif (. == "band_7_9") then ($a.band_7_9 // null)
+                    elif (. == "band_13_15") then ($a.band_13_15 // null)
+                    elif (. == "band_18_20") then ($a.band_18_20 // null)
+                    else null
                     end
                   ),
-                  unit: "Hz",
+                  unit: (
+                    if (. == "fundamental_hz" or (. | startswith("F"))) then "Hz" else "idx" end
+                  ),
                   meta: {
                     status: $status,
                     overlay_path: ($root.overlay_path // null),
