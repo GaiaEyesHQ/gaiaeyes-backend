@@ -19,6 +19,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import sys
 from typing import Optional, Dict, Any, List
+import hashlib
 
 STYLE_GUIDE = (
     "Persona: Humorous researcher who studies space/earth frequencies and their effects on physiology. "
@@ -98,6 +99,46 @@ def _dbg(msg: str) -> None:
 
 def _writer_model() -> Optional[str]:
     return resolve_openai_model("public_writer")
+
+
+INTRO_LINES = [
+    "Gaia Eyes check-in: the sky has opinions today.",
+    "Gaia Eyes forecast: subtle field, real effects.",
+    "Gaia Eyes update: magnetic weather with personality.",
+    "Gaia Eyes report: nervous systems may notice today.",
+    "Gaia Eyes says: keep pacing and stay curious.",
+    "Gaia Eyes field note: calm outside, sensitive inside.",
+    "Gaia Eyes alert: today's signal is a mixed bag.",
+    "Gaia Eyes briefing: your body may read the room.",
+    "Gaia Eyes pulse: geomagnetics are setting the tone.",
+    "Gaia Eyes watch: the atmosphere feels a little spicy.",
+    "Gaia Eyes check: steady skies, better rhythm windows.",
+    "Gaia Eyes note: cosmic weather, human consequences.",
+    "Gaia Eyes lens: today favors pacing over force.",
+    "Gaia Eyes tracker: field shifts, mood shifts, plan shifts.",
+    "Gaia Eyes monitor: today asks for cleaner boundaries.",
+    "Gaia Eyes signal: active currents, gentle strategy.",
+    "Gaia Eyes status: quiet magnetics, useful focus.",
+    "Gaia Eyes forecast: friction pockets, keep it simple.",
+    "Gaia Eyes bulletin: your nervous system gets a vote.",
+    "Gaia Eyes readout: build slack into the schedule.",
+    "Gaia Eyes daily: steady effort beats heroic effort.",
+    "Gaia Eyes observation: subtle changes still count.",
+    "Gaia Eyes brief: field conditions can shape recovery.",
+    "Gaia Eyes outlook: protect sleep like it is medicine.",
+    "Gaia Eyes note: today rewards shorter work bursts.",
+    "Gaia Eyes update: magnetic texture is not perfectly flat.",
+    "Gaia Eyes check-in: calm-ish day, still pace wisely.",
+    "Gaia Eyes radar: expect waves, not catastrophe.",
+    "Gaia Eyes ping: it is a regulation-first day.",
+    "Gaia Eyes signal check: keep your load intentional.",
+    "Gaia Eyes weather desk: today has edge and nuance.",
+    "Gaia Eyes pulse report: optimize for consistency.",
+    "Gaia Eyes tracker says: reduce noise, protect bandwidth.",
+    "Gaia Eyes guide: nervous systems like predictability today.",
+    "Gaia Eyes update: charged backdrop, softer pacing.",
+    "Gaia Eyes check: light structure will help today.",
+]
 PHRASE_VARIANTS = {
     "feel_stable": [
         "Steady field—good window for getting things done.",
@@ -291,6 +332,33 @@ def _daily_seed() -> int:
     return int(datetime.utcnow().strftime("%Y%m%d"))
 
 
+def _ctx_day_iso(ctx: Dict[str, Any]) -> str:
+    day = str(ctx.get("day") or "").strip()
+    return day or today_iso_local()
+
+
+def _ctx_platform(ctx: Dict[str, Any]) -> str:
+    return str(ctx.get("platform") or PLATFORM or "default").strip() or "default"
+
+
+def _stable_ctx_hash(ctx: Dict[str, Any]) -> str:
+    omit = {"day", "platform", "intro_hint", "banned_openers"}
+    normalized = {k: ctx[k] for k in sorted(ctx.keys()) if k not in omit}
+    blob = json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _select_intro_line(day_iso: str, platform: str, banned_openers: Optional[List[str]] = None) -> str:
+    banned = {(x or "").strip().lower() for x in (banned_openers or []) if (x or "").strip()}
+    seed = int(hashlib.sha256(f"{day_iso}|{platform}".encode("utf-8")).hexdigest(), 16)
+    for offset in range(len(INTRO_LINES)):
+        idx = (seed + offset) % len(INTRO_LINES)
+        intro = INTRO_LINES[idx]
+        if intro.strip().lower() not in banned:
+            return intro
+    return INTRO_LINES[seed % len(INTRO_LINES)]
+
+
 # --- Recent opener helpers for hook variation ---
 SENT_SPLIT_RE = re.compile(r"(?<=\.)\s+|(?<=! )\s+|(?<=\?)\s+", re.X)
 
@@ -298,6 +366,16 @@ def _first_sentence(txt: str) -> str:
     if not txt: return ""
     parts = SENT_SPLIT_RE.split(txt.strip(), maxsplit=1)
     return parts[0].strip() if parts else txt.strip()
+
+
+def _first_nonempty_line(txt: str) -> str:
+    if not txt:
+        return ""
+    for ln in str(txt).splitlines():
+        s = ln.strip()
+        if s:
+            return s
+    return ""
 
 def _recent_openers(days_back: int = 7) -> set:
     try:
@@ -320,6 +398,41 @@ def _recent_openers(days_back: int = 7) -> set:
         return opens
     except Exception:
         return set()
+
+
+def _recent_platform_openers(platform: str, limit: int = 3) -> List[str]:
+    plat = (platform or "default").strip() or "default"
+    try:
+        res = (
+            SB.schema(POSTS_SCHEMA)
+              .table(POSTS_TABLE)
+              .select("day,lead,caption")
+              .eq("platform", plat)
+              .order("day", desc=True)
+              .limit(limit)
+              .execute()
+        )
+        rows = res.data or []
+    except Exception:
+        try:
+            res = (
+                SB.schema(POSTS_SCHEMA)
+                  .table(POSTS_TABLE)
+                  .select("day,caption")
+                  .eq("platform", plat)
+                  .order("day", desc=True)
+                  .limit(limit)
+                  .execute()
+            )
+            rows = res.data or []
+        except Exception:
+            rows = []
+    out: List[str] = []
+    for row in rows:
+        opener = _first_nonempty_line(row.get("lead") or row.get("caption") or "")
+        if opener:
+            out.append(opener)
+    return out[:limit]
 
 # --- Recent titles helper to reduce repetition ---
 def _recent_titles(days_back: int = 14) -> set:
@@ -530,6 +643,8 @@ def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
         "aurora_severity": ctx.get("aurora_severity"),
         "quakes_count": ctx.get("quakes_count"),
         "severe_summary": ctx.get("severe_summary"),
+        "intro_hint": ctx.get("intro_hint"),
+        "banned_openers": ctx.get("banned_openers") or [],
     }
 
 
@@ -635,6 +750,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         " If aurora_headline exists, include one sentence about aurora chances (no numbers)."
         " If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers)."
         " If severe_summary exists, include one sentence with a calm safety note (no numbers)."
+        " Start with the provided intro_hint (or a close paraphrase)."
+        " Do not start with any banned_openers."
         " Aim for: caption 3-5 sentences (a full narrative summary); snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets or 3 sentences."
     )
 
@@ -656,6 +773,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
                 "remains effective",
                 "optimize your day"
             ],
+            "intro_hint": facts.get("intro_hint"),
+            "banned_openers": facts.get("banned_openers") or [],
         },
         "constraints": {
             "omit_numbers": True,
@@ -674,7 +793,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         resp = _chat_create_compat(
             client,
             model=model,
-            temperature=0.75,
+            temperature=0.7,
             top_p=0.9,
             presence_penalty=0.3,
             frequency_penalty=0.2,
@@ -1445,35 +1564,64 @@ def _chat_text(resp: Any) -> str:
     return ""
 
 # --- Single-call rewrite cache (avoid double API calls in one run) ---
-_REWRITE_CACHE: Optional[Dict[str, str]] = None
+_REWRITE_CACHE: Dict[str, Dict[str, str]] = {}
+
+
+def _rewrite_cache_key(ctx: Dict[str, Any]) -> tuple[str, str]:
+    day_iso = _ctx_day_iso(ctx)
+    platform = _ctx_platform(ctx)
+    model = _writer_model() or ""
+    ctx_hash = _stable_ctx_hash(ctx)
+    raw = f"{day_iso}|{platform}|{model}|{ctx_hash}"
+    key = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    _dbg(f"rewrite-cache: day={day_iso} platform={platform} model={model or 'none'} ctx={ctx_hash[:10]} key={key[:12]}")
+    return key, key[:12]
 
 def _get_cached_rewrite(client: Optional["OpenAI"], ctx: Dict[str, Any]) -> Optional[Dict[str, str]]:
     """Compute interpretive JSON rewrite once per run and cache it. Returns dict or None."""
-    global _REWRITE_CACHE
+    key, key_short = _rewrite_cache_key(ctx)
     _dbg("rewrite-cache: check")
-    if _REWRITE_CACHE:
-        _dbg("rewrite-cache: hit")
-        return _REWRITE_CACHE
+    if key in _REWRITE_CACHE:
+        _dbg(f"rewrite-cache: hit key={key_short}")
+        return _REWRITE_CACHE.get(key)
     if not client:
         _dbg("rewrite-cache: no client; skipping")
         return None
     rc_local = _rule_copy(ctx)
-    _dbg("rewrite-cache: miss; computing via LLM")
+    _dbg(f"rewrite-cache: miss key={key_short}; computing via LLM")
     out = _llm_rewrite_from_rules(
         client,
         rc_local["caption"], rc_local["snapshot"], rc_local["affects"], rc_local["playbook"], ctx
     )
     if out:
-        _REWRITE_CACHE = out
-    _dbg("rewrite-cache: stored" if _REWRITE_CACHE else "rewrite-cache: compute failed; using None")
-    return _REWRITE_CACHE
+        _REWRITE_CACHE[key] = out
+    _dbg(f"rewrite-cache: {'stored' if key in _REWRITE_CACHE else 'compute failed; using None'} key={key_short}")
+    return _REWRITE_CACHE.get(key)
 
+
+
+
+def _apply_intro_guard(caption: str, ctx: Dict[str, Any]) -> str:
+    day_iso = _ctx_day_iso(ctx)
+    platform = _ctx_platform(ctx)
+    banned = [x for x in (ctx.get("banned_openers") or []) if isinstance(x, str)]
+    intro = str(ctx.get("intro_hint") or "").strip() or _select_intro_line(day_iso, platform, banned)
+    if not caption:
+        return intro
+    first = _first_nonempty_line(caption)
+    if first.strip().lower() == intro.lower():
+        return caption.strip()
+    if first.strip().lower() in {b.strip().lower() for b in banned if b.strip()}:
+        body = caption.strip().splitlines()
+        body = "\n".join(body[1:]).strip() if len(body) > 1 else ""
+        return f"{intro} {body}".strip()
+    return f"{intro} {caption.strip()}".strip()
 
 def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     client = openai_client()
     if EARTHSCOPE_FORCE_RULES or not client:
         rc = _rule_copy(ctx)
-        return rc["caption"], rc["hashtags"]
+        return _apply_intro_guard(rc["caption"], ctx), rc["hashtags"]
 
     # Hybrid: generate rule copy and ask LLM to tighten it (no change of facts)
     rc = _rule_copy(ctx)
@@ -1497,7 +1645,7 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
                 footer.append(f"Schumann {_fmt_num(sr,2)} Hz")
             if footer:
                 cap += f"\n\n— {'  •  '.join(footer)} (snapshot at write time)"
-            return cap, out.get("hashtags", rc.get("hashtags", "#GaiaEyes #SpaceWeather"))
+            return _apply_intro_guard(cap, ctx), out.get("hashtags", rc.get("hashtags", "#GaiaEyes #SpaceWeather"))
 
     kp_now = ctx.get("kp_now")
     kp_max = ctx.get("kp_max_24h")
@@ -1510,14 +1658,14 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     model = _writer_model()
     if not model:
         rc = _rule_copy(ctx)
-        return rc["caption"], rc.get("hashtags", "#GaiaEyes #SpaceWeather")
+        return _apply_intro_guard(rc["caption"], ctx), rc.get("hashtags", "#GaiaEyes #SpaceWeather")
     try:
         resp = _chat_create_compat(
             client,
             model=model,
-            temperature=0.9,
-            presence_penalty=0.6,
-            frequency_penalty=0.4,
+            temperature=0.7,
+            presence_penalty=0.3,
+            frequency_penalty=0.2,
             max_completion_tokens=320,
             messages=[
                 {"role":"system","content":(
@@ -1563,10 +1711,10 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
         if not hashtags:
             hashtags = "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #Health #localtriggers"
         caption = _scrub_banned_phrases(caption)
-        return caption, hashtags
+        return _apply_intro_guard(caption, ctx), hashtags
     except Exception:
         rc = _rule_copy(ctx)
-        return rc["caption"], rc["hashtags"]
+        return _apply_intro_guard(rc["caption"], ctx), rc["hashtags"]
 
 
 def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
@@ -1733,7 +1881,11 @@ def main():
         "schumann_value_hz": sr.get("schumann_value_hz"),
         "schumann_note": sr.get("schumann_note"),
         "harmonics": sr.get("schumann_harmonics"),
+        "day": day,
+        "platform": args.platform,
     }
+    ctx["banned_openers"] = _recent_platform_openers(args.platform, limit=3)
+    ctx["intro_hint"] = _select_intro_line(day, args.platform, ctx.get("banned_openers"))
 
     # Fill Kp 'now' from the marts if available
     try:
@@ -1782,6 +1934,9 @@ def main():
     # 2) Generate copy
     short_caption, short_tags = generate_short_caption(ctx)
     snapshot, affects, playbook, long_tags = generate_long_sections(ctx)
+    _, dbg_key_short = _rewrite_cache_key(ctx)
+    opener = _first_nonempty_line(short_caption)
+    _dbg(f"opener={opener[:120]} day={day} platform={args.platform} cache_key={dbg_key_short}")
 
     # === Structured sections payload for renderers (back-compat) ===
     tone = _tone_from_ctx(ctx)
@@ -1802,7 +1957,7 @@ def main():
     llm_title = None
     if client:
         try:
-            llm_title = _llm_title_from_context(client, ctx, _REWRITE_CACHE)
+            llm_title = _llm_title_from_context(client, ctx, _REWRITE_CACHE.get(_rewrite_cache_key(ctx)[0]))
         except Exception:
             llm_title = None
     if llm_title:
