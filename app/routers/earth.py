@@ -84,8 +84,8 @@ async def _fetch_latest_ext_primary(conn) -> Optional[Dict]:
               ) as band_18_20,
               -- bins + axis metadata may live at meta top-level or meta.raw; prefer top-level if present
               COALESCE(
-                max(s.meta->'spectrogram_bins'),
-                max(s.meta->'raw'->'spectrogram_bins')
+                (max(s.meta->>'spectrogram_bins'))::jsonb,
+                (max(s.meta->'raw'->>'spectrogram_bins'))::jsonb
               ) as spectrogram_bins,
               COALESCE(
                 max((s.meta->>'freq_start_hz')::float),
@@ -153,8 +153,8 @@ async def _fetch_series_ext_primary(conn, limit: int) -> List[Dict]:
                 max((meta->'amplitude_idx'->>'band_18_20')::float)
               ) as band_18_20,
               COALESCE(
-                max(meta->'spectrogram_bins'),
-                max(meta->'raw'->'spectrogram_bins')
+                (max(meta->>'spectrogram_bins'))::jsonb,
+                (max(meta->'raw'->>'spectrogram_bins'))::jsonb
               ) as spectrogram_bins,
               COALESCE(
                 max((meta->>'freq_start_hz')::float),
