@@ -33,7 +33,11 @@ STYLE_GUIDE = (
 BAN_PHRASES = [
     "energy is calm", "calm vibes", "mindful living", "cosmic vibes",
     "mother earth recharge", "sound bath", "tap into", "manifest", "alchemy",
-    "grounding energy", "soothe your soul", "textured"
+    "grounding energy", "soothe your soul", "textured",
+    "a small metaphor",
+    "small metaphor",
+    "satellite-dependent",
+    "gnss",
 ]
 
 import requests
@@ -811,7 +815,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
         "Write in crisp, human language (not a bulletin or press release). Avoid sterile phrasing. "
-        "Include one playful metaphor in the caption and optionally one short playful aside in the body (max one sentence total outside the caption). Use metaphor_hint as a theme; you may paraphrase it. "
+        "Include one playful metaphor max in the caption only. Do not add additional metaphors or 'metaphor:' labels elsewhere. Use metaphor_hint as a theme; you may paraphrase it. "
         "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
         "No emojis. No questions. "
@@ -1717,9 +1721,23 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
         out = _get_cached_rewrite(client, ctx)
         if out and out.get("caption"):
             cap = out["caption"]
+
             # Encourage fuller paragraph; ensure period on calm day
             if _tone_from_ctx(ctx) == "calm" and not cap.endswith("."):
                 cap += "."
+
+            # Sanitize and avoid sterile bulletin-style openers
+            cap = _sanitize_caption(cap)
+            first_line = _first_nonempty_line(cap).lower()
+            if any(first_line.startswith(p) for p in BAN_CAPTION_OPENERS):
+                tone = _tone_from_ctx(ctx)
+                hook = _pick_hook(tone, last_used=_recent_openers(7))
+                first_split = re.split(r"(?<=\.)\s+", cap, maxsplit=1)
+                rest = first_split[1] if len(first_split) > 1 else cap
+                cap = f"{hook} {rest}".strip()
+
+            cap = _scrub_banned_phrases(cap)
+
             # Append daily field summary footer
             kp = ctx.get("kp_max_24h"); bz = ctx.get("bz_min"); sr = ctx.get("schumann_value_hz")
             footer = []
