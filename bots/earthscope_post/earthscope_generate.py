@@ -1666,7 +1666,7 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     client = openai_client()
     if EARTHSCOPE_FORCE_RULES or not client:
         rc = _rule_copy(ctx)
-        return _apply_intro_guard(rc["caption"], ctx), rc["hashtags"]
+        return rc["caption"].strip(), rc["hashtags"]
 
     # Hybrid: generate rule copy and ask LLM to tighten it (no change of facts)
     rc = _rule_copy(ctx)
@@ -1690,7 +1690,7 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
                 footer.append(f"Schumann {_fmt_num(sr,2)} Hz")
             if footer:
                 cap += f"\n\n— {'  •  '.join(footer)} (snapshot at write time)"
-            return _apply_intro_guard(cap, ctx), out.get("hashtags", rc.get("hashtags", "#GaiaEyes #SpaceWeather"))
+            return cap.strip(), out.get("hashtags", rc.get("hashtags", "#GaiaEyes #SpaceWeather"))
 
     kp_now = ctx.get("kp_now")
     kp_max = ctx.get("kp_max_24h")
@@ -1703,7 +1703,7 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     model = _writer_model()
     if not model:
         rc = _rule_copy(ctx)
-        return _apply_intro_guard(rc["caption"], ctx), rc.get("hashtags", "#GaiaEyes #SpaceWeather")
+        return rc["caption"].strip(), rc.get("hashtags", "#GaiaEyes #SpaceWeather")
     try:
         resp = _chat_create_compat(
             client,
@@ -1756,10 +1756,10 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
         if not hashtags:
             hashtags = "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #Health #localtriggers"
         caption = _scrub_banned_phrases(caption)
-        return _apply_intro_guard(caption, ctx), hashtags
+        return caption.strip(), hashtags
     except Exception:
         rc = _rule_copy(ctx)
-        return _apply_intro_guard(rc["caption"], ctx), rc["hashtags"]
+        return rc["caption"].strip(), rc["hashtags"]
 
 
 def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
