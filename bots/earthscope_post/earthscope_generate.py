@@ -666,6 +666,8 @@ def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
         "aurora_severity": ctx.get("aurora_severity"),
         "quakes_count": ctx.get("quakes_count"),
         "severe_summary": ctx.get("severe_summary"),
+        "intro_hint": ctx.get("intro_hint"),
+        "banned_openers": ctx.get("banned_openers") or [],
         "metaphor_hint": ctx.get("metaphor_hint"),
     }
 
@@ -776,6 +778,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "If aurora_headline exists, include one sentence about aurora chances (no numbers). "
         "If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers). "
         "If severe_summary exists, include one calm safety sentence (no numbers). "
+        "Start with the provided intro_hint (or a close paraphrase). "
         "Do not start with any banned_openers. "
         "Do not repeat any sentence verbatim. "
         "Aim for: caption 3–5 sentences; snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets."
@@ -799,6 +802,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
                 "remains effective",
                 "optimize your day"
             ],
+            "intro_hint": facts.get("intro_hint"),
+            "banned_openers": facts.get("banned_openers") or [],
             "metaphor_hint": facts.get("metaphor_hint"),
         },
         "constraints": {
