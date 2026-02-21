@@ -151,6 +151,26 @@ METAPHOR_HINTS = [
     "a treadmill set to 'interesting'",
     "a sea with small chop",
     "a radio slightly off-station",
+    "Wi-Fi cutting in and out",
+    "low battery mode",
+    "pop-up notifications all day",
+    "background app refresh",
+    "jazz improvisation",
+    "a car idling high",
+    "static on a signal",
+    "3am zoomies energy",
+    "a browser spinning wheel",
+    "a slightly misaligned compass",
+    "micro-bursts of caffeine",
+    "a choppy but manageable flight",
+    "a light crosswind",
+    "a dashboard blinking softly",
+    "a playlist on shuffle",
+    "a mild headwind",
+    "a humming transformer",
+    "a tightrope with balance",
+    "small waves, not a tsunami",
+    "a flickering streetlight"
 ]
 
 def _select_metaphor_hint(day_iso: str, platform: str) -> str:
@@ -298,6 +318,14 @@ def _strip_section_labels(text: str) -> str:
 import random
 
 BAN_STARTS = ("feeling ", "are you ", "ever feel ", "ready to ", "it’s time", "its time", "let’s ", "lets ")
+BAN_CAPTION_OPENERS = (
+    "active geomagnetic",
+    "geomagnetic activity is",
+    "solar wind is",
+    "elevated solar wind",
+    "southward magnetic tilt",
+    "active geomagnetic conditions",
+)
 EMOJI_RE = re.compile(r"[\U00010000-\U0010ffff]", flags=re.UNICODE)
 
 HOOKS = {
@@ -612,7 +640,7 @@ def _rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
             feel.append(f"- Clinician note: {_pick_variant('nerve_note', seed_extra=1)}")
         else:
             feel.append(f"- Sensitivity note: {_pick_variant('nerve_note', seed_extra=1)}")
-        feel.append("- Comms/GNSS: Tech may be glitchy today. Satellite based services, especially. Sensitivities may increase.")
+        feel.append("- Comms/GPS: Tech may be glitchy today. Satellite based services, especially. Nervous System sensitivities may increase.")
     else:
         feel.append(f"- Focus/energy: {_pick_variant('feel_stable') or 'Stable; good window to get things done.'}")
         feel.append("- Autonomic/HRV: Great for recovery and healing practices.")
@@ -782,8 +810,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "Interpret today’s space/earth conditions for humans. "
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
-        "Write in crisp, human language (not a bulletin). Vary sentence length. "
-        "Include one playful metaphor max. Use metaphor_hint as a theme; you may paraphrase it (do not repeat the exact phrase unless it fits naturally). "
+        "Write in crisp, human language (not a bulletin or press release). Avoid sterile phrasing. "
+        "Include one playful metaphor in the caption and optionally one short playful aside in the body (max one sentence total outside the caption). Use metaphor_hint as a theme; you may paraphrase it. "
         "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
         "No emojis. No questions. "
@@ -1751,6 +1779,14 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
             hashtags = "#GaiaEyes #SpaceWeather #KpIndex #SolarWind #Aurora"
         # Post‑process: sanitize and fix repetitive/question intros
         caption = _sanitize_caption(caption)
+        # Prevent sterile bulletin-style openers
+        head_lower = caption.lower()
+        if any(head_lower.startswith(p) for p in BAN_CAPTION_OPENERS):
+            tone = _tone_from_ctx(ctx)
+            hook = _pick_hook(tone, last_used=_recent_openers(7))
+            first_split = re.split(r"(?<=\.)\s+", caption, maxsplit=1)
+            rest = first_split[1] if len(first_split) > 1 else caption
+            caption = f"{hook} {rest}".strip()
         doit = False
         if HOOK_MODE == "always":
             doit = True
