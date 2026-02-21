@@ -102,22 +102,6 @@ def _writer_model() -> Optional[str]:
 
 
 INTRO_LINES = [
-METAPHOR_HINTS = [
-    "roller coaster",
-    "over-caffeinated squirrel",
-    "too many browser tabs",
-    "cosmic espresso shot",
-    "weather with jazz hands",
-    "nervous system pinging like a notification",
-    "a bumpy road with good suspension",
-    "a treadmill set to 'interesting'",
-    "a sea with small chop",
-    "a radio slightly off-station",
-]
-
-def _select_metaphor_hint(day_iso: str, platform: str) -> str:
-    seed = int(hashlib.sha256(f"{day_iso}|{platform}|metaphor".encode("utf-8")).hexdigest(), 16)
-    return METAPHOR_HINTS[seed % len(METAPHOR_HINTS)]
     "Gaia Eyes check-in: the sky has opinions today.",
     "Gaia Eyes forecast: subtle field, real effects.",
     "Gaia Eyes update: magnetic weather with personality.",
@@ -155,6 +139,23 @@ def _select_metaphor_hint(day_iso: str, platform: str) -> str:
     "Gaia Eyes update: charged backdrop, softer pacing.",
     "Gaia Eyes check: light structure will help today.",
 ]
+
+METAPHOR_HINTS = [
+    "roller coaster",
+    "over-caffeinated squirrel",
+    "too many browser tabs",
+    "cosmic espresso shot",
+    "weather with jazz hands",
+    "nervous system pinging like a notification",
+    "a bumpy road with good suspension",
+    "a treadmill set to 'interesting'",
+    "a sea with small chop",
+    "a radio slightly off-station",
+]
+
+def _select_metaphor_hint(day_iso: str, platform: str) -> str:
+    seed = int(hashlib.sha256(f"{day_iso}|{platform}|metaphor".encode("utf-8")).hexdigest(), 16)
+    return METAPHOR_HINTS[seed % len(METAPHOR_HINTS)]
 PHRASE_VARIANTS = {
     "feel_stable": [
         "Steady field—good window for getting things done.",
