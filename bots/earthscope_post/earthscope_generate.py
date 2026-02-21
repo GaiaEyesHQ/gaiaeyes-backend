@@ -102,6 +102,22 @@ def _writer_model() -> Optional[str]:
 
 
 INTRO_LINES = [
+METAPHOR_HINTS = [
+    "roller coaster",
+    "over-caffeinated squirrel",
+    "too many browser tabs",
+    "cosmic espresso shot",
+    "weather with jazz hands",
+    "nervous system pinging like a notification",
+    "a bumpy road with good suspension",
+    "a treadmill set to 'interesting'",
+    "a sea with small chop",
+    "a radio slightly off-station",
+]
+
+def _select_metaphor_hint(day_iso: str, platform: str) -> str:
+    seed = int(hashlib.sha256(f"{day_iso}|{platform}|metaphor".encode("utf-8")).hexdigest(), 16)
+    return METAPHOR_HINTS[seed % len(METAPHOR_HINTS)]
     "Gaia Eyes check-in: the sky has opinions today.",
     "Gaia Eyes forecast: subtle field, real effects.",
     "Gaia Eyes update: magnetic weather with personality.",
@@ -617,7 +633,13 @@ def _scrub_banned_phrases(text: str) -> str:
             low = s.lower()
     # light n-gram de-dupe: collapse repeated bigrams
     s = re.sub(r"\b(\w+\s+\w+)\s+\1\b", r"\1", s, flags=re.I)
-    return s.strip()
+    s2 = s.strip()
+    if s2:
+        first = _first_sentence(s2)
+        rest = s2[len(first):].lstrip()
+        if rest.startswith(first):
+            s2 = (first + " " + rest[len(first):].lstrip()).strip()
+    return s2
 
 # --- Context summarizer & JSON rewrite utilities (interpretive, number-free) ---
 
@@ -645,6 +667,7 @@ def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
         "severe_summary": ctx.get("severe_summary"),
         "intro_hint": ctx.get("intro_hint"),
         "banned_openers": ctx.get("banned_openers") or [],
+        "metaphor_hint": ctx.get("metaphor_hint"),
     }
 
 
@@ -740,19 +763,24 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         return None
 
     system_msg = (
-        "You are Gaia Eyes’ daily author. Interpret today’s space/earth conditions for humans. "
+        "You are Gaia Eyes’ daily weather desk: grounded, practical, and lightly funny. "
+        "Interpret today’s space/earth conditions for humans. "
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
-        "Explain significance and likely felt effects in viral, sometimes humorous, but plain language. "
-        "Offer practical self-care suggestions. No emojis. No questions. "
+        "Write in crisp, human language (not a bulletin). Vary sentence length. "
+        "Include EXACTLY ONE playful metaphor using metaphor_hint (examples: roller coaster, over-caffeinated squirrel, too many browser tabs). "
+        "Keep humor warm and grounded (no doom, no sarcasm). "
+        "No emojis. No questions. "
+        "Never claim deterministic health effects; use 'some may', 'can', 'for some'. "
         "Return ONLY a compact JSON object with EXACTLY these string keys: caption, snapshot, affects, playbook, hashtags. "
-        "No markdown, no extra keys, no code fences."
-        " If aurora_headline exists, include one sentence about aurora chances (no numbers)."
-        " If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers)."
-        " If severe_summary exists, include one sentence with a calm safety note (no numbers)."
-        " Start with the provided intro_hint (or a close paraphrase)."
-        " Do not start with any banned_openers."
-        " Aim for: caption 3-5 sentences (a full narrative summary); snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets or 3 sentences."
+        "No markdown, no extra keys, no code fences. "
+        "If aurora_headline exists, include one sentence about aurora chances (no numbers). "
+        "If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers). "
+        "If severe_summary exists, include one calm safety sentence (no numbers). "
+        "Start with the provided intro_hint (or a close paraphrase). "
+        "Do not start with any banned_openers. "
+        "Do not repeat any sentence verbatim. "
+        "Aim for: caption 3–5 sentences; snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets."
     )
 
     payload = {
@@ -775,6 +803,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             ],
             "intro_hint": facts.get("intro_hint"),
             "banned_openers": facts.get("banned_openers") or [],
+            "metaphor_hint": facts.get("metaphor_hint"),
         },
         "constraints": {
             "omit_numbers": True,
@@ -1011,13 +1040,18 @@ def _qualitative_snapshot(ctx: Dict[str, Any]) -> str:
 
     # Lead sentence based on tone/bands
     if tone == "stormy":
-        lines.append("Magnetics are packing a punch today—expect short surges and  dips in energy.")
+        lines.append("Charged field day—expect short surges and dips in energy.")
     elif tone == "unsettled":
-        lines.append("The atmosphere is buzzing—lively waves but not a full storm.")
+        lines.append("Lively field day—more waves than a full storm.")
     elif tone == "calm":
         lines.append("Steady magnetic backdrop—a good day for focused work and recovery.")
     else:
-        lines.append("Steady as she goes—ordinary day.")
+        lines.append("Middle-of-the-road field day—consistency wins.")
+
+    # Optional humor/metaphor line (fallback only)
+    mh = (ctx.get("metaphor_hint") or "").strip()
+    if mh:
+        lines.append(f"Translation: it can feel like {mh} for some—pace the big stuff.")
 
     # Solar drivers without citing numbers
     driver_bits: List[str] = []
@@ -1896,6 +1930,7 @@ def main():
     }
     ctx["banned_openers"] = _recent_platform_openers(args.platform, limit=3)
     ctx["intro_hint"] = _select_intro_line(day, args.platform, ctx.get("banned_openers"))
+    ctx["metaphor_hint"] = _select_metaphor_hint(day, args.platform)
 
     # Fill Kp 'now' from the marts if available
     try:
