@@ -279,6 +279,21 @@ def _strip_intro_header(block: str) -> str:
             lines = lines[1:]
     return "\n".join(lines).strip()
 
+# --- section header label stripper ---
+HEADER_LABEL_RE = re.compile(
+    r"^(space situation:|space weather snapshot:?|how people may feel:|how this affects you:|self-?care playbook:?|care notes:?|playbook:?|snapshot:)\s*",
+    re.I
+)
+
+def _strip_section_labels(text: str) -> str:
+    if not text:
+        return text
+    lines = [ln.rstrip() for ln in str(text).splitlines()]
+    out = []
+    for ln in lines:
+        out.append(HEADER_LABEL_RE.sub("", ln).strip())
+    return "\n".join([x for x in out if x != ""]).strip()
+
 # --- hook + tone system (no questions, no "Feeling...", no emojis) ---
 import random, re
 
@@ -585,7 +600,7 @@ def _rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
     if flr is not None: snap.append(f"- Flares (24h): {int(round(float(flr)))}")
     if cme is not None: snap.append(f"- CMEs (24h): {int(round(float(cme)))}")
     if sr is not None: snap.append(f"- Schumann f0: { _fmt_num(sr,2) } Hz")
-    snapshot = "Space weather snapshot\n" + "\n".join(snap)
+    snapshot = "\n".join(snap)
 
     # How it may feel (human clinical tone)
     feel = []
@@ -604,7 +619,7 @@ def _rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
         feel.append("- Sleep: Keep evening light warm and low.")
         if EARTHSCOPE_FIRST_PERSON:
             feel.append("- Clinician note: I see steadier HRV and less reactivity for many on days like this.")
-    affects = "How it may feel\n" + "\n".join(feel)
+    affects = "\n".join(feel)
 
     # Care notes (practical, small set)
     care_lines = []
@@ -617,7 +632,7 @@ def _rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
         care_lines.append("- Block 1–2 focus sessions (60–90 min) while the field is steady")
         care_lines.append("- Natural light and movement breaks to reinforce circadian tone")
         care_lines.append("- Hydrate; keep caffeine earlier in the day")
-    playbook = "Care notes\n" + "\n".join(care_lines)
+    playbook = "\n".join(care_lines)
 
     tags = "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus"
     return {"caption": caption, "snapshot": snapshot, "affects": affects, "playbook": playbook, "hashtags": tags}
@@ -779,7 +794,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers). "
         "If severe_summary exists, include one calm safety sentence (no numbers). "
         "Do not repeat any sentence verbatim. "
-        "Aim for: caption 3–5 sentences; snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets."
+        "Aim for: caption 3–5 sentences; snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets. "
+        "Do not include section headers or labels such as 'Space situation:', 'Space Weather Snapshot:', 'How people may feel:', or 'Care notes:'. Write each field as plain paragraphs or bullets only. "
     )
 
     payload = {
@@ -913,9 +929,9 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         if valid:
             # final scrubs
             valid["caption"] = _scrub_banned_phrases(_sanitize_caption(valid["caption"]))
-            valid["snapshot"] = _scrub_banned_phrases(valid["snapshot"]) 
-            valid["affects"] = _scrub_banned_phrases(valid["affects"]) 
-            valid["playbook"] = _scrub_banned_phrases(valid["playbook"]) 
+            valid["snapshot"] = _strip_section_labels(_scrub_banned_phrases(valid["snapshot"]))
+            valid["affects"] = _strip_section_labels(_scrub_banned_phrases(valid["affects"]))
+            valid["playbook"] = _strip_section_labels(_scrub_banned_phrases(valid["playbook"]))
             # Soft length diagnostics (debug only)
             def _sent_count(x: str) -> int:
                 parts = re.split(r"(?<=[\.!?])\s+", x.strip()) if x and isinstance(x, str) else []
