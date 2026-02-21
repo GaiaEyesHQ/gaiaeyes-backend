@@ -1608,14 +1608,24 @@ def _apply_intro_guard(caption: str, ctx: Dict[str, Any]) -> str:
     intro = str(ctx.get("intro_hint") or "").strip() or _select_intro_line(day_iso, platform, banned)
     if not caption:
         return intro
-    first = _first_nonempty_line(caption)
-    if first.strip().lower() == intro.lower():
-        return caption.strip()
+
+    cap = caption.strip()
+    intro_l = intro.strip().lower()
+    cap_l = cap.lower()
+
+    # If the model already started with the intro (often followed by more text on the same line),
+    # do not prepend it again.
+    if cap_l.startswith(intro_l):
+        return cap
+
+    first = _first_nonempty_line(cap)
+    if first.strip().lower() == intro_l:
+        return cap
     if first.strip().lower() in {b.strip().lower() for b in banned if b.strip()}:
-        body = caption.strip().splitlines()
+        body = cap.splitlines()
         body = "\n".join(body[1:]).strip() if len(body) > 1 else ""
         return f"{intro} {body}".strip()
-    return f"{intro} {caption.strip()}".strip()
+    return f"{intro} {cap}".strip()
 
 def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     client = openai_client()
