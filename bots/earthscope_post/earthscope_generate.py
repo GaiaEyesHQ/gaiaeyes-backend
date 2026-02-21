@@ -320,11 +320,11 @@ import random
 BAN_STARTS = ("feeling ", "are you ", "ever feel ", "ready to ", "it’s time", "its time", "let’s ", "lets ")
 BAN_CAPTION_OPENERS = (
     "active geomagnetic",
+    "geomagnetic conditions",
     "geomagnetic activity is",
     "solar wind is",
     "elevated solar wind",
     "southward magnetic tilt",
-    "active geomagnetic conditions",
 )
 EMOJI_RE = re.compile(r"[\U00010000-\U0010ffff]", flags=re.UNICODE)
 
@@ -1779,9 +1779,9 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
             hashtags = "#GaiaEyes #SpaceWeather #KpIndex #SolarWind #Aurora"
         # Post‑process: sanitize and fix repetitive/question intros
         caption = _sanitize_caption(caption)
-        # Prevent sterile bulletin-style openers
-        head_lower = caption.lower()
-        if any(head_lower.startswith(p) for p in BAN_CAPTION_OPENERS):
+        # Prevent sterile bulletin-style openers (check first non-empty line only)
+        first_line = _first_nonempty_line(caption).lower()
+        if any(first_line.startswith(p) for p in BAN_CAPTION_OPENERS):
             tone = _tone_from_ctx(ctx)
             hook = _pick_hook(tone, last_used=_recent_openers(7))
             first_split = re.split(r"(?<=\.)\s+", caption, maxsplit=1)
