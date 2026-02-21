@@ -53,9 +53,19 @@ async def _fetch_latest_ext_primary(conn) -> Optional[Dict]:
         await cur.execute(
             """
             with latest_ts as (
-              select max(ts_utc) as ts_utc
-              from ext.schumann
-              where (meta->>'is_primary')::boolean is true
+              select coalesce(
+                (
+                  select max(ts_utc)
+                  from ext.schumann
+                  where coalesce((meta->>'is_primary')::boolean, false) is true
+                ),
+                (
+                  select max(ts_utc)
+                  from ext.schumann
+                  where (meta->>'source') = 'cumiana'
+                    and (meta->>'status') = 'ok'
+                )
+              ) as ts_utc
             )
             select
               s.ts_utc,
@@ -100,8 +110,8 @@ async def _fetch_latest_ext_primary(conn) -> Optional[Dict]:
                 max((s.meta->'raw'->>'quality_score')::float)
               ) as quality_score,
               COALESCE(
-                max((s.meta->>'usable')::boolean),
-                max((s.meta->'raw'->>'usable')::boolean)
+                bool_or((s.meta->>'usable')::boolean),
+                bool_or((s.meta->'raw'->>'usable')::boolean)
               ) as usable,
               COALESCE(
                 max(s.meta->>'primary_source'),
@@ -109,7 +119,10 @@ async def _fetch_latest_ext_primary(conn) -> Optional[Dict]:
               ) as primary_source
             from ext.schumann s
             join latest_ts lt on s.ts_utc = lt.ts_utc
-            where (s.meta->>'is_primary')::boolean is true
+            where (
+              coalesce((s.meta->>'is_primary')::boolean, false) is true
+              or ((s.meta->>'source') = 'cumiana' and (s.meta->>'status') = 'ok')
+            )
             group by s.ts_utc
             """,
             prepare=False,
@@ -125,7 +138,7 @@ async def _fetch_series_ext_primary(conn, limit: int) -> List[Dict]:
             with prim as (
               select ts_utc, channel, value_num, meta
               from ext.schumann
-              where (meta->>'is_primary')::boolean is true
+              where coalesce((meta->>'is_primary')::boolean, false) is true
             )
             select
               ts_utc,
@@ -169,8 +182,8 @@ async def _fetch_series_ext_primary(conn, limit: int) -> List[Dict]:
                 max((meta->'raw'->>'quality_score')::float)
               ) as quality_score,
               COALESCE(
-                max((meta->>'usable')::boolean),
-                max((meta->'raw'->>'usable')::boolean)
+                bool_or((meta->>'usable')::boolean),
+                bool_or((meta->'raw'->>'usable')::boolean)
               ) as usable,
               COALESCE(
                 max(meta->>'primary_source'),
