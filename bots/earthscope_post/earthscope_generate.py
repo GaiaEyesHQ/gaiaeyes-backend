@@ -666,8 +666,7 @@ def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
         "aurora_severity": ctx.get("aurora_severity"),
         "quakes_count": ctx.get("quakes_count"),
         "severe_summary": ctx.get("severe_summary"),
-        "intro_hint": ctx.get("intro_hint"),
-        "banned_openers": ctx.get("banned_openers") or [],
+        # Removed intro_hint and banned_openers from facts passed to LLM
         "metaphor_hint": ctx.get("metaphor_hint"),
     }
 
@@ -769,7 +768,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
         "Write in crisp, human language (not a bulletin). Vary sentence length. "
-        "Include EXACTLY ONE playful metaphor using metaphor_hint (examples: roller coaster, over-caffeinated squirrel, too many browser tabs). "
+        "Include one playful metaphor max. Use metaphor_hint as a theme; you may paraphrase it (do not repeat the exact phrase unless it fits naturally). "
+        "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
         "No emojis. No questions. "
         "Never claim deterministic health effects; use 'some may', 'can', 'for some'. "
@@ -778,8 +778,6 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "If aurora_headline exists, include one sentence about aurora chances (no numbers). "
         "If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers). "
         "If severe_summary exists, include one calm safety sentence (no numbers). "
-        "Start with the provided intro_hint (or a close paraphrase). "
-        "Do not start with any banned_openers. "
         "Do not repeat any sentence verbatim. "
         "Aim for: caption 3–5 sentences; snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets."
     )
@@ -802,8 +800,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
                 "remains effective",
                 "optimize your day"
             ],
-            "intro_hint": facts.get("intro_hint"),
-            "banned_openers": facts.get("banned_openers") or [],
+            # Removed intro_hint and banned_openers from style
             "metaphor_hint": facts.get("metaphor_hint"),
         },
         "constraints": {
@@ -823,7 +820,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         resp = _chat_create_compat(
             client,
             model=model,
-            temperature=0.7,
+            temperature=0.8,
             top_p=0.9,
             presence_penalty=0.3,
             frequency_penalty=0.2,
@@ -1968,14 +1965,22 @@ def main():
     except Exception as e:
         _dbg(f"outlook_api: merge failed -> {e}")
 
-    # If no aurora headline was provided by outlook/ctx, derive a coarse headline from Kp
-    if not ctx.get("aurora_headline"):
-        src_kp = ctx.get("kp_max_24h") if ctx.get("kp_max_24h") is not None else ctx.get("kp_now")
-        if src_kp is not None:
-            hed, sev = _derive_aurora_from_kp(src_kp)
-            ctx["aurora_headline"] = hed
-            ctx.setdefault("aurora_window", "Next 24h")
-            ctx["aurora_severity"] = sev
+    # Aurora: only mention when notable (Kp >= 5). Otherwise omit aurora entirely.
+    src_kp = ctx.get("kp_max_24h") if ctx.get("kp_max_24h") is not None else ctx.get("kp_now")
+    kp_f = None
+    try:
+        kp_f = float(src_kp) if src_kp is not None else None
+    except Exception:
+        kp_f = None
+
+    if kp_f is not None and kp_f >= 5.0:
+        hed, sev = _derive_aurora_from_kp(kp_f)
+        ctx["aurora_headline"] = hed
+        ctx.setdefault("aurora_window", "Next 24h")
+        ctx["aurora_severity"] = sev
+    else:
+        ctx["aurora_headline"] = None
+        ctx["aurora_severity"] = "G0"
 
     # 2) Generate copy
     short_caption, short_tags = generate_short_caption(ctx)
