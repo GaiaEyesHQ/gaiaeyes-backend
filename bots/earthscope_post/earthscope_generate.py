@@ -13,7 +13,7 @@ Notes:
 - If OpenAI key is missing, falls back to deterministic copy using numbers.
 """
 
-import os, json, argparse
+import os, json, argparse, re
 import math
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -295,7 +295,7 @@ def _strip_section_labels(text: str) -> str:
     return "\n".join([x for x in out if x != ""]).strip()
 
 # --- hook + tone system (no questions, no "Feeling...", no emojis) ---
-import random, re
+import random
 
 BAN_STARTS = ("feeling ", "are you ", "ever feel ", "ready to ", "it’s time", "its time", "let’s ", "lets ")
 EMOJI_RE = re.compile(r"[\U00010000-\U0010ffff]", flags=re.UNICODE)
