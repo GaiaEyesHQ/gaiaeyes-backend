@@ -740,7 +740,7 @@ def _extract_first_json_object(text: str) -> Optional[str]:
     return None
 
 
-def _validate_rewrite(obj: Any) -> Optional[Dict[str, str]]:
+def _validate_rewrite(obj: Any, facts: Dict[str, Any]) -> Optional[Dict[str, str]]:
     """Ensure JSON has required keys. For number policy: forbid digits in caption/snapshot, but allow in affects/playbook (e.g., "5–10 min")."""
     if not isinstance(obj, dict):
         _dbg("validate: not a dict")
@@ -755,6 +755,19 @@ def _validate_rewrite(obj: Any) -> Optional[Dict[str, str]]:
         if _contains_digits(obj[k]):
             _dbg(f"validate: digits found in {k}")
             return None
+    # Factuality guard: do not invent major space-weather events not supported by facts/context
+    hint = _summarize_context(facts).lower() if isinstance(facts, dict) else ""
+    ctx_text = (obj.get("caption","") + " " + obj.get("snapshot","")).lower()
+
+    if "cme" not in hint and ("cme" in ctx_text or "coronal mass ejection" in ctx_text):
+        _dbg("validate: invented CME mention")
+        return None
+    if "flare" not in hint and ("x-class" in ctx_text or "m-class" in ctx_text):
+        _dbg("validate: invented flare class mention")
+        return None
+    if "storm" not in hint and ("g5" in ctx_text or "proton storm" in ctx_text or "radiation storm" in ctx_text):
+        _dbg("validate: invented storm mention")
+        return None
     return obj
 
 
@@ -769,7 +782,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
         "Write in crisp, human language (not a bulletin). Vary sentence length. "
-        "Include EXACTLY ONE playful metaphor using metaphor_hint (examples: roller coaster, over-caffeinated squirrel, too many browser tabs). "
+        "Include one playful metaphor max. Use metaphor_hint as a theme and feel free to paraphrase it (do not repeat the exact phrase unless it fits naturally). "
+        "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
         "No emojis. No questions. "
         "Never claim deterministic health effects; use 'some may', 'can', 'for some'. "
@@ -779,8 +793,6 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "If quakes_count exists, include one sentence noting recent notable earthquakes (no numbers). "
         "If severe_summary exists, include one calm safety sentence (no numbers). "
         "Start with the provided intro_hint (or a close paraphrase). "
-        "Do not start with any banned_openers. "
-        "Do not repeat any sentence verbatim. "
         "Aim for: caption 3–5 sentences; snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets."
     )
 
@@ -810,6 +822,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             "omit_numbers": True,
             "no_questions": True,
             "no_emojis": True,
+            "allow_creative_language": True,
             "max_caption_chars": 600
         }
     }
@@ -909,7 +922,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         # Make response robust: if hashtags missing, inject a sane default before validation
         if isinstance(obj, dict) and ("hashtags" not in obj or not isinstance(obj.get("hashtags"), str) or not obj.get("hashtags").strip()):
             obj["hashtags"] = "#GaiaEyes #SpaceWeather #ChronicPain #Schumann #HRV #Sleep #Wellness"
-        valid = _validate_rewrite(obj)
+        valid = _validate_rewrite(obj, facts)
         _dbg("rewrite: JSON valid") if valid else _dbg("rewrite: JSON invalid by validator")
         if not valid:
             _dbg(f"rewrite: raw response snippet => {text[:180]}")

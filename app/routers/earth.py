@@ -53,19 +53,11 @@ async def _fetch_latest_ext_primary(conn) -> Optional[Dict]:
         await cur.execute(
             """
             with latest_ts as (
-              select coalesce(
-                (
-                  select max(ts_utc)
-                  from ext.schumann
-                  where coalesce((meta->>'is_primary')::boolean, false) is true
-                ),
-                (
-                  select max(ts_utc)
-                  from ext.schumann
-                  where (meta->>'source') = 'cumiana'
-                    and (meta->>'status') = 'ok'
-                )
-              ) as ts_utc
+              select max(ts_utc) as ts_utc
+              from ext.schumann
+              where channel = 'fundamental_hz'
+                and (meta->>'source') = 'cumiana'
+                and (meta->>'status') = 'ok'
             )
             select
               s.ts_utc,
@@ -92,7 +84,6 @@ async def _fetch_latest_ext_primary(conn) -> Optional[Dict]:
                 max(s.value_num) filter (where s.channel='band_18_20'),
                 max((s.meta->'amplitude_idx'->>'band_18_20')::float)
               ) as band_18_20,
-              -- bins + axis metadata may live at meta top-level or meta.raw; prefer top-level if present
               COALESCE(
                 (max(s.meta->>'spectrogram_bins'))::jsonb,
                 (max(s.meta->'raw'->>'spectrogram_bins'))::jsonb
@@ -119,10 +110,8 @@ async def _fetch_latest_ext_primary(conn) -> Optional[Dict]:
               ) as primary_source
             from ext.schumann s
             join latest_ts lt on s.ts_utc = lt.ts_utc
-            where (
-              coalesce((s.meta->>'is_primary')::boolean, false) is true
-              or ((s.meta->>'source') = 'cumiana' and (s.meta->>'status') = 'ok')
-            )
+            where (s.meta->>'source') = 'cumiana'
+              and (s.meta->>'status') = 'ok'
             group by s.ts_utc
             """,
             prepare=False,
@@ -135,64 +124,70 @@ async def _fetch_series_ext_primary(conn, limit: int) -> List[Dict]:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
             """
-            with prim as (
-              select ts_utc, channel, value_num, meta
+            with ts as (
+              select distinct ts_utc
               from ext.schumann
-              where coalesce((meta->>'is_primary')::boolean, false) is true
+              where channel = 'fundamental_hz'
+                and (meta->>'source') = 'cumiana'
+                and (meta->>'status') = 'ok'
+              order by ts_utc desc
+              limit %s
             )
             select
-              ts_utc,
-              max(ts_utc) as generated_at,
-              max(value_num) filter (where channel='fundamental_hz') as f0,
-              max(value_num) filter (where channel='F1') as f1,
-              max(value_num) filter (where channel='F2') as f2,
-              max(value_num) filter (where channel='F3') as f3,
-              max(value_num) filter (where channel='F4') as f4,
-              max(value_num) filter (where channel='F5') as f5,
+              s.ts_utc,
+              max(s.ts_utc) as generated_at,
+              max(s.value_num) filter (where s.channel='fundamental_hz') as f0,
+              max(s.value_num) filter (where s.channel='F1') as f1,
+              max(s.value_num) filter (where s.channel='F2') as f2,
+              max(s.value_num) filter (where s.channel='F3') as f3,
+              max(s.value_num) filter (where s.channel='F4') as f4,
+              max(s.value_num) filter (where s.channel='F5') as f5,
               COALESCE(
-                max(value_num) filter (where channel='sr_total_0_20'),
-                max((meta->'amplitude_idx'->>'sr_total_0_20')::float)
+                max(s.value_num) filter (where s.channel='sr_total_0_20'),
+                max((s.meta->'amplitude_idx'->>'sr_total_0_20')::float)
               ) as sr_total_0_20,
               COALESCE(
-                max(value_num) filter (where channel='band_7_9'),
-                max((meta->'amplitude_idx'->>'band_7_9')::float)
+                max(s.value_num) filter (where s.channel='band_7_9'),
+                max((s.meta->'amplitude_idx'->>'band_7_9')::float)
               ) as band_7_9,
               COALESCE(
-                max(value_num) filter (where channel='band_13_15'),
-                max((meta->'amplitude_idx'->>'band_13_15')::float)
+                max(s.value_num) filter (where s.channel='band_13_15'),
+                max((s.meta->'amplitude_idx'->>'band_13_15')::float)
               ) as band_13_15,
               COALESCE(
-                max(value_num) filter (where channel='band_18_20'),
-                max((meta->'amplitude_idx'->>'band_18_20')::float)
+                max(s.value_num) filter (where s.channel='band_18_20'),
+                max((s.meta->'amplitude_idx'->>'band_18_20')::float)
               ) as band_18_20,
               COALESCE(
-                (max(meta->>'spectrogram_bins'))::jsonb,
-                (max(meta->'raw'->>'spectrogram_bins'))::jsonb
+                (max(s.meta->>'spectrogram_bins'))::jsonb,
+                (max(s.meta->'raw'->>'spectrogram_bins'))::jsonb
               ) as spectrogram_bins,
               COALESCE(
-                max((meta->>'freq_start_hz')::float),
-                max((meta->'raw'->>'freq_start_hz')::float)
+                max((s.meta->>'freq_start_hz')::float),
+                max((s.meta->'raw'->>'freq_start_hz')::float)
               ) as freq_start_hz,
               COALESCE(
-                max((meta->>'freq_step_hz')::float),
-                max((meta->'raw'->>'freq_step_hz')::float)
+                max((s.meta->>'freq_step_hz')::float),
+                max((s.meta->'raw'->>'freq_step_hz')::float)
               ) as freq_step_hz,
               COALESCE(
-                max((meta->>'quality_score')::float),
-                max((meta->'raw'->>'quality_score')::float)
+                max((s.meta->>'quality_score')::float),
+                max((s.meta->'raw'->>'quality_score')::float)
               ) as quality_score,
               COALESCE(
-                bool_or((meta->>'usable')::boolean),
-                bool_or((meta->'raw'->>'usable')::boolean)
+                bool_or((s.meta->>'usable')::boolean),
+                bool_or((s.meta->'raw'->>'usable')::boolean)
               ) as usable,
               COALESCE(
-                max(meta->>'primary_source'),
-                max(meta->>'source')
+                max(s.meta->>'primary_source'),
+                max(s.meta->>'source')
               ) as primary_source
-            from prim
-            group by ts_utc
-            order by coalesce(generated_at, ts_utc) desc
-            limit %s
+            from ext.schumann s
+            join ts on s.ts_utc = ts.ts_utc
+            where (s.meta->>'source') = 'cumiana'
+              and (s.meta->>'status') = 'ok'
+            group by s.ts_utc
+            order by s.ts_utc desc
             """,
             (limit,),
             prepare=False,
