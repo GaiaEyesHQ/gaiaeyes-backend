@@ -199,7 +199,10 @@ def _all_harmonics_null(row: Optional[Dict]) -> bool:
     """Return True when a marts/latest row exists but contains no usable harmonic values."""
     if not row or not isinstance(row, dict):
         return True
-    keys = ("f0", "f1", "f2", "f3", "f4", "f5", "combined_f1")
+    # Treat the row as empty if ALL core harmonic fields are null.
+    # Do NOT let a non-null combined_f1 prevent fallback, since some marts views
+    # can populate combined_f1 while leaving f0..f5 null.
+    keys = ("f0", "f1", "f2", "f3", "f4", "f5")
     return all(row.get(k) is None for k in keys)
 
 
@@ -208,20 +211,30 @@ async def schumann_latest(conn=Depends(get_db)):
     """
     Returns the most recent Schumann harmonics snapshot.
 
-    Primary source: marts.schumann_latest_v2 (if present)
-    Fallback:       marts.schumann_latest, marts.schumann_daily_v2, then marts.schumann_daily
+    Primary source: v_schumann_wide (intraday wide view)
+    Fallback:       marts.schumann_daily_v2, then marts.schumann_daily
     Fallback:       ext.schumann primary rows (new ingest path)
     """
     row = None
 
-    # Try v2 "latest" view first
+    # Prefer wide intraday view if present
     try:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
                 """
-                select ts_utc, generated_at, f0, f1, f2, f3, f4, f5, combined_f1
-                from marts.schumann_latest_v2
-                order by coalesce(generated_at, ts_utc) desc
+                select
+                  ts_utc,
+                  ts_utc as generated_at,
+                  -- v_schumann_wide uses f1_hz.. where f1_hz is the fundamental
+                  f1_hz as f0,
+                  f1_hz as f1,
+                  f2_hz as f2,
+                  f3_hz as f3,
+                  f4_hz as f4,
+                  f5_hz as f5,
+                  null::float as combined_f1
+                from v_schumann_wide
+                order by ts_utc desc
                 limit 1
                 """,
                 prepare=False,
@@ -231,25 +244,6 @@ async def schumann_latest(conn=Depends(get_db)):
                 row = None
     except Exception:
         row = None
-
-    # Fallback: canonical latest
-    if not row:
-        try:
-            async with conn.cursor(row_factory=dict_row) as cur:
-                await cur.execute(
-                    """
-                    select ts_utc, generated_at, f0, f1, f2, f3, f4, f5, combined_f1
-                    from marts.schumann_latest
-                    order by coalesce(generated_at, ts_utc) desc
-                    limit 1
-                    """,
-                    prepare=False,
-                )
-                row = await cur.fetchone()
-                if _all_harmonics_null(row):
-                    row = None
-        except Exception:
-            row = None
 
     # Fallback: most recent daily (v2 first, then canonical)
     if not row:

@@ -89,22 +89,40 @@ def env_get(name: str, default: Optional[str] = None) -> Optional[str]:
 # ------------ Helper: Strip trailing metric/stat readouts from captions ------------
 def strip_metric_tail(text: str) -> str:
     """
-    Remove trailing lines that look like metric/stat readouts
-    (e.g., KP/Bz/Schumann, PFU/MeV/Hz). We only strip from the tail
-    to preserve normal prose earlier in the caption.
+    Remove metric/stat readouts and hashtag-only lines from a caption for VO use,
+    then collapse remaining prose to a single paragraph.
     """
     if not text:
         return text
-    lines = text.splitlines()
-    metric_tokens = ("kp", "bz", "schumann", "pfu", "mev", "hz", "f10.7", "goes")
-    # Drop any tail lines containing metric tokens
-    changed = False
-    while lines and any(tok in lines[-1].lower() for tok in metric_tokens):
-        lines.pop()
-        changed = True
-    # Also trim dangling separators at the very end
-    out = "\n".join(lines).rstrip(" —-|·.,;()[]")
-    return out if changed else text
+    lines = [ln.strip() for ln in str(text).splitlines() if ln.strip()]
+
+    def is_metric_footer(ln: str) -> bool:
+        low = ln.lower()
+        if low.startswith("—"):
+            return True
+        # common footer pattern with multiple tokens
+        if ("kp" in low and "bz" in low) or ("schumann" in low and "hz" in low):
+            return True
+        if any(tok in low for tok in ("pfu", "mev", "f10.7", "goes")):
+            return True
+        return False
+
+    def is_hashtag_only(ln: str) -> bool:
+        parts = ln.split()
+        if not parts:
+            return False
+        return all(p.startswith("#") for p in parts)
+
+    # Drop metric footer lines anywhere
+    kept = [ln for ln in lines if not is_metric_footer(ln)]
+
+    # Drop trailing hashtag-only lines (common in captions)
+    while kept and is_hashtag_only(kept[-1]):
+        kept.pop()
+
+    # Collapse to one paragraph for VO
+    out = " ".join(kept).strip()
+    return out
 
 # ------------ Inputs & Defaults ------------
 
@@ -206,14 +224,14 @@ def resolve_caption(platform: str = "default", target_day: Optional[str] = None)
     for key in ("caption", "overview", "lead", "short"):
         val = row.get(key)
         if isinstance(val, str) and val.strip():
-            return val.strip()
+            return " ".join(val.split())
     cards = row.get("cards")
     if isinstance(cards, dict):
         cap = cards.get("caption") or {}
         if isinstance(cap, dict):
             txt = cap.get("text") or cap.get("short")
             if isinstance(txt, str) and txt.strip():
-                return txt.strip()
+                return " ".join(txt.split())
     return None
 
 # Visual timing
