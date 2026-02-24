@@ -258,6 +258,10 @@ async def schumann_latest(
         except Exception as exc:
             attempts.append({"source": wide_name, "ok": False, "error": str(exc)})
             row = None
+            try:
+                await conn.rollback()
+            except Exception:
+                pass
 
     # Fallback: most recent daily (v2 first, then canonical)
     if not row:
@@ -297,6 +301,10 @@ async def schumann_latest(
                         break
             except Exception as exc:
                 attempts.append({"source": "daily_fallback", "ok": False, "error": str(exc)})
+                try:
+                    await conn.rollback()
+                except Exception:
+                    pass
                 continue
 
     # Fallback: ext.schumann primary rows (new ingest path)
@@ -306,6 +314,10 @@ async def schumann_latest(
             attempts.append({"source": "ext_schumann", "ok": bool(row)})
         except Exception as exc:
             attempts.append({"source": "ext_schumann", "ok": False, "error": str(exc)})
+            try:
+                await conn.rollback()
+            except Exception:
+                pass
             row = None
 
     if not row:
