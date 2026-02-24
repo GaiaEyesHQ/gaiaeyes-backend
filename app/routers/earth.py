@@ -207,7 +207,10 @@ def _all_harmonics_null(row: Optional[Dict]) -> bool:
 
 
 @router.get("/earth/schumann/latest")
-async def schumann_latest(conn=Depends(get_db)):
+async def schumann_latest(
+    debug: bool = Query(False),
+    conn=Depends(get_db),
+):
     """
     Returns the most recent Schumann harmonics snapshot.
 
@@ -216,34 +219,45 @@ async def schumann_latest(conn=Depends(get_db)):
     Fallback:       ext.schumann primary rows (new ingest path)
     """
     row = None
+    attempts: List[Dict] = []
 
-    # Prefer wide intraday view if present
-    try:
-        async with conn.cursor(row_factory=dict_row) as cur:
-            await cur.execute(
-                """
-                select
-                  ts_utc,
-                  ts_utc as generated_at,
-                  -- v_schumann_wide uses f1_hz.. where f1_hz is the fundamental
-                  f1_hz as f0,
-                  f1_hz as f1,
-                  f2_hz as f2,
-                  f3_hz as f3,
-                  f4_hz as f4,
-                  f5_hz as f5,
-                  null::float as combined_f1
-                from v_schumann_wide
-                order by ts_utc desc
-                limit 1
-                """,
-                prepare=False,
-            )
-            row = await cur.fetchone()
-            if _all_harmonics_null(row):
-                row = None
-    except Exception:
-        row = None
+    # Prefer wide intraday view if present (try multiple schemas + column variants)
+    wide_candidates = [
+        "v_schumann_wide",
+        "public.v_schumann_wide",
+        "marts.v_schumann_wide",
+    ]
+    for wide_name in wide_candidates:
+        try:
+            async with conn.cursor(row_factory=dict_row) as cur:
+                await cur.execute(
+                    f"""
+                    select
+                      ts_utc,
+                      ts_utc as generated_at,
+                      -- Some variants use f0_hz, others use f1_hz as the fundamental.
+                      coalesce(f0_hz, f1_hz) as f0,
+                      coalesce(f0_hz, f1_hz) as f1,
+                      f2_hz as f2,
+                      f3_hz as f3,
+                      f4_hz as f4,
+                      f5_hz as f5,
+                      null::float as combined_f1
+                    from {wide_name}
+                    order by ts_utc desc
+                    limit 1
+                    """,
+                    prepare=False,
+                )
+                row = await cur.fetchone()
+                if row and _all_harmonics_null(row):
+                    row = None
+                attempts.append({"source": wide_name, "ok": bool(row)})
+                if row:
+                    break
+        except Exception as exc:
+            attempts.append({"source": wide_name, "ok": False, "error": str(exc)})
+            row = None
 
     # Fallback: most recent daily (v2 first, then canonical)
     if not row:
@@ -274,27 +288,34 @@ async def schumann_latest(conn=Depends(get_db)):
                 async with conn.cursor(row_factory=dict_row) as cur:
                     await cur.execute(daily_sql, prepare=False)
                     r = await cur.fetchone()
+                    attempts.append({"source": "daily_fallback", "ok": bool(r)})
                     if r:
                         row = r
                         if _all_harmonics_null(row):
                             row = None
                             continue
                         break
-            except Exception:
+            except Exception as exc:
+                attempts.append({"source": "daily_fallback", "ok": False, "error": str(exc)})
                 continue
 
     # Fallback: ext.schumann primary rows (new ingest path)
     if not row:
         try:
             row = await _fetch_latest_ext_primary(conn)
-        except Exception:
+            attempts.append({"source": "ext_schumann", "ok": bool(row)})
+        except Exception as exc:
+            attempts.append({"source": "ext_schumann", "ok": False, "error": str(exc)})
             row = None
 
     if not row:
-        return {"ok": True, "generated_at": None, "harmonics": {}, "amplitude": {}, "quality": {}}
+        out = {"ok": True, "generated_at": None, "harmonics": {}, "amplitude": {}, "quality": {}}
+        if debug:
+            out["debug"] = {"attempts": attempts}
+        return out
 
     ts = row.get("generated_at") or row.get("ts_utc")
-    return {
+    out = {
         "ok": True,
         "generated_at": _iso(ts),
         "harmonics": _project_harmonics(row),
@@ -305,6 +326,9 @@ async def schumann_latest(conn=Depends(get_db)):
             "quality_score": row.get("quality_score"),
         },
     }
+    if debug:
+        out["debug"] = {"attempts": attempts, "row_keys": sorted(list(row.keys()))}
+    return out
 
 
 @router.get("/earth/schumann/daily")
