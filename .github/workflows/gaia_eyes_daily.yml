@@ -387,6 +387,15 @@ jobs:
             exit 1
           fi
 
+      - name: Debug VO env
+        working-directory: bots/earthscope_post
+        env:
+          REEL_TTS_MODEL: gpt-4o-mini-tts
+          REEL_TTS_VOICE: marin
+        run: |
+          echo "OPENAI_API_KEY present: ${{ secrets.OPENAI_API_KEY != '' }}"
+          echo "REEL_TTS_MODEL: $REEL_TTS_MODEL"
+          echo "REEL_TTS_VOICE: $REEL_TTS_VOICE"
       - name: Build reel (reel_builder.py)
         working-directory: bots/earthscope_post
         env:
@@ -395,6 +404,10 @@ jobs:
           REEL_BED_URL: ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/music/bed01.wav
           REEL_OUT: ${{ github.workspace }}/reel.mp4
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          REEL_TTS_MODEL: gpt-4o-mini-tts
+          REEL_TTS_FALLBACK_MODEL: gpt-4o-mini-tts
+          REEL_TTS_VOICE: marin
+          REEL_REQUIRE_VO: "0"
           MEDIA_REPO_PATH: ${{ github.workspace }}/reel_media
         run: |
           set -euo pipefail

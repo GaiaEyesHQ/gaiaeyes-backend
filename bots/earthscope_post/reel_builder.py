@@ -132,6 +132,9 @@ DATA_DIR = MEDIA_REPO_PATH / "data"
 EARTHSCOPE_JSON = Path(env_get("EARTHSCOPE_OUTPUT_JSON_PATH", str(DATA_DIR / "earthscope_daily.json")))
 OPENAI_API_KEY = env_get("OPENAI_API_KEY")
 REEL_TTS_VOICE = env_get("REEL_TTS_VOICE", "marin")
+REEL_TTS_MODEL = env_get("REEL_TTS_MODEL", "gpt-4o-mini-tts")
+REEL_TTS_FALLBACK_MODEL = env_get("REEL_TTS_FALLBACK_MODEL", "gpt-4o-mini-tts")
+REEL_REQUIRE_VO = env_get("REEL_REQUIRE_VO", "0") == "1"
 REEL_MOOD = env_get("REEL_MOOD", None)
 REEL_OUT_PATH = Path(env_get("REEL_OUT_PATH", env_get("REEL_OUT", str(IMAGES_DIR / "reel.mp4"))))
 
@@ -398,7 +401,7 @@ def tts_to_wav(text: str, out_wav: Path, api_key: str, voice: str = "marin", mod
             log(f"VO wav saved: {out_wav}")
             return True
         else:
-            log(f"TTS failed {resp.status_code}: {resp.text[:200]}")
+            log(f"TTS failed {resp.status_code}: {resp.text[:400]}")
             return False
     except Exception as e:
         log(f"TTS exception: {e}")
@@ -558,14 +561,36 @@ def main():
     caption_text = resolve_caption(platform=platform, target_day=target_day)
     vo_text_raw = caption_text or guess_vo_text(EARTHSCOPE_JSON)
     vo_text = strip_metric_tail(vo_text_raw) if STRIP_METRICS else vo_text_raw
+    if len((vo_text or "").strip()) < 40:
+        log("VO text too short after sanitize; using fallback blurb.")
+        vo_text = "Gaia Eyes daily highlights. Check today’s EarthScope and pacing tips."
     if vo_text != vo_text_raw:
         log("Sanitized VO: removed trailing metric lines.")
+    log(f"VO: api_key_present={bool(OPENAI_API_KEY)} voice={REEL_TTS_VOICE} model={REEL_TTS_MODEL}")
+    log(f"VO text length={len((vo_text or '').strip())} sanitized={STRIP_METRICS}")
     vo_wav = tmp_dir / "vo.wav"
     vo_ok = False
     if OPENAI_API_KEY:
-        vo_ok = tts_to_wav(vo_text, vo_wav, api_key=OPENAI_API_KEY, voice=REEL_TTS_VOICE)
+        vo_ok = tts_to_wav(
+            vo_text,
+            vo_wav,
+            api_key=OPENAI_API_KEY,
+            voice=REEL_TTS_VOICE,
+            model=REEL_TTS_MODEL,
+        )
+        if (not vo_ok) and REEL_TTS_FALLBACK_MODEL != REEL_TTS_MODEL:
+            log(f"Retrying TTS with fallback model={REEL_TTS_FALLBACK_MODEL}")
+            vo_ok = tts_to_wav(
+                vo_text,
+                vo_wav,
+                api_key=OPENAI_API_KEY,
+                voice=REEL_TTS_VOICE,
+                model=REEL_TTS_FALLBACK_MODEL,
+            )
     else:
         log("OPENAI_API_KEY not set; skipping VO.")
+    if REEL_REQUIRE_VO and not vo_ok:
+        raise SystemExit("VO required but TTS failed")
 
     bed_wav = tmp_dir / "bed.wav"
     bed_ok = False
