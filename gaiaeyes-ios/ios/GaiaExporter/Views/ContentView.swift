@@ -1037,6 +1037,7 @@ struct ContentView: View {
     @State private var dashboardLastUpdatedText: String? = nil
     @State private var showMissionSettingsSheet: Bool = false
     @State private var showMissionInsightsSheet: Bool = false
+    @State private var showSchumannDashboardSheet: Bool = false
 
     @State private var magnetosphere: MagnetosphereData? = nil
     @State private var magnetosphereLoading: Bool = false
@@ -2855,6 +2856,7 @@ struct ContentView: View {
                 onSymptoms: { showSymptomSheet = true },
                 onInsights: { showMissionInsightsSheet = true },
                 onSettings: { showMissionSettingsSheet = true },
+                onSchumann: { showSchumannDashboardSheet = true },
                 onResearch: {
 #if canImport(UIKit)
                     if let url = URL(string: "https://gaiaeyes.com/research/") {
@@ -2871,6 +2873,7 @@ struct ContentView: View {
         let onSymptoms: () -> Void
         let onInsights: () -> Void
         let onSettings: () -> Void
+        let onSchumann: () -> Void
         let onResearch: () -> Void
 
         var body: some View {
@@ -2880,10 +2883,11 @@ struct ContentView: View {
                         Button(action: onSymptoms) { Label("Symptoms", systemImage: "plus.circle") }
                         Button(action: onInsights) { Label("Insights", systemImage: "chart.xyaxis.line") }
                         Button(action: onSettings) { Label("Settings", systemImage: "gearshape") }
+                        Button(action: onSchumann) { Label("Schumann", systemImage: "waveform.path.ecg") }
                         Button(action: onResearch) { Label("Research", systemImage: "book.closed") }
                     }
                 }
-                Text("Detailed cards were moved to Insights and Settings.")
+                Text("Quick links open dedicated views for insights and Schumann.")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -4292,6 +4296,11 @@ struct ContentView: View {
                 }
                 .navigationTitle("Settings")
                 .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+        .sheet(isPresented: $showSchumannDashboardSheet) {
+            NavigationStack {
+                SchumannDashboardView(state: state)
             }
         }
         .sheet(isPresented: $showSymptomSheet) {

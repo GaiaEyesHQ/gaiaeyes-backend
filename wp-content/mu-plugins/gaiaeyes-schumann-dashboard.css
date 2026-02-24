@@ -1,0 +1,307 @@
+.ge-schumann-dashboard {
+  --ge-bg: linear-gradient(130deg, #061a23 0%, #0d2a33 38%, #1f3c2a 100%);
+  --ge-panel: rgba(6, 20, 26, 0.72);
+  --ge-panel-border: rgba(116, 201, 213, 0.28);
+  --ge-text: #ecfaf9;
+  --ge-muted: #9ec3c6;
+  --ge-accent: #7ce0d8;
+  --ge-accent-2: #ffd17e;
+  --ge-alert: #f39f96;
+  --ge-shadow: 0 20px 40px rgba(0, 0, 0, 0.33);
+  --ge-font: "Avenir Next", "Segoe UI", sans-serif;
+
+  background: var(--ge-bg);
+  border-radius: 18px;
+  color: var(--ge-text);
+  font-family: var(--ge-font);
+  padding: 14px;
+  box-shadow: var(--ge-shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.ge-schumann-dashboard::before {
+  background: radial-gradient(circle at top right, rgba(255, 209, 126, 0.22), transparent 46%);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.ge-schumann-dashboard.ge-sch-high-contrast {
+  --ge-bg: #02090d;
+  --ge-panel: #07131a;
+  --ge-panel-border: rgba(220, 240, 247, 0.58);
+  --ge-text: #ffffff;
+  --ge-muted: #c7d9df;
+  --ge-accent: #9af4e8;
+  --ge-accent-2: #ffe29e;
+}
+
+.ge-sch-wrap {
+  position: relative;
+  z-index: 1;
+}
+
+.ge-sch-loading,
+.ge-sch-empty {
+  background: var(--ge-panel);
+  border: 1px solid var(--ge-panel-border);
+  border-radius: 12px;
+  color: var(--ge-muted);
+  font-size: 14px;
+  padding: 14px;
+}
+
+.ge-sch-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.ge-sch-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  margin: 0;
+}
+
+.ge-sch-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ge-sch-mode,
+.ge-sch-pill-btn,
+.ge-sch-action-link {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  color: var(--ge-text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 8px 12px;
+  text-decoration: none;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.ge-sch-mode:hover,
+.ge-sch-pill-btn:hover,
+.ge-sch-action-link:hover {
+  transform: translateY(-1px);
+}
+
+.ge-sch-mode.is-active {
+  background: rgba(124, 224, 216, 0.24);
+  border-color: rgba(124, 224, 216, 0.8);
+}
+
+.ge-sch-meta-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ge-sch-chip {
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  color: var(--ge-text);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 6px;
+  padding: 6px 10px;
+}
+
+.ge-sch-chip.ge-sch-chip-ok {
+  border-color: rgba(124, 224, 216, 0.65);
+}
+
+.ge-sch-chip.ge-sch-chip-low {
+  border-color: rgba(243, 159, 150, 0.65);
+}
+
+.ge-sch-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ge-sch-card {
+  background: var(--ge-panel);
+  border: 1px solid var(--ge-panel-border);
+  border-radius: 14px;
+  padding: 12px;
+  min-width: 0;
+}
+
+.ge-sch-card h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+.ge-sch-card--gauge,
+.ge-sch-card--readouts {
+  grid-column: span 6;
+}
+
+.ge-sch-card--heatmap,
+.ge-sch-card--pulse,
+.ge-sch-card--pro {
+  grid-column: span 12;
+}
+
+.ge-sch-gauge-wrap {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+}
+
+.ge-sch-gauge-wrap canvas {
+  width: 100%;
+  max-width: 260px;
+  height: 160px;
+}
+
+.ge-sch-gauge-value {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.ge-sch-muted {
+  color: var(--ge-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ge-sch-readouts {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ge-sch-readout {
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.14);
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.ge-sch-readout:last-child {
+  border-bottom: none;
+}
+
+.ge-sch-heatmap-wrap,
+.ge-sch-pulse-wrap {
+  position: relative;
+}
+
+.ge-sch-canvas {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+  display: block;
+  height: 230px;
+  width: 100%;
+}
+
+.ge-sch-pulse-canvas {
+  height: 210px;
+}
+
+.ge-sch-tooltip {
+  backdrop-filter: blur(5px);
+  background: rgba(2, 12, 18, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #f9ffff;
+  display: none;
+  font-size: 11px;
+  line-height: 1.35;
+  padding: 7px 8px;
+  pointer-events: none;
+  position: absolute;
+  transform: translate(8px, -8px);
+  white-space: nowrap;
+  z-index: 4;
+}
+
+.ge-sch-axes {
+  color: var(--ge-muted);
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  margin-top: 6px;
+}
+
+.ge-sch-band-bars {
+  display: grid;
+  gap: 8px;
+}
+
+.ge-sch-band-row {
+  display: grid;
+  grid-template-columns: 84px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.ge-sch-progress {
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.ge-sch-progress > span {
+  background: linear-gradient(90deg, #7ce0d8, #ffd17e);
+  display: block;
+  height: 100%;
+}
+
+.ge-sch-trend-up {
+  color: #9ef39f;
+}
+
+.ge-sch-trend-down {
+  color: #f39f96;
+}
+
+.ge-sch-trend-flat {
+  color: #d9e8ea;
+}
+
+.ge-sch-pro-lock {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 920px) {
+  .ge-sch-card--gauge,
+  .ge-sch-card--readouts {
+    grid-column: span 12;
+  }
+
+  .ge-sch-gauge-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .ge-sch-readouts {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import date, datetime, timezone
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from psycopg.rows import dict_row
 
 from app.db import get_db
@@ -18,6 +20,18 @@ def _iso(ts):
     if isinstance(ts, date):
         return datetime.combine(ts, datetime.min.time(), tzinfo=timezone.utc).isoformat()
     return None
+
+
+def _apply_cache_headers(response: Response, payload: object, max_age: int) -> None:
+    """Attach cache headers and a weak ETag without altering payload semantics."""
+    response.headers["Cache-Control"] = f"public, max-age={max_age}"
+    try:
+        body = json.dumps(payload, separators=(",", ":"), sort_keys=True, default=str)
+        digest = hashlib.sha1(body.encode("utf-8")).hexdigest()
+        response.headers["ETag"] = f'W/"{digest}"'
+    except Exception:
+        # Avoid failing requests on header formatting issues.
+        return
 
 
 def _project_harmonics(row: Dict) -> Dict[str, Optional[float]]:
@@ -208,6 +222,7 @@ def _all_harmonics_null(row: Optional[Dict]) -> bool:
 
 @router.get("/earth/schumann/latest")
 async def schumann_latest(
+    response: Response,
     debug: bool = Query(False),
     conn=Depends(get_db),
 ):
@@ -321,6 +336,7 @@ async def schumann_latest(
         out = {"ok": True, "generated_at": None, "harmonics": {}, "amplitude": {}, "quality": {}}
         if debug:
             out["debug"] = {"attempts": attempts}
+        _apply_cache_headers(response, out, 60)
         return out
 
     ts = row.get("generated_at") or row.get("ts_utc")
@@ -337,6 +353,7 @@ async def schumann_latest(
     }
     if debug:
         out["debug"] = {"attempts": attempts, "row_keys": sorted(list(row.keys()))}
+    _apply_cache_headers(response, out, 60)
     return out
 
 
@@ -502,6 +519,7 @@ async def schumann_diag(conn=Depends(get_db)):
 # New endpoint: /earth/schumann/series_primary
 @router.get("/earth/schumann/series_primary")
 async def schumann_series_primary(
+    response: Response,
     limit: int = Query(192, ge=10, le=20000),
     include_bins: bool = Query(False),
     conn=Depends(get_db),
@@ -536,12 +554,17 @@ async def schumann_series_primary(
             item["spectrogram_bins"] = r.get("spectrogram_bins")
         out.append(item)
 
-    return {"ok": True, "count": len(out), "rows": out}
+    payload = {"ok": True, "count": len(out), "rows": out}
+    _apply_cache_headers(response, payload, 300)
+    return payload
 
 
 # New endpoint: /earth/schumann/heatmap_48h
 @router.get("/earth/schumann/heatmap_48h")
-async def schumann_heatmap_48h(conn=Depends(get_db)):
+async def schumann_heatmap_48h(
+    response: Response,
+    conn=Depends(get_db),
+):
     """Return a lightweight 48h heatmap grid from primary rows.
 
     Output is time-ascending for direct heatmap rendering.
@@ -570,9 +593,11 @@ async def schumann_heatmap_48h(conn=Depends(get_db)):
             continue
         points.append({"ts": _iso(r.get("generated_at") or r.get("ts_utc")), "bins": bins})
 
-    return {
+    payload = {
         "ok": True,
         "axis": {"freq_start_hz": freq_start_hz, "freq_step_hz": freq_step_hz, "bins": 160},
         "count": len(points),
         "points": points,
     }
+    _apply_cache_headers(response, payload, 300)
+    return payload
