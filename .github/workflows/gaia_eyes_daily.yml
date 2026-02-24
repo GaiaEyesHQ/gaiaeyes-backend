@@ -338,8 +338,16 @@ jobs:
 
       - name: Install FFmpeg
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg jq
+          set -euo pipefail
+          if command -v ffmpeg >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+            echo "ffmpeg and jq already available; skipping apt install"
+            ffmpeg -version | head -n 1 || true
+            jq --version || true
+            exit 0
+          fi
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 update
+          sudo apt-get -o DPkg::Lock::Timeout=120 install -y --no-install-recommends ffmpeg jq
 
       - name: Set up Python
         uses: actions/setup-python@v5
