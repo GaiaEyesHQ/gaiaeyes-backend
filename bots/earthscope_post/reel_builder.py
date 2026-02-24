@@ -32,6 +32,7 @@ Basic flow:
 import os
 import json
 import random
+import re
 import subprocess
 import shlex
 from pathlib import Path
@@ -122,6 +123,7 @@ def strip_metric_tail(text: str) -> str:
 
     # Collapse to one paragraph for VO
     out = " ".join(kept).strip()
+    out = re.sub(r"\s*—\s*kp.*$", "", out, flags=re.I).strip()
     return out
 
 # ------------ Inputs & Defaults ------------
@@ -227,14 +229,14 @@ def resolve_caption(platform: str = "default", target_day: Optional[str] = None)
     for key in ("caption", "overview", "lead", "short"):
         val = row.get(key)
         if isinstance(val, str) and val.strip():
-            return " ".join(val.split())
+            return val.strip()
     cards = row.get("cards")
     if isinstance(cards, dict):
         cap = cards.get("caption") or {}
         if isinstance(cap, dict):
             txt = cap.get("text") or cap.get("short")
             if isinstance(txt, str) and txt.strip():
-                return " ".join(txt.split())
+                return txt.strip()
     return None
 
 # Visual timing
@@ -559,7 +561,10 @@ def main():
     platform = env_get("REEL_PLATFORM", "default")
     target_day = env_get("TARGET_DAY")
     caption_text = resolve_caption(platform=platform, target_day=target_day)
-    vo_text_raw = caption_text or guess_vo_text(EARTHSCOPE_JSON)
+    post_caption = " ".join((caption_text or "").split())
+    vo_text_raw = caption_text or ""
+    if not vo_text_raw.strip():
+        vo_text_raw = guess_vo_text(EARTHSCOPE_JSON)
     vo_text = strip_metric_tail(vo_text_raw) if STRIP_METRICS else vo_text_raw
     if len((vo_text or "").strip()) < 40:
         log("VO text too short after sanitize; using fallback blurb.")
@@ -571,6 +576,7 @@ def main():
     vo_wav = tmp_dir / "vo.wav"
     vo_ok = False
     if OPENAI_API_KEY:
+        log(f"VO using caption chars={len((vo_text or '').strip())}")
         vo_ok = tts_to_wav(
             vo_text,
             vo_wav,
