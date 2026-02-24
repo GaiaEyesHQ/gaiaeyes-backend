@@ -214,54 +214,64 @@ async def schumann_latest(
     """
     Returns the most recent Schumann harmonics snapshot.
 
-    Primary source: v_schumann_wide (intraday wide view)
+    Primary source: ext.schumann (Cumiana OK, 15-min cadence)
+    Fallback:       marts.v_schumann_wide (if available)
     Fallback:       marts.schumann_daily_v2, then marts.schumann_daily
-    Fallback:       ext.schumann primary rows (new ingest path)
     """
     row = None
     attempts: List[Dict] = []
 
-    # Prefer wide intraday view if present (try multiple schemas + column variants)
-    wide_candidates = [
-        "v_schumann_wide",
-        "public.v_schumann_wide",
-        "marts.v_schumann_wide",
-    ]
-    for wide_name in wide_candidates:
+    # Prefer realtime ext.schumann (Cumiana OK)
+    try:
+        row = await _fetch_latest_ext_primary(conn)
+        attempts.append({"source": "ext_schumann", "ok": bool(row)})
+    except Exception as exc:
+        attempts.append({"source": "ext_schumann", "ok": False, "error": str(exc)})
+        row = None
         try:
-            async with conn.cursor(row_factory=dict_row) as cur:
-                await cur.execute(
-                    f"""
-                    select
-                      ts_utc,
-                      ts_utc as generated_at,
-                      -- Some variants use f0_hz, others use f1_hz as the fundamental.
-                      coalesce(f0_hz, f1_hz) as f0,
-                      coalesce(f0_hz, f1_hz) as f1,
-                      f2_hz as f2,
-                      f3_hz as f3,
-                      f4_hz as f4,
-                      f5_hz as f5,
-                      null::float as combined_f1
-                    from {wide_name}
-                    order by ts_utc desc
-                    limit 1
-                    """,
-                    prepare=False,
-                )
-                row = await cur.fetchone()
-                if row and _all_harmonics_null(row):
-                    row = None
-                attempts.append({"source": wide_name, "ok": bool(row)})
-                if row:
-                    break
-        except Exception as exc:
-            attempts.append({"source": wide_name, "ok": False, "error": str(exc)})
-            row = None
+            await conn.rollback()
+        except Exception:
+            pass
+
+    # Prefer marts.v_schumann_wide if present (single candidate, marts only)
+    if not row:
+        wide_candidates = [
+            "marts.v_schumann_wide",
+        ]
+        for wide_name in wide_candidates:
             try:
-                await conn.rollback()
-            except Exception:
-                pass
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute(
+                        f"""
+                        select
+                          ts_utc,
+                          ts_utc as generated_at,
+                          f1_hz as f0,
+                          f1_hz as f1,
+                          f2_hz as f2,
+                          f3_hz as f3,
+                          f4_hz as f4,
+                          f5_hz as f5,
+                          null::float as combined_f1
+                        from {wide_name}
+                        order by ts_utc desc
+                        limit 1
+                        """,
+                        prepare=False,
+                    )
+                    row = await cur.fetchone()
+                    if row and _all_harmonics_null(row):
+                        row = None
+                    attempts.append({"source": wide_name, "ok": bool(row)})
+                    if row:
+                        break
+            except Exception as exc:
+                attempts.append({"source": wide_name, "ok": False, "error": str(exc)})
+                row = None
+                try:
+                    await conn.rollback()
+                except Exception:
+                    pass
 
     # Fallback: most recent daily (v2 first, then canonical)
     if not row:
@@ -275,7 +285,7 @@ async def schumann_latest(
             """
             select
               day as ts_utc,
-              generated_at,
+              day as generated_at,
               f0_avg_hz as f0,
               f1_avg_hz as f1,
               f2_avg_hz as f2,
@@ -306,19 +316,6 @@ async def schumann_latest(
                 except Exception:
                     pass
                 continue
-
-    # Fallback: ext.schumann primary rows (new ingest path)
-    if not row:
-        try:
-            row = await _fetch_latest_ext_primary(conn)
-            attempts.append({"source": "ext_schumann", "ok": bool(row)})
-        except Exception as exc:
-            attempts.append({"source": "ext_schumann", "ok": False, "error": str(exc)})
-            try:
-                await conn.rollback()
-            except Exception:
-                pass
-            row = None
 
     if not row:
         out = {"ok": True, "generated_at": None, "harmonics": {}, "amplitude": {}, "quality": {}}

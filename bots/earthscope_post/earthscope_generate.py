@@ -679,6 +679,9 @@ def _scrub_banned_phrases(text: str) -> str:
             # Replace banned phrase with neutral wording
             s = re.sub(re.escape(bp), "stable conditions", s, flags=re.I)
             low = s.lower()
+    # Soften overly technical phrasing
+    s = re.sub(r"inward-pointing field component", "southward field orientation", s, flags=re.I)
+    s = re.sub(r"interplanetary field", "field orientation", s, flags=re.I)
     # light n-gram de-dupe: collapse repeated bigrams
     s = re.sub(r"\b(\w+\s+\w+)\s+\1\b", r"\1", s, flags=re.I)
     s2 = s.strip()
@@ -814,8 +817,8 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "Interpret today’s space/earth conditions for humans. "
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
-        "Write in crisp, human language (not a bulletin or press release). Avoid sterile phrasing. "
-        "Include one playful metaphor max in the caption only. Do not add additional metaphors or 'metaphor:' labels elsewhere. Use metaphor_hint as a theme; you may paraphrase it. "
+        "Write in crisp, human language (not a bulletin or press release). Avoid sterile or overly technical phrasing (e.g., 'inward-pointing field component'). Prefer plain equivalents like 'southward field orientation' or 'field leaning south'. "
+        "Include one playful metaphor in the caption and allow one short humanizing aside in the body (max one additional sentence total). Do not stack metaphors. Use metaphor_hint as a theme; you may paraphrase it. "
         "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
         "No emojis. No questions. "
