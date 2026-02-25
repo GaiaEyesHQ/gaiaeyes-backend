@@ -120,11 +120,11 @@ private struct SchumannAmplitude: Codable {
     }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        srTotal0_20 = Self.decodeNumber(c, forKey: .srTotal0_20)
-        band7_9 = Self.decodeNumber(c, forKey: .band7_9)
-        band13_15 = Self.decodeNumber(c, forKey: .band13_15)
-        band18_20 = Self.decodeNumber(c, forKey: .band18_20)
+        let c = try decoder.container(keyedBy: SchumannDynamicCodingKey.self)
+        srTotal0_20 = Self.decodeNumber(c, keys: ["sr_total_0_20", "srTotal020", "srTotal0_20"])
+        band7_9 = Self.decodeNumber(c, keys: ["band_7_9", "band79", "band7_9"])
+        band13_15 = Self.decodeNumber(c, keys: ["band_13_15", "band1315", "band13_15"])
+        band18_20 = Self.decodeNumber(c, keys: ["band_18_20", "band1820", "band18_20"])
     }
 
     func encode(to encoder: Encoder) throws {
@@ -135,10 +135,26 @@ private struct SchumannAmplitude: Codable {
         try c.encodeIfPresent(band18_20, forKey: .band18_20)
     }
 
-    private static func decodeNumber(_ c: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double? {
-        if let v = try? c.decodeIfPresent(Double.self, forKey: key) { return v }
-        if let i = try? c.decodeIfPresent(Int.self, forKey: key) { return Double(i) }
-        if let s = try? c.decodeIfPresent(String.self, forKey: key) { return Double(s) }
+    private static func decodeNumber(_ c: KeyedDecodingContainer<SchumannDynamicCodingKey>, keys: [String]) -> Double? {
+        for raw in keys {
+            guard let key = SchumannDynamicCodingKey(stringValue: raw) else { continue }
+            if let v = try? c.decodeIfPresent(Double.self, forKey: key) { return v }
+            if let i = try? c.decodeIfPresent(Int.self, forKey: key) { return Double(i) }
+            if let s = try? c.decodeIfPresent(String.self, forKey: key), let d = Double(s) { return d }
+        }
+        return nil
+    }
+}
+
+private struct SchumannDynamicCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int? = nil
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+    }
+
+    init?(intValue: Int) {
         return nil
     }
 }
