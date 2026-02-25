@@ -17,12 +17,12 @@ def _definition():
 def test_zone_for_value_boundaries() -> None:
     zones = _definition()["gauge_zones"]["default"]
     assert zone_for_value(0, zones)["key"] == "low"
-    assert zone_for_value(24, zones)["key"] == "low"
-    assert zone_for_value(25, zones)["key"] == "mild"
-    assert zone_for_value(49, zones)["key"] == "mild"
-    assert zone_for_value(50, zones)["key"] == "elevated"
-    assert zone_for_value(74, zones)["key"] == "elevated"
-    assert zone_for_value(75, zones)["key"] == "high"
+    assert zone_for_value(29, zones)["key"] == "low"
+    assert zone_for_value(30, zones)["key"] == "mild"
+    assert zone_for_value(59, zones)["key"] == "mild"
+    assert zone_for_value(60, zones)["key"] == "elevated"
+    assert zone_for_value(79, zones)["key"] == "elevated"
+    assert zone_for_value(80, zones)["key"] == "high"
     assert zone_for_value(100, zones)["key"] == "high"
 
 

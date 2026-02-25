@@ -66,6 +66,13 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__gauge-marker--mild{box-shadow:0 0 0 2px #9ea339}
         .gaia-dashboard__gauge-marker--elevated{box-shadow:0 0 0 2px #ea8f36}
         .gaia-dashboard__gauge-marker--high{box-shadow:0 0 0 2px #cf4e4e}
+        .gaia-dashboard__gauge-legend{display:flex;flex-wrap:wrap;gap:10px;margin:4px 0 10px}
+        .gaia-dashboard__legend-item{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#9da9c1}
+        .gaia-dashboard__legend-dot{width:8px;height:8px;border-radius:50%}
+        .gaia-dashboard__legend-dot--low{background:#49b754}
+        .gaia-dashboard__legend-dot--mild{background:#9ea339}
+        .gaia-dashboard__legend-dot--elevated{background:#ea8f36}
+        .gaia-dashboard__legend-dot--high{background:#cf4e4e}
         .gaia-dashboard__alerts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
         .gaia-dashboard__pill{padding:5px 10px;border-radius:999px;font-size:12px;background:#223246;color:#a9c8ff}
         .gaia-dashboard__pill--watch{background:#3a2d19;color:#ffd58f}

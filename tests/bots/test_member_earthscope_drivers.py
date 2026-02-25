@@ -32,7 +32,7 @@ def test_active_state_lines_merges_pressure_solar_and_aqi() -> None:
 
     lines = _active_state_lines(active_states)
 
-    assert "Pressure swing: High (12h, 24h)" in lines
+    assert "Pressure swing: High (12h, 24h) (Δ24h +12.1 hPa)" in lines
     assert "Solar wind: High (610 km/s)" in lines
     assert "AQI: Moderate (59)" in lines
 
@@ -50,4 +50,4 @@ def test_observed_driver_lines_dedupes_alert_repeats() -> None:
     lines = _observed_driver_lines(active_states, alerts, local_payload={})
 
     pressure_lines = [line for line in lines if "Pressure swing" in line]
-    assert pressure_lines == ["Pressure swing: High (12h, 24h)"]
+    assert pressure_lines == ["Pressure swing: High (12h, 24h) (Δ24h +12.0 hPa)"]

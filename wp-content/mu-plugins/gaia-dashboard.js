@@ -21,10 +21,10 @@
   };
 
   const DEFAULT_GAUGE_ZONES = [
-    { min: 0, max: 24, key: "low" },
-    { min: 25, max: 49, key: "mild" },
-    { min: 50, max: 74, key: "elevated" },
-    { min: 75, max: 100, key: "high" },
+    { min: 0, max: 29, key: "low" },
+    { min: 30, max: 59, key: "mild" },
+    { min: 60, max: 79, key: "elevated" },
+    { min: 80, max: 100, key: "high" },
   ];
 
   const normalizeZoneKey = (raw) => {
@@ -177,12 +177,15 @@
       .replace(/^\d+\.\s+/, "")
       .trim();
 
-  const parseEarthscopeSections = (markdown) => {
+  const parseEarthscopeSections = (markdown, driversCompact) => {
     const buckets = { checkin: [], drivers: [], summary: [], actions: [] };
+    const compactDrivers = Array.isArray(driversCompact)
+      ? driversCompact.map((line) => cleanMarkdownLine(line)).filter(Boolean)
+      : [];
     if (!markdown || !String(markdown).trim()) {
       return {
         checkin: sectionDefaults.checkin,
-        drivers: sectionDefaults.drivers,
+        drivers: compactDrivers.length ? compactDrivers.join("\n") : sectionDefaults.drivers,
         summary: sectionDefaults.summary,
         actions: sectionDefaults.actions,
       };
@@ -226,6 +229,9 @@
     if (!buckets.checkin.length && buckets.summary.length) {
       buckets.checkin = buckets.summary.slice(0, 2);
       buckets.summary = buckets.summary.slice(Math.min(2, buckets.summary.length));
+    }
+    if (compactDrivers.length) {
+      buckets.drivers = compactDrivers;
     }
 
     return {
@@ -285,8 +291,11 @@
     });
   };
 
-  const renderEarthscopeBlocks = (earthscope) => {
-    const sections = parseEarthscopeSections(earthscope && earthscope.body_markdown);
+  const renderEarthscopeBlocks = (earthscope, driversCompact) => {
+    const sections = parseEarthscopeSections(
+      earthscope && earthscope.body_markdown,
+      driversCompact
+    );
     return sectionOrder
       .map((key) => {
         const candidates = backgroundCandidates(key).join("|");
@@ -423,6 +432,7 @@
     }));
 
     const alerts = Array.isArray(payload.alerts) ? payload.alerts : [];
+    const driversCompact = Array.isArray(payload.driversCompact) ? payload.driversCompact : [];
     const isPaid = payload.entitled === true || !!payload.memberPost;
     const displayRows = isPaid ? gaugeRows : gaugeRows.slice(0, 4);
     const earthscope = isPaid ? payload.memberPost || payload.publicPost || null : payload.publicPost || payload.memberPost || null;
@@ -447,6 +457,18 @@
       <div class="gaia-dashboard__gauges">
         ${displayRows.map((row) => renderGaugeCard(row, gaugeZones)).join("")}
       </div>
+      <div class="gaia-dashboard__gauge-legend">
+        ${["low", "mild", "elevated", "high"]
+          .map(
+            (zone) => `
+              <span class="gaia-dashboard__legend-item">
+                <span class="gaia-dashboard__legend-dot gaia-dashboard__legend-dot--${zone}"></span>
+                ${esc(zoneLabelFromKey(zone))}
+              </span>
+            `
+          )
+          .join("")}
+      </div>
       ${
         alerts.length
           ? `<div class="gaia-dashboard__alerts">${alerts
@@ -466,7 +488,7 @@
             ? `<p class="gaia-dashboard__muted">${esc(earthscope.caption)}</p>`
             : ""
         }
-        <div class="gaia-dashboard__es-grid">${renderEarthscopeBlocks(earthscope)}</div>
+        <div class="gaia-dashboard__es-grid">${renderEarthscopeBlocks(earthscope, driversCompact)}</div>
       </div>
     `;
     applyEarthscopeBackgrounds(root);
@@ -610,6 +632,8 @@
           (dashboard && (dashboard.gauge_zones || dashboard.gaugeZones)) || null,
         gaugeLabels:
           (dashboard && (dashboard.gauge_labels || dashboard.gaugeLabels)) || {},
+        driversCompact:
+          (dashboard && (dashboard.drivers_compact || dashboard.driversCompact)) || [],
         alerts: dashboard && Array.isArray(dashboard.alerts) ? dashboard.alerts : [],
         entitled: dashboard ? dashboard.entitled : null,
         memberPost:

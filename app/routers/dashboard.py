@@ -14,6 +14,8 @@ from psycopg.rows import dict_row
 from app.db import get_db
 from app.security.auth import require_read_auth, require_write_auth
 from bots.definitions.load_definition_base import load_definition_base
+from services.gauges.alerts import dedupe_alert_pills
+from services.gauges.drivers import extract_drivers_from_markdown, normalize_drivers
 from services.gauges.zones import decorate_gauge
 
 
@@ -88,6 +90,31 @@ def _decorate_gauges(gauges: Dict[str, Any], definition: Dict[str, Any]) -> Dict
         if zone_key:
             out[gauge_key] = {"zone": zone_key, "label": zone_label}
     return out
+
+
+def _normalized_alerts(alerts: Any) -> list[Dict[str, Any]]:
+    if not isinstance(alerts, list):
+        return []
+    return dedupe_alert_pills([item for item in alerts if isinstance(item, dict)])
+
+
+def _compact_drivers_from_posts(payload: Dict[str, Any]) -> list[str]:
+    candidates = [
+        payload.get("member_post"),
+        payload.get("public_post"),
+        payload.get("personal_post"),
+    ]
+    for post in candidates:
+        if not isinstance(post, dict):
+            continue
+        body = post.get("body_markdown")
+        if not body:
+            body = post.get("bodyMarkdown")
+        raw = extract_drivers_from_markdown(body)
+        compact = normalize_drivers(raw)
+        if compact:
+            return compact
+    return []
 
 
 def _coerce_day(value: Optional[date]) -> date:
@@ -270,6 +297,8 @@ async def dashboard(
         gauges = out.get("gauges")
         if isinstance(gauges, dict):
             out["gauges_meta"] = _decorate_gauges(gauges, definition)
+    out["alerts"] = _normalized_alerts(out.get("alerts"))
+    out["drivers_compact"] = _compact_drivers_from_posts(out)
 
     if debug:
         out["_debug"] = {

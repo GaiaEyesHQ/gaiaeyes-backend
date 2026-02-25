@@ -57,16 +57,23 @@ Scoring rules:
 - Cap per signal (from definition JSON)
 - Clamp to 0–100
 
-## Gauge Zones + Labels (v1.2)
+## Gauge Zones + Labels (v1.3)
 - Definition source of truth:
   - `bots/definitions/gauge_logic_base_v1.json`
   - `gauge_zones.default`:
-    - `low`: 0–24
-    - `mild`: 25–49
-    - `elevated`: 50–74
-    - `high`: 75–100
+    - `low`: 0–29
+    - `mild`: 30–59
+    - `elevated`: 60–79
+    - `high`: 80–100
 - Per-gauge `zone_labels` are defined in the same JSON for:
-  - `pain`, `focus`, `heart`, `stamina`, `energy`, `sleep`, `mood`, and `health_status` (via `health_metrics_overlay.output_gauge`).
+  - `pain`: Quiet / Elevated / Active / Flare
+  - `focus`: Clear / Patchy / Foggy / Scattered
+  - `heart`: Steady / Reactive / Loaded / Strained
+  - `stamina` (`Recovery Load`): Fresh / Okay / Heavy / Drained
+  - `energy`: Smooth / Variable / Wired/tired / Volatile
+  - `sleep`: Rest-friendly / Light / Disrupted / Fragile
+  - `mood`: Stable / Sensitive / Reactive / Volatile
+  - `health_status`: Low strain / Mild strain / Moderate strain / High strain
 - Display rename:
   - Gauge key remains `stamina`
   - Display label is now `Recovery Load`
@@ -130,6 +137,8 @@ When trigger events are detected for paid users, the engine appends a “Trigger
     - `gauges_meta`: per-gauge `{zone, label}` (for example, `health_status=10` => `low` / `Low strain`)
     - `gauge_zones`: normalized zone boundaries for 4-zone rendering
     - `gauge_labels`: display labels (includes `stamina -> Recovery Load`)
+    - `alerts`: de-duped by family (`pressure`, `solar_wind`, `aqi`, `geomagnetic`) with highest severity retained
+    - `drivers_compact`: normalized/de-duped drivers (max 5), including merged pressure swing, solar wind, and AQI lines
 - `GET /v1/earthscope/member`
   - Returns member EarthScope for the authenticated user + day
 - `POST /v1/earthscope/member/regenerate`

@@ -13,6 +13,7 @@ from bots.definitions.load_definition_base import load_definition_base
 from bots.gauges.db_utils import pick_column, table_columns, upsert_row
 from bots.gauges.signal_resolver import resolve_signals
 from bots.gauges.local_payload import get_local_payload
+from services.gauges.alerts import dedupe_alert_pills
 
 
 LOG_LEVEL = os.getenv("GAIA_LOG_LEVEL", "INFO").upper()
@@ -412,7 +413,7 @@ def _build_alerts(definition: Dict[str, Any], active_states: List[Dict[str, Any]
             }
         )
 
-    return alerts
+    return dedupe_alert_pills(alerts)
 
 
 def _compute_trend(

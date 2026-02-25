@@ -289,10 +289,10 @@ private struct DashboardGaugeZone: Codable, Hashable {
     let key: String
 
     static let defaultZones: [DashboardGaugeZone] = [
-        DashboardGaugeZone(min: 0, max: 24, key: "low"),
-        DashboardGaugeZone(min: 25, max: 49, key: "mild"),
-        DashboardGaugeZone(min: 50, max: 74, key: "elevated"),
-        DashboardGaugeZone(min: 75, max: 100, key: "high"),
+        DashboardGaugeZone(min: 0, max: 29, key: "low"),
+        DashboardGaugeZone(min: 30, max: 59, key: "mild"),
+        DashboardGaugeZone(min: 60, max: 79, key: "elevated"),
+        DashboardGaugeZone(min: 80, max: 100, key: "high"),
     ]
 }
 
@@ -332,6 +332,7 @@ private struct DashboardPayload: Codable {
     let gaugesMeta: [String: DashboardGaugeMeta]?
     let gaugeZones: [DashboardGaugeZone]?
     let gaugeLabels: [String: String]?
+    let driversCompact: [String]?
     let alerts: [DashboardAlertItem]?
     let entitled: Bool?
     let memberPost: DashboardEarthscopePost?
@@ -339,7 +340,7 @@ private struct DashboardPayload: Codable {
     let personalPost: DashboardEarthscopePost?
 
     private enum CodingKeys: String, CodingKey {
-        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, alerts, entitled
+        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, driversCompact, alerts, entitled
         case memberPost
         case publicPost
         case personalPost
@@ -1584,6 +1585,7 @@ struct ContentView: View {
                             gaugesMeta: payload.gaugesMeta ?? older.gaugesMeta,
                             gaugeZones: payload.gaugeZones ?? older.gaugeZones,
                             gaugeLabels: payload.gaugeLabels ?? older.gaugeLabels,
+                            driversCompact: payload.driversCompact ?? older.driversCompact,
                             alerts: (payload.alerts?.isEmpty == false) ? payload.alerts : older.alerts,
                             entitled: payload.entitled ?? older.entitled,
                             memberPost: payload.memberPost ?? payload.personalPost ?? older.memberPost ?? older.personalPost,
@@ -1617,6 +1619,7 @@ struct ContentView: View {
                             gaugesMeta: resolvedPayload.gaugesMeta,
                             gaugeZones: resolvedPayload.gaugeZones,
                             gaugeLabels: resolvedPayload.gaugeLabels,
+                            driversCompact: resolvedPayload.driversCompact,
                             alerts: resolvedPayload.alerts,
                             entitled: resolvedPayload.entitled,
                             memberPost: resolvedPayload.memberPost ?? normalizedMember,
@@ -1642,6 +1645,7 @@ struct ContentView: View {
                             gaugesMeta: resolvedPayload.gaugesMeta,
                             gaugeZones: resolvedPayload.gaugeZones,
                             gaugeLabels: resolvedPayload.gaugeLabels,
+                            driversCompact: resolvedPayload.driversCompact,
                             alerts: resolvedPayload.alerts,
                             entitled: resolvedPayload.entitled,
                             memberPost: resolvedPayload.memberPost,
@@ -1665,6 +1669,7 @@ struct ContentView: View {
                         gaugesMeta: resolvedPayload.gaugesMeta,
                         gaugeZones: resolvedPayload.gaugeZones,
                         gaugeLabels: resolvedPayload.gaugeLabels,
+                        driversCompact: resolvedPayload.driversCompact,
                         alerts: resolvedPayload.alerts,
                         entitled: resolvedPayload.entitled,
                         memberPost: resolvedPayload.memberPost,
@@ -2867,6 +2872,7 @@ struct ContentView: View {
         let dashboardGaugesMeta = dashboardPayload?.gaugesMeta ?? [:]
         let dashboardGaugeZones = dashboardPayload?.gaugeZones ?? DashboardGaugeZone.defaultZones
         let dashboardGaugeLabels = dashboardPayload?.gaugeLabels ?? [:]
+        let dashboardDriversCompact = dashboardPayload?.driversCompact ?? []
         let dashboardAlerts = dashboardPayload?.alerts ?? []
         let resolvedEarthscope: DashboardEarthscopePost? = {
             return dashboardPayload?.memberPost
@@ -2880,6 +2886,7 @@ struct ContentView: View {
                 gaugesMeta: dashboardGaugesMeta,
                 gaugeZones: dashboardGaugeZones,
                 gaugeLabels: dashboardGaugeLabels,
+                driversCompact: dashboardDriversCompact,
                 alerts: dashboardAlerts,
                 earthscope: resolvedEarthscope,
                 fallbackTitle: fallbackFeatures?.postTitle,
@@ -2940,6 +2947,7 @@ struct ContentView: View {
         let gaugesMeta: [String: DashboardGaugeMeta]
         let gaugeZones: [DashboardGaugeZone]
         let gaugeLabels: [String: String]
+        let driversCompact: [String]
         let alerts: [DashboardAlertItem]
         let earthscope: DashboardEarthscopePost?
         let fallbackTitle: String?
@@ -3108,6 +3116,21 @@ struct ContentView: View {
             return sorted.isEmpty ? DashboardGaugeZone.defaultZones : sorted
         }
 
+        private func zoneColor(_ raw: String) -> Color {
+            switch raw.lowercased() {
+            case "low":
+                return Color(red: 0.33, green: 0.76, blue: 0.39)
+            case "mild":
+                return Color(red: 0.68, green: 0.67, blue: 0.24)
+            case "elevated":
+                return Color(red: 0.95, green: 0.57, blue: 0.21)
+            case "high":
+                return Color(red: 0.86, green: 0.30, blue: 0.30)
+            default:
+                return Color.secondary
+            }
+        }
+
         private func pillSeverity(_ raw: String?) -> StatusPill.Severity {
             let s = (raw ?? "").lowercased()
             if s == "high" || s == "alert" || s == "red" { return .alert }
@@ -3138,6 +3161,18 @@ struct ContentView: View {
                                 SegmentedGaugeCard(row: row, zones: resolvedZones())
                             }
                         }
+                        HStack(spacing: 10) {
+                            ForEach(["low", "mild", "elevated", "high"], id: \.self) { key in
+                                HStack(spacing: 4) {
+                                    Circle()
+                                        .fill(zoneColor(key))
+                                        .frame(width: 7, height: 7)
+                                    Text(key.capitalized)
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
                     }
 
                     if !alerts.isEmpty {
@@ -3153,7 +3188,8 @@ struct ContentView: View {
                     EarthscopeCardV2(
                         title: earthscope?.title ?? fallbackTitle,
                         caption: earthscope?.caption ?? fallbackCaption,
-                        bodyMarkdown: earthscope?.bodyMarkdown ?? fallbackBody
+                        bodyMarkdown: earthscope?.bodyMarkdown ?? fallbackBody,
+                        driversCompact: driversCompact
                     )
 
                     if let lastUpdatedText, !lastUpdatedText.isEmpty {
@@ -6877,9 +6913,24 @@ struct ContentView: View {
             }
         }
 
-        static func parse(_ markdown: String?) -> [EarthscopeBriefingSection] {
+        static func parse(_ markdown: String?, driversCompact: [String] = []) -> [EarthscopeBriefingSection] {
             guard let markdown, !markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                return defaultSections()
+                if driversCompact.isEmpty {
+                    return defaultSections()
+                }
+                var fallback = defaultSections()
+                if let idx = fallback.firstIndex(where: { $0.key == EarthscopeBriefingKey.drivers.rawValue }) {
+                    let compact = driversCompact.map { cleanLine($0) }.filter { !$0.isEmpty }
+                    if !compact.isEmpty {
+                        fallback[idx] = EarthscopeBriefingSection(
+                            id: EarthscopeBriefingKey.drivers.rawValue,
+                            key: EarthscopeBriefingKey.drivers.rawValue,
+                            title: sectionTitle(.drivers),
+                            body: compact.joined(separator: "\n")
+                        )
+                    }
+                }
+                return fallback
             }
 
             let normalized = markdown.replacingOccurrences(of: "\r\n", with: "\n")
@@ -6929,6 +6980,10 @@ struct ContentView: View {
                 buckets[.checkin] = Array(summary.prefix(2))
                 buckets[.summary] = Array(summary.dropFirst(min(2, summary.count)))
             }
+            let compactDrivers = driversCompact.map { cleanLine($0) }.filter { !$0.isEmpty }
+            if !compactDrivers.isEmpty {
+                buckets[.drivers] = compactDrivers
+            }
 
             var sections: [EarthscopeBriefingSection] = []
             for key in EarthscopeBriefingKey.allCases {
@@ -6936,6 +6991,8 @@ struct ContentView: View {
                 let body: String
                 if !linesForKey.isEmpty, key == .actions {
                     body = linesForKey.map { "• \($0)" }.joined(separator: "\n")
+                } else if !linesForKey.isEmpty, key == .drivers {
+                    body = linesForKey.joined(separator: "\n")
                 } else if !linesForKey.isEmpty {
                     body = linesForKey.joined(separator: " ")
                 } else {
@@ -7063,10 +7120,11 @@ struct ContentView: View {
         let title: String?
         let caption: String?
         let bodyMarkdown: String?
+        let driversCompact: [String]
         @State private var showFull: Bool = false
 
         var body: some View {
-            let sections = EarthscopeBriefingParser.parse(bodyMarkdown)
+            let sections = EarthscopeBriefingParser.parse(bodyMarkdown, driversCompact: driversCompact)
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) {
                     if let t = title, !t.isEmpty { Text(t).font(.headline) }
@@ -7092,7 +7150,8 @@ struct ContentView: View {
                 EarthscopeFullSheetV2(
                     title: title,
                     caption: caption,
-                    bodyText: bodyMarkdown
+                    bodyText: bodyMarkdown,
+                    driversCompact: driversCompact
                 )
             }
         }
@@ -7102,10 +7161,11 @@ struct ContentView: View {
         let title: String?
         let caption: String?
         let bodyText: String?
+        let driversCompact: [String]
         @Environment(\.dismiss) private var dismiss
 
         var body: some View {
-            let sections = EarthscopeBriefingParser.parse(bodyText)
+            let sections = EarthscopeBriefingParser.parse(bodyText, driversCompact: driversCompact)
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {

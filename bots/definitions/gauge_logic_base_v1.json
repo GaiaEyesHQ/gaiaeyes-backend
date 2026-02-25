@@ -22,10 +22,10 @@
     },
     "gauge_zones": {
       "default": [
-        { "min": 0, "max": 24, "key": "low" },
-        { "min": 25, "max": 49, "key": "mild" },
-        { "min": 50, "max": 74, "key": "elevated" },
-        { "min": 75, "max": 100, "key": "high" }
+        { "min": 0, "max": 29, "key": "low" },
+        { "min": 30, "max": 59, "key": "mild" },
+        { "min": 60, "max": 79, "key": "elevated" },
+        { "min": 80, "max": 100, "key": "high" }
       ]
     },
     "gauges": [
@@ -52,7 +52,7 @@
         "support_effect_tags": ["sleep_quality", "anxiety", "fatigue", "autonomic_load"],
         "zone_labels": {
           "low": "Clear",
-          "mild": "Slightly patchy",
+          "mild": "Patchy",
           "elevated": "Foggy",
           "high": "Scattered"
         }

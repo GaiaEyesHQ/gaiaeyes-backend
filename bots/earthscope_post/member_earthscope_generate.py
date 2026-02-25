@@ -232,6 +232,8 @@ def _active_state_lines(active_states: List[Dict[str, Any]]) -> List[str]:
 
     pressure_windows: List[str] = []
     pressure_state = ""
+    pressure_delta_12h: Optional[float] = None
+    pressure_delta_24h: Optional[float] = None
 
     solar_state = ""
     solar_speed: Optional[float] = None
@@ -258,11 +260,23 @@ def _active_state_lines(active_states: List[Dict[str, Any]]) -> List[str]:
             pressure_windows.append("12h")
             if _state_rank(state_name) > _state_rank(pressure_state):
                 pressure_state = state_name
+            try:
+                parsed = float(value) if value is not None else None
+            except Exception:
+                parsed = None
+            if parsed is not None:
+                pressure_delta_12h = parsed
             continue
         if signal_key == "earthweather.pressure_swing_24h_big":
             pressure_windows.append("24h")
             if _state_rank(state_name) > _state_rank(pressure_state):
                 pressure_state = state_name
+            try:
+                parsed = float(value) if value is not None else None
+            except Exception:
+                parsed = None
+            if parsed is not None:
+                pressure_delta_24h = parsed
             continue
         if signal_key == "spaceweather.sw_speed":
             if _state_rank(state_name) > _state_rank(solar_state):
@@ -311,7 +325,12 @@ def _active_state_lines(active_states: List[Dict[str, Any]]) -> List[str]:
 
     if pressure_windows:
         ordered = sorted(set(pressure_windows), key=lambda window: 0 if window == "12h" else 1)
-        _push(f"Pressure swing: {_state_label(pressure_state or 'elevated')} ({', '.join(ordered)})")
+        pressure_line = f"Pressure swing: {_state_label(pressure_state or 'elevated')} ({', '.join(ordered)})"
+        delta_value = pressure_delta_24h if pressure_delta_24h is not None else pressure_delta_12h
+        if delta_value is not None:
+            delta_label = "Δ24h" if pressure_delta_24h is not None else "Δ12h"
+            pressure_line += f" ({delta_label} {delta_value:+.1f} hPa)"
+        _push(pressure_line)
 
     if solar_state:
         if solar_speed is None:
@@ -394,7 +413,7 @@ def _observed_driver_lines(
 
     if not lines:
         lines.append("No major external drivers are flagged right now.")
-    return lines
+    return lines[:5]
 
 
 def _join_labels(labels: List[str]) -> str:
