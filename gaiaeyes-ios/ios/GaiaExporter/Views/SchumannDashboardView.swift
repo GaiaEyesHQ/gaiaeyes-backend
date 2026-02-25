@@ -111,6 +111,36 @@ private struct SchumannAmplitude: Codable {
         case band13_15 = "band_13_15"
         case band18_20 = "band_18_20"
     }
+
+    init(srTotal0_20: Double?, band7_9: Double?, band13_15: Double?, band18_20: Double?) {
+        self.srTotal0_20 = srTotal0_20
+        self.band7_9 = band7_9
+        self.band13_15 = band13_15
+        self.band18_20 = band18_20
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        srTotal0_20 = Self.decodeNumber(c, forKey: .srTotal0_20)
+        band7_9 = Self.decodeNumber(c, forKey: .band7_9)
+        band13_15 = Self.decodeNumber(c, forKey: .band13_15)
+        band18_20 = Self.decodeNumber(c, forKey: .band18_20)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(srTotal0_20, forKey: .srTotal0_20)
+        try c.encodeIfPresent(band7_9, forKey: .band7_9)
+        try c.encodeIfPresent(band13_15, forKey: .band13_15)
+        try c.encodeIfPresent(band18_20, forKey: .band18_20)
+    }
+
+    private static func decodeNumber(_ c: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double? {
+        if let v = try? c.decodeIfPresent(Double.self, forKey: key) { return v }
+        if let i = try? c.decodeIfPresent(Int.self, forKey: key) { return Double(i) }
+        if let s = try? c.decodeIfPresent(String.self, forKey: key) { return Double(s) }
+        return nil
+    }
 }
 
 private struct SchumannQuality: Codable {
@@ -122,6 +152,35 @@ private struct SchumannQuality: Codable {
         case primarySource = "primary_source"
         case usable
         case qualityScore = "quality_score"
+    }
+
+    init(primarySource: String?, usable: Bool?, qualityScore: Double?) {
+        self.primarySource = primarySource
+        self.usable = usable
+        self.qualityScore = qualityScore
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        primarySource = try? c.decodeIfPresent(String.self, forKey: .primarySource)
+        usable = try? c.decodeIfPresent(Bool.self, forKey: .usable)
+        // quality_score may arrive as number or string
+        if let v = try? c.decodeIfPresent(Double.self, forKey: .qualityScore) {
+            qualityScore = v
+        } else if let i = try? c.decodeIfPresent(Int.self, forKey: .qualityScore) {
+            qualityScore = Double(i)
+        } else if let s = try? c.decodeIfPresent(String.self, forKey: .qualityScore) {
+            qualityScore = Double(s)
+        } else {
+            qualityScore = nil
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(primarySource, forKey: .primarySource)
+        try c.encodeIfPresent(usable, forKey: .usable)
+        try c.encodeIfPresent(qualityScore, forKey: .qualityScore)
     }
 }
 
