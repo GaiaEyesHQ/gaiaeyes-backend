@@ -895,7 +895,8 @@ private struct SchumannPulseChartView: View {
                         if let sr = sample.srTotal {
                             LineMark(
                                 x: .value("Time", sample.date),
-                                y: .value("Pulse", sr)
+                                y: .value("Pulse", sr),
+                                series: .value("Series", "Pulse")
                             )
                             .foregroundStyle(Color.cyan)
                             .lineStyle(StrokeStyle(lineWidth: 2))
@@ -919,7 +920,8 @@ private struct SchumannPulseChartView: View {
                             if let f0 = sample.f0 {
                                 LineMark(
                                     x: .value("Time", sample.date),
-                                    y: .value("F0Scaled", mapF0ToPulseScale(f0))
+                                    y: .value("F0Scaled", mapF0ToPulseScale(f0)),
+                                    series: .value("Series", "f0")
                                 )
                                 .foregroundStyle(Color.yellow)
                                 .lineStyle(StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
