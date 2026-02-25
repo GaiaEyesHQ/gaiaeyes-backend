@@ -20,9 +20,110 @@
     return "gaia-dashboard__pill";
   };
 
+  const DEFAULT_GAUGE_ZONES = [
+    { min: 0, max: 24, key: "low" },
+    { min: 25, max: 49, key: "mild" },
+    { min: 50, max: 74, key: "elevated" },
+    { min: 75, max: 100, key: "high" },
+  ];
+
+  const normalizeZoneKey = (raw) => {
+    const key = String(raw || "").toLowerCase().trim();
+    if (key === "low" || key === "mild" || key === "elevated" || key === "high") return key;
+    if (key === "calibrating") return "calibrating";
+    return "";
+  };
+
+  const zoneLabelFromKey = (zoneKey) => {
+    const key = normalizeZoneKey(zoneKey);
+    if (!key) return "";
+    if (key === "calibrating") return "Calibrating";
+    return key.charAt(0).toUpperCase() + key.slice(1);
+  };
+
+  const normalizeGaugeZones = (zonesRaw) => {
+    const source = Array.isArray(zonesRaw) && zonesRaw.length ? zonesRaw : DEFAULT_GAUGE_ZONES;
+    const normalized = source
+      .map((zone) => {
+        const min = Number(zone && zone.min);
+        const max = Number(zone && zone.max);
+        const key = normalizeZoneKey(zone && zone.key);
+        if (!Number.isFinite(min) || !Number.isFinite(max) || !key || key === "calibrating") return null;
+        const lo = Math.min(min, max);
+        const hi = Math.max(min, max);
+        const start = Math.max(0, Math.min(100, lo));
+        const end = Math.max(start, Math.min(100, hi + 1));
+        return {
+          min: lo,
+          max: hi,
+          key,
+          startPct: start,
+          widthPct: Math.max(1, end - start),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.min - b.min);
+
+    return normalized.length ? normalized : DEFAULT_GAUGE_ZONES.map((z) => ({
+      ...z,
+      startPct: z.min,
+      widthPct: Math.max(1, Math.min(100, z.max + 1) - z.min),
+    }));
+  };
+
+  const zoneKeyForValue = (value, zones) => {
+    if (!Number.isFinite(value)) return "";
+    const numeric = Math.max(0, Math.min(100, Number(value)));
+    for (const zone of zones || []) {
+      if (numeric >= zone.min && numeric <= zone.max) return zone.key;
+    }
+    if (Array.isArray(zones) && zones.length) {
+      if (numeric < zones[0].min) return zones[0].key;
+      return zones[zones.length - 1].key;
+    }
+    return "";
+  };
+
   const formatGaugeValue = (value) => {
     if (value == null || Number.isNaN(Number(value))) return "—";
     return String(Math.round(Number(value)));
+  };
+
+  const renderGaugeCard = (row, zones) => {
+    const numeric = Number(row && row.value);
+    const hasValue = Number.isFinite(numeric);
+    const meta = row && row.meta && typeof row.meta === "object" ? row.meta : {};
+    const zoneKey =
+      normalizeZoneKey(meta.zone) ||
+      (hasValue ? zoneKeyForValue(numeric, zones) : "calibrating");
+    const zoneLabel = String(meta.label || "").trim() || zoneLabelFromKey(zoneKey) || "Calibrating";
+    const markerPct = hasValue ? Math.max(0, Math.min(100, numeric)) : null;
+    const markerClass = zoneKey ? ` gaia-dashboard__gauge-marker--${zoneKey}` : "";
+
+    return `
+      <article class="gaia-dashboard__gauge">
+        <div class="gaia-dashboard__gauge-label">${esc(row && row.label ? row.label : "")}</div>
+        <div class="gaia-dashboard__gauge-value">${formatGaugeValue(row && row.value)}</div>
+        <div class="gaia-dashboard__gauge-zone gaia-dashboard__gauge-zone--${esc(zoneKey || "calibrating")}">${esc(zoneLabel)}</div>
+        <div class="gaia-dashboard__gauge-track">
+          ${zones
+            .map(
+              (zone) => `
+                <span
+                  class="gaia-dashboard__gauge-segment gaia-dashboard__gauge-segment--${esc(zone.key)}"
+                  style="left:${zone.startPct}%;width:${zone.widthPct}%"
+                ></span>
+              `
+            )
+            .join("")}
+          ${
+            markerPct == null
+              ? ""
+              : `<span class="gaia-dashboard__gauge-marker${markerClass}" style="left:${markerPct}%"></span>`
+          }
+        </div>
+      </article>
+    `;
   };
 
   const hasGaugeData = (gauges) => {
@@ -292,16 +393,34 @@
   const renderDashboard = (root, payload, authCtx) => {
     const title = root.dataset.title || "Mission Control";
     const gaugesRaw = payload.gauges || {};
+    const gaugesMeta = payload.gaugesMeta && typeof payload.gaugesMeta === "object" ? payload.gaugesMeta : {};
+    const gaugeZones = normalizeGaugeZones(payload.gaugeZones);
+    const gaugeLabels = payload.gaugeLabels && typeof payload.gaugeLabels === "object" ? payload.gaugeLabels : {};
+    const fallbackLabels = {
+      pain: "Pain",
+      focus: "Focus",
+      heart: "Heart",
+      stamina: "Recovery Load",
+      energy: "Energy",
+      sleep: "Sleep",
+      mood: "Mood",
+      health_status: "Health Status",
+    };
     const gaugeRows = [
-      ["Pain", gaugesRaw.pain],
-      ["Focus", gaugesRaw.focus],
-      ["Heart", gaugesRaw.heart],
-      ["Stamina", gaugesRaw.stamina],
-      ["Energy", gaugesRaw.energy],
-      ["Sleep", gaugesRaw.sleep],
-      ["Mood", gaugesRaw.mood],
-      ["Health", gaugesRaw.health_status],
-    ];
+      { key: "pain", value: gaugesRaw.pain },
+      { key: "focus", value: gaugesRaw.focus },
+      { key: "heart", value: gaugesRaw.heart },
+      { key: "stamina", value: gaugesRaw.stamina },
+      { key: "energy", value: gaugesRaw.energy },
+      { key: "sleep", value: gaugesRaw.sleep },
+      { key: "mood", value: gaugesRaw.mood },
+      { key: "health_status", value: gaugesRaw.health_status },
+    ].map((row) => ({
+      key: row.key,
+      label: gaugeLabels[row.key] || fallbackLabels[row.key] || row.key,
+      value: row.value,
+      meta: gaugesMeta[row.key] || null,
+    }));
 
     const alerts = Array.isArray(payload.alerts) ? payload.alerts : [];
     const isPaid = payload.entitled === true || !!payload.memberPost;
@@ -326,16 +445,7 @@
           : '<div class="gaia-dashboard__muted" style="margin-bottom:10px">No dashboard data yet for this account. Use a magic link for another email, or refresh shortly.</div>'
       }
       <div class="gaia-dashboard__gauges">
-        ${displayRows
-          .map(
-            ([label, value]) => `
-              <div class="gaia-dashboard__gauge">
-                <div class="gaia-dashboard__gauge-label">${esc(label)}</div>
-                <div class="gaia-dashboard__gauge-value">${formatGaugeValue(value)}</div>
-              </div>
-            `
-          )
-          .join("")}
+        ${displayRows.map((row) => renderGaugeCard(row, gaugeZones)).join("")}
       </div>
       ${
         alerts.length
@@ -494,6 +604,12 @@
 
       const payload = {
         gauges: dashboard && dashboard.gauges ? dashboard.gauges : null,
+        gaugesMeta:
+          (dashboard && (dashboard.gauges_meta || dashboard.gaugesMeta)) || {},
+        gaugeZones:
+          (dashboard && (dashboard.gauge_zones || dashboard.gaugeZones)) || null,
+        gaugeLabels:
+          (dashboard && (dashboard.gauge_labels || dashboard.gaugeLabels)) || {},
         alerts: dashboard && Array.isArray(dashboard.alerts) ? dashboard.alerts : [],
         entitled: dashboard ? dashboard.entitled : null,
         memberPost:

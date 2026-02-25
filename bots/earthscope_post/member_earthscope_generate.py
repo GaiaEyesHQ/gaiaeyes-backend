@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -189,52 +190,142 @@ def _light_wit_line(alerts: List[Dict[str, Any]]) -> str:
     return "Cosmic note: even calm days run better with a little maintenance."
 
 
+def _state_rank(state: str) -> int:
+    ranks = {
+        "watch": 1,
+        "moderate": 2,
+        "elevated": 2,
+        "active": 2,
+        "high": 3,
+        "strong": 3,
+        "storm": 3,
+        "usg": 3,
+        "very_high": 4,
+        "unhealthy": 4,
+    }
+    return ranks.get(state.lower().strip(), 0)
+
+
+def _state_label(state: str) -> str:
+    labels = {
+        "watch": "Watch",
+        "moderate": "Moderate",
+        "elevated": "Elevated",
+        "active": "Active",
+        "high": "High",
+        "strong": "Strong",
+        "storm": "Storm",
+        "very_high": "Very high",
+        "usg": "USG",
+        "unhealthy": "Unhealthy",
+    }
+    key = state.lower().strip()
+    if key in labels:
+        return labels[key]
+    cleaned = key.replace("_", " ").strip()
+    return cleaned[:1].upper() + cleaned[1:] if cleaned else "Active"
+
+
 def _active_state_lines(active_states: List[Dict[str, Any]]) -> List[str]:
     lines: List[str] = []
-    for state in active_states[:4]:
-        signal_key = str(state.get("signal_key") or "")
-        state_name = str(state.get("state") or "active")
+    seen: set[str] = set()
+
+    pressure_windows: List[str] = []
+    pressure_state = ""
+
+    solar_state = ""
+    solar_speed: Optional[float] = None
+
+    aqi_state = ""
+    aqi_value: Optional[float] = None
+
+    def _push(line: str) -> None:
+        clean = line.strip()
+        if not clean:
+            return
+        key = clean.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        lines.append(clean)
+
+    for state in active_states[:8]:
+        signal_key = str(state.get("signal_key") or "").strip()
+        state_name = str(state.get("state") or "active").strip()
         value = state.get("value")
-        if signal_key == "earthweather.air_quality":
-            if value is None:
-                lines.append(f"Air quality is {state_name}.")
-            else:
-                try:
-                    lines.append(f"Air quality is {state_name} (AQI {int(round(float(value), 0))}).")
-                except Exception:
-                    lines.append(f"Air quality is {state_name} (AQI {value}).")
+
+        if signal_key == "earthweather.pressure_swing_12h":
+            pressure_windows.append("12h")
+            if _state_rank(state_name) > _state_rank(pressure_state):
+                pressure_state = state_name
+            continue
+        if signal_key == "earthweather.pressure_swing_24h_big":
+            pressure_windows.append("24h")
+            if _state_rank(state_name) > _state_rank(pressure_state):
+                pressure_state = state_name
             continue
         if signal_key == "spaceweather.sw_speed":
-            if value is None:
-                lines.append(f"Solar wind speed is {state_name}.")
-            else:
-                try:
-                    lines.append(f"Solar wind speed is {state_name} ({int(round(float(value), 0))} km/s).")
-                except Exception:
-                    lines.append(f"Solar wind speed is {state_name} ({value}).")
+            if _state_rank(state_name) > _state_rank(solar_state):
+                solar_state = state_name
+            try:
+                parsed = float(value) if value is not None else None
+            except Exception:
+                parsed = None
+            if parsed is not None:
+                solar_speed = max(solar_speed or parsed, parsed)
+            continue
+        if signal_key == "earthweather.air_quality":
+            if _state_rank(state_name) > _state_rank(aqi_state):
+                aqi_state = state_name
+            try:
+                parsed = float(value) if value is not None else None
+            except Exception:
+                parsed = None
+            if parsed is not None:
+                aqi_value = parsed
             continue
         if signal_key == "earthweather.temp_swing_24h":
             if value is None:
-                lines.append(f"24-hour temperature swing is {state_name}.")
+                _push(f"Temperature swing: {_state_label(state_name)} (24h)")
             else:
                 try:
-                    lines.append(f"24-hour temperature swing is {state_name} ({float(value):+.1f} C).")
+                    _push(f"Temperature swing: {_state_label(state_name)} (24h, {float(value):+.1f} C)")
                 except Exception:
-                    lines.append(f"24-hour temperature swing is {state_name} ({value}).")
+                    _push(f"Temperature swing: {_state_label(state_name)} (24h, {value})")
+            continue
+        if signal_key == "earthweather.pressure_drop_3h":
+            _push(f"Rapid pressure drop: {_state_label(state_name)} (3h)")
             continue
         if signal_key == "schumann.variability_24h":
-            lines.append("Schumann variability is elevated compared with recent baseline.")
+            _push("Schumann variability: Elevated (24h)")
             continue
 
-        signal = signal_key.replace("_", " ").replace(".", " ").strip()
+        signal = signal_key.replace("_", " ").replace(".", " ").strip().title() or "Signal"
         if value is None:
-            lines.append(f"{signal.title() or 'Signal'} is {state_name}.")
+            _push(f"{signal}: {_state_label(state_name)}")
         else:
             try:
-                numeric = float(value)
-                lines.append(f"{signal.title() or 'Signal'} is {state_name} ({numeric:.1f}).")
+                _push(f"{signal}: {_state_label(state_name)} ({float(value):.1f})")
             except Exception:
-                lines.append(f"{signal.title() or 'Signal'} is {state_name} ({value}).")
+                _push(f"{signal}: {_state_label(state_name)} ({value})")
+
+    if pressure_windows:
+        ordered = sorted(set(pressure_windows), key=lambda window: 0 if window == "12h" else 1)
+        _push(f"Pressure swing: {_state_label(pressure_state or 'elevated')} ({', '.join(ordered)})")
+
+    if solar_state:
+        if solar_speed is None:
+            _push(f"Solar wind: {_state_label(solar_state)}")
+        else:
+            _push(f"Solar wind: {_state_label(solar_state)} ({int(round(solar_speed, 0))} km/s)")
+
+    if aqi_state:
+        aqi_label = "Moderate" if aqi_state.lower() == "moderate" else _state_label(aqi_state)
+        if aqi_value is None:
+            _push(f"AQI: {aqi_label}")
+        else:
+            _push(f"AQI: {aqi_label} ({int(round(aqi_value, 0))})")
+
     return lines
 
 
@@ -242,32 +333,8 @@ def _local_context_lines(local_payload: Optional[Dict[str, Any]]) -> List[str]:
     if not isinstance(local_payload, dict):
         return []
     lines: List[str] = []
-    weather = local_payload.get("weather") if isinstance(local_payload.get("weather"), dict) else {}
-    air = local_payload.get("air") if isinstance(local_payload.get("air"), dict) else {}
-
     health = local_payload.get("health") if isinstance(local_payload.get("health"), dict) else {}
     flags = health.get("flags") if isinstance(health.get("flags"), dict) else {}
-
-    # Only include local weather/air in drivers when flagged as elevated.
-    temp_delta = weather.get("temp_delta_24h_c")
-    if flags.get("big_temp_shift_24h") and isinstance(temp_delta, (int, float)):
-        lines.append(f"24-hour temperature swing is notable ({float(temp_delta):+.1f} C).")
-
-    baro_delta = weather.get("baro_delta_24h_hpa")
-    if flags.get("pressure_rapid_drop") and isinstance(baro_delta, (int, float)):
-        lines.append(f"Barometric pressure is dropping quickly ({float(baro_delta):+.1f} hPa / 24h).")
-
-    aqi = air.get("aqi")
-    category = air.get("category")
-    try:
-        aqi_value = float(aqi) if aqi is not None else None
-    except Exception:
-        aqi_value = None
-    if aqi_value is not None and aqi_value >= 101:
-        if category:
-            lines.append(f"Air quality is elevated (AQI {int(round(aqi_value, 0))}, {category}).")
-        else:
-            lines.append(f"Air quality is elevated (AQI {int(round(aqi_value, 0))}).")
 
     messages = health.get("messages") if isinstance(health.get("messages"), list) else []
     for msg in messages[:2]:
@@ -286,22 +353,44 @@ def _observed_driver_lines(
     local_payload: Optional[Dict[str, Any]],
 ) -> List[str]:
     lines: List[str] = []
+    seen: set[str] = set()
+
+    def _normalize_phrase(value: str) -> str:
+        text = str(value or "").lower()
+        text = re.sub(r"\([^)]*\)", " ", text)
+        text = re.sub(r"[^a-z0-9\s]", " ", text)
+        return re.sub(r"\s+", " ", text).strip()
+
+    def _append(line: str) -> None:
+        clean = line.strip()
+        if not clean:
+            return
+        key = clean.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        lines.append(clean)
+
+    for line in _active_state_lines(active_states):
+        _append(line)
+    for line in _local_context_lines(local_payload):
+        _append(line)
+
     for alert in alerts[:3]:
         title = str(alert.get("title") or alert.get("key") or "").strip()
         severity = str(alert.get("severity") or "").strip()
         if not title:
             continue
+        normalized_title = _normalize_phrase(title)
+        if any(
+            normalized_title and normalized_title in _normalize_phrase(existing)
+            for existing in lines
+        ):
+            continue
         if severity:
-            lines.append(f"{title} ({severity}).")
+            _append(f"{title} ({severity}).")
         else:
-            lines.append(f"{title}.")
-
-    for line in _active_state_lines(active_states):
-        if line not in lines:
-            lines.append(line)
-    for line in _local_context_lines(local_payload):
-        if line not in lines:
-            lines.append(line)
+            _append(f"{title}.")
 
     if not lines:
         lines.append("No major external drivers are flagged right now.")
@@ -359,7 +448,7 @@ def _summary_note(trend: Optional[Dict[str, Any]], drivers: List[str]) -> str:
         "sleep": "sleep",
         "focus": "focus",
         "mood": "mood",
-        "stamina": "stamina",
+        "stamina": "recovery load",
         "pain": "pain",
         "heart": "heart",
         "health_status": "health status",

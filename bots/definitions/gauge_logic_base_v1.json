@@ -20,6 +20,14 @@
         "event_override": { "type": "ema", "alpha": 0.65 }
       }
     },
+    "gauge_zones": {
+      "default": [
+        { "min": 0, "max": 24, "key": "low" },
+        { "min": 25, "max": 49, "key": "mild" },
+        { "min": 50, "max": 74, "key": "elevated" },
+        { "min": 75, "max": 100, "key": "high" }
+      ]
+    },
     "gauges": [
       {
         "key": "pain",
@@ -27,7 +35,13 @@
         "description": "Estimated flare-load based on environmental stressors plus user physiological data when available.",
         "direction": "higher_is_more_risk",
         "primary_effect_tags": ["pain_flare", "inflammation_sensitivity", "migraine", "headache"],
-        "support_effect_tags": ["sleep_quality", "autonomic_load", "stress_load"]
+        "support_effect_tags": ["sleep_quality", "autonomic_load", "stress_load"],
+        "zone_labels": {
+          "low": "Quiet",
+          "mild": "Elevated",
+          "elevated": "Active",
+          "high": "Flare"
+        }
       },
       {
         "key": "focus",
@@ -35,7 +49,13 @@
         "description": "Estimated cognitive steadiness and attention resilience under current conditions.",
         "direction": "higher_is_more_risk",
         "primary_effect_tags": ["brain_fog", "focus", "vigilance"],
-        "support_effect_tags": ["sleep_quality", "anxiety", "fatigue", "autonomic_load"]
+        "support_effect_tags": ["sleep_quality", "anxiety", "fatigue", "autonomic_load"],
+        "zone_labels": {
+          "low": "Clear",
+          "mild": "Slightly patchy",
+          "elevated": "Foggy",
+          "high": "Scattered"
+        }
       },
       {
         "key": "heart",
@@ -43,15 +63,27 @@
         "description": "Estimated cardiovascular/autonomic load (not a diagnosis).",
         "direction": "higher_is_more_risk",
         "primary_effect_tags": ["hrv_down", "resting_hr_up", "blood_pressure_variability", "palpitations_awareness"],
-        "support_effect_tags": ["autonomic_load", "sleep_quality", "anxiety"]
+        "support_effect_tags": ["autonomic_load", "sleep_quality", "anxiety"],
+        "zone_labels": {
+          "low": "Steady",
+          "mild": "Reactive",
+          "elevated": "Loaded",
+          "high": "Strained"
+        }
       },
       {
         "key": "stamina",
-        "label": "Stamina",
+        "label": "Recovery Load",
         "description": "Estimated recovery and exertion tolerance under conditions.",
         "direction": "higher_is_more_risk",
         "primary_effect_tags": ["fatigue", "sleep_quality", "deep_sleep"],
-        "support_effect_tags": ["autonomic_load", "inflammation_sensitivity"]
+        "support_effect_tags": ["autonomic_load", "inflammation_sensitivity"],
+        "zone_labels": {
+          "low": "Fresh",
+          "mild": "Okay",
+          "elevated": "Heavy",
+          "high": "Drained"
+        }
       },
       {
         "key": "energy",
@@ -59,7 +91,13 @@
         "description": "Estimated day energy stability and 'wired/tired' likelihood.",
         "direction": "higher_is_more_risk",
         "primary_effect_tags": ["fatigue", "sleep_quality", "mood_swings", "irritability"],
-        "support_effect_tags": ["anxiety", "autonomic_load"]
+        "support_effect_tags": ["anxiety", "autonomic_load"],
+        "zone_labels": {
+          "low": "Smooth",
+          "mild": "Variable",
+          "elevated": "Wired/tired",
+          "high": "Volatile"
+        }
       },
       {
         "key": "sleep",
@@ -67,7 +105,13 @@
         "description": "Estimated sleep disruption potential from environment and physiology.",
         "direction": "higher_is_more_risk",
         "primary_effect_tags": ["sleep_quality", "sleep_onset", "deep_sleep", "dream_intensity"],
-        "support_effect_tags": ["temperature_stress", "pressure_sensitivity", "anxiety"]
+        "support_effect_tags": ["temperature_stress", "pressure_sensitivity", "anxiety"],
+        "zone_labels": {
+          "low": "Rest-friendly",
+          "mild": "Light",
+          "elevated": "Disrupted",
+          "high": "Fragile"
+        }
       },
       {
         "key": "mood",
@@ -75,7 +119,13 @@
         "description": "Estimated mood volatility or sensitivity under current conditions.",
         "direction": "higher_is_more_risk",
         "primary_effect_tags": ["anxiety", "mood_swings", "irritability", "sensory_sensitivity"],
-        "support_effect_tags": ["sleep_quality", "fatigue", "autonomic_load"]
+        "support_effect_tags": ["sleep_quality", "fatigue", "autonomic_load"],
+        "zone_labels": {
+          "low": "Stable",
+          "mild": "Sensitive",
+          "elevated": "Reactive",
+          "high": "Volatile"
+        }
       }
     ],
     "effect_tags": [
@@ -453,7 +503,17 @@
         { "key": "wearable.skin_temp_deviation", "label": "Temp Deviation", "direction": "higher_is_worse", "weight": 8 },
         { "key": "user.symptom_log", "label": "Symptoms", "direction": "higher_is_worse", "weight": 14 }
       ],
-      "output_gauge": { "key": "health_status", "label": "Health Status", "direction": "higher_is_more_risk" }
+      "output_gauge": {
+        "key": "health_status",
+        "label": "Health Status",
+        "direction": "higher_is_more_risk",
+        "zone_labels": {
+          "low": "Low strain",
+          "mild": "Mild strain",
+          "elevated": "Moderate strain",
+          "high": "High strain"
+        }
+      }
     },
     "alert_pills": {
       "pill_template": {

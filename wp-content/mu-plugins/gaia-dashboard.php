@@ -45,10 +45,27 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
         .gaia-dashboard__title{font-size:22px;font-weight:700;line-height:1.2;margin:0}
         .gaia-dashboard__mode{font-size:12px;padding:3px 8px;border-radius:999px;background:#1f2a3a;color:#9cc0ff}
-        .gaia-dashboard__gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:10px 0}
-        .gaia-dashboard__gauge{padding:10px;border-radius:10px;background:#151c28}
+        .gaia-dashboard__gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0}
+        .gaia-dashboard__gauge{padding:10px;border-radius:12px;background:#151c28;display:flex;flex-direction:column;gap:6px}
         .gaia-dashboard__gauge-label{font-size:12px;color:#9da9c1}
-        .gaia-dashboard__gauge-value{font-size:24px;font-weight:700}
+        .gaia-dashboard__gauge-value{font-size:26px;font-weight:700;line-height:1}
+        .gaia-dashboard__gauge-zone{font-size:12px;line-height:1.2}
+        .gaia-dashboard__gauge-zone--low{color:#84e48d}
+        .gaia-dashboard__gauge-zone--mild{color:#d7d468}
+        .gaia-dashboard__gauge-zone--elevated{color:#ffb366}
+        .gaia-dashboard__gauge-zone--high{color:#ff8f8f}
+        .gaia-dashboard__gauge-zone--calibrating{color:#9da9c1}
+        .gaia-dashboard__gauge-track{position:relative;height:12px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+        .gaia-dashboard__gauge-segment{position:absolute;top:0;bottom:0}
+        .gaia-dashboard__gauge-segment--low{background:#49b754}
+        .gaia-dashboard__gauge-segment--mild{background:#9ea339}
+        .gaia-dashboard__gauge-segment--elevated{background:#ea8f36}
+        .gaia-dashboard__gauge-segment--high{background:#cf4e4e}
+        .gaia-dashboard__gauge-marker{position:absolute;top:50%;width:10px;height:10px;border-radius:50%;background:#fff;transform:translate(-50%,-50%);box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+        .gaia-dashboard__gauge-marker--low{box-shadow:0 0 0 2px #49b754}
+        .gaia-dashboard__gauge-marker--mild{box-shadow:0 0 0 2px #9ea339}
+        .gaia-dashboard__gauge-marker--elevated{box-shadow:0 0 0 2px #ea8f36}
+        .gaia-dashboard__gauge-marker--high{box-shadow:0 0 0 2px #cf4e4e}
         .gaia-dashboard__alerts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
         .gaia-dashboard__pill{padding:5px 10px;border-radius:999px;font-size:12px;background:#223246;color:#a9c8ff}
         .gaia-dashboard__pill--watch{background:#3a2d19;color:#ffd58f}

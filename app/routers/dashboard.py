@@ -5,6 +5,7 @@ import json
 import logging
 import time
 from datetime import date, datetime, timezone
+from functools import lru_cache
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, HTTPException
@@ -12,10 +13,81 @@ from psycopg.rows import dict_row
 
 from app.db import get_db
 from app.security.auth import require_read_auth, require_write_auth
+from bots.definitions.load_definition_base import load_definition_base
+from services.gauges.zones import decorate_gauge
 
 
 router = APIRouter(prefix="/v1", tags=["dashboard"])
 logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _load_dashboard_definition() -> Dict[str, Any]:
+    definition, _ = load_definition_base()
+    return definition
+
+
+def _safe_dashboard_definition() -> Dict[str, Any]:
+    try:
+        return _load_dashboard_definition()
+    except Exception as exc:
+        logger.warning("[dashboard] failed to load gauge definition base: %s", exc)
+        return {}
+
+
+def _normalized_default_zones(definition: Dict[str, Any]) -> list[Dict[str, Any]]:
+    raw = (definition.get("gauge_zones") or {}).get("default") or []
+    zones: list[Dict[str, Any]] = []
+    for zone in raw:
+        if not isinstance(zone, dict):
+            continue
+        key = str(zone.get("key") or "").strip()
+        try:
+            min_val = int(round(float(zone.get("min"))))
+            max_val = int(round(float(zone.get("max"))))
+        except Exception:
+            continue
+        if not key:
+            continue
+        if min_val > max_val:
+            min_val, max_val = max_val, min_val
+        zones.append({"min": min_val, "max": max_val, "key": key})
+    zones.sort(key=lambda item: (item["min"], item["max"]))
+    return zones
+
+
+def _gauge_labels(definition: Dict[str, Any]) -> Dict[str, str]:
+    labels: Dict[str, str] = {}
+    for gauge in definition.get("gauges") or []:
+        if not isinstance(gauge, dict):
+            continue
+        key = str(gauge.get("key") or "").strip()
+        label = str(gauge.get("label") or "").strip()
+        if key and label:
+            labels[key] = label
+
+    output_gauge = (definition.get("health_metrics_overlay") or {}).get("output_gauge")
+    if isinstance(output_gauge, dict):
+        key = str(output_gauge.get("key") or "").strip()
+        label = str(output_gauge.get("label") or "").strip()
+        if key and label:
+            labels[key] = label
+
+    return labels
+
+
+def _decorate_gauges(gauges: Dict[str, Any], definition: Dict[str, Any]) -> Dict[str, Dict[str, Optional[str]]]:
+    out: Dict[str, Dict[str, Optional[str]]] = {}
+    for gauge_key, raw_value in gauges.items():
+        item = decorate_gauge(gauge_key, raw_value, definition)
+        zone_key = item.get("zone_key")
+        zone_label = item.get("zone_label")
+        if zone_key is None and item.get("value") is None:
+            out[gauge_key] = {"zone": "calibrating", "label": zone_label}
+            continue
+        if zone_key:
+            out[gauge_key] = {"zone": zone_key, "label": zone_label}
+    return out
 
 
 def _coerce_day(value: Optional[date]) -> date:
@@ -190,6 +262,14 @@ async def dashboard(
         out["alerts"] = gauge_fallback.get("alerts")
     if not out.get("day") and gauge_fallback.get("day"):
         out["day"] = gauge_fallback.get("day")
+
+    definition = _safe_dashboard_definition()
+    if definition:
+        out["gauge_zones"] = _normalized_default_zones(definition)
+        out["gauge_labels"] = _gauge_labels(definition)
+        gauges = out.get("gauges")
+        if isinstance(gauges, dict):
+            out["gauges_meta"] = _decorate_gauges(gauges, definition)
 
     if debug:
         out["_debug"] = {

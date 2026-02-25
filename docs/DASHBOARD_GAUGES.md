@@ -57,6 +57,25 @@ Scoring rules:
 - Cap per signal (from definition JSON)
 - Clamp to 0–100
 
+## Gauge Zones + Labels (v1.2)
+- Definition source of truth:
+  - `bots/definitions/gauge_logic_base_v1.json`
+  - `gauge_zones.default`:
+    - `low`: 0–24
+    - `mild`: 25–49
+    - `elevated`: 50–74
+    - `high`: 75–100
+- Per-gauge `zone_labels` are defined in the same JSON for:
+  - `pain`, `focus`, `heart`, `stamina`, `energy`, `sleep`, `mood`, and `health_status` (via `health_metrics_overlay.output_gauge`).
+- Display rename:
+  - Gauge key remains `stamina`
+  - Display label is now `Recovery Load`
+- Shared helper:
+  - `services/gauges/zones.py`
+  - `zone_for_value(value, zones)`
+  - `label_for_gauge(gauge_key, zone_key, definition_base)`
+  - `decorate_gauge(gauge_key, value, definition_base)`
+
 Idempotency:
 - `inputs_hash = sha256(json.dumps(inputs_snapshot, sort_keys=True))`
 - If the stored hash matches, updates are skipped unless `force=true`.
@@ -107,6 +126,10 @@ When trigger events are detected for paid users, the engine appends a “Trigger
 - `GET /v1/dashboard`
   - Uses `app.get_dashboard_payload(day)` RPC
   - Requires read auth and a valid `user_id` in request context
+  - Enriches gauge output with shared UI metadata:
+    - `gauges_meta`: per-gauge `{zone, label}` (for example, `health_status=10` => `low` / `Low strain`)
+    - `gauge_zones`: normalized zone boundaries for 4-zone rendering
+    - `gauge_labels`: display labels (includes `stamina -> Recovery Load`)
 - `GET /v1/earthscope/member`
   - Returns member EarthScope for the authenticated user + day
 - `POST /v1/earthscope/member/regenerate`

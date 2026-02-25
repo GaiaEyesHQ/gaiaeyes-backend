@@ -278,6 +278,24 @@ private struct DashboardGaugeSet: Codable, Hashable {
     }
 }
 
+private struct DashboardGaugeMeta: Codable, Hashable {
+    let zone: String?
+    let label: String?
+}
+
+private struct DashboardGaugeZone: Codable, Hashable {
+    let min: Double
+    let max: Double
+    let key: String
+
+    static let defaultZones: [DashboardGaugeZone] = [
+        DashboardGaugeZone(min: 0, max: 24, key: "low"),
+        DashboardGaugeZone(min: 25, max: 49, key: "mild"),
+        DashboardGaugeZone(min: 50, max: 74, key: "elevated"),
+        DashboardGaugeZone(min: 75, max: 100, key: "high"),
+    ]
+}
+
 private struct DashboardAlertItem: Codable, Hashable, Identifiable {
     var id: String {
         let parts = [key, title, severity].compactMap { $0 }.joined(separator: "|")
@@ -311,6 +329,9 @@ private struct DashboardEarthscopePost: Codable, Hashable {
 private struct DashboardPayload: Codable {
     let day: String?
     let gauges: DashboardGaugeSet?
+    let gaugesMeta: [String: DashboardGaugeMeta]?
+    let gaugeZones: [DashboardGaugeZone]?
+    let gaugeLabels: [String: String]?
     let alerts: [DashboardAlertItem]?
     let entitled: Bool?
     let memberPost: DashboardEarthscopePost?
@@ -318,7 +339,7 @@ private struct DashboardPayload: Codable {
     let personalPost: DashboardEarthscopePost?
 
     private enum CodingKeys: String, CodingKey {
-        case day, gauges, alerts, entitled
+        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, alerts, entitled
         case memberPost
         case publicPost
         case personalPost
@@ -1560,6 +1581,9 @@ struct ContentView: View {
                         resolvedPayload = DashboardPayload(
                             day: payload.day ?? older.day,
                             gauges: payload.gauges ?? older.gauges,
+                            gaugesMeta: payload.gaugesMeta ?? older.gaugesMeta,
+                            gaugeZones: payload.gaugeZones ?? older.gaugeZones,
+                            gaugeLabels: payload.gaugeLabels ?? older.gaugeLabels,
                             alerts: (payload.alerts?.isEmpty == false) ? payload.alerts : older.alerts,
                             entitled: payload.entitled ?? older.entitled,
                             memberPost: payload.memberPost ?? payload.personalPost ?? older.memberPost ?? older.personalPost,
@@ -1590,6 +1614,9 @@ struct ContentView: View {
                         resolvedPayload = DashboardPayload(
                             day: resolvedPayload.day,
                             gauges: resolvedPayload.gauges ?? memberPost.metricsJson?.gauges,
+                            gaugesMeta: resolvedPayload.gaugesMeta,
+                            gaugeZones: resolvedPayload.gaugeZones,
+                            gaugeLabels: resolvedPayload.gaugeLabels,
                             alerts: resolvedPayload.alerts,
                             entitled: resolvedPayload.entitled,
                             memberPost: resolvedPayload.memberPost ?? normalizedMember,
@@ -1612,6 +1639,9 @@ struct ContentView: View {
                         resolvedPayload = DashboardPayload(
                             day: resolvedPayload.day,
                             gauges: resolvedPayload.gauges,
+                            gaugesMeta: resolvedPayload.gaugesMeta,
+                            gaugeZones: resolvedPayload.gaugeZones,
+                            gaugeLabels: resolvedPayload.gaugeLabels,
                             alerts: resolvedPayload.alerts,
                             entitled: resolvedPayload.entitled,
                             memberPost: resolvedPayload.memberPost,
@@ -1632,6 +1662,9 @@ struct ContentView: View {
                     let effectivePayload = DashboardPayload(
                         day: resolvedPayload.day,
                         gauges: gaugesForRender,
+                        gaugesMeta: resolvedPayload.gaugesMeta,
+                        gaugeZones: resolvedPayload.gaugeZones,
+                        gaugeLabels: resolvedPayload.gaugeLabels,
                         alerts: resolvedPayload.alerts,
                         entitled: resolvedPayload.entitled,
                         memberPost: resolvedPayload.memberPost,
@@ -2831,6 +2864,9 @@ struct ContentView: View {
 
     private func dashboardFeaturesView(_ fallbackFeatures: FeaturesToday?) -> some View {
         let dashboardGauges = dashboardPayload?.gauges ?? lastNonNilDashboardGauges
+        let dashboardGaugesMeta = dashboardPayload?.gaugesMeta ?? [:]
+        let dashboardGaugeZones = dashboardPayload?.gaugeZones ?? DashboardGaugeZone.defaultZones
+        let dashboardGaugeLabels = dashboardPayload?.gaugeLabels ?? [:]
         let dashboardAlerts = dashboardPayload?.alerts ?? []
         let resolvedEarthscope: DashboardEarthscopePost? = {
             return dashboardPayload?.memberPost
@@ -2841,6 +2877,9 @@ struct ContentView: View {
         return VStack(spacing: 16) {
             MissionControlSectionView(
                 gauges: dashboardGauges,
+                gaugesMeta: dashboardGaugesMeta,
+                gaugeZones: dashboardGaugeZones,
+                gaugeLabels: dashboardGaugeLabels,
                 alerts: dashboardAlerts,
                 earthscope: resolvedEarthscope,
                 fallbackTitle: fallbackFeatures?.postTitle,
@@ -2898,6 +2937,9 @@ struct ContentView: View {
 
     private struct MissionControlSectionView: View {
         let gauges: DashboardGaugeSet?
+        let gaugesMeta: [String: DashboardGaugeMeta]
+        let gaugeZones: [DashboardGaugeZone]
+        let gaugeLabels: [String: String]
         let alerts: [DashboardAlertItem]
         let earthscope: DashboardEarthscopePost?
         let fallbackTitle: String?
@@ -2907,18 +2949,163 @@ struct ContentView: View {
         let errorMessage: String?
         let lastUpdatedText: String?
 
-        private func gaugeRows(_ g: DashboardGaugeSet?) -> [(String, Double, ArcGauge.Theme)] {
+        private struct GaugeRow: Identifiable {
+            let key: String
+            let label: String
+            let value: Double?
+            let zoneKey: String?
+            let zoneLabel: String?
+
+            var id: String { key }
+        }
+
+        private struct SegmentedGaugeCard: View {
+            let row: GaugeRow
+            let zones: [DashboardGaugeZone]
+
+            private func zoneColor(_ raw: String?) -> Color {
+                switch (raw ?? "").lowercased() {
+                case "low":
+                    return Color(red: 0.33, green: 0.76, blue: 0.39)
+                case "mild":
+                    return Color(red: 0.68, green: 0.67, blue: 0.24)
+                case "elevated":
+                    return Color(red: 0.95, green: 0.57, blue: 0.21)
+                case "high":
+                    return Color(red: 0.86, green: 0.30, blue: 0.30)
+                default:
+                    return Color.secondary
+                }
+            }
+
+            private func segmentStart(_ zone: DashboardGaugeZone) -> CGFloat {
+                let start = min(100.0, max(0.0, zone.min))
+                return CGFloat(start / 100.0)
+            }
+
+            private func segmentWidth(_ zone: DashboardGaugeZone) -> CGFloat {
+                let start = min(100.0, max(0.0, zone.min))
+                let end = min(100.0, max(start, zone.max) + 1.0)
+                return CGFloat(max(0.01, (end - start) / 100.0))
+            }
+
+            private var markerPosition: CGFloat? {
+                guard let value = row.value else { return nil }
+                let pct = min(1.0, max(0.0, value / 100.0))
+                return CGFloat(pct)
+            }
+
+            private var valueText: String {
+                guard let value = row.value else { return "—" }
+                return String(Int(round(value)))
+            }
+
+            private var statusText: String {
+                if row.value == nil {
+                    return "Calibrating"
+                }
+                if let label = row.zoneLabel, !label.isEmpty {
+                    return label
+                }
+                if let zone = row.zoneKey, !zone.isEmpty {
+                    return zone.replacingOccurrences(of: "_", with: " ").capitalized
+                }
+                return "Calibrating"
+            }
+
+            var body: some View {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(row.label)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text(valueText)
+                        .font(.system(size: 26, weight: .heavy, design: .rounded))
+                    Text(statusText)
+                        .font(.caption)
+                        .foregroundColor(zoneColor(row.zoneKey))
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.white.opacity(0.08))
+                                .frame(height: 10)
+                            ForEach(Array(zones.enumerated()), id: \.offset) { _, zone in
+                                Rectangle()
+                                    .fill(zoneColor(zone.key))
+                                    .frame(width: max(2, geo.size.width * segmentWidth(zone)), height: 10)
+                                    .offset(x: geo.size.width * segmentStart(zone))
+                            }
+                            if let markerPosition {
+                                Circle()
+                                    .fill(Color.white)
+                                    .overlay(Circle().stroke(zoneColor(row.zoneKey), lineWidth: 2))
+                                    .frame(width: 12, height: 12)
+                                    .offset(
+                                        x: max(0, min(geo.size.width - 12, geo.size.width * markerPosition - 6)),
+                                        y: -1
+                                    )
+                            }
+                        }
+                        .frame(height: 12)
+                    }
+                    .frame(height: 14)
+                }
+                .padding(10)
+                .background(Color.black.opacity(0.25))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
+
+        private func gaugeRows(_ g: DashboardGaugeSet?) -> [GaugeRow] {
             guard let g else { return [] }
-            return [
-                ("Pain", g.pain ?? 0, .custom(Color(red: 0.95, green: 0.45, blue: 0.45))),
-                ("Focus", g.focus ?? 0, .custom(Color(red: 0.45, green: 0.78, blue: 0.95))),
-                ("Heart", g.heart ?? 0, .custom(Color(red: 1.0, green: 0.56, blue: 0.63))),
-                ("Stamina", g.stamina ?? 0, .custom(Color(red: 0.53, green: 0.88, blue: 0.56))),
-                ("Energy", g.energy ?? 0, .custom(Color(red: 0.98, green: 0.71, blue: 0.35))),
-                ("Sleep", g.sleep ?? 0, .custom(Color(red: 0.71, green: 0.67, blue: 0.98))),
-                ("Mood", g.mood ?? 0, .custom(Color(red: 0.45, green: 0.86, blue: 0.86))),
-                ("Health", g.healthStatus ?? 0, .custom(Color(red: 0.92, green: 0.86, blue: 0.57))),
+            let values: [(String, Double?)] = [
+                ("pain", g.pain),
+                ("focus", g.focus),
+                ("heart", g.heart),
+                ("stamina", g.stamina),
+                ("energy", g.energy),
+                ("sleep", g.sleep),
+                ("mood", g.mood),
+                ("health_status", g.healthStatus),
             ]
+            let fallbackLabels: [String: String] = [
+                "pain": "Pain",
+                "focus": "Focus",
+                "heart": "Heart",
+                "stamina": "Recovery Load",
+                "energy": "Energy",
+                "sleep": "Sleep",
+                "mood": "Mood",
+                "health_status": "Health Status",
+            ]
+            return values.map { key, value in
+                let meta = gaugesMeta[key]
+                let zoneKey = meta?.zone ?? inferredZoneKey(for: value)
+                return GaugeRow(
+                    key: key,
+                    label: gaugeLabels[key] ?? fallbackLabels[key] ?? key,
+                    value: value,
+                    zoneKey: zoneKey,
+                    zoneLabel: meta?.label
+                )
+            }
+        }
+
+        private func inferredZoneKey(for value: Double?) -> String? {
+            guard let value else { return nil }
+            let zones = resolvedZones()
+            for zone in zones {
+                if value >= zone.min && value <= zone.max {
+                    return zone.key
+                }
+            }
+            guard let first = zones.first, let last = zones.last else { return nil }
+            if value < first.min { return first.key }
+            return last.key
+        }
+
+        private func resolvedZones() -> [DashboardGaugeZone] {
+            let sorted = gaugeZones.sorted { $0.min < $1.min }
+            return sorted.isEmpty ? DashboardGaugeZone.defaultZones : sorted
         }
 
         private func pillSeverity(_ raw: String?) -> StatusPill.Severity {
@@ -2947,8 +3134,8 @@ struct ContentView: View {
                     } else {
                         let cols = [GridItem(.flexible()), GridItem(.flexible())]
                         LazyVGrid(columns: cols, spacing: 10) {
-                            ForEach(rows, id: \.0) { row in
-                                ArcGauge(value: row.1, min: 0, max: 100, label: row.0, theme: row.2)
+                            ForEach(rows) { row in
+                                SegmentedGaugeCard(row: row, zones: resolvedZones())
                             }
                         }
                     }
