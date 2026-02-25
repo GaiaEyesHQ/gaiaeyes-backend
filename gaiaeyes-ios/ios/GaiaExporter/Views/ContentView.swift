@@ -2967,41 +2967,10 @@ struct ContentView: View {
             var id: String { key }
         }
 
-        private struct SegmentedGaugeCard: View {
+        private struct ArcGaugeCard: View {
             let row: GaugeRow
-            let zones: [DashboardGaugeZone]
-
-            private func zoneColor(_ raw: String?) -> Color {
-                switch (raw ?? "").lowercased() {
-                case "low":
-                    return Color(red: 0.33, green: 0.76, blue: 0.39)
-                case "mild":
-                    return Color(red: 0.68, green: 0.67, blue: 0.24)
-                case "elevated":
-                    return Color(red: 0.95, green: 0.57, blue: 0.21)
-                case "high":
-                    return Color(red: 0.86, green: 0.30, blue: 0.30)
-                default:
-                    return Color.secondary
-                }
-            }
-
-            private func segmentStart(_ zone: DashboardGaugeZone) -> CGFloat {
-                let start = min(100.0, max(0.0, zone.min))
-                return CGFloat(start / 100.0)
-            }
-
-            private func segmentWidth(_ zone: DashboardGaugeZone) -> CGFloat {
-                let start = min(100.0, max(0.0, zone.min))
-                let end = min(100.0, max(start, zone.max) + 1.0)
-                return CGFloat(max(0.01, (end - start) / 100.0))
-            }
-
-            private var markerPosition: CGFloat? {
-                guard let value = row.value else { return nil }
-                let pct = min(1.0, max(0.0, value / 100.0))
-                return CGFloat(pct)
-            }
+            private let ringLineWidth: CGFloat = 9
+            private let meterSize: CGFloat = 108
 
             private var valueText: String {
                 guard let value = row.value else { return "—" }
@@ -3021,41 +2990,90 @@ struct ContentView: View {
                 return "Calibrating"
             }
 
+            private var zoneKeyText: String {
+                guard
+                    let zone = row.zoneKey,
+                    !zone.isEmpty,
+                    zone.lowercased() != "calibrating"
+                else { return "" }
+                return zone.replacingOccurrences(of: "_", with: " ").capitalized
+            }
+
+            private var progress: CGFloat? {
+                guard let value = row.value else { return nil }
+                return CGFloat(min(1.0, max(0.0, value / 100.0)))
+            }
+
+            private func markerPosition(in size: CGSize, progress: CGFloat) -> CGPoint {
+                let diameter = min(size.width, size.height)
+                let radius = max(0, (diameter * 0.5) - (ringLineWidth * 0.5))
+                let center = CGPoint(x: size.width * 0.5, y: size.height * 0.5)
+                let angle = ((Double(progress) * 360.0) - 90.0) * Double.pi / 180.0
+                return CGPoint(
+                    x: center.x + CGFloat(cos(angle)) * radius,
+                    y: center.y + CGFloat(sin(angle)) * radius
+                )
+            }
+
             var body: some View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(row.label)
                         .font(.caption2)
                         .foregroundColor(.secondary)
-                    Text(valueText)
-                        .font(.system(size: 26, weight: .heavy, design: .rounded))
-                    Text(statusText)
-                        .font(.caption)
-                        .foregroundColor(zoneColor(row.zoneKey))
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.white.opacity(0.08))
-                                .frame(height: 10)
-                            ForEach(Array(zones.enumerated()), id: \.offset) { _, zone in
-                                Rectangle()
-                                    .fill(zoneColor(zone.key))
-                                    .frame(width: max(2, geo.size.width * segmentWidth(zone)), height: 10)
-                                    .offset(x: geo.size.width * segmentStart(zone))
-                            }
-                            if let markerPosition {
+
+                    ZStack {
+                        Circle()
+                            .stroke(GaugePalette.ringBackground, lineWidth: ringLineWidth)
+
+                        if let progress {
+                            Circle()
+                                .trim(from: 0.0, to: max(0.002, progress))
+                                .stroke(
+                                    GaugePalette.arcGradient,
+                                    style: StrokeStyle(lineWidth: ringLineWidth, lineCap: .round)
+                                )
+                                .rotationEffect(.degrees(-90))
+                                .shadow(
+                                    color: GaugePalette
+                                        .zoneColor(row.zoneKey)
+                                        .opacity(GaugePalette.glowOpacity(row.zoneKey)),
+                                    radius: GaugePalette.glowRadius(row.zoneKey),
+                                    x: 0,
+                                    y: 0
+                                )
+                        }
+
+                        GeometryReader { geo in
+                            if let progress {
+                                let point = markerPosition(in: geo.size, progress: progress)
                                 Circle()
-                                    .fill(Color.white)
-                                    .overlay(Circle().stroke(zoneColor(row.zoneKey), lineWidth: 2))
-                                    .frame(width: 12, height: 12)
-                                    .offset(
-                                        x: max(0, min(geo.size.width - 12, geo.size.width * markerPosition - 6)),
-                                        y: -1
-                                    )
+                                    .fill(GaugePalette.marker)
+                                    .overlay(Circle().stroke(GaugePalette.zoneColor(row.zoneKey), lineWidth: 1.75))
+                                    .frame(width: 10, height: 10)
+                                    .position(point)
                             }
                         }
-                        .frame(height: 12)
+
+                        VStack(spacing: 2) {
+                            Text(valueText)
+                                .font(.system(size: 25, weight: .heavy, design: .rounded))
+                            Text(statusText)
+                                .font(.caption)
+                                .foregroundColor(
+                                    row.value == nil
+                                    ? .secondary
+                                    : GaugePalette.zoneColor(row.zoneKey)
+                                )
+                        }
                     }
-                    .frame(height: 14)
+                    .frame(width: meterSize, height: meterSize)
+                    .frame(maxWidth: .infinity)
+
+                    if !zoneKeyText.isEmpty {
+                        Text(zoneKeyText)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 .padding(10)
                 .background(Color.black.opacity(0.25))
@@ -3116,21 +3134,6 @@ struct ContentView: View {
             return sorted.isEmpty ? DashboardGaugeZone.defaultZones : sorted
         }
 
-        private func zoneColor(_ raw: String) -> Color {
-            switch raw.lowercased() {
-            case "low":
-                return Color(red: 0.33, green: 0.76, blue: 0.39)
-            case "mild":
-                return Color(red: 0.68, green: 0.67, blue: 0.24)
-            case "elevated":
-                return Color(red: 0.95, green: 0.57, blue: 0.21)
-            case "high":
-                return Color(red: 0.86, green: 0.30, blue: 0.30)
-            default:
-                return Color.secondary
-            }
-        }
-
         private func pillSeverity(_ raw: String?) -> StatusPill.Severity {
             let s = (raw ?? "").lowercased()
             if s == "high" || s == "alert" || s == "red" { return .alert }
@@ -3158,14 +3161,14 @@ struct ContentView: View {
                         let cols = [GridItem(.flexible()), GridItem(.flexible())]
                         LazyVGrid(columns: cols, spacing: 10) {
                             ForEach(rows) { row in
-                                SegmentedGaugeCard(row: row, zones: resolvedZones())
+                                ArcGaugeCard(row: row)
                             }
                         }
                         HStack(spacing: 10) {
                             ForEach(["low", "mild", "elevated", "high"], id: \.self) { key in
                                 HStack(spacing: 4) {
                                     Circle()
-                                        .fill(zoneColor(key))
+                                        .fill(GaugePalette.zoneColor(key))
                                         .frame(width: 7, height: 7)
                                     Text(key.capitalized)
                                         .font(.caption2)

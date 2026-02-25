@@ -27,6 +27,14 @@
     { min: 80, max: 100, key: "high" },
   ];
 
+  const GAUGE_PALETTE = {
+    low: { hex: "#63b787", glow: "rgba(99,183,135,0.30)", glowPx: 2 },
+    mild: { hex: "#9ea66c", glow: "rgba(158,166,108,0.34)", glowPx: 2 },
+    elevated: { hex: "#c8925b", glow: "rgba(200,146,91,0.42)", glowPx: 4 },
+    high: { hex: "#c9756d", glow: "rgba(201,117,109,0.56)", glowPx: 6 },
+    calibrating: { hex: "#9da9c1", glow: "rgba(157,169,193,0.28)", glowPx: 1 },
+  };
+
   const normalizeZoneKey = (raw) => {
     const key = String(raw || "").toLowerCase().trim();
     if (key === "low" || key === "mild" || key === "elevated" || key === "high") return key;
@@ -97,31 +105,53 @@
       normalizeZoneKey(meta.zone) ||
       (hasValue ? zoneKeyForValue(numeric, zones) : "calibrating");
     const zoneLabel = String(meta.label || "").trim() || zoneLabelFromKey(zoneKey) || "Calibrating";
-    const markerPct = hasValue ? Math.max(0, Math.min(100, numeric)) : null;
-    const markerClass = zoneKey ? ` gaia-dashboard__gauge-marker--${zoneKey}` : "";
+    const zoneKeyLabel = zoneKey && zoneKey !== "calibrating" ? zoneLabelFromKey(zoneKey) : "";
+    const clamped = hasValue ? Math.max(0, Math.min(100, numeric)) : 0;
+    const progress = clamped / 100;
+    const radius = 40;
+    const circumference = 2 * Math.PI * radius;
+    const dash = (circumference * progress).toFixed(3);
+    const gap = Math.max(0, circumference - Number(dash)).toFixed(3);
+    const theta = ((progress * 360) - 90) * (Math.PI / 180);
+    const markerX = (50 + radius * Math.cos(theta)).toFixed(2);
+    const markerY = (50 + radius * Math.sin(theta)).toFixed(2);
+    const gradientKey = String((row && row.key) || "gauge").toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+    const gradientId = `gaia-gauge-grad-${gradientKey}`;
+    const palette = GAUGE_PALETTE[zoneKey] || GAUGE_PALETTE.mild;
+    const zoneColor = zoneKey === "calibrating" ? GAUGE_PALETTE.calibrating.hex : palette.hex;
+    const arcStyle = `filter:drop-shadow(0 0 ${palette.glowPx}px ${palette.glow})`;
 
     return `
       <article class="gaia-dashboard__gauge">
         <div class="gaia-dashboard__gauge-label">${esc(row && row.label ? row.label : "")}</div>
-        <div class="gaia-dashboard__gauge-value">${formatGaugeValue(row && row.value)}</div>
-        <div class="gaia-dashboard__gauge-zone gaia-dashboard__gauge-zone--${esc(zoneKey || "calibrating")}">${esc(zoneLabel)}</div>
-        <div class="gaia-dashboard__gauge-track">
-          ${zones
-            .map(
-              (zone) => `
-                <span
-                  class="gaia-dashboard__gauge-segment gaia-dashboard__gauge-segment--${esc(zone.key)}"
-                  style="left:${zone.startPct}%;width:${zone.widthPct}%"
-                ></span>
-              `
-            )
-            .join("")}
-          ${
-            markerPct == null
-              ? ""
-              : `<span class="gaia-dashboard__gauge-marker${markerClass}" style="left:${markerPct}%"></span>`
-          }
+        <div class="gaia-dashboard__gauge-meter">
+          <svg class="gaia-dashboard__gauge-arc" viewBox="0 0 100 100" aria-hidden="true">
+            <defs>
+              <linearGradient id="${gradientId}" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="${GAUGE_PALETTE.low.hex}" />
+                <stop offset="40%" stop-color="${GAUGE_PALETTE.mild.hex}" />
+                <stop offset="70%" stop-color="${GAUGE_PALETTE.elevated.hex}" />
+                <stop offset="100%" stop-color="${GAUGE_PALETTE.high.hex}" />
+              </linearGradient>
+            </defs>
+            <circle class="gaia-dashboard__gauge-ring" cx="50" cy="50" r="${radius}"></circle>
+            ${
+              hasValue
+                ? `<circle class="gaia-dashboard__gauge-value-arc" cx="50" cy="50" r="${radius}" stroke="url(#${gradientId})" style="${arcStyle}" stroke-dasharray="${dash} ${gap}" transform="rotate(-90 50 50)"></circle>`
+                : ""
+            }
+            ${
+              hasValue
+                ? `<circle class="gaia-dashboard__gauge-dot" cx="${markerX}" cy="${markerY}" r="4.2" style="stroke:${palette.hex}"></circle>`
+                : ""
+            }
+          </svg>
+          <div class="gaia-dashboard__gauge-center">
+            <div class="gaia-dashboard__gauge-value">${formatGaugeValue(row && row.value)}</div>
+            <div class="gaia-dashboard__gauge-zone" style="color:${zoneColor}">${esc(zoneLabel)}</div>
+          </div>
         </div>
+        ${zoneKeyLabel ? `<div class="gaia-dashboard__gauge-zone-key">${esc(zoneKeyLabel)}</div>` : ""}
       </article>
     `;
   };
@@ -462,7 +492,7 @@
           .map(
             (zone) => `
               <span class="gaia-dashboard__legend-item">
-                <span class="gaia-dashboard__legend-dot gaia-dashboard__legend-dot--${zone}"></span>
+                <span class="gaia-dashboard__legend-dot" style="background:${(GAUGE_PALETTE[zone] || GAUGE_PALETTE.mild).hex}"></span>
                 ${esc(zoneLabelFromKey(zone))}
               </span>
             `
