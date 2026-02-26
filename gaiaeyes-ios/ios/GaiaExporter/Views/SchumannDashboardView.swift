@@ -828,14 +828,17 @@ private struct SchumannBandBarsView: View {
     }
 
     private func normalized(latest: Double?, min: Double?, max: Double?) -> Double {
-        guard let latest, let min, let max, max > min else {
+        guard let latest else {
             return 0
         }
-        let raw = Swift.min(1, Swift.max(0, (latest - min) / (max - min)))
-        if latest > 0 && raw < 0.04 {
-            return 0.04
+
+        let minimumVisible = latest > 0 ? 0.04 : 0
+        guard let min, let max, max > min else {
+            return minimumVisible
         }
-        return raw
+
+        let raw = Swift.min(1, Swift.max(0, (latest - min) / (max - min)))
+        return Swift.max(raw, minimumVisible)
     }
 
     private func trendText(latest: Double?, baseline: Double?) -> String {
