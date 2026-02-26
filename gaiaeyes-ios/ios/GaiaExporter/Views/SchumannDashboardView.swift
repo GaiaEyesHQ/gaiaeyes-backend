@@ -4,20 +4,6 @@ import Charts
 import UIKit
 #endif
 
-private enum SchumannDisplayMode: String, CaseIterable, Identifiable {
-    case scientific
-    case mystical
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .scientific: return "Scientific"
-        case .mystical: return "Mystical"
-        }
-    }
-}
-
 private struct SchumannLatestResponse: Codable {
     let ok: Bool?
     let generatedAt: String?
@@ -226,8 +212,7 @@ private struct SchumannSeriesSample: Identifiable {
 }
 
 private struct SchumannGaugeLevel {
-    let scientific: String
-    let mystical: String
+    let state: String
     let color: Color
 }
 
@@ -241,15 +226,15 @@ private enum SchumannTuning {
         let value = amplitude ?? 0
         switch value {
         case ..<calmUpper:
-            return SchumannGaugeLevel(scientific: "Calm", mystical: "Calm", color: Color(red: 0.44, green: 0.81, blue: 0.90))
+            return SchumannGaugeLevel(state: "Calm", color: Color(red: 0.44, green: 0.81, blue: 0.90))
         case calmUpper..<stableUpper:
-            return SchumannGaugeLevel(scientific: "Stable", mystical: "Stable", color: Color(red: 0.49, green: 0.88, blue: 0.84))
+            return SchumannGaugeLevel(state: "Stable", color: Color(red: 0.49, green: 0.88, blue: 0.84))
         case stableUpper..<activeUpper:
-            return SchumannGaugeLevel(scientific: "Active", mystical: "Active", color: Color(red: 0.90, green: 0.88, blue: 0.52))
+            return SchumannGaugeLevel(state: "Active", color: Color(red: 0.90, green: 0.88, blue: 0.52))
         case activeUpper..<elevatedUpper:
-            return SchumannGaugeLevel(scientific: "Elevated", mystical: "Elevated", color: Color(red: 0.97, green: 0.72, blue: 0.50))
+            return SchumannGaugeLevel(state: "Elevated", color: Color(red: 0.97, green: 0.72, blue: 0.50))
         default:
-            return SchumannGaugeLevel(scientific: "Intense", mystical: "Intense", color: Color(red: 0.95, green: 0.58, blue: 0.58))
+            return SchumannGaugeLevel(state: "Intense", color: Color(red: 0.95, green: 0.58, blue: 0.58))
         }
     }
 
@@ -305,9 +290,6 @@ private actor SchumannEndpointCache {
 
 @MainActor
 private final class SchumannDashboardViewModel: ObservableObject {
-    @Published var mode: SchumannDisplayMode = .scientific
-    @Published var showDetails: Bool = true
-    @Published var showHarmonics: Bool = true
     @Published var highContrast: Bool = false
 
     @Published var latest: SchumannLatestResponse?
@@ -438,15 +420,6 @@ private final class SchumannDashboardViewModel: ObservableObject {
         return samplesAscending.last?.ts
     }
 
-    func interpretationText(level: SchumannGaugeLevel) -> String {
-        switch mode {
-        case .scientific:
-            return "Primary index is derived from the 0-20 Hz amplitude band and updates every 15 minutes."
-        case .mystical:
-            return "Current field tone is \(level.mystical.lowercased()). Open details for exact frequencies and amplitudes."
-        }
-    }
-
     private func parseDate(_ iso: String?) -> Date? {
         guard let iso else { return nil }
         return Self.isoFractional.date(from: iso) ?? Self.isoPlain.date(from: iso)
@@ -535,6 +508,7 @@ private final class SchumannDashboardViewModel: ObservableObject {
 struct SchumannDashboardView: View {
     @ObservedObject var state: AppState
     @StateObject private var viewModel = SchumannDashboardViewModel()
+    @State private var showHowToRead: Bool = false
 
     private let timer = Timer.publish(every: 12 * 60, on: .main, in: .common).autoconnect()
 
@@ -569,13 +543,6 @@ struct SchumannDashboardView: View {
     private var headerCard: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
-                Picker("Mode", selection: $viewModel.mode) {
-                    ForEach(SchumannDisplayMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-
                 HStack(spacing: 8) {
                     qualityBadge
                     Text("Last updated: \(formattedTimestamp(viewModel.latestTimestamp))")
@@ -590,15 +557,22 @@ struct SchumannDashboardView: View {
                         .background(Color.secondary.opacity(0.15), in: Capsule())
                 }
 
-                HStack(spacing: 10) {
-                    Toggle("Show details", isOn: $viewModel.showDetails)
-                        .font(.caption)
-                    Toggle("Harmonics", isOn: $viewModel.showHarmonics)
-                        .font(.caption)
-                    Toggle("High contrast", isOn: $viewModel.highContrast)
-                        .font(.caption)
-                }
+                Toggle("High contrast", isOn: $viewModel.highContrast)
+                    .font(.caption)
                 .toggleStyle(.switch)
+
+                DisclosureGroup("How to read this", isExpanded: $showHowToRead) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("\u{2022} Gauge: overall intensity level (0-20 Hz).")
+                        Text("\u{2022} Heatmap: time x frequency; brighter = stronger.")
+                        Text("\u{2022} Bands: relative strength in key ranges.")
+                        Text("\u{2022} Pulse: intensity trend; dashed line = frequency.")
+                    }
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 4)
+                }
+                .font(.caption.weight(.semibold))
 
                 if let error = viewModel.errorMessage {
                     Text(error)
@@ -608,7 +582,7 @@ struct SchumannDashboardView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
-            Label("Schumann Mode", systemImage: "dial.medium")
+            Label("Schumann Overview", systemImage: "dial.medium")
         }
     }
 
@@ -625,6 +599,7 @@ struct SchumannDashboardView: View {
     private var gaugeCard: some View {
         let level = SchumannTuning.level(for: viewModel.latestAmplitude)
         let gaugeIndex = SchumannTuning.gaugeIndex(for: viewModel.latestAmplitude)
+        let gaugeSummary = String(format: "%.1f \u{2014} %@", gaugeIndex, level.state)
 
         return GroupBox {
             VStack(alignment: .leading, spacing: 10) {
@@ -632,26 +607,12 @@ struct SchumannDashboardView: View {
                     SchumannGaugeDial(value: gaugeIndex / 100, color: level.color)
                         .frame(width: 170, height: 130)
                         .accessibilityLabel("Schumann gauge")
-                        .accessibilityValue(viewModel.mode == .scientific
-                                            ? "Index \(String(format: "%.1f", gaugeIndex))"
-                                            : "State \(level.mystical)")
+                        .accessibilityValue("Index \(String(format: "%.1f", gaugeIndex)) State \(level.state)")
 
                     VStack(alignment: .leading, spacing: 6) {
-                        if viewModel.mode == .scientific {
-                            Text(String(format: "%.1f", gaugeIndex))
-                                .font(.system(size: 36, weight: .bold, design: .rounded))
-                            Text("Index")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text(level.mystical)
-                                .font(.system(size: 32, weight: .bold, design: .rounded))
-                            Text("State")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-
-                        Text(viewModel.interpretationText(level: level))
+                        Text(gaugeSummary)
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                        Text("Index (0-20 Hz intensity; updates every 15 minutes).")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -668,9 +629,6 @@ struct SchumannDashboardView: View {
             SchumannHeatmapView(
                 heatmap: viewModel.heatmap,
                 samples: viewModel.samplesAscending,
-                mode: viewModel.mode,
-                showDetails: viewModel.showDetails,
-                showHarmonics: viewModel.showHarmonics,
                 highContrast: viewModel.highContrast
             )
         } label: {
@@ -681,8 +639,7 @@ struct SchumannDashboardView: View {
     private var bandsCard: some View {
         GroupBox {
             SchumannBandBarsView(
-                samples: viewModel.samplesAscending,
-                mode: viewModel.mode
+                samples: viewModel.samplesAscending
             )
         } label: {
             Label("Harmonic Bands", systemImage: "chart.bar.fill")
@@ -692,9 +649,7 @@ struct SchumannDashboardView: View {
     private var pulseCard: some View {
         GroupBox {
             SchumannPulseChartView(
-                samples: viewModel.samplesAscending,
-                mode: viewModel.mode,
-                showDetails: viewModel.showDetails
+                samples: viewModel.samplesAscending
             )
         } label: {
             Label("48h Pulse Line", systemImage: "waveform.path.ecg")
@@ -764,38 +719,44 @@ private struct SchumannGaugeDial: View {
 
 private struct SchumannBandBarsView: View {
     let samples: [SchumannSeriesSample]
-    let mode: SchumannDisplayMode
 
     private struct BandItem: Identifiable {
         let id = UUID()
-        let key: String
         let label: String
         let latest: Double?
         let baseline: Double?
+        let min48h: Double?
+        let max48h: Double?
     }
 
     var body: some View {
         let latest = samples.last
         let previousWindow = Array(samples.dropLast().suffix(8))
+        let minMax7_9 = minMax(samples.map(\.band7_9))
+        let minMax13_15 = minMax(samples.map(\.band13_15))
+        let minMax18_20 = minMax(samples.map(\.band18_20))
 
         let items: [BandItem] = [
             BandItem(
-                key: "band7_9",
-                label: mode == .scientific ? "7-9 Hz" : "Ground",
+                label: "7-9 Hz \u{2022} Ground",
                 latest: latest?.band7_9,
-                baseline: average(previousWindow.map(\.band7_9))
+                baseline: average(previousWindow.map(\.band7_9)),
+                min48h: minMax7_9?.min,
+                max48h: minMax7_9?.max
             ),
             BandItem(
-                key: "band13_15",
-                label: mode == .scientific ? "13-15 Hz" : "Flow",
+                label: "13-15 Hz \u{2022} Flow",
                 latest: latest?.band13_15,
-                baseline: average(previousWindow.map(\.band13_15))
+                baseline: average(previousWindow.map(\.band13_15)),
+                min48h: minMax13_15?.min,
+                max48h: minMax13_15?.max
             ),
             BandItem(
-                key: "band18_20",
-                label: mode == .scientific ? "18-20 Hz" : "Spark",
+                label: "18-20 Hz \u{2022} Spark",
                 latest: latest?.band18_20,
-                baseline: average(previousWindow.map(\.band18_20))
+                baseline: average(previousWindow.map(\.band18_20)),
+                min48h: minMax18_20?.min,
+                max48h: minMax18_20?.max
             )
         ]
 
@@ -809,9 +770,9 @@ private struct SchumannBandBarsView: View {
                     HStack(spacing: 10) {
                         Text(item.label)
                             .font(.caption)
-                            .frame(width: 80, alignment: .leading)
+                            .frame(width: 126, alignment: .leading)
 
-                        ProgressView(value: min(max(item.latest ?? 0, 0), 1), total: 1)
+                        ProgressView(value: normalized(latest: item.latest, min: item.min48h, max: item.max48h), total: 1)
                             .tint(Color.cyan)
 
                         Text(trendText(latest: item.latest, baseline: item.baseline))
@@ -820,7 +781,7 @@ private struct SchumannBandBarsView: View {
                             .frame(width: 64, alignment: .trailing)
                     }
                 }
-                Text("Trend compares latest reading against the previous 2 hours (8 points).")
+                Text("Relative strength vs last 48h. Trend compares to previous 2 hours.")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -832,6 +793,19 @@ private struct SchumannBandBarsView: View {
         let numeric = values.compactMap { $0 }
         guard !numeric.isEmpty else { return nil }
         return numeric.reduce(0, +) / Double(numeric.count)
+    }
+
+    private func minMax(_ values: [Double?]) -> (min: Double, max: Double)? {
+        let numeric = values.compactMap { $0 }
+        guard let minValue = numeric.min(), let maxValue = numeric.max() else { return nil }
+        return (minValue, maxValue)
+    }
+
+    private func normalized(latest: Double?, min: Double?, max: Double?) -> Double {
+        guard let latest, let min, let max, max > min else {
+            return 0
+        }
+        return Swift.min(1, Swift.max(0, (latest - min) / (max - min)))
     }
 
     private func trendText(latest: Double?, baseline: Double?) -> String {
@@ -861,14 +835,8 @@ private struct SchumannBandBarsView: View {
 
 private struct SchumannPulseChartView: View {
     let samples: [SchumannSeriesSample]
-    let mode: SchumannDisplayMode
-    let showDetails: Bool
 
     @State private var selectedSample: SchumannSeriesSample?
-
-    private var showAxes: Bool {
-        mode == .scientific || showDetails
-    }
 
     private var srUpperBound: Double {
         let maxValue = samples.compactMap(\.srTotal).max() ?? 0.12
@@ -915,17 +883,15 @@ private struct SchumannPulseChartView: View {
                         }
                     }
 
-                    if mode == .scientific {
-                        ForEach(samples) { sample in
-                            if let f0 = sample.f0 {
-                                LineMark(
-                                    x: .value("Time", sample.date),
-                                    y: .value("F0Scaled", mapF0ToPulseScale(f0)),
-                                    series: .value("Series", "f0")
-                                )
-                                .foregroundStyle(Color.yellow)
-                                .lineStyle(StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
-                            }
+                    ForEach(samples) { sample in
+                        if let f0 = sample.f0 {
+                            LineMark(
+                                x: .value("Time", sample.date),
+                                y: .value("F0Scaled", mapF0ToPulseScale(f0)),
+                                series: .value("Series", "f0")
+                            )
+                            .foregroundStyle(Color.yellow)
+                            .lineStyle(StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
                         }
                     }
 
@@ -940,20 +906,14 @@ private struct SchumannPulseChartView: View {
                 .chartYScale(domain: 0...srUpperBound)
                 .frame(height: 230)
                 .chartXAxis {
-                    if showAxes {
-                        AxisMarks(values: .automatic(desiredCount: 4))
-                    }
+                    AxisMarks(values: .automatic(desiredCount: 4))
                 }
                 .chartYAxis {
-                    if showAxes {
-                        AxisMarks(position: .leading)
-                        if mode == .scientific {
-                            let ticks = trailingF0TickValues()
-                            AxisMarks(position: .trailing, values: ticks) { value in
-                                if let scaled = value.as(Double.self) {
-                                    AxisValueLabel(String(format: "%.2f Hz", mapPulseScaleToF0(scaled)))
-                                }
-                            }
+                    AxisMarks(position: .leading)
+                    let ticks = trailingF0TickValues()
+                    AxisMarks(position: .trailing, values: ticks) { value in
+                        if let scaled = value.as(Double.self) {
+                            AxisValueLabel(String(format: "%.2f Hz", mapPulseScaleToF0(scaled)))
                         }
                     }
                 }
@@ -979,6 +939,14 @@ private struct SchumannPulseChartView: View {
                             )
                     }
                 }
+                HStack(spacing: 12) {
+                    Text("Cyan: Intensity (0-20 Hz)")
+                        .font(.caption2)
+                        .foregroundColor(.cyan)
+                    Text("Yellow dashed: Fundamental (Hz)")
+                        .font(.caption2)
+                        .foregroundColor(.yellow)
+                }
 
                 if let selected = selectedSample {
                     HStack(spacing: 10) {
@@ -987,11 +955,9 @@ private struct SchumannPulseChartView: View {
                             .foregroundColor(.secondary)
                         Text("Pulse \(selected.srTotal.map { String(format: "%.3f", $0) } ?? "-")")
                             .font(.caption)
-                        if mode == .scientific {
-                            Text("f0 \(selected.f0.map { String(format: "%.2f", $0) } ?? "-") Hz")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+                        Text("f0 \(selected.f0.map { String(format: "%.2f", $0) } ?? "-") Hz")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                         Text(selected.usable ? "OK" : "Low confidence")
                             .font(.caption2.weight(.semibold))
                             .padding(.horizontal, 8)
@@ -1198,9 +1164,6 @@ private enum SchumannHeatmapRenderer {
 private struct SchumannHeatmapView: View {
     let heatmap: SchumannHeatmapResponse?
     let samples: [SchumannSeriesSample]
-    let mode: SchumannDisplayMode
-    let showDetails: Bool
-    let showHarmonics: Bool
     let highContrast: Bool
 
     @State private var bitmap: SchumannHeatmapBitmap?
@@ -1209,10 +1172,6 @@ private struct SchumannHeatmapView: View {
     #if canImport(UIKit)
     @State private var sharePayload: SchumannShareImagePayload?
     #endif
-
-    private var showAxes: Bool {
-        mode == .scientific || showDetails
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1260,7 +1219,7 @@ private struct SchumannHeatmapView: View {
                             }
                     }
 
-                    if showHarmonics, let bitmap {
+                    if let bitmap {
                         harmonicOverlay(size: geo.size, axis: heatmap?.axis, bins: bitmap.binCount)
                     }
 
@@ -1292,22 +1251,20 @@ private struct SchumannHeatmapView: View {
             }
             .frame(height: 220)
 
-            if showAxes {
-                let axisText = axisSummary()
-                HStack {
-                    Text(axisText.start)
-                    Spacer()
-                    Text(axisText.middle)
-                    Spacer()
-                    Text(axisText.end)
-                }
+            let axisText = axisSummary()
+            HStack {
+                Text(axisText.start)
+                Spacer()
+                Text(axisText.middle)
+                Spacer()
+                Text(axisText.end)
+            }
+            .font(.caption2)
+            .foregroundColor(.secondary)
+
+            Text("Heatmap = time x frequency. Brighter colors = stronger signal.")
                 .font(.caption2)
                 .foregroundColor(.secondary)
-            } else {
-                Text("Mystical mode: details hidden")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {

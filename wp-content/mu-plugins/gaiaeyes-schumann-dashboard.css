@@ -75,7 +75,6 @@
   flex-wrap: wrap;
 }
 
-.ge-sch-mode,
 .ge-sch-pill-btn,
 .ge-sch-action-link {
   appearance: none;
@@ -92,15 +91,31 @@
   transition: transform 0.2s ease, background 0.2s ease;
 }
 
-.ge-sch-mode:hover,
 .ge-sch-pill-btn:hover,
 .ge-sch-action-link:hover {
   transform: translateY(-1px);
 }
 
-.ge-sch-mode.is-active {
-  background: rgba(124, 224, 216, 0.24);
-  border-color: rgba(124, 224, 216, 0.8);
+.ge-sch-help {
+  background: var(--ge-panel);
+  border: 1px solid var(--ge-panel-border);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+}
+
+.ge-sch-help summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ge-sch-help ul {
+  color: var(--ge-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 8px 0 0 16px;
+  padding: 0;
 }
 
 .ge-sch-meta-row {
@@ -246,6 +261,10 @@
   margin-top: 6px;
 }
 
+.ge-sch-legend {
+  margin-top: 6px;
+}
+
 .ge-sch-band-bars {
   display: grid;
   gap: 8px;
@@ -253,7 +272,7 @@
 
 .ge-sch-band-row {
   display: grid;
-  grid-template-columns: 84px 1fr auto;
+  grid-template-columns: 132px 1fr auto;
   gap: 8px;
   align-items: center;
 }

@@ -207,14 +207,8 @@ if (!function_exists('gaiaeyes_schumann_dashboard_enqueue_assets')) {
 if (!function_exists('gaiaeyes_schumann_dashboard_render')) {
     function gaiaeyes_schumann_dashboard_render($atts = []) {
         $a = shortcode_atts([
-            'mode' => 'scientific',
-            'show_details' => '',
             'app_link' => '',
         ], $atts, 'gaiaeyes_schumann_dashboard');
-
-        $mode = strtolower(trim((string) $a['mode'])) === 'mystical' ? 'mystical' : 'scientific';
-        $show_details = trim((string) $a['show_details']);
-        $show_details_bool = $show_details === '' ? null : in_array(strtolower($show_details), ['1', 'true', 'yes', 'on'], true);
 
         $component_id = 'ge-schumann-dashboard-' . wp_generate_uuid4();
         $app_link = trim((string) $a['app_link']);
@@ -225,8 +219,6 @@ if (!function_exists('gaiaeyes_schumann_dashboard_render')) {
         gaiaeyes_schumann_dashboard_enqueue_assets();
 
         $client_cfg = [
-            'mode' => $mode,
-            'showDetails' => $show_details_bool,
             'appLink' => $app_link,
             'proEnabled' => (bool) apply_filters('gaiaeyes_schumann_pro_enabled', false),
         ];

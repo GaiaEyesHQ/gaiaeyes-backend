@@ -5,24 +5,17 @@
   var sharedPayloadPromise = null;
 
   var STATE_LEVELS = [
-    { key: "calm", min: 0.0, max: 0.03, scientific: "Calm", mystical: "Calm", color: "#6fcde3" },
-    { key: "stable", min: 0.03, max: 0.06, scientific: "Stable", mystical: "Stable", color: "#7ce0d8" },
-    { key: "active", min: 0.06, max: 0.1, scientific: "Active", mystical: "Active", color: "#e7e184" },
-    { key: "elevated", min: 0.1, max: 0.16, scientific: "Elevated", mystical: "Elevated", color: "#f7b27f" },
-    { key: "intense", min: 0.16, max: Number.POSITIVE_INFINITY, scientific: "Intense", mystical: "Intense", color: "#f08f90" },
+    { key: "calm", min: 0.0, max: 0.03, label: "Calm", color: "#6fcde3" },
+    { key: "stable", min: 0.03, max: 0.06, label: "Stable", color: "#7ce0d8" },
+    { key: "active", min: 0.06, max: 0.1, label: "Active", color: "#e7e184" },
+    { key: "elevated", min: 0.1, max: 0.16, label: "Elevated", color: "#f7b27f" },
+    { key: "intense", min: 0.16, max: Number.POSITIVE_INFINITY, label: "Intense", color: "#f08f90" },
   ];
 
   var BAND_LABELS = {
-    scientific: {
-      band_7_9: "7-9 Hz",
-      band_13_15: "13-15 Hz",
-      band_18_20: "18-20 Hz",
-    },
-    mystical: {
-      band_7_9: "Ground",
-      band_13_15: "Flow",
-      band_18_20: "Spark",
-    },
+    band_7_9: "7-9 Hz \u2022 Ground",
+    band_13_15: "13-15 Hz \u2022 Flow",
+    band_18_20: "18-20 Hz \u2022 Spark",
   };
 
   function clamp(value, min, max) {
@@ -240,9 +233,6 @@
     var cfg = parseJSON(root.getAttribute("data-config"), {});
 
     this.state = {
-      mode: cfg.mode === "mystical" ? "mystical" : "scientific",
-      showDetails: typeof cfg.showDetails === "boolean" ? cfg.showDetails : cfg.mode !== "mystical",
-      showHarmonics: true,
       highContrast: false,
       appLink: cfg.appLink || GLOBAL_CFG.appLink || "",
       proEnabled: !!(typeof cfg.proEnabled === "boolean" ? cfg.proEnabled : GLOBAL_CFG.proEnabled),
@@ -266,15 +256,20 @@
       '  <div class="ge-sch-header">',
       '    <h2 class="ge-sch-title">Schumann Dashboard</h2>',
       '    <div class="ge-sch-controls">',
-      '      <button type="button" class="ge-sch-mode" data-action="mode-scientific">Scientific</button>',
-      '      <button type="button" class="ge-sch-mode" data-action="mode-mystical">Mystical</button>',
-      '      <button type="button" class="ge-sch-pill-btn" data-action="toggle-details">Details</button>',
       '      <button type="button" class="ge-sch-pill-btn" data-action="toggle-contrast">Contrast</button>',
-      '      <button type="button" class="ge-sch-pill-btn" data-action="toggle-harmonics">Harmonics</button>',
       '      <button type="button" class="ge-sch-pill-btn" data-action="download-heatmap">Download PNG</button>',
       '      <a class="ge-sch-action-link" data-role="open-app" target="_blank" rel="noopener noreferrer">Open in app</a>',
       '    </div>',
       '  </div>',
+      '  <details class="ge-sch-help">',
+      '    <summary>How to read this</summary>',
+      '    <ul>',
+      '      <li>Gauge: overall intensity level (0-20 Hz).</li>',
+      '      <li>Heatmap: time x frequency; brighter = stronger.</li>',
+      '      <li>Bands: relative strength in key ranges.</li>',
+      '      <li>Pulse: intensity trend; dashed line = frequency.</li>',
+      '    </ul>',
+      '  </details>',
       '  <div class="ge-sch-meta-row">',
       '    <span class="ge-sch-chip" data-role="updated">Last updated: -</span>',
       '    <span class="ge-sch-chip" data-role="quality">Quality: -</span>',
@@ -287,7 +282,7 @@
       '        <canvas class="ge-sch-gauge-canvas" aria-label="Earth resonance gauge"></canvas>',
       '        <div>',
       '          <div class="ge-sch-gauge-value" data-role="gauge-value">-</div>',
-      '          <div class="ge-sch-muted" data-role="gauge-label">Index</div>',
+      '          <div class="ge-sch-muted" data-role="gauge-label">Index (0-20 Hz intensity; updates every 15 minutes).</div>',
       '          <p class="ge-sch-muted" data-role="interpretation">Loading signal interpretation...</p>',
       '        </div>',
       '      </div>',
@@ -304,6 +299,7 @@
       '        <div class="ge-sch-tooltip" data-role="heatmap-tooltip"></div>',
       '      </div>',
       '      <div class="ge-sch-axes" data-role="heatmap-axes"></div>',
+      '      <div class="ge-sch-muted ge-sch-legend">Heatmap = time x frequency. Brighter = stronger.</div>',
       '    </section>',
       '    <section class="ge-sch-card ge-sch-card--pulse">',
       '      <h3>48h Pulse Line</h3>',
@@ -311,6 +307,7 @@
       '        <canvas class="ge-sch-canvas ge-sch-pulse-canvas"></canvas>',
       '        <div class="ge-sch-tooltip" data-role="pulse-tooltip"></div>',
       '      </div>',
+      '      <div class="ge-sch-muted ge-sch-legend">Cyan: Intensity (0-20 Hz) \u2022 Yellow dashed: Fundamental (Hz)</div>',
       '      <div class="ge-sch-axes" data-role="pulse-axes"></div>',
       '    </section>',
       '    <section class="ge-sch-card ge-sch-card--pro">',
@@ -321,11 +318,7 @@
       '</div>'
     ].join("");
 
-    this.refs.modeScientific = this.root.querySelector('[data-action="mode-scientific"]');
-    this.refs.modeMystical = this.root.querySelector('[data-action="mode-mystical"]');
-    this.refs.toggleDetails = this.root.querySelector('[data-action="toggle-details"]');
     this.refs.toggleContrast = this.root.querySelector('[data-action="toggle-contrast"]');
-    this.refs.toggleHarmonics = this.root.querySelector('[data-action="toggle-harmonics"]');
     this.refs.downloadHeatmap = this.root.querySelector('[data-action="download-heatmap"]');
     this.refs.openApp = this.root.querySelector('[data-role="open-app"]');
 
@@ -358,31 +351,9 @@
   SchumannWidget.prototype.bindEvents = function () {
     var self = this;
 
-    this.refs.modeScientific.addEventListener("click", function () {
-      self.state.mode = "scientific";
-      self.state.showDetails = true;
-      self.render();
-    });
-
-    this.refs.modeMystical.addEventListener("click", function () {
-      self.state.mode = "mystical";
-      self.state.showDetails = false;
-      self.render();
-    });
-
-    this.refs.toggleDetails.addEventListener("click", function () {
-      self.state.showDetails = !self.state.showDetails;
-      self.render();
-    });
-
     this.refs.toggleContrast.addEventListener("click", function () {
       self.state.highContrast = !self.state.highContrast;
       self.cachedHeatmap = null;
-      self.render();
-    });
-
-    this.refs.toggleHarmonics.addEventListener("click", function () {
-      self.state.showHarmonics = !self.state.showHarmonics;
       self.render();
     });
 
@@ -423,9 +394,6 @@
         self.state.payload = payload;
         self.state.seriesRows = normalizeSeriesRows(payload && payload.series);
         self.state.heatmap = normalizeHeatmap(payload && payload.heatmap);
-        if (self.state.mode === "mystical" && typeof self.state.showDetails !== "boolean") {
-          self.state.showDetails = false;
-        }
         self.render();
       })
       .catch(function (err) {
@@ -461,12 +429,7 @@
   };
 
   SchumannWidget.prototype.updateControlState = function () {
-    this.refs.modeScientific.classList.toggle("is-active", this.state.mode === "scientific");
-    this.refs.modeMystical.classList.toggle("is-active", this.state.mode === "mystical");
-
-    this.refs.toggleDetails.textContent = this.state.showDetails ? "Hide details" : "Show details";
     this.refs.toggleContrast.textContent = this.state.highContrast ? "Contrast on" : "Contrast";
-    this.refs.toggleHarmonics.textContent = this.state.showHarmonics ? "Harmonics on" : "Harmonics off";
   };
 
   SchumannWidget.prototype.render = function () {
@@ -482,24 +445,15 @@
     var gaugeIndex = clamp(srTotal * 1000, 0, 100);
     var stateLevel = deriveState(srTotal);
     var qualityText = qualityStatus(quality);
-    var mode = this.state.mode;
 
     this.refs.updated.textContent = "Last updated: " + formatDateTime(latest && latest.generated_at);
     this.refs.quality.textContent = "Quality: " + qualityText.text;
     this.refs.quality.className = "ge-sch-chip " + qualityText.className;
     this.refs.station.textContent = "Station: " + ((quality && quality.primary_source) || "cumiana");
 
-    this.refs.gaugeValue.textContent = mode === "scientific"
-      ? formatNumber(gaugeIndex, 1)
-      : stateLevel.mystical;
-
-    this.refs.gaugeLabel.textContent = mode === "scientific"
-      ? "Index"
-      : "State";
-
-    this.refs.interpretation.textContent = mode === "scientific"
-      ? "Signal state: " + stateLevel.scientific + ". Index is scaled from sr_total_0_20 over 48h."
-      : "Energy tone is " + stateLevel.mystical + ". Tap details for full numbers and axes.";
+    this.refs.gaugeValue.textContent = formatNumber(gaugeIndex, 1) + " \u2014 " + stateLevel.label;
+    this.refs.gaugeLabel.textContent = "Index (0-20 Hz intensity; updates every 15 minutes).";
+    this.refs.interpretation.textContent = "Current state: " + stateLevel.label + ".";
 
     this.renderGauge(gaugeIndex, stateLevel.color);
     this.renderReadouts(harmonics, amplitude, quality);
@@ -546,15 +500,13 @@
   };
 
   SchumannWidget.prototype.renderReadouts = function (harmonics, amplitude, quality) {
-    var mode = this.state.mode;
-    var labels = BAND_LABELS[mode];
     var station = quality && quality.primary_source ? quality.primary_source : "cumiana";
 
     var rows = [
       { label: "f0", value: Number.isFinite(toNumber(harmonics.f0, Number.NaN)) ? formatNumber(toNumber(harmonics.f0, 0), 2) + " Hz" : "-" },
-      { label: labels.band_7_9, value: Number.isFinite(toNumber(amplitude.band_7_9, Number.NaN)) ? formatNumber(toNumber(amplitude.band_7_9, 0) * 100, 1) + "%" : "-" },
-      { label: labels.band_13_15, value: Number.isFinite(toNumber(amplitude.band_13_15, Number.NaN)) ? formatNumber(toNumber(amplitude.band_13_15, 0) * 100, 1) + "%" : "-" },
-      { label: labels.band_18_20, value: Number.isFinite(toNumber(amplitude.band_18_20, Number.NaN)) ? formatNumber(toNumber(amplitude.band_18_20, 0) * 100, 1) + "%" : "-" },
+      { label: BAND_LABELS.band_7_9, value: Number.isFinite(toNumber(amplitude.band_7_9, Number.NaN)) ? formatNumber(toNumber(amplitude.band_7_9, 0) * 100, 1) + "%" : "-" },
+      { label: BAND_LABELS.band_13_15, value: Number.isFinite(toNumber(amplitude.band_13_15, Number.NaN)) ? formatNumber(toNumber(amplitude.band_13_15, 0) * 100, 1) + "%" : "-" },
+      { label: BAND_LABELS.band_18_20, value: Number.isFinite(toNumber(amplitude.band_18_20, Number.NaN)) ? formatNumber(toNumber(amplitude.band_18_20, 0) * 100, 1) + "%" : "-" },
       { label: "Source", value: station },
     ];
 
@@ -572,8 +524,6 @@
       return;
     }
 
-    var mode = this.state.mode;
-    var labels = BAND_LABELS[mode];
     var latest = rows[rows.length - 1];
     var baseline = rows.slice(Math.max(0, rows.length - 9), Math.max(0, rows.length - 1));
 
@@ -586,10 +536,27 @@
       return total / vals.length;
     }
 
+    function minMax(list, key) {
+      var vals = list.map(function (item) { return item[key]; }).filter(Number.isFinite);
+      if (!vals.length) {
+        return null;
+      }
+      return {
+        min: Math.min.apply(null, vals),
+        max: Math.max.apply(null, vals),
+      };
+    }
+
+    var ranges = {
+      band7_9: minMax(rows, "band7_9"),
+      band13_15: minMax(rows, "band13_15"),
+      band18_20: minMax(rows, "band18_20"),
+    };
+
     var bands = [
-      { key: "band7_9", label: labels.band_7_9 },
-      { key: "band13_15", label: labels.band_13_15 },
-      { key: "band18_20", label: labels.band_18_20 },
+      { key: "band7_9", label: BAND_LABELS.band_7_9 },
+      { key: "band13_15", label: BAND_LABELS.band_13_15 },
+      { key: "band18_20", label: BAND_LABELS.band_18_20 },
     ];
 
     var html = bands
@@ -607,7 +574,12 @@
           trendArrow = "\u2193";
         }
 
-        var pct = Number.isFinite(current) ? clamp(current * 100, 0, 100) : 0;
+        var pct = 0;
+        var range = ranges[band.key];
+        if (Number.isFinite(current) && range && range.max > range.min) {
+          pct = clamp(((current - range.min) / (range.max - range.min)) * 100, 0, 100);
+        }
+
         return [
           '<div class="ge-sch-band-row" style="opacity:' + (latest.usable ? "1" : "0.55") + '">',
           '  <span>' + band.label + '</span>',
@@ -618,7 +590,7 @@
       })
       .join("");
 
-    this.refs.bandBars.innerHTML = html;
+    this.refs.bandBars.innerHTML = html + '<div class="ge-sch-muted">Relative strength vs last 48h. Trend compares to previous 2 hours.</div>';
   };
 
   SchumannWidget.prototype.renderHeatmap = function () {
@@ -702,40 +674,34 @@
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.cachedHeatmap.canvas, 0, 0, cssWidth, cssHeight);
 
-    if (this.state.showHarmonics) {
-      var axis = heatmap.axis || {};
-      var freqStart = toNumber(axis.freqStartHz, 0);
-      var freqStep = toNumber(axis.freqStepHz, 0);
-      if (!(freqStep > 0)) {
-        freqStep = 20 / Math.max(1, bins);
+    var axis = heatmap.axis || {};
+    var freqStart = toNumber(axis.freqStartHz, 0);
+    var freqStep = toNumber(axis.freqStepHz, 0);
+    if (!(freqStep > 0)) {
+      freqStep = 20 / Math.max(1, bins);
+    }
+
+    var guides = [7.8, 14.1, 20.0];
+    ctx.strokeStyle = "rgba(255,255,255,0.36)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    guides.forEach(function (freq) {
+      var binPos = (freq - freqStart) / freqStep;
+      var yPx = cssHeight - (binPos / Math.max(1, bins - 1)) * cssHeight;
+      if (yPx >= 0 && yPx <= cssHeight) {
+        ctx.beginPath();
+        ctx.moveTo(0, yPx);
+        ctx.lineTo(cssWidth, yPx);
+        ctx.stroke();
       }
+    });
+    ctx.setLineDash([]);
 
-      var guides = [7.8, 14.1, 20.0];
-      ctx.strokeStyle = "rgba(255,255,255,0.36)";
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      guides.forEach(function (freq) {
-        var binPos = (freq - freqStart) / freqStep;
-        var yPx = cssHeight - (binPos / Math.max(1, bins - 1)) * cssHeight;
-        if (yPx >= 0 && yPx <= cssHeight) {
-          ctx.beginPath();
-          ctx.moveTo(0, yPx);
-          ctx.lineTo(cssWidth, yPx);
-          ctx.stroke();
-        }
-      });
-      ctx.setLineDash([]);
-    }
-
-    if (this.state.mode === "scientific" || this.state.showDetails) {
-      this.refs.heatmapAxes.innerHTML = [
-        '<span>' + formatDateTime(points[0].ts) + '</span>',
-        '<span>0-20 Hz</span>',
-        '<span>' + formatDateTime(points[points.length - 1].ts) + '</span>'
-      ].join("");
-    } else {
-      this.refs.heatmapAxes.innerHTML = '<span>Mystical mode: details hidden</span>';
-    }
+    this.refs.heatmapAxes.innerHTML = [
+      '<span>' + formatDateTime(points[0].ts) + '</span>',
+      '<span>0-20 Hz</span>',
+      '<span>' + formatDateTime(points[points.length - 1].ts) + '</span>'
+    ].join("");
   };
 
   SchumannWidget.prototype.updateHeatmapTooltip = function (event) {
@@ -791,11 +757,7 @@
     var cssWidth = canvas.clientWidth || canvas.parentElement.clientWidth || 640;
     var cssHeight = canvas.clientHeight || 210;
     var ctx = resizeCanvas(canvas, cssWidth, cssHeight);
-    var showAxes = this.state.mode === "scientific" || this.state.showDetails;
-
-    var margin = showAxes
-      ? { top: 14, right: this.state.mode === "scientific" ? 52 : 14, bottom: 26, left: 50 }
-      : { top: 10, right: 10, bottom: 12, left: 10 };
+    var margin = { top: 14, right: 52, bottom: 26, left: 50 };
 
     var plotWidth = Math.max(12, cssWidth - margin.left - margin.right);
     var plotHeight = Math.max(12, cssHeight - margin.top - margin.bottom);
@@ -832,36 +794,34 @@
 
     ctx.clearRect(0, 0, cssWidth, cssHeight);
 
-    if (showAxes) {
-      ctx.strokeStyle = "rgba(255,255,255,0.14)";
-      ctx.lineWidth = 1;
-      for (var i = 0; i <= 4; i += 1) {
-        var yTick = margin.top + (plotHeight / 4) * i;
-        ctx.beginPath();
-        ctx.moveTo(margin.left, yTick);
-        ctx.lineTo(margin.left + plotWidth, yTick);
-        ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.14)";
+    ctx.lineWidth = 1;
+    for (var i = 0; i <= 4; i += 1) {
+      var yTick = margin.top + (plotHeight / 4) * i;
+      ctx.beginPath();
+      ctx.moveTo(margin.left, yTick);
+      ctx.lineTo(margin.left + plotWidth, yTick);
+      ctx.stroke();
 
-        var srAtTick = yMax - (yMax / 4) * i;
-        ctx.fillStyle = "rgba(255,255,255,0.75)";
-        ctx.font = "11px sans-serif";
-        ctx.textAlign = "right";
-        ctx.fillText(formatNumber(srAtTick, 3), margin.left - 6, yTick + 3);
-      }
-
-      var timeIndices = [0, Math.floor(rows.length / 2), rows.length - 1];
-      ctx.textAlign = "center";
+      var srAtTick = yMax - (yMax / 4) * i;
       ctx.fillStyle = "rgba(255,255,255,0.75)";
-      timeIndices.forEach(function (idx) {
-        var row = rows[idx];
-        var xTick = xForDate(row.date);
-        ctx.fillText(
-          row.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          xTick,
-          margin.top + plotHeight + 16
-        );
-      });
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText(formatNumber(srAtTick, 3), margin.left - 6, yTick + 3);
     }
+
+    var timeIndices = [0, Math.floor(rows.length / 2), rows.length - 1];
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    timeIndices.forEach(function (idx) {
+      var row = rows[idx];
+      var xTick = xForDate(row.date);
+      ctx.fillText(
+        row.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        xTick,
+        margin.top + plotHeight + 16
+      );
+    });
 
     ctx.lineWidth = 2;
     for (var j = 1; j < rows.length; j += 1) {
@@ -889,47 +849,37 @@
       ctx.fill();
     });
 
-    if (this.state.mode === "scientific") {
-      ctx.strokeStyle = "rgba(255, 209, 126, 0.95)";
-      ctx.setLineDash([5, 4]);
-      ctx.lineWidth = 1.4;
-      var started = false;
-      ctx.beginPath();
-      rows.forEach(function (row) {
-        if (!Number.isFinite(row.f0)) {
-          return;
-        }
-        var x = xForDate(row.date);
-        var y = yForF0(row.f0);
-        if (!started) {
-          ctx.moveTo(x, y);
-          started = true;
-        } else {
-          ctx.lineTo(x, y);
-        }
-      });
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      if (showAxes) {
-        ctx.fillStyle = "rgba(255, 230, 181, 0.9)";
-        ctx.textAlign = "left";
-        var steps = 3;
-        for (var tick = 0; tick <= steps; tick += 1) {
-          var f0Tick = f0Min + ((f0Max - f0Min) / steps) * tick;
-          var yTick2 = yForF0(f0Tick);
-          ctx.fillText(formatNumber(f0Tick, 2) + " Hz", margin.left + plotWidth + 6, yTick2 + 3);
-        }
+    ctx.strokeStyle = "rgba(255, 209, 126, 0.95)";
+    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = 1.4;
+    var started = false;
+    ctx.beginPath();
+    rows.forEach(function (row) {
+      if (!Number.isFinite(row.f0)) {
+        return;
       }
+      var x = xForDate(row.date);
+      var y = yForF0(row.f0);
+      if (!started) {
+        ctx.moveTo(x, y);
+        started = true;
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = "rgba(255, 230, 181, 0.9)";
+    ctx.textAlign = "left";
+    var steps = 3;
+    for (var tick = 0; tick <= steps; tick += 1) {
+      var f0Tick = f0Min + ((f0Max - f0Min) / steps) * tick;
+      var yTick2 = yForF0(f0Tick);
+      ctx.fillText(formatNumber(f0Tick, 2) + " Hz", margin.left + plotWidth + 6, yTick2 + 3);
     }
 
-    if (showAxes) {
-      this.refs.pulseAxes.innerHTML = '<span>sr_total_0_20</span>' +
-        (this.state.mode === "scientific" ? "<span>f0 overlay (Hz)</span>" : "<span>Mystical state view</span>") +
-        '<span>Low quality points dimmed</span>';
-    } else {
-      this.refs.pulseAxes.innerHTML = '<span>Mystical mode: details hidden</span>';
-    }
+    this.refs.pulseAxes.innerHTML = '<span>sr_total_0_20</span><span>f0 overlay (Hz)</span><span>Low quality points dimmed</span>';
   };
 
   SchumannWidget.prototype.updatePulseTooltip = function (event) {
