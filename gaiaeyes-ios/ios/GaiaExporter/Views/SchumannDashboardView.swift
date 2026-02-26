@@ -732,9 +732,9 @@ private struct SchumannBandBarsView: View {
     var body: some View {
         let latest = samples.last
         let previousWindow = Array(samples.dropLast().suffix(8))
-        let minMax7_9 = minMax(samples.map(\.band7_9))
-        let minMax13_15 = minMax(samples.map(\.band13_15))
-        let minMax18_20 = minMax(samples.map(\.band18_20))
+        let minMax7_9 = robustRange(usableValues(\.band7_9), fallback: allValues(\.band7_9))
+        let minMax13_15 = robustRange(usableValues(\.band13_15), fallback: allValues(\.band13_15))
+        let minMax18_20 = robustRange(usableValues(\.band18_20), fallback: allValues(\.band18_20))
 
         let items: [BandItem] = [
             BandItem(
@@ -795,17 +795,47 @@ private struct SchumannBandBarsView: View {
         return numeric.reduce(0, +) / Double(numeric.count)
     }
 
-    private func minMax(_ values: [Double?]) -> (min: Double, max: Double)? {
-        let numeric = values.compactMap { $0 }
-        guard let minValue = numeric.min(), let maxValue = numeric.max() else { return nil }
-        return (minValue, maxValue)
+    private func usableValues(_ keyPath: KeyPath<SchumannSeriesSample, Double?>) -> [Double] {
+        samples.filter(\.usable).compactMap { $0[keyPath: keyPath] }
+    }
+
+    private func allValues(_ keyPath: KeyPath<SchumannSeriesSample, Double?>) -> [Double] {
+        samples.compactMap { $0[keyPath: keyPath] }
+    }
+
+    private func robustRange(_ preferred: [Double], fallback: [Double]) -> (min: Double, max: Double)? {
+        let base = preferred.count >= 8 ? preferred : fallback
+        guard !base.isEmpty else { return nil }
+
+        let sorted = base.sorted()
+        if sorted.count < 8 {
+            return (sorted[0], sorted[sorted.count - 1])
+        }
+
+        let low = percentile(sorted, p: 0.05)
+        let high = percentile(sorted, p: 0.95)
+        if high > low {
+            return (low, high)
+        }
+
+        return (sorted[0], sorted[sorted.count - 1])
+    }
+
+    private func percentile(_ sorted: [Double], p: Double) -> Double {
+        guard !sorted.isEmpty else { return 0 }
+        let idx = Int((Double(sorted.count - 1) * p).rounded())
+        return sorted[max(0, min(sorted.count - 1, idx))]
     }
 
     private func normalized(latest: Double?, min: Double?, max: Double?) -> Double {
         guard let latest, let min, let max, max > min else {
             return 0
         }
-        return Swift.min(1, Swift.max(0, (latest - min) / (max - min)))
+        let raw = Swift.min(1, Swift.max(0, (latest - min) / (max - min)))
+        if latest > 0 && raw < 0.04 {
+            return 0.04
+        }
+        return raw
     }
 
     private func trendText(latest: Double?, baseline: Double?) -> String {

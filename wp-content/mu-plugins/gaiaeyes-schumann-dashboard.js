@@ -536,21 +536,39 @@
       return total / vals.length;
     }
 
-    function minMax(list, key) {
-      var vals = list.map(function (item) { return item[key]; }).filter(Number.isFinite);
+    function robustRange(list, key) {
+      var preferred = list
+        .filter(function (item) { return item.usable !== false; })
+        .map(function (item) { return item[key]; })
+        .filter(Number.isFinite);
+
+      var vals = preferred.length >= 8
+        ? preferred.slice()
+        : list.map(function (item) { return item[key]; }).filter(Number.isFinite);
       if (!vals.length) {
         return null;
       }
+      vals.sort(function (a, b) { return a - b; });
+      if (vals.length < 8) {
+        return { min: vals[0], max: vals[vals.length - 1] };
+      }
+
+      var low = percentile(vals, 0.05);
+      var high = percentile(vals, 0.95);
+      if (high > low) {
+        return { min: low, max: high };
+      }
+
       return {
-        min: Math.min.apply(null, vals),
-        max: Math.max.apply(null, vals),
+        min: vals[0],
+        max: vals[vals.length - 1],
       };
     }
 
     var ranges = {
-      band7_9: minMax(rows, "band7_9"),
-      band13_15: minMax(rows, "band13_15"),
-      band18_20: minMax(rows, "band18_20"),
+      band7_9: robustRange(rows, "band7_9"),
+      band13_15: robustRange(rows, "band13_15"),
+      band18_20: robustRange(rows, "band18_20"),
     };
 
     var bands = [
@@ -578,6 +596,9 @@
         var range = ranges[band.key];
         if (Number.isFinite(current) && range && range.max > range.min) {
           pct = clamp(((current - range.min) / (range.max - range.min)) * 100, 0, 100);
+        }
+        if (Number.isFinite(current) && current > 0 && pct < 4) {
+          pct = 4;
         }
 
         return [
