@@ -45,17 +45,20 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
         .gaia-dashboard__title{font-size:22px;font-weight:700;line-height:1.2;margin:0}
         .gaia-dashboard__mode{font-size:12px;padding:3px 8px;border-radius:999px;background:#1f2a3a;color:#9cc0ff}
-        .gaia-dashboard__gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0}
-        .gaia-dashboard__gauge{padding:10px;border-radius:12px;background:#151c28;display:flex;flex-direction:column;gap:8px}
+        .gaia-dashboard__gauges{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:12px 0;align-items:stretch}
+        @media(min-width:900px){.gaia-dashboard__gauges{grid-template-columns:repeat(3,minmax(0,1fr));}}
+        @media(min-width:1200px){.gaia-dashboard__gauges{grid-template-columns:repeat(4,minmax(0,1fr));}}
+        .gaia-dashboard__gauge{padding:12px;border-radius:14px;background:#151c28;display:flex;flex-direction:column;gap:10px;min-height:150px}
         .gaia-dashboard__gauge-label{font-size:12px;color:#9da9c1}
-        .gaia-dashboard__gauge-meter{position:relative;display:grid;place-items:center}
-        .gaia-dashboard__gauge-arc{width:108px;height:108px;display:block}
+        .gaia-dashboard__gauge-meter{position:relative;display:grid;place-items:center;margin-top:2px}
+        .gaia-dashboard__gauge-arc{width:104px;height:104px;display:block}
+        @media(min-width:1200px){.gaia-dashboard__gauge-arc{width:110px;height:110px}}
         .gaia-dashboard__gauge-ring{fill:none;stroke:rgba(255,255,255,.12);stroke-width:9}
         .gaia-dashboard__gauge-value-arc{fill:none;stroke-width:9;stroke-linecap:round}
         .gaia-dashboard__gauge-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
-        .gaia-dashboard__gauge-value{font-size:25px;font-weight:700;line-height:1}
-        .gaia-dashboard__gauge-zone{font-size:12px;line-height:1.2}
-        .gaia-dashboard__gauge-zone-key{font-size:11px;color:#9da9c1;text-align:center}
+        .gaia-dashboard__gauge-value{font-size:26px;font-weight:750;line-height:1}
+        .gaia-dashboard__gauge-zone{font-size:12px;line-height:1.2;opacity:.95}
+        .gaia-dashboard__gauge-zone-key{font-size:11px;color:#9da9c1;text-align:center;margin-top:2px}
         .gaia-dashboard__gauge-dot{fill:#fff;stroke:#1a2434;stroke-width:1.6}
         .gaia-dashboard__gauge-legend{display:flex;flex-wrap:wrap;gap:10px;margin:4px 0 10px}
         .gaia-dashboard__legend-item{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#9da9c1}
