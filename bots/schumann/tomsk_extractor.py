@@ -36,6 +36,11 @@ ROI = (59, 31, 1539, 431)             # x0,y0,x1,y1
 RIGHT_EXCLUDE_PX = 90  # ignore right margin (colorbar/legend)
 MIN_GUARD_PX = 6       # min distance left of frontier
 
+FRONTIER_COLOR_S_MIN = 35
+FRONTIER_COLOR_V_MIN = 28
+FRONTIER_MIN_ACTIVITY = 0.16
+FRONTIER_MIN_RUN_PX = 8
+
 # Canonical harmonic windows (Hz) for picking
 HARMONIC_WINDOWS = {
     "F1": (6.0, 9.5),
@@ -103,6 +108,25 @@ def vertical_energy(gray):
     col = (col - col.min()) / (np.ptp(col) + 1e-6)
     return col
 
+def smooth_1d(arr, radius):
+    arr = np.asarray(arr, dtype=np.float32).ravel()
+    r = int(max(0, radius))
+    if arr.size <= 2 or r <= 0:
+        return arr.copy()
+    k = 2 * r + 1
+    kernel = np.ones(k, dtype=np.float32) / float(k)
+    return np.convolve(arr, kernel, mode="same")
+
+def normalize_robust(arr):
+    arr = np.asarray(arr, dtype=np.float32).ravel()
+    if arr.size == 0:
+        return arr
+    p10 = float(np.percentile(arr, 10))
+    p90 = float(np.percentile(arr, 90))
+    if (p90 - p10) < 1e-6:
+        return np.zeros_like(arr)
+    return np.clip((arr - p10) / (p90 - p10), 0.0, 1.0)
+
 def detect_tick_pph(img_bgr, roi, verbose=False):
     x0,y0,x1,y1 = roi
     y_top = max(y0, y1 - (TICK_STRIP_H + 2))
@@ -156,24 +180,73 @@ def estimate_day_boundaries(img_bgr, roi):
     x_day2 = int(round(x_day1 + day_w))
     return x_day0, x_day1, x_day2, float(day_w)
 
-def detect_frontier(img_bgr, roi):
-    _x0, y0, _x1, y1 = roi
+def detect_frontier(img_bgr, roi, return_debug=False):
+    x0, y0, x1, y1 = roi
     x1_eff = max(x0 + 50, x1 - RIGHT_EXCLUDE_PX)
     crop = img_bgr[y0:y1, x0:x1_eff]
-    if crop.size == 0: return x0
-    gry = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY).astype(np.float32)
-    col_std = gry.std(axis=0)
-    k = max(3, (x1_eff - x0) // 600)
-    col_std = cv2.blur(col_std.reshape(1, -1), (1, 2 * k + 1)).ravel()
-    col_std = (col_std - col_std.min()) / (np.ptp(col_std) + 1e-6)
-    thr = float(np.percentile(col_std, 40)) * 0.9
+    if crop.size == 0:
+        frontier = x0
+        dbg = {"method": "empty", "activity_thr": None, "activity_right_tail": None}
+        return (frontier, dbg) if return_debug else frontier
+
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    sat = hsv[:, :, 1].astype(np.float32)
+    val = hsv[:, :, 2].astype(np.float32)
+
+    color_mask = ((sat >= FRONTIER_COLOR_S_MIN) & (val >= FRONTIER_COLOR_V_MIN)).astype(np.float32)
+    col_color = color_mask.mean(axis=0)
+
+    col_diff = np.zeros(gray.shape[1], dtype=np.float32)
+    if gray.shape[1] > 1:
+        col_diff[1:] = np.abs(np.diff(gray, axis=1)).mean(axis=0)
+
+    smooth_r = max(2, int((x1_eff - x0) / 700.0))
+    color_s = smooth_1d(col_color, smooth_r)
+    diff_s = smooth_1d(col_diff, smooth_r)
+
+    color_n = normalize_robust(color_s)
+    diff_n = normalize_robust(diff_s)
+    activity = 0.45 * color_n + 0.55 * diff_n
+
+    thr = max(FRONTIER_MIN_ACTIVITY, float(np.percentile(activity, 65)) * 0.85)
+    run = max(FRONTIER_MIN_RUN_PX, int(round((x1_eff - x0) / 220.0)))
+
     idx = None
-    for i in range(len(col_std) - 1, -1, -1):
-        if col_std[i] > thr:
+    for i in range(len(activity) - 1, run - 2, -1):
+        window = activity[i - run + 1:i + 1]
+        if float(np.mean(window)) >= thr:
             idx = i
             break
-    if idx is None: idx = len(col_std) - 1
-    return x0 + int(idx)
+
+    method = "activity_scan"
+    if idx is None:
+        # Conservative fallback when activity scoring is too weak.
+        col_std = gray.std(axis=0)
+        col_std = smooth_1d(col_std, max(2, int((x1_eff - x0) / 600.0)))
+        col_std = (col_std - col_std.min()) / (np.ptp(col_std) + 1e-6)
+        thr_std = max(0.10, float(np.percentile(col_std, 55)) * 0.9)
+        for i in range(len(col_std) - 1, -1, -1):
+            if float(col_std[i]) > thr_std:
+                idx = i
+                break
+        method = "std_fallback"
+
+    if idx is None:
+        idx = len(activity) - 1
+        method = "right_edge_fallback"
+
+    frontier = x0 + int(idx)
+    tail_len = int(min(len(activity), max(20, run * 2)))
+    right_tail = float(np.mean(activity[-tail_len:])) if tail_len > 0 else 0.0
+    dbg = {
+        "method": method,
+        "activity_thr": float(thr),
+        "activity_right_tail": right_tail,
+        "activity_run_px": int(run),
+        "x1_eff": int(x1_eff),
+    }
+    return (frontier, dbg) if return_debug else frontier
 
 def px_per_hour(day_w): return day_w/24.0
 def x_for_hour_in_day(x_day_start, pph, hour_in_day): return int(round(x_day_start + float(hour_in_day) * float(pph)))
@@ -611,7 +684,7 @@ def main():
         else:
             pph = pph_day;  pph_source = "day_width"
 
-    x_frontier = detect_frontier(img, ROI)
+    x_frontier, frontier_dbg = detect_frontier(img, ROI, return_debug=True)
     guard_px = max(MIN_GUARD_PX, int(round(pph * (args.guard_minutes/60.0))))
 
     now_tsst = tsst_now()
@@ -636,7 +709,7 @@ def main():
         lm_tsst = last_mod.astimezone(timezone(timedelta(hours=UTC_TO_TSST_HOURS))) if last_mod else None
         if lm_tsst:
             lm_hour = hour_float(lm_tsst)
-            x_lm = x_for_hour_in_day(x_day2, pph, lm_hour)
+            x_lm = x_for_hour_in_day(x_day2_time, pph, lm_hour)
             dx_px = x_frontier - x_lm
             measured_bias_minutes = (dx_px / pph) * 60.0
 
@@ -764,6 +837,10 @@ def main():
             },
             "debug": {
                 "x_frontier": x_frontier,
+                "frontier_method": frontier_dbg.get("method"),
+                "frontier_activity_thr": frontier_dbg.get("activity_thr"),
+                "frontier_activity_right_tail": frontier_dbg.get("activity_right_tail"),
+                "frontier_activity_run_px": frontier_dbg.get("activity_run_px"),
                 "x1_exclude_right_px": RIGHT_EXCLUDE_PX,
                 "guard_px": guard_px,
                 "x_time": x_time,
