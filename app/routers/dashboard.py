@@ -14,13 +14,27 @@ from psycopg.rows import dict_row
 from app.db import get_db
 from app.security.auth import require_read_auth, require_write_auth
 from bots.definitions.load_definition_base import load_definition_base
+from bots.gauges.local_payload import get_local_payload
+from bots.gauges.signal_resolver import resolve_signals
+from services.drivers.driver_normalize import normalize_environmental_drivers
 from services.gauges.alerts import dedupe_alert_pills
-from services.gauges.drivers import extract_drivers_from_markdown, normalize_drivers
 from services.gauges.zones import decorate_gauge
+from services.mc_modals.modal_builder import build_earthscope_summary, build_modal_models
 
 
 router = APIRouter(prefix="/v1", tags=["dashboard"])
 logger = logging.getLogger(__name__)
+
+_GAUGE_DELTA_KEYS = [
+    "pain",
+    "focus",
+    "heart",
+    "stamina",
+    "energy",
+    "sleep",
+    "mood",
+    "health_status",
+]
 
 
 @lru_cache(maxsize=1)
@@ -97,24 +111,118 @@ def _normalized_alerts(alerts: Any) -> list[Dict[str, Any]]:
         return []
     return dedupe_alert_pills([item for item in alerts if isinstance(item, dict)])
 
+def _safe_float(value: Any) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        if isinstance(value, str) and not value.strip():
+            return None
+        return float(value)
+    except Exception:
+        return None
 
-def _compact_drivers_from_posts(payload: Dict[str, Any]) -> list[str]:
-    candidates = [
-        payload.get("member_post"),
-        payload.get("public_post"),
-        payload.get("personal_post"),
-    ]
-    for post in candidates:
-        if not isinstance(post, dict):
+
+def _normalize_delta_map(raw: Any) -> Dict[str, int]:
+    payload = raw
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except Exception:
+            payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    out: Dict[str, int] = {}
+    for key in _GAUGE_DELTA_KEYS:
+        try:
+            out[key] = int(round(float(payload.get(key) or 0), 0))
+        except Exception:
+            out[key] = 0
+    return out
+
+
+async def _compute_gauges_delta_fallback(conn, user_id: str, day: date) -> Dict[str, int]:
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                """
+                select day, pain, focus, heart, stamina, energy, sleep, mood, health_status
+                  from marts.user_gauges_day
+                 where user_id = %s
+                   and day <= %s
+                 order by day desc
+                 limit 2
+                """,
+                (user_id, day),
+                prepare=False,
+            )
+            rows = await cur.fetchall()
+    except Exception:
+        return {key: 0 for key in _GAUGE_DELTA_KEYS}
+
+    if not rows or len(rows) < 2:
+        return {key: 0 for key in _GAUGE_DELTA_KEYS}
+
+    today_row = rows[0] or {}
+    prev_row = rows[1] or {}
+    out: Dict[str, int] = {}
+    for key in _GAUGE_DELTA_KEYS:
+        curr = _safe_float(today_row.get(key))
+        prev = _safe_float(prev_row.get(key))
+        if curr is None or prev is None:
+            out[key] = 0
             continue
-        body = post.get("body_markdown")
-        if not body:
-            body = post.get("bodyMarkdown")
-        raw = extract_drivers_from_markdown(body)
-        compact = normalize_drivers(raw)
-        if compact:
-            return compact
-    return []
+        out[key] = int(round(curr - prev, 0))
+    return out
+
+
+async def _fetch_gauges_delta(conn, user_id: str, day: date) -> Dict[str, int]:
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                """
+                select day, deltas_json
+                  from marts.user_gauges_delta_day
+                 where user_id = %s
+                   and day <= %s
+                 order by day desc
+                 limit 1
+                """,
+                (user_id, day),
+                prepare=False,
+            )
+            row = await cur.fetchone()
+            if row and row.get("deltas_json") is not None:
+                return _normalize_delta_map(row.get("deltas_json"))
+    except Exception:
+        try:
+            await conn.rollback()
+        except Exception:
+            pass
+
+    return await _compute_gauges_delta_fallback(conn, user_id, day)
+
+
+async def _resolve_signal_context(
+    user_id: str,
+    day: date,
+    definition: Dict[str, Any],
+) -> tuple[list[Dict[str, Any]], Dict[str, Any]]:
+    def _run() -> tuple[list[Dict[str, Any]], Dict[str, Any]]:
+        local_payload = get_local_payload(user_id, day)
+        active_states = resolve_signals(
+            user_id,
+            day,
+            local_payload=local_payload,
+            definition=definition or None,
+        )
+        return active_states if isinstance(active_states, list) else [], local_payload or {}
+
+    try:
+        return await asyncio.to_thread(_run)
+    except Exception as exc:
+        logger.warning("[dashboard] resolve signal context failed user=%s day=%s err=%s", user_id, day, exc)
+        return [], {}
 
 
 def _coerce_day(value: Optional[date]) -> date:
@@ -298,7 +406,36 @@ async def dashboard(
         if isinstance(gauges, dict):
             out["gauges_meta"] = _decorate_gauges(gauges, definition)
     out["alerts"] = _normalized_alerts(out.get("alerts"))
-    out["drivers_compact"] = _compact_drivers_from_posts(out)
+    out["gauges_delta"] = await _fetch_gauges_delta(conn, user_id, day)
+
+    active_states, local_payload = await _resolve_signal_context(user_id, day, definition)
+    drivers = normalize_environmental_drivers(
+        active_states=active_states,
+        local_payload=local_payload,
+        alerts_json=out.get("alerts"),
+        limit=6,
+    )
+    out["drivers"] = drivers
+    out["drivers_compact"] = [str(item.get("display") or "").strip() for item in drivers if str(item.get("display") or "").strip()]
+
+    gauges_payload = out.get("gauges") if isinstance(out.get("gauges"), dict) else {}
+    gauges_meta_payload = out.get("gauges_meta") if isinstance(out.get("gauges_meta"), dict) else {}
+    gauge_labels_payload = out.get("gauge_labels") if isinstance(out.get("gauge_labels"), dict) else {}
+
+    out["modal_models"] = build_modal_models(
+        day=day,
+        gauges=gauges_payload,
+        gauges_meta=gauges_meta_payload,
+        gauge_labels=gauge_labels_payload,
+        drivers=drivers,
+    )
+    out["earthscope_summary"] = build_earthscope_summary(
+        day=day,
+        gauges=gauges_payload,
+        gauges_meta=gauges_meta_payload,
+        gauge_labels=gauge_labels_payload,
+        drivers=drivers,
+    )
 
     if debug:
         out["_debug"] = {
@@ -311,6 +448,8 @@ async def dashboard(
                 (not payload.get("gauges") and gauge_fallback.get("gauges"))
                 or (not payload.get("alerts") and gauge_fallback.get("alerts"))
             ),
+            "active_states_count": len(active_states),
+            "drivers_count": len(drivers),
         }
 
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)

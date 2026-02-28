@@ -51,6 +51,15 @@ Notes:
   - `pain`, `focus`, `heart`, `stamina`, `energy`, `sleep`, `mood`, `health_status`
   - `trend_json`, `alerts_json`, `inputs_hash`, `model_version`
 
+## Gauge Delta Job (v1)
+- Script: `bots/gauges/gauge_delta_job.py`
+- Target: `marts.user_gauges_delta_day`
+- Upsert key: `(user_id, day)`
+- Keys stored in `deltas_json`:
+  - `pain`, `focus`, `heart`, `stamina`, `energy`, `sleep`, `mood`, `health_status`
+- Delta definition:
+  - integer `today - yesterday` per key (`day - 1` exact match)
+
 Scoring rules:
 - Base score + per-signal weights
 - Confidence multiplier applied per signal
@@ -138,7 +147,11 @@ When trigger events are detected for paid users, the engine appends a “Trigger
     - `gauge_zones`: normalized zone boundaries for 4-zone rendering
     - `gauge_labels`: display labels (includes `stamina -> Recovery Load`)
     - `alerts`: de-duped by family (`pressure`, `solar_wind`, `aqi`, `geomagnetic`) with highest severity retained
-    - `drivers_compact`: normalized/de-duped drivers (max 5), including merged pressure swing, solar wind, and AQI lines
+    - `gauges_delta`: integer day-over-day deltas keyed by gauge
+    - `drivers`: normalized environmental drivers with `{key,label,severity,state,value,unit,display}` (max 6)
+    - `drivers_compact`: compact display strings derived from `drivers`
+    - `modal_models`: deterministic modal content for gauges and drivers
+    - `earthscope_summary`: short deterministic summary paragraph for home cards
 - `GET /v1/earthscope/member`
   - Returns member EarthScope for the authenticated user + day
 - `POST /v1/earthscope/member/regenerate`
@@ -151,13 +164,16 @@ Workflow: `.github/workflows/gauges_and_member_writer_daily.yml`
 Runs daily:
 1) `python bots/gauges/location_context_job.py`
 2) `python bots/gauges/gauge_scoring_job.py`
-3) `python bots/earthscope_post/member_earthscope_generate.py`
+3) `python bots/gauges/gauge_delta_job.py`
+4) `python bots/earthscope_post/member_earthscope_generate.py`
+5) `python bots/triggers/run_trigger_engine.py` (only when `GAIA_TRIGGERS_ENABLED != false`)
 
 Manual trigger is available via `workflow_dispatch`.
 
 ## Local Test Checklist
 1) `python bots/gauges/location_context_job.py`
 2) `python bots/gauges/gauge_scoring_job.py --user-id <uuid>`
-3) `python bots/earthscope_post/member_earthscope_generate.py --user-id <uuid>`
-4) `curl -H "Authorization: Bearer <token>" -H "X-Dev-UserId: <uuid>" "$BASE/v1/dashboard"`
-5) `curl -H "Authorization: Bearer <token>" -H "X-Dev-UserId: <uuid>" "$BASE/v1/earthscope/member"`
+3) `python bots/gauges/gauge_delta_job.py --user-id <uuid>`
+4) `python bots/earthscope_post/member_earthscope_generate.py --user-id <uuid>`
+5) `curl -H "Authorization: Bearer <token>" -H "X-Dev-UserId: <uuid>" "$BASE/v1/dashboard"`
+6) `curl -H "Authorization: Bearer <token>" -H "X-Dev-UserId: <uuid>" "$BASE/v1/earthscope/member"`

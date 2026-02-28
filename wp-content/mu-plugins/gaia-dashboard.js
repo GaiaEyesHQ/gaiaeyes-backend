@@ -97,7 +97,69 @@
     return String(Math.round(Number(value)));
   };
 
-  const renderGaugeCard = (row, zones) => {
+  const formatGaugeDelta = (delta) => {
+    const numeric = Number(delta);
+    if (!Number.isFinite(numeric)) return "(0)";
+    const rounded = Math.round(numeric);
+    return `(${rounded > 0 ? "+" : ""}${rounded})`;
+  };
+
+  const gaugeIsClickable = (zoneKey, delta) => {
+    const zone = normalizeZoneKey(zoneKey);
+    return zone === "elevated" || zone === "high" || Math.abs(Number(delta) || 0) >= 5;
+  };
+
+  const normalizeDriverSeverity = (severity) => {
+    const s = String(severity || "").toLowerCase();
+    if (s === "high") return "high";
+    if (s === "watch") return "watch";
+    if (s === "elevated") return "elevated";
+    if (s === "mild") return "mild";
+    return "low";
+  };
+
+  const driverZoneFromSeverity = (severity) => {
+    const s = normalizeDriverSeverity(severity);
+    if (s === "high") return "high";
+    if (s === "watch" || s === "elevated") return "elevated";
+    if (s === "mild") return "mild";
+    return "low";
+  };
+
+  const driverProgress = (severity) => {
+    const s = normalizeDriverSeverity(severity);
+    if (s === "high") return 1;
+    if (s === "watch" || s === "elevated") return 0.76;
+    if (s === "mild") return 0.5;
+    return 0.28;
+  };
+
+  const driverIsClickable = (severity) => {
+    const s = normalizeDriverSeverity(severity);
+    return s === "watch" || s === "elevated" || s === "high";
+  };
+
+  const formatDriverValue = (driver) => {
+    if (!driver || driver.value == null || Number.isNaN(Number(driver.value))) return "";
+    const raw = Number(driver.value);
+    const key = String(driver.key || "").toLowerCase();
+    const unit = String(driver.unit || "").trim();
+    let valueText = "";
+    if (key === "aqi" || key === "sw") {
+      valueText = String(Math.round(raw));
+    } else if (key === "schumann") {
+      valueText = raw.toFixed(2);
+    } else if (Math.abs(raw - Math.round(raw)) < 0.01) {
+      valueText = String(Math.round(raw));
+    } else {
+      valueText = raw.toFixed(1);
+    }
+    if (!unit) return valueText;
+    if (key === "temp") return `${valueText}°C`;
+    return `${valueText} ${unit}`;
+  };
+
+  const renderGaugeCard = (row, zones, hasModal) => {
     const numeric = Number(row && row.value);
     const hasValue = Number.isFinite(numeric);
     const meta = row && row.meta && typeof row.meta === "object" ? row.meta : {};
@@ -106,6 +168,9 @@
       (hasValue ? zoneKeyForValue(numeric, zones) : "calibrating");
     const zoneLabel = String(meta.label || "").trim() || zoneLabelFromKey(zoneKey) || "Calibrating";
     const zoneKeyLabel = zoneKey && zoneKey !== "calibrating" ? zoneLabelFromKey(zoneKey) : "";
+    const delta = Number(row && row.delta);
+    const deltaStrong = Math.abs(delta || 0) >= 5;
+    const clickable = hasModal && gaugeIsClickable(zoneKey, delta);
     const clamped = hasValue ? Math.max(0, Math.min(100, numeric)) : 0;
     const progress = clamped / 100;
     const radius = 40;
@@ -120,9 +185,11 @@
     const palette = GAUGE_PALETTE[zoneKey] || GAUGE_PALETTE.mild;
     const zoneColor = zoneKey === "calibrating" ? GAUGE_PALETTE.calibrating.hex : palette.hex;
     const arcStyle = `filter:drop-shadow(0 0 ${palette.glowPx}px ${palette.glow})`;
+    const cardClass = clickable ? "gaia-dashboard__gauge gaia-dashboard__gauge--clickable" : "gaia-dashboard__gauge";
+    const deltaClass = deltaStrong ? "gaia-dashboard__gauge-delta gaia-dashboard__gauge-delta--strong" : "gaia-dashboard__gauge-delta";
 
     return `
-      <article class="gaia-dashboard__gauge">
+      <article class="${cardClass}" ${clickable ? `data-gauge-key="${esc(row && row.key ? row.key : "")}"` : ""}>
         <div class="gaia-dashboard__gauge-label">${esc(row && row.label ? row.label : "")}</div>
         <div class="gaia-dashboard__gauge-meter">
           <svg class="gaia-dashboard__gauge-arc" viewBox="0 0 100 100" aria-hidden="true">
@@ -147,12 +214,59 @@
             }
           </svg>
           <div class="gaia-dashboard__gauge-center">
-            <div class="gaia-dashboard__gauge-value">${formatGaugeValue(row && row.value)}</div>
+            <div class="gaia-dashboard__gauge-value">
+              <span>${formatGaugeValue(row && row.value)}</span>
+              ${hasValue ? `<span class="${deltaClass}">${esc(formatGaugeDelta(delta))}</span>` : ""}
+            </div>
             <div class="gaia-dashboard__gauge-zone" style="color:${zoneColor}">${esc(zoneLabel)}</div>
           </div>
         </div>
         ${zoneKeyLabel ? `<div class="gaia-dashboard__gauge-zone-key">${esc(zoneKeyLabel)}</div>` : ""}
+        ${clickable ? '<div class="gaia-dashboard__tap-hint">Tap for context</div>' : ""}
       </article>
+    `;
+  };
+
+  const renderDriversSection = (drivers, modalModels) => {
+    if (!Array.isArray(drivers) || !drivers.length) {
+      return `
+        <div class="gaia-dashboard__drivers">
+          <h4>Environmental Drivers</h4>
+          <div class="gaia-dashboard__muted">No major environmental drivers are elevated right now.</div>
+        </div>
+      `;
+    }
+    const modalDrivers = modalModels && modalModels.drivers && typeof modalModels.drivers === "object"
+      ? modalModels.drivers
+      : {};
+
+    const rows = drivers.slice(0, 6).map((driver) => {
+      const severity = normalizeDriverSeverity(driver && driver.severity);
+      const zoneKey = driverZoneFromSeverity(severity);
+      const color = (GAUGE_PALETTE[zoneKey] || GAUGE_PALETTE.mild).hex;
+      const width = Math.max(10, Math.round(driverProgress(severity) * 100));
+      const canOpen = driverIsClickable(severity) && !!modalDrivers[String(driver.key || "")];
+      const rowClass = canOpen ? "gaia-dashboard__driver-row gaia-dashboard__driver-row--clickable" : "gaia-dashboard__driver-row";
+
+      return `
+        <div class="${rowClass}" ${canOpen ? `data-driver-key="${esc(driver.key)}"` : ""}>
+          <div class="gaia-dashboard__driver-head">
+            <span class="gaia-dashboard__driver-label">${esc(driver.label || driver.key || "Driver")}</span>
+            <span class="gaia-dashboard__driver-state" style="color:${color}">${esc(driver.state || "Low")}</span>
+            <span class="gaia-dashboard__driver-value">${esc(formatDriverValue(driver))}</span>
+          </div>
+          <div class="gaia-dashboard__driver-bar-track">
+            <div class="gaia-dashboard__driver-bar-fill" style="width:${width}%;background:${color}"></div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="gaia-dashboard__drivers">
+        <h4>Environmental Drivers</h4>
+        <div class="gaia-dashboard__drivers-list">${rows}</div>
+      </div>
     `;
   };
 
@@ -342,6 +456,115 @@
       .join("");
   };
 
+  const resolveEarthscopeSummary = (summaryText, earthscope, driversCompact) => {
+    const direct = String(summaryText || "").trim();
+    if (direct) return direct;
+    const sections = parseEarthscopeSections(
+      earthscope && earthscope.body_markdown,
+      driversCompact
+    );
+    return sections.summary || sectionDefaults.summary;
+  };
+
+  const normalizeSymptomCode = (value) =>
+    String(value || "")
+      .trim()
+      .replace(/[-\s]+/g, "_")
+      .toUpperCase();
+
+  const hideModal = (root) => {
+    const modal = root.querySelector("[data-gaia-modal]");
+    if (!modal) return;
+    modal.classList.remove("is-open");
+    document.body.classList.remove("gaia-modal-open");
+  };
+
+  const openModal = (root, html) => {
+    const modal = root.querySelector("[data-gaia-modal]");
+    const slot = root.querySelector("[data-gaia-modal-content]");
+    if (!modal || !slot) return null;
+    slot.innerHTML = html;
+    modal.classList.add("is-open");
+    document.body.classList.add("gaia-modal-open");
+    return modal;
+  };
+
+  const renderModalList = (title, items) => {
+    if (!Array.isArray(items) || !items.length) return "";
+    return `
+      <section class="gaia-dashboard__modal-group">
+        <h5>${esc(title)}</h5>
+        <ul>${items.map((line) => `<li>${esc(line)}</li>`).join("")}</ul>
+      </section>
+    `;
+  };
+
+  const renderContextModal = (entry) => {
+    if (!entry || typeof entry !== "object") {
+      return `
+        <h3 class="gaia-dashboard__modal-title">Details</h3>
+        <div class="gaia-dashboard__muted">No details are available for this item.</div>
+      `;
+    }
+    const ctaPrefill = Array.isArray(entry.cta && entry.cta.prefill) ? entry.cta.prefill : [];
+    const ctaPrefillAttr = esc(JSON.stringify(ctaPrefill));
+    const ctaLabel = String(entry.cta && entry.cta.label ? entry.cta.label : "Log symptoms");
+    const ctaAction = String(entry.cta && entry.cta.action ? entry.cta.action : "");
+
+    return `
+      <h3 class="gaia-dashboard__modal-title">${esc(entry.title || "Mission Context")}</h3>
+      ${renderModalList("Why", entry.why)}
+      ${renderModalList("What You May Notice", entry.what_you_may_notice || entry.whatYouMayNotice)}
+      ${renderModalList("Supportive Actions", entry.suggested_actions || entry.suggestedActions)}
+      <div class="gaia-dashboard__muted" data-modal-status></div>
+      <div class="gaia-dashboard__modal-actions">
+        ${
+          ctaAction === "open_symptom_log"
+            ? `<button class="gaia-dashboard__btn" type="button" data-modal-log="1" data-prefill='${ctaPrefillAttr}'>${esc(ctaLabel)}</button>`
+            : ""
+        }
+        <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-modal-close="1">Close</button>
+      </div>
+    `;
+  };
+
+  const postQuickSymptom = async (token, prefill) => {
+    if (!backendBase) {
+      throw new Error("Backend base URL is not configured for symptom logging.");
+    }
+    const list = Array.isArray(prefill) ? prefill.map(normalizeSymptomCode).filter(Boolean) : [];
+    const code = list[0] || "OTHER";
+    const response = await fetch(`${backendBase}/v1/symptoms`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        symptom_code: code,
+        tags: list.length ? list : undefined,
+      }),
+    });
+    const raw = await response.text();
+    let parsed = null;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      parsed = null;
+    }
+    if (!response.ok) {
+      const detail = parsed && (parsed.detail || parsed.error || parsed.message)
+        ? parsed.detail || parsed.error || parsed.message
+        : raw.slice(0, 180);
+      throw new Error(`HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
+    }
+    if (parsed && parsed.ok === false) {
+      throw new Error(parsed.friendly_error || parsed.error || "Could not log symptom.");
+    }
+    return parsed;
+  };
+
   const fetchJson = async (url, token) => {
     const response = await fetch(url, {
       method: "GET",
@@ -430,11 +653,17 @@
   };
 
   const renderDashboard = (root, payload, authCtx) => {
+    document.body.classList.remove("gaia-modal-open");
     const title = root.dataset.title || "Mission Control";
     const gaugesRaw = payload.gauges || {};
     const gaugesMeta = payload.gaugesMeta && typeof payload.gaugesMeta === "object" ? payload.gaugesMeta : {};
+    const gaugesDelta = payload.gaugesDelta && typeof payload.gaugesDelta === "object" ? payload.gaugesDelta : {};
     const gaugeZones = normalizeGaugeZones(payload.gaugeZones);
     const gaugeLabels = payload.gaugeLabels && typeof payload.gaugeLabels === "object" ? payload.gaugeLabels : {};
+    const drivers = Array.isArray(payload.drivers) ? payload.drivers : [];
+    const modalModels = payload.modalModels && typeof payload.modalModels === "object" ? payload.modalModels : {};
+    const modalGauges = modalModels.gauges && typeof modalModels.gauges === "object" ? modalModels.gauges : {};
+    const modalDrivers = modalModels.drivers && typeof modalModels.drivers === "object" ? modalModels.drivers : {};
     const fallbackLabels = {
       pain: "Pain",
       focus: "Focus",
@@ -458,6 +687,7 @@
       key: row.key,
       label: gaugeLabels[row.key] || fallbackLabels[row.key] || row.key,
       value: row.value,
+      delta: gaugesDelta[row.key],
       meta: gaugesMeta[row.key] || null,
     }));
 
@@ -466,6 +696,7 @@
     const isPaid = payload.entitled === true || !!payload.memberPost;
     const displayRows = isPaid ? gaugeRows : gaugeRows.slice(0, 4);
     const earthscope = isPaid ? payload.memberPost || payload.publicPost || null : payload.publicPost || payload.memberPost || null;
+    const earthscopeSummary = resolveEarthscopeSummary(payload.earthscopeSummary, earthscope, driversCompact);
     const hasData = hasGaugeData(gaugesRaw) || !!earthscope;
 
     const email = authCtx && authCtx.email ? authCtx.email : "";
@@ -485,7 +716,7 @@
           : '<div class="gaia-dashboard__muted" style="margin-bottom:10px">No dashboard data yet for this account. Use a magic link for another email, or refresh shortly.</div>'
       }
       <div class="gaia-dashboard__gauges">
-        ${displayRows.map((row) => renderGaugeCard(row, gaugeZones)).join("")}
+        ${displayRows.map((row) => renderGaugeCard(row, gaugeZones, !!modalGauges[row.key])).join("")}
       </div>
       <div class="gaia-dashboard__gauge-legend">
         ${["low", "mild", "elevated", "high"]
@@ -511,6 +742,7 @@
               .join("")}</div>`
           : '<div class="gaia-dashboard__muted">No active alerts.</div>'
       }
+      ${renderDriversSection(drivers, modalModels)}
       <div class="gaia-dashboard__earthscope">
         <h4>${esc((earthscope && earthscope.title) || "EarthScope")}</h4>
         ${
@@ -518,10 +750,51 @@
             ? `<p class="gaia-dashboard__muted">${esc(earthscope.caption)}</p>`
             : ""
         }
-        <div class="gaia-dashboard__es-grid">${renderEarthscopeBlocks(earthscope, driversCompact)}</div>
+        <p class="gaia-dashboard__earthscope-summary">${esc(earthscopeSummary)}</p>
+        <button class="gaia-dashboard__earthscope-link" type="button" data-earthscope-full="1">Read full EarthScope</button>
+      </div>
+      <div class="gaia-dashboard__modal" data-gaia-modal>
+        <div class="gaia-dashboard__modal-backdrop" data-gaia-modal-backdrop="1"></div>
+        <div class="gaia-dashboard__modal-card" role="dialog" aria-modal="true">
+          <div data-gaia-modal-content></div>
+        </div>
       </div>
     `;
-    applyEarthscopeBackgrounds(root);
+
+    const modalNode = root.querySelector("[data-gaia-modal]");
+    if (modalNode) {
+      modalNode.addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        if (target.closest("[data-modal-close]") || target.closest("[data-gaia-modal-backdrop]")) {
+          hideModal(root);
+          return;
+        }
+        const logBtn = target.closest("[data-modal-log]");
+        if (logBtn) {
+          const status = modalNode.querySelector("[data-modal-status]");
+          let prefill = [];
+          try {
+            prefill = JSON.parse(logBtn.getAttribute("data-prefill") || "[]");
+          } catch (_) {
+            prefill = [];
+          }
+          logBtn.disabled = true;
+          if (status) status.textContent = "Logging symptom...";
+          try {
+            await postQuickSymptom(authCtx && authCtx.token ? authCtx.token : "", prefill);
+            if (status) status.textContent = "Symptom logged.";
+          } catch (err) {
+            if (status) {
+              status.textContent = err && err.message ? err.message : "Could not log symptom.";
+            }
+          } finally {
+            logBtn.disabled = false;
+          }
+        }
+      });
+    }
+
     const signOutBtn = root.querySelector("[data-gaia-signout]");
     if (signOutBtn && authCtx && typeof authCtx.onSignOut === "function") {
         signOutBtn.addEventListener("click", authCtx.onSignOut);
@@ -529,6 +802,45 @@
     const switchBtn = root.querySelector("[data-gaia-switch]");
     if (switchBtn && authCtx && typeof authCtx.onSwitch === "function") {
       switchBtn.addEventListener("click", authCtx.onSwitch);
+    }
+
+    root.querySelectorAll("[data-gauge-key]").forEach((node) => {
+      node.addEventListener("click", () => {
+        const key = node.getAttribute("data-gauge-key");
+        const entry = key ? modalGauges[key] : null;
+        if (!entry) return;
+        openModal(root, renderContextModal(entry));
+      });
+    });
+
+    root.querySelectorAll("[data-driver-key]").forEach((node) => {
+      node.addEventListener("click", () => {
+        const key = node.getAttribute("data-driver-key");
+        const entry = key ? modalDrivers[key] : null;
+        if (!entry) return;
+        openModal(root, renderContextModal(entry));
+      });
+    });
+
+    const earthscopeBtn = root.querySelector("[data-earthscope-full]");
+    if (earthscopeBtn) {
+      earthscopeBtn.addEventListener("click", () => {
+        const blocks = renderEarthscopeBlocks(earthscope, driversCompact);
+        const html = `
+          <h3 class="gaia-dashboard__modal-title">${esc((earthscope && earthscope.title) || "EarthScope")}</h3>
+          ${
+            earthscope && earthscope.caption
+              ? `<p class="gaia-dashboard__muted">${esc(earthscope.caption)}</p>`
+              : ""
+          }
+          <div class="gaia-dashboard__es-grid">${blocks}</div>
+          <div class="gaia-dashboard__modal-actions">
+            <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-modal-close="1">Close</button>
+          </div>
+        `;
+        const modal = openModal(root, html);
+        if (modal) applyEarthscopeBackgrounds(modal);
+      });
     }
   };
 
@@ -658,12 +970,20 @@
         gauges: dashboard && dashboard.gauges ? dashboard.gauges : null,
         gaugesMeta:
           (dashboard && (dashboard.gauges_meta || dashboard.gaugesMeta)) || {},
+        gaugesDelta:
+          (dashboard && (dashboard.gauges_delta || dashboard.gaugesDelta)) || {},
         gaugeZones:
           (dashboard && (dashboard.gauge_zones || dashboard.gaugeZones)) || null,
         gaugeLabels:
           (dashboard && (dashboard.gauge_labels || dashboard.gaugeLabels)) || {},
+        drivers:
+          (dashboard && (dashboard.drivers || dashboard.driverModels)) || [],
         driversCompact:
           (dashboard && (dashboard.drivers_compact || dashboard.driversCompact)) || [],
+        modalModels:
+          (dashboard && (dashboard.modal_models || dashboard.modalModels)) || {},
+        earthscopeSummary:
+          (dashboard && (dashboard.earthscope_summary || dashboard.earthscopeSummary)) || "",
         alerts: dashboard && Array.isArray(dashboard.alerts) ? dashboard.alerts : [],
         entitled: dashboard ? dashboard.entitled : null,
         memberPost:
@@ -673,6 +993,7 @@
       const user = data && data.session && data.session.user ? data.session.user : null;
       renderDashboard(root, payload, {
         email: user && user.email ? user.email : "",
+        token,
         onSignOut: async () => {
           try {
             await supabase.auth.signOut();

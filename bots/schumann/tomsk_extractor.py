@@ -370,10 +370,22 @@ def main():
             print(f"[fresh] age={age_hours:.2f}h (stale > {args.stale_hours}h)")
 
     x0,y0,x1,y1 = ROI
-    x_day0, x_day1, x_day2, day_w = estimate_day_boundaries(img, ROI)
 
-    # px/hour from ticks (preferred when good), else from day width
-    pph_day = day_w/24.0
+    # Timing anchors should be geometry-based, not content-derived, because the right side of Tomsk
+    # can be partially unpainted (blank) and content-based day splits can drift.
+    x1_eff = max(x0 + 50, x1 - RIGHT_EXCLUDE_PX)
+    W_time = float(x1_eff - x0)
+    day_w_time = W_time / 3.0
+    x_day0_time = x0
+    x_day1_time = int(round(x0 + day_w_time))
+    x_day2_time = int(round(x0 + 2.0 * day_w_time))
+    pph_day_time = day_w_time / 24.0
+
+    x_day0, x_day1, x_day2, day_w = estimate_day_boundaries(img, ROI)
+    # Note: x_day* above are content-derived and used for overlay only. Timing uses x_day2_time.
+
+    # px/hour from ticks (preferred when good), else from day width (geometry-based)
+    pph_day = pph_day_time
     pph_tick, tick_count, tick_quality = detect_tick_pph(img, ROI, verbose=args.verbose)
     if args.pph_source == "ticks":
         if pph_tick is not None and tick_count >= int(args.tick_min_count):
@@ -393,7 +405,7 @@ def main():
 
     now_tsst = tsst_now()
     hour_now = hour_float(now_tsst)
-    x_time = x_for_hour_in_day(x_day2, pph, hour_now)
+    x_time = x_for_hour_in_day(x_day2_time, pph, hour_now)
     x_ideal = x_time
 
     measured_bias_minutes = None
@@ -429,8 +441,11 @@ def main():
 
     x_ideal = int(round(x_time + (bias_minutes_applied/60.0)*pph))
 
-    left_guard  = x_day2 + 2
+    left_guard  = x_day2_time + 2
     right_guard = min(x1-2, x_frontier - guard_px)
+    # If the latest painted frontier is too far left, we cannot safely sample "now".
+    # In this case, emit a safe payload with no peaks rather than incorrect readings.
+    guard_invalid = bool(right_guard <= left_guard + 10)
 
     delta_px  = right_guard - x_ideal
     delta_min = (delta_px / max(pph, 1e-6)) * 60.0
@@ -440,10 +455,16 @@ def main():
         x_now_pre = x_ideal
 
     x_now = int(np.clip(x_now_pre, left_guard, right_guard))
+    if guard_invalid:
+        # Force x_now to the safest available point left of the frontier.
+        x_now = int(np.clip(right_guard, x0 + 2, x1 - 2))
 
     # ---- banded harmonic picking with fallbacks ----
-    peaks_banded = estimate_peaks_banded(img, ROI, x_now, verbose=args.verbose)
-    peaks = repair_harmonics(peaks_banded)
+    if not guard_invalid:
+        peaks_banded = estimate_peaks_banded(img, ROI, x_now, verbose=args.verbose)
+        peaks = repair_harmonics(peaks_banded)
+    else:
+        peaks = {k: None for k in HARMONIC_WINDOWS.keys()}
 
     # Overlay
     dbg = None
@@ -452,8 +473,8 @@ def main():
             'x_day1': x_day1,
             'x_day2': x_day2,
             'x_frontier': x_frontier,
-            'left_guard': x_day2 + 2,
-            'right_guard': min(x1-2, x_frontier - guard_px),
+            'left_guard': x_day2_time + 2,
+            'right_guard': right_guard,
         }
     overlay_img = draw_overlay(
         img, ROI, x_now,
@@ -467,6 +488,8 @@ def main():
     status_val = "ok"
     if age_hours is not None and age_hours > float(args.stale_hours):
         status_val = "stale_source"
+    if guard_invalid and status_val == "ok":
+        status_val = "no_recent_data"
 
     out = {
         "status": status_val,
@@ -483,6 +506,7 @@ def main():
             "roi": {"x0":x0,"y0":y0,"x1":x1,"y1":y1},
             "group_boundaries_px": {
                 "x_day0": x_day0, "x_day1": x_day1, "x_day2": x_day2, "day_w": day_w,
+                "x_day1_time": x_day1_time, "x_day2_time": x_day2_time, "day_w_time": day_w_time,
             },
             "debug": {
                 "x_frontier": x_frontier,
@@ -494,8 +518,9 @@ def main():
                 "delta_min_to_guard": float(delta_min),
                 "pph": pph,
                 "pph_source": pph_source,
-                "tick_count": tick_count if pph_source=="ticks" else 0,
-                "tick_quality": tick_quality if pph_source=="ticks" else 0.0,
+                "tick_count": int(tick_count),
+                "tick_quality": float(tick_quality),
+                "tick_used": bool(pph_source == "ticks"),
                 "bias_minutes_applied": float(bias_minutes_applied),
                 "measured_bias_minutes": (None if measured_bias_minutes is None else float(measured_bias_minutes)),
                 "guard_applied": bool(x_now != x_ideal),

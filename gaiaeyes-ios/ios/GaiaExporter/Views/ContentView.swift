@@ -312,6 +312,37 @@ private struct DashboardAlertItem: Codable, Hashable, Identifiable {
     }
 }
 
+private struct DashboardDriverItem: Codable, Hashable, Identifiable {
+    let key: String
+    let label: String?
+    let severity: String?
+    let state: String?
+    let value: Double?
+    let unit: String?
+    let display: String?
+
+    var id: String { key }
+}
+
+private struct DashboardModalCTA: Codable, Hashable {
+    let label: String?
+    let action: String?
+    let prefill: [String]?
+}
+
+private struct DashboardModalEntry: Codable, Hashable {
+    let title: String?
+    let why: [String]?
+    let whatYouMayNotice: [String]?
+    let suggestedActions: [String]?
+    let cta: DashboardModalCTA?
+}
+
+private struct DashboardModalModels: Codable, Hashable {
+    let gauges: [String: DashboardModalEntry]?
+    let drivers: [String: DashboardModalEntry]?
+}
+
 private struct DashboardEarthscopePost: Codable, Hashable {
     let day: String?
     let title: String?
@@ -332,7 +363,11 @@ private struct DashboardPayload: Codable {
     let gaugesMeta: [String: DashboardGaugeMeta]?
     let gaugeZones: [DashboardGaugeZone]?
     let gaugeLabels: [String: String]?
+    let gaugesDelta: [String: Int]?
+    let drivers: [DashboardDriverItem]?
     let driversCompact: [String]?
+    let modalModels: DashboardModalModels?
+    let earthscopeSummary: String?
     let alerts: [DashboardAlertItem]?
     let entitled: Bool?
     let memberPost: DashboardEarthscopePost?
@@ -340,7 +375,7 @@ private struct DashboardPayload: Codable {
     let personalPost: DashboardEarthscopePost?
 
     private enum CodingKeys: String, CodingKey {
-        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, driversCompact, alerts, entitled
+        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, gaugesDelta, drivers, driversCompact, modalModels, earthscopeSummary, alerts, entitled
         case memberPost
         case publicPost
         case personalPost
@@ -1585,7 +1620,11 @@ struct ContentView: View {
                             gaugesMeta: payload.gaugesMeta ?? older.gaugesMeta,
                             gaugeZones: payload.gaugeZones ?? older.gaugeZones,
                             gaugeLabels: payload.gaugeLabels ?? older.gaugeLabels,
+                            gaugesDelta: payload.gaugesDelta ?? older.gaugesDelta,
+                            drivers: payload.drivers ?? older.drivers,
                             driversCompact: payload.driversCompact ?? older.driversCompact,
+                            modalModels: payload.modalModels ?? older.modalModels,
+                            earthscopeSummary: payload.earthscopeSummary ?? older.earthscopeSummary,
                             alerts: (payload.alerts?.isEmpty == false) ? payload.alerts : older.alerts,
                             entitled: payload.entitled ?? older.entitled,
                             memberPost: payload.memberPost ?? payload.personalPost ?? older.memberPost ?? older.personalPost,
@@ -1619,7 +1658,11 @@ struct ContentView: View {
                             gaugesMeta: resolvedPayload.gaugesMeta,
                             gaugeZones: resolvedPayload.gaugeZones,
                             gaugeLabels: resolvedPayload.gaugeLabels,
+                            gaugesDelta: resolvedPayload.gaugesDelta,
+                            drivers: resolvedPayload.drivers,
                             driversCompact: resolvedPayload.driversCompact,
+                            modalModels: resolvedPayload.modalModels,
+                            earthscopeSummary: resolvedPayload.earthscopeSummary,
                             alerts: resolvedPayload.alerts,
                             entitled: resolvedPayload.entitled,
                             memberPost: resolvedPayload.memberPost ?? normalizedMember,
@@ -1645,7 +1688,11 @@ struct ContentView: View {
                             gaugesMeta: resolvedPayload.gaugesMeta,
                             gaugeZones: resolvedPayload.gaugeZones,
                             gaugeLabels: resolvedPayload.gaugeLabels,
+                            gaugesDelta: resolvedPayload.gaugesDelta,
+                            drivers: resolvedPayload.drivers,
                             driversCompact: resolvedPayload.driversCompact,
+                            modalModels: resolvedPayload.modalModels,
+                            earthscopeSummary: resolvedPayload.earthscopeSummary,
                             alerts: resolvedPayload.alerts,
                             entitled: resolvedPayload.entitled,
                             memberPost: resolvedPayload.memberPost,
@@ -1669,7 +1716,11 @@ struct ContentView: View {
                         gaugesMeta: resolvedPayload.gaugesMeta,
                         gaugeZones: resolvedPayload.gaugeZones,
                         gaugeLabels: resolvedPayload.gaugeLabels,
+                        gaugesDelta: resolvedPayload.gaugesDelta,
+                        drivers: resolvedPayload.drivers,
                         driversCompact: resolvedPayload.driversCompact,
+                        modalModels: resolvedPayload.modalModels,
+                        earthscopeSummary: resolvedPayload.earthscopeSummary,
                         alerts: resolvedPayload.alerts,
                         entitled: resolvedPayload.entitled,
                         memberPost: resolvedPayload.memberPost,
@@ -2820,6 +2871,24 @@ struct ContentView: View {
         await state.refreshSymptomQueueCount()
         return false
     }
+
+    private func quickLogMissionControl(prefill: [String]) async {
+        let normalizedPrefill = prefill
+            .map { normalize($0) }
+            .filter { !$0.isEmpty }
+        let available = Set(symptomPresets.map { $0.code })
+
+        let selectedCode =
+            normalizedPrefill.first(where: { available.contains($0) })
+            ?? normalizedPrefill.first
+            ?? SymptomCodeHelper.fallbackCode
+
+        var event = SymptomQueuedEvent(symptomCode: selectedCode, tsUtc: Date())
+        if !normalizedPrefill.isEmpty {
+            event.tags = normalizedPrefill
+        }
+        _ = await logSymptomEvent(event)
+    }
     
     // Decide which Features snapshot to display (today or fallback to yesterday)
     private func selectDisplayFeatures(for f: FeaturesToday) -> (FeaturesToday, Bool) {
@@ -2872,7 +2941,11 @@ struct ContentView: View {
         let dashboardGaugesMeta = dashboardPayload?.gaugesMeta ?? [:]
         let dashboardGaugeZones = dashboardPayload?.gaugeZones ?? DashboardGaugeZone.defaultZones
         let dashboardGaugeLabels = dashboardPayload?.gaugeLabels ?? [:]
+        let dashboardGaugesDelta = dashboardPayload?.gaugesDelta ?? [:]
+        let dashboardDrivers = dashboardPayload?.drivers ?? []
         let dashboardDriversCompact = dashboardPayload?.driversCompact ?? []
+        let dashboardModalModels = dashboardPayload?.modalModels
+        let dashboardEarthscopeSummary = dashboardPayload?.earthscopeSummary
         let dashboardAlerts = dashboardPayload?.alerts ?? []
         let resolvedEarthscope: DashboardEarthscopePost? = {
             return dashboardPayload?.memberPost
@@ -2886,7 +2959,11 @@ struct ContentView: View {
                 gaugesMeta: dashboardGaugesMeta,
                 gaugeZones: dashboardGaugeZones,
                 gaugeLabels: dashboardGaugeLabels,
+                gaugesDelta: dashboardGaugesDelta,
+                drivers: dashboardDrivers,
                 driversCompact: dashboardDriversCompact,
+                modalModels: dashboardModalModels,
+                earthscopeSummary: dashboardEarthscopeSummary,
                 alerts: dashboardAlerts,
                 earthscope: resolvedEarthscope,
                 fallbackTitle: fallbackFeatures?.postTitle,
@@ -2894,7 +2971,12 @@ struct ContentView: View {
                 fallbackBody: fallbackFeatures?.postBody,
                 isLoading: dashboardLoading,
                 errorMessage: ContentView.scrubError(dashboardError),
-                lastUpdatedText: dashboardLastUpdatedText
+                lastUpdatedText: dashboardLastUpdatedText,
+                onQuickLog: { prefill in
+                    Task {
+                        await quickLogMissionControl(prefill: prefill)
+                    }
+                }
             )
             .padding(.horizontal)
 
@@ -2947,7 +3029,11 @@ struct ContentView: View {
         let gaugesMeta: [String: DashboardGaugeMeta]
         let gaugeZones: [DashboardGaugeZone]
         let gaugeLabels: [String: String]
+        let gaugesDelta: [String: Int]
+        let drivers: [DashboardDriverItem]
         let driversCompact: [String]
+        let modalModels: DashboardModalModels?
+        let earthscopeSummary: String?
         let alerts: [DashboardAlertItem]
         let earthscope: DashboardEarthscopePost?
         let fallbackTitle: String?
@@ -2956,25 +3042,44 @@ struct ContentView: View {
         let isLoading: Bool
         let errorMessage: String?
         let lastUpdatedText: String?
+        let onQuickLog: ([String]) -> Void
+        @State private var selectedModal: ModalPresentation? = nil
+
+        private struct ModalPresentation: Identifiable {
+            let id: String
+            let entry: DashboardModalEntry
+        }
 
         private struct GaugeRow: Identifiable {
             let key: String
             let label: String
             let value: Double?
+            let delta: Int
             let zoneKey: String?
             let zoneLabel: String?
+            let clickable: Bool
 
             var id: String { key }
         }
 
         private struct ArcGaugeCard: View {
             let row: GaugeRow
+            let onTap: (() -> Void)?
             private let ringLineWidth: CGFloat = 9
             private let meterSize: CGFloat = 108
 
             private var valueText: String {
                 guard let value = row.value else { return "—" }
                 return String(Int(round(value)))
+            }
+
+            private var deltaText: String {
+                let value = row.delta
+                return value > 0 ? "(+\(value))" : "(\(value))"
+            }
+
+            private var deltaColor: Color {
+                abs(row.delta) >= 5 ? GaugePalette.zoneColor(row.zoneKey) : .secondary
             }
 
             private var statusText: String {
@@ -3015,11 +3120,19 @@ struct ContentView: View {
                 )
             }
 
-            var body: some View {
+            private var content: some View {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(row.label)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(row.label)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Spacer(minLength: 4)
+                        if row.clickable {
+                            Image(systemName: "sparkles")
+                                .font(.caption2)
+                                .foregroundColor(GaugePalette.zoneColor(row.zoneKey))
+                        }
+                    }
 
                     ZStack {
                         Circle()
@@ -3055,8 +3168,15 @@ struct ContentView: View {
                         }
 
                         VStack(spacing: 2) {
-                            Text(valueText)
-                                .font(.system(size: 25, weight: .heavy, design: .rounded))
+                            HStack(spacing: 4) {
+                                Text(valueText)
+                                    .font(.system(size: 24, weight: .heavy, design: .rounded))
+                                if row.value != nil {
+                                    Text(deltaText)
+                                        .font(.caption2)
+                                        .foregroundColor(deltaColor)
+                                }
+                            }
                             Text(statusText)
                                 .font(.caption)
                                 .foregroundColor(
@@ -3078,6 +3198,194 @@ struct ContentView: View {
                 .padding(10)
                 .background(Color.black.opacity(0.25))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(
+                            row.clickable
+                            ? GaugePalette.zoneColor(row.zoneKey).opacity(0.45)
+                            : Color.white.opacity(0.05),
+                            lineWidth: row.clickable ? 1.2 : 1
+                        )
+                )
+                .shadow(
+                    color: row.clickable
+                    ? GaugePalette.zoneColor(row.zoneKey).opacity(0.20)
+                    : .clear,
+                    radius: row.clickable ? 8 : 0,
+                    x: 0,
+                    y: 0
+                )
+            }
+
+            var body: some View {
+                if let onTap {
+                    Button(action: onTap) {
+                        content
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    content
+                }
+            }
+        }
+
+        private struct DriverStatusRow: View {
+            let driver: DashboardDriverItem
+            let clickable: Bool
+            let zoneKey: String
+            let progress: Double
+            let onTap: (() -> Void)?
+
+            private func formattedValue() -> String {
+                guard let value = driver.value else { return "" }
+                let unit = (driver.unit ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                let key = driver.key.lowercased()
+                let text: String
+                if key == "sw" || key == "aqi" {
+                    text = String(Int(round(value)))
+                } else if key == "schumann" {
+                    text = String(format: "%.2f", value)
+                } else if abs(value - round(value)) < 0.01 {
+                    text = String(Int(round(value)))
+                } else {
+                    text = String(format: "%.1f", value)
+                }
+                if unit.isEmpty { return text }
+                if key == "temp" {
+                    return "\(text)\u{00B0}C"
+                }
+                return "\(text) \(unit)"
+            }
+
+            private var content: some View {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized)
+                            .font(.subheadline.weight(.semibold))
+                        Spacer(minLength: 6)
+                        Text(driver.state ?? "Low")
+                            .font(.caption)
+                            .foregroundColor(GaugePalette.zoneColor(zoneKey))
+                        let value = formattedValue()
+                        if !value.isEmpty {
+                            Text(value)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        if clickable {
+                            Image(systemName: "sparkles")
+                                .font(.caption2)
+                                .foregroundColor(GaugePalette.zoneColor(zoneKey))
+                        }
+                    }
+                    GeometryReader { geo in
+                        let width = max(18, geo.size.width * progress)
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(GaugePalette.zoneColor(zoneKey).opacity(0.18))
+                                .frame(height: 10)
+                            Capsule()
+                                .fill(GaugePalette.zoneColor(zoneKey).opacity(0.50))
+                                .frame(width: width, height: 10)
+                        }
+                    }
+                    .frame(height: 10)
+                }
+                .padding(10)
+                .background(Color.black.opacity(0.20))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(
+                            clickable
+                            ? GaugePalette.zoneColor(zoneKey).opacity(0.38)
+                            : Color.white.opacity(0.06),
+                            lineWidth: clickable ? 1.1 : 1
+                        )
+                )
+                .shadow(
+                    color: clickable ? GaugePalette.zoneColor(zoneKey).opacity(0.16) : .clear,
+                    radius: clickable ? 7 : 0,
+                    x: 0,
+                    y: 0
+                )
+            }
+
+            var body: some View {
+                if let onTap {
+                    Button(action: onTap) {
+                        content
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    content
+                }
+            }
+        }
+
+        private struct ContextModalSheetView: View {
+            let entry: DashboardModalEntry
+            let onQuickLog: ([String]) -> Void
+            @Environment(\.dismiss) private var dismiss
+
+            var body: some View {
+                NavigationStack {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            if let title = entry.title, !title.isEmpty {
+                                Text(title)
+                                    .font(.title3.weight(.bold))
+                            }
+                            if let why = entry.why, !why.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Why")
+                                        .font(.headline)
+                                    ForEach(Array(why.enumerated()), id: \.offset) { _, line in
+                                        Text("\u{2022} \(line)")
+                                            .font(.subheadline)
+                                    }
+                                }
+                            }
+                            if let notice = entry.whatYouMayNotice, !notice.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("What You May Notice")
+                                        .font(.headline)
+                                    ForEach(Array(notice.enumerated()), id: \.offset) { _, line in
+                                        Text("\u{2022} \(line)")
+                                            .font(.subheadline)
+                                    }
+                                }
+                            }
+                            if let actions = entry.suggestedActions, !actions.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Supportive Actions")
+                                        .font(.headline)
+                                    ForEach(Array(actions.enumerated()), id: \.offset) { _, line in
+                                        Text("\u{2022} \(line)")
+                                            .font(.subheadline)
+                                    }
+                                }
+                            }
+                            let ctaLabel = entry.cta?.label?.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if let label = ctaLabel, !label.isEmpty {
+                                Button(label) {
+                                    onQuickLog(entry.cta?.prefill ?? ["OTHER"])
+                                    dismiss()
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                    }
+                    .navigationTitle("Mission Context")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close") { dismiss() }
+                        }
+                    }
+                }
             }
         }
 
@@ -3106,14 +3414,55 @@ struct ContentView: View {
             return values.map { key, value in
                 let meta = gaugesMeta[key]
                 let zoneKey = meta?.zone ?? inferredZoneKey(for: value)
+                let delta = gaugesDelta[key] ?? 0
+                let clickable = gaugeIsClickable(zoneKey: zoneKey, delta: delta) && (modalModels?.gauges?[key] != nil)
                 return GaugeRow(
                     key: key,
                     label: gaugeLabels[key] ?? fallbackLabels[key] ?? key,
                     value: value,
+                    delta: delta,
                     zoneKey: zoneKey,
-                    zoneLabel: meta?.label
+                    zoneLabel: meta?.label,
+                    clickable: clickable
                 )
             }
+        }
+
+        private func gaugeIsClickable(zoneKey: String?, delta: Int) -> Bool {
+            let zone = (zoneKey ?? "").lowercased()
+            return zone == "elevated" || zone == "high" || abs(delta) >= 5
+        }
+
+        private func driverSeverityKey(_ raw: String?) -> String {
+            let token = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if token == "high" { return "high" }
+            if token == "watch" { return "elevated" }
+            if token == "elevated" { return "elevated" }
+            if token == "mild" { return "mild" }
+            return "low"
+        }
+
+        private func driverProgress(_ raw: String?) -> Double {
+            let token = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if token == "high" { return 1.0 }
+            if token == "watch" || token == "elevated" { return 0.76 }
+            if token == "mild" { return 0.5 }
+            return 0.28
+        }
+
+        private func driverClickable(_ raw: String?) -> Bool {
+            let token = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return token == "watch" || token == "elevated" || token == "high"
+        }
+
+        private func presentGaugeModal(_ key: String) {
+            guard let entry = modalModels?.gauges?[key] else { return }
+            selectedModal = ModalPresentation(id: "gauge:\(key)", entry: entry)
+        }
+
+        private func presentDriverModal(_ key: String) {
+            guard let entry = modalModels?.drivers?[key] else { return }
+            selectedModal = ModalPresentation(id: "driver:\(key)", entry: entry)
         }
 
         private func inferredZoneKey(for value: Double?) -> String? {
@@ -3161,7 +3510,10 @@ struct ContentView: View {
                         let cols = [GridItem(.flexible()), GridItem(.flexible())]
                         LazyVGrid(columns: cols, spacing: 10) {
                             ForEach(rows) { row in
-                                ArcGaugeCard(row: row)
+                                ArcGaugeCard(
+                                    row: row,
+                                    onTap: row.clickable ? { presentGaugeModal(row.key) } : nil
+                                )
                             }
                         }
                         HStack(spacing: 10) {
@@ -3188,10 +3540,33 @@ struct ContentView: View {
                         }
                     }
 
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Environmental Drivers")
+                            .font(.headline)
+                        if drivers.isEmpty {
+                            Text("No major environmental drivers are elevated right now.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            ForEach(Array(drivers.prefix(6))) { driver in
+                                let zoneKey = driverSeverityKey(driver.severity)
+                                let clickable = driverClickable(driver.severity) && (modalModels?.drivers?[driver.key] != nil)
+                                DriverStatusRow(
+                                    driver: driver,
+                                    clickable: clickable,
+                                    zoneKey: zoneKey,
+                                    progress: driverProgress(driver.severity),
+                                    onTap: clickable ? { presentDriverModal(driver.key) } : nil
+                                )
+                            }
+                        }
+                    }
+
                     EarthscopeCardV2(
                         title: earthscope?.title ?? fallbackTitle,
                         caption: earthscope?.caption ?? fallbackCaption,
                         bodyMarkdown: earthscope?.bodyMarkdown ?? fallbackBody,
+                        summaryText: earthscopeSummary,
                         driversCompact: driversCompact
                     )
 
@@ -3203,6 +3578,12 @@ struct ContentView: View {
                 }
             } label: {
                 Label("Mission Control", systemImage: "dial.medium")
+            }
+            .sheet(item: $selectedModal) { modal in
+                ContextModalSheetView(
+                    entry: modal.entry,
+                    onQuickLog: onQuickLog
+                )
             }
         }
     }
@@ -7123,11 +7504,23 @@ struct ContentView: View {
         let title: String?
         let caption: String?
         let bodyMarkdown: String?
+        let summaryText: String?
         let driversCompact: [String]
         @State private var showFull: Bool = false
 
-        var body: some View {
+        private func resolvedSummary() -> String {
+            if let summaryText, !summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return summaryText.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
             let sections = EarthscopeBriefingParser.parse(bodyMarkdown, driversCompact: driversCompact)
+            if let summary = sections.first(where: { $0.key == EarthscopeBriefingKey.summary.rawValue })?.body,
+               !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return summary
+            }
+            return "Keep an eye on highlighted gauges and drivers for context."
+        }
+
+        var body: some View {
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) {
                     if let t = title, !t.isEmpty { Text(t).font(.headline) }
@@ -7139,11 +7532,13 @@ struct ContentView: View {
                             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
                     }
 
-                    ForEach(sections) { section in
-                        EarthscopeBriefingBlock(section: section, compact: true)
-                    }
+                    Text(resolvedSummary())
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                        .padding(10)
+                        .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                    Button("Read full briefing") { showFull = true }
+                    Button("Read full EarthScope") { showFull = true }
                         .font(.caption)
                         .underline()
                 }
