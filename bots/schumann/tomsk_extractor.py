@@ -48,6 +48,17 @@ HARMONIC_WINDOWS = {
 # Gridlines (Hz) for overlay and gridline suppression
 GRID_HZ = [8.0, 12.0, 16.0, 20.0, 24.0, 28.0, 32.0, 36.0]
 
+F1_PLAUSIBLE_MIN_HZ = 7.2
+F1_PLAUSIBLE_MAX_HZ = 8.6
+F1_DIRECT_MIN_HZ = 7.0
+F1_DIRECT_MAX_HZ = 9.0
+F2_CANDIDATE_LIMIT = 5
+FAMILY_GRID_STEP_HZ = 0.05
+FAMILY_TOLERANCE_HZ = 0.5
+FAMILY_REFINE_WINDOW_HZ = 0.6
+FAMILY_SCORE_MIN_USABLE = 1.35
+FAMILY_SCORE_WEIGHTS = {1: 1.0, 2: 1.0, 3: 0.8, 4: 0.6, 5: 0.4}
+
 # --------------------------
 # Helpers
 # --------------------------
@@ -146,7 +157,7 @@ def estimate_day_boundaries(img_bgr, roi):
     return x_day0, x_day1, x_day2, float(day_w)
 
 def detect_frontier(img_bgr, roi):
-    x0, y0, x1, y1 = roi
+    _x0, y0, _x1, y1 = roi
     x1_eff = max(x0 + 50, x1 - RIGHT_EXCLUDE_PX)
     crop = img_bgr[y0:y1, x0:x1_eff]
     if crop.size == 0: return x0
@@ -196,112 +207,304 @@ def draw_overlay(img_bgr, roi, x_now, peaks=None, debug_lines=None, pph=None, pp
             cv2.circle(out, (x_now, y), 3, colors[i%len(colors)], -1)
     return out
 
+def is_plausible_f1(f1_hz):
+    if f1_hz is None:
+        return False
+    return bool(F1_PLAUSIBLE_MIN_HZ <= float(f1_hz) <= F1_PLAUSIBLE_MAX_HZ)
+
+def default_picker_debug():
+    return {
+        "plausibility_reject_f2_count": 0,
+        "plausibility_selected_f2_rank": None,
+        "family_scoring_used": False,
+        "family_best_f1": None,
+        "family_best_score": None,
+        "family_candidate_count": 0,
+        "family_top3": [],
+        "family_score_threshold": float(FAMILY_SCORE_MIN_USABLE),
+        "family_fallback_used": False,
+    }
+
+def dedupe_sorted_floats(values, precision=3):
+    out = []
+    seen = set()
+    for v in values:
+        if v is None:
+            continue
+        fv = float(v)
+        key = round(fv, precision)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(fv)
+    out.sort()
+    return out
+
+def select_family_by_scoring(sig, roi, candidates_f1, tolerance_hz):
+    """
+    Score candidate F1 values by summing ridge strengths at expected harmonics.
+    Returns: (best_f1, best_score, top_scores[<=3]).
+    """
+    x0, y0, x1, y1 = roi
+    h_pix = int(max(1, y1 - y0))
+    tol_pix = max(1, int(round((float(tolerance_hz) / 40.0) * h_pix)))
+
+    scored = []
+    for f1 in dedupe_sorted_floats(candidates_f1):
+        if not is_plausible_f1(f1):
+            continue
+        score = 0.0
+        for k, weight in FAMILY_SCORE_WEIGHTS.items():
+            target_hz = float(k) * float(f1)
+            if target_hz <= 0.0 or target_hz > 40.0:
+                continue
+            y_idx = int(np.clip(hz_to_y(target_hz, roi) - y0, 0, h_pix - 1))
+            lo = max(0, y_idx - tol_pix)
+            hi = min(h_pix - 1, y_idx + tol_pix)
+            if hi < lo:
+                continue
+            local_max = float(np.max(sig[lo:hi+1]))
+            score += float(weight) * local_max
+        scored.append({"f1": float(f1), "score": float(score)})
+
+    if not scored:
+        return None, None, []
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    best = scored[0]
+    top3 = [{"f1": float(item["f1"]), "score": float(item["score"])} for item in scored[:3]]
+    return float(best["f1"]), float(best["score"]), top3
+
 # ----- banded picker with fallbacks -----
-def estimate_peaks_banded(img_bgr, roi, x_now, verbose=False):
+def estimate_peaks_banded(img_bgr, roi, x_now, verbose=False, return_debug=False):
     """
-    Banded harmonic picker (F1..F5) at x_now with robustness improvements:
-    - Wider vertical slice (11 px) and HSV-V profile instead of raw gray
-    - Gridline suppression (notches around 8,12,...,36 Hz)
-    - Dynamic per-window threshold (median + fraction of (p95 - median))
-    - F2-first strategy; F1 assisted by F2/2 when available
+    Banded harmonic picker (F1..F5) with:
+    - Stage 1 plausibility-gated F2/F1 picks
+    - Stage 2 harmonic family scoring with local harmonic refinement
     """
-    x0,y0,x1,y1 = roi
-    x = int(np.clip(x_now, x0+1, x1-2))
-    # Wider slice to stabilize ridge measurement
-    slice_w = img_bgr[y0:y1, max(x-5,x0):min(x+6,x1), :]  # 11 px wide
+    picker_debug = default_picker_debug()
+    x0, y0, x1, y1 = roi
+    x = int(np.clip(x_now, x0 + 1, x1 - 2))
+
+    # Wider slice to stabilize ridge measurement.
+    slice_w = img_bgr[y0:y1, max(x - 5, x0):min(x + 6, x1), :]
     if slice_w.size == 0:
-        return {k: None for k in HARMONIC_WINDOWS.keys()}
+        empty = {k: None for k in HARMONIC_WINDOWS.keys()}
+        return (empty, picker_debug) if return_debug else empty
 
-    # Use HSV Value channel (brightness correlates with signal power in colormap)
+    # Use HSV Value channel (brightness correlates with signal power in colormap).
     hsv = cv2.cvtColor(slice_w, cv2.COLOR_BGR2HSV)
-    V = hsv[:,:,2].astype(np.float32)
-    prof = V.mean(axis=1)  # average across slice width
-    # Gentle vertical smoothing
-    prof = cv2.GaussianBlur(prof.reshape(-1,1), (1,9), 0).ravel()
+    prof = hsv[:, :, 2].astype(np.float32).mean(axis=1)
+    prof = cv2.GaussianBlur(prof.reshape(-1, 1), (1, 9), 0).ravel()
 
-    # Build a penalty mask for gridlines to avoid snapping to them
+    # Build a penalty mask for gridlines to avoid snapping to them.
     penalty = np.zeros_like(prof, dtype=np.float32)
-    Hpix = (y1 - y0)
+    h_pix = int(y1 - y0)
     for ghz in GRID_HZ:
         yg = hz_to_y(ghz, roi)
-        gi = int(np.clip(yg - y0, 0, Hpix-1))
-        # narrower, gentler notch so real ridges near gridlines aren't suppressed
+        gi = int(np.clip(yg - y0, 0, h_pix - 1))
         for d in range(-2, 3):
             idx = gi + d
-            if 0 <= idx < Hpix:
-                penalty[idx] += float(np.exp(-0.5*(d/1.6)**2)) * 6.0
+            if 0 <= idx < h_pix:
+                penalty[idx] += float(np.exp(-0.5 * (d / 1.6) ** 2)) * 6.0
 
-    # Convert to "signal" where high means likely ridge, then suppress gridlines
-    sig_raw = prof.copy()
-    sig = sig_raw - penalty
-    # Normalize to 0..1
+    sig = prof - penalty
     sig = (sig - sig.min()) / (np.ptp(sig) + 1e-6)
 
-    def pick_in_window_named(band_name, enforce_floor=False, assist_center_hz=None):
-        hz_lo, hz_hi = HARMONIC_WINDOWS[band_name]
-        # optional stricter floor for F1 to reduce low bias
-        if band_name == "F1" and enforce_floor:
-            hz_lo = max(hz_lo, 7.1)
-        # tighten window around assist center if provided (helps F1 near F2/2)
-        if assist_center_hz is not None:
-            hz_lo = max(hz_lo, assist_center_hz - 0.6)
-            hz_hi = min(hz_hi, assist_center_hz + 0.8)
-        y_lo = hz_to_y(hz_lo, roi); y_hi = hz_to_y(hz_hi, roi)
-        lo = max(0, min(y_lo - y0, Hpix - 2))
-        hi = max(1, min(y_hi - y0, Hpix - 1))
+    def subpixel_peak_idx(seg_s, idx):
+        i0 = max(0, idx - 1)
+        i2 = min(len(seg_s) - 1, idx + 1)
+        if i2 - i0 == 2:
+            y_m1, y_0, y_p1 = seg_s[i0], seg_s[idx], seg_s[i2]
+            denom = (y_m1 - 2 * y_0 + y_p1)
+            delta = 0.0 if abs(denom) < 1e-6 else 0.5 * (y_m1 - y_p1) / denom
+            return idx + float(np.clip(delta, -0.5, 0.5))
+        return float(idx)
+
+    def segment_for_hz(hz_lo, hz_hi):
+        y_lo = hz_to_y(hz_lo, roi)
+        y_hi = hz_to_y(hz_hi, roi)
+        lo = max(0, min(y_lo - y0, h_pix - 2))
+        hi = max(1, min(y_hi - y0, h_pix - 1))
         if hi <= lo + 2:
-            return None, 0.0
+            return None
         seg = sig[lo:hi].copy()
-        # Dynamic threshold using window statistics
+        if seg.size < 3:
+            return None
         w_med = float(np.median(seg))
         w_p95 = float(np.percentile(seg, 95))
-        dyn_thr = w_med + 0.22*(w_p95 - w_med)
-        # Light smoothing
-        seg_s = cv2.blur(seg.reshape(-1,1), (1, 7)).ravel()
+        dyn_thr = w_med + 0.22 * (w_p95 - w_med)
+        seg_s = cv2.blur(seg.reshape(-1, 1), (1, 7)).ravel()
+        return {"lo": int(lo), "seg_s": seg_s, "dyn_thr": float(dyn_thr)}
+
+    def local_candidates_from_segment(seg_data, limit):
+        if seg_data is None:
+            return []
+        seg_s = seg_data["seg_s"]
+        dyn_thr = seg_data["dyn_thr"]
+        candidates = []
+        for i in range(1, len(seg_s) - 1):
+            cur = float(seg_s[i])
+            if cur < dyn_thr:
+                continue
+            if cur >= float(seg_s[i - 1]) and cur >= float(seg_s[i + 1]):
+                candidates.append((i, cur))
+        if not candidates:
+            idx = int(np.argmax(seg_s))
+            val = float(seg_s[idx])
+            if val >= dyn_thr:
+                candidates = [(idx, val)]
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        out = []
+        for idx, val in candidates[:limit]:
+            idx_f = subpixel_peak_idx(seg_s, idx)
+            y_pick = y0 + seg_data["lo"] + idx_f
+            out.append({"hz": float(y_to_hz(y_pick, roi)), "value": float(val)})
+        return out
+
+    def pick_best_from_segment(seg_data):
+        if seg_data is None:
+            return None, 0.0
+        seg_s = seg_data["seg_s"]
+        dyn_thr = seg_data["dyn_thr"]
         idx = int(np.argmax(seg_s))
         val = float(seg_s[idx])
         if val < dyn_thr:
             return None, val
-        # Quadratic sub-pixel refinement around peak (clamped at edges)
-        i0 = max(0, idx-1); i2 = min(len(seg_s)-1, idx+1)
-        if i2 - i0 == 2:
-            y_m1, y_0, y_p1 = seg_s[i0], seg_s[idx], seg_s[i2]
-            denom = (y_m1 - 2*y_0 + y_p1)
-            delta = 0.0 if abs(denom) < 1e-6 else 0.5*(y_m1 - y_p1)/denom
-            idx_f = idx + float(np.clip(delta, -0.5, 0.5))
-        else:
-            idx_f = float(idx)
-        y_pick = y0 + lo + idx_f
-        return y_to_hz(y_pick, roi), val
+        idx_f = subpixel_peak_idx(seg_s, idx)
+        y_pick = y0 + seg_data["lo"] + idx_f
+        return float(y_to_hz(y_pick, roi)), float(val)
 
-    picks = {k: None for k in HARMONIC_WINDOWS.keys()}
-    strength = {k: 0.0 for k in HARMONIC_WINDOWS.keys()}
+    def pick_in_window_named(band_name, enforce_floor=False, assist_center_hz=None):
+        hz_lo, hz_hi = HARMONIC_WINDOWS[band_name]
+        if band_name == "F1" and enforce_floor:
+            hz_lo = max(hz_lo, F1_DIRECT_MIN_HZ)
+        if assist_center_hz is not None:
+            hz_lo = max(hz_lo, assist_center_hz - 0.6)
+            hz_hi = min(hz_hi, assist_center_hz + 0.8)
+        seg_data = segment_for_hz(hz_lo, hz_hi)
+        return pick_best_from_segment(seg_data)
 
-    # 1) Pick F2 first (usually more stable than F1)
-    f2, v2 = pick_in_window_named("F2")
-    picks["F2"], strength["F2"] = f2, v2
+    def pick_candidates_in_window_named(band_name, enforce_floor=False, assist_center_hz=None, limit=F2_CANDIDATE_LIMIT):
+        hz_lo, hz_hi = HARMONIC_WINDOWS[band_name]
+        if band_name == "F1" and enforce_floor:
+            hz_lo = max(hz_lo, F1_DIRECT_MIN_HZ)
+        if assist_center_hz is not None:
+            hz_lo = max(hz_lo, assist_center_hz - 0.6)
+            hz_hi = min(hz_hi, assist_center_hz + 0.8)
+        seg_data = segment_for_hz(hz_lo, hz_hi)
+        return local_candidates_from_segment(seg_data, limit=limit)
 
-    # 2) Pick F1; if F2 exists, nudge around F2/2
-    f1_assist = (f2 / 2.0) if f2 is not None else None
-    f1, v1 = pick_in_window_named("F1", enforce_floor=True, assist_center_hz=f1_assist)
-    picks["F1"], strength["F1"] = f1, v1
+    stage1_picks = {k: None for k in HARMONIC_WINDOWS.keys()}
+    stage1_strength = {k: 0.0 for k in HARMONIC_WINDOWS.keys()}
 
-    # 3) Pick remaining bands normally
-    for name in ["F3","F4","F5"]:
+    # Stage 1.1/1.2: F2 local maxima + F1 plausibility gate.
+    f2_candidates = pick_candidates_in_window_named("F2", limit=F2_CANDIDATE_LIMIT)
+    plausible_implied_f1 = []
+    selected_rank = None
+    for rank, cand in enumerate(f2_candidates):
+        implied_f1 = float(cand["hz"]) / 2.0
+        if is_plausible_f1(implied_f1):
+            selected_rank = rank
+            stage1_picks["F2"] = float(cand["hz"])
+            stage1_strength["F2"] = float(cand["value"])
+            break
+        picker_debug["plausibility_reject_f2_count"] += 1
+    for cand in f2_candidates:
+        implied_f1 = float(cand["hz"]) / 2.0
+        if is_plausible_f1(implied_f1):
+            plausible_implied_f1.append(implied_f1)
+    if selected_rank is not None:
+        picker_debug["plausibility_selected_f2_rank"] = int(selected_rank)
+
+    # Stage 1.3: direct F1 pick must be in a broader sane range, else drop.
+    f1_assist = (stage1_picks["F2"] / 2.0) if stage1_picks["F2"] is not None else None
+    f1_direct, v1 = pick_in_window_named("F1", enforce_floor=True, assist_center_hz=f1_assist)
+    if f1_direct is not None and not (F1_DIRECT_MIN_HZ <= float(f1_direct) <= F1_DIRECT_MAX_HZ):
+        f1_direct = None
+        v1 = 0.0
+    stage1_picks["F1"] = f1_direct
+    stage1_strength["F1"] = float(v1)
+
+    for name in ["F3", "F4", "F5"]:
         fv, vv = pick_in_window_named(name)
-        picks[name], strength[name] = fv, vv
+        stage1_picks[name], stage1_strength[name] = fv, float(vv)
 
-    # --- harmonic-consistency refinement for F1 ---
-    if picks.get("F1") is not None and picks.get("F2") is not None:
-        f1_assist = picks["F2"] / 2.0
-        # if F1 is >0.4 Hz below assisted value and its strength is modest, nudge upward
-        if (f1_assist - picks["F1"]) > 0.4 and strength.get("F1", 0.0) < max(0.35, strength.get("F2", 0.0)*0.6):
-            f1_new = 0.7*f1_assist + 0.3*picks["F1"]
+    # Keep prior consistency nudge for fallback path.
+    if stage1_picks.get("F1") is not None and stage1_picks.get("F2") is not None:
+        f1_assist = stage1_picks["F2"] / 2.0
+        if (f1_assist - stage1_picks["F1"]) > 0.4 and stage1_strength.get("F1", 0.0) < max(0.35, stage1_strength.get("F2", 0.0) * 0.6):
+            f1_new = 0.7 * f1_assist + 0.3 * stage1_picks["F1"]
             lo, hi = HARMONIC_WINDOWS["F1"]
-            picks["F1"] = float(min(hi, max(lo, f1_new)))
+            stage1_picks["F1"] = float(min(hi, max(lo, f1_new)))
 
-    # Fallback repair using harmonic relations (existing helper)
-    picks = repair_harmonics(picks)
+    # Stage 2 candidate generation.
+    f1_local_candidates = pick_candidates_in_window_named("F1", enforce_floor=True, limit=20)
+    candidates_f1 = [cand["hz"] for cand in f1_local_candidates if is_plausible_f1(cand["hz"])]
+    candidates_f1.extend(plausible_implied_f1)
+    candidates_f1 = dedupe_sorted_floats(candidates_f1)
+    if len(candidates_f1) < 6:
+        grid = np.arange(
+            F1_PLAUSIBLE_MIN_HZ,
+            F1_PLAUSIBLE_MAX_HZ + (FAMILY_GRID_STEP_HZ * 0.5),
+            FAMILY_GRID_STEP_HZ,
+        )
+        candidates_f1 = dedupe_sorted_floats(candidates_f1 + [float(v) for v in grid])
+
+    picker_debug["family_candidate_count"] = int(len(candidates_f1))
+
+    best_f1, best_score, top3 = select_family_by_scoring(
+        sig=sig,
+        roi=roi,
+        candidates_f1=candidates_f1,
+        tolerance_hz=FAMILY_TOLERANCE_HZ,
+    )
+    picker_debug["family_best_f1"] = (None if best_f1 is None else float(best_f1))
+    picker_debug["family_best_score"] = (None if best_score is None else float(best_score))
+    picker_debug["family_top3"] = top3
+
+    def refine_harmonic_near_prediction(band_name, predicted_hz):
+        if predicted_hz is None or predicted_hz <= 0.0 or predicted_hz > 40.0:
+            return None, 0.0
+        band_lo, band_hi = HARMONIC_WINDOWS[band_name]
+        hz_lo = max(band_lo, float(predicted_hz) - FAMILY_REFINE_WINDOW_HZ)
+        hz_hi = min(band_hi, float(predicted_hz) + FAMILY_REFINE_WINDOW_HZ)
+        seg_data = segment_for_hz(hz_lo, hz_hi)
+        return pick_best_from_segment(seg_data)
+
+    family_picks = {k: None for k in HARMONIC_WINDOWS.keys()}
+    if best_f1 is not None:
+        for k in [1, 2, 3, 4, 5]:
+            band = f"F{k}"
+            predicted = float(best_f1) * float(k)
+            hz_refined, _strength = refine_harmonic_near_prediction(band, predicted)
+            if hz_refined is not None:
+                family_picks[band] = float(hz_refined)
+        if family_picks["F1"] is None and is_plausible_f1(best_f1):
+            family_picks["F1"] = float(best_f1)
+
+    family_score_ok = best_score is not None and float(best_score) >= float(FAMILY_SCORE_MIN_USABLE)
+    family_ready = bool(family_score_ok and is_plausible_f1(family_picks.get("F1")))
+
+    if family_ready:
+        picks = family_picks
+        picker_debug["family_scoring_used"] = True
+    else:
+        picks = repair_harmonics(stage1_picks)
+        picker_debug["family_fallback_used"] = True
+
+    if picks.get("F1") is not None and not (F1_DIRECT_MIN_HZ <= float(picks["F1"]) <= F1_DIRECT_MAX_HZ):
+        picks["F1"] = None
+
+    if verbose:
+        print(
+            f"[family] candidates={picker_debug['family_candidate_count']} "
+            f"best_f1={picker_debug['family_best_f1']} score={picker_debug['family_best_score']} "
+            f"used={picker_debug['family_scoring_used']}"
+        )
+
+    if return_debug:
+        return picks, picker_debug
     return picks
 
 def clamp(v, lo, hi):
@@ -312,7 +515,11 @@ def repair_harmonics(peaks):
     p = dict(peaks)  # copy
     # back-derive F1 from F2 if needed
     if p.get("F1") is None and p.get("F2") is not None:
-        p["F1"] = clamp(p["F2"]/2.0, *HARMONIC_WINDOWS["F1"])
+        f1_candidate = clamp(p["F2"]/2.0, *HARMONIC_WINDOWS["F1"])
+        if f1_candidate is not None and f1_candidate >= F1_DIRECT_MIN_HZ:
+            p["F1"] = f1_candidate
+    if p.get("F1") is not None and float(p["F1"]) < F1_DIRECT_MIN_HZ:
+        p["F1"] = None
     # fill any missing Fk as multiples of F1 (only if we have F1)
     if p.get("F1") is not None:
         f1 = p["F1"]
@@ -330,10 +537,12 @@ def repair_harmonics(peaks):
 # --------------------------
 def main():
     ap = argparse.ArgumentParser(description="Tomsk Schumann extractor")
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", required=False, help="Output JSON path (optional when --self-test is used).")
     ap.add_argument("--overlay", required=False)
     ap.add_argument("--insecure", action="store_true")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--self-test", action="store_true",
+                    help="Fetch one image, run extraction, print family debug, and exit with health-check status.")
     ap.add_argument("--time-bias-minutes", type=float, default=None,
                     help="Manual bias override (minutes, positive shifts right).")
     ap.add_argument("--reset-bias", action="store_true",
@@ -353,6 +562,8 @@ def main():
     ap.add_argument("--stale-hours", type=float, default=6.0,
                     help="Mark Tomsk as stale_source if Last-Modified age exceeds this many hours.")
     args = ap.parse_args()
+    if not args.out and not args.self_test:
+        ap.error("--out is required unless --self-test is set")
 
     img, last_mod_h = fetch_image(TOMSK_IMG, insecure=args.insecure)
     if img is None:
@@ -461,10 +672,17 @@ def main():
 
     # ---- banded harmonic picking with fallbacks ----
     if not guard_invalid:
-        peaks_banded = estimate_peaks_banded(img, ROI, x_now, verbose=args.verbose)
-        peaks = repair_harmonics(peaks_banded)
+        peaks, picker_debug = estimate_peaks_banded(
+            img,
+            ROI,
+            x_now,
+            verbose=args.verbose,
+            return_debug=True,
+        )
     else:
         peaks = {k: None for k in HARMONIC_WINDOWS.keys()}
+        picker_debug = default_picker_debug()
+        picker_debug["family_fallback_used"] = True
 
     # Overlay
     dbg = None
@@ -491,6 +709,39 @@ def main():
     if guard_invalid and status_val == "ok":
         status_val = "no_recent_data"
 
+    # Quality/usable gating for downstream source selection.
+    family_best_score = picker_debug.get("family_best_score")
+    family_score_ok = isinstance(family_best_score, (int, float)) and float(family_best_score) >= float(FAMILY_SCORE_MIN_USABLE)
+    f1_val = peaks.get("F1")
+    f1_plausible = is_plausible_f1(f1_val)
+    if not f1_plausible:
+        peaks["F1"] = None
+
+    quality_reasons = []
+    if not f1_plausible:
+        quality_reasons.append("f1_not_plausible")
+    if not family_score_ok:
+        quality_reasons.append("low_family_score")
+    if guard_invalid:
+        quality_reasons.append("no_recent_data_guard")
+    if status_val != "ok":
+        quality_reasons.append(f"status_{status_val}")
+
+    max_family_score = float(sum(FAMILY_SCORE_WEIGHTS.values()))
+    quality_score = 0.0
+    if isinstance(family_best_score, (int, float)):
+        quality_score = float(np.clip(float(family_best_score) / max_family_score, 0.0, 1.0))
+    if not f1_plausible:
+        quality_score = min(quality_score, 0.20)
+    if guard_invalid:
+        quality_score = 0.0
+    if status_val != "ok":
+        quality_score = min(quality_score, 0.35)
+
+    usable = bool(f1_plausible and family_score_ok and status_val == "ok")
+    if not usable:
+        quality_reasons.append("below_min_quality")
+
     out = {
         "status": status_val,
         "source":"tomsk",
@@ -499,6 +750,9 @@ def main():
         "fundamental_hz": peaks.get("F1", None),
         "harmonics_hz": {k:(None if v is None else float(v)) for k,v in peaks.items()},
         "amplitude_idx": {},
+        "quality_score": float(quality_score),
+        "usable": usable,
+        "quality_reasons": quality_reasons,
         "confidence": "high-panels",
         "overlay_path": args.overlay,
         "raw":{
@@ -526,16 +780,39 @@ def main():
                 "guard_applied": bool(x_now != x_ideal),
                 "age_hours": (None if age_hours is None else float(age_hours)),
                 "stale_hours": float(args.stale_hours),
+                **picker_debug,
             },
-            "method": "tick-ruler px/h + adaptive frontier guard; day3(48–72h) time-anchor; banded picker + fallbacks",
+            "method": "tick-ruler px/h + adaptive frontier guard; day3(48–72h) time-anchor; stage1 plausibility gate + stage2 family scoring",
         }
     }
 
-    with open(args.out, "w", encoding="utf-8") as f:
-        json.dump(out, f, ensure_ascii=False, indent=2)
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(out, f, ensure_ascii=False, indent=2)
 
     if args.verbose:
         print(json.dumps(out, indent=2))
+
+    if args.self_test:
+        dbg = out.get("raw", {}).get("debug", {})
+        print(
+            f"self_test status={out.get('status')} usable={out.get('usable')} "
+            f"F1={out.get('fundamental_hz')} F2={(out.get('harmonics_hz') or {}).get('F2')}"
+        )
+        print(json.dumps({
+            "family_scoring_used": dbg.get("family_scoring_used"),
+            "family_best_f1": dbg.get("family_best_f1"),
+            "family_best_score": dbg.get("family_best_score"),
+            "family_candidate_count": dbg.get("family_candidate_count"),
+            "family_top3": dbg.get("family_top3"),
+            "plausibility_reject_f2_count": dbg.get("plausibility_reject_f2_count"),
+            "plausibility_selected_f2_rank": dbg.get("plausibility_selected_f2_rank"),
+        }, ensure_ascii=False, indent=2))
+
+        f1_ok = is_plausible_f1(out.get("fundamental_hz"))
+        status_not_ok = str(out.get("status", "")).lower() != "ok"
+        unusable = not bool(out.get("usable", True))
+        return 0 if (f1_ok or (unusable and status_not_ok)) else 2
     return 0
 
 if __name__ == "__main__":

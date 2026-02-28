@@ -145,7 +145,7 @@ def infer_quality_and_usable(name: str, payload: dict, peer_payload: dict | None
     if name == "tomsk":
         tick_count = _get_nested(payload, ["raw", "debug", "tick_count"], None)
         tick_quality = _get_nested(payload, ["raw", "debug", "tick_quality"], None)
-        stale_hours = _get_nested(payload, ["raw", "debug", "stale_hours"], None)
+        age_hours = _get_nested(payload, ["raw", "debug", "age_hours"], None)
 
         # If tick detection failed, reduce confidence (still may be usable)
         if tick_count is not None and int(tick_count) == 0:
@@ -164,9 +164,9 @@ def infer_quality_and_usable(name: str, payload: dict, peer_payload: dict | None
                 qs -= 0.10
                 reasons.append("tick_quality_parse")
 
-        if stale_hours is not None:
+        if age_hours is not None:
             try:
-                sh = float(stale_hours)
+                sh = float(age_hours)
                 if sh >= 6:
                     qs -= 0.20
                     reasons.append("stale_hours_ge_6")
