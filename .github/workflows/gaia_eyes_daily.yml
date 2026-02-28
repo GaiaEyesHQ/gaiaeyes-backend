@@ -512,7 +512,7 @@ jobs:
             curl -sS -X POST "https://graph.facebook.com/v20.0/${IG_USER_ID}/media" \
               -F "media_type=REELS" \
               -F "video_url=${REEL_URL}" \
-              -F "caption=$(cat caption.txt)" \
+              --form-string "caption=$(cat caption.txt)" \
               -F "access_token=${FB_ACCESS_TOKEN}"
           )"
           echo "IG create_resp: ${create_resp}"
@@ -562,7 +562,7 @@ jobs:
           fb_resp="$(
             curl -sS -X POST "https://graph.facebook.com/v20.0/${FB_PAGE_ID}/videos" \
               -F "file_url=${REEL_URL}" \
-              -F "description=$(cat caption.txt)" \
+              --form-string "description=$(cat caption.txt)" \
               -F "access_token=${FB_ACCESS_TOKEN}"
           )"
           echo "FB video resp: ${fb_resp}"
