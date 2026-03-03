@@ -31,6 +31,13 @@ UTC_TO_TSST_HOURS = 7
 TICK_MIN_SEP = 8
 TICK_MIN_COUNT = 24
 MIN_GUARD_PX = 6
+DEFAULT_ACCEPT_MINUTES = 90.0
+DEFAULT_SNAP_THRESHOLD_MINUTES = 20.0
+
+FRONTIER_COLOR_S_MIN = 35
+FRONTIER_COLOR_V_MIN = 28
+FRONTIER_MIN_ACTIVITY = 0.16
+FRONTIER_MIN_RUN_PX = 8
 
 # Series colors (RGB for reading; drawing uses BGR). Order is consistent across charts.
 SERIES = {
@@ -223,137 +230,198 @@ def estimate_day_boundaries(img_bgr, roi):
     x_day0 = x0; x_day1 = int(round(x0 + day_w)); x_day2 = int(round(x_day1 + day_w))
     return x_day0, x_day1, x_day2, float(day_w)
 
-def detect_frontier(img_bgr, roi):
+def detect_frontier(img_bgr, roi, return_debug=False):
     x0, y0, x1, y1 = roi
     x1_dyn = detect_right_logo_margin(img_bgr, roi)
-    x1_eff = max(x0 + 50, min(x1_dyn, x1) - RIGHT_EXCLUDE_PX//2)
+    x_plot = min(x1, x1_dyn)
+    x1_eff = max(x0 + 50, x_plot - RIGHT_EXCLUDE_PX)
     crop = img_bgr[y0:y1, x0:x1_eff]
-    if crop.size == 0: return x0
-    gry = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY).astype(np.float32)
-    col_std = gry.std(axis=0)
-    k = max(3, (x1_eff - x0) // 600)
-    col_std = cv2.blur(col_std.reshape(1, -1), (1, 2 * k + 1)).ravel()
-    col_std = (col_std - col_std.min()) / (np.ptp(col_std) + 1e-6)
-    thr = float(np.percentile(col_std, 40)) * 0.9
-    idx = next((i for i in range(len(col_std)-1, -1, -1) if col_std[i] > thr), len(col_std)-1)
-    return x0 + int(idx)
+    if crop.size == 0:
+        frontier = x0
+        dbg = {"method": "empty", "activity_thr": None, "activity_right_tail": None}
+        return (frontier, dbg) if return_debug else frontier
+
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    sat = hsv[:, :, 1].astype(np.float32)
+    val = hsv[:, :, 2].astype(np.float32)
+
+    color_mask = ((sat >= FRONTIER_COLOR_S_MIN) & (val >= FRONTIER_COLOR_V_MIN)).astype(np.float32)
+    col_color = color_mask.mean(axis=0)
+
+    col_diff = np.zeros(gray.shape[1], dtype=np.float32)
+    if gray.shape[1] > 1:
+        col_diff[1:] = np.abs(np.diff(gray, axis=1)).mean(axis=0)
+
+    smooth_r = max(2, int((x1_eff - x0) / 700.0))
+    color_s = smooth_1d(col_color, smooth_r)
+    diff_s = smooth_1d(col_diff, smooth_r)
+
+    color_n = normalize_robust(color_s)
+    diff_n = normalize_robust(diff_s)
+    activity = 0.45 * color_n + 0.55 * diff_n
+
+    thr = max(FRONTIER_MIN_ACTIVITY, float(np.percentile(activity, 65)) * 0.85)
+    run = max(FRONTIER_MIN_RUN_PX, int(round((x1_eff - x0) / 220.0)))
+
+    idx = None
+    for i in range(len(activity) - 1, run - 2, -1):
+        window = activity[i - run + 1:i + 1]
+        if float(np.mean(window)) >= thr:
+            idx = i
+            break
+
+    method = "activity_scan"
+    if idx is None:
+        col_std = gray.std(axis=0)
+        col_std = smooth_1d(col_std, max(2, int((x1_eff - x0) / 600.0)))
+        col_std = (col_std - col_std.min()) / (np.ptp(col_std) + 1e-6)
+        thr_std = max(0.10, float(np.percentile(col_std, 55)) * 0.9)
+        for i in range(len(col_std) - 1, -1, -1):
+            if float(col_std[i]) > thr_std:
+                idx = i
+                break
+        method = "std_fallback"
+
+    if idx is None:
+        idx = len(activity) - 1
+        method = "right_edge_fallback"
+
+    frontier = x0 + int(idx)
+    tail_len = int(min(len(activity), max(20, run * 2)))
+    right_tail = float(np.mean(activity[-tail_len:])) if tail_len > 0 else 0.0
+    dbg = {
+        "method": method,
+        "activity_thr": float(thr),
+        "activity_right_tail": right_tail,
+        "activity_run_px": int(run),
+        "x1_eff": int(x1_eff),
+        "x1_dyn": int(x1_dyn),
+    }
+    return (frontier, dbg) if return_debug else frontier
 
 def x_for_hour_in_day(x_day_start, pph, hour_in_day):
     return int(round(x_day_start + float(hour_in_day) * float(pph)))
 
 def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
-                  pp_hour_source="auto", verbose=False, accept_minutes=90.0,
+                  pp_hour_source="auto", verbose=False, accept_minutes=DEFAULT_ACCEPT_MINUTES,
                   last_modified=None, stale_hours=6.0):
-    # 1) Use full sanitized ROI for day boundaries & px/hour
-    x0f, y0f, x1f, y1f = sanitize_roi(img_bgr, roi)
-    # 2) Build a trimmed ROI only for frontier guarding
-    x1_trim = detect_right_logo_margin(img_bgr, (x0f, y0f, x1f, y1f))
-    roi_full = (x0f, y0f, x1f, y1f)
-    roi_trim = (x0f, y0f, x1_trim, y1f)
+    x0, y0, x1, y1 = sanitize_roi(img_bgr, roi)
 
-    # Day boundaries & pph from full width
-    x_day0, x_day1, x_day2, day_w = estimate_day_boundaries(img_bgr, roi_full)
-    pph_day = day_w / 24.0
-    pph_tick, tick_count, _ = detect_tick_pph(img_bgr, roi_full, verbose=verbose)
+    # Timing uses geometry-derived day boundaries from the plotting area width.
+    x1_dyn = detect_right_logo_margin(img_bgr, (x0, y0, x1, y1))
+    x_plot_end = min(x1, x1_dyn)
+    x1_eff = max(x0 + 50, x_plot_end - RIGHT_EXCLUDE_PX)
+    w_time = float(x1_eff - x0)
+    day_w_time = w_time / 3.0
+    x_day0_time = x0
+    x_day1_time = int(round(x0 + day_w_time))
+    x_day2_time = int(round(x0 + 2.0 * day_w_time))
+    pph_day = day_w_time / 24.0
 
-    # If tick-based px/hour strongly disagrees with day-width, prefer ticks for geometry too
-    # Heuristic: high-confidence ticks (>=48) and >20% discrepancy -> rebuild day geometry
-    rebuild_from_ticks = False
-    if pph_tick is not None and tick_count >= 48:
-        discrep = abs(pph_tick - pph_day) / max(pph_day, 1e-6)
-        rebuild_from_ticks = discrep > 0.20
+    # Content-derived splits are kept for diagnostics only.
+    x_day0, x_day1, x_day2, day_w = estimate_day_boundaries(img_bgr, (x0, y0, x1, y1))
 
-    # choose px-per-hour; prefer day width; only trust ticks if very close to day estimate
+    pph_tick, tick_count, tick_quality = detect_tick_pph(img_bgr, (x0, y0, x1, y1), verbose=verbose)
+    pph = pph_day
+    pph_src = "day_width"
     use_ticks = (pph_tick is not None and tick_count >= int(tick_min_count))
-    pph = pph_day; pph_src = "day_width"
-    if pp_hour_source == "ticks" and use_ticks:
-        pph = pph_tick; pph_src = "ticks (forced)"
+    if pp_hour_source == "ticks":
+        if use_ticks:
+            pph = pph_tick
+            pph_src = "ticks"
+        else:
+            pph_src = "day_width (ticks-forced-fallback)"
     elif pp_hour_source == "auto" and use_ticks:
-        if rebuild_from_ticks or (abs(pph_tick - pph_day) / max(pph_day, 1e-6) <= 0.08):
-            pph = pph_tick; pph_src = "ticks"
+        pph = pph_tick
+        pph_src = "ticks"
 
-    # Optionally rebuild day1/day2 positions from tick px/hour to fix bad day-width snaps
-    if rebuild_from_ticks and pph is not None:
-        day_w_from_ticks = 24.0 * float(pph)
-        x_day1 = int(round(x_day0 + day_w_from_ticks))
-        x_day2 = int(round(x_day0 + 2.0 * day_w_from_ticks))
-        day_w = day_w_from_ticks
+    x_frontier, frontier_dbg = detect_frontier(img_bgr, (x0, y0, x1, y1), return_debug=True)
+    guard_px = max(MIN_GUARD_PX, int(round(pph * (guard_minutes / 60.0))))
 
-    # Frontier based on trimmed ROI only (ignores right logo/panel)
-    x_frontier = detect_frontier(img_bgr, roi_trim)
-    guard_px = max(MIN_GUARD_PX, int(round(pph * (guard_minutes/60.0))))
-
-    # Phase-align using explicit tick columns near the frontier (refines @now)
-    x_now = None
-    tick_cols = find_tick_columns(img_bgr, roi_trim)
-    if tick_cols:
-        # Keep ticks inside day 3 and left of the frontier guard
-        left_day3 = x_day2 + 4
-        right_guard = min(x1f - 2, x_frontier - guard_px)
-        G = [x for x in tick_cols if left_day3 <= x <= right_guard]
-        if len(G) >= 6:
-            G = np.array(G, dtype=np.float32)
-            # Consecutive hour indices, last tick nearest the frontier is floor(current hour)
-            now_hour = hour_float(now_tsst)
-            # pick the tick closest to frontier as anchor
-            anchor_idx = int(np.argmax(G))  # rightmost in G
-            # Assign integer hours decreasing to the left
-            hours = np.arange(len(G), dtype=np.float32)
-            hours = (now_hour - (hours.max() - hours))[::-1]
-            # Fit hour = a*x + b (robust linear model via least squares)
-            A = np.vstack([G, np.ones_like(G)]).T
-            sol, _, _, _ = np.linalg.lstsq(A, hours, rcond=None)
-            a, b = float(sol[0]), float(sol[1])
-            # Invert to get x at current hour
-            x_now_lin = a and int(round((now_hour - b) / a)) or right_guard
-            # Clamp into guards
-            x_now = int(np.clip(x_now_lin, left_day3, right_guard))
-
-    # Compute time in Tomsk local and map to x within day3 (full ROI geometry)
     now_tsst = tsst_now()
     hour_now = hour_float(now_tsst)
-    x_time = x_for_hour_in_day(x_day2, pph, hour_now)
+    x_time = x_for_hour_in_day(x_day2_time, pph, hour_now)
+    x_ideal = x_time
 
-    measured_bias_minutes = None; bias_minutes_applied = 0.0
+    measured_bias_minutes = None
+    bias_minutes_applied = 0.0
     fresh_ok = False
     if last_modified is not None:
-        age_min = (datetime.now(timezone.utc) - last_modified).total_seconds()/60.0
+        age_min = (datetime.now(timezone.utc) - last_modified).total_seconds() / 60.0
         fresh_ok = age_min < 45.0
+    edge_ok = (x1 - x_frontier) > (guard_px + 2)
 
-    left_guard  = x_day2 + 2
-    right_guard = min(x1f - 2, x_frontier - guard_px)
-
-    if fresh_ok:
+    if fresh_ok and edge_ok:
         lm_tsst = last_modified.astimezone(timezone(timedelta(hours=UTC_TO_TSST_HOURS)))
         lm_hour = hour_float(lm_tsst)
-        x_lm = x_for_hour_in_day(x_day2, pph, lm_hour)
+        x_lm = x_for_hour_in_day(x_day2_time, pph, lm_hour)
         dx_px = x_frontier - x_lm
         measured_bias_minutes = (dx_px / max(pph, 1e-6)) * 60.0
         if abs(measured_bias_minutes) <= float(accept_minutes):
             bias_minutes_applied = float(measured_bias_minutes)
 
-    x_ideal = int(round(x_time + (bias_minutes_applied/60.0)*pph))
-    if x_now is None:
-        right_guard = min(x1f - 2, x_frontier - guard_px)
-        x_now = int(np.clip(x_ideal, left_guard, right_guard))
+    x_ideal = int(round(x_time + (bias_minutes_applied / 60.0) * pph))
+    left_guard = x_day2_time + 2
+    right_guard = min(x1 - 2, x_frontier - guard_px)
+    guard_invalid = bool(right_guard <= left_guard + 10)
+
+    delta_px = right_guard - x_ideal
+    delta_min = (delta_px / max(pph, 1e-6)) * 60.0
+    if delta_min > float(DEFAULT_SNAP_THRESHOLD_MINUTES):
+        x_now_pre = right_guard
+        x_now_method = "snap_to_guard"
+    else:
+        x_now_pre = x_ideal
+        x_now_method = "ideal"
+
+    x_now = int(np.clip(x_now_pre, left_guard, right_guard))
+    if guard_invalid:
+        x_now = int(np.clip(right_guard, x0 + 2, x1 - 2))
+        x_now_method = "guard_invalid"
 
     age_hours = None
     if last_modified is not None:
-        age_hours = (datetime.now(timezone.utc) - last_modified).total_seconds()/3600.0
-    status = "ok" if (age_hours is None or age_hours <= float(stale_hours)) else "stale_source"
+        age_hours = (datetime.now(timezone.utc) - last_modified).total_seconds() / 3600.0
+    status = "ok"
+    if age_hours is not None and age_hours > float(stale_hours):
+        status = "stale_source"
+    if guard_invalid and status == "ok":
+        status = "no_recent_data"
 
     dbg = {
-        "x_day0": x_day0, "x_day1": x_day1, "x_day2": x_day2,
-        "day_w": day_w, "pph": pph, "pph_source": pph_src,
-        "x_frontier": x_frontier, "guard_px": guard_px,
-        "x_time": x_time, "x_ideal": x_ideal, "x_now": x_now,
-        "bias_minutes_applied": bias_minutes_applied,
-        "measured_bias_minutes": measured_bias_minutes,
-        "status": status,
-        "rebuild_from_ticks": rebuild_from_ticks,
+        "x_day0": x_day0,
+        "x_day1": x_day1,
+        "x_day2": x_day2,
+        "day_w": day_w,
+        "x_day0_time": x_day0_time,
+        "x_day1_time": x_day1_time,
+        "x_day2_time": x_day2_time,
+        "day_w_time": day_w_time,
+        "x_plot_end": x_plot_end,
+        "pph": pph,
+        "pph_source": pph_src,
         "pph_tick": pph_tick,
-        "tick_pph": pph_tick, "tick_count": tick_count,
-        "x_now_method": ("ticks_phase" if tick_cols and x_now is not None else "pph_guard"),
+        "tick_count": int(tick_count),
+        "tick_quality": float(tick_quality),
+        "tick_used": bool(pph_src == "ticks"),
+        "x_frontier": x_frontier,
+        "frontier_method": frontier_dbg.get("method"),
+        "frontier_activity_thr": frontier_dbg.get("activity_thr"),
+        "frontier_activity_right_tail": frontier_dbg.get("activity_right_tail"),
+        "frontier_activity_run_px": frontier_dbg.get("activity_run_px"),
+        "guard_px": guard_px,
+        "left_guard": left_guard,
+        "right_guard": right_guard,
+        "x_time": x_time,
+        "x_ideal": x_ideal,
+        "x_now": x_now,
+        "x_now_method": x_now_method,
+        "delta_min_to_guard": float(delta_min),
+        "bias_minutes_applied": float(bias_minutes_applied),
+        "measured_bias_minutes": measured_bias_minutes,
+        "age_hours": age_hours,
+        "status": status,
     }
     return x_now, dbg
 

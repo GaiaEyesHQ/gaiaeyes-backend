@@ -93,3 +93,14 @@ Behavior:
 - Exits `0` when either:
   - `F1` is plausible (`[7.2, 8.6]`), or
   - extraction is explicitly unusable with non-OK status
+
+## SOS70 Params Timing Alignment
+
+`bots/schumann/tomsk_sos70_params_extractor.py` now uses the same timing guard principles as `tomsk_extractor.py`:
+
+- Geometry-based day3 time anchor (`x_day2_time`) for `x_time`.
+- Activity-based frontier detection (color + texture) to avoid blank right-panel lock.
+- Adaptive frontier guard with snap-to-guard when ideal time is too far into unpainted area.
+- Auto-bias computed against `x_day2_time` when `Last-Modified` is fresh.
+
+This keeps `F/A/Q` parameter charts anchored at the same effective "now" position as the main Tomsk resonance extractor.
