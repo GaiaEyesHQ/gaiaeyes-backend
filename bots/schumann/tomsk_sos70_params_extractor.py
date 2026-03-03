@@ -27,6 +27,7 @@ ROI = (59, 31, 1539, 431)
 TICK_STRIP_H = 14
 RIGHT_EXCLUDE_PX = 70
 RIGHT_LOGO_SCAN_PX = 180
+RIGHT_PICK_SAFETY_PX = 24
 UTC_TO_TSST_HOURS = 7
 TICK_MIN_SEP = 8
 TICK_MIN_COUNT = 24
@@ -137,6 +138,17 @@ def resolve_plot_right_edge(x0, x1, x1_dyn):
     x1_eff = int(min(x1_static, x1_dyn_clamped))
     dyn_used = bool(x1_dyn_clamped <= x1_static)
     return x1_eff, x1_static, x1_dyn_clamped, dyn_used
+
+def safe_pick_x(x_now, roi, dbg, back_px, safety_px=RIGHT_PICK_SAFETY_PX):
+    """
+    Keep x-picking away from the far-right logo/legend zone while staying near x_now.
+    """
+    x0, _y0, x1, _y1 = roi
+    default_plot_end = max(x0 + 50, x1 - RIGHT_EXCLUDE_PX)
+    x_plot_end = int(dbg.get("x_plot_end", default_plot_end) or default_plot_end)
+    safe_right = int(np.clip(x_plot_end - int(safety_px), x0 + 2, x1 - 2))
+    x_pick = int(np.clip(min(int(x_now) - int(back_px), safe_right), x0 + 1, x1 - 2))
+    return x_pick, safe_right
 
 def fetch_image(url, timeout=30):
     r = requests.get(url, timeout=timeout, headers={"User-Agent":"Mozilla/5.0"})
@@ -492,7 +504,7 @@ def harmonize_x_now_across_charts(x_vals, dbg_vals, rois):
     dbg_vals["x_now_spread_hours"] = float(spread_hours)
     return out, dbg_vals
 
-def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq_max_hz=40.0):
+def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq_max_hz=40.0, x_right_limit=None):
     """
     For each series color, find y where HSV distance is minimal around x_now.
     Uses small per-series vertical windows for F (based on nominal Hz ranges) to avoid grid/legend.
@@ -500,7 +512,13 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
     """
     x0,y0,x1,y1 = roi
     x = int(np.clip(x_now, x0+1, x1-2))
+    xr = None
+    if x_right_limit is not None:
+        xr = int(np.clip(x_right_limit, x0 + 1, x1 - 2))
+        x = min(x, xr)
     lo = max(x0, x - band_px); hi = min(x1, x + band_px + 1)
+    if xr is not None:
+        hi = min(hi, xr + 1)
     # avoid chart borders: shrink vertical span slightly
     pad_top, pad_bot = 4, 18
     y0i = min(y1-1, y0 + pad_top)
@@ -695,25 +713,28 @@ def main():
     dbgF, dbgA, dbgQ = dbg_map["F"], dbg_map["A"], dbg_map["Q"]
 
     # Read traces slightly left of x_now to avoid right-edge repaint artifacts.
-    xF_pick = int(np.clip(xF - 2, roiF[0] + 1, roiF[2] - 2))
-    xF_pick_edge = int(np.clip(xF, roiF[0] + 1, roiF[2] - 2))
-    xA_pick = int(np.clip(xA - 4, roiA[0] + 1, roiA[2] - 2))
-    xQ_pick = int(np.clip(xQ - 4, roiQ[0] + 1, roiQ[2] - 2))
+    xF_pick, xF_safe_right = safe_pick_x(xF, roiF, dbgF, back_px=2)
+    xF_pick_edge = int(np.clip(min(xF, xF_safe_right), roiF[0] + 1, roiF[2] - 2))
+    xA_pick, xA_safe_right = safe_pick_x(xA, roiA, dbgA, back_px=4)
+    xQ_pick, xQ_safe_right = safe_pick_x(xQ, roiQ, dbgQ, back_px=4)
     dbgF["x_pick"] = xF_pick
     dbgF["x_pick_edge"] = xF_pick_edge
+    dbgF["x_pick_safe_right"] = xF_safe_right
     dbgA["x_pick"] = xA_pick
+    dbgA["x_pick_safe_right"] = xA_safe_right
     dbgQ["x_pick"] = xQ_pick
+    dbgQ["x_pick_safe_right"] = xQ_safe_right
 
-    picksF = pick_colored_lines_at_x(F_img, roiF, xF_pick, chart_type="F", band_px=3, freq_max_hz=float(args.freq_max_hz))
-    picksF_edge = pick_colored_lines_at_x(F_img, roiF, xF_pick_edge, chart_type="F", band_px=1, freq_max_hz=float(args.freq_max_hz))
+    picksF = pick_colored_lines_at_x(F_img, roiF, xF_pick, chart_type="F", band_px=3, freq_max_hz=float(args.freq_max_hz), x_right_limit=xF_safe_right)
+    picksF_edge = pick_colored_lines_at_x(F_img, roiF, xF_pick_edge, chart_type="F", band_px=1, freq_max_hz=float(args.freq_max_hz), x_right_limit=xF_safe_right)
     for k in ("F1", "F4"):
         if k in picksF_edge:
             picksF[k] = picksF_edge[k]
-    picksF, dbgF_path = refine_f1_f4_with_path_tracking(F_img, roiF, xF, picksF)
+    picksF, dbgF_path = refine_f1_f4_with_path_tracking(F_img, roiF, xF_pick_edge, picksF)
     if dbgF_path:
         dbgF.update(dbgF_path)
-    picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz))
-    picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz))
+    picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xA_safe_right)
+    picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xQ_safe_right)
 
     # overlays
     F_overlay = A_overlay = Q_overlay = None
