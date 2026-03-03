@@ -598,13 +598,19 @@ def main():
 
     # Read traces slightly left of x_now to avoid right-edge repaint artifacts.
     xF_pick = int(np.clip(xF - 2, roiF[0] + 1, roiF[2] - 2))
+    xF_pick_edge = int(np.clip(xF, roiF[0] + 1, roiF[2] - 2))
     xA_pick = int(np.clip(xA - 4, roiA[0] + 1, roiA[2] - 2))
     xQ_pick = int(np.clip(xQ - 4, roiQ[0] + 1, roiQ[2] - 2))
     dbgF["x_pick"] = xF_pick
+    dbgF["x_pick_edge"] = xF_pick_edge
     dbgA["x_pick"] = xA_pick
     dbgQ["x_pick"] = xQ_pick
 
     picksF = pick_colored_lines_at_x(F_img, roiF, xF_pick, chart_type="F", band_px=3, freq_max_hz=float(args.freq_max_hz))
+    picksF_edge = pick_colored_lines_at_x(F_img, roiF, xF_pick_edge, chart_type="F", band_px=1, freq_max_hz=float(args.freq_max_hz))
+    for k in ("F1", "F4"):
+        if k in picksF_edge:
+            picksF[k] = picksF_edge[k]
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz))
     picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz))
 
