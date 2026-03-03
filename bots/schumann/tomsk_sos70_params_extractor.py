@@ -149,6 +149,25 @@ def vertical_energy(gray):
     col = (gray.astype(np.float32)).mean(axis=0)
     return (col - col.min()) / (np.ptp(col) + 1e-6)
 
+def smooth_1d(arr, radius):
+    arr = np.asarray(arr, dtype=np.float32).ravel()
+    r = int(max(0, radius))
+    if arr.size <= 2 or r <= 0:
+        return arr.copy()
+    k = 2 * r + 1
+    kernel = np.ones(k, dtype=np.float32) / float(k)
+    return np.convolve(arr, kernel, mode="same")
+
+def normalize_robust(arr):
+    arr = np.asarray(arr, dtype=np.float32).ravel()
+    if arr.size == 0:
+        return arr
+    p10 = float(np.percentile(arr, 10))
+    p90 = float(np.percentile(arr, 90))
+    if (p90 - p10) < 1e-6:
+        return np.zeros_like(arr)
+    return np.clip((arr - p10) / (p90 - p10), 0.0, 1.0)
+
 def detect_tick_pph(img_bgr, roi, verbose=False):
     x0,y0,x1,y1 = roi
     if x1 - x0 < 10:
