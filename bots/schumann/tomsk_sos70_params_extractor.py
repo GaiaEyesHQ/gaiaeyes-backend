@@ -122,6 +122,22 @@ def detect_right_logo_margin(img_bgr, roi, scan_px=RIGHT_LOGO_SCAN_PX):
             return max(x0 + 50, min(x1 - 2, int(x1_new)))
     return x1
 
+def resolve_plot_right_edge(x0, x1, x1_dyn):
+    """
+    Resolve the right plotting edge without double-cutting.
+    - static cut: fixed margin to avoid legend/logo area
+    - dynamic cut: logo detector
+    Dynamic cut is ignored if it clips too far beyond the static cut.
+    """
+    x1_static = int(max(x0 + 50, x1 - RIGHT_EXCLUDE_PX))
+    x1_dyn_clamped = int(np.clip(int(x1_dyn), x0 + 50, x1))
+    # Guard against aggressive dynamic trims into valid data.
+    if x1_dyn_clamped < (x1_static - 25):
+        return x1_static, x1_static, x1_dyn_clamped, False
+    x1_eff = int(min(x1_static, x1_dyn_clamped))
+    dyn_used = bool(x1_dyn_clamped <= x1_static)
+    return x1_eff, x1_static, x1_dyn_clamped, dyn_used
+
 def fetch_image(url, timeout=30):
     r = requests.get(url, timeout=timeout, headers={"User-Agent":"Mozilla/5.0"})
     r.raise_for_status()
@@ -252,8 +268,7 @@ def estimate_day_boundaries(img_bgr, roi):
 def detect_frontier(img_bgr, roi, return_debug=False):
     x0, y0, x1, y1 = roi
     x1_dyn = detect_right_logo_margin(img_bgr, roi)
-    x_plot = min(x1, x1_dyn)
-    x1_eff = max(x0 + 50, x_plot - RIGHT_EXCLUDE_PX)
+    x1_eff, x1_static, x1_dyn_clamped, dyn_used = resolve_plot_right_edge(x0, x1, x1_dyn)
     crop = img_bgr[y0:y1, x0:x1_eff]
     if crop.size == 0:
         frontier = x0
@@ -315,7 +330,9 @@ def detect_frontier(img_bgr, roi, return_debug=False):
         "activity_right_tail": right_tail,
         "activity_run_px": int(run),
         "x1_eff": int(x1_eff),
-        "x1_dyn": int(x1_dyn),
+        "x1_static": int(x1_static),
+        "x1_dyn": int(x1_dyn_clamped),
+        "x1_dyn_used": bool(dyn_used),
     }
     return (frontier, dbg) if return_debug else frontier
 
@@ -329,8 +346,8 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
 
     # Timing uses geometry-derived day boundaries from the plotting area width.
     x1_dyn = detect_right_logo_margin(img_bgr, (x0, y0, x1, y1))
-    x_plot_end = min(x1, x1_dyn)
-    x1_eff = max(x0 + 50, x_plot_end - RIGHT_EXCLUDE_PX)
+    x1_eff, x1_static, x1_dyn_clamped, dyn_used = resolve_plot_right_edge(x0, x1, x1_dyn)
+    x_plot_end = x1_eff
     w_time = float(x1_eff - x0)
     day_w_time = w_time / 3.0
     x_day0_time = x0
@@ -418,6 +435,9 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
         "x_day2_time": x_day2_time,
         "day_w_time": day_w_time,
         "x_plot_end": x_plot_end,
+        "x1_static": x1_static,
+        "x1_dyn": x1_dyn_clamped,
+        "x1_dyn_used": bool(dyn_used),
         "pph": pph,
         "pph_source": pph_src,
         "pph_tick": pph_tick,
@@ -546,6 +566,84 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
         results[series_name] = {"y_px": int(y_pix), "y_norm": float(y_norm), "draw": bgr_draw}
     return results
 
+def refine_f1_f4_with_path_tracking(img_bgr, roi, x_now, picks):
+    """
+    Refine F1/F4 by tracking a smooth path across the last few x-columns into x_now.
+    This reduces right-edge mis-picks when local color minima jump between nearby lanes.
+    """
+    x0, y0, x1, y1 = roi
+    pad_top, pad_bot = 4, 18
+    y0i = min(y1 - 1, y0 + pad_top)
+    y1i = max(y0i + 1, y1 - pad_bot)
+    x_lo = int(np.clip(x_now - 10, x0 + 1, x1 - 2))
+    x_hi = int(np.clip(x_now + 1, x0 + 1, x1 - 2))
+    if x_hi <= x_lo:
+        return picks, {}
+
+    crop = img_bgr[y0i:y1i, x_lo:x_hi+1, :]
+    if crop.size == 0:
+        return picks, {}
+
+    crop_hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    H = int(crop.shape[0])
+    W = int(crop.shape[1])
+    target_col = int(np.clip(x_now - x_lo, 0, W - 1))
+    lane_norm = {"F1": (0.02, 0.22), "F4": (0.60, 0.76)}
+    series_meta = {
+        "F1": {"label": "white", "rgb": (240, 240, 240), "smooth": 0.45},
+        "F4": {"label": "green", "rgb": (40, 160, 60), "smooth": 0.35},
+    }
+    dbg = {}
+
+    for name in ("F1", "F4"):
+        if name not in picks:
+            continue
+        meta = series_meta[name]
+        n_lo, n_hi = lane_norm[name]
+        h = float(y1i - y0i)
+        wy0c = int(np.clip(round(n_lo * h), 0, H - 1))
+        wy1c = int(np.clip(round(n_hi * h), 0, H - 1))
+        if wy1c <= wy0c + 1:
+            continue
+
+        tgt_hsv = bgr_to_hsv_color((meta["rgb"][2], meta["rgb"][1], meta["rgb"][0]))
+        cost = np.zeros((H, W), dtype=np.float32)
+        for c in range(W):
+            col_cost = hsv_row_distance(crop_hsv[:, c:c+1, :], tgt_hsv, meta["label"]).astype(np.float32).ravel()
+            cost[:, c] = col_cost
+
+        # Keep tracker inside the expected lane.
+        outside = np.ones(H, dtype=np.float32) * 8.0
+        outside[wy0c:wy1c+1] = 0.0
+        cost += outside[:, None]
+        cost = cv2.GaussianBlur(cost, (1, 5), 0)
+
+        max_step = 3
+        smooth = float(meta["smooth"])
+        dp = np.full((W, H), 1e9, dtype=np.float32)
+        dp[0, :] = cost[:, 0]
+        for c in range(1, W):
+            prev = dp[c - 1, :]
+            for y in range(H):
+                lo = max(0, y - max_step)
+                hi = min(H - 1, y + max_step)
+                ys = np.arange(lo, hi + 1, dtype=np.int16)
+                vals = prev[lo:hi+1] + smooth * np.abs(ys.astype(np.float32) - float(y))
+                j = int(np.argmin(vals))
+                dp[c, y] = cost[y, c] + vals[j]
+
+        y_best = int(np.argmin(dp[target_col, :]))
+        y_pix = int(y0i + y_best)
+        y_norm = (y_pix - y0i) / max(1.0, float(y1i - y0i))
+        picks[name]["y_px"] = int(y_pix)
+        picks[name]["y_norm"] = float(y_norm)
+
+        dbg[f"{name.lower()}_path_x_range"] = [int(x_lo), int(x_hi)]
+        dbg[f"{name.lower()}_path_target_col"] = int(target_col)
+        dbg[f"{name.lower()}_path_y_px"] = int(y_pix)
+
+    return picks, dbg
+
 def draw_overlay_with_picks(img_bgr, roi, x_now, picks, title, chart_type="F"):
     out = img_bgr.copy()
     x0,y0,x1,y1 = roi
@@ -611,6 +709,9 @@ def main():
     for k in ("F1", "F4"):
         if k in picksF_edge:
             picksF[k] = picksF_edge[k]
+    picksF, dbgF_path = refine_f1_f4_with_path_tracking(F_img, roiF, xF, picksF)
+    if dbgF_path:
+        dbgF.update(dbgF_path)
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz))
     picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz))
 
