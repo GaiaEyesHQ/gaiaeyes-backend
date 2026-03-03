@@ -530,11 +530,13 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
             mask = np.ones_like(row_cost) * 10.0
             mask[wy0c:wy1c+1] = 0.0
             row_cost = row_cost + mask
-            # Mild center bias inside the valid window to reduce edge/grid snaps.
-            c = 0.5 * (wy0c + wy1c)
-            span = max(3.0, 0.5 * (wy1c - wy0c))
-            ridx = np.arange(row_cost.size, dtype=np.float32)
-            row_cost = row_cost + 0.10 * ((ridx - c) / span) ** 2
+            # Mild center bias inside the valid window; disabled for F where it caused drift.
+            bias_weight = 0.0 if chart_type == "F" else 0.10
+            if bias_weight > 0.0:
+                c = 0.5 * (wy0c + wy1c)
+                span = max(3.0, 0.5 * (wy1c - wy0c))
+                ridx = np.arange(row_cost.size, dtype=np.float32)
+                row_cost = row_cost + bias_weight * ((ridx - c) / span) ** 2
 
         # Light median filter to stabilize row cost.
         row_cost = cv2.blur(row_cost.reshape(-1,1), (1,5)).ravel()
@@ -595,14 +597,14 @@ def main():
     dbgF, dbgA, dbgQ = dbg_map["F"], dbg_map["A"], dbg_map["Q"]
 
     # Read traces slightly left of x_now to avoid right-edge repaint artifacts.
-    xF_pick = int(np.clip(xF - 4, roiF[0] + 1, roiF[2] - 2))
+    xF_pick = int(np.clip(xF - 2, roiF[0] + 1, roiF[2] - 2))
     xA_pick = int(np.clip(xA - 4, roiA[0] + 1, roiA[2] - 2))
     xQ_pick = int(np.clip(xQ - 4, roiQ[0] + 1, roiQ[2] - 2))
     dbgF["x_pick"] = xF_pick
     dbgA["x_pick"] = xA_pick
     dbgQ["x_pick"] = xQ_pick
 
-    picksF = pick_colored_lines_at_x(F_img, roiF, xF_pick, chart_type="F", band_px=5, freq_max_hz=float(args.freq_max_hz))
+    picksF = pick_colored_lines_at_x(F_img, roiF, xF_pick, chart_type="F", band_px=3, freq_max_hz=float(args.freq_max_hz))
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz))
     picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz))
 
