@@ -497,17 +497,10 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
     # Convert band to HSV once
     crop_hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
 
-    # Helper to convert Hz ranges to row indices (for F windows)
-    def hz_to_row_bounds(hz_lo, hz_hi):
-        y_lo = int(round(y0i + (hz_lo/freq_max_hz) * (y1i - y0i)))
-        y_hi = int(round(y0i + (hz_hi/freq_max_hz) * (y1i - y0i)))
-        y_lo, y_hi = sorted((max(y0i, y_lo), min(y1i-1, y_hi)))
-        return y_lo, y_hi
-
     # Chart-specific normalized row windows to avoid grid/legend false positives.
     # These bands follow stable visual lanes on SOS70 parameter plots.
     lane_windows = {
-        "F": {"F1": (0.03, 0.24), "F2": (0.18, 0.44), "F3": (0.38, 0.62), "F4": (0.58, 0.86)},
+        "F": {"F1": (0.02, 0.22), "F2": (0.24, 0.42), "F3": (0.43, 0.59), "F4": (0.60, 0.76)},
         "A": {"A1": (0.03, 0.32), "A2": (0.20, 0.54), "A3": (0.42, 0.76), "A4": (0.68, 0.98)},
         "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.99)},
     }
@@ -520,13 +513,6 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
         y_hi = max(y0i, min(y1i - 1, y_hi))
         return (min(y_lo, y_hi), max(y_lo, y_hi))
 
-    f_windows = {
-        "F1": hz_to_row_bounds(6.8, 8.9),
-        "F2": hz_to_row_bounds(12.5, 16.5),
-        "F3": hz_to_row_bounds(18.5, 22.8),
-        "F4": hz_to_row_bounds(24.5, 27.8),
-    }
-
     results = {}
     for key, (label, rgb, bgr_draw, f_lbl, a_lbl, q_lbl) in SERIES.items():
         series_name = {"F": f_lbl, "A": a_lbl, "Q": q_lbl}[chart_type]
@@ -535,11 +521,8 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
         row_cost = hsv_row_distance(crop_hsv, tgt_hsv, label)
 
         # Apply lane windowing to avoid wrong traces.
-        if chart_type == "F":
-            wy0, wy1 = f_windows[series_name]
-        else:
-            n_lo, n_hi = lane_windows[chart_type][series_name]
-            wy0, wy1 = norm_window_to_rows(n_lo, n_hi)
+        n_lo, n_hi = lane_windows[chart_type][series_name]
+        wy0, wy1 = norm_window_to_rows(n_lo, n_hi)
 
         wy0c = max(0, wy0 - y0)
         wy1c = min(crop.shape[0] - 1, wy1 - y0)
@@ -553,9 +536,31 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
             ridx = np.arange(row_cost.size, dtype=np.float32)
             row_cost = row_cost + 0.10 * ((ridx - c) / span) ** 2
 
+        # F chart benefits from per-column robust picking because adjacent traces can crowd.
+        y_hint = None
+        if chart_type == "F" and crop_hsv.shape[1] >= 3 and wy1c > wy0c:
+            y_cols = []
+            for col in range(crop_hsv.shape[1]):
+                col_cost = hsv_row_distance(crop_hsv[:, col:col+1, :], tgt_hsv, label)
+                col_mask = np.ones_like(col_cost) * 10.0
+                col_mask[wy0c:wy1c+1] = 0.0
+                col_cost = col_cost + col_mask
+                col_cost = cv2.blur(col_cost.reshape(-1, 1), (1, 3)).ravel()
+                y_cols.append(int(np.argmin(col_cost)))
+            if y_cols:
+                y_hint = int(round(float(np.median(np.array(y_cols, dtype=np.float32)))))
+
         # Light median filter to stabilize row cost
         row_cost = cv2.blur(row_cost.reshape(-1,1), (1,5)).ravel()
-        y_rel = int(np.argmin(row_cost))
+        if y_hint is not None:
+            lo = max(wy0c, y_hint - 6)
+            hi = min(wy1c, y_hint + 6)
+            if hi > lo:
+                y_rel = int(lo + np.argmin(row_cost[lo:hi+1]))
+            else:
+                y_rel = int(np.argmin(row_cost))
+        else:
+            y_rel = int(np.argmin(row_cost))
         y_pix = y0i + y_rel
         y_norm = (y_pix - y0i) / max(1.0, (y1i - y0i))
         results[series_name] = {"y_px": int(y_pix), "y_norm": float(y_norm), "draw": bgr_draw}
