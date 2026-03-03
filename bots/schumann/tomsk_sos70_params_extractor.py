@@ -616,6 +616,23 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
         results[series_name] = {"y_px": int(y_pix), "y_norm": float(y_norm), "draw": bgr_draw}
     return results
 
+def blend_picks(picks_a, picks_b, roi, weight_a=0.7):
+    x0, y0, x1, y1 = roi
+    y0i = min(y1 - 1, y0 + 4)
+    y1i = max(y0i + 1, y1 - 18)
+    out = {}
+    wa = float(np.clip(weight_a, 0.0, 1.0))
+    wb = 1.0 - wa
+    for k, va in picks_a.items():
+        vb = picks_b.get(k, va)
+        y_a = int(va.get("y_px", y0i))
+        y_b = int(vb.get("y_px", y_a))
+        y_blend = int(round(wa * y_a + wb * y_b))
+        y_blend = int(np.clip(y_blend, y0i, y1i - 1))
+        y_norm = (y_blend - y0i) / max(1.0, (y1i - y0i))
+        out[k] = {"y_px": int(y_blend), "y_norm": float(y_norm), "draw": va.get("draw")}
+    return out
+
 def draw_overlay_with_picks(img_bgr, roi, x_now, picks, title, chart_type="F"):
     out = img_bgr.copy()
     x0,y0,x1,y1 = roi
@@ -667,14 +684,30 @@ def main():
     dbgF, dbgA, dbgQ = dbg_map["F"], dbg_map["A"], dbg_map["Q"]
 
     # Read traces slightly left of x_now to avoid right-edge repaint artifacts.
-    xF_pick = int(np.clip(xF - 7, roiF[0] + 1, roiF[2] - 2))
+    xF_pick = int(np.clip(xF - 1, roiF[0] + 1, roiF[2] - 2))
+    xF_pick_backup = int(np.clip(xF - 5, roiF[0] + 1, roiF[2] - 2))
     xA_pick = int(np.clip(xA - 4, roiA[0] + 1, roiA[2] - 2))
     xQ_pick = int(np.clip(xQ - 4, roiQ[0] + 1, roiQ[2] - 2))
     dbgF["x_pick"] = xF_pick
+    dbgF["x_pick_backup"] = xF_pick_backup
     dbgA["x_pick"] = xA_pick
     dbgQ["x_pick"] = xQ_pick
 
-    picksF = pick_colored_lines_at_x(F_img, roiF, xF_pick, chart_type="F", band_px=4, freq_max_hz=float(args.freq_max_hz))
+    picksF_now = pick_colored_lines_at_x(F_img, roiF, xF_pick, chart_type="F", band_px=2, freq_max_hz=float(args.freq_max_hz))
+    picksF_back = pick_colored_lines_at_x(F_img, roiF, xF_pick_backup, chart_type="F", band_px=4, freq_max_hz=float(args.freq_max_hz))
+    picksF = blend_picks(picksF_now, picksF_back, roiF, weight_a=0.65)
+    # F1/F4 track sharp right-edge changes better with stronger near-now weighting.
+    for k in ("F1", "F4"):
+        if k in picksF_now and k in picksF_back:
+            y_n = int(picksF_now[k]["y_px"])
+            y_b = int(picksF_back[k]["y_px"])
+            y_blend = int(round(0.82 * y_n + 0.18 * y_b))
+            y0i = min(roiF[3] - 1, roiF[1] + 4)
+            y1i = max(y0i + 1, roiF[3] - 18)
+            y_blend = int(np.clip(y_blend, y0i, y1i - 1))
+            y_norm = (y_blend - y0i) / max(1.0, (y1i - y0i))
+            picksF[k]["y_px"] = y_blend
+            picksF[k]["y_norm"] = float(y_norm)
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz))
     picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz))
 
