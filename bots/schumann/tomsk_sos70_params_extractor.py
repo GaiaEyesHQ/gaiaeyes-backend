@@ -524,8 +524,8 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
         n_lo, n_hi = lane_windows[chart_type][series_name]
         wy0, wy1 = norm_window_to_rows(n_lo, n_hi)
 
-        wy0c = max(0, wy0 - y0)
-        wy1c = min(crop.shape[0] - 1, wy1 - y0)
+        wy0c = max(0, wy0 - y0i)
+        wy1c = min(crop.shape[0] - 1, wy1 - y0i)
         if wy1c > wy0c:
             mask = np.ones_like(row_cost) * 10.0
             mask[wy0c:wy1c+1] = 0.0
@@ -535,6 +535,32 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
             span = max(3.0, 0.5 * (wy1c - wy0c))
             ridx = np.arange(row_cost.size, dtype=np.float32)
             row_cost = row_cost + 0.10 * ((ridx - c) / span) ** 2
+
+        # F1/F4 need tighter color-specific anchoring; generic HSV distance drifts on these.
+        special_y = None
+        if chart_type == "F" and series_name in ("F1", "F4") and wy1c > wy0c and crop.shape[1] >= 3:
+            cx = int(crop.shape[1] // 2)
+            sx0 = max(0, cx - 1)
+            sx1 = min(crop.shape[1], cx + 2)
+            stripe_hsv = crop_hsv[:, sx0:sx1, :].astype(np.float32)
+            stripe_bgr = crop[:, sx0:sx1, :].astype(np.float32)
+
+            if series_name == "F1":
+                # White trace: high V with lower S.
+                score = (stripe_hsv[:, :, 2] / 255.0) - 0.60 * (stripe_hsv[:, :, 1] / 255.0)
+                score = score.mean(axis=1)
+            else:
+                # Green trace: strong G dominance over R/B.
+                b = stripe_bgr[:, :, 0]
+                g = stripe_bgr[:, :, 1]
+                r = stripe_bgr[:, :, 2]
+                score = ((g - 0.65 * r - 0.65 * b) / 255.0).mean(axis=1)
+
+            score = cv2.GaussianBlur(score.reshape(-1, 1), (1, 7), 0).ravel()
+            score_masked = np.full_like(score, -1e9, dtype=np.float32)
+            score_masked[wy0c:wy1c+1] = score[wy0c:wy1c+1]
+            if float(np.max(score_masked)) > -1e8:
+                special_y = int(np.argmax(score_masked))
 
         # F chart benefits from per-column robust picking because adjacent traces can crowd.
         y_hint = None
@@ -555,7 +581,14 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
 
         # Light median filter to stabilize row cost
         row_cost = cv2.blur(row_cost.reshape(-1,1), (1,5)).ravel()
-        if y_center is not None:
+        if special_y is not None:
+            lo = max(wy0c, special_y - 4)
+            hi = min(wy1c, special_y + 4)
+            if hi > lo:
+                y_rel = int(lo + np.argmin(row_cost[lo:hi+1]))
+            else:
+                y_rel = int(special_y)
+        elif y_center is not None:
             target = int(y_center if y_hint is None else round(0.65 * y_center + 0.35 * y_hint))
             lo = max(wy0c, target - 5)
             hi = min(wy1c, target + 5)
