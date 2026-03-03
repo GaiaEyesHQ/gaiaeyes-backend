@@ -444,6 +444,34 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
     }
     return x_now, dbg
 
+def harmonize_x_now_across_charts(x_vals, dbg_vals, rois):
+    """
+    Keep F/A/Q aligned in time when one chart drifts.
+    If spread is > ~2 chart-hours, snap all to median x.
+    """
+    xs = [int(x_vals["F"]), int(x_vals["A"]), int(x_vals["Q"])]
+    spread_px = int(max(xs) - min(xs))
+    pphs = [float(dbg_vals[k].get("pph", 0.0) or 0.0) for k in ("F", "A", "Q")]
+    pph_ref = float(np.median([p for p in pphs if p > 0.0])) if any(p > 0.0 for p in pphs) else 18.0
+    spread_hours = float(spread_px / max(pph_ref, 1e-6))
+    threshold_hours = 2.0
+    harmonized = spread_hours > threshold_hours
+    x_median = int(round(float(np.median(xs))))
+
+    out = dict(x_vals)
+    if harmonized:
+        for key in ("F", "A", "Q"):
+            x0, _y0, x1, _y1 = rois[key]
+            out[key] = int(np.clip(x_median, x0 + 2, x1 - 2))
+            dbg_vals[key]["x_now_before_harmonize"] = int(x_vals[key])
+            dbg_vals[key]["x_now"] = int(out[key])
+            dbg_vals[key]["x_now_method"] = "harmonized_median"
+        dbg_vals["shared_x_now"] = int(x_median)
+    dbg_vals["x_now_harmonized"] = bool(harmonized)
+    dbg_vals["x_now_spread_px"] = int(spread_px)
+    dbg_vals["x_now_spread_hours"] = float(spread_hours)
+    return out, dbg_vals
+
 def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq_max_hz=40.0):
     """
     For each series color, find y where HSV distance is minimal around x_now.
@@ -476,7 +504,22 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
         y_lo, y_hi = sorted((max(y0i, y_lo), min(y1i-1, y_hi)))
         return y_lo, y_hi
 
-    # nominal vertical windows for F1..F4 (SOS70 chart label-aligned)
+    # Chart-specific normalized row windows to avoid grid/legend false positives.
+    # These bands follow stable visual lanes on SOS70 parameter plots.
+    lane_windows = {
+        "F": {"F1": (0.03, 0.24), "F2": (0.18, 0.44), "F3": (0.38, 0.62), "F4": (0.58, 0.86)},
+        "A": {"A1": (0.03, 0.32), "A2": (0.20, 0.54), "A3": (0.42, 0.76), "A4": (0.68, 0.98)},
+        "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.99)},
+    }
+
+    def norm_window_to_rows(norm_lo, norm_hi):
+        h = max(1.0, float(y1i - y0i))
+        y_lo = int(round(y0i + float(norm_lo) * h))
+        y_hi = int(round(y0i + float(norm_hi) * h))
+        y_lo = max(y0i, min(y1i - 1, y_lo))
+        y_hi = max(y0i, min(y1i - 1, y_hi))
+        return (min(y_lo, y_hi), max(y_lo, y_hi))
+
     f_windows = {
         "F1": hz_to_row_bounds(6.8, 8.9),
         "F2": hz_to_row_bounds(12.5, 16.5),
@@ -491,16 +534,24 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
         tgt_hsv = bgr_to_hsv_color((rgb[2], rgb[1], rgb[0]))  # convert from RGB->BGR then to HSV
         row_cost = hsv_row_distance(crop_hsv, tgt_hsv, label)
 
-        # Apply windowing for F to avoid wrong trace
+        # Apply lane windowing to avoid wrong traces.
         if chart_type == "F":
-            wy0, wy1 = f_windows[series_name]  # absolute image coords
-            # convert to crop row indices
-            wy0c = max(0, wy0 - y0); wy1c = min(crop.shape[0]-1, wy1 - y0)
-            if wy1c > wy0c:
-                # penalize outside window
-                mask = np.ones_like(row_cost) * 10.0
-                mask[wy0c:wy1c+1] = 0.0
-                row_cost = row_cost + mask
+            wy0, wy1 = f_windows[series_name]
+        else:
+            n_lo, n_hi = lane_windows[chart_type][series_name]
+            wy0, wy1 = norm_window_to_rows(n_lo, n_hi)
+
+        wy0c = max(0, wy0 - y0)
+        wy1c = min(crop.shape[0] - 1, wy1 - y0)
+        if wy1c > wy0c:
+            mask = np.ones_like(row_cost) * 10.0
+            mask[wy0c:wy1c+1] = 0.0
+            row_cost = row_cost + mask
+            # Mild center bias inside the valid window to reduce edge/grid snaps.
+            c = 0.5 * (wy0c + wy1c)
+            span = max(3.0, 0.5 * (wy1c - wy0c))
+            ridx = np.arange(row_cost.size, dtype=np.float32)
+            row_cost = row_cost + 0.10 * ((ridx - c) / span) ** 2
 
         # Light median filter to stabilize row cost
         row_cost = cv2.blur(row_cost.reshape(-1,1), (1,5)).ravel()
@@ -551,6 +602,14 @@ def main():
     xF, dbgF = compute_x_now(F_img, roiF, last_modified=F_lm_dt, verbose=args.verbose)
     xA, dbgA = compute_x_now(A_img, roiA, last_modified=A_lm_dt, verbose=args.verbose)
     xQ, dbgQ = compute_x_now(Q_img, roiQ, last_modified=Q_lm_dt, verbose=args.verbose)
+
+    x_map, dbg_map = harmonize_x_now_across_charts(
+        x_vals={"F": xF, "A": xA, "Q": xQ},
+        dbg_vals={"F": dbgF, "A": dbgA, "Q": dbgQ},
+        rois={"F": roiF, "A": roiA, "Q": roiQ},
+    )
+    xF, xA, xQ = x_map["F"], x_map["A"], x_map["Q"]
+    dbgF, dbgA, dbgQ = dbg_map["F"], dbg_map["A"], dbg_map["Q"]
 
     picksF = pick_colored_lines_at_x(F_img, roiF, xF, chart_type="F", band_px=5, freq_max_hz=float(args.freq_max_hz))
     picksA = pick_colored_lines_at_x(A_img, roiA, xA, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz))
