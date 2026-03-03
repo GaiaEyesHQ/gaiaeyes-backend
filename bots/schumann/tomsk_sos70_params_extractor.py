@@ -536,102 +536,13 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
             ridx = np.arange(row_cost.size, dtype=np.float32)
             row_cost = row_cost + 0.10 * ((ridx - c) / span) ** 2
 
-        # F1/F4 need tighter color-specific anchoring; generic HSV distance drifts on these.
-        special_y = None
-        if chart_type == "F" and series_name in ("F1", "F4") and wy1c > wy0c and crop.shape[1] >= 3:
-            cx = int(crop.shape[1] // 2)
-            sx0 = max(0, cx - 1)
-            sx1 = min(crop.shape[1], cx + 2)
-
-            if series_name == "F1":
-                # White trace affinity: high value and relatively low saturation.
-                score_map = (crop_hsv[:, :, 2] / 255.0) - 0.58 * (crop_hsv[:, :, 1] / 255.0)
-            else:
-                # Green trace affinity: green channel dominance over red/blue.
-                b = crop[:, :, 0].astype(np.float32)
-                g = crop[:, :, 1].astype(np.float32)
-                r = crop[:, :, 2].astype(np.float32)
-                score_map = (g - 0.62 * r - 0.62 * b) / 255.0
-
-            # Remove row-static bias (grid/horizontal structures) by subtracting per-row baseline.
-            row_baseline = np.median(score_map, axis=1)
-            center_score = np.mean(score_map[:, sx0:sx1], axis=1)
-            anomaly = center_score - row_baseline
-            anomaly = cv2.GaussianBlur(anomaly.reshape(-1, 1), (1, 7), 0).ravel()
-
-            # Fallback if anomaly is very flat.
-            if float(np.max(anomaly) - np.min(anomaly)) < 0.01:
-                anomaly = cv2.GaussianBlur(center_score.reshape(-1, 1), (1, 7), 0).ravel()
-
-            score_masked = np.full_like(anomaly, -1e9, dtype=np.float32)
-            score_masked[wy0c:wy1c+1] = anomaly[wy0c:wy1c+1]
-            if float(np.max(score_masked)) > -1e8:
-                special_y = int(np.argmax(score_masked))
-
-        # F chart benefits from per-column robust picking because adjacent traces can crowd.
-        y_hint = None
-        y_center = None
-        if chart_type == "F" and crop_hsv.shape[1] >= 3 and wy1c > wy0c:
-            y_cols = []
-            for col in range(crop_hsv.shape[1]):
-                col_cost = hsv_row_distance(crop_hsv[:, col:col+1, :], tgt_hsv, label)
-                col_mask = np.ones_like(col_cost) * 10.0
-                col_mask[wy0c:wy1c+1] = 0.0
-                col_cost = col_cost + col_mask
-                col_cost = cv2.blur(col_cost.reshape(-1, 1), (1, 3)).ravel()
-                y_cols.append(int(np.argmin(col_cost)))
-                if col == (crop_hsv.shape[1] // 2):
-                    y_center = int(np.argmin(col_cost))
-            if y_cols:
-                y_hint = int(round(float(np.median(np.array(y_cols, dtype=np.float32)))))
-
-        # Light median filter to stabilize row cost
+        # Light median filter to stabilize row cost.
         row_cost = cv2.blur(row_cost.reshape(-1,1), (1,5)).ravel()
-        if special_y is not None:
-            lo = max(wy0c, special_y - 4)
-            hi = min(wy1c, special_y + 4)
-            if hi > lo:
-                y_rel = int(lo + np.argmin(row_cost[lo:hi+1]))
-            else:
-                y_rel = int(special_y)
-        elif y_center is not None:
-            target = int(y_center if y_hint is None else round(0.65 * y_center + 0.35 * y_hint))
-            lo = max(wy0c, target - 5)
-            hi = min(wy1c, target + 5)
-            if hi > lo:
-                y_rel = int(lo + np.argmin(row_cost[lo:hi+1]))
-            else:
-                y_rel = int(np.argmin(row_cost))
-        elif y_hint is not None:
-            lo = max(wy0c, y_hint - 6)
-            hi = min(wy1c, y_hint + 6)
-            if hi > lo:
-                y_rel = int(lo + np.argmin(row_cost[lo:hi+1]))
-            else:
-                y_rel = int(np.argmin(row_cost))
-        else:
-            y_rel = int(np.argmin(row_cost))
+        y_rel = int(np.argmin(row_cost))
         y_pix = y0i + y_rel
         y_norm = (y_pix - y0i) / max(1.0, (y1i - y0i))
         results[series_name] = {"y_px": int(y_pix), "y_norm": float(y_norm), "draw": bgr_draw}
     return results
-
-def blend_picks(picks_a, picks_b, roi, weight_a=0.7):
-    x0, y0, x1, y1 = roi
-    y0i = min(y1 - 1, y0 + 4)
-    y1i = max(y0i + 1, y1 - 18)
-    out = {}
-    wa = float(np.clip(weight_a, 0.0, 1.0))
-    wb = 1.0 - wa
-    for k, va in picks_a.items():
-        vb = picks_b.get(k, va)
-        y_a = int(va.get("y_px", y0i))
-        y_b = int(vb.get("y_px", y_a))
-        y_blend = int(round(wa * y_a + wb * y_b))
-        y_blend = int(np.clip(y_blend, y0i, y1i - 1))
-        y_norm = (y_blend - y0i) / max(1.0, (y1i - y0i))
-        out[k] = {"y_px": int(y_blend), "y_norm": float(y_norm), "draw": va.get("draw")}
-    return out
 
 def draw_overlay_with_picks(img_bgr, roi, x_now, picks, title, chart_type="F"):
     out = img_bgr.copy()
@@ -684,30 +595,14 @@ def main():
     dbgF, dbgA, dbgQ = dbg_map["F"], dbg_map["A"], dbg_map["Q"]
 
     # Read traces slightly left of x_now to avoid right-edge repaint artifacts.
-    xF_pick = int(np.clip(xF - 1, roiF[0] + 1, roiF[2] - 2))
-    xF_pick_backup = int(np.clip(xF - 5, roiF[0] + 1, roiF[2] - 2))
+    xF_pick = int(np.clip(xF - 4, roiF[0] + 1, roiF[2] - 2))
     xA_pick = int(np.clip(xA - 4, roiA[0] + 1, roiA[2] - 2))
     xQ_pick = int(np.clip(xQ - 4, roiQ[0] + 1, roiQ[2] - 2))
     dbgF["x_pick"] = xF_pick
-    dbgF["x_pick_backup"] = xF_pick_backup
     dbgA["x_pick"] = xA_pick
     dbgQ["x_pick"] = xQ_pick
 
-    picksF_now = pick_colored_lines_at_x(F_img, roiF, xF_pick, chart_type="F", band_px=2, freq_max_hz=float(args.freq_max_hz))
-    picksF_back = pick_colored_lines_at_x(F_img, roiF, xF_pick_backup, chart_type="F", band_px=4, freq_max_hz=float(args.freq_max_hz))
-    picksF = blend_picks(picksF_now, picksF_back, roiF, weight_a=0.65)
-    # F1/F4 track sharp right-edge changes better with stronger near-now weighting.
-    for k in ("F1", "F4"):
-        if k in picksF_now and k in picksF_back:
-            y_n = int(picksF_now[k]["y_px"])
-            y_b = int(picksF_back[k]["y_px"])
-            y_blend = int(round(0.82 * y_n + 0.18 * y_b))
-            y0i = min(roiF[3] - 1, roiF[1] + 4)
-            y1i = max(y0i + 1, roiF[3] - 18)
-            y_blend = int(np.clip(y_blend, y0i, y1i - 1))
-            y_norm = (y_blend - y0i) / max(1.0, (y1i - y0i))
-            picksF[k]["y_px"] = y_blend
-            picksF[k]["y_norm"] = float(y_norm)
+    picksF = pick_colored_lines_at_x(F_img, roiF, xF_pick, chart_type="F", band_px=5, freq_max_hz=float(args.freq_max_hz))
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz))
     picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz))
 
