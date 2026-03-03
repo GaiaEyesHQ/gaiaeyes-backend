@@ -542,23 +542,29 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
             cx = int(crop.shape[1] // 2)
             sx0 = max(0, cx - 1)
             sx1 = min(crop.shape[1], cx + 2)
-            stripe_hsv = crop_hsv[:, sx0:sx1, :].astype(np.float32)
-            stripe_bgr = crop[:, sx0:sx1, :].astype(np.float32)
 
             if series_name == "F1":
-                # White trace: high V with lower S.
-                score = (stripe_hsv[:, :, 2] / 255.0) - 0.60 * (stripe_hsv[:, :, 1] / 255.0)
-                score = score.mean(axis=1)
+                # White trace affinity: high value and relatively low saturation.
+                score_map = (crop_hsv[:, :, 2] / 255.0) - 0.58 * (crop_hsv[:, :, 1] / 255.0)
             else:
-                # Green trace: strong G dominance over R/B.
-                b = stripe_bgr[:, :, 0]
-                g = stripe_bgr[:, :, 1]
-                r = stripe_bgr[:, :, 2]
-                score = ((g - 0.65 * r - 0.65 * b) / 255.0).mean(axis=1)
+                # Green trace affinity: green channel dominance over red/blue.
+                b = crop[:, :, 0].astype(np.float32)
+                g = crop[:, :, 1].astype(np.float32)
+                r = crop[:, :, 2].astype(np.float32)
+                score_map = (g - 0.62 * r - 0.62 * b) / 255.0
 
-            score = cv2.GaussianBlur(score.reshape(-1, 1), (1, 7), 0).ravel()
-            score_masked = np.full_like(score, -1e9, dtype=np.float32)
-            score_masked[wy0c:wy1c+1] = score[wy0c:wy1c+1]
+            # Remove row-static bias (grid/horizontal structures) by subtracting per-row baseline.
+            row_baseline = np.median(score_map, axis=1)
+            center_score = np.mean(score_map[:, sx0:sx1], axis=1)
+            anomaly = center_score - row_baseline
+            anomaly = cv2.GaussianBlur(anomaly.reshape(-1, 1), (1, 7), 0).ravel()
+
+            # Fallback if anomaly is very flat.
+            if float(np.max(anomaly) - np.min(anomaly)) < 0.01:
+                anomaly = cv2.GaussianBlur(center_score.reshape(-1, 1), (1, 7), 0).ravel()
+
+            score_masked = np.full_like(anomaly, -1e9, dtype=np.float32)
+            score_masked[wy0c:wy1c+1] = anomaly[wy0c:wy1c+1]
             if float(np.max(score_masked)) > -1e8:
                 special_y = int(np.argmax(score_masked))
 
