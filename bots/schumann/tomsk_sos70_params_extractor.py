@@ -28,6 +28,7 @@ TICK_STRIP_H = 14
 RIGHT_EXCLUDE_PX = 70
 RIGHT_LOGO_SCAN_PX = 180
 RIGHT_PICK_SAFETY_PX = 24
+RIGHT_PICK_SAFETY_PX_F = 42
 UTC_TO_TSST_HOURS = 7
 TICK_MIN_SEP = 8
 TICK_MIN_COUNT = 24
@@ -593,8 +594,8 @@ def refine_f1_f4_with_path_tracking(img_bgr, roi, x_now, picks):
     pad_top, pad_bot = 4, 18
     y0i = min(y1 - 1, y0 + pad_top)
     y1i = max(y0i + 1, y1 - pad_bot)
-    x_lo = int(np.clip(x_now - 10, x0 + 1, x1 - 2))
-    x_hi = int(np.clip(x_now + 1, x0 + 1, x1 - 2))
+    x_lo = int(np.clip(x_now - 14, x0 + 1, x1 - 2))
+    x_hi = int(np.clip(x_now, x0 + 1, x1 - 2))
     if x_hi <= x_lo:
         return picks, {}
 
@@ -713,7 +714,7 @@ def main():
     dbgF, dbgA, dbgQ = dbg_map["F"], dbg_map["A"], dbg_map["Q"]
 
     # Read traces slightly left of x_now to avoid right-edge repaint artifacts.
-    xF_pick, xF_safe_right = safe_pick_x(xF, roiF, dbgF, back_px=2)
+    xF_pick, xF_safe_right = safe_pick_x(xF, roiF, dbgF, back_px=3, safety_px=RIGHT_PICK_SAFETY_PX_F)
     xF_pick_edge = int(np.clip(min(xF, xF_safe_right), roiF[0] + 1, roiF[2] - 2))
     xA_pick, xA_safe_right = safe_pick_x(xA, roiA, dbgA, back_px=4)
     xQ_pick, xQ_safe_right = safe_pick_x(xQ, roiQ, dbgQ, back_px=4)
@@ -726,11 +727,7 @@ def main():
     dbgQ["x_pick_safe_right"] = xQ_safe_right
 
     picksF = pick_colored_lines_at_x(F_img, roiF, xF_pick, chart_type="F", band_px=3, freq_max_hz=float(args.freq_max_hz), x_right_limit=xF_safe_right)
-    picksF_edge = pick_colored_lines_at_x(F_img, roiF, xF_pick_edge, chart_type="F", band_px=1, freq_max_hz=float(args.freq_max_hz), x_right_limit=xF_safe_right)
-    for k in ("F1", "F4"):
-        if k in picksF_edge:
-            picksF[k] = picksF_edge[k]
-    picksF, dbgF_path = refine_f1_f4_with_path_tracking(F_img, roiF, xF_pick_edge, picksF)
+    picksF, dbgF_path = refine_f1_f4_with_path_tracking(F_img, roiF, xF_pick, picksF)
     if dbgF_path:
         dbgF.update(dbgF_path)
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xA_safe_right)
