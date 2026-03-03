@@ -538,6 +538,7 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
 
         # F chart benefits from per-column robust picking because adjacent traces can crowd.
         y_hint = None
+        y_center = None
         if chart_type == "F" and crop_hsv.shape[1] >= 3 and wy1c > wy0c:
             y_cols = []
             for col in range(crop_hsv.shape[1]):
@@ -547,12 +548,22 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
                 col_cost = col_cost + col_mask
                 col_cost = cv2.blur(col_cost.reshape(-1, 1), (1, 3)).ravel()
                 y_cols.append(int(np.argmin(col_cost)))
+                if col == (crop_hsv.shape[1] // 2):
+                    y_center = int(np.argmin(col_cost))
             if y_cols:
                 y_hint = int(round(float(np.median(np.array(y_cols, dtype=np.float32)))))
 
         # Light median filter to stabilize row cost
         row_cost = cv2.blur(row_cost.reshape(-1,1), (1,5)).ravel()
-        if y_hint is not None:
+        if y_center is not None:
+            target = int(y_center if y_hint is None else round(0.65 * y_center + 0.35 * y_hint))
+            lo = max(wy0c, target - 5)
+            hi = min(wy1c, target + 5)
+            if hi > lo:
+                y_rel = int(lo + np.argmin(row_cost[lo:hi+1]))
+            else:
+                y_rel = int(np.argmin(row_cost))
+        elif y_hint is not None:
             lo = max(wy0c, y_hint - 6)
             hi = min(wy1c, y_hint + 6)
             if hi > lo:
