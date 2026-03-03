@@ -472,35 +472,6 @@ def harmonize_x_now_across_charts(x_vals, dbg_vals, rois):
     dbg_vals["x_now_spread_hours"] = float(spread_hours)
     return out, dbg_vals
 
-def row_mask_score(crop_hsv, label, series_name):
-    """Return per-row score array in [0..1] for how well pixels match the target color."""
-    H = crop_hsv[:, :, 0].astype(np.float32)
-    S = crop_hsv[:, :, 1].astype(np.float32)
-    V = crop_hsv[:, :, 2].astype(np.float32)
-
-    if label == "white":
-        # White trace: low saturation, high value
-        mask = (S < 70) & (V > 205)
-        return mask.mean(axis=1).astype(np.float32)
-
-    if label == "yellow":
-        # Yellow trace: hue ~20-45, high saturation/value
-        mask = (H >= 15) & (H <= 50) & (S > 90) & (V > 120)
-        return mask.mean(axis=1).astype(np.float32)
-
-    if label == "red":
-        # Red trace: hue near 0 (or wrap), high saturation
-        mask = ((H <= 10) | (H >= 170)) & (S > 90) & (V > 80)
-        return mask.mean(axis=1).astype(np.float32)
-
-    if label == "green":
-        # Green trace: hue ~45-95, high saturation/value
-        mask = (H >= 45) & (H <= 95) & (S > 90) & (V > 70)
-        return mask.mean(axis=1).astype(np.float32)
-
-    # fallback: no mask
-    return np.zeros((crop_hsv.shape[0],), dtype=np.float32)
-
 def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq_max_hz=40.0):
     """
     For each series color, find y where HSV distance is minimal around x_now.
@@ -520,7 +491,7 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
         results = {}
         for key, (label, rgb, bgr_draw, f_lbl, a_lbl, q_lbl) in SERIES.items():
             series_name = {"F": f_lbl, "A": a_lbl, "Q": q_lbl}[chart_type]
-            results[series_name] = {"y_px": int(mid_y), "y_norm": 0.5, "draw": bgr_draw, "mask_score": None}
+            results[series_name] = {"y_px": int(mid_y), "y_norm": 0.5, "draw": bgr_draw}
         return results
 
     # Convert band to HSV once
@@ -549,44 +520,12 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
         tgt_hsv = bgr_to_hsv_color((rgb[2], rgb[1], rgb[0]))  # convert from RGB->BGR then to HSV
         row_cost = hsv_row_distance(crop_hsv, tgt_hsv, label)
 
-        # For F-params, distance-minimization is fragile for white/green due to gridlines and labels.
-        # Use HSV mask maximization inside the lane window; fallback to distance method if mask weak.
-        use_mask = (chart_type == "F")
-        if use_mask:
-            row_score = row_mask_score(crop_hsv, label, series_name)
-            # Smooth lightly to prefer thicker traces over 1px gridlines
-            row_score = cv2.blur(row_score.reshape(-1, 1), (1, 5)).ravel()
-
         # Apply lane windowing to avoid wrong traces.
         n_lo, n_hi = lane_windows[chart_type][series_name]
         wy0, wy1 = norm_window_to_rows(n_lo, n_hi)
 
         wy0c = max(0, wy0 - y0i)
         wy1c = min(crop.shape[0] - 1, wy1 - y0i)
-
-        if use_mask:
-            # Restrict to lane and pick the row with max score.
-            # If the best score is too low, fall back to distance-based row_cost.
-            best_score = 0.0
-            best_idx = None
-            if wy1c > wy0c:
-                window = row_score[wy0c:wy1c+1]
-                best_rel = int(np.argmax(window))
-                best_score = float(window[best_rel])
-                best_idx = wy0c + best_rel
-            else:
-                best_score = float(row_score.max()) if row_score.size else 0.0
-                best_idx = int(np.argmax(row_score)) if row_score.size else 0
-
-            # Mask confidence threshold: requires at least a few matching pixels in the stripe.
-            if best_score >= 0.02:
-                y_rel = int(best_idx)
-                y_pix = y0i + int(y_rel)
-                y_norm = (y_pix - y0i) / max(1.0, (y1i - y0i))
-                results[series_name] = {"y_px": int(y_pix), "y_norm": float(y_norm), "draw": bgr_draw, "mask_score": best_score}
-                continue
-            # else fall through to distance-based approach
-
         if wy1c > wy0c:
             mask = np.ones_like(row_cost) * 10.0
             mask[wy0c:wy1c+1] = 0.0
@@ -604,7 +543,7 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
         y_rel = int(np.argmin(row_cost))
         y_pix = y0i + y_rel
         y_norm = (y_pix - y0i) / max(1.0, (y1i - y0i))
-        results[series_name] = {"y_px": int(y_pix), "y_norm": float(y_norm), "draw": bgr_draw, "mask_score": None}
+        results[series_name] = {"y_px": int(y_pix), "y_norm": float(y_norm), "draw": bgr_draw}
     return results
 
 def draw_overlay_with_picks(img_bgr, roi, x_now, picks, title, chart_type="F"):
@@ -668,9 +607,6 @@ def main():
     picksF = pick_colored_lines_at_x(F_img, roiF, xF_pick, chart_type="F", band_px=3, freq_max_hz=float(args.freq_max_hz))
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz))
     picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz))
-
-    # expose F mask scores for diagnostics
-    dbgF["mask_scores"] = {k: float(v.get("mask_score")) if v.get("mask_score") is not None else None for k, v in picksF.items()}
 
     # overlays
     F_overlay = A_overlay = Q_overlay = None
