@@ -214,7 +214,7 @@ def convert_picks_to_values(picks, chart_type):
         values[series_name] = float(vmax - ln * (vmax - vmin))
     return values
 
-def refine_series_local_snap(img_bgr, roi, x_center, picks, chart_type, series_name, search_px=6, band_px=2):
+def refine_series_local_snap(img_bgr, roi, x_center, picks, chart_type, series_name, search_px=6, band_px=2, edge_margin_px=0):
     """
     Small local y-snap around an existing pick to reduce residual 1-3 px offsets.
     Keeps the search constrained to both the lane and a local neighborhood.
@@ -244,8 +244,11 @@ def refine_series_local_snap(img_bgr, roi, x_center, picks, chart_type, series_n
     row_cost = cv2.blur(row_cost.reshape(-1, 1), (1, 5)).ravel()
 
     # Hard lane gate
-    lane0 = max(0, lane_y0 - y0i)
-    lane1 = min(crop.shape[0] - 1, lane_y1 - y0i)
+    lane0 = max(0, lane_y0 - y0i + int(edge_margin_px))
+    lane1 = min(crop.shape[0] - 1, lane_y1 - y0i - int(edge_margin_px))
+    if lane1 <= lane0:
+        lane0 = max(0, lane_y0 - y0i)
+        lane1 = min(crop.shape[0] - 1, lane_y1 - y0i)
     lane_mask = np.ones_like(row_cost) * 8.0
     lane_mask[lane0:lane1 + 1] = 0.0
     row_cost = row_cost + lane_mask
@@ -875,6 +878,14 @@ def main():
     picksA, dbgA_a1 = refine_series_local_snap(A_img, roiA, xA_pick, picksA, "A", "A1", search_px=6, band_px=2)
     if dbgA_a1:
         dbgA.update(dbgA_a1)
+    picksA, dbgA_a2 = refine_series_local_snap(A_img, roiA, xA_pick, picksA, "A", "A2", search_px=7, band_px=2)
+    if dbgA_a2:
+        dbgA.update(dbgA_a2)
+    picksA, dbgA_a4 = refine_series_local_snap(
+        A_img, roiA, xA_pick, picksA, "A", "A4", search_px=7, band_px=2, edge_margin_px=2
+    )
+    if dbgA_a4:
+        dbgA.update(dbgA_a4)
 
     picksF = attach_lane_norms(picksF, roiF, "F")
     picksA = attach_lane_norms(picksA, roiA, "A")
