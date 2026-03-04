@@ -830,8 +830,6 @@ def refine_f1_f4_with_path_tracking(img_bgr, roi, x_now, picks):
 def draw_overlay_with_picks(img_bgr, roi, x_now, picks, title, chart_type="F"):
     out = img_bgr.copy()
     x0,y0,x1,y1 = roi
-    # vertical x_now
-    cv2.line(out, (x_now, y0), (x_now, y1), (0,0,255), 2)
     # markers + labels
     for series_name, val in picks.items():
         y = int(val["y_px"]); color = val["draw"]
