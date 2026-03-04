@@ -516,7 +516,7 @@ def x_for_hour_in_day(x_day_start, pph, hour_in_day):
 
 def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
                   pp_hour_source="auto", verbose=False, accept_minutes=DEFAULT_ACCEPT_MINUTES,
-                  last_modified=None, stale_hours=6.0):
+                  last_modified=None, stale_hours=6.0, min_guard_px=MIN_GUARD_PX):
     x0, y0, x1, y1 = sanitize_roi(img_bgr, roi)
 
     # Timing uses geometry-derived day boundaries from the plotting area width.
@@ -555,7 +555,7 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
         pph_src = "day_width (tick-mismatch-fallback)"
 
     x_frontier, frontier_dbg = detect_frontier(img_bgr, (x0, y0, x1, y1), return_debug=True)
-    guard_px = max(MIN_GUARD_PX, int(round(pph * (guard_minutes / 60.0))))
+    guard_px = max(int(min_guard_px), int(round(pph * (guard_minutes / 60.0))))
 
     now_tsst = tsst_now()
     hour_now = hour_float(now_tsst)
@@ -879,7 +879,7 @@ def main():
     roiA = sanitize_roi(A_img, ROI)
     roiQ = sanitize_roi(Q_img, ROI)
 
-    xF, dbgF = compute_x_now(F_img, roiF, last_modified=F_lm_dt, verbose=args.verbose)
+    xF, dbgF = compute_x_now(F_img, roiF, last_modified=F_lm_dt, verbose=args.verbose, min_guard_px=4)
     xA, dbgA = compute_x_now(A_img, roiA, last_modified=A_lm_dt, verbose=args.verbose)
     xQ, dbgQ = compute_x_now(Q_img, roiQ, last_modified=Q_lm_dt, verbose=args.verbose)
 
@@ -892,7 +892,7 @@ def main():
     dbgF, dbgA, dbgQ = dbg_map["F"], dbg_map["A"], dbg_map["Q"]
 
     # Read traces slightly left of x_now to avoid right-edge repaint artifacts.
-    xF_pick, xF_safe_right = safe_pick_x(xF, roiF, dbgF, back_px=3, safety_px=RIGHT_PICK_SAFETY_PX_F)
+    xF_pick, xF_safe_right = safe_pick_x(xF, roiF, dbgF, back_px=2, safety_px=RIGHT_PICK_SAFETY_PX_F)
     xF_pick_edge = int(np.clip(min(xF, xF_safe_right), roiF[0] + 1, roiF[2] - 2))
     xA_pick, xA_safe_right = safe_pick_x(xA, roiA, dbgA, back_px=4)
     xQ_pick, xQ_safe_right = safe_pick_x(xQ, roiQ, dbgQ, back_px=2)
