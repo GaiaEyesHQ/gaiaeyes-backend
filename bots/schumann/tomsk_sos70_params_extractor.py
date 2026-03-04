@@ -895,7 +895,7 @@ def main():
     xF_pick, xF_safe_right = safe_pick_x(xF, roiF, dbgF, back_px=3, safety_px=RIGHT_PICK_SAFETY_PX_F)
     xF_pick_edge = int(np.clip(min(xF, xF_safe_right), roiF[0] + 1, roiF[2] - 2))
     xA_pick, xA_safe_right = safe_pick_x(xA, roiA, dbgA, back_px=4)
-    xQ_pick, xQ_safe_right = safe_pick_x(xQ, roiQ, dbgQ, back_px=4)
+    xQ_pick, xQ_safe_right = safe_pick_x(xQ, roiQ, dbgQ, back_px=2)
     dbgF["x_pick"] = xF_pick
     dbgF["x_pick_edge"] = xF_pick_edge
     dbgF["x_pick_safe_right"] = xF_safe_right
@@ -937,10 +937,10 @@ def main():
         "A4",
         search_px=8,
         band_px=2,
-        edge_margin_px=0,
+        edge_margin_px=1,
         search_up_px=4,
-        search_down_px=90,
-        prefer_lower_weight=0.30,
+        search_down_px=72,
+        prefer_lower_weight=0.12,
     )
     if dbgA_a4:
         dbgA.update(dbgA_a4)
@@ -983,10 +983,10 @@ def main():
         "Q4",
         search_px=9,
         band_px=2,
-        edge_margin_px=0,
+        edge_margin_px=1,
         search_up_px=4,
-        search_down_px=96,
-        prefer_lower_weight=0.32,
+        search_down_px=72,
+        prefer_lower_weight=0.12,
     )
     if dbgQ_q4:
         dbgQ.update(dbgQ_q4)
@@ -1000,10 +1000,10 @@ def main():
             "Q4",
             search_px=10,
             band_px=2,
-            edge_margin_px=0,
+            edge_margin_px=1,
             search_up_px=4,
-            search_down_px=96,
-            prefer_lower_weight=0.32,
+            search_down_px=72,
+            prefer_lower_weight=0.12,
             min_y_px=int(picksQ["Q3"]["y_px"]) + 12,
         )
         if dbgQ_q4_ord:
