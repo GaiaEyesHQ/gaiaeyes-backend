@@ -866,7 +866,7 @@ def main():
     dbgQ["x_pick_safe_right"] = xQ_safe_right
 
     picksF = pick_colored_lines_at_x(F_img, roiF, xF_pick, chart_type="F", band_px=3, freq_max_hz=float(args.freq_max_hz), x_right_limit=xF_safe_right)
-    picksF, dbgF_path = refine_f1_f4_with_path_tracking(F_img, roiF, xF_pick, picksF)
+    picksF, dbgF_path = refine_f1_f4_with_path_tracking(F_img, roiF, xF_pick_edge, picksF)
     if dbgF_path:
         dbgF.update(dbgF_path)
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xA_safe_right)
@@ -876,7 +876,7 @@ def main():
     if dbgF_f3:
         dbgF.update(dbgF_f3)
     picksF, dbgF_f4 = refine_series_local_snap(
-        F_img, roiF, xF_pick_edge, picksF, "F", "F4", search_px=8, band_px=2, edge_margin_px=1
+        F_img, roiF, xF_pick_edge, picksF, "F", "F4", search_px=4, band_px=1, edge_margin_px=3
     )
     if dbgF_f4:
         dbgF.update(dbgF_f4)
