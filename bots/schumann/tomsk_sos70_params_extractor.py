@@ -49,6 +49,20 @@ SERIES = {
     "s4": ("green",  (40,160,60),   (0,200,100),   "F4", "A4", "Q4"),
 }
 
+# Per-series lane windows (normalized in plotting ROI, top=0 -> bottom=1).
+SERIES_LANE_WINDOWS = {
+    "F": {"F1": (0.02, 0.22), "F2": (0.24, 0.42), "F3": (0.43, 0.59), "F4": (0.60, 0.76)},
+    "A": {"A1": (0.03, 0.32), "A2": (0.20, 0.54), "A3": (0.42, 0.76), "A4": (0.68, 0.98)},
+    "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.99)},
+}
+
+# Per-series value ranges read from SOS70 chart axes (top=max, bottom=min).
+SERIES_VALUE_RANGES = {
+    "F": {"F1": (7.20, 8.40), "F2": (13.10, 14.50), "F3": (18.60, 20.20), "F4": (24.10, 26.50)},
+    "A": {"A1": (1.00, 45.00), "A2": (1.00, 61.50), "A3": (2.20, 12.20), "A4": (1.10, 10.20)},
+    "Q": {"Q1": (4.00, 38.00), "Q2": (5.00, 17.50), "Q3": (7.00, 23.00), "Q4": (5.00, 30.00)},
+}
+
 def bgr_to_hsv_color(bgr_tuple):
     color = np.uint8([[list(bgr_tuple)]])
     hsv = cv2.cvtColor(color, cv2.COLOR_BGR2HSV)[0,0]
@@ -150,6 +164,47 @@ def safe_pick_x(x_now, roi, dbg, back_px, safety_px=RIGHT_PICK_SAFETY_PX):
     safe_right = int(np.clip(x_plot_end - int(safety_px), x0 + 2, x1 - 2))
     x_pick = int(np.clip(min(int(x_now) - int(back_px), safe_right), x0 + 1, x1 - 2))
     return x_pick, safe_right
+
+def lane_window_to_rows(roi, norm_lo, norm_hi, pad_top=4, pad_bot=18):
+    x0, y0, x1, y1 = roi
+    y0i = min(y1 - 1, y0 + pad_top)
+    y1i = max(y0i + 1, y1 - pad_bot)
+    h = max(1.0, float(y1i - y0i))
+    y_lo = int(round(y0i + float(norm_lo) * h))
+    y_hi = int(round(y0i + float(norm_hi) * h))
+    y_lo = max(y0i, min(y1i - 1, y_lo))
+    y_hi = max(y0i, min(y1i - 1, y_hi))
+    return y0i, y1i, min(y_lo, y_hi), max(y_lo, y_hi)
+
+def attach_lane_norms(picks, roi, chart_type):
+    lanes = SERIES_LANE_WINDOWS.get(chart_type, {})
+    out = dict(picks)
+    for series_name, data in picks.items():
+        d = dict(data)
+        if series_name in lanes:
+            n_lo, n_hi = lanes[series_name]
+            _y0i, _y1i, y_lo, y_hi = lane_window_to_rows(roi, n_lo, n_hi)
+            y = int(d.get("y_px", y_lo))
+            span = max(1.0, float(y_hi - y_lo))
+            lane_norm = (float(y) - float(y_lo)) / span
+            d["lane_norm"] = float(np.clip(lane_norm, 0.0, 1.0))
+        out[series_name] = d
+    return out
+
+def convert_picks_to_values(picks, chart_type):
+    """
+    Convert picked y-positions into chart values using per-series lane ranges.
+    """
+    ranges = SERIES_VALUE_RANGES.get(chart_type, {})
+    values = {}
+    for series_name, data in picks.items():
+        if series_name not in ranges:
+            continue
+        vmin, vmax = ranges[series_name]
+        ln = float(data.get("lane_norm", data.get("y_norm", 0.5)))
+        ln = float(np.clip(ln, 0.0, 1.0))
+        values[series_name] = float(vmax - ln * (vmax - vmin))
+    return values
 
 def fetch_image(url, timeout=30):
     r = requests.get(url, timeout=timeout, headers={"User-Agent":"Mozilla/5.0"})
@@ -538,11 +593,7 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
 
     # Chart-specific normalized row windows to avoid grid/legend false positives.
     # These bands follow stable visual lanes on SOS70 parameter plots.
-    lane_windows = {
-        "F": {"F1": (0.02, 0.22), "F2": (0.24, 0.42), "F3": (0.43, 0.59), "F4": (0.60, 0.76)},
-        "A": {"A1": (0.03, 0.32), "A2": (0.20, 0.54), "A3": (0.42, 0.76), "A4": (0.68, 0.98)},
-        "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.99)},
-    }
+    lane_windows = SERIES_LANE_WINDOWS
 
     def norm_window_to_rows(norm_lo, norm_hi):
         h = max(1.0, float(y1i - y0i))
@@ -582,7 +633,14 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
         y_rel = int(np.argmin(row_cost))
         y_pix = y0i + y_rel
         y_norm = (y_pix - y0i) / max(1.0, (y1i - y0i))
-        results[series_name] = {"y_px": int(y_pix), "y_norm": float(y_norm), "draw": bgr_draw}
+        lane_span = max(1.0, float(wy1 - wy0))
+        lane_norm = (float(y_pix) - float(wy0)) / lane_span
+        results[series_name] = {
+            "y_px": int(y_pix),
+            "y_norm": float(y_norm),
+            "lane_norm": float(np.clip(lane_norm, 0.0, 1.0)),
+            "draw": bgr_draw,
+        }
     return results
 
 def refine_f1_f4_with_path_tracking(img_bgr, roi, x_now, picks):
@@ -607,7 +665,7 @@ def refine_f1_f4_with_path_tracking(img_bgr, roi, x_now, picks):
     H = int(crop.shape[0])
     W = int(crop.shape[1])
     target_col = int(np.clip(x_now - x_lo, 0, W - 1))
-    lane_norm = {"F1": (0.02, 0.22), "F4": (0.60, 0.76)}
+    lane_norm = {"F1": SERIES_LANE_WINDOWS["F"]["F1"], "F4": SERIES_LANE_WINDOWS["F"]["F4"]}
     series_meta = {
         "F1": {"label": "white", "rgb": (240, 240, 240), "smooth": 0.45},
         "F4": {"label": "green", "rgb": (40, 160, 60), "smooth": 0.35},
@@ -656,6 +714,9 @@ def refine_f1_f4_with_path_tracking(img_bgr, roi, x_now, picks):
         y_norm = (y_pix - y0i) / max(1.0, float(y1i - y0i))
         picks[name]["y_px"] = int(y_pix)
         picks[name]["y_norm"] = float(y_norm)
+        lane_span = max(1.0, float(wy1c - wy0c))
+        lane_norm_val = (float(y_best) - float(wy0c)) / lane_span
+        picks[name]["lane_norm"] = float(np.clip(lane_norm_val, 0.0, 1.0))
 
         dbg[f"{name.lower()}_path_x_range"] = [int(x_lo), int(x_hi)]
         dbg[f"{name.lower()}_path_target_col"] = int(target_col)
@@ -732,6 +793,17 @@ def main():
         dbgF.update(dbgF_path)
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xA_safe_right)
     picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xQ_safe_right)
+    picksF = attach_lane_norms(picksF, roiF, "F")
+    picksA = attach_lane_norms(picksA, roiA, "A")
+    picksQ = attach_lane_norms(picksQ, roiQ, "Q")
+
+    valsF = convert_picks_to_values(picksF, "F")
+    valsA = convert_picks_to_values(picksA, "A")
+    valsQ = convert_picks_to_values(picksQ, "Q")
+
+    dbgF["scale_ranges"] = SERIES_VALUE_RANGES["F"]
+    dbgA["scale_ranges"] = SERIES_VALUE_RANGES["A"]
+    dbgQ["scale_ranges"] = SERIES_VALUE_RANGES["Q"]
 
     # overlays
     F_overlay = A_overlay = Q_overlay = None
@@ -756,12 +828,20 @@ def main():
         "source": "tomsk_sos70_param_charts",
         "freq_max_hz": freq_max,
         "values": {
+            "scale_ranges": SERIES_VALUE_RANGES,
+            "scale_units": {"F_hz": "Hz", "A_value": "idx", "Q_value": "idx"},
             "F_norm": {k: float(v["y_norm"]) for k,v in picksF.items()},
             "F_y_px": {k: int(v["y_px"]) for k,v in picksF.items()},
+            "F_lane_norm": {k: float(v.get("lane_norm", v["y_norm"])) for k,v in picksF.items()},
+            "F_hz": {k: float(v) for k,v in valsF.items()},
             "A_norm": {k: float(v["y_norm"]) for k,v in picksA.items()},
             "A_y_px": {k: int(v["y_px"]) for k,v in picksA.items()},
+            "A_lane_norm": {k: float(v.get("lane_norm", v["y_norm"])) for k,v in picksA.items()},
+            "A_value": {k: float(v) for k,v in valsA.items()},
             "Q_norm": {k: float(v["y_norm"]) for k,v in picksQ.items()},
             "Q_y_px": {k: int(v["y_px"]) for k,v in picksQ.items()},
+            "Q_lane_norm": {k: float(v.get("lane_norm", v["y_norm"])) for k,v in picksQ.items()},
+            "Q_value": {k: float(v) for k,v in valsQ.items()},
         },
         "debug": { "F": dbgF, "A": dbgA, "Q": dbgQ,
                    "urls": {"F": URL_F, "A": URL_A, "Q": URL_Q},
