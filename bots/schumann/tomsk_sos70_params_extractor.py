@@ -35,6 +35,7 @@ TICK_MIN_COUNT = 24
 MIN_GUARD_PX = 6
 DEFAULT_ACCEPT_MINUTES = 90.0
 DEFAULT_SNAP_THRESHOLD_MINUTES = 20.0
+TICK_PPH_REL_TOL = 0.20
 
 FRONTIER_COLOR_S_MIN = 35
 FRONTIER_COLOR_V_MIN = 28
@@ -430,15 +431,22 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
     pph = pph_day
     pph_src = "day_width"
     use_ticks = (pph_tick is not None and tick_count >= int(tick_min_count))
+    tick_pph_rel_err = None
+    tick_pph_valid = False
+    if use_ticks:
+        tick_pph_rel_err = abs(float(pph_tick) - float(pph_day)) / max(float(pph_day), 1e-6)
+        tick_pph_valid = bool(tick_pph_rel_err <= float(TICK_PPH_REL_TOL))
     if pp_hour_source == "ticks":
-        if use_ticks:
+        if use_ticks and tick_pph_valid:
             pph = pph_tick
             pph_src = "ticks"
         else:
             pph_src = "day_width (ticks-forced-fallback)"
-    elif pp_hour_source == "auto" and use_ticks:
+    elif pp_hour_source == "auto" and use_ticks and tick_pph_valid:
         pph = pph_tick
         pph_src = "ticks"
+    elif pp_hour_source == "auto" and use_ticks and not tick_pph_valid:
+        pph_src = "day_width (tick-mismatch-fallback)"
 
     x_frontier, frontier_dbg = detect_frontier(img_bgr, (x0, y0, x1, y1), return_debug=True)
     guard_px = max(MIN_GUARD_PX, int(round(pph * (guard_minutes / 60.0))))
@@ -472,7 +480,8 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
 
     delta_px = right_guard - x_ideal
     delta_min = (delta_px / max(pph, 1e-6)) * 60.0
-    if delta_min > float(DEFAULT_SNAP_THRESHOLD_MINUTES):
+    # Snap only when ideal time is beyond available right edge (future vs data).
+    if delta_min < -float(DEFAULT_SNAP_THRESHOLD_MINUTES):
         x_now_pre = right_guard
         x_now_method = "snap_to_guard"
     else:
@@ -509,6 +518,8 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
         "pph": pph,
         "pph_source": pph_src,
         "pph_tick": pph_tick,
+        "tick_pph_rel_err": tick_pph_rel_err,
+        "tick_pph_valid": bool(tick_pph_valid),
         "tick_count": int(tick_count),
         "tick_quality": float(tick_quality),
         "tick_used": bool(pph_src == "ticks"),
