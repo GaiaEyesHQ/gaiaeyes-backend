@@ -827,15 +827,17 @@ def refine_f1_f4_with_path_tracking(img_bgr, roi, x_now, picks):
 
     return picks, dbg
 
-def draw_overlay_with_picks(img_bgr, roi, x_now, picks, title, chart_type="F"):
+def draw_overlay_with_picks(img_bgr, roi, x_now, picks, title, chart_type="F", x_marker=None):
     out = img_bgr.copy()
     x0,y0,x1,y1 = roi
+    x_draw = int(x_now if x_marker is None else x_marker)
+    x_draw = int(np.clip(x_draw, x0 + 1, x1 - 2))
     # markers + labels
     for series_name, val in picks.items():
         y = int(val["y_px"]); color = val["draw"]
-        cv2.circle(out, (x_now, y), 5, color, -1)
+        cv2.circle(out, (x_draw, y), 5, color, -1)
         txt = f"{series_name}"
-        cv2.putText(out, txt, (min(x_now+8, x1-140), max(y-6, y0+14)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1, cv2.LINE_AA)
+        cv2.putText(out, txt, (min(x_draw+8, x1-140), max(y-6, y0+14)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1, cv2.LINE_AA)
     cv2.putText(out, title, (x0+8, y0+18), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255,255,255), 1, cv2.LINE_AA)
     return out
 
@@ -883,10 +885,13 @@ def main():
     dbgF["x_pick"] = xF_pick
     dbgF["x_pick_edge"] = xF_pick_edge
     dbgF["x_pick_safe_right"] = xF_safe_right
+    dbgF["x_overlay"] = xF_pick_edge
     dbgA["x_pick"] = xA_pick
     dbgA["x_pick_safe_right"] = xA_safe_right
+    dbgA["x_overlay"] = xA_pick
     dbgQ["x_pick"] = xQ_pick
     dbgQ["x_pick_safe_right"] = xQ_safe_right
+    dbgQ["x_overlay"] = xQ_pick
 
     picksF = pick_colored_lines_at_x(F_img, roiF, xF_pick, chart_type="F", band_px=3, freq_max_hz=float(args.freq_max_hz), x_right_limit=xF_safe_right)
     picksF, dbgF_path = refine_f1_f4_with_path_tracking(F_img, roiF, xF_pick_edge, picksF)
@@ -964,7 +969,10 @@ def main():
         A_overlay = os.path.join(args.dir, "tomsk_params_a_overlay.png")
         Q_overlay = os.path.join(args.dir, "tomsk_params_q_overlay.png")
         def stamp(img, roi, x_now, title):
-            out = draw_overlay_with_picks(img, roi, x_now, picksF if "F " in title else (picksA if "A " in title else picksQ), title, chart_type=("F" if "F " in title else ("A" if "A " in title else "Q")))
+            chart = ("F" if "F " in title else ("A" if "A " in title else "Q"))
+            use_picks = picksF if chart == "F" else (picksA if chart == "A" else picksQ)
+            x_draw = xF_pick_edge if chart == "F" else (xA_pick if chart == "A" else xQ_pick)
+            out = draw_overlay_with_picks(img, roi, x_now, use_picks, title, chart_type=chart, x_marker=x_draw)
             x0,y0,x1,y1 = roi
             now_local = tsst_now().strftime("%Y-%m-%d %H:%M TSST")
             cv2.putText(out, now_local, (x0+8, y1-8), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255,255,255), 1, cv2.LINE_AA)
