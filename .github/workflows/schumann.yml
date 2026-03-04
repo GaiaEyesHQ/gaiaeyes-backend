@@ -469,24 +469,46 @@ jobs:
           echo "rows_ext channels sample:"
           jq -r '.[].channel' rows_ext.json | sort -u | sed -n '1,40p' || true
 
-          # Insert (append-only) into ext.schumann via REST. Ensure ext schema is exposed.
+          # Insert (append-only) into ext.schumann via REST.
+          # Primary path: /rest/v1/schumann with ext schema profile headers.
+          # Fallback path: /rest/v1/ext_schumann (legacy public view/table alias).
           if [ "${total_rows}" -gt 0 ]; then
             RESP_FILE="$(mktemp)"
             HTTP_CODE="$(
               curl -sS -o "${RESP_FILE}" -w "%{http_code}" \
-                "${SUPABASE_URL}/rest/v1/ext_schumann" \
+                "${SUPABASE_URL}/rest/v1/schumann" \
                 -H "apikey: ${SUPABASE_SERVICE_ROLE}" \
                 -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE}" \
+                -H "Accept-Profile: ext" \
+                -H "Content-Profile: ext" \
                 -H "Content-Type: application/json" \
                 -H "Prefer: resolution=ignore-duplicates" \
                 -d @rows_ext.json
             )"
-            echo "Supabase insert HTTP status: ${HTTP_CODE}"
+            echo "Supabase insert (ext.schumann via profile) HTTP status: ${HTTP_CODE}"
             if [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -ge 300 ]; then
-              echo "ERROR: Supabase insert failed. Response body:"
+              echo "Primary insert failed. Response body:"
               cat "${RESP_FILE}" || true
-              rm -f "${RESP_FILE}"
-              exit 1
+
+              # Legacy fallback if API is wired to a public ext_schumann object.
+              RESP_FILE2="$(mktemp)"
+              HTTP_CODE2="$(
+                curl -sS -o "${RESP_FILE2}" -w "%{http_code}" \
+                  "${SUPABASE_URL}/rest/v1/ext_schumann" \
+                  -H "apikey: ${SUPABASE_SERVICE_ROLE}" \
+                  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE}" \
+                  -H "Content-Type: application/json" \
+                  -H "Prefer: resolution=ignore-duplicates" \
+                  -d @rows_ext.json
+              )"
+              echo "Supabase insert (legacy ext_schumann) HTTP status: ${HTTP_CODE2}"
+              if [ "${HTTP_CODE2}" -lt 200 ] || [ "${HTTP_CODE2}" -ge 300 ]; then
+                echo "ERROR: Supabase fallback insert failed. Response body:"
+                cat "${RESP_FILE2}" || true
+                rm -f "${RESP_FILE}" "${RESP_FILE2}"
+                exit 1
+              fi
+              rm -f "${RESP_FILE2}"
             fi
             rm -f "${RESP_FILE}"
           else
