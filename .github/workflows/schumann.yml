@@ -22,7 +22,7 @@ jobs:
       PYTHON_VERSION: "3.10"
       PREFER: "cumiana,tomsk"
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+      SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE || secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
     steps:
       - name: Checkout backend
@@ -200,6 +200,16 @@ jobs:
 
           echo "ok=true" >> "$GITHUB_OUTPUT"
 
+      - name: Validate Supabase DB credentials
+        if: ${{ steps.stage_latest.outputs.ok == 'true' && env.SUPABASE_URL != '' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_SERVICE_ROLE:-}" ]; then
+            echo "ERROR: SUPABASE_URL is set but SUPABASE_SERVICE_ROLE is missing."
+            echo "Set secret SUPABASE_SERVICE_ROLE (or SUPABASE_SERVICE_ROLE_KEY) in GitHub Actions secrets."
+            exit 1
+          fi
+
       - name: Remove timestamped media artifacts (keep only *_latest.*)
         if: ${{ steps.stage_latest.outputs.ok == 'true' }}
         working-directory: ${{ env.MEDIA_DIR }}
@@ -227,7 +237,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE || secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_SCHUMANN_BUCKET: ${{ vars.SUPABASE_SCHUMANN_BUCKET }}
           MEDIA_DIR: ${{ github.workspace }}/media
         run: |
@@ -325,7 +335,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE || secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
 
