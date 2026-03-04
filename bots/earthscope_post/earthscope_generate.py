@@ -95,6 +95,9 @@ EARTHSCOPE_FIRST_PERSON = os.getenv("EARTHSCOPE_FIRST_PERSON", "true").strip().l
 
 # Debug flag for rewrite path tracing
 EARTHSCOPE_DEBUG_REWRITE = os.getenv("EARTHSCOPE_DEBUG_REWRITE", "false").strip().lower() in ("1","true","yes","on")
+EARTHSCOPE_SIM_GUARD = os.getenv("EARTHSCOPE_SIM_GUARD", "1").strip().lower() in ("1","true","yes","on")
+EARTHSCOPE_SIM_THRESH = float(os.getenv("EARTHSCOPE_SIM_THRESH", "0.35"))
+EARTHSCOPE_SIM_RECENT = max(1, int(os.getenv("EARTHSCOPE_SIM_RECENT", "5")))
 
 def _dbg(msg: str) -> None:
     if EARTHSCOPE_DEBUG_REWRITE:
@@ -177,9 +180,48 @@ METAPHOR_HINTS = [
     "a flickering streetlight"
 ]
 
+CAPTION_STRUCTURE_TEMPLATES = {
+    0: "Hook -> Context -> Tip",
+    1: "Context -> Hook -> Tip",
+    2: "Tip -> Context -> Hook",
+    3: "One-line summary -> two short support lines",
+    4: "Calm reassurance -> one context line -> one tip",
+    5: "Field texture line -> practical pacing line -> optional light aside",
+}
+
 def _select_metaphor_hint(day_iso: str, platform: str) -> str:
     seed = int(hashlib.sha256(f"{day_iso}|{platform}|metaphor".encode("utf-8")).hexdigest(), 16)
     return METAPHOR_HINTS[seed % len(METAPHOR_HINTS)]
+
+
+def _select_caption_template_id(day_iso: str, platform: str, salt: int = 0) -> int:
+    seed = int(hashlib.sha256(f"{day_iso}|{platform}|template|{salt}".encode("utf-8")).hexdigest(), 16)
+    return seed % len(CAPTION_STRUCTURE_TEMPLATES)
+
+
+def _select_metaphor_pool(day_iso: str, platform: str, size: int = 8) -> List[str]:
+    if not METAPHOR_HINTS:
+        return []
+    seed = int(hashlib.sha256(f"{day_iso}|{platform}|metaphor-pool".encode("utf-8")).hexdigest(), 16)
+    out: List[str] = []
+    for idx in range(min(size, len(METAPHOR_HINTS))):
+        out.append(METAPHOR_HINTS[(seed + idx) % len(METAPHOR_HINTS)])
+    return out
+
+
+def _extract_recent_analogies(captions: List[str], limit: int = 5) -> List[str]:
+    out: List[str] = []
+    for cap in captions:
+        for sent in re.split(r"(?<=[.!?])\s+", cap or ""):
+            s = sent.strip()
+            low = s.lower()
+            if not s:
+                continue
+            if " like " in low or " as if " in low or " similar to " in low:
+                out.append(s)
+                if len(out) >= limit:
+                    return out
+    return out
 PHRASE_VARIANTS = {
     "feel_stable": [
         "Steady field—good window for getting things done.",
@@ -406,7 +448,7 @@ def _ctx_platform(ctx: Dict[str, Any]) -> str:
 
 
 def _stable_ctx_hash(ctx: Dict[str, Any]) -> str:
-    omit = {"day", "platform", "intro_hint", "banned_openers"}
+    omit = {"day", "platform", "intro_hint", "banned_openers", "recent_captions", "recent_analogies"}
     normalized = {k: ctx[k] for k in sorted(ctx.keys()) if k not in omit}
     blob = json.dumps(normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
@@ -462,6 +504,57 @@ def _recent_openers(days_back: int = 7) -> set:
         return opens
     except Exception:
         return set()
+
+
+def _recent_platform_captions(platform: str, limit: int = 5, before_day: Optional[str] = None) -> List[str]:
+    plat = (platform or "default").strip() or "default"
+    try:
+        q = (
+            SB.schema(POSTS_SCHEMA)
+              .table(POSTS_TABLE)
+              .select("day,caption")
+              .eq("platform", plat)
+        )
+        if before_day:
+            q = q.lt("day", before_day)
+        res = q.order("day", desc=True).limit(limit).execute()
+        rows = res.data or []
+    except Exception:
+        rows = []
+    out: List[str] = []
+    for row in rows:
+        cap = (row.get("caption") or "").strip()
+        if cap:
+            out.append(cap)
+    return out[:limit]
+
+
+def _normalize_for_similarity(text: str) -> str:
+    s = (text or "").lower()
+    s = re.sub(r"[^a-z0-9\s]", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _shingles3(text: str) -> set[str]:
+    toks = _normalize_for_similarity(text).split()
+    if len(toks) < 3:
+        return {" ".join(toks)} if toks else set()
+    return {" ".join(toks[i:i+3]) for i in range(len(toks)-2)}
+
+
+def _jaccard_similarity_3gram(a: str, b: str) -> float:
+    sa = _shingles3(a)
+    sb = _shingles3(b)
+    if not sa or not sb:
+        return 0.0
+    return len(sa & sb) / max(1, len(sa | sb))
+
+
+def _caption_too_similar(caption: str, recent: List[str], threshold: float) -> bool:
+    for prev in recent:
+        if _jaccard_similarity_3gram(caption, prev) > threshold:
+            return True
+    return False
 
 
 def _recent_platform_openers(platform: str, limit: int = 3) -> List[str]:
@@ -679,7 +772,8 @@ def _scrub_banned_phrases(text: str) -> str:
             # Replace banned phrase with neutral wording
             s = re.sub(re.escape(bp), "stable conditions", s, flags=re.I)
             low = s.lower()
-    # Soften overly technical phrasing
+    # Remove forced lead-ins and soften overly technical phrasing
+    s = re.sub(r"(?i)\bthink of it (like|as)\b[:\s]*", "", s)
     s = re.sub(r"inward-pointing field component", "southward field orientation", s, flags=re.I)
     s = re.sub(r"interplanetary field", "field orientation", s, flags=re.I)
     # light n-gram de-dupe: collapse repeated bigrams
@@ -718,6 +812,9 @@ def _build_facts(ctx: Dict[str, Any]) -> Dict[str, Any]:
         "severe_summary": ctx.get("severe_summary"),
         # Removed intro_hint and banned_openers from facts passed to LLM
         "metaphor_hint": ctx.get("metaphor_hint"),
+        "metaphor_pool": ctx.get("metaphor_pool") or [],
+        "recent_analogies": ctx.get("recent_analogies") or [],
+        "template_id": ctx.get("template_id"),
     }
 
 
@@ -789,7 +886,7 @@ def _extract_first_json_object(text: str) -> Optional[str]:
     return None
 
 
-def _validate_rewrite(obj: Any) -> Optional[Dict[str, str]]:
+def _validate_rewrite(obj: Any, facts: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, str]]:
     """Ensure JSON has required keys. For number policy: forbid digits in caption/snapshot, but allow in affects/playbook (e.g., "5–10 min")."""
     if not isinstance(obj, dict):
         _dbg("validate: not a dict")
@@ -804,10 +901,26 @@ def _validate_rewrite(obj: Any) -> Optional[Dict[str, str]]:
         if _contains_digits(obj[k]):
             _dbg(f"validate: digits found in {k}")
             return None
+    combined = " ".join(obj.get(k, "") for k in ["caption", "snapshot", "affects", "playbook"]).lower()
+    cmes = to_float((facts or {}).get("cmes_24h")) or 0
+    flares = to_float((facts or {}).get("flares_24h")) or 0
+    severe = str((facts or {}).get("severe_summary") or "").strip()
+    kp = to_float((facts or {}).get("kp_max_24h"))
+
+    if cmes <= 0 and re.search(r"\b(cme|cmes|coronal mass ejection)\b", combined):
+        _dbg("validate: cme mention without supporting context")
+        return None
+    if flares <= 0 and re.search(r"\b(x-class|m-class)\b", combined):
+        _dbg("validate: flare-class mention without supporting context")
+        return None
+    severe_allowed = bool(severe) or (kp is not None and kp >= 5)
+    if not severe_allowed and re.search(r"\b(proton storm|radiation storm|g5)\b", combined):
+        _dbg("validate: severe storm mention without supporting context")
+        return None
     return obj
 
 
-def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str], facts: Dict[str, Any]) -> Optional[Dict[str, str]]:
+def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str], facts: Dict[str, Any], temperature: float = 0.8, template_id: Optional[int] = None) -> Optional[Dict[str, str]]:
     """Call the LLM to rewrite into interpretive, number-free JSON. Returns dict or None."""
     if not client:
         return None
@@ -818,7 +931,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
         "Write in crisp, human language (not a bulletin or press release). Avoid sterile or overly technical phrasing (e.g., 'inward-pointing field component'). Prefer plain equivalents like 'southward field orientation' or 'field leaning south'. "
-        "Include one playful metaphor in the caption and allow one short humanizing aside in the body (max one additional sentence total). Do not stack metaphors. Use metaphor_hint as a theme; you may paraphrase it. "
+        "Humor is optional. If you use an analogy, keep it to one sentence max and do not use the phrase 'Think of it like'. Vary phrasing. Never start a sentence with 'Think of it like'. You may use metaphor_pool as guidance or invent a fresh analogy. Do not reuse any recent_analogies. "
         "Do not start with a label like 'Gaia Eyes signal:' or 'Gaia Eyes forecast:'. Start directly with the summary. "
         "Keep humor warm and grounded (no doom, no sarcasm). "
         "No emojis. No questions. "
@@ -830,7 +943,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         "If severe_summary exists, include one calm safety sentence (no numbers). "
         "Do not repeat any sentence verbatim. "
         "Aim for: caption 3–5 sentences; snapshot 3–5 sentences; affects 3–4 sentences; playbook 3–5 bullets. "
-        "Do not include section headers or labels such as 'Space situation:', 'Space Weather Snapshot:', 'How people may feel:', or 'Care notes:'. Write each field as plain paragraphs or bullets only. "
+        "Do not include section headers or labels such as 'Space situation:', 'Space Weather Snapshot:', 'How people may feel:', or 'Care notes:'. Write each field as plain paragraphs or bullets only. Respect style.template_id and style.template_map to decide sentence order for caption only; rearrange the same facts without adding new claims. "
     )
 
     payload = {
@@ -853,6 +966,10 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             ],
             # Removed intro_hint and banned_openers from style
             "metaphor_hint": facts.get("metaphor_hint"),
+            "metaphor_pool": facts.get("metaphor_pool") or [],
+            "recent_analogies": facts.get("recent_analogies") or [],
+            "template_id": template_id if template_id is not None else facts.get("template_id"),
+            "template_map": CAPTION_STRUCTURE_TEMPLATES,
         },
         "constraints": {
             "omit_numbers": True,
@@ -871,7 +988,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         resp = _chat_create_compat(
             client,
             model=model,
-            temperature=0.8,
+            temperature=temperature,
             top_p=0.9,
             presence_penalty=0.3,
             frequency_penalty=0.2,
@@ -957,7 +1074,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         # Make response robust: if hashtags missing, inject a sane default before validation
         if isinstance(obj, dict) and ("hashtags" not in obj or not isinstance(obj.get("hashtags"), str) or not obj.get("hashtags").strip()):
             obj["hashtags"] = "#GaiaEyes #SpaceWeather #ChronicPain #Schumann #HRV #Sleep #Wellness"
-        valid = _validate_rewrite(obj)
+        valid = _validate_rewrite(obj, facts)
         _dbg("rewrite: JSON valid") if valid else _dbg("rewrite: JSON invalid by validator")
         if not valid:
             _dbg(f"rewrite: raw response snippet => {text[:180]}")
@@ -1008,15 +1125,27 @@ def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: 
     facts = _build_facts(ctx)
 
     # Try once
-    out = _rewrite_json_interpretive(client, draft, facts)
+    template_id = facts.get("template_id") if isinstance(facts.get("template_id"), int) else None
+    out = _rewrite_json_interpretive(client, draft, facts, temperature=0.8, template_id=template_id)
     _dbg("rewrite: primary succeeded") if out else _dbg("rewrite: primary failed; retrying")
+    if out and EARTHSCOPE_SIM_GUARD:
+        recent_caps = [x for x in (ctx.get("recent_captions") or []) if isinstance(x, str)]
+        if _caption_too_similar(out.get("caption", ""), recent_caps, EARTHSCOPE_SIM_THRESH):
+            _dbg("rewrite: similarity guard triggered; trying alternate template")
+            alt_template = _select_caption_template_id(_ctx_day_iso(ctx), _ctx_platform(ctx), salt=1)
+            out_retry = _rewrite_json_interpretive(client, draft, facts, temperature=0.95, template_id=alt_template)
+            if out_retry:
+                out = out_retry
+                facts["template_id"] = alt_template
+
     if out:
         return out
     # Try a second time with a slightly different temperature
     client_tweak = client
     try:
         # Some SDKs allow per-call overrides only; we just reissue with different params inside helper if needed.
-        out = _rewrite_json_interpretive(client_tweak, draft, facts)
+        alt_template = _select_caption_template_id(_ctx_day_iso(ctx), _ctx_platform(ctx), salt=2)
+        out = _rewrite_json_interpretive(client_tweak, draft, facts, temperature=0.9, template_id=alt_template)
     except Exception:
         out = None
 
@@ -2000,8 +2129,13 @@ def main():
         "platform": args.platform,
     }
     ctx["banned_openers"] = _recent_platform_openers(args.platform, limit=3)
+    recent_captions = _recent_platform_captions(args.platform, limit=EARTHSCOPE_SIM_RECENT, before_day=day)
+    ctx["recent_captions"] = recent_captions
     ctx["intro_hint"] = _select_intro_line(day, args.platform, ctx.get("banned_openers"))
     ctx["metaphor_hint"] = _select_metaphor_hint(day, args.platform)
+    ctx["metaphor_pool"] = _select_metaphor_pool(day, args.platform, size=8)
+    ctx["recent_analogies"] = _extract_recent_analogies(recent_captions)
+    ctx["template_id"] = _select_caption_template_id(day, args.platform)
 
     # Fill Kp 'now' from the marts if available
     try:
