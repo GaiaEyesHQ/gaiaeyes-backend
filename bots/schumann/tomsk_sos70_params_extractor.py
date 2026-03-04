@@ -177,6 +177,13 @@ def lane_window_to_rows(roi, norm_lo, norm_hi, pad_top=4, pad_bot=18):
     y_hi = max(y0i, min(y1i - 1, y_hi))
     return y0i, y1i, min(y_lo, y_hi), max(y_lo, y_hi)
 
+def find_series_style(chart_type, series_name):
+    for _key, (label, rgb, bgr_draw, f_lbl, a_lbl, q_lbl) in SERIES.items():
+        n = {"F": f_lbl, "A": a_lbl, "Q": q_lbl}[chart_type]
+        if n == series_name:
+            return {"label": label, "rgb": rgb, "draw": bgr_draw}
+    return None
+
 def attach_lane_norms(picks, roi, chart_type):
     lanes = SERIES_LANE_WINDOWS.get(chart_type, {})
     out = dict(picks)
@@ -206,6 +213,63 @@ def convert_picks_to_values(picks, chart_type):
         ln = float(np.clip(ln, 0.0, 1.0))
         values[series_name] = float(vmax - ln * (vmax - vmin))
     return values
+
+def refine_series_local_snap(img_bgr, roi, x_center, picks, chart_type, series_name, search_px=6, band_px=2):
+    """
+    Small local y-snap around an existing pick to reduce residual 1-3 px offsets.
+    Keeps the search constrained to both the lane and a local neighborhood.
+    """
+    if series_name not in picks:
+        return picks, {}
+    style = find_series_style(chart_type, series_name)
+    if style is None:
+        return picks, {}
+    lanes = SERIES_LANE_WINDOWS.get(chart_type, {})
+    if series_name not in lanes:
+        return picks, {}
+
+    x0, y0, x1, y1 = roi
+    x = int(np.clip(x_center, x0 + 1, x1 - 2))
+    lo = max(x0, x - int(band_px))
+    hi = min(x1, x + int(band_px) + 1)
+
+    y0i, y1i, lane_y0, lane_y1 = lane_window_to_rows(roi, lanes[series_name][0], lanes[series_name][1])
+    crop = img_bgr[y0i:y1i, lo:hi, :]
+    if crop.size == 0:
+        return picks, {}
+
+    crop_hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    tgt_hsv = bgr_to_hsv_color((style["rgb"][2], style["rgb"][1], style["rgb"][0]))
+    row_cost = hsv_row_distance(crop_hsv, tgt_hsv, style["label"]).astype(np.float32).ravel()
+    row_cost = cv2.blur(row_cost.reshape(-1, 1), (1, 5)).ravel()
+
+    # Hard lane gate
+    lane0 = max(0, lane_y0 - y0i)
+    lane1 = min(crop.shape[0] - 1, lane_y1 - y0i)
+    lane_mask = np.ones_like(row_cost) * 8.0
+    lane_mask[lane0:lane1 + 1] = 0.0
+    row_cost = row_cost + lane_mask
+
+    y_ref = int(np.clip(int(picks[series_name]["y_px"]) - y0i, 0, crop.shape[0] - 1))
+    s0 = max(lane0, y_ref - int(search_px))
+    s1 = min(lane1, y_ref + int(search_px))
+    if s1 <= s0:
+        return picks, {}
+
+    y_rel = int(s0 + int(np.argmin(row_cost[s0:s1 + 1])))
+    y_pix = int(y0i + y_rel)
+    y_norm = (y_pix - y0i) / max(1.0, float(y1i - y0i))
+    lane_norm = (float(y_pix) - float(lane_y0)) / max(1.0, float(lane_y1 - lane_y0))
+
+    picks[series_name]["y_px"] = int(y_pix)
+    picks[series_name]["y_norm"] = float(y_norm)
+    picks[series_name]["lane_norm"] = float(np.clip(lane_norm, 0.0, 1.0))
+    dbg = {
+        f"{series_name.lower()}_local_snap_x": int(x),
+        f"{series_name.lower()}_local_snap_y_px": int(y_pix),
+        f"{series_name.lower()}_local_snap_search_px": int(search_px),
+    }
+    return picks, dbg
 
 def fetch_image(url, timeout=30):
     r = requests.get(url, timeout=timeout, headers={"User-Agent":"Mozilla/5.0"})
@@ -804,6 +868,14 @@ def main():
         dbgF.update(dbgF_path)
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xA_safe_right)
     picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xQ_safe_right)
+
+    picksF, dbgF_f4 = refine_series_local_snap(F_img, roiF, xF_pick, picksF, "F", "F4", search_px=7, band_px=2)
+    if dbgF_f4:
+        dbgF.update(dbgF_f4)
+    picksA, dbgA_a1 = refine_series_local_snap(A_img, roiA, xA_pick, picksA, "A", "A1", search_px=6, band_px=2)
+    if dbgA_a1:
+        dbgA.update(dbgA_a1)
+
     picksF = attach_lane_norms(picksF, roiF, "F")
     picksA = attach_lane_norms(picksA, roiA, "A")
     picksQ = attach_lane_norms(picksQ, roiQ, "Q")
