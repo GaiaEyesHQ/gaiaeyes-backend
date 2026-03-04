@@ -61,7 +61,7 @@ SERIES_LANE_WINDOWS = {
 PICK_LANE_WINDOWS = {
     "F": {"F1": (0.02, 0.22), "F2": (0.26, 0.45), "F3": (0.43, 0.59), "F4": (0.62, 0.80)},
     "A": {"A1": (0.03, 0.32), "A2": (0.25, 0.60), "A3": (0.42, 0.76), "A4": (0.68, 0.98)},
-    "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.99)},
+    "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.96)},
 }
 
 # Per-series value ranges read from SOS70 chart axes (top=max, bottom=min).
@@ -949,6 +949,26 @@ def main():
         )
         if dbgA_a2_ord:
             dbgA.update(dbgA_a2_ord)
+    picksQ, dbgQ_q4 = refine_series_local_snap(
+        Q_img, roiQ, xQ_pick, picksQ, "Q", "Q4", search_px=8, band_px=2, edge_margin_px=3
+    )
+    if dbgQ_q4:
+        dbgQ.update(dbgQ_q4)
+    if "Q3" in picksQ and "Q4" in picksQ:
+        picksQ, dbgQ_q4_ord = refine_series_local_snap(
+            Q_img,
+            roiQ,
+            xQ_pick,
+            picksQ,
+            "Q",
+            "Q4",
+            search_px=10,
+            band_px=2,
+            edge_margin_px=3,
+            min_y_px=int(picksQ["Q3"]["y_px"]) + 12,
+        )
+        if dbgQ_q4_ord:
+            dbgQ.update(dbgQ_q4_ord)
 
     picksF = attach_lane_norms(picksF, roiF, "F")
     picksA = attach_lane_norms(picksA, roiA, "A")
