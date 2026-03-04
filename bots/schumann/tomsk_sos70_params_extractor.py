@@ -28,7 +28,7 @@ TICK_STRIP_H = 14
 RIGHT_EXCLUDE_PX = 70
 RIGHT_LOGO_SCAN_PX = 180
 RIGHT_PICK_SAFETY_PX = 24
-RIGHT_PICK_SAFETY_PX_F = 42
+RIGHT_PICK_SAFETY_PX_F = 30
 UTC_TO_TSST_HOURS = 7
 TICK_MIN_SEP = 8
 TICK_MIN_COUNT = 24
@@ -738,7 +738,7 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
             mask[wy0c:wy1c+1] = 0.0
             row_cost = row_cost + mask
             # Mild center bias inside the valid window; disabled for F where it caused drift.
-            bias_weight = 0.0 if (chart_type == "F" or series_name in {"A4", "Q4"}) else 0.10
+            bias_weight = 0.0 if (chart_type == "F" or series_name in {"A2", "A4", "Q4"}) else 0.10
             if bias_weight > 0.0:
                 c = 0.5 * (wy0c + wy1c)
                 span = max(3.0, 0.5 * (wy1c - wy0c))
@@ -892,10 +892,10 @@ def main():
     dbgF, dbgA, dbgQ = dbg_map["F"], dbg_map["A"], dbg_map["Q"]
 
     # Read traces slightly left of x_now to avoid right-edge repaint artifacts.
-    xF_pick, xF_safe_right = safe_pick_x(xF, roiF, dbgF, back_px=2, safety_px=RIGHT_PICK_SAFETY_PX_F)
+    xF_pick, xF_safe_right = safe_pick_x(xF, roiF, dbgF, back_px=1, safety_px=RIGHT_PICK_SAFETY_PX_F)
     xF_pick_edge = int(np.clip(min(xF, xF_safe_right), roiF[0] + 1, roiF[2] - 2))
     xA_pick, xA_safe_right = safe_pick_x(xA, roiA, dbgA, back_px=4)
-    xQ_pick, xQ_safe_right = safe_pick_x(xQ, roiQ, dbgQ, back_px=2)
+    xQ_pick, xQ_safe_right = safe_pick_x(xQ, roiQ, dbgQ, back_px=1)
     dbgF["x_pick"] = xF_pick
     dbgF["x_pick_edge"] = xF_pick_edge
     dbgF["x_pick_safe_right"] = xF_safe_right
@@ -939,8 +939,8 @@ def main():
         band_px=2,
         edge_margin_px=1,
         search_up_px=4,
-        search_down_px=72,
-        prefer_lower_weight=0.12,
+        search_down_px=54,
+        prefer_lower_weight=0.08,
     )
     if dbgA_a4:
         dbgA.update(dbgA_a4)

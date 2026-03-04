@@ -209,6 +209,28 @@ jobs:
             echo "Set secret SUPABASE_SERVICE_ROLE (or SUPABASE_SERVICE_ROLE_KEY) in GitHub Actions secrets."
             exit 1
           fi
+          ROLE_CLAIM="$(python - <<'PY'
+import os, json, base64
+tok = (os.getenv("SUPABASE_SERVICE_ROLE") or "").strip()
+role = "invalid"
+parts = tok.split(".")
+if len(parts) >= 2:
+    payload = parts[1]
+    payload += "=" * (-len(payload) % 4)
+    try:
+        obj = json.loads(base64.urlsafe_b64decode(payload.encode("utf-8")).decode("utf-8"))
+        role = str(obj.get("role") or obj.get("user_role") or "unknown")
+    except Exception:
+        role = "decode_error"
+print(role)
+PY
+)"
+          echo "Supabase key role claim: ${ROLE_CLAIM}"
+          if [ "${ROLE_CLAIM}" != "service_role" ]; then
+            echo "ERROR: Supabase key role claim is '${ROLE_CLAIM}', expected 'service_role'."
+            echo "Use the Service Role key secret, not anon/public key."
+            exit 1
+          fi
 
       - name: Remove timestamped media artifacts (keep only *_latest.*)
         if: ${{ steps.stage_latest.outputs.ok == 'true' }}
