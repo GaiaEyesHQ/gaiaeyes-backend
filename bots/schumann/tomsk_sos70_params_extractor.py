@@ -872,7 +872,12 @@ def main():
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xA_safe_right)
     picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xQ_safe_right)
 
-    picksF, dbgF_f4 = refine_series_local_snap(F_img, roiF, xF_pick, picksF, "F", "F4", search_px=7, band_px=2)
+    picksF, dbgF_f3 = refine_series_local_snap(F_img, roiF, xF_pick_edge, picksF, "F", "F3", search_px=6, band_px=2)
+    if dbgF_f3:
+        dbgF.update(dbgF_f3)
+    picksF, dbgF_f4 = refine_series_local_snap(
+        F_img, roiF, xF_pick_edge, picksF, "F", "F4", search_px=8, band_px=2, edge_margin_px=1
+    )
     if dbgF_f4:
         dbgF.update(dbgF_f4)
     picksA, dbgA_a1 = refine_series_local_snap(A_img, roiA, xA_pick, picksA, "A", "A1", search_px=6, band_px=2)
