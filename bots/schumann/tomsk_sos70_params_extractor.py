@@ -57,6 +57,13 @@ SERIES_LANE_WINDOWS = {
     "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.99)},
 }
 
+# Pick windows can be narrower than scale windows to avoid high-side mis-locks.
+PICK_LANE_WINDOWS = {
+    "F": {"F1": (0.02, 0.22), "F2": (0.26, 0.45), "F3": (0.43, 0.59), "F4": (0.62, 0.80)},
+    "A": {"A1": (0.03, 0.32), "A2": (0.25, 0.60), "A3": (0.42, 0.76), "A4": (0.68, 0.98)},
+    "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.99)},
+}
+
 # Per-series value ranges read from SOS70 chart axes (top=max, bottom=min).
 SERIES_VALUE_RANGES = {
     "F": {"F1": (7.20, 8.40), "F2": (13.10, 14.50), "F3": (18.60, 20.20), "F4": (24.10, 26.50)},
@@ -214,7 +221,19 @@ def convert_picks_to_values(picks, chart_type):
         values[series_name] = float(vmax - ln * (vmax - vmin))
     return values
 
-def refine_series_local_snap(img_bgr, roi, x_center, picks, chart_type, series_name, search_px=6, band_px=2, edge_margin_px=0):
+def refine_series_local_snap(
+    img_bgr,
+    roi,
+    x_center,
+    picks,
+    chart_type,
+    series_name,
+    search_px=6,
+    band_px=2,
+    edge_margin_px=0,
+    min_y_px=None,
+    max_y_px=None,
+):
     """
     Small local y-snap around an existing pick to reduce residual 1-3 px offsets.
     Keeps the search constrained to both the lane and a local neighborhood.
@@ -224,7 +243,7 @@ def refine_series_local_snap(img_bgr, roi, x_center, picks, chart_type, series_n
     style = find_series_style(chart_type, series_name)
     if style is None:
         return picks, {}
-    lanes = SERIES_LANE_WINDOWS.get(chart_type, {})
+    lanes = PICK_LANE_WINDOWS.get(chart_type, {})
     if series_name not in lanes:
         return picks, {}
 
@@ -249,6 +268,12 @@ def refine_series_local_snap(img_bgr, roi, x_center, picks, chart_type, series_n
     if lane1 <= lane0:
         lane0 = max(0, lane_y0 - y0i)
         lane1 = min(crop.shape[0] - 1, lane_y1 - y0i)
+    if min_y_px is not None:
+        lane0 = max(lane0, int(min_y_px) - y0i)
+    if max_y_px is not None:
+        lane1 = min(lane1, int(max_y_px) - y0i)
+    if lane1 <= lane0:
+        return picks, {}
     lane_mask = np.ones_like(row_cost) * 8.0
     lane_mask[lane0:lane1 + 1] = 0.0
     row_cost = row_cost + lane_mask
@@ -671,7 +696,7 @@ def pick_colored_lines_at_x(img_bgr, roi, x_now, chart_type="F", band_px=5, freq
 
     # Chart-specific normalized row windows to avoid grid/legend false positives.
     # These bands follow stable visual lanes on SOS70 parameter plots.
-    lane_windows = SERIES_LANE_WINDOWS
+    lane_windows = PICK_LANE_WINDOWS
 
     def norm_window_to_rows(norm_lo, norm_hi):
         h = max(1.0, float(y1i - y0i))
@@ -743,7 +768,7 @@ def refine_f1_f4_with_path_tracking(img_bgr, roi, x_now, picks):
     H = int(crop.shape[0])
     W = int(crop.shape[1])
     target_col = int(np.clip(x_now - x_lo, 0, W - 1))
-    lane_norm = {"F1": SERIES_LANE_WINDOWS["F"]["F1"], "F4": SERIES_LANE_WINDOWS["F"]["F4"]}
+    lane_norm = {"F1": PICK_LANE_WINDOWS["F"]["F1"], "F4": PICK_LANE_WINDOWS["F"]["F4"]}
     series_meta = {
         "F1": {"label": "white", "rgb": (240, 240, 240), "smooth": 0.45},
         "F4": {"label": "green", "rgb": (40, 160, 60), "smooth": 0.35},
@@ -891,6 +916,36 @@ def main():
     )
     if dbgA_a4:
         dbgA.update(dbgA_a4)
+
+    # Enforce vertical ordering where neighboring series must remain separated.
+    if "F1" in picksF and "F2" in picksF:
+        picksF, dbgF_f2_ord = refine_series_local_snap(
+            F_img,
+            roiF,
+            xF_pick_edge,
+            picksF,
+            "F",
+            "F2",
+            search_px=8,
+            band_px=2,
+            min_y_px=int(picksF["F1"]["y_px"]) + 10,
+        )
+        if dbgF_f2_ord:
+            dbgF.update(dbgF_f2_ord)
+    if "A1" in picksA and "A2" in picksA:
+        picksA, dbgA_a2_ord = refine_series_local_snap(
+            A_img,
+            roiA,
+            xA_pick,
+            picksA,
+            "A",
+            "A2",
+            search_px=9,
+            band_px=2,
+            min_y_px=int(picksA["A1"]["y_px"]) + 10,
+        )
+        if dbgA_a2_ord:
+            dbgA.update(dbgA_a2_ord)
 
     picksF = attach_lane_norms(picksF, roiF, "F")
     picksA = attach_lane_norms(picksA, roiA, "A")
