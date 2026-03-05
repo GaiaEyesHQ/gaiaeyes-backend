@@ -61,7 +61,7 @@ SERIES_LANE_WINDOWS = {
 PICK_LANE_WINDOWS = {
     "F": {"F1": (0.02, 0.22), "F2": (0.26, 0.45), "F3": (0.43, 0.59), "F4": (0.62, 0.80)},
     "A": {"A1": (0.03, 0.32), "A2": (0.25, 0.60), "A3": (0.42, 0.76), "A4": (0.68, 0.995)},
-    "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.995)},
+    "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.97)},
 }
 
 # Per-series value ranges read from SOS70 chart axes (top=max, bottom=min).
@@ -911,6 +911,22 @@ def main():
     picksF, dbgF_path = refine_f1_f4_with_path_tracking(F_img, roiF, xF_pick_edge, picksF)
     if dbgF_path:
         dbgF.update(dbgF_path)
+    picksF, dbgF_f1 = refine_series_local_snap(
+        F_img,
+        roiF,
+        xF_pick_edge,
+        picksF,
+        "F",
+        "F1",
+        search_px=8,
+        band_px=2,
+        edge_margin_px=1,
+        search_up_px=2,
+        search_down_px=12,
+        prefer_lower_weight=0.05,
+    )
+    if dbgF_f1:
+        dbgF.update(dbgF_f1)
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xA_safe_right)
     picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xQ_safe_right)
 
@@ -962,7 +978,8 @@ def main():
         band_px=2,
         edge_margin_px=1,
         search_up_px=6,
-        search_down_px=18,
+        search_down_px=30,
+        prefer_lower_weight=0.04,
     )
     if dbgA_a3:
         dbgA.update(dbgA_a3)
@@ -977,8 +994,8 @@ def main():
         band_px=2,
         edge_margin_px=1,
         search_up_px=4,
-        search_down_px=54,
-        prefer_lower_weight=0.08,
+        search_down_px=36,
+        prefer_lower_weight=0.05,
     )
     if dbgA_a4:
         dbgA.update(dbgA_a4)
@@ -1052,6 +1069,24 @@ def main():
         )
         if dbgA_a3_ord:
             dbgA.update(dbgA_a3_ord)
+    if "A3" in picksA and "A4" in picksA:
+        picksA, dbgA_a4_ord = refine_series_local_snap(
+            A_img,
+            roiA,
+            xA_pick,
+            picksA,
+            "A",
+            "A4",
+            search_px=10,
+            band_px=2,
+            edge_margin_px=1,
+            search_up_px=4,
+            search_down_px=42,
+            prefer_lower_weight=0.06,
+            min_y_px=int(picksA["A3"]["y_px"]) + 12,
+        )
+        if dbgA_a4_ord:
+            dbgA.update(dbgA_a4_ord)
     picksQ, dbgQ_q4 = refine_series_local_snap(
         Q_img,
         roiQ,
@@ -1061,10 +1096,10 @@ def main():
         "Q4",
         search_px=9,
         band_px=2,
-        edge_margin_px=1,
+        edge_margin_px=2,
         search_up_px=4,
-        search_down_px=72,
-        prefer_lower_weight=0.12,
+        search_down_px=36,
+        prefer_lower_weight=0.04,
     )
     if dbgQ_q4:
         dbgQ.update(dbgQ_q4)
@@ -1078,10 +1113,10 @@ def main():
             "Q4",
             search_px=10,
             band_px=2,
-            edge_margin_px=1,
+            edge_margin_px=2,
             search_up_px=4,
-            search_down_px=72,
-            prefer_lower_weight=0.12,
+            search_down_px=36,
+            prefer_lower_weight=0.04,
             min_y_px=int(picksQ["Q3"]["y_px"]) + 12,
         )
         if dbgQ_q4_ord:
