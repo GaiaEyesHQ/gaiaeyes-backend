@@ -616,9 +616,66 @@ class SupabaseWriter:
 
 
 async def fetch_json(client: httpx.AsyncClient, url: str, params: dict[str, Any] | None = None) -> Any:
-    resp = await client.get(url, params=params, timeout=60)
-    resp.raise_for_status()
-    return resp.json()
+    """
+    Fetch JSON with simple retry/backoff for transient upstream errors (e.g., NASA 503).
+
+    Retries on: 429, 500, 502, 503, 504 and common network errors.
+    Honors Retry-After header when present.
+    """
+    max_tries = int(os.getenv("HTTP_RETRY_TRIES", "5"))
+    base_sleep = float(os.getenv("HTTP_RETRY_BASE_SLEEP", "1.5"))
+    timeout_s = float(os.getenv("HTTP_TIMEOUT_SECS", "60"))
+
+    last_exc: Exception | None = None
+    for attempt in range(1, max_tries + 1):
+        try:
+            resp = await client.get(url, params=params, timeout=timeout_s)
+            # Retry on transient server responses
+            if resp.status_code in (429, 500, 502, 503, 504):
+                retry_after = resp.headers.get("Retry-After")
+                if retry_after:
+                    try:
+                        sleep_s = float(retry_after)
+                    except Exception:
+                        sleep_s = base_sleep * attempt
+                else:
+                    sleep_s = base_sleep * attempt
+                logger.warning(
+                    "HTTP %s for %s (attempt %d/%d); retrying in %.1fs",
+                    resp.status_code,
+                    url,
+                    attempt,
+                    max_tries,
+                    sleep_s,
+                )
+                if attempt < max_tries:
+                    await asyncio.sleep(sleep_s)
+                    continue
+            resp.raise_for_status()
+            return resp.json()
+        except (httpx.RequestError, httpx.TimeoutException, httpx.HTTPStatusError, json.JSONDecodeError) as exc:
+            last_exc = exc
+            # For HTTPStatusError, we only want to retry transient codes; others should raise immediately.
+            if isinstance(exc, httpx.HTTPStatusError):
+                code = exc.response.status_code if exc.response is not None else None
+                if code not in (429, 500, 502, 503, 504):
+                    raise
+            sleep_s = base_sleep * attempt
+            logger.warning(
+                "HTTP fetch failed for %s (attempt %d/%d): %s; retrying in %.1fs",
+                url,
+                attempt,
+                max_tries,
+                exc,
+                sleep_s,
+            )
+            if attempt < max_tries:
+                await asyncio.sleep(sleep_s)
+                continue
+            break
+
+    assert last_exc is not None
+    raise last_exc
 
 
 
@@ -713,7 +770,11 @@ async def ingest_enlil(
         "endDate": now.strftime("%Y-%m-%d"),
         "api_key": os.getenv("NASA_API_KEY"),
     }
-    data = await fetch_json(client, "https://api.nasa.gov/DONKI/WSAEnlilSimulations", params)
+    try:
+        data = await fetch_json(client, "https://api.nasa.gov/DONKI/WSAEnlilSimulations", params)
+    except Exception as exc:
+        logger.warning("WSA–Enlil fetch failed after retries (%s); skipping ENLIL ingest for this run", exc)
+        return
 
     # Prefetch CME plane‑of‑sky speeds by activityID as a robust fallback
     try:
