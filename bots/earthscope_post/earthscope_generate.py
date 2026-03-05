@@ -1934,6 +1934,13 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
         if any(first_line.startswith(p) for p in BAN_CAPTION_OPENERS):
             tone = _tone_from_ctx(ctx)
             hook = _pick_hook(tone, last_used=_recent_openers(7))
+            # Replace a sterile opener with a hook, keeping the remainder of the caption.
+            first_split = re.split(r"(?<=\.)\s+", caption, maxsplit=1)
+            rest = first_split[1].strip() if len(first_split) > 1 else caption
+            caption = f"{hook} {rest}".strip()
+            caption = _scrub_banned_phrases(caption)
+            tone = _tone_from_ctx(ctx)
+            hook = _pick_hook(tone, last_used=_recent_openers(7))
             first_split = re.split(r"(?<=\.)\s+", caption, maxsplit=1)
             rest = first_split[1] if len(first_split) > 1 else caption
             caption = f"{hook} {rest}".strip()
