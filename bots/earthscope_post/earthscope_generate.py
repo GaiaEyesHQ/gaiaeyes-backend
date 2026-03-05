@@ -2006,7 +2006,7 @@ Data:
         resp = _chat_create_compat(
             client,
             model=model, temperature=0.75, max_completion_tokens=900,
-            messages=[{"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, catchy, and helpful. Balance science, humor and mysticism."},
+            messages=[{"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, cackl, and helpful. Balance science, humor and mysticism."},
                      {"role":"user","content": prompt}],
         )
         text = resp.choices[0].message.content.strip()
@@ -2024,7 +2024,7 @@ Data:
                 cur = "play"; playbook += b + "\n\n"; continue
             if b.startswith("#") and " " in b and not hashtags:
                 hashtags = b; continue
-            if cur == "snap": snapshot += b + "\n\n"
+            if cur == "snap": snapshot += b + 
             elif cur == "aff": affects += b + "\n\n"
             elif cur == "play": playbook += b + "\n\n"
             else: snapshot += b + "\n\n"
