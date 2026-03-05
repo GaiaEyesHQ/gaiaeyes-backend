@@ -918,7 +918,18 @@ def main():
     if dbgF_f3:
         dbgF.update(dbgF_f3)
     picksF, dbgF_f4 = refine_series_local_snap(
-        F_img, roiF, xF_pick_edge, picksF, "F", "F4", search_px=4, band_px=1, edge_margin_px=3
+        F_img,
+        roiF,
+        xF_pick_edge,
+        picksF,
+        "F",
+        "F4",
+        search_px=5,
+        band_px=2,
+        edge_margin_px=1,
+        search_up_px=3,
+        search_down_px=12,
+        prefer_lower_weight=0.06,
     )
     if dbgF_f4:
         dbgF.update(dbgF_f4)
@@ -947,6 +958,9 @@ def main():
 
     # Enforce vertical ordering where neighboring series must remain separated.
     if "F1" in picksF and "F2" in picksF:
+        f2_max_y = None
+        if "F3" in picksF:
+            f2_max_y = int(picksF["F3"]["y_px"]) - 10
         picksF, dbgF_f2_ord = refine_series_local_snap(
             F_img,
             roiF,
@@ -956,7 +970,11 @@ def main():
             "F2",
             search_px=8,
             band_px=2,
+            search_up_px=4,
+            search_down_px=12,
+            prefer_lower_weight=0.05,
             min_y_px=int(picksF["F1"]["y_px"]) + 10,
+            max_y_px=f2_max_y,
         )
         if dbgF_f2_ord:
             dbgF.update(dbgF_f2_ord)
