@@ -23,7 +23,7 @@ import hashlib
 
 STYLE_GUIDE = (
     "Persona: Humorous researcher who studies space/earth frequencies and their effects on physiology. "
-    "Voice: Viral, plain‑language, humane, lightly empathic; first‑person is OK in short asides. "
+    "Voice: Viral, humorous, plain‑language, humane, lightly empathic; first‑person is OK in short asides. "
     "Audience: Chronic pain sufferers and people who consider themselves sensitive (HRV, sleep, nerve/pain flares during storms). "
     "Rules: Never contradict provided metrics; no emojis; no rhetorical questions. "
     "Prefer terms like 'active geomagnetics', 'autonomic/HRV', 'sleep quality', 'nerve sensitivity'. "
@@ -109,46 +109,46 @@ def _writer_model() -> Optional[str]:
 
 
 INTRO_LINES = [
-    "Gaia Eyes check-in: the sky has opinions today.",
-    "Gaia Eyes forecast: subtle field, real effects.",
-    "Gaia Eyes update: magnetic weather with personality.",
-    "Gaia Eyes report: nervous systems may notice today.",
-    "Gaia Eyes says: keep pacing and stay curious.",
-    "Gaia Eyes field note: calm outside, sensitive inside.",
-    "Gaia Eyes alert: today's signal is a mixed bag.",
-    "Gaia Eyes briefing: your body may read the room.",
-    "Gaia Eyes pulse: geomagnetics are setting the tone.",
-    "Gaia Eyes watch: the atmosphere feels a little spicy.",
-    "Gaia Eyes check: steady skies, better rhythm windows.",
-    "Gaia Eyes note: cosmic weather, human consequences.",
-    "Gaia Eyes lens: today favors pacing over force.",
-    "Gaia Eyes tracker: field shifts, mood shifts, plan shifts.",
-    "Gaia Eyes monitor: today asks for cleaner boundaries.",
-    "Gaia Eyes signal: active currents, gentle strategy.",
-    "Gaia Eyes status: quiet magnetics, useful focus.",
-    "Gaia Eyes forecast: friction pockets, keep it simple.",
-    "Gaia Eyes bulletin: your nervous system gets a vote.",
-    "Gaia Eyes readout: build slack into the schedule.",
-    "Gaia Eyes daily: steady effort beats heroic effort.",
-    "Gaia Eyes observation: subtle changes still count.",
-    "Gaia Eyes brief: field conditions can shape recovery.",
-    "Gaia Eyes outlook: protect sleep like it is medicine.",
-    "Gaia Eyes note: today rewards shorter work bursts.",
-    "Gaia Eyes update: magnetic texture is not perfectly flat.",
-    "Gaia Eyes check-in: calm-ish day, still pace wisely.",
-    "Gaia Eyes radar: expect waves, not catastrophe.",
-    "Gaia Eyes ping: it is a regulation-first day.",
-    "Gaia Eyes signal check: keep your load intentional.",
-    "Gaia Eyes weather desk: today has edge and nuance.",
-    "Gaia Eyes pulse report: optimize for consistency.",
-    "Gaia Eyes tracker says: reduce noise, protect bandwidth.",
-    "Gaia Eyes guide: nervous systems like predictability today.",
-    "Gaia Eyes update: charged backdrop, softer pacing.",
-    "Gaia Eyes check: light structure will help today.",
+    "The sky has opinions today.",
+    "Subtle field, real effects.",
+    "Magnetic weather with personality.",
+    "Nervous systems may notice today.",
+    "Keep pacing and stay curious.",
+    "Calm outside, sensitive inside.",
+    "Today's signal is a mixed bag.",
+    "Your body may read the room.",
+    "Geomagnetics are setting the tone.",
+    "The atmosphere feels a little spicy.",
+    "Steady skies, better rhythm windows.",
+    "Cosmic weather, human consequences.",
+    "Today favors pacing over force.",
+    "Field shifts, mood shifts, plan shifts.",
+    "Today asks for cleaner boundaries.",
+    "Active currents, gentle strategy.",
+    "Quiet magnetics, useful focus.",
+    "Friction pockets, keep it simple.",
+    "Your nervous system gets a vote.",
+    "Build slack into the schedule.",
+    "Steady effort beats heroic effort.",
+    "Subtle changes still count.",
+    "Field conditions can shape recovery.",
+    "Protect sleep like it is medicine.",
+    "Today rewards shorter work bursts.",
+    "Magnetic texture is not perfectly flat.",
+    "Calm-ish day, still pace wisely.",
+    "Expect waves, not catastrophe.",
+    "It is a regulation-first day.",
+    "Keep your load intentional.",
+    "Today has edge and nuance.",
+    "Optimize for consistency.",
+    "Reduce noise, protect bandwidth.",
+    "Nervous systems like predictability today.",
+    "Charged backdrop, softer pacing.",
+    "Light structure will help today.",
 ]
 
 METAPHOR_HINTS = [
-    "roller coaster",
+    "energy like a roller coaster",
     "over-caffeinated squirrel",
     "too many browser tabs",
     "cosmic espresso shot",
@@ -176,7 +176,7 @@ METAPHOR_HINTS = [
     "a mild headwind",
     "a humming transformer",
     "a tightrope with balance",
-    "small waves, not a tsunami",
+    "it's a doozie",
     "a flickering streetlight"
 ]
 
@@ -224,7 +224,7 @@ def _extract_recent_analogies(captions: List[str], limit: int = 5) -> List[str]:
     return out
 PHRASE_VARIANTS = {
     "feel_stable": [
-        "Steady field—good window for getting things done.",
+        "Steady energy field—good time for getting things done.",
         "Quieter field—use the mental clarity to your advantage today.",
         "Stable profile—set a simple plan and move steadily towards goals."
     ],
@@ -759,7 +759,7 @@ def _rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
         care_lines.append("- Hydrate; keep caffeine earlier in the day")
     playbook = "\n".join(care_lines)
 
-    tags = "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus"
+    tags = "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
     return {"caption": caption, "snapshot": snapshot, "affects": affects, "playbook": playbook, "hashtags": tags}
 
 # --- banned phrase and repetition scrubber ---

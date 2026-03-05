@@ -936,7 +936,19 @@ def main():
     picksA, dbgA_a1 = refine_series_local_snap(A_img, roiA, xA_pick, picksA, "A", "A1", search_px=6, band_px=2)
     if dbgA_a1:
         dbgA.update(dbgA_a1)
-    picksA, dbgA_a2 = refine_series_local_snap(A_img, roiA, xA_pick, picksA, "A", "A2", search_px=7, band_px=2)
+    picksA, dbgA_a2 = refine_series_local_snap(
+        A_img,
+        roiA,
+        xA_pick,
+        picksA,
+        "A",
+        "A2",
+        search_px=6,
+        band_px=2,
+        edge_margin_px=1,
+        search_up_px=4,
+        search_down_px=10,
+    )
     if dbgA_a2:
         dbgA.update(dbgA_a2)
     picksA, dbgA_a4 = refine_series_local_snap(
@@ -979,6 +991,9 @@ def main():
         if dbgF_f2_ord:
             dbgF.update(dbgF_f2_ord)
     if "A1" in picksA and "A2" in picksA:
+        a2_max_y = None
+        if "A3" in picksA:
+            a2_max_y = int(picksA["A3"]["y_px"]) - 12
         picksA, dbgA_a2_ord = refine_series_local_snap(
             A_img,
             roiA,
@@ -986,9 +1001,12 @@ def main():
             picksA,
             "A",
             "A2",
-            search_px=9,
+            search_px=8,
             band_px=2,
-            min_y_px=int(picksA["A1"]["y_px"]) + 10,
+            search_up_px=4,
+            search_down_px=10,
+            min_y_px=int(picksA["A1"]["y_px"]) + 14,
+            max_y_px=a2_max_y,
         )
         if dbgA_a2_ord:
             dbgA.update(dbgA_a2_ord)
