@@ -951,6 +951,21 @@ def main():
     )
     if dbgA_a2:
         dbgA.update(dbgA_a2)
+    picksA, dbgA_a3 = refine_series_local_snap(
+        A_img,
+        roiA,
+        xA_pick,
+        picksA,
+        "A",
+        "A3",
+        search_px=8,
+        band_px=2,
+        edge_margin_px=1,
+        search_up_px=6,
+        search_down_px=18,
+    )
+    if dbgA_a3:
+        dbgA.update(dbgA_a3)
     picksA, dbgA_a4 = refine_series_local_snap(
         A_img,
         roiA,
@@ -991,9 +1006,12 @@ def main():
         if dbgF_f2_ord:
             dbgF.update(dbgF_f2_ord)
     if "A1" in picksA and "A2" in picksA:
+        a2_min_y = int(picksA["A1"]["y_px"]) + 14
         a2_max_y = None
         if "A3" in picksA:
             a2_max_y = int(picksA["A3"]["y_px"]) - 12
+        if a2_max_y is not None and a2_max_y <= (a2_min_y + 4):
+            a2_max_y = None
         picksA, dbgA_a2_ord = refine_series_local_snap(
             A_img,
             roiA,
@@ -1005,11 +1023,35 @@ def main():
             band_px=2,
             search_up_px=4,
             search_down_px=10,
-            min_y_px=int(picksA["A1"]["y_px"]) + 14,
+            min_y_px=a2_min_y,
             max_y_px=a2_max_y,
         )
         if dbgA_a2_ord:
             dbgA.update(dbgA_a2_ord)
+    if "A2" in picksA and "A3" in picksA:
+        a3_min_y = int(picksA["A2"]["y_px"]) + 12
+        a3_max_y = None
+        if "A4" in picksA:
+            a3_max_y = int(picksA["A4"]["y_px"]) - 12
+        if a3_max_y is not None and a3_max_y <= (a3_min_y + 4):
+            a3_max_y = None
+        picksA, dbgA_a3_ord = refine_series_local_snap(
+            A_img,
+            roiA,
+            xA_pick,
+            picksA,
+            "A",
+            "A3",
+            search_px=12,
+            band_px=2,
+            edge_margin_px=1,
+            search_up_px=6,
+            search_down_px=32,
+            min_y_px=a3_min_y,
+            max_y_px=a3_max_y,
+        )
+        if dbgA_a3_ord:
+            dbgA.update(dbgA_a3_ord)
     picksQ, dbgQ_q4 = refine_series_local_snap(
         Q_img,
         roiQ,
