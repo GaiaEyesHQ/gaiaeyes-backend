@@ -61,7 +61,7 @@ SERIES_LANE_WINDOWS = {
 PICK_LANE_WINDOWS = {
     "F": {"F1": (0.02, 0.22), "F2": (0.26, 0.45), "F3": (0.43, 0.59), "F4": (0.62, 0.80)},
     "A": {"A1": (0.03, 0.32), "A2": (0.25, 0.60), "A3": (0.42, 0.76), "A4": (0.68, 0.995)},
-    "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.97)},
+    "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.95)},
 }
 
 # Per-series value ranges read from SOS70 chart axes (top=max, bottom=min).
@@ -784,7 +784,7 @@ def refine_f1_f4_with_path_tracking(img_bgr, roi, x_now, picks):
     target_col = int(np.clip(x_now - x_lo, 0, W - 1))
     lane_norm = {"F1": PICK_LANE_WINDOWS["F"]["F1"], "F4": PICK_LANE_WINDOWS["F"]["F4"]}
     series_meta = {
-        "F1": {"label": "white", "rgb": (240, 240, 240), "smooth": 0.45},
+        "F1": {"label": "white", "rgb": (240, 240, 240), "smooth": 0.65},
         "F4": {"label": "green", "rgb": (40, 160, 60), "smooth": 0.35},
     }
     dbg = {}
@@ -921,9 +921,9 @@ def main():
         search_px=8,
         band_px=2,
         edge_margin_px=1,
-        search_up_px=2,
-        search_down_px=12,
-        prefer_lower_weight=0.05,
+        search_up_px=1,
+        search_down_px=18,
+        prefer_lower_weight=0.10,
     )
     if dbgF_f1:
         dbgF.update(dbgF_f1)
@@ -1096,10 +1096,10 @@ def main():
         "Q4",
         search_px=9,
         band_px=2,
-        edge_margin_px=2,
+        edge_margin_px=3,
         search_up_px=4,
-        search_down_px=36,
-        prefer_lower_weight=0.04,
+        search_down_px=24,
+        prefer_lower_weight=0.02,
     )
     if dbgQ_q4:
         dbgQ.update(dbgQ_q4)
@@ -1113,10 +1113,10 @@ def main():
             "Q4",
             search_px=10,
             band_px=2,
-            edge_margin_px=2,
+            edge_margin_px=3,
             search_up_px=4,
-            search_down_px=36,
-            prefer_lower_weight=0.04,
+            search_down_px=24,
+            prefer_lower_weight=0.02,
             min_y_px=int(picksQ["Q3"]["y_px"]) + 12,
         )
         if dbgQ_q4_ord:

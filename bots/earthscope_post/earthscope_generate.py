@@ -926,7 +926,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         return None
 
     system_msg = (
-        "You are Gaia Eyes’ daily weather desk: grounded, practical, and lightly funny. "
+        "You are Gaia Eyes’ daily weather desk: viral, practical, and lightly funny. "
         "Interpret today’s space/earth conditions for humans. "
         "Do NOT cite numeric measurements or units for space-weather values (e.g., 'Kp 4.7', '386 km/s', 'nT', 'Hz'). "
         "It is OK to include small time ranges in practices (e.g., '5–10 min'). "
@@ -1073,7 +1073,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
             return None
         # Make response robust: if hashtags missing, inject a sane default before validation
         if isinstance(obj, dict) and ("hashtags" not in obj or not isinstance(obj.get("hashtags"), str) or not obj.get("hashtags").strip()):
-            obj["hashtags"] = "#GaiaEyes #SpaceWeather #ChronicPain #Schumann #HRV #Sleep #Wellness"
+            obj["hashtags"] = "#GaiaEyes #SpaceWeather #ChronicPain #Schumann #HRV #Frequency #Wellness"
         valid = _validate_rewrite(obj, facts)
         _dbg("rewrite: JSON valid") if valid else _dbg("rewrite: JSON invalid by validator")
         if not valid:
@@ -1120,7 +1120,7 @@ def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: 
         "snapshot": snapshot,
         "affects": affects,
         "playbook": playbook,
-        "hashtags": "#GaiaEyes #SpaceWeather #KpIndex #HRV #Sleep #Focus",
+        "hashtags": "#GaiaEyes #SpaceWeather #Schumann #ChronicPain #Frequency #Focus",
     }
     facts = _build_facts(ctx)
 
@@ -1218,13 +1218,13 @@ def _qualitative_snapshot(ctx: Dict[str, Any]) -> str:
 
     # Lead sentence based on tone/bands
     if tone == "stormy":
-        lines.append("Charged field day—expect short surges and dips in energy.")
+        lines.append("It's an electrified day. Expect short surges and dips in energy.")
     elif tone == "unsettled":
-        lines.append("Lively field day—more waves than a full storm.")
+        lines.append("Things are looking lively in the field—expect some fluctuations.")
     elif tone == "calm":
-        lines.append("Steady magnetic backdrop—a good day for focused work and recovery.")
+        lines.append("Steady as she goes—it's a good day for focused work and recovery.")
     else:
-        lines.append("Middle-of-the-road field day—consistency wins.")
+        lines.append("We've achieved the happy medium field day—consistency wins.")
 
     # Optional humor/metaphor line (fallback only)
     mh = (ctx.get("metaphor_hint") or "").strip()
@@ -1246,9 +1246,9 @@ def _qualitative_snapshot(ctx: Dict[str, Any]) -> str:
 
     # Schumann / resonance context
     if isinstance(sr, (int, float)) and sr:
-        lines.append("Schumann resonance reads on the lively side at times, matching reports of vivid dreams or restlessness for some.")
+        lines.append("Schumann resonance has been lively, matching reports of vivid dreams or restlessness for some.")
     else:
-        lines.append("Resonance bed looks ordinary overall.")
+        lines.append("Resonance looks ordinary overall.")
 
     # Aurora chances
     if ctx.get("aurora_headline"):
@@ -1263,7 +1263,7 @@ def _qualitative_snapshot(ctx: Dict[str, Any]) -> str:
         lines.append("Regional storm/flood alerts are active—check local guidance if you’re in the affected area.")
 
     # Close with guidance intent
-    lines.append("Keep a steady rhythm; if you run sensitive, utilize quick breath resets and short movement breaks.")
+    lines.append("Keep a steady rhythm; if you run sensitive, utilize quick breath resets and short movement breaks. Try grounding techniques.")
 
     return "Space Weather Snapshot\n" + " ".join(lines)
 # ============================================================
@@ -1905,7 +1905,7 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
             max_completion_tokens=320,
             messages=[
                 {"role":"system","content":(
-                    "You are Gaia Eyes' space‑weather writer. Write an accurate, human, relatable and slightly humorous caption. "
+                    "You are Gaia Eyes' space/Earth signal and weather writer. Write an accurate, human, relatable and humorous caption. "
                     "Do not start with questions or phrases like 'Feeling', 'Are you', 'Ever feel', 'Ready to', 'Let’s'. "
                     "Never use emojis. Vary openings day‑to‑day."
                 )},
@@ -1926,7 +1926,7 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
             hashtags = lines[-1]
             caption = "\n".join(lines[:-1]).strip()
         if not hashtags:
-            hashtags = "#GaiaEyes #SpaceWeather #KpIndex #SolarWind #Aurora"
+            hashtags = "#GaiaEyes #SpaceWeather #Schumann #Frequency #ChronicPain"
         # Post‑process: sanitize and fix repetitive/question intros
         caption = _sanitize_caption(caption)
         # Prevent sterile bulletin-style openers (check first non-empty line only)
@@ -2006,7 +2006,7 @@ Data:
         resp = _chat_create_compat(
             client,
             model=model, temperature=0.75, max_completion_tokens=900,
-            messages=[{"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, warm, and helpful. Balance science, humor and mysticism."},
+            messages=[{"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, catchy, and helpful. Balance science, humor and mysticism."},
                      {"role":"user","content": prompt}],
         )
         text = resp.choices[0].message.content.strip()
