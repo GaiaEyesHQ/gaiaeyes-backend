@@ -2031,7 +2031,7 @@ Data:
                 cur = "play"; playbook += b + "\n\n"; continue
             if b.startswith("#") and " " in b and not hashtags:
                 hashtags = b; continue
-            if cur == "snap": snapshot += b + 
+            if cur == "snap": snapshot += b + "\n\n"
             elif cur == "aff": affects += b + "\n\n"
             elif cur == "play": playbook += b + "\n\n"
             else: snapshot += b + "\n\n"
