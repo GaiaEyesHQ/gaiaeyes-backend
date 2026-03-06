@@ -61,7 +61,7 @@ SERIES_LANE_WINDOWS = {
 PICK_LANE_WINDOWS = {
     "F": {"F1": (0.02, 0.22), "F2": (0.26, 0.45), "F3": (0.43, 0.59), "F4": (0.62, 0.80)},
     "A": {"A1": (0.03, 0.32), "A2": (0.25, 0.60), "A3": (0.42, 0.76), "A4": (0.68, 0.995)},
-    "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.95)},
+    "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.97)},
 }
 
 # Per-series value ranges read from SOS70 chart axes (top=max, bottom=min).
@@ -281,13 +281,17 @@ def refine_series_local_snap(
     lane_mask[lane0:lane1 + 1] = 0.0
     row_cost = row_cost + lane_mask
 
-    y_ref = int(np.clip(int(picks[series_name]["y_px"]) - y0i, 0, crop.shape[0] - 1))
+    # Anchor the local search inside the currently allowed lane/constraints.
+    # This prevents ordered passes from becoming no-ops when the seed pick is outside bounds.
+    y_ref = int(np.clip(int(picks[series_name]["y_px"]) - y0i, lane0, lane1))
     up_px = int(search_px if search_up_px is None else search_up_px)
     dn_px = int(search_px if search_down_px is None else search_down_px)
     s0 = max(lane0, y_ref - up_px)
     s1 = min(lane1, y_ref + dn_px)
     if s1 <= s0:
-        return picks, {}
+        s0, s1 = lane0, lane1
+        if s1 <= s0:
+            return picks, {}
 
     local_cost = row_cost[s0:s1 + 1].copy()
     if float(prefer_lower_weight) > 0.0 and lane1 > lane0:
@@ -781,10 +785,10 @@ def refine_f1_f4_with_path_tracking(img_bgr, roi, x_now, picks):
     crop_hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
     H = int(crop.shape[0])
     W = int(crop.shape[1])
-    target_col = int(np.clip(x_now - x_lo, 0, W - 1))
+    target_col = int(np.clip((x_now - 1) - x_lo, 0, W - 1))
     lane_norm = {"F1": PICK_LANE_WINDOWS["F"]["F1"], "F4": PICK_LANE_WINDOWS["F"]["F4"]}
     series_meta = {
-        "F1": {"label": "white", "rgb": (240, 240, 240), "smooth": 0.65},
+        "F1": {"label": "white", "rgb": (240, 240, 240), "smooth": 0.85},
         "F4": {"label": "green", "rgb": (40, 160, 60), "smooth": 0.35},
     }
     dbg = {}
@@ -1096,10 +1100,10 @@ def main():
         "Q4",
         search_px=9,
         band_px=2,
-        edge_margin_px=3,
+        edge_margin_px=2,
         search_up_px=4,
-        search_down_px=24,
-        prefer_lower_weight=0.02,
+        search_down_px=40,
+        prefer_lower_weight=0.03,
     )
     if dbgQ_q4:
         dbgQ.update(dbgQ_q4)
@@ -1113,10 +1117,10 @@ def main():
             "Q4",
             search_px=10,
             band_px=2,
-            edge_margin_px=3,
+            edge_margin_px=2,
             search_up_px=4,
-            search_down_px=24,
-            prefer_lower_weight=0.02,
+            search_down_px=40,
+            prefer_lower_weight=0.03,
             min_y_px=int(picksQ["Q3"]["y_px"]) + 12,
         )
         if dbgQ_q4_ord:
