@@ -61,7 +61,7 @@ SERIES_LANE_WINDOWS = {
 PICK_LANE_WINDOWS = {
     "F": {"F1": (0.02, 0.22), "F2": (0.26, 0.45), "F3": (0.43, 0.59), "F4": (0.62, 0.80)},
     "A": {"A1": (0.03, 0.32), "A2": (0.25, 0.60), "A3": (0.42, 0.76), "A4": (0.68, 0.995)},
-    "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.97)},
+    "Q": {"Q1": (0.05, 0.36), "Q2": (0.24, 0.58), "Q3": (0.42, 0.78), "Q4": (0.70, 0.96)},
 }
 
 # Per-series value ranges read from SOS70 chart axes (top=max, bottom=min).
@@ -859,6 +859,10 @@ def refine_series_path_tracking(
     min_y_px=None,
     max_y_px=None,
     target_back_px=1,
+    left_weight=0.45,
+    right_weight=1.0,
+    direct_switch_px=4,
+    direct_cost_ratio=0.95,
 ):
     """
     Track a series across recent x-columns and snap at the target column.
@@ -912,6 +916,9 @@ def refine_series_path_tracking(
     outside[lane0:lane1 + 1] = 0.0
     cost += outside[:, None]
     cost = cv2.GaussianBlur(cost, (1, 5), 0)
+    if W > 1:
+        col_w = np.linspace(float(left_weight), float(right_weight), W, dtype=np.float32)
+        cost *= col_w.reshape(1, W)
 
     dp = np.full((W, H), 1e9, dtype=np.float32)
     dp[0, :] = cost[:, 0]
@@ -925,6 +932,15 @@ def refine_series_path_tracking(
             dp[c, yy] = cost[yy, c] + float(np.min(vals))
 
     y_rel = int(np.argmin(dp[target_col, lane0:lane1 + 1])) + lane0
+    y_direct = int(np.argmin(cost[lane0:lane1 + 1, target_col])) + lane0
+    path_col_cost = float(cost[y_rel, target_col])
+    direct_col_cost = float(cost[y_direct, target_col])
+    use_direct = (
+        abs(y_direct - y_rel) >= int(direct_switch_px)
+        and direct_col_cost <= path_col_cost * float(direct_cost_ratio)
+    )
+    if use_direct:
+        y_rel = y_direct
     y_pix = int(y0i + y_rel)
     y_norm = (y_pix - y0i) / max(1.0, float(y1i - y0i))
     lane_norm = (float(y_pix) - float(lane_y0)) / max(1.0, float(lane_y1 - lane_y0))
@@ -936,6 +952,10 @@ def refine_series_path_tracking(
         f"{series_name.lower()}_path2_x_range": [int(x_lo), int(x_hi)],
         f"{series_name.lower()}_path2_target_col": int(target_col),
         f"{series_name.lower()}_path2_y_px": int(y_pix),
+        f"{series_name.lower()}_path2_y_direct_px": int(y0i + y_direct),
+        f"{series_name.lower()}_path2_direct_used": bool(use_direct),
+        f"{series_name.lower()}_path2_left_weight": float(left_weight),
+        f"{series_name.lower()}_path2_right_weight": float(right_weight),
     }
     return picks, dbg
 
@@ -1010,17 +1030,56 @@ def main():
     if dbgF_path:
         dbgF.update(dbgF_path)
     picksF, dbgF_f1_path2 = refine_series_path_tracking(
-        F_img, roiF, xF_pick_edge, picksF, "F", "F1", span_px=10, smooth=0.50, max_step=3, target_back_px=1
+        F_img,
+        roiF,
+        xF_pick_edge,
+        picksF,
+        "F",
+        "F1",
+        span_px=12,
+        smooth=0.55,
+        max_step=3,
+        target_back_px=1,
+        left_weight=0.35,
+        right_weight=1.0,
+        direct_switch_px=4,
+        direct_cost_ratio=0.95,
     )
     if dbgF_f1_path2:
         dbgF.update(dbgF_f1_path2)
     picksF, dbgF_f2_path2 = refine_series_path_tracking(
-        F_img, roiF, xF_pick_edge, picksF, "F", "F2", span_px=10, smooth=0.40, max_step=3, target_back_px=1
+        F_img,
+        roiF,
+        xF_pick_edge,
+        picksF,
+        "F",
+        "F2",
+        span_px=12,
+        smooth=0.50,
+        max_step=3,
+        target_back_px=1,
+        left_weight=0.40,
+        right_weight=1.0,
+        direct_switch_px=4,
+        direct_cost_ratio=0.95,
     )
     if dbgF_f2_path2:
         dbgF.update(dbgF_f2_path2)
     picksF, dbgF_f4_path2 = refine_series_path_tracking(
-        F_img, roiF, xF_pick_edge, picksF, "F", "F4", span_px=10, smooth=0.35, max_step=3, target_back_px=1
+        F_img,
+        roiF,
+        xF_pick_edge,
+        picksF,
+        "F",
+        "F4",
+        span_px=12,
+        smooth=0.45,
+        max_step=3,
+        target_back_px=1,
+        left_weight=0.40,
+        right_weight=1.0,
+        direct_switch_px=4,
+        direct_cost_ratio=0.95,
     )
     if dbgF_f4_path2:
         dbgF.update(dbgF_f4_path2)
@@ -1031,19 +1090,50 @@ def main():
         picksF,
         "F",
         "F1",
-        search_px=8,
+        search_px=4,
         band_px=2,
         edge_margin_px=1,
-        search_up_px=3,
-        search_down_px=10,
-        prefer_lower_weight=0.02,
+        search_up_px=4,
+        search_down_px=4,
+        prefer_lower_weight=0.0,
     )
     if dbgF_f1:
         dbgF.update(dbgF_f1)
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xA_safe_right)
     picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xQ_safe_right)
+    picksA, dbgA_a2_path2 = refine_series_path_tracking(
+        A_img,
+        roiA,
+        xA_pick,
+        picksA,
+        "A",
+        "A2",
+        span_px=10,
+        smooth=0.45,
+        max_step=3,
+        target_back_px=1,
+        left_weight=0.45,
+        right_weight=1.0,
+        direct_switch_px=4,
+        direct_cost_ratio=0.95,
+    )
+    if dbgA_a2_path2:
+        dbgA.update(dbgA_a2_path2)
     picksQ, dbgQ_q4_path2 = refine_series_path_tracking(
-        Q_img, roiQ, xQ_pick, picksQ, "Q", "Q4", span_px=10, smooth=0.45, max_step=3, target_back_px=1
+        Q_img,
+        roiQ,
+        xQ_pick,
+        picksQ,
+        "Q",
+        "Q4",
+        span_px=10,
+        smooth=0.40,
+        max_step=3,
+        target_back_px=1,
+        left_weight=0.45,
+        right_weight=1.0,
+        direct_switch_px=4,
+        direct_cost_ratio=0.95,
     )
     if dbgQ_q4_path2:
         dbgQ.update(dbgQ_q4_path2)
@@ -1058,12 +1148,12 @@ def main():
         picksF,
         "F",
         "F4",
-        search_px=5,
+        search_px=4,
         band_px=2,
         edge_margin_px=1,
-        search_up_px=3,
-        search_down_px=12,
-        prefer_lower_weight=0.02,
+        search_up_px=4,
+        search_down_px=4,
+        prefer_lower_weight=0.0,
     )
     if dbgF_f4:
         dbgF.update(dbgF_f4)
@@ -1130,11 +1220,11 @@ def main():
             picksF,
             "F",
             "F2",
-            search_px=8,
+            search_px=5,
             band_px=2,
-            search_up_px=4,
-            search_down_px=12,
-            prefer_lower_weight=0.02,
+            search_up_px=3,
+            search_down_px=3,
+            prefer_lower_weight=0.0,
             min_y_px=int(picksF["F1"]["y_px"]) + 10,
             max_y_px=f2_max_y,
         )
@@ -1216,8 +1306,8 @@ def main():
         band_px=2,
         edge_margin_px=2,
         search_up_px=4,
-        search_down_px=40,
-        prefer_lower_weight=0.03,
+        search_down_px=20,
+        prefer_lower_weight=0.01,
     )
     if dbgQ_q4:
         dbgQ.update(dbgQ_q4)
@@ -1233,8 +1323,8 @@ def main():
             band_px=2,
             edge_margin_px=2,
             search_up_px=4,
-            search_down_px=40,
-            prefer_lower_weight=0.03,
+            search_down_px=20,
+            prefer_lower_weight=0.01,
             min_y_px=int(picksQ["Q3"]["y_px"]) + 8,
         )
         if dbgQ_q4_ord:
