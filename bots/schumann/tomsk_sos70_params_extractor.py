@@ -788,7 +788,7 @@ def refine_f1_f4_with_path_tracking(img_bgr, roi, x_now, picks):
     target_col = int(np.clip((x_now - 1) - x_lo, 0, W - 1))
     lane_norm = {"F1": PICK_LANE_WINDOWS["F"]["F1"], "F4": PICK_LANE_WINDOWS["F"]["F4"]}
     series_meta = {
-        "F1": {"label": "white", "rgb": (240, 240, 240), "smooth": 0.85},
+        "F1": {"label": "white", "rgb": (240, 240, 240), "smooth": 0.55},
         "F4": {"label": "green", "rgb": (40, 160, 60), "smooth": 0.35},
     }
     dbg = {}
@@ -843,6 +843,100 @@ def refine_f1_f4_with_path_tracking(img_bgr, roi, x_now, picks):
         dbg[f"{name.lower()}_path_target_col"] = int(target_col)
         dbg[f"{name.lower()}_path_y_px"] = int(y_pix)
 
+    return picks, dbg
+
+def refine_series_path_tracking(
+    img_bgr,
+    roi,
+    x_now,
+    picks,
+    chart_type,
+    series_name,
+    span_px=12,
+    smooth=0.45,
+    max_step=3,
+    edge_margin_px=1,
+    min_y_px=None,
+    max_y_px=None,
+    target_back_px=1,
+):
+    """
+    Track a series across recent x-columns and snap at the target column.
+    This is less brittle than single-column local minima when traces jump/spike.
+    """
+    if series_name not in picks:
+        return picks, {}
+    style = find_series_style(chart_type, series_name)
+    if style is None:
+        return picks, {}
+    lanes = PICK_LANE_WINDOWS.get(chart_type, {})
+    if series_name not in lanes:
+        return picks, {}
+
+    x0, y0, x1, y1 = roi
+    pad_top, pad_bot = 4, 18
+    y0i = min(y1 - 1, y0 + pad_top)
+    y1i = max(y0i + 1, y1 - pad_bot)
+    x_lo = int(np.clip(x_now - int(span_px), x0 + 1, x1 - 2))
+    x_hi = int(np.clip(x_now, x0 + 1, x1 - 2))
+    if x_hi <= x_lo:
+        return picks, {}
+
+    crop = img_bgr[y0i:y1i, x_lo:x_hi + 1, :]
+    if crop.size == 0:
+        return picks, {}
+    crop_hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+
+    H = int(crop.shape[0])
+    W = int(crop.shape[1])
+    target_col = int(np.clip((x_hi - int(target_back_px)) - x_lo, 0, W - 1))
+
+    n_lo, n_hi = lanes[series_name]
+    _y0i2, _y1i2, lane_y0, lane_y1 = lane_window_to_rows(roi, n_lo, n_hi)
+    lane0 = max(0, int(lane_y0 - y0i + int(edge_margin_px)))
+    lane1 = min(H - 1, int(lane_y1 - y0i - int(edge_margin_px)))
+    if min_y_px is not None:
+        lane0 = max(lane0, int(min_y_px) - y0i)
+    if max_y_px is not None:
+        lane1 = min(lane1, int(max_y_px) - y0i)
+    if lane1 <= lane0:
+        return picks, {}
+
+    tgt_hsv = bgr_to_hsv_color((style["rgb"][2], style["rgb"][1], style["rgb"][0]))
+    cost = np.zeros((H, W), dtype=np.float32)
+    for c in range(W):
+        col_cost = hsv_row_distance(crop_hsv[:, c:c + 1, :], tgt_hsv, style["label"]).astype(np.float32).ravel()
+        cost[:, c] = col_cost
+
+    outside = np.ones(H, dtype=np.float32) * 8.0
+    outside[lane0:lane1 + 1] = 0.0
+    cost += outside[:, None]
+    cost = cv2.GaussianBlur(cost, (1, 5), 0)
+
+    dp = np.full((W, H), 1e9, dtype=np.float32)
+    dp[0, :] = cost[:, 0]
+    for c in range(1, W):
+        prev = dp[c - 1, :]
+        for yy in range(lane0, lane1 + 1):
+            lo = max(lane0, yy - int(max_step))
+            hi = min(lane1, yy + int(max_step))
+            ys = np.arange(lo, hi + 1, dtype=np.int16)
+            vals = prev[lo:hi + 1] + float(smooth) * np.abs(ys.astype(np.float32) - float(yy))
+            dp[c, yy] = cost[yy, c] + float(np.min(vals))
+
+    y_rel = int(np.argmin(dp[target_col, lane0:lane1 + 1])) + lane0
+    y_pix = int(y0i + y_rel)
+    y_norm = (y_pix - y0i) / max(1.0, float(y1i - y0i))
+    lane_norm = (float(y_pix) - float(lane_y0)) / max(1.0, float(lane_y1 - lane_y0))
+
+    picks[series_name]["y_px"] = int(y_pix)
+    picks[series_name]["y_norm"] = float(y_norm)
+    picks[series_name]["lane_norm"] = float(np.clip(lane_norm, 0.0, 1.0))
+    dbg = {
+        f"{series_name.lower()}_path2_x_range": [int(x_lo), int(x_hi)],
+        f"{series_name.lower()}_path2_target_col": int(target_col),
+        f"{series_name.lower()}_path2_y_px": int(y_pix),
+    }
     return picks, dbg
 
 def draw_overlay_with_picks(img_bgr, roi, x_now, picks, title, chart_type="F", x_marker=None):
@@ -915,6 +1009,21 @@ def main():
     picksF, dbgF_path = refine_f1_f4_with_path_tracking(F_img, roiF, xF_pick_edge, picksF)
     if dbgF_path:
         dbgF.update(dbgF_path)
+    picksF, dbgF_f1_path2 = refine_series_path_tracking(
+        F_img, roiF, xF_pick_edge, picksF, "F", "F1", span_px=10, smooth=0.50, max_step=3, target_back_px=1
+    )
+    if dbgF_f1_path2:
+        dbgF.update(dbgF_f1_path2)
+    picksF, dbgF_f2_path2 = refine_series_path_tracking(
+        F_img, roiF, xF_pick_edge, picksF, "F", "F2", span_px=10, smooth=0.40, max_step=3, target_back_px=1
+    )
+    if dbgF_f2_path2:
+        dbgF.update(dbgF_f2_path2)
+    picksF, dbgF_f4_path2 = refine_series_path_tracking(
+        F_img, roiF, xF_pick_edge, picksF, "F", "F4", span_px=10, smooth=0.35, max_step=3, target_back_px=1
+    )
+    if dbgF_f4_path2:
+        dbgF.update(dbgF_f4_path2)
     picksF, dbgF_f1 = refine_series_local_snap(
         F_img,
         roiF,
@@ -925,14 +1034,19 @@ def main():
         search_px=8,
         band_px=2,
         edge_margin_px=1,
-        search_up_px=1,
-        search_down_px=18,
-        prefer_lower_weight=0.10,
+        search_up_px=3,
+        search_down_px=10,
+        prefer_lower_weight=0.02,
     )
     if dbgF_f1:
         dbgF.update(dbgF_f1)
     picksA = pick_colored_lines_at_x(A_img, roiA, xA_pick, chart_type="A", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xA_safe_right)
     picksQ = pick_colored_lines_at_x(Q_img, roiQ, xQ_pick, chart_type="Q", band_px=5, freq_max_hz=float(args.freq_max_hz), x_right_limit=xQ_safe_right)
+    picksQ, dbgQ_q4_path2 = refine_series_path_tracking(
+        Q_img, roiQ, xQ_pick, picksQ, "Q", "Q4", span_px=10, smooth=0.45, max_step=3, target_back_px=1
+    )
+    if dbgQ_q4_path2:
+        dbgQ.update(dbgQ_q4_path2)
 
     picksF, dbgF_f3 = refine_series_local_snap(F_img, roiF, xF_pick_edge, picksF, "F", "F3", search_px=6, band_px=2)
     if dbgF_f3:
@@ -949,7 +1063,7 @@ def main():
         edge_margin_px=1,
         search_up_px=3,
         search_down_px=12,
-        prefer_lower_weight=0.06,
+        prefer_lower_weight=0.02,
     )
     if dbgF_f4:
         dbgF.update(dbgF_f4)
@@ -1020,7 +1134,7 @@ def main():
             band_px=2,
             search_up_px=4,
             search_down_px=12,
-            prefer_lower_weight=0.05,
+            prefer_lower_weight=0.02,
             min_y_px=int(picksF["F1"]["y_px"]) + 10,
             max_y_px=f2_max_y,
         )
@@ -1121,7 +1235,7 @@ def main():
             search_up_px=4,
             search_down_px=40,
             prefer_lower_weight=0.03,
-            min_y_px=int(picksQ["Q3"]["y_px"]) + 12,
+            min_y_px=int(picksQ["Q3"]["y_px"]) + 8,
         )
         if dbgQ_q4_ord:
             dbgQ.update(dbgQ_q4_ord)
