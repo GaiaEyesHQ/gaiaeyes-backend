@@ -863,6 +863,7 @@ def refine_series_path_tracking(
     right_weight=1.0,
     direct_switch_px=4,
     direct_cost_ratio=0.95,
+    allow_direct=True,
 ):
     """
     Track a series across recent x-columns and snap at the target column.
@@ -935,7 +936,7 @@ def refine_series_path_tracking(
     y_direct = int(np.argmin(cost[lane0:lane1 + 1, target_col])) + lane0
     path_col_cost = float(cost[y_rel, target_col])
     direct_col_cost = float(cost[y_direct, target_col])
-    use_direct = (
+    use_direct = bool(allow_direct) and (
         abs(y_direct - y_rel) >= int(direct_switch_px)
         and direct_col_cost <= path_col_cost * float(direct_cost_ratio)
     )
@@ -954,6 +955,7 @@ def refine_series_path_tracking(
         f"{series_name.lower()}_path2_y_px": int(y_pix),
         f"{series_name.lower()}_path2_y_direct_px": int(y0i + y_direct),
         f"{series_name.lower()}_path2_direct_used": bool(use_direct),
+        f"{series_name.lower()}_path2_direct_allowed": bool(allow_direct),
         f"{series_name.lower()}_path2_left_weight": float(left_weight),
         f"{series_name.lower()}_path2_right_weight": float(right_weight),
     }
@@ -1044,6 +1046,7 @@ def main():
         right_weight=1.0,
         direct_switch_px=4,
         direct_cost_ratio=0.95,
+        allow_direct=False,
     )
     if dbgF_f1_path2:
         dbgF.update(dbgF_f1_path2)
@@ -1062,6 +1065,7 @@ def main():
         right_weight=1.0,
         direct_switch_px=4,
         direct_cost_ratio=0.95,
+        allow_direct=False,
     )
     if dbgF_f2_path2:
         dbgF.update(dbgF_f2_path2)
@@ -1080,6 +1084,7 @@ def main():
         right_weight=1.0,
         direct_switch_px=4,
         direct_cost_ratio=0.95,
+        allow_direct=False,
     )
     if dbgF_f4_path2:
         dbgF.update(dbgF_f4_path2)
