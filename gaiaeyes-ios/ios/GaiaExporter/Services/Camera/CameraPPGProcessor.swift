@@ -145,6 +145,7 @@ final class CameraPPGProcessor {
         let peakIndices = detectPeaks(signal: bandpassed, sampleRate: hz)
         let rawIbi = computeIBI(from: peakIndices, sampleRate: hz)
         let cleaned = rejectArtifacts(ibiMs: rawIbi.ms, ibiTsMs: rawIbi.tsMs)
+        let boundedRawIbi = rawIbi.ms.filter { $0 >= 300 && $0 <= 2000 }
 
         let saturationHitRatio = average(saturationRatios)
         let motionScore = average(motionSamples)
@@ -160,8 +161,9 @@ final class CameraPPGProcessor {
             droppedFrameRatio: droppedFrameRatio
         )
 
+        let bpmSeries = cleaned.ms.count >= 5 ? cleaned.ms : boundedRawIbi
         let avnn = mean(cleaned.ms)
-        let bpmStable = bpm(fromAvnn: avnn, ibIs: cleaned.ms)
+        let bpmStable = bpm(fromAvnn: mean(bpmSeries), ibIs: bpmSeries, qualityScore: quality.score)
         let canComputeHRV = cleaned.ms.count >= 20 && quality.score >= 0.65 && quality.label != .poor
 
         let hrvMetrics: (sdnn: Double?, rmssd: Double?, pnn50: Double?, lnRmssd: Double?, stress: Double?, resp: Double?)
@@ -386,12 +388,15 @@ final class CameraPPGProcessor {
         return (cleanedMs, cleanedTs)
     }
 
-    private func bpm(fromAvnn avnn: Double?, ibIs: [Double]) -> Double? {
+    private func bpm(fromAvnn avnn: Double?, ibIs: [Double], qualityScore: Double) -> Double? {
         guard let avnn, avnn > 0 else { return nil }
-        guard ibIs.count >= 8 else { return nil }
+        guard ibIs.count >= 5 else { return nil }
+        guard qualityScore >= 0.32 else { return nil }
         let variability = (standardDeviation(ibIs) / avnn)
-        guard variability <= 0.25 else { return nil }
-        return round1(60000.0 / avnn)
+        guard variability <= 0.40 else { return nil }
+        let bpm = 60000.0 / avnn
+        guard bpm >= 35.0, bpm <= 210.0 else { return nil }
+        return round1(bpm)
     }
 
     private func sdnnMs(_ ibi: [Double]) -> Double? {

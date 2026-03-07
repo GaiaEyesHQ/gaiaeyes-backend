@@ -151,6 +151,9 @@ final class AuthManager: ObservableObject {
     }
 
     func validAccessToken() async -> String? {
+        if supabaseAccessToken == nil && supabaseRefreshToken == nil {
+            loadFromKeychain()
+        }
         await refreshSessionIfNeeded()
         return supabaseAccessToken
     }

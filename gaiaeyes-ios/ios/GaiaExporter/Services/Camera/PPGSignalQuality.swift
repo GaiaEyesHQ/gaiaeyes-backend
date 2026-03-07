@@ -35,14 +35,14 @@ enum PPGSignalQuality {
 
         let snrProxy = normalizedSNR(filteredSignal: filteredSignal, residualSignal: residualSignal)
         let stability = ibiStabilityScore(ibiMs)
-        let saturationPenalty = clamp(saturationHitRatio * 0.45, min: 0, max: 0.35)
-        let motionPenalty = clamp(motionScore * 0.35, min: 0, max: 0.30)
-        let droppedPenalty = clamp(droppedFrameRatio * 0.55, min: 0, max: 0.25)
+        let saturationPenalty = saturationPenalty(for: saturationHitRatio)
+        let motionPenalty = clamp(max(0.0, motionScore - 0.10) * 0.25, min: 0, max: 0.20)
+        let droppedPenalty = clamp(droppedFrameRatio * 0.45, min: 0, max: 0.20)
 
         var score =
-            (0.45 * validRatio) +
-            (0.25 * snrProxy) +
-            (0.30 * stability) -
+            (0.40 * validRatio) +
+            (0.28 * snrProxy) +
+            (0.32 * stability) -
             saturationPenalty -
             motionPenalty -
             droppedPenalty
@@ -79,8 +79,8 @@ enum PPGSignalQuality {
         let signalStd = standardDeviation(filteredSignal)
         let noiseStd = max(standardDeviation(residualSignal), 1e-6)
         let ratio = signalStd / noiseStd
-        // Typical usable camera PPG tends to sit around 1.2-3.5 for this proxy.
-        return clamp((ratio - 0.8) / 2.7, min: 0.0, max: 1.0)
+        // Typical usable camera PPG on phones often lands around 1.1-2.6.
+        return clamp((ratio - 0.7) / 1.9, min: 0.0, max: 1.0)
     }
 
     private static func ibiStabilityScore(_ ibiMs: [Double]) -> Double {
@@ -101,6 +101,12 @@ enum PPGSignalQuality {
             return acc + (delta * delta)
         } / Double(values.count - 1)
         return sqrt(max(0.0, variance))
+    }
+
+    private static func saturationPenalty(for ratio: Double) -> Double {
+        let clipped = clamp(ratio, min: 0.0, max: 1.0)
+        let excess = max(0.0, clipped - 0.82)
+        return clamp(excess * 0.70, min: 0.0, max: 0.16)
     }
 
     private static func clamp(_ value: Double, min minValue: Double, max maxValue: Double) -> Double {

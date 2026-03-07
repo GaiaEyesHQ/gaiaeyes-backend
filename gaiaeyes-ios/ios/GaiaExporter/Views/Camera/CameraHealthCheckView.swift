@@ -122,20 +122,29 @@ struct CameraHealthCheckView: View {
                         value: result.metrics.bpm.map { String(Int($0.rounded())) } ?? "--",
                         subtitle: "Heart Rate"
                     )
-                    Spacer(minLength: 12)
-                    MetricValueBlock(
-                        title: "RMSSD",
-                        value: result.metrics.rmssdMs.map { "\(Int($0.rounded())) ms" } ?? "N/A",
-                        subtitle: "HRV"
-                    )
+                    if let rmssd = result.metrics.rmssdMs {
+                        Spacer(minLength: 12)
+                        MetricValueBlock(
+                            title: "RMSSD",
+                            value: "\(Int(rmssd.rounded())) ms",
+                            subtitle: "HRV"
+                        )
+                    }
                 }
 
                 qualityBadge(quality, score: result.quality.score)
 
                 if result.metrics.rmssdMs == nil {
-                    Text("Signal quality was low. We saved this check, but HRV metrics were withheld. Keep still and adjust pressure, then re-run.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    let guidance = "Try lighter pressure, cover lens + flash fully, and warm your fingers if cold."
+                    if result.metrics.bpm != nil {
+                        Text("Heart rate captured, but HRV was not reliable enough. \(guidance)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("Signal quality was low for both heart rate and HRV. \(guidance)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 } else {
                     HStack(spacing: 10) {
                         if let sdnn = result.metrics.sdnnMs {
@@ -151,6 +160,12 @@ struct CameraHealthCheckView: View {
                             smallMetric("lnRMSSD", String(format: "%.2f", ln))
                         }
                     }
+                }
+
+                if result.metrics.rmssdMs == nil && result.metrics.bpm == nil {
+                    Text("Re-run tip: keep your finger still for the full 30-45 seconds.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
 
                 Text("Duration \(result.durationSec)s")
@@ -505,6 +520,9 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
         }
         Task {
             do {
+                await MainActor.run {
+                    AuthManager.shared.loadFromKeychain()
+                }
                 try await supabase.saveCheck(result)
                 await MainActor.run {
                     self.saveStateMessage = "Saved to your account."
@@ -512,7 +530,16 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
                 }
             } catch {
                 await MainActor.run {
-                    self.saveStateMessage = "Saved locally only: \(error.localizedDescription)"
+                    if let authError = error as? CameraHealthSupabaseError {
+                        switch authError {
+                        case .notAuthenticated, .missingUserId:
+                            self.saveStateMessage = "Not synced: Supabase sign-in missing. Open Settings > Subscribe and sign in."
+                        default:
+                            self.saveStateMessage = "Sync failed: \(authError.localizedDescription)"
+                        }
+                    } else {
+                        self.saveStateMessage = "Sync failed: \(error.localizedDescription)"
+                    }
                 }
             }
         }
@@ -557,7 +584,8 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
 
         let motion: Double
         if let last = lastGreenMean {
-            motion = min(1.0, abs(greenMean - last) / 18.0)
+            let delta = abs(greenMean - last)
+            motion = min(1.0, max(0.0, (delta - 3.0) / 80.0))
         } else {
             motion = 0.0
         }
@@ -615,11 +643,10 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
             var x = minX
             while x < maxX {
                 let px = row + (x * 4)
-                let b = px[0]
                 let g = px[1]
                 let r = px[2]
                 greenSum += Double(g)
-                if r > 250 || g > 250 || b > 250 {
+                if r >= 254 && g >= 254 {
                     saturationHits += 1
                 }
                 count += 1

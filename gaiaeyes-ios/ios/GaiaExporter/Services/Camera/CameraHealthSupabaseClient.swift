@@ -120,6 +120,7 @@ final class CameraHealthSupabaseClient {
     @MainActor
     func saveCheck(_ result: CameraPPGComputedResult, auth: AuthManager? = nil) async throws {
         let auth = auth ?? AuthManager.shared
+        auth.loadFromKeychain()
         guard let config = loadConfig() else {
             throw CameraHealthSupabaseError.missingConfig
         }
@@ -187,6 +188,7 @@ final class CameraHealthSupabaseClient {
     @MainActor
     func fetchLatestDailySummary(auth: AuthManager? = nil) async throws -> CameraHealthDailySummary? {
         let auth = auth ?? AuthManager.shared
+        auth.loadFromKeychain()
         guard let config = loadConfig() else {
             throw CameraHealthSupabaseError.missingConfig
         }
