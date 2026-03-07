@@ -127,7 +127,7 @@ final class CameraHealthSupabaseClient {
         guard let token = await auth.validAccessToken(), !token.isEmpty else {
             throw CameraHealthSupabaseError.notAuthenticated
         }
-        guard let userId = auth.currentSupabaseUserId(), !userId.isEmpty else {
+        guard let userId = await auth.resolveSupabaseUserId(), !userId.isEmpty else {
             throw CameraHealthSupabaseError.missingUserId
         }
 
@@ -195,7 +195,7 @@ final class CameraHealthSupabaseClient {
         guard let token = await auth.validAccessToken(), !token.isEmpty else {
             throw CameraHealthSupabaseError.notAuthenticated
         }
-        guard let userId = auth.currentSupabaseUserId(), !userId.isEmpty else {
+        guard let userId = await auth.resolveSupabaseUserId(), !userId.isEmpty else {
             throw CameraHealthSupabaseError.missingUserId
         }
 

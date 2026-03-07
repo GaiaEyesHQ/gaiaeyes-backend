@@ -7,6 +7,7 @@ final class AuthManager: ObservableObject {
 
     @Published private(set) var supabaseAccessToken: String?
     @Published private(set) var supabaseRefreshToken: String?
+    @Published private(set) var supabaseUserId: String?
     @Published private(set) var supabaseEmail: String?
     @Published private(set) var supabaseExpiresAt: Date?
     @Published private(set) var lastError: String?
@@ -21,6 +22,7 @@ final class AuthManager: ObservableObject {
     func loadFromKeychain() {
         supabaseAccessToken = keychain.read("access_token")
         supabaseRefreshToken = keychain.read("refresh_token")
+        supabaseUserId = keychain.read("user_id")
         supabaseEmail = keychain.read("email")
         if let exp = keychain.read("expires_at"), let ts = TimeInterval(exp) {
             supabaseExpiresAt = Date(timeIntervalSince1970: ts)
@@ -87,7 +89,12 @@ final class AuthManager: ObservableObject {
         }
 
         let expiresAt = Self.expiresAt(from: params)
-        persistSession(accessToken: access, refreshToken: refresh, expiresAt: expiresAt)
+        persistSession(
+            accessToken: access,
+            refreshToken: refresh,
+            expiresAt: expiresAt,
+            userId: Self.jwtSubject(from: access)
+        )
         return true
     }
 
@@ -95,21 +102,29 @@ final class AuthManager: ObservableObject {
         lastError = nil
         supabaseAccessToken = nil
         supabaseRefreshToken = nil
+        supabaseUserId = nil
         supabaseEmail = nil
         supabaseExpiresAt = nil
         keychain.delete("access_token")
         keychain.delete("refresh_token")
+        keychain.delete("user_id")
         keychain.delete("email")
         keychain.delete("expires_at")
     }
 
-    private func persistSession(accessToken: String, refreshToken: String, expiresAt: Date?) {
+    private func persistSession(accessToken: String, refreshToken: String, expiresAt: Date?, userId: String?) {
         supabaseAccessToken = accessToken
         supabaseRefreshToken = refreshToken
+        supabaseUserId = userId ?? Self.jwtSubject(from: accessToken)
         supabaseExpiresAt = expiresAt
 
         keychain.write(accessToken, key: "access_token")
         keychain.write(refreshToken, key: "refresh_token")
+        if let supabaseUserId {
+            keychain.write(supabaseUserId, key: "user_id")
+        } else {
+            keychain.delete("user_id")
+        }
         if let email = supabaseEmail {
             keychain.write(email, key: "email")
         }
@@ -144,7 +159,12 @@ final class AuthManager: ObservableObject {
             let decoded = try JSONDecoder().decode(SupabaseSessionResponse.self, from: data)
             supabaseEmail = decoded.user?.email
             let expiresAt = Date().addingTimeInterval(TimeInterval(decoded.expiresIn))
-            persistSession(accessToken: decoded.accessToken, refreshToken: decoded.refreshToken, expiresAt: expiresAt)
+            persistSession(
+                accessToken: decoded.accessToken,
+                refreshToken: decoded.refreshToken,
+                expiresAt: expiresAt,
+                userId: decoded.user?.id
+            )
         } catch {
             lastError = error.localizedDescription
         }
@@ -159,8 +179,51 @@ final class AuthManager: ObservableObject {
     }
 
     func currentSupabaseUserId() -> String? {
+        if let supabaseUserId, !supabaseUserId.isEmpty {
+            return supabaseUserId
+        }
         guard let token = supabaseAccessToken else { return nil }
         return Self.jwtSubject(from: token)
+    }
+
+    func resolveSupabaseUserId() async -> String? {
+        if let current = currentSupabaseUserId(), !current.isEmpty {
+            return current
+        }
+        guard let config else { return nil }
+        guard let token = await validAccessToken(), !token.isEmpty else { return nil }
+
+        if let parsed = Self.jwtSubject(from: token), !parsed.isEmpty {
+            supabaseUserId = parsed
+            keychain.write(parsed, key: "user_id")
+            return parsed
+        }
+
+        var req = URLRequest(url: config.url.appendingPathComponent("auth/v1/user"))
+        req.httpMethod = "GET"
+        req.setValue(config.anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                return nil
+            }
+            let user = try JSONDecoder().decode(SupabaseUser.self, from: data)
+            if let id = user.id, !id.isEmpty {
+                supabaseUserId = id
+                keychain.write(id, key: "user_id")
+                if let email = user.email, !email.isEmpty {
+                    supabaseEmail = email
+                    keychain.write(email, key: "email")
+                }
+                return id
+            }
+        } catch {
+            lastError = error.localizedDescription
+        }
+        return nil
     }
 
     private static func parseParams(from url: URL) -> [String: String] {
@@ -259,6 +322,7 @@ private struct SupabaseSessionResponse: Decodable {
 }
 
 private struct SupabaseUser: Decodable {
+    let id: String?
     let email: String?
 }
 

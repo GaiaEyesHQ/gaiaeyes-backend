@@ -135,7 +135,7 @@ struct CameraHealthCheckView: View {
                 qualityBadge(quality, score: result.quality.score)
 
                 if result.metrics.rmssdMs == nil {
-                    let guidance = "Try lighter pressure, cover lens + flash fully, and warm your fingers if cold."
+                    let guidance = "Try lighter pressure, cover the flash and one rear lens (usually the 1x lens), and warm your fingers if cold."
                     if result.metrics.bpm != nil {
                         Text("Heart rate captured, but HRV was not reliable enough. \(guidance)")
                             .font(.caption)
@@ -334,7 +334,7 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
         case .warmingUp:
             return "Warming up: keep finger steady"
         case .measuring:
-            return "Measuring: keep still and cover camera/flash"
+            return "Measuring: keep still and cover flash + one rear lens"
         case .processing:
             return "Processing signal"
         case .completed:

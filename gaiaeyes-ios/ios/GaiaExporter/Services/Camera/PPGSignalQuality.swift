@@ -29,34 +29,37 @@ enum PPGSignalQuality {
         motionScore: Double,
         droppedFrameRatio: Double
     ) -> PPGQualityAssessment {
-        let validRatio: Double = totalIBICount > 0
-            ? Double(validIBICount) / Double(totalIBICount)
+        let effectiveTotal = max(validIBICount, min(totalIBICount, validIBICount + 12))
+        let validRatio: Double = effectiveTotal > 0
+            ? Double(validIBICount) / Double(effectiveTotal)
             : 0.0
+        let beatCountScore = clamp(Double(validIBICount) / 20.0, min: 0.0, max: 1.0)
 
         let snrProxy = normalizedSNR(filteredSignal: filteredSignal, residualSignal: residualSignal)
         let stability = ibiStabilityScore(ibiMs)
         let saturationPenalty = saturationPenalty(for: saturationHitRatio)
-        let motionPenalty = clamp(max(0.0, motionScore - 0.10) * 0.25, min: 0, max: 0.20)
-        let droppedPenalty = clamp(droppedFrameRatio * 0.45, min: 0, max: 0.20)
+        let motionPenalty = clamp(max(0.0, motionScore - 0.10) * 0.20, min: 0, max: 0.16)
+        let droppedPenalty = clamp(droppedFrameRatio * 0.35, min: 0, max: 0.16)
 
         var score =
-            (0.40 * validRatio) +
-            (0.28 * snrProxy) +
-            (0.32 * stability) -
+            (0.30 * validRatio) +
+            (0.24 * snrProxy) +
+            (0.26 * stability) +
+            (0.20 * beatCountScore) -
             saturationPenalty -
             motionPenalty -
             droppedPenalty
 
-        if validIBICount < 8 {
-            score *= 0.6
+        if validIBICount < 6 {
+            score *= 0.55
         }
 
         score = clamp(score, min: 0.0, max: 1.0)
 
         let label: PPGQualityLabel
-        if score >= 0.80 {
+        if score >= 0.78 {
             label = .good
-        } else if score >= 0.65 {
+        } else if score >= 0.50 {
             label = .ok
         } else {
             label = .poor

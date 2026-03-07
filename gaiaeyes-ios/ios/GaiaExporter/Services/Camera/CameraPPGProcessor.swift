@@ -152,7 +152,7 @@ final class CameraPPGProcessor {
         let droppedFrameRatio = totalFrames > 0 ? Double(droppedFrames) / Double(totalFrames) : 0.0
         let quality = PPGSignalQuality.assess(
             validIBICount: cleaned.ms.count,
-            totalIBICount: rawIbi.ms.count,
+            totalIBICount: boundedRawIbi.count,
             filteredSignal: bandpassed,
             residualSignal: residual,
             ibiMs: cleaned.ms,
