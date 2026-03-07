@@ -25,7 +25,7 @@ struct LoginView: View {
             .disabled(isBusy || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
             if sent {
-                Text("Check your email for the magic link, then return to the app.")
+                Text("Open the magic link on this iPhone. It should return to the app automatically.")
                     .font(.footnote)
                     .foregroundColor(.secondary)
             }

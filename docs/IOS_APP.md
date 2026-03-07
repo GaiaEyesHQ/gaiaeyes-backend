@@ -26,7 +26,8 @@
   - `SUPABASE_ANON_KEY`
   - `GAIA_API_BASE` (backend base for billing calls)
   - `GAIA_BILLING_PORTAL_URL` (optional)
-  - `GAIA_MAGICLINK_REDIRECT` (optional redirect URL for magic links, e.g. `gaiaeyes://login`)
+  - `GAIA_MAGICLINK_REDIRECT` (optional redirect URL for magic links, e.g. `gaiaeyes://auth/callback`)
+- Supabase Auth redirect allow-list must include `gaiaeyes://auth/callback` for native sign-in completion.
 
 ## Environment/config
 - API base URL and dev tokens are configured in-app via the connection settings UI.

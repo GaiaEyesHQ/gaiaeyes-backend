@@ -330,6 +330,7 @@ private struct SupabaseConfig {
     let url: URL
     let anonKey: String
     let magicLinkRedirect: String?
+    private static let defaultRedirect = "gaiaeyes://auth/callback"
 
     static func load() -> SupabaseConfig? {
         guard let urlString = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") as? String,
@@ -338,7 +339,14 @@ private struct SupabaseConfig {
               !anon.isEmpty else {
             return nil
         }
-        let redirect = Bundle.main.object(forInfoDictionaryKey: "GAIA_MAGICLINK_REDIRECT") as? String
+        let configuredRedirect = (Bundle.main.object(forInfoDictionaryKey: "GAIA_MAGICLINK_REDIRECT") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let redirect: String?
+        if let configuredRedirect, !configuredRedirect.isEmpty, !configuredRedirect.contains("*") {
+            redirect = configuredRedirect
+        } else {
+            redirect = defaultRedirect
+        }
         return SupabaseConfig(url: url, anonKey: anon, magicLinkRedirect: redirect)
     }
 }

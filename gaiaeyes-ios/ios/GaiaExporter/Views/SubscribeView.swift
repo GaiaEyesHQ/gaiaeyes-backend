@@ -24,11 +24,29 @@ struct SubscribeView: View {
                         .foregroundColor(.orange)
                 }
 
+                HStack(alignment: .firstTextBaseline) {
+                    Text(auth.supabaseAccessToken == nil ? "Status: Not signed in on this device" : "Status: Signed in")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("Refresh Status") {
+                        Task { await refreshSessionStatus() }
+                    }
+                    .font(.caption)
+                }
+
                 if auth.supabaseAccessToken == nil {
                     LoginView()
+                    Text("After opening the magic link, this screen should switch to signed-in state.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
                 } else {
                     if let email = auth.supabaseEmail {
                         Text("Signed in as \(email)")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    } else if let userId = auth.currentSupabaseUserId() {
+                        Text("Signed in (user \(userId.prefix(8))...)")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                     }
@@ -90,6 +108,7 @@ struct SubscribeView: View {
             }
         }
         .task {
+            await refreshSessionStatus()
             await refreshEntitlementsIfNeeded()
         }
         .onChange(of: auth.supabaseAccessToken) { _, _ in
@@ -128,6 +147,12 @@ struct SubscribeView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func refreshSessionStatus() async {
+        auth.loadFromKeychain()
+        _ = await auth.validAccessToken()
+        _ = await auth.resolveSupabaseUserId()
     }
 }
 
