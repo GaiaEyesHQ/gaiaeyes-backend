@@ -43,6 +43,7 @@ FRONTIER_MIN_ACTIVITY = 0.16
 FRONTIER_MIN_RUN_PX = 8
 
 # Early-day rollover heuristic: sometimes SOS70 rightmost panel is still "yesterday".
+ROLLOVER_EARLY_HOUR_MIN = 3.0
 ROLLOVER_EARLY_HOUR_MAX = 8.5
 ROLLOVER_MIN_GAP_HOURS = 8.0
 ROLLOVER_MIN_FRONTIER_DAY_FILL = 0.88
@@ -598,7 +599,8 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
     delta_min = (delta_px / max(pph, 1e-6)) * 60.0
     frontier_day_fill = float((x_frontier - x_day2_time) / max(day_w_time, 1e-6))
     rollover_candidate = bool(
-        (hour_now <= float(ROLLOVER_EARLY_HOUR_MAX))
+        (hour_now >= float(ROLLOVER_EARLY_HOUR_MIN))
+        and (hour_now <= float(ROLLOVER_EARLY_HOUR_MAX))
         and (delta_min >= float(ROLLOVER_MIN_GAP_HOURS * 60.0))
         and (frontier_day_fill >= float(ROLLOVER_MIN_FRONTIER_DAY_FILL))
         and (float(frontier_dbg.get("activity_right_tail") or 0.0) >= float(ROLLOVER_MIN_RIGHT_TAIL_ACTIVITY))
@@ -662,6 +664,8 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
         "x_now": x_now,
         "x_now_method": x_now_method,
         "hour_now_tsst": float(hour_now),
+        "rollover_hour_min": float(ROLLOVER_EARLY_HOUR_MIN),
+        "rollover_hour_max": float(ROLLOVER_EARLY_HOUR_MAX),
         "delta_min_to_guard": float(delta_min),
         "frontier_day_fill": float(frontier_day_fill),
         "rollover_candidate": bool(rollover_candidate),
