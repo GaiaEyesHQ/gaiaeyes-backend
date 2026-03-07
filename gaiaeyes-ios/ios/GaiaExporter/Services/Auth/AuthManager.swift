@@ -43,7 +43,11 @@ final class AuthManager: ObservableObject {
             throw AuthError.invalidEmail
         }
 
-        var req = URLRequest(url: config.url.appendingPathComponent("auth/v1/otp"))
+        var otpURL = config.url.appendingPathComponent("auth/v1/otp")
+        if let redirect = config.magicLinkRedirect {
+            otpURL = otpURL.appending(queryItems: ["redirect_to": redirect])
+        }
+        var req = URLRequest(url: otpURL)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(config.anonKey, forHTTPHeaderField: "apikey")
@@ -61,11 +65,13 @@ final class AuthManager: ObservableObject {
             body["options"] = ["email_redirect_to": redirect]
         }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        appLog("[AUTH] sending magic-link otp redirect=\(config.magicLinkRedirect ?? "nil") url=\(req.url?.absoluteString ?? "-")")
 
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse else {
             throw AuthError.unexpectedResponse
         }
+        appLog("[AUTH] otp response status=\(http.statusCode)")
         guard (200...299).contains(http.statusCode) else {
             let msg = Self.extractMessage(from: data) ?? "Supabase sign-in failed"
             throw AuthError.remote(msg)
@@ -77,13 +83,16 @@ final class AuthManager: ObservableObject {
 
     func handleMagicLink(_ url: URL) async -> Bool {
         lastError = nil
+        appLog("[AUTH] received magic-link callback: \(url.absoluteString)")
         let params = Self.parseParams(from: url)
         if let err = params["error_description"] ?? params["error"] {
             lastError = err.replacingOccurrences(of: "+", with: " ")
+            appLog("[AUTH] callback error: \(lastError ?? "unknown")")
             return false
         }
 
         guard let access = params["access_token"], let refresh = params["refresh_token"] else {
+            appLog("[AUTH] callback missing tokens")
             return false
         }
 
@@ -94,6 +103,7 @@ final class AuthManager: ObservableObject {
             expiresAt: expiresAt,
             userId: Self.jwtSubject(from: access)
         )
+        appLog("[AUTH] session established from callback")
         return true
     }
 
