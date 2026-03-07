@@ -1175,9 +1175,9 @@ def main():
         search_px=8,
         band_px=2,
         edge_margin_px=1,
-        search_up_px=12,
-        search_down_px=4,
-        prefer_lower_weight=0.0,
+        search_up_px=6,
+        search_down_px=14,
+        prefer_lower_weight=0.05,
     )
     if dbgF_f4:
         dbgF.update(dbgF_f4)
@@ -1246,8 +1246,8 @@ def main():
             "F2",
             search_px=8,
             band_px=2,
-            search_up_px=10,
-            search_down_px=4,
+            search_up_px=14,
+            search_down_px=2,
             prefer_lower_weight=0.0,
             min_y_px=int(picksF["F1"]["y_px"]) + 10,
             max_y_px=f2_max_y,
