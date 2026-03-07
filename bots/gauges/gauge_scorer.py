@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -35,6 +36,8 @@ _METRIC_SPECS = {
 _HRV_CANDIDATES = ["hrv_avg", "hrv_rmssd", "rmssd", "hrv", "hrv_ms"]
 _DAY_CANDIDATES = ["day", "date", "day_local", "day_utc"]
 _TS_CANDIDATES = ["ts_utc", "ts", "sample_ts", "created_at", "timestamp"]
+_CAMERA_QUALITY_OK = {"good", "ok"}
+_CAMERA_QUALITY_THRESHOLD = 0.65
 
 
 def _coerce_day(value: str | date | None) -> date:
@@ -221,9 +224,54 @@ def fetch_hrv_fallback(
     user_id: str,
     day: date,
     today_row: Optional[Dict[str, Any]] = None,
-) -> Tuple[Optional[float], Optional[str]]:
+) -> Tuple[Optional[float], Optional[str], Optional[float]]:
     if today_row and today_row.get("hrv_avg") is not None:
-        return _safe_float(today_row.get("hrv_avg")), "marts.daily_features.hrv_avg"
+        return _safe_float(today_row.get("hrv_avg")), "marts.daily_features.hrv_avg", None
+
+    camera_cols = table_columns("marts", "camera_health_daily")
+    if camera_cols:
+        rmssd_col = pick_column(camera_cols, ["rmssd_ms"])
+        ln_rmssd_col = pick_column(camera_cols, ["ln_rmssd"])
+        quality_score_col = pick_column(camera_cols, ["quality_score"])
+        quality_label_col = pick_column(camera_cols, ["quality_label"])
+        stress_col = pick_column(camera_cols, ["stress_index"])
+        ts_col = pick_column(camera_cols, ["latest_ts_utc", "ts_utc"])
+        if rmssd_col and quality_score_col and quality_label_col and ts_col:
+            ln_expr = ln_rmssd_col if ln_rmssd_col else "null"
+            stress_expr = stress_col if stress_col else "null"
+            row = pg.fetchrow(
+                f"""
+                select {rmssd_col} as rmssd_ms,
+                       {ln_expr} as ln_rmssd,
+                       {quality_score_col} as quality_score,
+                       {quality_label_col} as quality_label,
+                       {stress_expr} as stress_index
+                  from marts.camera_health_daily
+                 where user_id = %s
+                   and day <= %s
+                 order by day desc, {ts_col} desc
+                 limit 1
+                """,
+                user_id,
+                day,
+            )
+            if row:
+                quality_label = str(row.get("quality_label") or "").strip().lower()
+                quality_score = _safe_float(row.get("quality_score")) or 0.0
+                quality_ok = (
+                    quality_label in _CAMERA_QUALITY_OK and
+                    quality_score >= _CAMERA_QUALITY_THRESHOLD
+                )
+                if quality_ok:
+                    stress_index = _safe_float(row.get("stress_index"))
+                    rmssd = _safe_float(row.get("rmssd_ms"))
+                    if rmssd is not None:
+                        return rmssd, "marts.camera_health_daily.rmssd_ms", stress_index
+                    ln_rmssd = _safe_float(row.get("ln_rmssd"))
+                    if ln_rmssd is not None:
+                        inferred_rmssd = math.exp(ln_rmssd) if ln_rmssd < 20 else None
+                        if inferred_rmssd is not None:
+                            return inferred_rmssd, "marts.camera_health_daily.ln_rmssd(exp)", stress_index
 
     cols = table_columns("gaia", "daily_summary")
     if cols:
@@ -239,7 +287,7 @@ def fetch_hrv_fallback(
             """
             row = pg.fetchrow(sql, user_id, day)
             if row and row.get("hrv") is not None:
-                return _safe_float(row.get("hrv")), f"gaia.daily_summary.{hrv_col}"
+                return _safe_float(row.get("hrv")), f"gaia.daily_summary.{hrv_col}", None
 
     cols = table_columns("gaia", "samples")
     if cols:
@@ -258,9 +306,9 @@ def fetch_hrv_fallback(
             """
             row = pg.fetchrow(sql, user_id, start, end)
             if row and row.get("hrv") is not None:
-                return _safe_float(row.get("hrv")), f"gaia.samples.{hrv_col}"
+                return _safe_float(row.get("hrv")), f"gaia.samples.{hrv_col}", None
 
-    return None, None
+    return None, None, None
 
 
 def _compute_baseline_stats(
@@ -296,6 +344,7 @@ def compute_health_status(
     *,
     hrv_value: Optional[float] = None,
     hrv_source: Optional[str] = None,
+    camera_stress_index: Optional[float] = None,
 ) -> Tuple[Optional[float], Dict[str, Any]]:
     metrics = list(_METRIC_SPECS.keys())
     baseline_days, stats = _compute_baseline_stats(baseline_rows, metrics)
@@ -374,12 +423,22 @@ def compute_health_status(
     if severity_max:
         health_status = min(100.0, health_status + min(15.0, severity_max * 1.5))
 
+    stress_penalty = 0.0
+    if camera_stress_index is not None:
+        stress = max(0.0, float(camera_stress_index))
+        if stress > 80.0:
+            # Mild additional strain weight when camera quality is already vetted.
+            stress_penalty = min(8.0, ((stress - 80.0) / 220.0) * 8.0)
+            health_status = min(100.0, round(health_status + stress_penalty, 1))
+
     return health_status, {
         "calibrating": False,
         "baseline_days": baseline_days,
         "metrics_used": list(metric_inputs.keys()),
         "metric_inputs": metric_inputs,
         "hrv_source": hrv_source,
+        "camera_stress_index": camera_stress_index,
+        "stress_penalty": round(stress_penalty, 2) if stress_penalty else 0.0,
     }
 
 
@@ -540,13 +599,14 @@ def score_user_day(
     wearable = fetch_local_health_summary(user_id)
     today_features = fetch_daily_features(user_id, day)
     baseline_rows = fetch_daily_features_baseline(user_id, day)
-    hrv_value, hrv_source = fetch_hrv_fallback(user_id, day, today_features)
+    hrv_value, hrv_source, camera_stress_index = fetch_hrv_fallback(user_id, day, today_features)
     health_status, health_meta = compute_health_status(
         today_features,
         baseline_rows,
         symptoms,
         hrv_value=hrv_value,
         hrv_source=hrv_source,
+        camera_stress_index=camera_stress_index,
     )
 
     gauges = _score_gauges(definition, active_states)

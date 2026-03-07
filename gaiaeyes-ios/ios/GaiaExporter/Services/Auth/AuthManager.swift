@@ -150,6 +150,16 @@ final class AuthManager: ObservableObject {
         }
     }
 
+    func validAccessToken() async -> String? {
+        await refreshSessionIfNeeded()
+        return supabaseAccessToken
+    }
+
+    func currentSupabaseUserId() -> String? {
+        guard let token = supabaseAccessToken else { return nil }
+        return Self.jwtSubject(from: token)
+    }
+
     private static func parseParams(from url: URL) -> [String: String] {
         var params: [String: String] = [:]
         if let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems {
@@ -188,6 +198,24 @@ final class AuthManager: ObservableObject {
         if let msg = json["error_description"] as? String { return msg }
         if let msg = json["error"] as? String { return msg }
         return nil
+    }
+
+    private static func jwtSubject(from token: String) -> String? {
+        let parts = token.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var payload = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        while !payload.count.isMultiple(of: 4) {
+            payload.append("=")
+        }
+        guard let data = Data(base64Encoded: payload),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let sub = json["sub"] as? String,
+              !sub.isEmpty else {
+            return nil
+        }
+        return sub
     }
 }
 

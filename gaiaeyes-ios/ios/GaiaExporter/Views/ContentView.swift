@@ -1095,6 +1095,11 @@ struct ContentView: View {
     @State private var showMissionSettingsSheet: Bool = false
     @State private var showMissionInsightsSheet: Bool = false
     @State private var showSchumannDashboardSheet: Bool = false
+    @State private var showCameraHealthCheckSheet: Bool = false
+    @State private var latestCameraCheck: CameraHealthDailySummary? = nil
+    @State private var latestCameraCheckLoading: Bool = false
+    @State private var latestCameraCheckError: String? = nil
+    @AppStorage("camera_health_debug_export_enabled") private var cameraHealthDebugExportEnabled: Bool = false
 
     @State private var magnetosphere: MagnetosphereData? = nil
     @State private var magnetosphereLoading: Bool = false
@@ -1759,6 +1764,47 @@ struct ContentView: View {
             }
         }
         appLog("[UI] dashboard payload error: \(lastError?.localizedDescription ?? "unknown")")
+    }
+
+    private func fetchLatestCameraCheck() async {
+        let shouldStart = await MainActor.run { () -> Bool in
+            if latestCameraCheckLoading {
+                return false
+            }
+            latestCameraCheckLoading = true
+            latestCameraCheckError = nil
+            return true
+        }
+        guard shouldStart else { return }
+
+        defer {
+            Task { @MainActor in
+                latestCameraCheckLoading = false
+            }
+        }
+
+        do {
+            let summary = try await CameraHealthSupabaseClient.shared.fetchLatestDailySummary()
+            await MainActor.run {
+                latestCameraCheck = summary
+                latestCameraCheckError = nil
+            }
+        } catch CameraHealthSupabaseError.notAuthenticated {
+            await MainActor.run {
+                latestCameraCheck = nil
+                latestCameraCheckError = nil
+            }
+        } catch CameraHealthSupabaseError.missingUserId {
+            await MainActor.run {
+                latestCameraCheck = nil
+                latestCameraCheckError = nil
+            }
+        } catch {
+            await MainActor.run {
+                latestCameraCheckError = "Latest check unavailable"
+            }
+            appLog("[UI] camera check fetch error: \(error.localizedDescription)")
+        }
     }
 
     private func fetchProfileLocation() async {
@@ -2966,6 +3012,9 @@ struct ContentView: View {
                 earthscopeSummary: dashboardEarthscopeSummary,
                 alerts: dashboardAlerts,
                 earthscope: resolvedEarthscope,
+                latestCameraCheck: latestCameraCheck,
+                cameraCheckLoading: latestCameraCheckLoading,
+                cameraCheckError: latestCameraCheckError,
                 fallbackTitle: fallbackFeatures?.postTitle,
                 fallbackCaption: fallbackFeatures?.postCaption,
                 fallbackBody: fallbackFeatures?.postBody,
@@ -2984,6 +3033,7 @@ struct ContentView: View {
                 onSymptoms: { showSymptomSheet = true },
                 onInsights: { showMissionInsightsSheet = true },
                 onSettings: { showMissionSettingsSheet = true },
+                onQuickCheck: { showCameraHealthCheckSheet = true },
                 onSchumann: { showSchumannDashboardSheet = true },
                 onResearch: {
 #if canImport(UIKit)
@@ -3001,6 +3051,7 @@ struct ContentView: View {
         let onSymptoms: () -> Void
         let onInsights: () -> Void
         let onSettings: () -> Void
+        let onQuickCheck: () -> Void
         let onSchumann: () -> Void
         let onResearch: () -> Void
 
@@ -3008,6 +3059,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 6) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
+                        Button(action: onQuickCheck) { Label("Quick Check", systemImage: "camera.fill") }
                         Button(action: onSymptoms) { Label("Symptoms", systemImage: "plus.circle") }
                         Button(action: onInsights) { Label("Insights", systemImage: "chart.xyaxis.line") }
                         Button(action: onSettings) { Label("Settings", systemImage: "gearshape") }
@@ -3036,6 +3088,9 @@ struct ContentView: View {
         let earthscopeSummary: String?
         let alerts: [DashboardAlertItem]
         let earthscope: DashboardEarthscopePost?
+        let latestCameraCheck: CameraHealthDailySummary?
+        let cameraCheckLoading: Bool
+        let cameraCheckError: String?
         let fallbackTitle: String?
         let fallbackCaption: String?
         let fallbackBody: String?
@@ -3389,6 +3444,101 @@ struct ContentView: View {
             }
         }
 
+        private struct CameraCheckCard: View {
+            let summary: CameraHealthDailySummary?
+            let isLoading: Bool
+            let errorText: String?
+
+            private func qualityColor(_ quality: String?) -> Color {
+                let token = (quality ?? "").lowercased()
+                if token == "good" { return .green }
+                if token == "ok" { return .yellow }
+                if token == "poor" { return .orange }
+                return .secondary
+            }
+
+            private func qualityLabel(_ quality: String?) -> String {
+                let token = (quality ?? "unknown").trimmingCharacters(in: .whitespacesAndNewlines)
+                if token.isEmpty { return "Unknown" }
+                return token.capitalized
+            }
+
+            private func timeText(_ raw: String?) -> String? {
+                guard let raw, let date = ISO8601DateFormatter().date(from: raw) else { return nil }
+                let out = DateFormatter()
+                out.dateStyle = .none
+                out.timeStyle = .short
+                return out.string(from: date)
+            }
+
+            var body: some View {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label("Latest Check", systemImage: "camera.metering.center.weighted")
+                            .font(.headline)
+                        Spacer()
+                        if let q = summary?.qualityLabel {
+                            Text(qualityLabel(q))
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(qualityColor(q).opacity(0.18))
+                                .foregroundColor(qualityColor(q))
+                                .clipShape(Capsule())
+                        }
+                    }
+                    if isLoading {
+                        ProgressView("Loading latest check...")
+                            .font(.caption)
+                    } else if let errorText, !errorText.isEmpty, summary == nil {
+                        Text(errorText)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    } else if let summary {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("BPM")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Text(summary.bpm.map { String(Int($0.rounded())) } ?? "--")
+                                    .font(.title3.weight(.bold))
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("RMSSD")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Text(summary.rmssdMs.map { "\(Int($0.rounded())) ms" } ?? "N/A")
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                            if let timestamp = timeText(summary.latestTsUtc) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Time")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                    Text(timestamp)
+                                        .font(.caption.weight(.semibold))
+                                }
+                            }
+                        }
+                        Text("Wellness estimate only. Not medical advice.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("No camera check yet today.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(10)
+                .background(Color.black.opacity(0.20))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                )
+            }
+        }
+
         private func gaugeRows(_ g: DashboardGaugeSet?) -> [GaugeRow] {
             guard let g else { return [] }
             let values: [(String, Double?)] = [
@@ -3568,6 +3718,12 @@ struct ContentView: View {
                         bodyMarkdown: earthscope?.bodyMarkdown ?? fallbackBody,
                         summaryText: earthscopeSummary,
                         driversCompact: driversCompact
+                    )
+
+                    CameraCheckCard(
+                        summary: latestCameraCheck,
+                        isLoading: cameraCheckLoading,
+                        errorText: cameraCheckError
                     )
 
                     if let lastUpdatedText, !lastUpdatedText.isEmpty {
@@ -4386,7 +4542,8 @@ struct ContentView: View {
                 let api = state.apiWithAuth()
                 async let a: Void = fetchDashboardPayload(force: true)
                 async let b: Void = fetchProfileSettings()
-                _ = await (a, b)
+                async let e: Void = fetchLatestCameraCheck()
+                _ = await (a, b, e)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
                 async let d: Void = refreshSymptomPresets(api: api)
                 _ = await (c, d)
@@ -4396,7 +4553,8 @@ struct ContentView: View {
                 let api = state.apiWithAuth()
                 async let a: Void = fetchDashboardPayload(force: true)
                 async let b: Void = fetchProfileSettings()
-                _ = await (a, b)
+                async let e: Void = fetchLatestCameraCheck()
+                _ = await (a, b, e)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
                 async let d: Void = refreshSymptomPresets(api: api)
                 _ = await (c, d)
@@ -4525,6 +4683,11 @@ struct ContentView: View {
                 Task {
                     await fetchProfileSettings()
                     await fetchLocalHealth()
+                }
+            }
+            .onChange(of: showCameraHealthCheckSheet, initial: false) { _, newValue in
+                if !newValue {
+                    Task { await fetchLatestCameraCheck() }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .featuresShouldRefresh).receive(on: RunLoop.main)) { _ in
@@ -4898,6 +5061,17 @@ struct ContentView: View {
                             Text("Diagnostics")
                         }
                         .padding(.horizontal)
+
+                        GroupBox {
+                            Toggle("Enable camera check JSON export", isOn: $cameraHealthDebugExportEnabled)
+                                .font(.subheadline)
+                            Text("Developer-only: adds a Copy Debug JSON button after Quick Check.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        } label: {
+                            Label("Camera Check", systemImage: "ladybug")
+                        }
+                        .padding(.horizontal)
                     }
                     .padding(.vertical, 16)
                 }
@@ -4909,6 +5083,11 @@ struct ContentView: View {
             NavigationStack {
                 SchumannDashboardView(state: state)
             }
+        }
+        .sheet(isPresented: $showCameraHealthCheckSheet) {
+            CameraHealthCheckView(onSaved: {
+                Task { await fetchLatestCameraCheck() }
+            })
         }
         .sheet(isPresented: $showSymptomSheet) {
             SymptomsLogSheet(
