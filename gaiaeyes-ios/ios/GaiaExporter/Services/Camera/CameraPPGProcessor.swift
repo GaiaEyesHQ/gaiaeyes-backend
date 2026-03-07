@@ -146,26 +146,28 @@ final class CameraPPGProcessor {
         let rawIbi = computeIBI(from: peakIndices, sampleRate: hz)
         let cleaned = rejectArtifacts(ibiMs: rawIbi.ms, ibiTsMs: rawIbi.tsMs)
         let boundedRawIbi = rawIbi.ms.filter { $0 >= 300 && $0 <= 2000 }
+        let qualityReadyIbi = mergeSplitBeats(in: cleaned.ms)
+        let qualityReadyRawIbi = mergeSplitBeats(in: boundedRawIbi)
 
         let saturationHitRatio = average(saturationRatios)
         let motionScore = average(motionSamples)
         let droppedFrameRatio = totalFrames > 0 ? Double(droppedFrames) / Double(totalFrames) : 0.0
         let quality = PPGSignalQuality.assess(
-            validIBICount: cleaned.ms.count,
-            totalIBICount: boundedRawIbi.count,
+            validIBICount: qualityReadyIbi.count,
+            totalIBICount: qualityReadyRawIbi.count,
             filteredSignal: bandpassed,
             residualSignal: residual,
-            ibiMs: cleaned.ms,
+            ibiMs: qualityReadyIbi,
             saturationHitRatio: saturationHitRatio,
             motionScore: motionScore,
             droppedFrameRatio: droppedFrameRatio
         )
 
-        let bpmSeries = bpmCandidates(cleaned: cleaned.ms, boundedRaw: boundedRawIbi)
+        let bpmSeries = bpmCandidates(cleaned: qualityReadyIbi, boundedRaw: qualityReadyRawIbi)
         let avnn = mean(cleaned.ms)
         let bpmFromIBI = bpm(fromIBIs: bpmSeries, qualityScore: quality.score)
         let bpmFromSignal = bpmFromAutocorrelation(signal: bandpassed, sampleRate: hz)
-        let bpmStable = resolveBpm(ibiBpm: bpmFromIBI, signalBpm: bpmFromSignal, qualityScore: quality.score)
+        let bpmStable = resolveBpm(ibiBpm: bpmFromIBI, signalEstimate: bpmFromSignal, qualityScore: quality.score)
         let canComputeHRV = cleaned.ms.count >= 20 && quality.score >= 0.65 && quality.label != .poor
 
         let hrvMetrics: (sdnn: Double?, rmssd: Double?, pnn50: Double?, lnRmssd: Double?, stress: Double?, resp: Double?)
@@ -392,69 +394,75 @@ final class CameraPPGProcessor {
 
     private func bpmCandidates(cleaned: [Double], boundedRaw: [Double]) -> [Double] {
         let source = cleaned.count >= 8 ? cleaned : boundedRaw
-        return dominantIbiCluster(source)
+        let merged = mergeSplitBeats(in: source)
+        return merged.count >= 6 ? merged : source
     }
 
-    private func dominantIbiCluster(_ ibiMs: [Double]) -> [Double] {
-        guard ibiMs.count >= 8 else { return ibiMs }
+    private func mergeSplitBeats(in ibiMs: [Double]) -> [Double] {
+        guard ibiMs.count >= 2 else { return ibiMs }
+        var merged: [Double] = []
+        merged.reserveCapacity(ibiMs.count)
 
-        let minIbi = 300.0
-        let maxIbi = 2000.0
-        let binWidth = 40.0
-        let binCount = Int(((maxIbi - minIbi) / binWidth).rounded(.down)) + 1
-        var histogram = Array(repeating: 0, count: binCount)
-
-        for value in ibiMs where value >= minIbi && value <= maxIbi {
-            let idx = min(
-                binCount - 1,
-                max(0, Int(((value - minIbi) / binWidth).rounded(.down)))
-            )
-            histogram[idx] += 1
+        var i = 0
+        while i < ibiMs.count {
+            let current = ibiMs[i]
+            if current < 430.0, i + 1 < ibiMs.count {
+                var combined = current
+                var j = i + 1
+                while j < ibiMs.count, combined < 560.0 {
+                    combined += ibiMs[j]
+                    j += 1
+                }
+                if (j - i) >= 2, combined >= 560.0, combined <= 1700.0 {
+                    merged.append(combined)
+                    i = j
+                    continue
+                }
+            }
+            if i + 1 < ibiMs.count {
+                let next = ibiMs[i + 1]
+                let shorter = min(current, next)
+                let longer = max(current, next)
+                let ratio = longer / max(shorter, 1.0)
+                let combined = current + next
+                let likelySplit =
+                    shorter < 400.0 &&
+                    ratio >= 1.25 &&
+                    combined >= 560.0 &&
+                    combined <= 1700.0
+                if likelySplit {
+                    merged.append(combined)
+                    i += 2
+                    continue
+                }
+            }
+            merged.append(current)
+            i += 1
         }
-
-        guard let maxCount = histogram.max(), maxCount >= 4 else { return ibiMs }
-        let modeIndex = histogram.firstIndex(of: maxCount) ?? 0
-        let center = minIbi + (Double(modeIndex) * binWidth) + (binWidth * 0.5)
-        let coarseMin = max(minIbi, center - 160.0)
-        let coarseMax = min(maxIbi, center + 160.0)
-
-        var cluster = ibiMs.filter { $0 >= coarseMin && $0 <= coarseMax }
-        let minClusterCount = max(6, Int((Double(ibiMs.count) * 0.35).rounded(.up)))
-        guard cluster.count >= minClusterCount else { return ibiMs }
-
-        let med = median(cluster)
-        let tightTol = max(90.0, med * 0.20)
-        let tightened = cluster.filter { abs($0 - med) <= tightTol }
-        if tightened.count >= 6 {
-            cluster = tightened
-        }
-        return cluster
+        return merged
     }
 
     private func bpm(fromIBIs ibIs: [Double], qualityScore: Double) -> Double? {
         guard ibIs.count >= 6 else { return nil }
         guard qualityScore >= 0.35 else { return nil }
 
-        let med = median(ibIs)
+        let trimmed = trimExtremes(ibIs, fraction: 0.18)
+        guard trimmed.count >= 6 else { return nil }
+
+        let med = median(trimmed)
         guard med > 0 else { return nil }
 
-        let deviations = ibIs.map { abs($0 - med) }
+        let deviations = trimmed.map { abs($0 - med) }
         let mad = median(deviations)
         let robustCv = (1.4826 * mad) / med
-        guard robustCv <= 0.22 else { return nil }
+        guard robustCv <= 0.36 else { return nil }
 
-        let trimmed = trimExtremes(ibIs, fraction: 0.15)
-        guard let avnn = mean(trimmed), avnn > 0 else { return nil }
-
-        let cv = standardDeviation(trimmed) / avnn
-        guard cv <= 0.22 else { return nil }
-
-        let bpm = 60000.0 / avnn
+        let bpm = 60000.0 / med
         guard bpm >= 40.0, bpm <= 180.0 else { return nil }
         return round1(bpm)
     }
 
-    private func bpmFromAutocorrelation(signal: [Double], sampleRate: Double) -> Double? {
+    private func bpmFromAutocorrelation(signal: [Double], sampleRate: Double) -> (bpm: Double, confidence: Double)? {
         guard sampleRate > 0, signal.count >= Int(sampleRate * 12.0) else { return nil }
         guard let mu = mean(signal) else { return nil }
         let centered = signal.map { $0 - mu }
@@ -490,7 +498,7 @@ final class CameraPPGProcessor {
             }
         }
 
-        guard bestCorr >= 0.18 else { return nil }
+        guard bestCorr >= 0.24 else { return nil }
         var refinedLag = Double(bestLag)
         if bestLag > minLag, bestLag < maxLag {
             let ym = corrByLag[bestLag - 1]
@@ -508,24 +516,42 @@ final class CameraPPGProcessor {
         guard refinedLag > 0 else { return nil }
         let bpm = (60.0 * sampleRate) / refinedLag
         guard bpm >= 40.0, bpm <= 180.0 else { return nil }
-        return round1(bpm)
+        return (round1(bpm), bestCorr)
     }
 
-    private func resolveBpm(ibiBpm: Double?, signalBpm: Double?, qualityScore: Double) -> Double? {
-        switch (ibiBpm, signalBpm) {
+    private func resolveBpm(ibiBpm: Double?, signalEstimate: (bpm: Double, confidence: Double)?, qualityScore: Double) -> Double? {
+        switch (ibiBpm, signalEstimate) {
         case let (ibi?, signal?):
-            let delta = abs(ibi - signal)
+            let delta = abs(ibi - signal.bpm)
             if delta <= 8.0 {
-                return round1((ibi + signal) * 0.5)
+                let blended = round1((ibi + signal.bpm) * 0.5)
+                return isPlausibleBpm(blended, qualityScore: qualityScore) ? blended : nil
             }
-            return qualityScore < 0.65 ? signal : ibi
+            guard qualityScore >= 0.65, isPlausibleBpm(ibi, qualityScore: qualityScore) else {
+                return nil
+            }
+            return ibi
         case let (ibi?, nil):
+            guard qualityScore >= 0.45, isPlausibleBpm(ibi, qualityScore: qualityScore) else {
+                return nil
+            }
             return ibi
         case let (nil, signal?):
-            return qualityScore >= 0.40 ? signal : nil
+            guard signal.confidence >= 0.34 else { return nil }
+            guard qualityScore >= 0.60, isPlausibleBpm(signal.bpm, qualityScore: qualityScore) else {
+                return nil
+            }
+            return signal.bpm
         case (nil, nil):
             return nil
         }
+    }
+
+    private func isPlausibleBpm(_ bpm: Double, qualityScore: Double) -> Bool {
+        if qualityScore < 0.65 {
+            return bpm >= 50.0 && bpm <= 120.0
+        }
+        return bpm >= 40.0 && bpm <= 180.0
     }
 
     private func trimExtremes(_ values: [Double], fraction: Double) -> [Double] {

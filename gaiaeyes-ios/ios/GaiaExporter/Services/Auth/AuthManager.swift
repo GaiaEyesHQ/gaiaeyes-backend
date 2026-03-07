@@ -49,17 +49,16 @@ final class AuthManager: ObservableObject {
         req.setValue(config.anonKey, forHTTPHeaderField: "apikey")
         req.setValue("Bearer \(config.anonKey)", forHTTPHeaderField: "Authorization")
 
-        var options: [String: String] = [:]
-        if let redirect = config.magicLinkRedirect {
-            options["emailRedirectTo"] = redirect
-        }
-
         var body: [String: Any] = [
             "email": email,
             "create_user": true,
         ]
-        if !options.isEmpty {
-            body["options"] = options
+        if let redirect = config.magicLinkRedirect {
+            // Some GoTrue versions expect top-level redirect_to on /otp.
+            // Keep options.email_redirect_to for compatibility with older behavior.
+            body["redirect_to"] = redirect
+            body["email_redirect_to"] = redirect
+            body["options"] = ["email_redirect_to": redirect]
         }
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 

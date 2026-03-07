@@ -59,7 +59,7 @@ enum PPGSignalQuality {
         let label: PPGQualityLabel
         if score >= 0.78 {
             label = .good
-        } else if score >= 0.45 {
+        } else if score >= 0.55 {
             label = .ok
         } else {
             label = .poor
