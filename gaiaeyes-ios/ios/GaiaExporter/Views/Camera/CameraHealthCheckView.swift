@@ -534,6 +534,11 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
                         switch authError {
                         case .notAuthenticated, .missingUserId:
                             self.saveStateMessage = "Not synced: Supabase sign-in missing. Open Settings > Subscribe and sign in."
+                        case .server(_, let body)
+                            where body.localizedCaseInsensitiveContains("permission denied for schema raw")
+                            || body.localizedCaseInsensitiveContains("permission denied for schema marts")
+                            || body.contains("\"code\":\"42501\""):
+                            self.saveStateMessage = "Sync blocked by Supabase permissions. Run the camera-health grants migration, then retry."
                         default:
                             self.saveStateMessage = "Sync failed: \(authError.localizedDescription)"
                         }

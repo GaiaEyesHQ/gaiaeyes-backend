@@ -28,11 +28,19 @@ Safety language in app UI:
 
 Migration file:
 - `supabase/migrations/20260307113000_create_camera_health_checks.sql`
+- `supabase/migrations/20260308020500_grant_camera_health_schema_access.sql`
 
 Objects added:
 - `raw.camera_health_checks` table
 - `marts.camera_health_daily` view (latest check per user/day)
 - RLS policies for own-row select/insert/delete
+- Grants for `authenticated` role to use `raw`/`marts` schemas and query camera-health objects
+
+Common troubleshooting:
+- If the app shows:
+  - `Supabase error 403`
+  - `{"code":"42501","message":"permission denied for schema raw"}`
+- Then the grants migration above has not been applied in the target Supabase project.
 
 ## iOS direct Supabase writes
 
