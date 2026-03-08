@@ -4,9 +4,9 @@ struct Entitlement: Decodable {
     let key: String
     let term: String?
     let isActive: Bool?
-    let startedAt: Date?
-    let expiresAt: Date?
-    let updatedAt: Date?
+    let startedAt: String?
+    let expiresAt: String?
+    let updatedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case key
