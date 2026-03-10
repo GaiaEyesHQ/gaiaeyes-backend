@@ -1951,16 +1951,26 @@ async def ingest_magnetometer(
         try:
             data = await fetch_json(client, fallback_url, params)
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 404:
+            status = exc.response.status_code if exc.response is not None else None
+            if status in (403, 404):
                 logger.warning(
-                    "SuperMAG fallback endpoint returned 404; skipping magnetometer ingest",
+                    "SuperMAG fallback endpoint returned %s; using proxy from ext.magnetosphere_pulse instead",
+                    status,
                 )
+                await ingest_magnetometer_proxy(writer, days)
                 return
-            raise
-        except json.JSONDecodeError:
             logger.warning(
-                "SuperMAG fallback endpoint returned non-JSON content; skipping magnetometer ingest",
+                "SuperMAG fallback endpoint failed with HTTP %s; using proxy from ext.magnetosphere_pulse instead",
+                status,
             )
+            await ingest_magnetometer_proxy(writer, days)
+            return
+        except (httpx.RequestError, httpx.TimeoutException, json.JSONDecodeError) as exc:
+            logger.warning(
+                "SuperMAG fallback endpoint unavailable (%s); using proxy from ext.magnetosphere_pulse instead",
+                exc,
+            )
+            await ingest_magnetometer_proxy(writer, days)
             return
         records = extract_records(data)
     if not records:
