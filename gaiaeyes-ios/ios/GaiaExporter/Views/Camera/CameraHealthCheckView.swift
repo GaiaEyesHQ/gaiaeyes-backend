@@ -451,10 +451,13 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
 
             do {
                 try device.lockForConfiguration()
+                _ = self.configurePreferredFrameRate(device: device, preferredFPS: 60.0)
                 if device.isTorchModeSupported(.on) {
                     try device.setTorchModeOn(level: 1.0)
                 }
-                if device.isFocusModeSupported(.continuousAutoFocus) {
+                if device.isFocusModeSupported(.locked) {
+                    device.focusMode = .locked
+                } else if device.isFocusModeSupported(.continuousAutoFocus) {
                     device.focusMode = .continuousAutoFocus
                 }
                 if device.isExposureModeSupported(.continuousAutoExposure) {
@@ -664,5 +667,54 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
         let mean = greenSum / Double(count)
         let saturationRatio = Double(saturationHits) / Double(count)
         return (mean, saturationRatio)
+    }
+
+    private func configurePreferredFrameRate(device: AVCaptureDevice, preferredFPS: Double) -> Double? {
+        if let fast = bestFormat(device: device, preferredFPS: preferredFPS) {
+            device.activeFormat = fast.format
+            device.activeVideoMinFrameDuration = fast.frameDuration
+            device.activeVideoMaxFrameDuration = fast.frameDuration
+            return fast.fps
+        }
+        if let fallback = bestFormat(device: device, preferredFPS: 30.0) {
+            device.activeFormat = fallback.format
+            device.activeVideoMinFrameDuration = fallback.frameDuration
+            device.activeVideoMaxFrameDuration = fallback.frameDuration
+            return fallback.fps
+        }
+        return nil
+    }
+
+    private func bestFormat(device: AVCaptureDevice, preferredFPS: Double) -> (format: AVCaptureDevice.Format, frameDuration: CMTime, fps: Double)? {
+        var best: (format: AVCaptureDevice.Format, frameDuration: CMTime, fps: Double, pixels: Int64)?
+
+        for format in device.formats {
+            let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+            guard dims.width >= 640, dims.height >= 480 else { continue }
+            let pixels = Int64(dims.width) * Int64(dims.height)
+
+            for range in format.videoSupportedFrameRateRanges {
+                guard range.maxFrameRate + 0.01 >= preferredFPS else { continue }
+                let fps = min(preferredFPS, range.maxFrameRate)
+                guard fps + 0.01 >= range.minFrameRate else { continue }
+
+                let timescale = Int32(max(1, Int(fps.rounded())))
+                let duration = CMTime(value: 1, timescale: timescale)
+
+                if let current = best {
+                    let hasHigherFPS = fps > current.fps + 0.1
+                    let sameFPS = abs(fps - current.fps) <= 0.1
+                    let hasMorePixels = pixels > current.pixels
+                    if hasHigherFPS || (sameFPS && hasMorePixels) {
+                        best = (format, duration, fps, pixels)
+                    }
+                } else {
+                    best = (format, duration, fps, pixels)
+                }
+            }
+        }
+
+        guard let selected = best else { return nil }
+        return (selected.format, selected.frameDuration, selected.fps)
     }
 }

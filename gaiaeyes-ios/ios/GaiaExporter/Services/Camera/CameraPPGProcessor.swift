@@ -164,20 +164,29 @@ final class CameraPPGProcessor {
         )
 
         let bpmSeries = bpmCandidates(cleaned: qualityReadyIbi, boundedRaw: qualityReadyRawIbi)
-        let avnn = mean(cleaned.ms)
+        let estimatedFps = fpsEstimate(recordDuration: elapsed)
+        let hrvIbi = qualityReadyIbi
+        let hrvTs = cumulativeTimestamps(from: hrvIbi)
+        let avnn = mean(hrvIbi)
         let bpmFromIBI = bpm(fromIBIs: bpmSeries, qualityScore: quality.score)
         let bpmFromSignal = bpmFromAutocorrelation(signal: bandpassed, sampleRate: hz)
         let bpmStable = resolveBpm(ibiBpm: bpmFromIBI, signalEstimate: bpmFromSignal, qualityScore: quality.score)
-        let canComputeHRV = cleaned.ms.count >= 20 && quality.score >= 0.65 && quality.label != .poor
+        let hrvRobustCV = robustCoefficientOfVariation(hrvIbi) ?? 1.0
+        let canComputeHRV =
+            hrvIbi.count >= 20 &&
+            quality.score >= 0.65 &&
+            quality.label != .poor &&
+            (estimatedFps ?? 0) >= 30 &&
+            hrvRobustCV <= 0.24
 
         let hrvMetrics: (sdnn: Double?, rmssd: Double?, pnn50: Double?, lnRmssd: Double?, stress: Double?, resp: Double?)
         if canComputeHRV || !requireQualityForHRV {
-            let sdnn = sdnnMs(cleaned.ms)
-            let rmssd = rmssdMs(cleaned.ms)
-            let pnn50 = pnn50(cleaned.ms)
+            let sdnn = sdnnMs(hrvIbi)
+            let rmssd = rmssdMs(hrvIbi)
+            let pnn50 = pnn50(hrvIbi)
             let ln = rmssd.flatMap { $0 > 0 ? log($0) : nil }
-            let stress = baevskyStressIndex(ibiMs: cleaned.ms)
-            let respiration = estimateRespirationRate(ibiMs: cleaned.ms, ibiTsMs: cleaned.tsMs, qualityScore: quality.score)
+            let stress = baevskyStressIndex(ibiMs: hrvIbi)
+            let respiration = estimateRespirationRate(ibiMs: hrvIbi, ibiTsMs: hrvTs, qualityScore: quality.score)
             hrvMetrics = (
                 sdnn,
                 rmssd,
@@ -206,13 +215,13 @@ final class CameraPPGProcessor {
             droppedFrameRatio: round3(droppedFrameRatio),
             saturationHitRatio: round3(saturationHitRatio),
             motionScore: round3(motionScore),
-            validIbiCount: cleaned.ms.count,
-            totalIbiCount: rawIbi.ms.count
+            validIbiCount: hrvIbi.count,
+            totalIbiCount: qualityReadyRawIbi.count
         )
 
         return CameraPPGComputedResult(
             durationSec: Int(elapsed.rounded()),
-            fps: fpsEstimate(recordDuration: elapsed),
+            fps: estimatedFps,
             quality: quality,
             metrics: outputMetrics,
             artifacts: artifacts,
@@ -561,6 +570,28 @@ final class CameraPPGProcessor {
         let cut = min(rawCut, (sorted.count - 2) / 2)
         guard cut > 0 else { return sorted }
         return Array(sorted[cut..<(sorted.count - cut)])
+    }
+
+    private func robustCoefficientOfVariation(_ values: [Double]) -> Double? {
+        guard values.count >= 6 else { return nil }
+        let med = median(values)
+        guard med > 0 else { return nil }
+        let deviations = values.map { abs($0 - med) }
+        let mad = median(deviations)
+        let robustStd = 1.4826 * mad
+        return robustStd / med
+    }
+
+    private func cumulativeTimestamps(from ibiMs: [Double]) -> [Double] {
+        guard !ibiMs.isEmpty else { return [] }
+        var out: [Double] = []
+        out.reserveCapacity(ibiMs.count)
+        var running = 0.0
+        for interval in ibiMs {
+            running += interval
+            out.append(running)
+        }
+        return out
     }
 
     private func sdnnMs(_ ibi: [Double]) -> Double? {
