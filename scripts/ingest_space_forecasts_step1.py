@@ -2261,7 +2261,47 @@ async def ingest_magnetometer_proxy(
         pc = max(0.0, min(pc, 10.0))
         return ae, al, pc
 
-    mart_rows: list[dict[str, Any]<truncated__content/>
+    mart_rows: list[dict[str, Any]] = []
+    now = datetime.now(tz=UTC)
+
+    for hour, samples in buckets.items():
+        if not samples:
+            continue
+
+        ae_vals: list[float] = []
+        al_vals: list[float] = []
+        pc_vals: list[float] = []
+
+        for bz, v, n in samples:
+            ae, al, pc = proxy_from_sample(bz, v, n)
+            ae_vals.append(ae)
+            al_vals.append(al)
+            pc_vals.append(pc)
+
+        mart_rows.append(
+            {
+                "ts_utc": hour,
+                "region": "global",
+                "ae": max(ae_vals) if ae_vals else None,
+                "al": min(al_vals) if al_vals else None,
+                "au": max(ae_vals) if ae_vals else None,
+                "pc": max(pc_vals) if pc_vals else None,
+                "stations": json.dumps(["proxy:magnetosphere_pulse"]),
+                "created_at": now,
+            }
+        )
+
+    if mart_rows:
+        await writer.upsert_many(
+            "marts",
+            "magnetometer_regional",
+            mart_rows,
+            ["ts_utc", "region"],
+        )
+        logger.info("Upserted %d proxy magnetometer rows into marts.magnetometer_regional", len(mart_rows))
+    else:
+        logger.info("Proxy magnetometer produced no rows after bucketing")
+
 
 if __name__ == "__main__":  # pragma: no cover - exercised via CLI
     main()
