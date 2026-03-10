@@ -2195,8 +2195,6 @@ def main(argv: Sequence[str] | None = None) -> None:
         raise SystemExit(130)
 
 
-if __name__ == "__main__":  # pragma: no cover - exercised via CLI
-    main()
 
 async def ingest_magnetometer_proxy(
     writer: SupabaseWriter,
@@ -2263,41 +2261,7 @@ async def ingest_magnetometer_proxy(
         pc = max(0.0, min(pc, 10.0))
         return ae, al, pc
 
-    mart_rows: list[dict[str, Any]] = []
-    now = datetime.now(tz=UTC)
-    for hour, samples in buckets.items():
-        ae_vals: list[float] = []
-        al_vals: list[float] = []
-        pc_vals: list[float] = []
-        for bz, v, n in samples:
-            ae_p, al_p, pc_p = proxy_from_sample(bz, v, n)
-            ae_vals.append(ae_p)
-            al_vals.append(al_p)
-            pc_vals.append(pc_p)
+    mart_rows: list[dict[str, Any]<truncated__content/>
 
-        if not ae_vals and not al_vals and not pc_vals:
-            continue
-
-        mart_rows.append(
-            {
-                "ts_utc": hour,
-                "region": "global",
-                "ae": max(ae_vals) if ae_vals else None,
-                "al": min(al_vals) if al_vals else None,
-                "au": max(ae_vals) * 0.5 if ae_vals else None,  # rough symmetry
-                "pc": max(pc_vals) if pc_vals else None,
-                "stations": json.dumps(["proxy:magnetosphere_pulse"]),
-                "created_at": now,
-            }
-        )
-
-    if mart_rows:
-        inserted = await writer.upsert_many(
-            "marts",
-            "magnetometer_regional",
-            mart_rows,
-            ["ts_utc", "region"],
-        )
-        logger.info("Upserted %d proxy rows into marts.magnetometer_regional", inserted)
-    else:
-        logger.info("Proxy magnetometer produced no rows; nothing to upsert")
+if __name__ == "__main__":  # pragma: no cover - exercised via CLI
+    main()
