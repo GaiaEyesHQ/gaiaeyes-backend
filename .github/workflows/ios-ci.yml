@@ -1,0 +1,141 @@
+name: iOS CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: Build configuration
+        required: true
+        default: Debug
+        type: choice
+        options:
+          - Debug
+          - Release
+      run_tests:
+        description: Run test action
+        required: true
+        default: false
+        type: boolean
+      simulator:
+        description: Simulator destination
+        required: false
+        default: generic/platform=iOS Simulator
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - "gaiaeyes-ios/**"
+      - ".github/workflows/ios-ci.yml"
+  pull_request:
+    paths:
+      - "gaiaeyes-ios/**"
+      - ".github/workflows/ios-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      XCODE_PROJECT: gaiaeyes-ios/ios/GaiaExporter.xcodeproj
+      XCODE_SCHEME: GaiaExporter
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build (Simulator, unsigned)
+        run: |
+          set -euo pipefail
+          CONFIGURATION="${{ github.event.inputs.configuration }}"
+          if [[ -z "$CONFIGURATION" ]]; then CONFIGURATION="Debug"; fi
+
+          DESTINATION="${{ github.event.inputs.simulator }}"
+          if [[ -z "$DESTINATION" ]]; then DESTINATION="generic/platform=iOS Simulator"; fi
+
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME"
+
+          xcodebuild \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -destination "$DESTINATION" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tee "$RUNNER_TEMP/ios-build.log"
+
+      - name: Test (optional)
+        if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.run_tests == 'true' || github.event.inputs.run_tests == true) }}
+        run: |
+          set -euo pipefail
+          CONFIGURATION="${{ github.event.inputs.configuration }}"
+          if [[ -z "$CONFIGURATION" ]]; then CONFIGURATION="Debug"; fi
+
+          DESTINATION="${{ github.event.inputs.simulator }}"
+          if [[ -z "$DESTINATION" ]]; then DESTINATION="generic/platform=iOS Simulator"; fi
+
+          if [[ "$DESTINATION" == "generic/platform=iOS Simulator" ]]; then
+            SIM_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ { print $2; exit }')"
+            if [[ -z "$SIM_ID" ]]; then
+              echo "No available iPhone simulator found."
+              exit 1
+            fi
+            DESTINATION="id=$SIM_ID"
+          fi
+
+          xcodebuild \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -destination "$DESTINATION" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            test | tee "$RUNNER_TEMP/ios-test.log"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ci-logs-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/ios-build.log
+            ${{ runner.temp }}/ios-test.log
+          if-no-files-found: ignore
+
+      - name: Summary
+        if: always()
+        run: |
+          CONFIGURATION="${{ github.event.inputs.configuration }}"
+          if [[ -z "$CONFIGURATION" ]]; then CONFIGURATION="Debug"; fi
+
+          DESTINATION="${{ github.event.inputs.simulator }}"
+          if [[ -z "$DESTINATION" ]]; then DESTINATION="generic/platform=iOS Simulator"; fi
+
+          RUN_TESTS="false"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && ("${{ github.event.inputs.run_tests }}" == "true" || "${{ github.event.inputs.run_tests }}" == "1") ]]; then
+            RUN_TESTS="true"
+          fi
+
+          {
+            echo "## iOS CI"
+            echo "- Project: \`$XCODE_PROJECT\`"
+            echo "- Scheme: \`$XCODE_SCHEME\`"
+            echo "- Configuration: \`$CONFIGURATION\`"
+            echo "- Destination: \`$DESTINATION\`"
+            echo "- Tests run: \`$RUN_TESTS\`"
+            echo "- Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"

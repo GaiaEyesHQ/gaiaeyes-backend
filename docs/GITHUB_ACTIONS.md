@@ -47,5 +47,8 @@ This repo relies heavily on GitHub Actions for scheduled ingestion, JSON snapsho
 - `review.yml` — PR review automation.
 - `pulse.yml` — pulse JSON output.
 
+### iOS
+- `ios-ci.yml` — remote iOS Simulator build with optional manual test run (`workflow_dispatch`).
+
 ## Open questions
 See `docs/OPEN_QUESTIONS.md` for missing Render cron details; however, most scheduled work lives in these GitHub Actions workflows.

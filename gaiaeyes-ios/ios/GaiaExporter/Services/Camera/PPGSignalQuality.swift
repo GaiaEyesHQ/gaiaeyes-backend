@@ -88,12 +88,17 @@ enum PPGSignalQuality {
 
     private static func ibiStabilityScore(_ ibiMs: [Double]) -> Double {
         guard ibiMs.count >= 6 else { return 0.0 }
-        let mean = ibiMs.reduce(0.0, +) / Double(ibiMs.count)
+        let trimmed = trimExtremes(ibiMs, fraction: 0.20)
+        guard trimmed.count >= 6 else { return 0.0 }
+
+        let mean = trimmed.reduce(0.0, +) / Double(trimmed.count)
         guard mean > 0 else { return 0.0 }
-        let std = standardDeviation(ibiMs)
+        let std = standardDeviation(trimmed)
         let cv = std / mean
-        // CV of 0.03-0.12 is common for stable windows.
-        return clamp(1.0 - (cv / 0.25), min: 0.0, max: 1.0)
+        // Trimmed CV is less sensitive to occasional split/missed beats.
+        // Keep HRV gating strict elsewhere (>=0.65 quality) while allowing HR-only runs
+        // to avoid being permanently stuck in "poor" on otherwise usable captures.
+        return clamp(1.0 - (cv / 0.30), min: 0.0, max: 1.0)
     }
 
     private static func standardDeviation(_ values: [Double]) -> Double {
@@ -110,6 +115,15 @@ enum PPGSignalQuality {
         let clipped = clamp(ratio, min: 0.0, max: 1.0)
         let excess = max(0.0, clipped - 0.82)
         return clamp(excess * 0.70, min: 0.0, max: 0.16)
+    }
+
+    private static func trimExtremes(_ values: [Double], fraction: Double) -> [Double] {
+        guard values.count >= 6 else { return values }
+        let sorted = values.sorted()
+        let rawCut = Int((Double(sorted.count) * fraction).rounded(.down))
+        let cut = min(rawCut, (sorted.count - 2) / 2)
+        guard cut > 0 else { return sorted }
+        return Array(sorted[cut..<(sorted.count - cut)])
     }
 
     private static func clamp(_ value: Double, min minValue: Double, max maxValue: Double) -> Double {
