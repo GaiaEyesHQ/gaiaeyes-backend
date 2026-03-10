@@ -37,7 +37,8 @@ final class CameraPPGProcessor {
     let minRecordDurationSec: Double = 30.0
     let maxRecordDurationSec: Double = 45.0
 
-    private let targetHz: Double = 30.0
+    private let baseTargetHz: Double = 30.0
+    private let highFpsTargetHz: Double = 45.0
     private let maxDownsampledPoints = 1500
 
     private var captureStartTime: TimeInterval?
@@ -71,7 +72,7 @@ final class CameraPPGProcessor {
         if let lastTs = lastFrameTimestamp {
             let delta = timestamp - lastTs
             if delta > 0 {
-                let expected = 1.0 / targetHz
+                let expected = 1.0 / baseTargetHz
                 if delta > (expected * 1.8) {
                     let estimatedDrops = Int((delta / expected).rounded()) - 1
                     droppedFrames += max(0, estimatedDrops)
@@ -172,25 +173,35 @@ final class CameraPPGProcessor {
         let bpmFromSignal = bpmFromAutocorrelation(signal: bandpassed, sampleRate: hz)
         let bpmStable = resolveBpm(ibiBpm: bpmFromIBI, signalEstimate: bpmFromSignal, qualityScore: quality.score)
         let hrvRobustCV = robustCoefficientOfVariation(hrvIbi) ?? 1.0
-        let canComputeHRV =
+        let hrvPrecheck =
             hrvIbi.count >= 20 &&
             quality.score >= 0.65 &&
             quality.label != .poor &&
             (estimatedFps ?? 0) >= 30 &&
-            hrvRobustCV <= 0.24
+            hrvRobustCV <= 0.20
 
         let hrvMetrics: (sdnn: Double?, rmssd: Double?, pnn50: Double?, lnRmssd: Double?, stress: Double?, resp: Double?)
-        if canComputeHRV || !requireQualityForHRV {
+        let canComputeRawHRVMetrics = hrvPrecheck || !requireQualityForHRV
+        if canComputeRawHRVMetrics {
             let sdnn = sdnnMs(hrvIbi)
             let rmssd = rmssdMs(hrvIbi)
             let pnn50 = pnn50(hrvIbi)
-            let ln = rmssd.flatMap { $0 > 0 ? log($0) : nil }
-            let stress = baevskyStressIndex(ibiMs: hrvIbi)
-            let respiration = estimateRespirationRate(ibiMs: hrvIbi, ibiTsMs: hrvTs, qualityScore: quality.score)
+            let hrvPlausible = isPlausibleHRV(
+                avnn: avnn,
+                sdnn: sdnn,
+                rmssd: rmssd,
+                pnn50: pnn50,
+                robustCV: hrvRobustCV
+            )
+            let ln = (hrvPlausible ? rmssd : nil).flatMap { $0 > 0 ? log($0) : nil }
+            let stress = hrvPlausible ? baevskyStressIndex(ibiMs: hrvIbi) : nil
+            let respiration = hrvPlausible
+                ? estimateRespirationRate(ibiMs: hrvIbi, ibiTsMs: hrvTs, qualityScore: quality.score)
+                : nil
             hrvMetrics = (
-                sdnn,
-                rmssd,
-                pnn50,
+                hrvPlausible ? sdnn : nil,
+                hrvPlausible ? rmssd : nil,
+                hrvPlausible ? pnn50 : nil,
                 ln,
                 stress,
                 respiration
@@ -198,6 +209,8 @@ final class CameraPPGProcessor {
         } else {
             hrvMetrics = (nil, nil, nil, nil, nil, nil)
         }
+
+        let canComputeHRV = hrvMetrics.rmssd != nil
 
         let outputMetrics = CameraPPGMetrics(
             bpm: bpmStable,
@@ -251,10 +264,18 @@ final class CameraPPGProcessor {
         guard clippedTimes.count >= 4 else { return ([], []) }
 
         let hz = estimatedHz(times: clippedTimes)
+        let targetHz = analysisTargetHz(for: hz)
         if hz <= targetHz + 2.0 {
             return (clippedTimes, clippedValues)
         }
         return resample(times: clippedTimes, values: clippedValues, targetHz: targetHz)
+    }
+
+    private func analysisTargetHz(for observedHz: Double) -> Double {
+        if observedHz >= 50.0 {
+            return highFpsTargetHz
+        }
+        return baseTargetHz
     }
 
     private func resample(times: [Double], values: [Double], targetHz: Double) -> (times: [Double], values: [Double]) {
@@ -320,7 +341,7 @@ final class CameraPPGProcessor {
         guard signal.count > 6 else { return [] }
         let globalStd = max(standardDeviation(signal), 1e-6)
         let window = max(5, Int((sampleRate * 1.2).rounded()))
-        let minDistance = max(5, Int((sampleRate * 0.33).rounded()))
+        let minDistance = max(5, Int((sampleRate * 0.38).rounded()))
         var peaks: [Int] = []
         var lastPeak = -minDistance
 
@@ -337,8 +358,13 @@ final class CameraPPGProcessor {
             let local = Array(signal[left...right])
             let localMean = mean(local) ?? 0.0
             let localStd = standardDeviation(local)
-            let threshold = localMean + max(globalStd * 0.10, localStd * 0.25)
-            if current >= threshold {
+            let threshold = localMean + max(globalStd * 0.16, localStd * 0.34)
+            let promLeft = max(0, i - 3)
+            let promRight = min(signal.count - 1, i + 3)
+            let localMin = (signal[promLeft...promRight]).min() ?? localMean
+            let prominence = current - localMin
+            let minProminence = max(globalStd * 0.12, localStd * 0.16)
+            if current >= threshold, prominence >= minProminence {
                 peaks.append(i)
                 lastPeak = i
             }
@@ -409,20 +435,24 @@ final class CameraPPGProcessor {
 
     private func mergeSplitBeats(in ibiMs: [Double]) -> [Double] {
         guard ibiMs.count >= 2 else { return ibiMs }
+        let baseline = clamp(median(ibiMs), min: 480.0, max: 1200.0)
+        let splitThreshold = max(360.0, baseline * 0.62)
+        let combinedMin = max(560.0, baseline * 0.72)
+        let combinedMax = min(1700.0, baseline * 1.90)
         var merged: [Double] = []
         merged.reserveCapacity(ibiMs.count)
 
         var i = 0
         while i < ibiMs.count {
             let current = ibiMs[i]
-            if current < 430.0, i + 1 < ibiMs.count {
+            if current < splitThreshold, i + 1 < ibiMs.count {
                 var combined = current
                 var j = i + 1
-                while j < ibiMs.count, combined < 560.0 {
+                while j < ibiMs.count, combined < combinedMin {
                     combined += ibiMs[j]
                     j += 1
                 }
-                if (j - i) >= 2, combined >= 560.0, combined <= 1700.0 {
+                if (j - i) >= 2, combined >= combinedMin, combined <= combinedMax {
                     merged.append(combined)
                     i = j
                     continue
@@ -435,10 +465,10 @@ final class CameraPPGProcessor {
                 let ratio = longer / max(shorter, 1.0)
                 let combined = current + next
                 let likelySplit =
-                    shorter < 400.0 &&
+                    shorter < splitThreshold &&
                     ratio >= 1.25 &&
-                    combined >= 560.0 &&
-                    combined <= 1700.0
+                    combined >= combinedMin &&
+                    combined <= combinedMax
                 if likelySplit {
                     merged.append(combined)
                     i += 2
@@ -536,6 +566,15 @@ final class CameraPPGProcessor {
                 let blended = round1((ibi + signal.bpm) * 0.5)
                 return isPlausibleBpm(blended, qualityScore: qualityScore) ? blended : nil
             }
+            if delta >= 12.0 {
+                if signal.confidence >= 0.38, isPlausibleBpm(signal.bpm, qualityScore: qualityScore) {
+                    return signal.bpm
+                }
+                guard qualityScore >= 0.72, isPlausibleBpm(ibi, qualityScore: qualityScore) else {
+                    return nil
+                }
+                return ibi
+            }
             guard qualityScore >= 0.65, isPlausibleBpm(ibi, qualityScore: qualityScore) else {
                 return nil
             }
@@ -592,6 +631,18 @@ final class CameraPPGProcessor {
             out.append(running)
         }
         return out
+    }
+
+    private func isPlausibleHRV(avnn: Double?, sdnn: Double?, rmssd: Double?, pnn50: Double?, robustCV: Double) -> Bool {
+        guard let avnn, let sdnn, let rmssd, let pnn50 else { return false }
+        guard avnn > 0 else { return false }
+        // Camera-PPG short-window HRV tends to be unstable when these explode.
+        guard robustCV <= 0.20 else { return false }
+        guard sdnn >= 8.0, sdnn <= 180.0 else { return false }
+        guard rmssd >= 8.0, rmssd <= 180.0 else { return false }
+        guard pnn50 >= 0.0, pnn50 <= 80.0 else { return false }
+        guard (rmssd / avnn) <= 0.25 else { return false }
+        return true
     }
 
     private func sdnnMs(_ ibi: [Double]) -> Double? {
@@ -718,9 +769,9 @@ final class CameraPPGProcessor {
     }
 
     private func estimatedHz(times: [Double]) -> Double {
-        guard times.count >= 2 else { return targetHz }
+        guard times.count >= 2 else { return baseTargetHz }
         let span = (times.last ?? 0.0) - (times.first ?? 0.0)
-        guard span > 0 else { return targetHz }
+        guard span > 0 else { return baseTargetHz }
         return Double(times.count - 1) / span
     }
 

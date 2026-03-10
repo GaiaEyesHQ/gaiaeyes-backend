@@ -679,26 +679,43 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
 def harmonize_x_now_across_charts(x_vals, dbg_vals, rois):
     """
     Keep F/A/Q aligned in time when one chart drifts.
-    If spread is > ~2 chart-hours, snap all to median x.
+    If spread is large, avoid blindly trusting right-edge rollover snaps.
+    Prefer non-rollover candidates when available; otherwise fall back to median.
     """
-    xs = [int(x_vals["F"]), int(x_vals["A"]), int(x_vals["Q"])]
+    keys = ("F", "A", "Q")
+    xs = [int(x_vals[k]) for k in keys]
     spread_px = int(max(xs) - min(xs))
-    pphs = [float(dbg_vals[k].get("pph", 0.0) or 0.0) for k in ("F", "A", "Q")]
+    pphs = [float(dbg_vals[k].get("pph", 0.0) or 0.0) for k in keys]
     pph_ref = float(np.median([p for p in pphs if p > 0.0])) if any(p > 0.0 for p in pphs) else 18.0
     spread_hours = float(spread_px / max(pph_ref, 1e-6))
     threshold_hours = 2.0
     harmonized = spread_hours > threshold_hours
-    x_median = int(round(float(np.median(xs))))
+    x_anchor = int(round(float(np.median(xs))))
+    reason = "median"
+
+    if harmonized:
+        non_roll_keys = [k for k in keys if not bool(dbg_vals[k].get("rollover_candidate", False))]
+        if len(non_roll_keys) > 0:
+            x_anchor = int(round(float(np.median([int(x_vals[k]) for k in non_roll_keys]))))
+            reason = "prefer_non_rollover"
+        else:
+            fills = {k: float(dbg_vals[k].get("frontier_day_fill", 1.0) or 1.0) for k in keys}
+            fill_span = float(max(fills.values()) - min(fills.values()))
+            # Strong frontier disagreement: choose conservative (left-most) anchor.
+            if fill_span >= 0.25:
+                x_anchor = int(min(int(x_vals[k]) for k in keys))
+                reason = "frontier_disagreement_conservative"
 
     out = dict(x_vals)
     if harmonized:
-        for key in ("F", "A", "Q"):
+        for key in keys:
             x0, _y0, x1, _y1 = rois[key]
-            out[key] = int(np.clip(x_median, x0 + 2, x1 - 2))
+            out[key] = int(np.clip(x_anchor, x0 + 2, x1 - 2))
             dbg_vals[key]["x_now_before_harmonize"] = int(x_vals[key])
             dbg_vals[key]["x_now"] = int(out[key])
-            dbg_vals[key]["x_now_method"] = "harmonized_median"
-        dbg_vals["shared_x_now"] = int(x_median)
+            dbg_vals[key]["x_now_method"] = f"harmonized_{reason}"
+        dbg_vals["shared_x_now"] = int(x_anchor)
+        dbg_vals["x_now_harmonize_reason"] = reason
     dbg_vals["x_now_harmonized"] = bool(harmonized)
     dbg_vals["x_now_spread_px"] = int(spread_px)
     dbg_vals["x_now_spread_hours"] = float(spread_hours)
