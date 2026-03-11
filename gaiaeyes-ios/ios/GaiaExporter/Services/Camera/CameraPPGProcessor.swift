@@ -165,13 +165,19 @@ final class CameraPPGProcessor {
         )
 
         let bpmSeries = bpmCandidates(cleaned: qualityReadyIbi, boundedRaw: qualityReadyRawIbi)
+        let bpmSeriesRobustCV = robustCoefficientOfVariation(bpmSeries)
         let estimatedFps = fpsEstimate(recordDuration: elapsed)
         let hrvIbi = qualityReadyIbi
         let hrvTs = cumulativeTimestamps(from: hrvIbi)
         let avnn = mean(hrvIbi)
         let bpmFromIBI = bpm(fromIBIs: bpmSeries, qualityScore: quality.score)
         let bpmFromSignal = bpmFromAutocorrelation(signal: bandpassed, sampleRate: hz)
-        let bpmStable = resolveBpm(ibiBpm: bpmFromIBI, signalEstimate: bpmFromSignal, qualityScore: quality.score)
+        let bpmStable = resolveBpm(
+            ibiBpm: bpmFromIBI,
+            signalEstimate: bpmFromSignal,
+            ibiRobustCV: bpmSeriesRobustCV,
+            qualityScore: quality.score
+        )
         let hrvRobustCV = robustCoefficientOfVariation(hrvIbi) ?? 1.0
         let hrvPrecheck =
             hrvIbi.count >= 20 &&
@@ -430,7 +436,38 @@ final class CameraPPGProcessor {
     private func bpmCandidates(cleaned: [Double], boundedRaw: [Double]) -> [Double] {
         let source = cleaned.count >= 8 ? cleaned : boundedRaw
         let merged = mergeSplitBeats(in: source)
+        let stable = stableIntervalsForBpm(merged)
+        if stable.count >= 6 {
+            return stable
+        }
         return merged.count >= 6 ? merged : source
+    }
+
+    private func stableIntervalsForBpm(_ ibiMs: [Double]) -> [Double] {
+        guard ibiMs.count >= 6 else { return ibiMs }
+        let bounded = ibiMs.filter { $0 >= 350.0 && $0 <= 1600.0 }
+        guard bounded.count >= 6 else { return bounded }
+
+        let med = median(bounded)
+        let primaryTolerance = max(220.0, med * 0.28)
+        let primary = bounded.filter { abs($0 - med) <= primaryTolerance }
+        if primary.count >= 6 {
+            return primary
+        }
+
+        var rolling: [Double] = []
+        rolling.reserveCapacity(bounded.count)
+        for i in bounded.indices {
+            let left = max(0, i - 2)
+            let right = min(bounded.count - 1, i + 2)
+            let local = Array(bounded[left...right])
+            let localMed = median(local)
+            let tolerance = max(200.0, localMed * 0.30)
+            if abs(bounded[i] - localMed) <= tolerance {
+                rolling.append(bounded[i])
+            }
+        }
+        return rolling.count >= 6 ? rolling : bounded
     }
 
     private func mergeSplitBeats(in ibiMs: [Double]) -> [Double] {
@@ -494,7 +531,13 @@ final class CameraPPGProcessor {
         let deviations = trimmed.map { abs($0 - med) }
         let mad = median(deviations)
         let robustCv = (1.4826 * mad) / med
-        guard robustCv <= 0.36 else { return nil }
+        guard robustCv <= 0.30 else { return nil }
+
+        let sorted = trimmed.sorted()
+        let p10 = sorted[max(0, Int((Double(sorted.count) * 0.10).rounded(.down)))]
+        let p90 = sorted[min(sorted.count - 1, Int((Double(sorted.count) * 0.90).rounded(.down)))]
+        let spreadRatio = p90 / max(p10, 1.0)
+        guard spreadRatio <= 1.80 else { return nil }
 
         let bpm = 60000.0 / med
         guard bpm >= 40.0, bpm <= 180.0 else { return nil }
@@ -558,7 +601,12 @@ final class CameraPPGProcessor {
         return (round1(bpm), bestCorr)
     }
 
-    private func resolveBpm(ibiBpm: Double?, signalEstimate: (bpm: Double, confidence: Double)?, qualityScore: Double) -> Double? {
+    private func resolveBpm(
+        ibiBpm: Double?,
+        signalEstimate: (bpm: Double, confidence: Double)?,
+        ibiRobustCV: Double?,
+        qualityScore: Double
+    ) -> Double? {
         switch (ibiBpm, signalEstimate) {
         case let (ibi?, signal?):
             let delta = abs(ibi - signal.bpm)
@@ -570,17 +618,30 @@ final class CameraPPGProcessor {
                 if signal.confidence >= 0.38, isPlausibleBpm(signal.bpm, qualityScore: qualityScore) {
                     return signal.bpm
                 }
-                guard qualityScore >= 0.72, isPlausibleBpm(ibi, qualityScore: qualityScore) else {
+                guard
+                    qualityScore >= 0.72,
+                    (ibiRobustCV ?? 1.0) <= 0.22,
+                    isPlausibleBpm(ibi, qualityScore: qualityScore)
+                else {
                     return nil
                 }
                 return ibi
             }
-            guard qualityScore >= 0.65, isPlausibleBpm(ibi, qualityScore: qualityScore) else {
+            guard
+                qualityScore >= 0.65,
+                (ibiRobustCV ?? 1.0) <= 0.26,
+                isPlausibleBpm(ibi, qualityScore: qualityScore)
+            else {
                 return nil
             }
             return ibi
         case let (ibi?, nil):
-            guard qualityScore >= 0.45, isPlausibleBpm(ibi, qualityScore: qualityScore) else {
+            let maxCv = qualityScore >= 0.60 ? 0.30 : 0.20
+            guard
+                qualityScore >= 0.45,
+                (ibiRobustCV ?? 1.0) <= maxCv,
+                isPlausibleBpm(ibi, qualityScore: qualityScore)
+            else {
                 return nil
             }
             return ibi

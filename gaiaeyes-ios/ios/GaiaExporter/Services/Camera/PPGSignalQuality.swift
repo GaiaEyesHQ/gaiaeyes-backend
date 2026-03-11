@@ -40,6 +40,12 @@ enum PPGSignalQuality {
         let saturationPenalty = saturationPenalty(for: saturationHitRatio)
         let motionPenalty = clamp(max(0.0, motionScore - 0.10) * 0.20, min: 0, max: 0.16)
         let droppedPenalty = clamp(droppedFrameRatio * 0.35, min: 0, max: 0.16)
+        let lowStabilityPenalty = stability < 0.45
+            ? clamp((0.45 - stability) * 0.45, min: 0.0, max: 0.12)
+            : 0.0
+        let lowSNRPenalty = snrProxy < 0.10
+            ? clamp((0.10 - snrProxy) * 0.35, min: 0.0, max: 0.08)
+            : 0.0
 
         var score =
             (0.30 * validRatio) +
@@ -48,7 +54,9 @@ enum PPGSignalQuality {
             (0.20 * beatCountScore) -
             saturationPenalty -
             motionPenalty -
-            droppedPenalty
+            droppedPenalty -
+            lowStabilityPenalty -
+            lowSNRPenalty
 
         if validIBICount < 6 {
             score *= 0.55
