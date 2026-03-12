@@ -610,26 +610,21 @@ final class CameraPPGProcessor {
         switch (ibiBpm, signalEstimate) {
         case let (ibi?, signal?):
             let delta = abs(ibi - signal.bpm)
+            let ibiCv = ibiRobustCV ?? 1.0
+            let ibiStable = ibiCv <= 0.22
             if delta <= 8.0 {
                 let blended = round1((ibi + signal.bpm) * 0.5)
                 return isPlausibleBpm(blended, qualityScore: qualityScore) ? blended : nil
             }
-            if delta >= 12.0 {
-                if signal.confidence >= 0.38, isPlausibleBpm(signal.bpm, qualityScore: qualityScore) {
-                    return signal.bpm
-                }
-                guard
-                    qualityScore >= 0.72,
-                    (ibiRobustCV ?? 1.0) <= 0.22,
-                    isPlausibleBpm(ibi, qualityScore: qualityScore)
-                else {
-                    return nil
-                }
+            if qualityScore >= 0.55, ibiStable, isPlausibleBpm(ibi, qualityScore: qualityScore) {
                 return ibi
+            }
+            if signal.confidence >= 0.50, qualityScore >= 0.55, isPlausibleBpm(signal.bpm, qualityScore: qualityScore) {
+                return signal.bpm
             }
             guard
                 qualityScore >= 0.65,
-                (ibiRobustCV ?? 1.0) <= 0.26,
+                ibiCv <= 0.26,
                 isPlausibleBpm(ibi, qualityScore: qualityScore)
             else {
                 return nil
