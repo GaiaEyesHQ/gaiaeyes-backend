@@ -34,7 +34,7 @@ TICK_MIN_SEP = 8
 TICK_MIN_COUNT = 24
 MIN_GUARD_PX = 6
 DEFAULT_ACCEPT_MINUTES = 90.0
-DEFAULT_SNAP_THRESHOLD_MINUTES = 20.0
+DEFAULT_SNAP_THRESHOLD_MINUTES = 45.0
 TICK_PPH_REL_TOL = 0.20
 
 FRONTIER_COLOR_S_MIN = 35
@@ -595,13 +595,15 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
     right_guard = min(x1 - 2, x_frontier - guard_px)
     guard_invalid = bool(right_guard <= left_guard + 10)
 
-    delta_px = right_guard - x_ideal
-    delta_min = (delta_px / max(pph, 1e-6)) * 60.0
+    delta_guard_px = right_guard - x_ideal
+    delta_guard_min = (delta_guard_px / max(pph, 1e-6)) * 60.0
+    delta_frontier_px = x_frontier - x_ideal
+    delta_frontier_min = (delta_frontier_px / max(pph, 1e-6)) * 60.0
     frontier_day_fill = float((x_frontier - x_day2_time) / max(day_w_time, 1e-6))
     rollover_candidate = bool(
         (hour_now >= float(ROLLOVER_EARLY_HOUR_MIN))
         and (hour_now <= float(ROLLOVER_EARLY_HOUR_MAX))
-        and (delta_min >= float(ROLLOVER_MIN_GAP_HOURS * 60.0))
+        and (delta_guard_min >= float(ROLLOVER_MIN_GAP_HOURS * 60.0))
         and (frontier_day_fill >= float(ROLLOVER_MIN_FRONTIER_DAY_FILL))
         and (float(frontier_dbg.get("activity_right_tail") or 0.0) >= float(ROLLOVER_MIN_RIGHT_TAIL_ACTIVITY))
     )
@@ -609,14 +611,17 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
     if rollover_candidate:
         x_now_pre = right_guard
         x_now_method = "rollover_snap_to_guard"
-    elif delta_min < -float(DEFAULT_SNAP_THRESHOLD_MINUTES):
+    elif delta_frontier_min < -float(DEFAULT_SNAP_THRESHOLD_MINUTES):
         x_now_pre = right_guard
         x_now_method = "snap_to_guard"
     else:
         x_now_pre = x_ideal
         x_now_method = "ideal"
 
-    x_now = int(np.clip(x_now_pre, left_guard, right_guard))
+    if x_now_method in {"snap_to_guard", "rollover_snap_to_guard"}:
+        x_now = int(np.clip(x_now_pre, left_guard, right_guard))
+    else:
+        x_now = int(np.clip(x_now_pre, x0 + 2, x1 - 2))
     if guard_invalid:
         x_now = int(np.clip(right_guard, x0 + 2, x1 - 2))
         x_now_method = "guard_invalid"
@@ -666,7 +671,8 @@ def compute_x_now(img_bgr, roi, tick_min_count=24, guard_minutes=15.0,
         "hour_now_tsst": float(hour_now),
         "rollover_hour_min": float(ROLLOVER_EARLY_HOUR_MIN),
         "rollover_hour_max": float(ROLLOVER_EARLY_HOUR_MAX),
-        "delta_min_to_guard": float(delta_min),
+        "delta_min_to_guard": float(delta_guard_min),
+        "delta_min_to_frontier": float(delta_frontier_min),
         "frontier_day_fill": float(frontier_day_fill),
         "rollover_candidate": bool(rollover_candidate),
         "bias_minutes_applied": float(bias_minutes_applied),
