@@ -694,23 +694,35 @@ def harmonize_x_now_across_charts(x_vals, dbg_vals, rois):
     pphs = [float(dbg_vals[k].get("pph", 0.0) or 0.0) for k in keys]
     pph_ref = float(np.median([p for p in pphs if p > 0.0])) if any(p > 0.0 for p in pphs) else 18.0
     spread_hours = float(spread_px / max(pph_ref, 1e-6))
-    threshold_hours = 2.0
+    threshold_hours = 1.25
     harmonized = spread_hours > threshold_hours
     x_anchor = int(round(float(np.median(xs))))
     reason = "median"
 
     if harmonized:
-        non_roll_keys = [k for k in keys if not bool(dbg_vals[k].get("rollover_candidate", False))]
-        if len(non_roll_keys) > 0:
-            x_anchor = int(round(float(np.median([int(x_vals[k]) for k in non_roll_keys]))))
-            reason = "prefer_non_rollover"
+        pairs = [("F", "A"), ("F", "Q"), ("A", "Q")]
+        pair_diffs = []
+        for a, b in pairs:
+            d_px = abs(int(x_vals[a]) - int(x_vals[b]))
+            d_hr = float(d_px / max(pph_ref, 1e-6))
+            pair_diffs.append((d_hr, d_px, a, b))
+        pair_diffs.sort(key=lambda t: t[0])
+        best_hr, _best_px, k1, k2 = pair_diffs[0]
+        if best_hr <= 1.25:
+            x_anchor = int(round((int(x_vals[k1]) + int(x_vals[k2])) / 2.0))
+            reason = "pair_cluster"
         else:
-            fills = {k: float(dbg_vals[k].get("frontier_day_fill", 1.0) or 1.0) for k in keys}
-            fill_span = float(max(fills.values()) - min(fills.values()))
-            # Strong frontier disagreement: choose conservative (left-most) anchor.
-            if fill_span >= 0.25:
-                x_anchor = int(min(int(x_vals[k]) for k in keys))
-                reason = "frontier_disagreement_conservative"
+            non_roll_keys = [k for k in keys if not bool(dbg_vals[k].get("rollover_candidate", False))]
+            if len(non_roll_keys) > 0:
+                x_anchor = int(round(float(np.median([int(x_vals[k]) for k in non_roll_keys]))))
+                reason = "prefer_non_rollover"
+            else:
+                fills = {k: float(dbg_vals[k].get("frontier_day_fill", 1.0) or 1.0) for k in keys}
+                fill_span = float(max(fills.values()) - min(fills.values()))
+                # Strong frontier disagreement: choose conservative (left-most) anchor.
+                if fill_span >= 0.25:
+                    x_anchor = int(min(int(x_vals[k]) for k in keys))
+                    reason = "frontier_disagreement_conservative"
 
     out = dict(x_vals)
     if harmonized:
