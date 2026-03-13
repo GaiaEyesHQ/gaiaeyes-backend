@@ -22,6 +22,7 @@ add_action('wp_enqueue_scripts', function () {
     $supabase_anon = defined('SUPABASE_ANON_KEY') ? SUPABASE_ANON_KEY : getenv('SUPABASE_ANON_KEY');
     $backend_base = defined('GAIAEYES_API_BASE') ? GAIAEYES_API_BASE : getenv('GAIAEYES_API_BASE');
     $media_base = defined('MEDIA_BASE_URL') ? MEDIA_BASE_URL : getenv('MEDIA_BASE_URL');
+    $symptom_log_url = apply_filters('gaia_dashboard_symptom_log_url', home_url('/symptoms/'));
     if (!$media_base && $supabase_url) {
         $media_base = rtrim($supabase_url, '/') . '/storage/v1/object/public/space-visuals';
     }
@@ -35,6 +36,7 @@ add_action('wp_enqueue_scripts', function () {
         'dashboardProxy' => esc_url_raw(rest_url('gaia/v1/dashboard')),
         'mediaBase' => $media_base ? rtrim($media_base, '/') : '',
         'redirectUrl' => $redirect_url,
+        'symptomLogUrl' => $symptom_log_url ? esc_url_raw($symptom_log_url) : '',
     ]);
 
     wp_register_style('gaia-dashboard', false);
@@ -51,7 +53,7 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__gauge{padding:12px;border-radius:14px;background:#151c28;display:flex;flex-direction:column;gap:10px;min-height:150px}
         .gaia-dashboard__gauge--clickable{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;border:1px solid rgba(255,255,255,.16)}
         .gaia-dashboard__gauge--clickable:hover{transform:translateY(-1px);box-shadow:0 0 16px rgba(162,186,223,.22);border-color:rgba(162,186,223,.42)}
-        .gaia-dashboard__gauge-label{font-size:12px;color:#9da9c1}
+        .gaia-dashboard__gauge-label{font-size:15px;font-weight:650;color:#eef4ff;line-height:1.25}
         .gaia-dashboard__gauge-meter{position:relative;display:grid;place-items:center;margin-top:2px}
         .gaia-dashboard__gauge-arc{width:104px;height:104px;display:block}
         @media(min-width:1200px){.gaia-dashboard__gauge-arc{width:110px;height:110px}}
@@ -107,6 +109,11 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__modal-group h5{margin:0 0 7px;font-size:15px}
         .gaia-dashboard__modal-group ul{margin:0;padding-left:18px}
         .gaia-dashboard__modal-group li{margin:0 0 6px;line-height:1.45}
+        .gaia-dashboard__modal-copy{margin:0;color:#e8edf7;line-height:1.55}
+        .gaia-dashboard__quicklog-pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+        .gaia-dashboard__quicklog-pill{border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:8px 14px;background:#182234;color:#e8edf7;font-weight:600;cursor:pointer}
+        .gaia-dashboard__quicklog-pill.is-selected{border-color:#67a7ff;background:#213150}
+        .gaia-dashboard__modal-status-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;flex-wrap:wrap}
         .gaia-dashboard__modal-actions{display:flex;justify-content:space-between;gap:10px;margin-top:16px;flex-wrap:wrap}
         body.gaia-modal-open{overflow:hidden}
     ');

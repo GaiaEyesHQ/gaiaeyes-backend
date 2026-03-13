@@ -330,11 +330,30 @@ private struct DashboardModalCTA: Codable, Hashable {
     let prefill: [String]?
 }
 
-private struct DashboardModalEntry: Codable, Hashable {
+private struct DashboardQuickLogOption: Codable, Hashable, Identifiable {
+    let code: String
+    let label: String
+
+    var id: String { "\(code)|\(label)" }
+}
+
+private struct DashboardQuickLog: Codable, Hashable {
     let title: String?
+    let confirmLabel: String?
+    let options: [DashboardQuickLogOption]?
+    let defaultSeverity: Int?
+    let baseTags: [String]?
+}
+
+private struct DashboardModalEntry: Codable, Hashable {
+    let modalType: String?
+    let title: String?
+    let body: String?
+    let tip: String?
     let why: [String]?
     let whatYouMayNotice: [String]?
     let suggestedActions: [String]?
+    let quickLog: DashboardQuickLog?
     let cta: DashboardModalCTA?
 }
 
@@ -1119,7 +1138,8 @@ struct ContentView: View {
     @State private var symptomDiagnostics: [SymptomDiagSummary] = []
     @State private var showSymptomSheet: Bool = false
     @State private var isSubmittingSymptom: Bool = false
-    @State private var symptomToastMessage: String? = nil
+    @State private var symptomToast: SymptomToastState? = nil
+    @State private var symptomSheetPrefill: SymptomQueuedEvent? = nil
     @State private var symptomPresets: [SymptomPreset] = SymptomPreset.defaults
     @State private var didHydrateSymptomPresets: Bool = false
     @State private var isSymptomServiceOffline: Bool = false
@@ -1134,6 +1154,18 @@ struct ContentView: View {
     @State private var showQuakes: Bool = false
     @State private var showAuroraForecast: Bool = false
     @State private var showMagnetosphere: Bool = false
+
+    private struct SymptomToastState: Identifiable {
+        let id = UUID()
+        let message: String
+        let actionTitle: String?
+        let prefill: SymptomQueuedEvent?
+    }
+
+    private struct MissionControlQuickLogRequest {
+        let label: String
+        let event: SymptomQueuedEvent
+    }
     
     private func chicagoDayString(offsetDays: Int = 0) -> String {
         var cal = Calendar(identifier: .gregorian)
@@ -1310,14 +1342,19 @@ struct ContentView: View {
         return "Top: \(label) — \(top.events) events"
     }
     
-    private func showSymptomToast(_ message: String) {
+    private func showSymptomToast(
+        _ message: String,
+        actionTitle: String? = nil,
+        prefill: SymptomQueuedEvent? = nil
+    ) {
+        let toast = SymptomToastState(message: message, actionTitle: actionTitle, prefill: prefill)
         withAnimation {
-            symptomToastMessage = message
+            symptomToast = toast
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [self] in
             withAnimation {
-                if self.symptomToastMessage == message {
-                    self.symptomToastMessage = nil
+                if self.symptomToast?.id == toast.id {
+                    self.symptomToast = nil
                 }
             }
         }
@@ -2825,7 +2862,11 @@ struct ContentView: View {
         }
     }
     
-    private func logSymptomEvent(_ event: SymptomQueuedEvent) async -> Bool {
+    private func logSymptomEvent(
+        _ event: SymptomQueuedEvent,
+        successMessage: String = "Symptom logged",
+        successPrefill: SymptomQueuedEvent? = nil
+    ) async -> Bool {
         let api = state.apiWithAuth()
         do {
             struct SymptomPostBody: Encodable {
@@ -2868,7 +2909,11 @@ struct ContentView: View {
             }
 
             if (200..<300).contains(http.statusCode) {
-                showSymptomToast("Symptom logged")
+                showSymptomToast(
+                    successMessage,
+                    actionTitle: successPrefill == nil ? nil : "Edit",
+                    prefill: successPrefill
+                )
                 await fetchSymptoms(api: api)
                 await state.refreshSymptomQueueCount()
                 return true
@@ -2918,22 +2963,12 @@ struct ContentView: View {
         return false
     }
 
-    private func quickLogMissionControl(prefill: [String]) async {
-        let normalizedPrefill = prefill
-            .map { normalize($0) }
-            .filter { !$0.isEmpty }
-        let available = Set(symptomPresets.map { $0.code })
-
-        let selectedCode =
-            normalizedPrefill.first(where: { available.contains($0) })
-            ?? normalizedPrefill.first
-            ?? SymptomCodeHelper.fallbackCode
-
-        var event = SymptomQueuedEvent(symptomCode: selectedCode, tsUtc: Date())
-        if !normalizedPrefill.isEmpty {
-            event.tags = normalizedPrefill
-        }
-        _ = await logSymptomEvent(event)
+    private func quickLogMissionControl(_ request: MissionControlQuickLogRequest) async {
+        _ = await logSymptomEvent(
+            request.event,
+            successMessage: "Logged: \(request.label)",
+            successPrefill: request.event
+        )
     }
     
     // Decide which Features snapshot to display (today or fallback to yesterday)
@@ -3021,9 +3056,9 @@ struct ContentView: View {
                 isLoading: dashboardLoading,
                 errorMessage: ContentView.scrubError(dashboardError),
                 lastUpdatedText: dashboardLastUpdatedText,
-                onQuickLog: { prefill in
+                onQuickLog: { request in
                     Task {
-                        await quickLogMissionControl(prefill: prefill)
+                        await quickLogMissionControl(request)
                     }
                 }
             )
@@ -3097,7 +3132,7 @@ struct ContentView: View {
         let isLoading: Bool
         let errorMessage: String?
         let lastUpdatedText: String?
-        let onQuickLog: ([String]) -> Void
+        let onQuickLog: (MissionControlQuickLogRequest) -> Void
         @State private var selectedModal: ModalPresentation? = nil
 
         private struct ModalPresentation: Identifiable {
@@ -3112,7 +3147,8 @@ struct ContentView: View {
             let delta: Int
             let zoneKey: String?
             let zoneLabel: String?
-            let clickable: Bool
+            let tappable: Bool
+            let showAffordance: Bool
 
             var id: String { key }
         }
@@ -3179,10 +3215,10 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(row.label)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(Color.white.opacity(0.92))
                         Spacer(minLength: 4)
-                        if row.clickable {
+                        if row.showAffordance {
                             Image(systemName: "sparkles")
                                 .font(.caption2)
                                 .foregroundColor(GaugePalette.zoneColor(row.zoneKey))
@@ -3202,10 +3238,12 @@ struct ContentView: View {
                                 )
                                 .rotationEffect(.degrees(-90))
                                 .shadow(
-                                    color: GaugePalette
+                                    color: row.showAffordance
+                                    ? GaugePalette
                                         .zoneColor(row.zoneKey)
-                                        .opacity(GaugePalette.glowOpacity(row.zoneKey)),
-                                    radius: GaugePalette.glowRadius(row.zoneKey),
+                                        .opacity(GaugePalette.glowOpacity(row.zoneKey))
+                                    : .clear,
+                                    radius: row.showAffordance ? GaugePalette.glowRadius(row.zoneKey) : 0,
                                     x: 0,
                                     y: 0
                                 )
@@ -3256,17 +3294,17 @@ struct ContentView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(
-                            row.clickable
+                            row.showAffordance
                             ? GaugePalette.zoneColor(row.zoneKey).opacity(0.45)
                             : Color.white.opacity(0.05),
-                            lineWidth: row.clickable ? 1.2 : 1
+                            lineWidth: row.showAffordance ? 1.2 : 1
                         )
                 )
                 .shadow(
-                    color: row.clickable
+                    color: row.showAffordance
                     ? GaugePalette.zoneColor(row.zoneKey).opacity(0.20)
                     : .clear,
-                    radius: row.clickable ? 8 : 0,
+                    radius: row.showAffordance ? 8 : 0,
                     x: 0,
                     y: 0
                 )
@@ -3286,7 +3324,8 @@ struct ContentView: View {
 
         private struct DriverStatusRow: View {
             let driver: DashboardDriverItem
-            let clickable: Bool
+            let tappable: Bool
+            let showAffordance: Bool
             let zoneKey: String
             let progress: Double
             let onTap: (() -> Void)?
@@ -3327,7 +3366,7 @@ struct ContentView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
-                        if clickable {
+                        if showAffordance {
                             Image(systemName: "sparkles")
                                 .font(.caption2)
                                 .foregroundColor(GaugePalette.zoneColor(zoneKey))
@@ -3352,15 +3391,15 @@ struct ContentView: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(
-                            clickable
+                            showAffordance
                             ? GaugePalette.zoneColor(zoneKey).opacity(0.38)
                             : Color.white.opacity(0.06),
-                            lineWidth: clickable ? 1.1 : 1
+                            lineWidth: showAffordance ? 1.1 : 1
                         )
                 )
                 .shadow(
-                    color: clickable ? GaugePalette.zoneColor(zoneKey).opacity(0.16) : .clear,
-                    radius: clickable ? 7 : 0,
+                    color: showAffordance ? GaugePalette.zoneColor(zoneKey).opacity(0.16) : .clear,
+                    radius: showAffordance ? 7 : 0,
                     x: 0,
                     y: 0
                 )
@@ -3380,8 +3419,91 @@ struct ContentView: View {
 
         private struct ContextModalSheetView: View {
             let entry: DashboardModalEntry
-            let onQuickLog: ([String]) -> Void
+            let onQuickLog: (MissionControlQuickLogRequest) -> Void
             @Environment(\.dismiss) private var dismiss
+            @State private var selectedQuickLog: DashboardQuickLogOption? = nil
+
+            private var modalType: String {
+                (entry.modalType ?? "full").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            }
+
+            private var quickLog: DashboardQuickLog? {
+                if let quickLog = entry.quickLog {
+                    return quickLog
+                }
+                let options = (entry.cta?.prefill ?? ["OTHER"]).map { code in
+                    DashboardQuickLogOption(
+                        code: normalize(code),
+                        label: normalize(code).replacingOccurrences(of: "_", with: " ").capitalized
+                    )
+                }
+                return DashboardQuickLog(
+                    title: "Log what you're feeling:",
+                    confirmLabel: entry.cta?.label,
+                    options: options,
+                    defaultSeverity: nil,
+                    baseTags: nil
+                )
+            }
+
+            private func quickLogSection(_ quickLog: DashboardQuickLog) -> some View {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Quick Log")
+                        .font(.headline)
+                    if let title = quickLog.title, !title.isEmpty {
+                        Text(title)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    let options = quickLog.options ?? []
+                    let columns = [GridItem(.adaptive(minimum: 120), spacing: 10)]
+                    LazyVGrid(columns: columns, spacing: 10) {
+                        ForEach(options) { option in
+                            Button {
+                                if selectedQuickLog == option {
+                                    selectedQuickLog = nil
+                                } else {
+                                    selectedQuickLog = option
+                                }
+                            } label: {
+                                Text(option.label)
+                                    .font(.subheadline.weight(.semibold))
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.plain)
+                            .background(
+                                Capsule()
+                                    .fill(
+                                        selectedQuickLog == option
+                                        ? Color.accentColor.opacity(0.22)
+                                        : Color.white.opacity(0.08)
+                                    )
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(
+                                        selectedQuickLog == option
+                                        ? Color.accentColor.opacity(0.9)
+                                        : Color.white.opacity(0.10),
+                                        lineWidth: 1
+                                    )
+                            )
+                        }
+                    }
+                    Button(quickLog.confirmLabel?.isEmpty == false ? quickLog.confirmLabel! : "Log Symptoms") {
+                        guard let selectedQuickLog else { return }
+                        var event = SymptomQueuedEvent(symptomCode: selectedQuickLog.code, tsUtc: Date())
+                        event.severity = quickLog.defaultSeverity
+                        event.tags = quickLog.baseTags
+                        onQuickLog(MissionControlQuickLogRequest(label: selectedQuickLog.label, event: event))
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(selectedQuickLog == nil)
+                }
+            }
 
             var body: some View {
                 NavigationStack {
@@ -3391,7 +3513,20 @@ struct ContentView: View {
                                 Text(title)
                                     .font(.title3.weight(.bold))
                             }
-                            if let why = entry.why, !why.isEmpty {
+                            if modalType == "short" {
+                                if let body = entry.body, !body.isEmpty {
+                                    Text(body)
+                                        .font(.body)
+                                }
+                                if let tip = entry.tip, !tip.isEmpty {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Tip")
+                                            .font(.headline)
+                                        Text(tip)
+                                            .font(.subheadline)
+                                    }
+                                }
+                            } else if let why = entry.why, !why.isEmpty {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Why")
                                         .font(.headline)
@@ -3421,13 +3556,8 @@ struct ContentView: View {
                                     }
                                 }
                             }
-                            let ctaLabel = entry.cta?.label?.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if let label = ctaLabel, !label.isEmpty {
-                                Button(label) {
-                                    onQuickLog(entry.cta?.prefill ?? ["OTHER"])
-                                    dismiss()
-                                }
-                                .buttonStyle(.borderedProminent)
+                            if let quickLog {
+                                quickLogSection(quickLog)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -3565,7 +3695,7 @@ struct ContentView: View {
                 let meta = gaugesMeta[key]
                 let zoneKey = meta?.zone ?? inferredZoneKey(for: value)
                 let delta = gaugesDelta[key] ?? 0
-                let clickable = gaugeIsClickable(zoneKey: zoneKey, delta: delta) && (modalModels?.gauges?[key] != nil)
+                let tappable = modalModels?.gauges?[key] != nil
                 return GaugeRow(
                     key: key,
                     label: gaugeLabels[key] ?? fallbackLabels[key] ?? key,
@@ -3573,14 +3703,15 @@ struct ContentView: View {
                     delta: delta,
                     zoneKey: zoneKey,
                     zoneLabel: meta?.label,
-                    clickable: clickable
+                    tappable: tappable,
+                    showAffordance: gaugeHasAffordance(zoneKey: zoneKey)
                 )
             }
         }
 
-        private func gaugeIsClickable(zoneKey: String?, delta: Int) -> Bool {
+        private func gaugeHasAffordance(zoneKey: String?) -> Bool {
             let zone = (zoneKey ?? "").lowercased()
-            return zone == "elevated" || zone == "high" || abs(delta) >= 5
+            return zone == "elevated" || zone == "high"
         }
 
         private func driverSeverityKey(_ raw: String?) -> String {
@@ -3600,7 +3731,7 @@ struct ContentView: View {
             return 0.28
         }
 
-        private func driverClickable(_ raw: String?) -> Bool {
+        private func driverHasAffordance(_ raw: String?) -> Bool {
             let token = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             return token == "watch" || token == "elevated" || token == "high"
         }
@@ -3662,7 +3793,7 @@ struct ContentView: View {
                             ForEach(rows) { row in
                                 ArcGaugeCard(
                                     row: row,
-                                    onTap: row.clickable ? { presentGaugeModal(row.key) } : nil
+                                    onTap: row.tappable ? { presentGaugeModal(row.key) } : nil
                                 )
                             }
                         }
@@ -3700,13 +3831,14 @@ struct ContentView: View {
                         } else {
                             ForEach(Array(drivers.prefix(6))) { driver in
                                 let zoneKey = driverSeverityKey(driver.severity)
-                                let clickable = driverClickable(driver.severity) && (modalModels?.drivers?[driver.key] != nil)
+                                let tappable = modalModels?.drivers?[driver.key] != nil
                                 DriverStatusRow(
                                     driver: driver,
-                                    clickable: clickable,
+                                    tappable: tappable,
+                                    showAffordance: driverHasAffordance(driver.severity),
                                     zoneKey: zoneKey,
                                     progress: driverProgress(driver.severity),
-                                    onTap: clickable ? { presentDriverModal(driver.key) } : nil
+                                    onTap: tappable ? { presentDriverModal(driver.key) } : nil
                                 )
                             }
                         }
@@ -4533,7 +4665,19 @@ struct ContentView: View {
             }
             .transaction { $0.disablesAnimations = true }
             .overlay(alignment: .top) {
-                if let toast = symptomToastMessage { SymptomToastView(message: toast).padding(.top, 12).transition(.move(edge: .top).combined(with: .opacity)) }
+                if let toast = symptomToast {
+                    SymptomToastView(
+                        toast: toast,
+                        onAction: {
+                            guard let prefill = toast.prefill else { return }
+                            symptomToast = nil
+                            symptomSheetPrefill = prefill
+                            showSymptomSheet = true
+                        }
+                    )
+                    .padding(.top, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
             .task {
                 guard !didRunInitialTasks else { return }
@@ -5089,20 +5233,32 @@ struct ContentView: View {
                 Task { await fetchLatestCameraCheck() }
             })
         }
-        .sheet(isPresented: $showSymptomSheet) {
-            SymptomsLogSheet(
-                presets: symptomPresets,
-                queuedCount: state.symptomQueueCount,
-                isOffline: isSymptomServiceOffline,
-                isSubmitting: $isSubmittingSymptom,
-                onSubmit: { event in
-                    isSubmittingSymptom = true
-                    Task {
-                        let shouldDismiss = await logSymptomEvent(event)
-                        await MainActor.run { isSubmittingSymptom = false; if shouldDismiss { showSymptomSheet = false } }
+        .sheet(isPresented: $showSymptomSheet, onDismiss: {
+            symptomSheetPrefill = nil
+        }) {
+            NavigationStack {
+                SymptomsLogPage(
+                    presets: symptomPresets,
+                    queuedCount: state.symptomQueueCount,
+                    isOffline: isSymptomServiceOffline,
+                    isSubmitting: $isSubmittingSymptom,
+                    prefill: symptomSheetPrefill,
+                    showsCloseButton: true,
+                    onSubmit: { event in
+                        isSubmittingSymptom = true
+                        Task {
+                            let shouldDismiss = await logSymptomEvent(event)
+                            await MainActor.run {
+                                isSubmittingSymptom = false
+                                if shouldDismiss {
+                                    showSymptomSheet = false
+                                    symptomSheetPrefill = nil
+                                }
+                            }
+                        }
                     }
-                }
-            )
+                )
+            }
         }
         .sheet(isPresented: $showLocationOnboarding) {
             LocationOnboardingSheet(
@@ -5175,82 +5331,6 @@ struct ContentView: View {
         let id = UUID()
         let date: Date
         let events: Int
-    }
-    
-    private struct SymptomPreset: Identifiable, Hashable {
-        let id: String
-        let code: String
-        let label: String
-        let systemImage: String
-        let tags: [String]?
-        
-        init(code: String, label: String, systemImage: String? = nil, tags: [String]? = nil) {
-            let normalizedCode = normalize(code)
-            self.id = normalizedCode
-            self.code = normalizedCode
-            self.label = label
-            self.systemImage = systemImage ?? SymptomPreset.defaultSystemImage(for: normalizedCode)
-            self.tags = tags
-        }
-        
-        init(definition: SymptomCodeDefinition) {
-            let normalizedCode = normalize(definition.symptomCode)
-            id = normalizedCode
-            code = normalizedCode
-            let trimmedLabel = definition.label.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmedLabel.isEmpty {
-                label = normalizedCode.replacingOccurrences(of: "_", with: " ").capitalized
-            } else {
-                label = trimmedLabel
-            }
-            let icon = definition.systemImage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            systemImage = icon.isEmpty ? SymptomPreset.defaultSystemImage(for: normalizedCode) : icon
-            tags = definition.tags
-        }
-        
-        private static func defaultSystemImage(for code: String) -> String {
-            switch code {
-            case "NERVE_PAIN": return "bolt.heart"
-            case "ZAPS": return "bolt"
-            case "DRAINED": return "battery.25"
-            case "HEADACHE": return "brain.head.profile"
-            case "ANXIOUS": return "exclamationmark.triangle"
-            case "INSOMNIA": return "moon.zzz"
-            default: return "ellipsis"
-            }
-        }
-        
-        static func fromDefinitions(_ definitions: [SymptomCodeDefinition]) -> [SymptomPreset] {
-            var seen: Set<String> = []
-            let mapped = definitions.filter { $0.isActive }.compactMap { definition -> SymptomPreset? in
-                let preset = SymptomPreset(definition: definition)
-                if seen.insert(preset.code).inserted {
-                    return preset
-                }
-                return nil
-            }
-            return ensureFallback(in: mapped)
-        }
-        
-        static func ensureFallback(in presets: [SymptomPreset]) -> [SymptomPreset] {
-            var filtered = presets.filter { $0.code != SymptomCodeHelper.fallbackCode }
-            if let existing = presets.first(where: { $0.code == SymptomCodeHelper.fallbackCode }) {
-                filtered.append(existing)
-            } else {
-                filtered.append(SymptomPreset(code: SymptomCodeHelper.fallbackCode, label: "Other", systemImage: "ellipsis"))
-            }
-            return filtered
-        }
-        
-        static let defaults: [SymptomPreset] = ensureFallback(in: [
-            SymptomPreset(code: "NERVE_PAIN", label: "Nerve pain", systemImage: "bolt.heart"),
-            SymptomPreset(code: "ZAPS", label: "Zaps", systemImage: "bolt"),
-            SymptomPreset(code: "DRAINED", label: "Drained", systemImage: "battery.25"),
-            SymptomPreset(code: "HEADACHE", label: "Headache", systemImage: "brain.head.profile"),
-            SymptomPreset(code: "ANXIOUS", label: "Anxious", systemImage: "exclamationmark.triangle"),
-            SymptomPreset(code: "INSOMNIA", label: "Insomnia", systemImage: "moon.zzz"),
-            SymptomPreset(code: "OTHER", label: "Other", systemImage: "ellipsis")
-        ])
     }
     
     @available(iOS 16.0, *)
@@ -5620,15 +5700,22 @@ struct ContentView: View {
     }
 
     private struct SymptomToastView: View {
-        let message: String
+        let toast: SymptomToastState
+        let onAction: () -> Void
         
         var body: some View {
-            Text(message)
-                .font(.footnote)
-                .padding(.vertical, 8)
-                .padding(.horizontal, 18)
-                .background(.ultraThinMaterial, in: Capsule())
-                .shadow(radius: 3)
+            HStack(spacing: 10) {
+                Text(toast.message)
+                    .font(.footnote)
+                if let actionTitle = toast.actionTitle, !actionTitle.isEmpty {
+                    Button(actionTitle, action: onAction)
+                        .font(.footnote.weight(.semibold))
+                }
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 18)
+            .background(.ultraThinMaterial, in: Capsule())
+            .shadow(radius: 3)
         }
     }
 
@@ -5674,149 +5761,6 @@ struct ContentView: View {
                         .disabled(isSaving)
                     }
                 }
-            }
-        }
-    }
-    
-    private struct SymptomsLogSheet: View {
-        @Environment(\.dismiss) private var dismiss
-        
-        let presets: [SymptomPreset]
-        let queuedCount: Int
-        let isOffline: Bool
-        @Binding var isSubmitting: Bool
-        let onSubmit: (SymptomQueuedEvent) -> Void
-        
-        @State private var selectedPreset: SymptomPreset?
-        @State private var includeSeverity: Bool = false
-        @State private var severityValue: Double = 3
-        @State private var freeText: String = ""
-        @State private var occurredAt: Date = Date()
-        @FocusState private var notesFocused: Bool
-        
-        private var trimmedFreeText: String {
-            freeText.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        
-        private var isSubmitDisabled: Bool {
-            (selectedPreset == nil && trimmedFreeText.isEmpty) || isSubmitting
-        }
-        
-        var body: some View {
-            NavigationStack {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        if queuedCount > 0 {
-                            Text("\(queuedCount) symptom(s) waiting to send")
-                                .font(.caption)
-                                .foregroundColor(.orange)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(8)
-                                .background(Color.orange.opacity(0.1))
-                                .cornerRadius(8)
-                        }
-                        
-                        if isOffline {
-                            Label("Temporarily offline — showing last known symptoms.", systemImage: "wifi.slash")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        
-                        Text("Choose a symptom")
-                            .font(.headline)
-
-                        DatePicker(
-                            "When did this occur?",
-                            selection: $occurredAt,
-                            displayedComponents: [.date, .hourAndMinute]
-                        )
-                        .datePickerStyle(.compact)
-                        
-                        let columns = [GridItem(.adaptive(minimum: 110), spacing: 12)]
-                        LazyVGrid(columns: columns, spacing: 12) {
-                            ForEach(presets) { preset in
-                                Button {
-                                    if selectedPreset == preset {
-                                        selectedPreset = nil
-                                        includeSeverity = false
-                                    } else {
-                                        selectedPreset = preset
-                                    }
-                                } label: {
-                                    VStack(spacing: 8) {
-                                        Image(systemName: preset.systemImage)
-                                            .font(.title2)
-                                        Text(preset.label)
-                                            .font(.subheadline)
-                                    }
-                                    .frame(maxWidth: .infinity, minHeight: 70)
-                                }
-                                .buttonStyle(.bordered)
-                                .tint(selectedPreset == preset ? .accentColor : .secondary)
-                            }
-                        }
-                        
-                        if let preset = selectedPreset {
-                            Divider()
-                            
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Details for \(preset.label)")
-                                    .font(.headline)
-                                
-                                Toggle("Include severity", isOn: $includeSeverity.animation())
-                                    .tint(.accentColor)
-                                
-                                if includeSeverity {
-                                    VStack(alignment: .leading) {
-                                        Slider(value: $severityValue, in: 0...10, step: 1) {
-                                            Text("Severity")
-                                        } minimumValueLabel: {
-                                            Text("0")
-                                        } maximumValueLabel: {
-                                            Text("10")
-                                        }
-                                        Text("Selected: \(Int(severityValue))")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                
-                                TextField("Optional notes", text: $freeText, axis: .vertical)
-                                    .textFieldStyle(.roundedBorder)
-                                    .lineLimit(2...4)
-                                    .focused($notesFocused)
-                            }
-                        }
-                    }
-                    .padding()
-                }
-                .navigationTitle("Log Symptom")
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Close") { dismiss() }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") {
-                            let code = selectedPreset?.code ?? SymptomCodeHelper.fallbackCode
-                            var event = SymptomQueuedEvent(symptomCode: code, tsUtc: occurredAt)
-                            if includeSeverity { event.severity = Int(severityValue) }
-                            if !trimmedFreeText.isEmpty { event.freeText = trimmedFreeText }
-                            if let tags = selectedPreset?.tags { event.tags = tags }
-                            onSubmit(event)
-                        }
-                        .disabled(isSubmitDisabled)
-                    }
-                }
-            }
-            .interactiveDismissDisabled(isSubmitting)
-            .onDisappear {
-                includeSeverity = false
-                severityValue = 3
-                freeText = ""
-                occurredAt = Date()
-                notesFocused = false
-                selectedPreset = nil
             }
         }
     }
@@ -7085,8 +7029,7 @@ struct ContentView: View {
 
         private func formatTempDelta(_ celsius: Double?) -> String {
             guard let c = celsius else { return "—" }
-            let f = c * 9.0/5.0
-            return "\(String(format: "%.1f", c)) °C (\(String(format: "%.1f", f)) °F)"
+            return "\(String(format: "%+.1f", c)) °C"
         }
 
         private func formatPressure(_ hpa: Double?) -> String {
@@ -7097,8 +7040,7 @@ struct ContentView: View {
 
         private func formatPressureDelta(_ hpa: Double?) -> String {
             guard let hpa else { return "—" }
-            let inHg = hpa * 0.02953
-            return "\(String(format: "%.1f", hpa)) hPa (\(String(format: "%.2f", inHg)) inHg)"
+            return "\(String(format: "%+.1f", hpa)) hPa"
         }
 
         private func formatPercent(_ value: Double?) -> String {
@@ -7109,9 +7051,9 @@ struct ContentView: View {
         private func formatBaroTrend(_ trend: String?) -> String {
             guard let trend, !trend.isEmpty else { return "—" }
             switch trend.lowercased() {
-            case "rising": return "↑ rising"
-            case "falling": return "↓ falling"
-            case "steady": return "→ steady"
+            case "rising": return "rising"
+            case "falling": return "falling"
+            case "steady": return "steady"
             default: return trend
             }
         }
@@ -7167,12 +7109,12 @@ struct ContentView: View {
                         Text("Weather").font(.subheadline)
                         Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
                             GridRow { Text("Temp"); Text(formatTemp(weather?.tempC)) }
-                            GridRow { Text("24h Δ"); Text(formatTempDelta(weather?.tempDelta24hC)) }
+                            GridRow { Text("Temp 24h Δ"); Text(formatTempDelta(weather?.tempDelta24hC)) }
                             GridRow { Text("Humidity"); Text(formatPercent(weather?.humidityPct)) }
                             GridRow { Text("Precip"); Text(formatPercent(weather?.precipProbPct)) }
                             GridRow { Text("Pressure"); Text(formatPressure(weather?.pressureHpa)) }
                             GridRow { Text("Baro 24h Δ"); Text(formatPressureDelta(weather?.baroDelta24hHpa)) }
-                            GridRow { Text("Baro trend"); Text(formatBaroTrend(weather?.pressureTrend ?? weather?.baroTrend)) }
+                            GridRow { Text("Trend"); Text(formatBaroTrend(weather?.pressureTrend ?? weather?.baroTrend)) }
                         }
                         .font(.caption)
                         .foregroundColor(.secondary)

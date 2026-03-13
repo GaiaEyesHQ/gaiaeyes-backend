@@ -104,9 +104,9 @@
     return `(${rounded > 0 ? "+" : ""}${rounded})`;
   };
 
-  const gaugeIsClickable = (zoneKey, delta) => {
+  const gaugeHasAffordance = (zoneKey) => {
     const zone = normalizeZoneKey(zoneKey);
-    return zone === "elevated" || zone === "high" || Math.abs(Number(delta) || 0) >= 5;
+    return zone === "elevated" || zone === "high";
   };
 
   const normalizeDriverSeverity = (severity) => {
@@ -134,7 +134,7 @@
     return 0.28;
   };
 
-  const driverIsClickable = (severity) => {
+  const driverHasAffordance = (severity) => {
     const s = normalizeDriverSeverity(severity);
     return s === "watch" || s === "elevated" || s === "high";
   };
@@ -159,7 +159,7 @@
     return `${valueText} ${unit}`;
   };
 
-  const renderGaugeCard = (row, zones, hasModal) => {
+  const renderGaugeCard = (row, zones, entry) => {
     const numeric = Number(row && row.value);
     const hasValue = Number.isFinite(numeric);
     const meta = row && row.meta && typeof row.meta === "object" ? row.meta : {};
@@ -170,7 +170,8 @@
     const zoneKeyLabel = zoneKey && zoneKey !== "calibrating" ? zoneLabelFromKey(zoneKey) : "";
     const delta = Number(row && row.delta);
     const deltaStrong = Math.abs(delta || 0) >= 5;
-    const clickable = hasModal && gaugeIsClickable(zoneKey, delta);
+    const clickable = !!entry;
+    const emphasized = gaugeHasAffordance(zoneKey);
     const clamped = hasValue ? Math.max(0, Math.min(100, numeric)) : 0;
     const progress = clamped / 100;
     const radius = 40;
@@ -184,7 +185,7 @@
     const gradientId = `gaia-gauge-grad-${gradientKey}`;
     const palette = GAUGE_PALETTE[zoneKey] || GAUGE_PALETTE.mild;
     const zoneColor = zoneKey === "calibrating" ? GAUGE_PALETTE.calibrating.hex : palette.hex;
-    const arcStyle = `filter:drop-shadow(0 0 ${palette.glowPx}px ${palette.glow})`;
+    const arcStyle = emphasized ? `filter:drop-shadow(0 0 ${palette.glowPx}px ${palette.glow})` : "";
     const cardClass = clickable ? "gaia-dashboard__gauge gaia-dashboard__gauge--clickable" : "gaia-dashboard__gauge";
     const deltaClass = deltaStrong ? "gaia-dashboard__gauge-delta gaia-dashboard__gauge-delta--strong" : "gaia-dashboard__gauge-delta";
 
@@ -222,7 +223,7 @@
           </div>
         </div>
         ${zoneKeyLabel ? `<div class="gaia-dashboard__gauge-zone-key">${esc(zoneKeyLabel)}</div>` : ""}
-        ${clickable ? '<div class="gaia-dashboard__tap-hint">Tap for context</div>' : ""}
+        ${emphasized ? '<div class="gaia-dashboard__tap-hint">Tap for context</div>' : ""}
       </article>
     `;
   };
@@ -245,7 +246,8 @@
       const zoneKey = driverZoneFromSeverity(severity);
       const color = (GAUGE_PALETTE[zoneKey] || GAUGE_PALETTE.mild).hex;
       const width = Math.max(10, Math.round(driverProgress(severity) * 100));
-      const canOpen = driverIsClickable(severity) && !!modalDrivers[String(driver.key || "")];
+      const canOpen = !!modalDrivers[String(driver.key || "")];
+      const emphasized = driverHasAffordance(severity);
       const rowClass = canOpen ? "gaia-dashboard__driver-row gaia-dashboard__driver-row--clickable" : "gaia-dashboard__driver-row";
 
       return `
@@ -254,6 +256,7 @@
             <span class="gaia-dashboard__driver-label">${esc(driver.label || driver.key || "Driver")}</span>
             <span class="gaia-dashboard__driver-state" style="color:${color}">${esc(driver.state || "Low")}</span>
             <span class="gaia-dashboard__driver-value">${esc(formatDriverValue(driver))}</span>
+            ${emphasized ? '<span class="gaia-dashboard__driver-value">✦</span>' : ""}
           </div>
           <div class="gaia-dashboard__driver-bar-track">
             <div class="gaia-dashboard__driver-bar-fill" style="width:${width}%;background:${color}"></div>

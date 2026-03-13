@@ -428,6 +428,7 @@ async def dashboard(
         gauges_meta=gauges_meta_payload,
         gauge_labels=gauge_labels_payload,
         drivers=drivers,
+        gauges_delta=out.get("gauges_delta") if isinstance(out.get("gauges_delta"), dict) else {},
     )
     out["earthscope_summary"] = build_earthscope_summary(
         day=day,

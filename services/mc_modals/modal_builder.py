@@ -143,41 +143,84 @@ _GAUGE_PREFILL = {
     "health_status": ["OTHER", "DRAINED"],
 }
 
+_GAUGE_QUICK_LOG = {
+    "pain": [
+        {"code": "HEADACHE", "label": "Headache"},
+        {"code": "NERVE_PAIN", "label": "Pain flare"},
+        {"code": "OTHER", "label": "Joint stiffness"},
+    ],
+    "focus": [
+        {"code": "HEADACHE", "label": "Headache"},
+        {"code": "DRAINED", "label": "Brain fog"},
+        {"code": "OTHER", "label": "Focus drift"},
+    ],
+    "heart": [
+        {"code": "ANXIOUS", "label": "Restless"},
+        {"code": "DRAINED", "label": "Drained"},
+        {"code": "OTHER", "label": "Heart awareness"},
+    ],
+    "stamina": [
+        {"code": "DRAINED", "label": "Drained"},
+        {"code": "OTHER", "label": "Body aches"},
+        {"code": "NERVE_PAIN", "label": "Pain flare"},
+    ],
+    "energy": [
+        {"code": "DRAINED", "label": "Drained"},
+        {"code": "ANXIOUS", "label": "Wired"},
+        {"code": "OTHER", "label": "Energy swing"},
+    ],
+    "sleep": [
+        {"code": "INSOMNIA", "label": "Insomnia"},
+        {"code": "ANXIOUS", "label": "Restless"},
+        {"code": "DRAINED", "label": "Unrefreshed"},
+    ],
+    "mood": [
+        {"code": "ANXIOUS", "label": "Anxious"},
+        {"code": "DRAINED", "label": "Drained"},
+        {"code": "OTHER", "label": "Overstimulated"},
+    ],
+    "health_status": [
+        {"code": "DRAINED", "label": "Drained"},
+        {"code": "NERVE_PAIN", "label": "Pain flare"},
+        {"code": "OTHER", "label": "Other"},
+    ],
+}
+
 _DRIVER_NOTICE = {
     "pressure": [
-        "Head or sinus pressure sensitivity may increase for some.",
-        "Joint or nerve sensitivity can feel higher for some.",
-        "Pacing may feel more helpful than usual for some.",
+        "Headaches or migraines may feel easier to trigger for some people.",
+        "Head, sinus, or ear pressure can feel more noticeable for some people.",
+        "Joint, arthritis, or nerve flare sensitivity may increase for some people.",
     ],
     "temp": [
-        "Temperature transitions may feel more draining for some.",
-        "Energy steadiness may vary more for some people.",
-        "Sleep quality can feel more fragile for some.",
+        "Body aches or fatigue may feel more noticeable for some people.",
+        "Fibro flare sensitivity can rise for some people during bigger swings.",
+        "Circulation discomfort can feel more noticeable for some people.",
     ],
     "aqi": [
-        "Airway or sensory irritation may increase for some.",
-        "Outdoor exertion may feel heavier for some people.",
-        "Fatigue can show up faster for some.",
+        "Sinus irritation or headache may feel more noticeable for some people.",
+        "Fatigue or brain fog can show up faster for some people.",
+        "Breathing irritation may be easier to notice for some people.",
     ],
     "kp": [
-        "Sleep or mood sensitivity may shift for some people.",
-        "Some people may notice extra stress reactivity.",
-        "Cognitive steadiness may feel less predictable for some.",
+        "Scattered focus can show up for some people during geomagnetic activity.",
+        "Some people may notice a wired or restless feeling.",
+        "Sleep disruption or autonomic wobble can feel more noticeable for some people.",
     ],
     "bz": [
-        "Sleep continuity may feel less stable for some.",
-        "Stress-load awareness can feel higher for some people.",
-        "Energy recovery may feel slower for some.",
+        "Scattered focus can feel more noticeable for some people.",
+        "A wired or restless feeling may be easier to notice for some people.",
+        "Sleep disruption or autonomic wobble can show up for some people.",
     ],
     "sw": [
-        "Some people may notice a wired-and-tired pattern.",
-        "Overstimulation may feel easier to trigger for some.",
-        "Sleep depth can feel lighter for some.",
+        "A wired or restless feeling may show up for some people.",
+        "Scattered focus can feel more noticeable for some people.",
+        "Sleep disruption or autonomic wobble can show up for some people.",
     ],
     "schumann": [
-        "Some people may notice lighter sleep or vivid dreams.",
-        "Sensory sensitivity may feel a bit sharper for some.",
-        "Focus stability can feel more variable for some.",
+        "A jittery or buzzy feeling may show up for some people.",
+        "Focus drift can feel more noticeable for some people.",
+        "Sleep sensitivity may feel higher for some people.",
     ],
 }
 
@@ -229,6 +272,86 @@ _DRIVER_PREFILL = {
     "schumann": ["INSOMNIA", "OTHER"],
 }
 
+_DRIVER_QUICK_LOG = {
+    "pressure": [
+        {"code": "HEADACHE", "label": "Headache"},
+        {"code": "NERVE_PAIN", "label": "Pain flare"},
+        {"code": "OTHER", "label": "Sinus pressure"},
+    ],
+    "temp": [
+        {"code": "DRAINED", "label": "Fatigue"},
+        {"code": "OTHER", "label": "Body aches"},
+        {"code": "NERVE_PAIN", "label": "Fibro flare"},
+    ],
+    "aqi": [
+        {"code": "HEADACHE", "label": "Headache"},
+        {"code": "DRAINED", "label": "Brain fog"},
+        {"code": "OTHER", "label": "Breathing irritation"},
+    ],
+    "kp": [
+        {"code": "ANXIOUS", "label": "Restless"},
+        {"code": "INSOMNIA", "label": "Sleep disruption"},
+        {"code": "OTHER", "label": "Focus drift"},
+    ],
+    "bz": [
+        {"code": "ANXIOUS", "label": "Restless"},
+        {"code": "INSOMNIA", "label": "Sleep disruption"},
+        {"code": "OTHER", "label": "Autonomic wobble"},
+    ],
+    "sw": [
+        {"code": "ANXIOUS", "label": "Wired"},
+        {"code": "INSOMNIA", "label": "Sleep disruption"},
+        {"code": "OTHER", "label": "Focus drift"},
+    ],
+    "schumann": [
+        {"code": "ANXIOUS", "label": "Jittery"},
+        {"code": "INSOMNIA", "label": "Sleep sensitivity"},
+        {"code": "OTHER", "label": "Buzzy"},
+    ],
+}
+
+_GAUGE_SHORT_BODY = {
+    "pain": "Steady is a good sign. No strong pain-load drivers stand out right now.",
+    "focus": "Steady is a good sign. No strong focus-load drivers stand out right now.",
+    "heart": "Steady is a good sign. No strong heart-load drivers stand out right now.",
+    "stamina": "Steady is a good sign. No strong stamina-load drivers stand out right now.",
+    "energy": "Steady is a good sign. No strong energy-load drivers stand out right now.",
+    "sleep": "Steady is a good sign. No strong sleep-load drivers stand out right now.",
+    "mood": "Steady is a good sign. No strong mood-load drivers stand out right now.",
+    "health_status": "Steady is a good sign. No strong body-load drivers stand out right now.",
+}
+
+_GAUGE_SHORT_TIP = {
+    "pain": "Stay hydrated and keep pacing gentle if needed.",
+    "focus": "Use normal pacing and protect your most important focus blocks.",
+    "heart": "Stay hydrated and pace intense effort if needed.",
+    "stamina": "Keep recovery basics steady and avoid stacking heavy exertion.",
+    "energy": "Keep hydration and meals steady to help energy stay even.",
+    "sleep": "Keep your wind-down routine steady tonight.",
+    "mood": "Keep stimulation moderate and use short resets if needed.",
+    "health_status": "Keep recovery basics steady and check in if anything shifts.",
+}
+
+_DRIVER_SHORT_BODY = {
+    "pressure": "Pressure change looks fairly steady right now.",
+    "temp": "Temperature change looks fairly steady right now.",
+    "aqi": "Air quality looks relatively steady right now.",
+    "kp": "Geomagnetic activity looks relatively steady right now.",
+    "bz": "Bz coupling looks relatively steady right now.",
+    "sw": "Solar wind speed looks relatively steady right now.",
+    "schumann": "Schumann variability looks relatively steady right now.",
+}
+
+_DRIVER_SHORT_TIP = {
+    "pressure": "Normal hydration and pacing should be enough for most people.",
+    "temp": "Dress for comfort and keep hydration steady if conditions change.",
+    "aqi": "Normal outdoor plans may be fine if you usually tolerate them well.",
+    "kp": "Keep your normal pacing and sleep routine steady.",
+    "bz": "Keep effort steady and avoid overreacting to small shifts.",
+    "sw": "Use your usual pacing and sleep routine for now.",
+    "schumann": "Keep sensory load and sleep routine steady if that usually helps.",
+}
+
 
 def _seed_index(day: date, key: str, bucket: str) -> int:
     text = f"{day.isoformat()}|{key}|{bucket}".encode("utf-8")
@@ -257,6 +380,101 @@ def _normalized_zone_label(meta: Dict[str, Any]) -> str:
     if zone:
         return zone[:1].upper() + zone[1:]
     return "Calibrating"
+
+
+def _normalized_zone_key(meta: Dict[str, Any]) -> str:
+    zone = str(meta.get("zone") or "").strip().lower()
+    if zone in {"low", "mild", "elevated", "high"}:
+        return zone
+    return "low"
+
+
+def _driver_zone_key(driver: Dict[str, Any]) -> str:
+    severity = str(driver.get("severity") or "").strip().lower()
+    if severity == "high":
+        return "high"
+    if severity in {"watch", "elevated"}:
+        return "elevated"
+    if severity == "mild":
+        return "mild"
+    return "low"
+
+
+def _default_severity(zone: str) -> int:
+    if zone == "high":
+        return 4
+    if zone == "elevated":
+        return 3
+    if zone == "mild":
+        return 2
+    return 1
+
+
+def _unique_lines(items: Iterable[str]) -> List[str]:
+    seen: set[str] = set()
+    out: List[str] = []
+    for raw in items:
+        line = str(raw or "").strip()
+        if not line or line in seen:
+            continue
+        seen.add(line)
+        out.append(line)
+    return out
+
+
+def _delta_line(delta: int) -> Optional[str]:
+    if abs(int(delta or 0)) < 5:
+        return None
+    direction = "up" if delta > 0 else "down"
+    return f"This gauge moved {abs(delta)} points {direction} from the prior reading."
+
+
+def _quick_log(
+    *,
+    context_type: str,
+    context_key: str,
+    zone: str,
+    default_options: List[Dict[str, str]],
+    default_prefill: List[str],
+    delta: Optional[int | float] = None,
+) -> Dict[str, Any]:
+    options = [
+        {"code": str(item.get("code") or "").strip(), "label": str(item.get("label") or "").strip()}
+        for item in default_options
+        if str(item.get("code") or "").strip() and str(item.get("label") or "").strip()
+    ]
+    if not options:
+        options = [
+            {
+                "code": str(code or "").strip(),
+                "label": str(code or "").strip().replace("_", " ").title(),
+            }
+            for code in default_prefill
+            if str(code or "").strip()
+        ]
+
+    tags = [
+        "source:quick_log",
+        f"context:{context_type}:{context_key}",
+        f"zone:{zone}",
+    ]
+    if delta is not None:
+        try:
+            numeric = float(delta)
+            if numeric.is_integer():
+                tags.append(f"delta:{int(numeric)}")
+            else:
+                tags.append(f"delta:{numeric:.1f}")
+        except Exception:
+            pass
+
+    return {
+        "title": "Log what you're feeling:",
+        "confirm_label": "Log Symptoms",
+        "options": options[:3],
+        "default_severity": _default_severity(zone),
+        "base_tags": tags,
+    }
 
 
 def _driver_why_line(driver: Dict[str, Any]) -> str:
@@ -302,17 +520,103 @@ def _elevated_gauges(
     return rows
 
 
+def _driver_is_watch_or_high(driver: Dict[str, Any]) -> bool:
+    return str(driver.get("severity") or "").strip().lower() in {"watch", "high"}
+
+
+def _gauge_modal_type(zone: str, delta: int, related: List[Dict[str, Any]]) -> str:
+    if zone in {"mild", "elevated", "high"}:
+        return "full"
+    if abs(int(delta or 0)) >= 5:
+        return "full"
+    if any(_driver_is_watch_or_high(driver) for driver in related):
+        return "full"
+    return "short"
+
+
+def _driver_modal_type(driver: Dict[str, Any]) -> str:
+    zone = _driver_zone_key(driver)
+    return "full" if zone in {"mild", "elevated", "high"} else "short"
+
+
+def _gauge_why_lines(
+    *,
+    day: date,
+    gauge_key: str,
+    related: List[Dict[str, Any]],
+    delta: int,
+) -> List[str]:
+    lines = [_driver_why_line(item) for item in related[:3]]
+    delta_line = _delta_line(delta)
+    if delta_line:
+        lines.append(delta_line)
+    if not lines:
+        lines = _rotate_pick(
+            [
+                "This gauge combines your current environmental context and personal baseline.",
+                "Recent local and space drivers can nudge this gauge up or down.",
+                "Today’s score reflects context, not certainty, and can change quickly.",
+            ],
+            day,
+            gauge_key,
+            "why",
+            2,
+        )
+    return _unique_lines(lines)[:3]
+
+
+def _gauge_notice_lines(
+    *,
+    day: date,
+    gauge_key: str,
+    related: List[Dict[str, Any]],
+) -> List[str]:
+    lines: List[str] = []
+    for driver in related[:2]:
+        driver_key = str(driver.get("key") or "").strip()
+        lines.extend(_rotate_pick(_DRIVER_NOTICE.get(driver_key, []), day, f"{gauge_key}:{driver_key}", "driver-notice", 1))
+    lines.extend(_rotate_pick(_GAUGE_NOTICES.get(gauge_key, []), day, gauge_key, "notice", 2))
+    return _unique_lines(lines)[:3]
+
+
+def _gauge_action_lines(
+    *,
+    day: date,
+    gauge_key: str,
+    related: List[Dict[str, Any]],
+) -> List[str]:
+    lines: List[str] = []
+    for driver in related[:2]:
+        driver_key = str(driver.get("key") or "").strip()
+        lines.extend(_rotate_pick(_DRIVER_ACTIONS.get(driver_key, []), day, f"{gauge_key}:{driver_key}", "driver-actions", 1))
+    lines.extend(_rotate_pick(_GAUGE_ACTIONS.get(gauge_key, []), day, gauge_key, "actions", 3))
+    lines = _unique_lines(lines)
+    return lines[:4] if lines else ["Hydrate, pace tasks, and protect your sleep window."]
+
+
+def _driver_notice_lines(day: date, key: str) -> List[str]:
+    notices = _rotate_pick(_DRIVER_NOTICE.get(key, []), day, key, "driver-notice", 3)
+    return notices[:3] if notices else ["Some people may notice mild sensitivity shifts with this driver."]
+
+
+def _driver_action_lines(day: date, key: str) -> List[str]:
+    actions = _rotate_pick(_DRIVER_ACTIONS.get(key, []), day, key, "driver-actions", 3)
+    return actions[:4] if actions else ["Use steady pacing and track symptoms to see personal patterns."]
+
+
 def build_modal_models(
     *,
     day: date,
     gauges: Optional[Dict[str, Any]],
     gauges_meta: Optional[Dict[str, Dict[str, Any]]],
     gauge_labels: Optional[Dict[str, str]],
-    drivers: Optional[Iterable[Dict[str, Any]]],
+    drivers: Optional[Iterable[Dict[str, Any]]] = None,
+    gauges_delta: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Dict[str, Dict[str, Any]]]:
     gauges = gauges or {}
     gauges_meta = gauges_meta or {}
     gauge_labels = gauge_labels or {}
+    gauges_delta = gauges_delta or {}
     driver_rows = [d for d in list(drivers or []) if isinstance(d, dict)]
     drivers_by_key = {
         str(d.get("key") or "").strip(): d
@@ -323,34 +627,45 @@ def build_modal_models(
     gauge_models: Dict[str, Dict[str, Any]] = {}
     for gauge_key in _GAUGE_ORDER:
         label = gauge_labels.get(gauge_key) or _GAUGE_FALLBACK_LABELS.get(gauge_key) or gauge_key
-        status = _normalized_zone_label(gauges_meta.get(gauge_key) or {})
+        meta = gauges_meta.get(gauge_key) or {}
+        zone = _normalized_zone_key(meta)
+        status = _normalized_zone_label(meta)
+        delta = int(gauges_delta.get(gauge_key) or 0)
         related_keys = _GAUGE_DRIVER_MAP.get(gauge_key) or []
         related = [drivers_by_key[k] for k in related_keys if k in drivers_by_key]
+        modal_type = _gauge_modal_type(zone, delta, related)
 
-        why_lines = [_driver_why_line(item) for item in related[:2]]
-        if not why_lines:
-            why_lines = _rotate_pick(
-                [
-                    "This gauge combines your current environmental context and personal baseline.",
-                    "Recent local and space drivers can nudge this gauge up or down.",
-                    "Today’s score reflects context, not certainty, and can change quickly.",
-                ],
-                day,
-                gauge_key,
-                "why",
-                2,
-            )
+        quick_log = _quick_log(
+            context_type="gauge",
+            context_key=gauge_key,
+            zone=zone,
+            default_options=_GAUGE_QUICK_LOG.get(gauge_key, []),
+            default_prefill=_GAUGE_PREFILL.get(gauge_key, ["OTHER"]),
+            delta=delta if abs(delta) >= 1 else None,
+        )
 
-        notice = _rotate_pick(_GAUGE_NOTICES.get(gauge_key, []), day, gauge_key, "notice", 2)
-        actions = _rotate_pick(_GAUGE_ACTIONS.get(gauge_key, []), day, gauge_key, "actions", 3)
-        if not actions:
-            actions = ["Hydrate, pace tasks, and protect your sleep window."]
+        if modal_type == "short":
+            gauge_models[gauge_key] = {
+                "modal_type": "short",
+                "title": f"{label} \u2014 Steady",
+                "body": _GAUGE_SHORT_BODY.get(gauge_key, "Steady is a good sign right now."),
+                "tip": _GAUGE_SHORT_TIP.get(gauge_key, "Keep pacing and recovery basics steady."),
+                "quick_log": quick_log,
+                "cta": {
+                    "label": "Log symptoms",
+                    "action": "open_symptom_log",
+                    "prefill": _GAUGE_PREFILL.get(gauge_key, ["OTHER"]),
+                },
+            }
+            continue
 
         gauge_models[gauge_key] = {
+            "modal_type": "full",
             "title": f"{label} \u2014 {status}",
-            "why": why_lines[:3],
-            "what_you_may_notice": notice[:3],
-            "suggested_actions": actions[:4],
+            "why": _gauge_why_lines(day=day, gauge_key=gauge_key, related=related, delta=delta),
+            "what_you_may_notice": _gauge_notice_lines(day=day, gauge_key=gauge_key, related=related),
+            "suggested_actions": _gauge_action_lines(day=day, gauge_key=gauge_key, related=related),
+            "quick_log": quick_log,
             "cta": {
                 "label": "Log symptoms",
                 "action": "open_symptom_log",
@@ -365,6 +680,15 @@ def build_modal_models(
             continue
         label = str(driver.get("label") or key.replace("_", " ").title())
         state = str(driver.get("state") or "Elevated")
+        zone = _driver_zone_key(driver)
+        quick_log = _quick_log(
+            context_type="driver",
+            context_key=key,
+            zone=zone,
+            default_options=_DRIVER_QUICK_LOG.get(key, []),
+            default_prefill=_DRIVER_PREFILL.get(key, ["OTHER"]),
+            delta=driver.get("value") if key in {"pressure", "temp"} else None,
+        )
         why_lines = [
             _driver_why_line(driver),
             _rotate_pick(
@@ -379,18 +703,28 @@ def build_modal_models(
                 1,
             )[0],
         ]
-        notices = _rotate_pick(_DRIVER_NOTICE.get(key, []), day, key, "driver-notice", 2)
-        actions = _rotate_pick(_DRIVER_ACTIONS.get(key, []), day, key, "driver-actions", 3)
-        if not notices:
-            notices = ["Some people may notice mild sensitivity shifts with this driver."]
-        if not actions:
-            actions = ["Use steady pacing and track symptoms to see personal patterns."]
+        if _driver_modal_type(driver) == "short":
+            driver_models[key] = {
+                "modal_type": "short",
+                "title": f"{label} \u2014 Steady",
+                "body": _DRIVER_SHORT_BODY.get(key, "This driver looks relatively steady right now."),
+                "tip": _DRIVER_SHORT_TIP.get(key, "Keep your normal pacing steady for now."),
+                "quick_log": quick_log,
+                "cta": {
+                    "label": "Log symptoms",
+                    "action": "open_symptom_log",
+                    "prefill": _DRIVER_PREFILL.get(key, ["OTHER"]),
+                },
+            }
+            continue
 
         driver_models[key] = {
+            "modal_type": "full",
             "title": f"{label} \u2014 {state}",
             "why": why_lines[:3],
-            "what_you_may_notice": notices[:3],
-            "suggested_actions": actions[:4],
+            "what_you_may_notice": _driver_notice_lines(day, key),
+            "suggested_actions": _driver_action_lines(day, key),
+            "quick_log": quick_log,
             "cta": {
                 "label": "Log symptoms",
                 "action": "open_symptom_log",
@@ -456,5 +790,5 @@ def build_earthscope_summary(
         1,
     )
     sentences.extend(bridge[:1])
-    sentences.append("Tap highlighted gauges or drivers for details, supportive actions, and quick logging.")
+    sentences.append("Tap any gauge or driver for details, supportive actions, and quick logging.")
     return " ".join(sentences[:4]).strip()

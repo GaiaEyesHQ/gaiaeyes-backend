@@ -1,6 +1,6 @@
-from typing import Dict, Any
-from datetime import datetime, timezone
-from .cache import latest_and_ref, get_previous_approx
+from typing import Dict, Any, Optional
+from datetime import datetime, timedelta, timezone
+from .cache import latest_and_ref, get_previous_approx, nearest_row_to
 from services.geo.zip_lookup import zip_to_latlon
 from ..external import nws, airnow
 from ..time.moon import moon_phase
@@ -66,6 +66,74 @@ def _aqi_bucket(aqi: Any, category_name: str | None) -> str | None:
     if "hazard" in name:
         return "hazardous"
     return None
+
+
+def _parse_iso_ts(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def _weather_from_row(row: dict | None) -> Dict[str, Any]:
+    if not row or not isinstance(row.get("payload"), dict):
+        return {}
+    weather = row["payload"].get("weather")
+    return weather if isinstance(weather, dict) else {}
+
+
+def ensure_weather_fields(zip_code: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return payload
+
+    weather = payload.get("weather")
+    if not isinstance(weather, dict):
+        weather = {}
+        payload["weather"] = weather
+
+    temp_c = weather.get("temp_c")
+    baro_now = weather.get("pressure_hpa")
+    needs_temp_delta = weather.get("temp_delta_24h_c") is None
+    needs_baro_delta = weather.get("baro_delta_24h_hpa") is None
+    existing_trend = weather.get("baro_trend") or weather.get("pressure_trend")
+    needs_baro_trend = not existing_trend
+
+    if not any([needs_temp_delta, needs_baro_delta, needs_baro_trend]):
+        return payload
+
+    asof = _parse_iso_ts(payload.get("asof")) or _parse_iso_ts(weather.get("obs_time")) or datetime.now(timezone.utc)
+
+    ref24 = nearest_row_to(zip_code, asof - timedelta(hours=24), window_hours=3)
+    if ref24 is None:
+        ref24 = get_previous_approx(zip_code, asof, min_hours=18, max_hours=36)
+    ref3 = nearest_row_to(zip_code, asof - timedelta(hours=3), window_hours=2)
+
+    prev24_weather = _weather_from_row(ref24)
+    prev3_weather = _weather_from_row(ref3)
+
+    if needs_temp_delta:
+        weather["temp_delta_24h_c"] = _delta(temp_c, prev24_weather.get("temp_c"))
+    if needs_baro_delta:
+        weather["baro_delta_24h_hpa"] = _delta(baro_now, prev24_weather.get("pressure_hpa"))
+
+    trend = existing_trend
+    if needs_baro_trend:
+        baro_delta_3h = _delta(baro_now, prev3_weather.get("pressure_hpa"))
+        trend = _trend(baro_delta_3h, tol=1.5)
+    if trend:
+        weather["baro_trend"] = trend
+        weather["pressure_trend"] = trend
+
+    return payload
 
 async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
     """
@@ -190,7 +258,7 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
 
     health = {"flags": flags, "messages": messages}
 
-    return {
+    return ensure_weather_fields(zip_code, {
         "ok": True,
         "where": {"zip": zip_code, "lat": lat, "lon": lon},
         "weather": {
@@ -201,9 +269,11 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
             "pressure_hpa": baro_now,
             "obs_time": obs_iso,
             "baro_delta_24h_hpa": baro_delta,
+            "baro_trend": baro_trend_3h,
+            "pressure_trend": baro_trend_3h,
         },
         "air": {"aqi": aqi, "category": category, "pollutant": pollutant},
         "moon": m,
         "health": health,
         "asof": obs_iso or datetime.now(timezone.utc).isoformat(),
-    }
+    })
