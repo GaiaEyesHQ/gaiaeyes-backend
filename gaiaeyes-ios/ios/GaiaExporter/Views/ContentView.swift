@@ -86,6 +86,17 @@ private struct LocalWeather: Codable {
     let baroDelta24hHpa: Double?
     let pressureTrend: String?
     let baroTrend: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case tempC = "temp_c"
+        case tempDelta24hC = "temp_delta_24h_c"
+        case humidityPct = "humidity_pct"
+        case precipProbPct = "precip_prob_pct"
+        case pressureHpa = "pressure_hpa"
+        case baroDelta24hHpa = "baro_delta_24h_hpa"
+        case pressureTrend = "pressure_trend"
+        case baroTrend = "baro_trend"
+    }
 }
 
 private struct LocalAir: Codable {
@@ -3060,6 +3071,10 @@ struct ContentView: View {
                     Task {
                         await quickLogMissionControl(request)
                     }
+                },
+                onOpenCustomLog: { event in
+                    symptomSheetPrefill = event
+                    showSymptomSheet = true
                 }
             )
             .padding(.horizontal)
@@ -3133,6 +3148,7 @@ struct ContentView: View {
         let errorMessage: String?
         let lastUpdatedText: String?
         let onQuickLog: (MissionControlQuickLogRequest) -> Void
+        let onOpenCustomLog: (SymptomQueuedEvent) -> Void
         @State private var selectedModal: ModalPresentation? = nil
 
         private struct ModalPresentation: Identifiable {
@@ -3420,6 +3436,7 @@ struct ContentView: View {
         private struct ContextModalSheetView: View {
             let entry: DashboardModalEntry
             let onQuickLog: (MissionControlQuickLogRequest) -> Void
+            let onOpenCustomLog: (SymptomQueuedEvent) -> Void
             @Environment(\.dismiss) private var dismiss
             @State private var selectedQuickLog: DashboardQuickLogOption? = nil
 
@@ -3491,8 +3508,30 @@ struct ContentView: View {
                                     )
                             )
                         }
+                        Button {
+                            var event = SymptomQueuedEvent(symptomCode: SymptomCodeHelper.fallbackCode, tsUtc: Date())
+                            event.severity = quickLog.defaultSeverity
+                            event.tags = quickLog.baseTags
+                            onOpenCustomLog(event)
+                        } label: {
+                            Text("Custom / Other")
+                                .font(.subheadline.weight(.semibold))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.plain)
+                        .background(
+                            Capsule()
+                                .fill(Color.white.opacity(0.06))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                        )
                     }
-                    Button(quickLog.confirmLabel?.isEmpty == false ? quickLog.confirmLabel! : "Log Symptoms") {
+                    let confirmLabel = quickLog.confirmLabel?.isEmpty == false ? quickLog.confirmLabel! : "Log Symptoms"
+                    Button(confirmLabel) {
                         guard let selectedQuickLog else { return }
                         var event = SymptomQueuedEvent(symptomCode: selectedQuickLog.code, tsUtc: Date())
                         event.severity = quickLog.defaultSeverity
@@ -3704,7 +3743,7 @@ struct ContentView: View {
                     zoneKey: zoneKey,
                     zoneLabel: meta?.label,
                     tappable: tappable,
-                    showAffordance: gaugeHasAffordance(zoneKey: zoneKey)
+                    showAffordance: gaugeShowsAffordance(zoneKey: zoneKey, zoneLabel: meta?.label)
                 )
             }
         }
@@ -3712,6 +3751,14 @@ struct ContentView: View {
         private func gaugeHasAffordance(zoneKey: String?) -> Bool {
             let zone = (zoneKey ?? "").lowercased()
             return zone == "elevated" || zone == "high"
+        }
+
+        private func gaugeShowsAffordance(zoneKey: String?, zoneLabel: String?) -> Bool {
+            if gaugeHasAffordance(zoneKey: zoneKey) {
+                return true
+            }
+            let label = (zoneLabel ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return label.contains("elevated") || label.contains("high") || label.contains("watch")
         }
 
         private func driverSeverityKey(_ raw: String?) -> String {
@@ -3870,7 +3917,13 @@ struct ContentView: View {
             .sheet(item: $selectedModal) { modal in
                 ContextModalSheetView(
                     entry: modal.entry,
-                    onQuickLog: onQuickLog
+                    onQuickLog: onQuickLog,
+                    onOpenCustomLog: { event in
+                        selectedModal = nil
+                        DispatchQueue.main.async {
+                            onOpenCustomLog(event)
+                        }
+                    }
                 )
             }
         }
