@@ -228,6 +228,21 @@ def convert_picks_to_values(picks, chart_type):
         values[series_name] = float(vmax - ln * (vmax - vmin))
     return values
 
+def weighted_median_int(values, weights):
+    vals = np.asarray(values, dtype=np.float32).ravel()
+    wts = np.asarray(weights, dtype=np.float32).ravel()
+    if vals.size == 0:
+        return None
+    if vals.size == 1:
+        return int(round(float(vals[0])))
+    order = np.argsort(vals)
+    vals = vals[order]
+    wts = np.maximum(wts[order], 1e-6)
+    csum = np.cumsum(wts)
+    idx = int(np.searchsorted(csum, 0.5 * float(csum[-1]), side="left"))
+    idx = max(0, min(int(vals.size - 1), idx))
+    return int(round(float(vals[idx])))
+
 def refine_series_local_snap(
     img_bgr,
     roi,
@@ -321,6 +336,146 @@ def refine_series_local_snap(
         f"{series_name.lower()}_local_snap_search_up_px": int(up_px),
         f"{series_name.lower()}_local_snap_search_down_px": int(dn_px),
         f"{series_name.lower()}_local_snap_prefer_lower_weight": float(prefer_lower_weight),
+    }
+    return picks, dbg
+
+def refine_series_recent_consensus(
+    img_bgr,
+    roi,
+    x_center,
+    picks,
+    chart_type,
+    series_name,
+    span_left_px=6,
+    span_right_px=0,
+    band_px=1,
+    edge_margin_px=0,
+    min_y_px=None,
+    max_y_px=None,
+    inlier_tol_px=6,
+    min_support_cols=3,
+):
+    """
+    Final y-only pass that aggregates the same series over several nearby columns.
+    This is intentionally decoupled from x_now detection and only stabilizes the pick
+    around the already-selected read column.
+    """
+    if series_name not in picks:
+        return picks, {}
+    style = find_series_style(chart_type, series_name)
+    if style is None:
+        return picks, {}
+    lanes = PICK_LANE_WINDOWS.get(chart_type, {})
+    if series_name not in lanes:
+        return picks, {}
+
+    x0, y0, x1, y1 = roi
+    x = int(np.clip(x_center, x0 + 1, x1 - 2))
+    x_lo = int(np.clip(x - int(span_left_px), x0 + 1, x1 - 2))
+    x_hi = int(np.clip(x + int(span_right_px), x0 + 1, x1 - 2))
+    if x_hi <= x_lo:
+        return picks, {}
+
+    y0i, y1i, lane_y0, lane_y1 = lane_window_to_rows(roi, lanes[series_name][0], lanes[series_name][1])
+    lane0 = max(0, lane_y0 - y0i + int(edge_margin_px))
+    lane1 = min(y1i - y0i - 1, lane_y1 - y0i - int(edge_margin_px))
+    if lane1 <= lane0:
+        lane0 = max(0, lane_y0 - y0i)
+        lane1 = min(y1i - y0i - 1, lane_y1 - y0i)
+    if min_y_px is not None:
+        lane0 = max(lane0, int(min_y_px) - y0i)
+    if max_y_px is not None:
+        lane1 = min(lane1, int(max_y_px) - y0i)
+    if lane1 <= lane0:
+        return picks, {}
+
+    tgt_hsv = bgr_to_hsv_color((style["rgb"][2], style["rgb"][1], style["rgb"][0]))
+    candidates = []
+    weights = []
+    cols = list(range(x_lo, x_hi + 1))
+    lane_size = max(1, lane1 - lane0 + 1)
+
+    for idx, cx in enumerate(cols):
+        lo = max(x0, cx - int(band_px))
+        hi = min(x1, cx + int(band_px) + 1)
+        crop = img_bgr[y0i:y1i, lo:hi, :]
+        if crop.size == 0:
+            continue
+        crop_hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+        row_cost = hsv_row_distance(crop_hsv, tgt_hsv, style["label"]).astype(np.float32).ravel()
+        row_cost = cv2.blur(row_cost.reshape(-1, 1), (1, 5)).ravel()
+
+        lane_mask = np.ones_like(row_cost) * 8.0
+        lane_mask[lane0:lane1 + 1] = 0.0
+        row_cost = row_cost + lane_mask
+
+        local = row_cost[lane0:lane1 + 1]
+        if local.size <= 0:
+            continue
+        y_rel = int(np.argmin(local)) + lane0
+        y_pix = int(y0i + y_rel)
+
+        recency_w = 0.65 + 0.70 * (float(idx) / max(1.0, float(len(cols) - 1)))
+        center_bias = 1.0
+        if lane_size > 2:
+            lane_mid = 0.5 * float(lane0 + lane1)
+            dist_frac = abs(float(y_rel) - lane_mid) / max(1.0, 0.5 * float(lane1 - lane0))
+            center_bias = max(0.70, 1.0 - 0.10 * dist_frac)
+        candidates.append(int(y_pix))
+        weights.append(float(recency_w * center_bias))
+
+    if len(candidates) < int(min_support_cols):
+        return picks, {
+            f"{series_name.lower()}_consensus_applied": False,
+            f"{series_name.lower()}_consensus_support_cols": int(len(candidates)),
+        }
+
+    tol = max(2, int(inlier_tol_px))
+    best_seed = None
+    best_support = -1.0
+    best_recency = -1.0
+    for seed in candidates:
+        support = 0.0
+        recency = 0.0
+        for idx, (yy, ww) in enumerate(zip(candidates, weights)):
+            if abs(int(yy) - int(seed)) <= tol:
+                support += float(ww)
+                recency += float(ww) * (float(idx) / max(1.0, float(len(candidates) - 1)))
+        if support > best_support + 1e-6 or (abs(support - best_support) <= 1e-6 and recency > best_recency):
+            best_seed = int(seed)
+            best_support = float(support)
+            best_recency = float(recency)
+
+    inlier_vals = []
+    inlier_wts = []
+    for yy, ww in zip(candidates, weights):
+        if abs(int(yy) - int(best_seed)) <= tol:
+            inlier_vals.append(int(yy))
+            inlier_wts.append(float(ww))
+
+    if len(inlier_vals) < int(min_support_cols):
+        return picks, {
+            f"{series_name.lower()}_consensus_applied": False,
+            f"{series_name.lower()}_consensus_support_cols": int(len(inlier_vals)),
+            f"{series_name.lower()}_consensus_seed_y_px": int(best_seed),
+        }
+
+    y_pix = weighted_median_int(inlier_vals, inlier_wts)
+    if y_pix is None:
+        return picks, {}
+    y_norm = (float(y_pix) - float(y0i)) / max(1.0, float(y1i - y0i))
+    lane_norm = (float(y_pix) - float(lane_y0)) / max(1.0, float(lane_y1 - lane_y0))
+    picks[series_name]["y_px"] = int(y_pix)
+    picks[series_name]["y_norm"] = float(y_norm)
+    picks[series_name]["lane_norm"] = float(np.clip(lane_norm, 0.0, 1.0))
+
+    dbg = {
+        f"{series_name.lower()}_consensus_x_range": [int(x_lo), int(x_hi)],
+        f"{series_name.lower()}_consensus_y_px": int(y_pix),
+        f"{series_name.lower()}_consensus_seed_y_px": int(best_seed),
+        f"{series_name.lower()}_consensus_support_cols": int(len(inlier_vals)),
+        f"{series_name.lower()}_consensus_tol_px": int(tol),
+        f"{series_name.lower()}_consensus_applied": True,
     }
     return picks, dbg
 
@@ -1392,6 +1547,161 @@ def main():
         )
         if dbgQ_q4_ord:
             dbgQ.update(dbgQ_q4_ord)
+
+    # Final y-only consensus pass over nearby columns. This stabilizes point picks
+    # without changing the already-resolved x_now/x_pick timing.
+    if "F1" in picksF and "F2" in picksF and "F3" in picksF:
+        picksF, dbgF_f2_cons = refine_series_recent_consensus(
+            F_img,
+            roiF,
+            xF_pick_edge,
+            picksF,
+            "F",
+            "F2",
+            span_left_px=6,
+            band_px=1,
+            min_y_px=int(picksF["F1"]["y_px"]) + 10,
+            max_y_px=int(picksF["F3"]["y_px"]) - 10,
+            inlier_tol_px=5,
+            min_support_cols=3,
+        )
+        if dbgF_f2_cons:
+            dbgF.update(dbgF_f2_cons)
+    if "F2" in picksF and "F3" in picksF and "F4" in picksF:
+        picksF, dbgF_f3_cons = refine_series_recent_consensus(
+            F_img,
+            roiF,
+            xF_pick_edge,
+            picksF,
+            "F",
+            "F3",
+            span_left_px=6,
+            band_px=1,
+            min_y_px=int(picksF["F2"]["y_px"]) + 8,
+            max_y_px=int(picksF["F4"]["y_px"]) - 10,
+            inlier_tol_px=5,
+            min_support_cols=3,
+        )
+        if dbgF_f3_cons:
+            dbgF.update(dbgF_f3_cons)
+    if "F3" in picksF and "F4" in picksF:
+        picksF, dbgF_f4_cons = refine_series_recent_consensus(
+            F_img,
+            roiF,
+            xF_pick_edge,
+            picksF,
+            "F",
+            "F4",
+            span_left_px=6,
+            band_px=1,
+            min_y_px=int(picksF["F3"]["y_px"]) + 10,
+            inlier_tol_px=6,
+            min_support_cols=3,
+        )
+        if dbgF_f4_cons:
+            dbgF.update(dbgF_f4_cons)
+
+    if "A1" in picksA and "A2" in picksA and "A3" in picksA:
+        picksA, dbgA_a2_cons = refine_series_recent_consensus(
+            A_img,
+            roiA,
+            xA_pick,
+            picksA,
+            "A",
+            "A2",
+            span_left_px=6,
+            band_px=1,
+            min_y_px=int(picksA["A1"]["y_px"]) + 14,
+            max_y_px=int(picksA["A3"]["y_px"]) - 12,
+            inlier_tol_px=6,
+            min_support_cols=3,
+        )
+        if dbgA_a2_cons:
+            dbgA.update(dbgA_a2_cons)
+    if "A2" in picksA and "A3" in picksA and "A4" in picksA:
+        picksA, dbgA_a3_cons = refine_series_recent_consensus(
+            A_img,
+            roiA,
+            xA_pick,
+            picksA,
+            "A",
+            "A3",
+            span_left_px=6,
+            band_px=1,
+            min_y_px=int(picksA["A2"]["y_px"]) + 12,
+            max_y_px=int(picksA["A4"]["y_px"]) - 12,
+            inlier_tol_px=6,
+            min_support_cols=3,
+        )
+        if dbgA_a3_cons:
+            dbgA.update(dbgA_a3_cons)
+    if "A3" in picksA and "A4" in picksA:
+        picksA, dbgA_a4_cons = refine_series_recent_consensus(
+            A_img,
+            roiA,
+            xA_pick,
+            picksA,
+            "A",
+            "A4",
+            span_left_px=6,
+            band_px=1,
+            min_y_px=int(picksA["A3"]["y_px"]) + 12,
+            inlier_tol_px=6,
+            min_support_cols=3,
+        )
+        if dbgA_a4_cons:
+            dbgA.update(dbgA_a4_cons)
+
+    if "Q1" in picksQ and "Q2" in picksQ and "Q3" in picksQ:
+        picksQ, dbgQ_q2_cons = refine_series_recent_consensus(
+            Q_img,
+            roiQ,
+            xQ_pick,
+            picksQ,
+            "Q",
+            "Q2",
+            span_left_px=6,
+            band_px=1,
+            min_y_px=int(picksQ["Q1"]["y_px"]) + 10,
+            max_y_px=int(picksQ["Q3"]["y_px"]) - 8,
+            inlier_tol_px=6,
+            min_support_cols=3,
+        )
+        if dbgQ_q2_cons:
+            dbgQ.update(dbgQ_q2_cons)
+    if "Q2" in picksQ and "Q3" in picksQ and "Q4" in picksQ:
+        picksQ, dbgQ_q3_cons = refine_series_recent_consensus(
+            Q_img,
+            roiQ,
+            xQ_pick,
+            picksQ,
+            "Q",
+            "Q3",
+            span_left_px=6,
+            band_px=1,
+            min_y_px=int(picksQ["Q2"]["y_px"]) + 8,
+            max_y_px=int(picksQ["Q4"]["y_px"]) - 8,
+            inlier_tol_px=6,
+            min_support_cols=3,
+        )
+        if dbgQ_q3_cons:
+            dbgQ.update(dbgQ_q3_cons)
+    if "Q3" in picksQ and "Q4" in picksQ:
+        picksQ, dbgQ_q4_cons = refine_series_recent_consensus(
+            Q_img,
+            roiQ,
+            xQ_pick,
+            picksQ,
+            "Q",
+            "Q4",
+            span_left_px=6,
+            band_px=1,
+            min_y_px=int(picksQ["Q3"]["y_px"]) + 8,
+            inlier_tol_px=6,
+            min_support_cols=3,
+        )
+        if dbgQ_q4_cons:
+            dbgQ.update(dbgQ_q4_cons)
 
     picksF = attach_lane_norms(picksF, roiF, "F")
     picksA = attach_lane_norms(picksA, roiA, "A")
