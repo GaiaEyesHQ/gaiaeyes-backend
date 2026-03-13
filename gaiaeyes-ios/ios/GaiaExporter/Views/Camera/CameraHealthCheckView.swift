@@ -5,6 +5,57 @@ import QuartzCore
 import UIKit
 #endif
 
+enum CameraMeasurementMode: String, CaseIterable, Identifiable {
+    case quickHR
+    case hrv
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .quickHR: return "Quick HR"
+        case .hrv: return "HRV Mode"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .quickHR:
+            return "Faster capture focused on heart rate."
+        case .hrv:
+            return "Longer capture with stricter quality for HRV."
+        }
+    }
+
+    var minRecordDurationSec: Double {
+        switch self {
+        case .quickHR: return 12
+        case .hrv: return 45
+        }
+    }
+
+    var maxRecordDurationSec: Double {
+        switch self {
+        case .quickHR: return 25
+        case .hrv: return 60
+        }
+    }
+
+    var allowsHRVOutput: Bool {
+        switch self {
+        case .quickHR: return false
+        case .hrv: return true
+        }
+    }
+
+    var minUploadQuality: Double {
+        switch self {
+        case .quickHR: return 0.60
+        case .hrv: return 0.65
+        }
+    }
+}
+
 struct CameraHealthCheckView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: CameraHealthCheckViewModel
@@ -19,6 +70,18 @@ struct CameraHealthCheckView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    Picker("Mode", selection: $viewModel.selectedMode) {
+                        ForEach(CameraMeasurementMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(viewModel.isRunning)
+
+                    Text(viewModel.selectedMode.subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
                     ZStack {
                         CameraPreviewView(session: viewModel.previewSession)
                             .frame(height: 290)
@@ -98,7 +161,7 @@ struct CameraHealthCheckView: View {
                     copiedDebugJSON = false
                     viewModel.start()
                 } label: {
-                    Label(viewModel.result == nil ? "Start Check" : "Run Again", systemImage: "camera.fill")
+                    Label(viewModel.result == nil ? "Start \(viewModel.selectedMode.title)" : "Run Again", systemImage: "camera.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -114,6 +177,7 @@ struct CameraHealthCheckView: View {
 
     private func resultCard(_ result: CameraPPGComputedResult) -> some View {
         let quality = result.quality.label
+        let runMode = viewModel.lastRunMode
         return GroupBox {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -136,8 +200,16 @@ struct CameraHealthCheckView: View {
 
                 if result.metrics.rmssdMs == nil {
                     let guidance = "Try lighter pressure, cover the flash and one rear lens (usually the 1x lens), and warm your fingers if cold."
-                    if result.metrics.bpm != nil {
+                    if runMode == .quickHR, result.metrics.bpm != nil {
+                        Text("Quick HR mode captures heart rate only. Switch to HRV Mode for HRV metrics.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else if result.metrics.bpm != nil {
                         Text("Heart rate captured, but HRV was not reliable enough. \(guidance)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else if runMode == .quickHR {
+                        Text("Signal quality was low for heart rate. \(guidance)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     } else {
@@ -163,7 +235,7 @@ struct CameraHealthCheckView: View {
                 }
 
                 if result.metrics.rmssdMs == nil && result.metrics.bpm == nil {
-                    Text("Re-run tip: keep your finger still for the full 30-45 seconds.")
+                    Text("Re-run tip: keep your finger still for the full \(Int(runMode.maxRecordDurationSec.rounded())) seconds.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -318,14 +390,22 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
 
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var progress: Double = 0
-    @Published private(set) var secondsRemaining: Int = 45
+    @Published private(set) var secondsRemaining: Int = Int(CameraMeasurementMode.quickHR.maxRecordDurationSec)
     @Published private(set) var previewSession: AVCaptureSession?
     @Published private(set) var result: CameraPPGComputedResult?
     @Published private(set) var errorMessage: String?
     @Published private(set) var isRunning: Bool = false
     @Published private(set) var saveStateMessage: String?
+    @Published var selectedMode: CameraMeasurementMode = .quickHR {
+        didSet {
+            guard !isRunning else { return }
+            secondsRemaining = Int(selectedMode.maxRecordDurationSec.rounded())
+        }
+    }
+    @Published private(set) var lastRunMode: CameraMeasurementMode = .quickHR
 
     var statusText: String {
+        let activeMode = isRunning ? lastRunMode : selectedMode
         switch phase {
         case .idle:
             return "Ready"
@@ -334,7 +414,12 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
         case .warmingUp:
             return "Warming up: keep finger steady"
         case .measuring:
-            return "Measuring: keep still and cover flash + one rear lens"
+            switch activeMode {
+            case .quickHR:
+                return "Measuring HR: keep still and cover flash + one rear lens"
+            case .hrv:
+                return "Measuring HRV: keep still and breathe naturally"
+            }
         case .processing:
             return "Processing signal"
         case .completed:
@@ -362,13 +447,15 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
 
     func start() {
         if isRunning { return }
+        let mode = selectedMode
         publish {
             self.errorMessage = nil
             self.result = nil
             self.progress = 0
-            self.secondsRemaining = Int(self.processor.maxRecordDurationSec)
+            self.secondsRemaining = Int(mode.maxRecordDurationSec.rounded())
             self.saveStateMessage = nil
             self.phase = .requestingPermission
+            self.lastRunMode = mode
         }
         requestPermissionIfNeeded { [weak self] granted in
             guard let self else { return }
@@ -380,7 +467,7 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
                 }
                 return
             }
-            self.startCaptureSession()
+            self.startCaptureSession(mode: mode)
         }
     }
 
@@ -412,7 +499,7 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
         }
     }
 
-    private func startCaptureSession() {
+    private func startCaptureSession(mode: CameraMeasurementMode) {
         sampleQueue.async { [weak self] in
             guard let self else { return }
             self.stopCaptureSession()
@@ -476,7 +563,12 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
             self.lastGreenMean = nil
 
             let startTime = CACurrentMediaTime()
-            self.processor.reset(startTime: startTime)
+            self.processor.reset(
+                startTime: startTime,
+                warmupDurationSec: 3.0,
+                minRecordDurationSec: mode.minRecordDurationSec,
+                maxRecordDurationSec: mode.maxRecordDurationSec
+            )
             session.startRunning()
 
             self.publish {
@@ -484,13 +576,14 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
                 self.phase = .warmingUp
                 self.isRunning = true
                 self.progress = 0
-                self.secondsRemaining = Int(self.processor.maxRecordDurationSec.rounded())
+                self.secondsRemaining = Int(mode.maxRecordDurationSec.rounded())
             }
         }
     }
 
     private func finishCapture() {
         guard !isStopping else { return }
+        let mode = lastRunMode
         isStopping = true
         publish {
             self.phase = .processing
@@ -498,13 +591,13 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
         }
 
         let now = CACurrentMediaTime()
-        let computed = processor.finalize(now: now)
+        let computed = processor.finalize(now: now, allowHRVOutput: mode.allowsHRVOutput)
         stopCaptureSession()
 
         guard let computed else {
             publish {
                 self.phase = .failed
-                self.errorMessage = "Need a steadier 30-45 second signal. Keep still and retry."
+                self.errorMessage = "Need a steadier \(Int(mode.minRecordDurationSec.rounded()))-\(Int(mode.maxRecordDurationSec.rounded())) second signal. Keep still and retry."
             }
             return
         }
@@ -514,10 +607,17 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
             self.phase = .completed
             self.errorMessage = nil
         }
-        saveResult(computed)
+        saveResult(computed, mode: mode)
     }
 
-    private func saveResult(_ result: CameraPPGComputedResult) {
+    private func saveResult(_ result: CameraPPGComputedResult, mode: CameraMeasurementMode) {
+        guard shouldUpload(result, mode: mode) else {
+            publish {
+                self.saveStateMessage = "Not synced: launch-safe quality gate blocked this run."
+            }
+            return
+        }
+
         publish {
             self.saveStateMessage = "Saving check..."
         }
@@ -551,6 +651,15 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
                 }
             }
         }
+    }
+
+    private func shouldUpload(_ result: CameraPPGComputedResult, mode: CameraMeasurementMode) -> Bool {
+        guard result.quality.score >= mode.minUploadQuality else { return false }
+        guard result.quality.label != .poor else { return false }
+        if mode.allowsHRVOutput {
+            return result.metrics.rmssdMs != nil && result.metrics.bpm != nil
+        }
+        return result.metrics.bpm != nil
     }
 
     private func stopCaptureSession() {

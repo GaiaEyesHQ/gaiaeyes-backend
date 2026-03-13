@@ -33,9 +33,9 @@ struct CameraPPGComputedResult: Codable {
 }
 
 final class CameraPPGProcessor {
-    let warmupDurationSec: Double = 3.0
-    let minRecordDurationSec: Double = 30.0
-    let maxRecordDurationSec: Double = 45.0
+    private(set) var warmupDurationSec: Double = 3.0
+    private(set) var minRecordDurationSec: Double = 30.0
+    private(set) var maxRecordDurationSec: Double = 45.0
 
     private let baseTargetHz: Double = 30.0
     private let highFpsTargetHz: Double = 45.0
@@ -52,7 +52,18 @@ final class CameraPPGProcessor {
     private var lastAutoStopEvalAt: TimeInterval = 0
     private var lastAutoStopDecision: Bool = false
 
-    func reset(startTime: TimeInterval) {
+    func reset(
+        startTime: TimeInterval,
+        warmupDurationSec: Double = 3.0,
+        minRecordDurationSec: Double = 30.0,
+        maxRecordDurationSec: Double = 45.0
+    ) {
+        self.warmupDurationSec = clamp(warmupDurationSec, min: 1.0, max: 8.0)
+        let minRecord = clamp(minRecordDurationSec, min: 8.0, max: 90.0)
+        let maxRecord = clamp(maxRecordDurationSec, min: minRecord + 4.0, max: 120.0)
+        self.minRecordDurationSec = minRecord
+        self.maxRecordDurationSec = maxRecord
+
         captureStartTime = startTime
         frameTimes.removeAll(keepingCapacity: true)
         frameSignal.removeAll(keepingCapacity: true)
@@ -118,7 +129,7 @@ final class CameraPPGProcessor {
             return lastAutoStopDecision
         }
         lastAutoStopEvalAt = now
-        guard let preview = computeResult(now: now, requireQualityForHRV: false) else {
+        guard let preview = computeResult(now: now, requireQualityForHRV: false, allowHRVOutput: false) else {
             lastAutoStopDecision = false
             return false
         }
@@ -126,11 +137,15 @@ final class CameraPPGProcessor {
         return lastAutoStopDecision
     }
 
-    func finalize(now: TimeInterval) -> CameraPPGComputedResult? {
-        return computeResult(now: now, requireQualityForHRV: true)
+    func finalize(now: TimeInterval, allowHRVOutput: Bool) -> CameraPPGComputedResult? {
+        return computeResult(now: now, requireQualityForHRV: true, allowHRVOutput: allowHRVOutput)
     }
 
-    private func computeResult(now: TimeInterval, requireQualityForHRV: Bool) -> CameraPPGComputedResult? {
+    private func computeResult(
+        now: TimeInterval,
+        requireQualityForHRV: Bool,
+        allowHRVOutput: Bool
+    ) -> CameraPPGComputedResult? {
         let elapsed = recordElapsed(now: now)
         guard elapsed >= 8.0 else { return nil }
         guard frameTimes.count >= 120 else { return nil }
@@ -187,7 +202,7 @@ final class CameraPPGProcessor {
             hrvRobustCV <= 0.20
 
         let hrvMetrics: (sdnn: Double?, rmssd: Double?, pnn50: Double?, lnRmssd: Double?, stress: Double?, resp: Double?)
-        let canComputeRawHRVMetrics = hrvPrecheck || !requireQualityForHRV
+        let canComputeRawHRVMetrics = allowHRVOutput && (hrvPrecheck || !requireQualityForHRV)
         if canComputeRawHRVMetrics {
             let sdnn = sdnnMs(hrvIbi)
             let rmssd = rmssdMs(hrvIbi)
@@ -216,7 +231,7 @@ final class CameraPPGProcessor {
             hrvMetrics = (nil, nil, nil, nil, nil, nil)
         }
 
-        let canComputeHRV = hrvMetrics.rmssd != nil
+        let canComputeHRV = allowHRVOutput && hrvMetrics.rmssd != nil
 
         let outputMetrics = CameraPPGMetrics(
             bpm: bpmStable,
@@ -541,6 +556,11 @@ final class CameraPPGProcessor {
 
         let bpm = 60000.0 / med
         guard bpm >= 40.0, bpm <= 180.0 else { return nil }
+        // In low-quality runs, constrain to a conservative resting range and tighter spread.
+        if qualityScore < 0.62 {
+            guard bpm >= 55.0, bpm <= 110.0 else { return nil }
+            guard robustCv <= 0.24, spreadRatio <= 1.65 else { return nil }
+        }
         return round1(bpm)
     }
 
@@ -616,10 +636,17 @@ final class CameraPPGProcessor {
                 let blended = round1((ibi + signal.bpm) * 0.5)
                 return isPlausibleBpm(blended, qualityScore: qualityScore) ? blended : nil
             }
+            let hi = max(ibi, signal.bpm)
+            let lo = min(ibi, signal.bpm)
+            let harmonicRatio = hi / max(lo, 1.0)
+            if delta >= 14.0, harmonicRatio >= 1.82, harmonicRatio <= 2.25, qualityScore < 0.70 {
+                let conservative = round1(lo)
+                return isPlausibleBpm(conservative, qualityScore: qualityScore) ? conservative : nil
+            }
             if qualityScore >= 0.55, ibiStable, isPlausibleBpm(ibi, qualityScore: qualityScore) {
                 return ibi
             }
-            if signal.confidence >= 0.50, qualityScore >= 0.55, isPlausibleBpm(signal.bpm, qualityScore: qualityScore) {
+            if signal.confidence >= 0.50, qualityScore >= 0.58, isPlausibleBpm(signal.bpm, qualityScore: qualityScore) {
                 return signal.bpm
             }
             guard
@@ -652,6 +679,9 @@ final class CameraPPGProcessor {
     }
 
     private func isPlausibleBpm(_ bpm: Double, qualityScore: Double) -> Bool {
+        if qualityScore < 0.60 {
+            return bpm >= 55.0 && bpm <= 110.0
+        }
         if qualityScore < 0.65 {
             return bpm >= 50.0 && bpm <= 120.0
         }
