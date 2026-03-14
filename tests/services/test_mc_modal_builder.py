@@ -51,6 +51,88 @@ def test_build_modal_models_returns_gauge_and_driver_models() -> None:
     assert payload["drivers"]["pressure"]["cta"]["prefill"]
 
 
+def test_pressure_modal_personalizes_for_migraine_history() -> None:
+    payload = build_modal_models(
+        day=date(2026, 2, 27),
+        gauges={"pain": 82},
+        gauges_meta={"pain": {"zone": "high", "label": "Flare"}},
+        gauge_labels={"pain": "Pain"},
+        drivers=[
+            {
+                "key": "pressure",
+                "label": "Pressure Swing",
+                "severity": "high",
+                "state": "High",
+                "value": -10.4,
+                "unit": "hPa",
+            }
+        ],
+        user_tags=["migraine_history"],
+    )
+
+    pressure = payload["drivers"]["pressure"]
+    assert pressure["quick_log"]["options"][0]["code"] == "HEADACHE"
+    assert pressure["quick_log"]["options"][1]["code"] == "SINUS_PRESSURE"
+    assert pressure["quick_log"]["options"][2]["code"] == "LIGHT_SENSITIVITY"
+    assert "head" in pressure["what_you_may_notice"][0].lower()
+
+
+def test_aqi_modal_personalizes_for_allergies() -> None:
+    payload = build_modal_models(
+        day=date(2026, 2, 27),
+        gauges={"energy": 68},
+        gauges_meta={"energy": {"zone": "elevated", "label": "Variable"}},
+        gauge_labels={"energy": "Energy"},
+        drivers=[
+            {
+                "key": "aqi",
+                "label": "AQI",
+                "severity": "high",
+                "state": "High",
+                "value": 118.0,
+                "unit": "AQI",
+            }
+        ],
+        user_tags=["allergies_sinus"],
+    )
+
+    aqi = payload["drivers"]["aqi"]
+    assert [item["code"] for item in aqi["quick_log"]["options"]] == [
+        "SINUS_PRESSURE",
+        "BRAIN_FOG",
+        "HEADACHE",
+    ]
+    assert "sinus" in aqi["what_you_may_notice"][0].lower()
+
+
+def test_solar_wind_modal_personalizes_for_autonomic_context() -> None:
+    payload = build_modal_models(
+        day=date(2026, 2, 27),
+        gauges={"heart": 61},
+        gauges_meta={"heart": {"zone": "elevated", "label": "Elevated"}},
+        gauge_labels={"heart": "Heart"},
+        drivers=[
+            {
+                "key": "sw",
+                "label": "Solar Wind",
+                "severity": "elevated",
+                "state": "Elevated",
+                "value": 612.0,
+                "unit": "km/s",
+            }
+        ],
+        user_tags=["pots_dysautonomia"],
+    )
+
+    sw = payload["drivers"]["sw"]
+    assert [item["code"] for item in sw["quick_log"]["options"]] == [
+        "PALPITATIONS",
+        "WIRED",
+        "DRAINED",
+    ]
+    assert "palpitations" in sw["what_you_may_notice"][0].lower()
+
+
 def test_build_earthscope_summary_mentions_top_drivers_and_gauges() -> None:
     summary = build_earthscope_summary(
         day=date(2026, 2, 27),
@@ -69,4 +151,4 @@ def test_build_earthscope_summary_mentions_top_drivers_and_gauges() -> None:
 
     assert "Pressure Swing" in summary
     assert "Pain" in summary
-    assert "Tap highlighted gauges or drivers" in summary
+    assert "Tap any gauge or driver" in summary

@@ -9,6 +9,7 @@ from psycopg.rows import dict_row
 
 from app.db import get_db
 from app.security.auth import require_read_auth, require_write_auth
+from services.personalization.health_context import canonicalize_tag_key, canonicalize_tag_keys
 
 
 router = APIRouter(prefix="/v1/profile", tags=["profile"])
@@ -231,7 +232,18 @@ async def _fetch_catalog_rows(conn) -> List[Dict[str, Any]]:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, prepare=False)
         rows = await cur.fetchall()
-    return rows or []
+    deduped: Dict[str, Dict[str, Any]] = {}
+    for raw_row in rows or []:
+        row = dict(raw_row or {})
+        canonical_key = canonicalize_tag_key(row.get("tag_key"))
+        if not canonical_key:
+            continue
+        row["tag_key"] = canonical_key
+        existing = deduped.get(canonical_key)
+        raw_matches_canonical = str(raw_row.get("tag_key") or "").strip().lower() == canonical_key
+        if existing is None or raw_matches_canonical:
+            deduped[canonical_key] = row
+    return list(deduped.values())
 
 
 @router.get("/tags/catalog", dependencies=[Depends(require_read_auth)])
@@ -261,7 +273,7 @@ async def profile_tags(request: Request, conn=Depends(get_db)):
         await cur.execute(sql, (user_id,), prepare=False)
         rows = await cur.fetchall()
 
-    tags = [r.get("tag_key") for r in rows or [] if r.get("tag_key")]
+    tags = canonicalize_tag_keys([r.get("tag_key") for r in rows or [] if r.get("tag_key")])
     return {"ok": True, "tags": tags}
 
 
@@ -284,11 +296,7 @@ async def profile_tags_upsert(
     if not user_col or not tag_col:
         return {"ok": False, "error": "app.user_tags schema unsupported"}
 
-    cleaned: List[str] = []
-    for tag in payload.tags or []:
-        value = str(tag).strip()
-        if value and value not in cleaned:
-            cleaned.append(value)
+    cleaned = canonicalize_tag_keys(payload.tags or [])
 
     async with conn.cursor() as cur:
         await cur.execute(f"delete from app.user_tags where {user_col} = %s", (user_id,), prepare=False)

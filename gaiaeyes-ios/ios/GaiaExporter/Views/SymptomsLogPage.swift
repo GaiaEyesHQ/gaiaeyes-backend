@@ -36,9 +36,21 @@ struct SymptomPreset: Identifiable, Hashable {
         case "NERVE_PAIN": return "bolt.heart"
         case "ZAPS": return "bolt"
         case "DRAINED": return "battery.25"
+        case "FATIGUE": return "battery.25"
         case "HEADACHE": return "brain.head.profile"
         case "ANXIOUS": return "exclamationmark.triangle"
         case "INSOMNIA": return "moon.zzz"
+        case "SINUS_PRESSURE": return "wind"
+        case "LIGHT_SENSITIVITY": return "sun.max"
+        case "JOINT_PAIN": return "figure.walk"
+        case "PAIN": return "bandage"
+        case "STIFFNESS": return "figure.walk.motion"
+        case "BRAIN_FOG": return "cloud.fog"
+        case "RESP_IRRITATION": return "wind"
+        case "CHEST_TIGHTNESS": return "heart"
+        case "PALPITATIONS": return "heart.fill"
+        case "WIRED": return "bolt.fill"
+        case "RESTLESS_SLEEP": return "bed.double"
         default: return "ellipsis"
         }
     }
@@ -69,9 +81,21 @@ struct SymptomPreset: Identifiable, Hashable {
         SymptomPreset(code: "NERVE_PAIN", label: "Nerve pain", systemImage: "bolt.heart"),
         SymptomPreset(code: "ZAPS", label: "Zaps", systemImage: "bolt"),
         SymptomPreset(code: "DRAINED", label: "Drained", systemImage: "battery.25"),
+        SymptomPreset(code: "FATIGUE", label: "Fatigue", systemImage: "battery.25"),
         SymptomPreset(code: "HEADACHE", label: "Headache", systemImage: "brain.head.profile"),
         SymptomPreset(code: "ANXIOUS", label: "Anxious", systemImage: "exclamationmark.triangle"),
         SymptomPreset(code: "INSOMNIA", label: "Insomnia", systemImage: "moon.zzz"),
+        SymptomPreset(code: "SINUS_PRESSURE", label: "Sinus pressure", systemImage: "wind"),
+        SymptomPreset(code: "LIGHT_SENSITIVITY", label: "Light sensitivity", systemImage: "sun.max"),
+        SymptomPreset(code: "JOINT_PAIN", label: "Joint pain", systemImage: "figure.walk"),
+        SymptomPreset(code: "PAIN", label: "Pain flare", systemImage: "bandage"),
+        SymptomPreset(code: "STIFFNESS", label: "Stiffness", systemImage: "figure.walk.motion"),
+        SymptomPreset(code: "BRAIN_FOG", label: "Brain fog", systemImage: "cloud.fog"),
+        SymptomPreset(code: "RESP_IRRITATION", label: "Breathing irritation", systemImage: "wind"),
+        SymptomPreset(code: "CHEST_TIGHTNESS", label: "Chest tightness", systemImage: "heart"),
+        SymptomPreset(code: "PALPITATIONS", label: "Palpitations", systemImage: "heart.fill"),
+        SymptomPreset(code: "WIRED", label: "Wired", systemImage: "bolt.fill"),
+        SymptomPreset(code: "RESTLESS_SLEEP", label: "Restless sleep", systemImage: "bed.double"),
         SymptomPreset(code: "OTHER", label: "Other", systemImage: "ellipsis"),
     ])
 }

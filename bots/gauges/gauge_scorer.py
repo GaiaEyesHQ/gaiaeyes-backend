@@ -15,6 +15,11 @@ from bots.gauges.db_utils import pick_column, table_columns, upsert_row
 from bots.gauges.signal_resolver import resolve_signals
 from bots.gauges.local_payload import get_local_payload
 from services.gauges.alerts import dedupe_alert_pills
+from services.personalization.health_context import (
+    build_personalization_profile,
+    gauge_personalization_multiplier,
+    health_status_contextual_adjustment,
+)
 
 
 LOG_LEVEL = os.getenv("GAIA_LOG_LEVEL", "INFO").upper()
@@ -89,6 +94,10 @@ def fetch_user_tags(user_id: str) -> List[Dict[str, Any]]:
         select_cols.append("c.label as tag_label")
     if "tag_key" in cat_cols and "tag_key" not in ut_cols:
         select_cols.append("c.tag_key as tag_key")
+    if "section" in cat_cols:
+        select_cols.append("c.section as tag_section")
+    elif "tag_type" in cat_cols:
+        select_cols.append("c.tag_type as tag_section")
 
     sql = f"""
         select {', '.join(select_cols)}
@@ -516,6 +525,8 @@ def _compute_trend(
 def _score_gauges(
     definition: Dict[str, Any],
     active_states: List[Dict[str, Any]],
+    *,
+    profile=None,
 ) -> Dict[str, Optional[float]]:
     model = definition.get("scoring_model") or {}
     base_score = float(model.get("base_score", 0))
@@ -527,6 +538,7 @@ def _score_gauges(
 
     conf_map = definition.get("confidence_multiplier") or {}
     sig_defs = {s.get("key"): s for s in definition.get("signal_definitions", [])}
+    profile = profile or build_personalization_profile([])
 
     gauges = {g["key"]: base_score for g in (definition.get("gauges") or []) if g.get("key")}
 
@@ -562,7 +574,14 @@ def _score_gauges(
                 continue
             weight = float(weight) * conf_mult * stacking_mult
             for g in effect.get("gauges") or []:
-                per_signal[g] = per_signal.get(g, 0.0) + weight
+                contribution = weight
+                if g:
+                    contribution *= gauge_personalization_multiplier(
+                        profile,
+                        signal_key=str(sig_key),
+                        gauge_key=str(g),
+                    )
+                per_signal[g] = per_signal.get(g, 0.0) + contribution
 
         for g, contrib in per_signal.items():
             if cap_per_signal:
@@ -608,8 +627,13 @@ def score_user_day(
         hrv_source=hrv_source,
         camera_stress_index=camera_stress_index,
     )
+    profile = build_personalization_profile(tags)
 
-    gauges = _score_gauges(definition, active_states)
+    gauges = _score_gauges(definition, active_states, profile=profile)
+    if health_status is not None:
+        health_adjustment = health_status_contextual_adjustment(profile, active_states)
+        if health_adjustment:
+            health_status = round(min(100.0, max(0.0, float(health_status) + health_adjustment)), 2)
 
     alerts = _build_alerts(definition, active_states)
     if health_meta.get("calibrating"):

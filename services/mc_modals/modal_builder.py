@@ -4,6 +4,16 @@ import hashlib
 from datetime import date
 from typing import Any, Dict, Iterable, List, Optional
 
+from services.personalization.health_context import (
+    AUTONOMIC_KEYS,
+    HEAD_PRESSURE_KEYS,
+    PAIN_FLARE_KEYS,
+    SINUS_KEYS,
+    SLEEP_DISRUPTION_KEYS,
+    PersonalizationProfile,
+    build_personalization_profile,
+)
+
 
 _GAUGE_ORDER = [
     "pain",
@@ -263,51 +273,258 @@ _DRIVER_ACTIONS = {
 }
 
 _DRIVER_PREFILL = {
-    "pressure": ["HEADACHE", "NERVE_PAIN"],
-    "temp": ["DRAINED", "INSOMNIA"],
-    "aqi": ["DRAINED", "HEADACHE"],
-    "kp": ["ANXIOUS", "INSOMNIA"],
-    "bz": ["INSOMNIA", "ANXIOUS"],
-    "sw": ["DRAINED", "ANXIOUS"],
-    "schumann": ["INSOMNIA", "OTHER"],
+    "pressure": ["HEADACHE", "NERVE_PAIN", "PAIN"],
+    "temp": ["FATIGUE", "PAIN", "STIFFNESS"],
+    "aqi": ["HEADACHE", "DRAINED", "RESP_IRRITATION"],
+    "kp": ["ANXIOUS", "DRAINED", "BRAIN_FOG"],
+    "bz": ["ANXIOUS", "DRAINED", "BRAIN_FOG"],
+    "sw": ["ANXIOUS", "DRAINED", "BRAIN_FOG"],
+    "schumann": ["WIRED", "BRAIN_FOG", "INSOMNIA"],
 }
 
 _DRIVER_QUICK_LOG = {
     "pressure": [
         {"code": "HEADACHE", "label": "Headache"},
-        {"code": "NERVE_PAIN", "label": "Pain flare"},
-        {"code": "OTHER", "label": "Sinus pressure"},
+        {"code": "NERVE_PAIN", "label": "Nerve pain"},
+        {"code": "PAIN", "label": "Pain flare"},
     ],
     "temp": [
-        {"code": "DRAINED", "label": "Fatigue"},
-        {"code": "OTHER", "label": "Body aches"},
-        {"code": "NERVE_PAIN", "label": "Fibro flare"},
+        {"code": "FATIGUE", "label": "Fatigue"},
+        {"code": "PAIN", "label": "Body aches"},
+        {"code": "STIFFNESS", "label": "Stiffness"},
     ],
     "aqi": [
         {"code": "HEADACHE", "label": "Headache"},
         {"code": "DRAINED", "label": "Brain fog"},
-        {"code": "OTHER", "label": "Breathing irritation"},
+        {"code": "RESP_IRRITATION", "label": "Breathing irritation"},
     ],
     "kp": [
-        {"code": "ANXIOUS", "label": "Restless"},
-        {"code": "INSOMNIA", "label": "Sleep disruption"},
-        {"code": "OTHER", "label": "Focus drift"},
+        {"code": "ANXIOUS", "label": "Anxious"},
+        {"code": "DRAINED", "label": "Drained"},
+        {"code": "BRAIN_FOG", "label": "Brain fog"},
     ],
     "bz": [
-        {"code": "ANXIOUS", "label": "Restless"},
-        {"code": "INSOMNIA", "label": "Sleep disruption"},
-        {"code": "OTHER", "label": "Autonomic wobble"},
+        {"code": "ANXIOUS", "label": "Anxious"},
+        {"code": "DRAINED", "label": "Drained"},
+        {"code": "BRAIN_FOG", "label": "Brain fog"},
     ],
     "sw": [
-        {"code": "ANXIOUS", "label": "Wired"},
-        {"code": "INSOMNIA", "label": "Sleep disruption"},
-        {"code": "OTHER", "label": "Focus drift"},
+        {"code": "ANXIOUS", "label": "Anxious"},
+        {"code": "DRAINED", "label": "Drained"},
+        {"code": "BRAIN_FOG", "label": "Brain fog"},
     ],
     "schumann": [
-        {"code": "ANXIOUS", "label": "Jittery"},
+        {"code": "WIRED", "label": "Jittery"},
+        {"code": "BRAIN_FOG", "label": "Focus drift"},
         {"code": "INSOMNIA", "label": "Sleep sensitivity"},
-        {"code": "OTHER", "label": "Buzzy"},
     ],
+}
+
+_PERSONALIZED_DRIVER_CONTENT = {
+    ("pressure", "head_pressure"): {
+        "notices": [
+            "Headache or migraine sensitivity may feel closer to the surface for some people.",
+            "Head or sinus pressure can feel more noticeable for some people during barometric swings.",
+            "Light sensitivity can tag along for some people when head pressure is up.",
+        ],
+        "actions": [
+            "Hydrate and lower light or screen intensity if that usually helps.",
+            "Use a darker, quieter space if head pressure feels easier to trigger.",
+            "Reduce extra sensory load and pace demanding blocks.",
+        ],
+        "quick_log": [
+            {"code": "HEADACHE", "label": "Headache"},
+            {"code": "SINUS_PRESSURE", "label": "Sinus pressure"},
+            {"code": "LIGHT_SENSITIVITY", "label": "Light sensitivity"},
+        ],
+    },
+    ("pressure", "pain_flare"): {
+        "notices": [
+            "Joint pain or stiffness may feel more noticeable for some people during pressure swings.",
+            "Body aches or a pain flare can show up faster for some people.",
+            "Pacing can feel more important for some people when pressure changes stack up.",
+        ],
+        "actions": [
+            "Use warmth or gentle movement if that usually helps your body settle.",
+            "Pace heavier tasks and add shorter resets between effort blocks.",
+            "Hydrate steadily and avoid stacking long exertion back-to-back.",
+        ],
+        "quick_log": [
+            {"code": "JOINT_PAIN", "label": "Joint pain"},
+            {"code": "PAIN", "label": "Pain flare"},
+            {"code": "STIFFNESS", "label": "Stiffness"},
+        ],
+    },
+    ("temp", "pain_flare"): {
+        "notices": [
+            "Body aches or stiffness may feel more noticeable for some people during sharper temperature swings.",
+            "Fibro-like pain or fatigue sensitivity can feel closer to the surface for some people.",
+            "Recovery can feel slower for some people when temperature shifts are abrupt.",
+        ],
+        "actions": [
+            "Favor warmth, layering, and gentle movement if those usually help.",
+            "Pace exertion and leave more margin for recovery than usual.",
+            "Keep hydration and meals steady through the swing.",
+        ],
+        "quick_log": [
+            {"code": "FATIGUE", "label": "Fatigue"},
+            {"code": "PAIN", "label": "Pain flare"},
+            {"code": "STIFFNESS", "label": "Stiffness"},
+        ],
+    },
+    ("aqi", "sinus"): {
+        "notices": [
+            "Sinus pressure or irritation may feel more noticeable for some people in poorer air.",
+            "Brain fog can show up faster for some people when air quality slips.",
+            "Headache can ride along with sinus sensitivity for some people.",
+        ],
+        "actions": [
+            "Use cleaner indoor air or HEPA support if that is available to you.",
+            "Saline or rinse support may feel soothing for some people.",
+            "Reduce outdoor exposure during peak irritation windows when possible.",
+        ],
+        "quick_log": [
+            {"code": "SINUS_PRESSURE", "label": "Sinus pressure"},
+            {"code": "BRAIN_FOG", "label": "Brain fog"},
+            {"code": "HEADACHE", "label": "Headache"},
+        ],
+    },
+    ("aqi", "airway"): {
+        "notices": [
+            "Breathing irritation may feel more noticeable for some people when air quality worsens.",
+            "Chest tightness or a heavier breathing feel can show up for some people.",
+            "Fatigue can land faster for some people when irritated air stacks with effort.",
+        ],
+        "actions": [
+            "Reduce outdoor exertion and favor cleaner indoor air when possible.",
+            "Use shorter effort blocks and pause sooner if breathing feels irritated.",
+            "Hydrate steadily and lower extra exposure where you can.",
+        ],
+        "quick_log": [
+            {"code": "RESP_IRRITATION", "label": "Breathing irritation"},
+            {"code": "CHEST_TIGHTNESS", "label": "Chest tightness"},
+            {"code": "FATIGUE", "label": "Fatigue"},
+        ],
+    },
+    ("kp", "autonomic"): {
+        "notices": [
+            "Palpitations or heart-awareness can feel easier to notice for some people during geomagnetic activity.",
+            "A wired or restless feeling can show up for some people when autonomic load feels touchier.",
+            "Energy can feel less steady or more drained after stimulation for some people.",
+        ],
+        "actions": [
+            "Hydrate and use electrolytes if that is already part of your routine.",
+            "Avoid sudden exertion or fast position changes if those usually hit you.",
+            "Use shorter, steadier activity blocks with recovery breaks.",
+        ],
+        "quick_log": [
+            {"code": "PALPITATIONS", "label": "Palpitations"},
+            {"code": "WIRED", "label": "Wired"},
+            {"code": "DRAINED", "label": "Drained"},
+        ],
+    },
+    ("sw", "autonomic"): {
+        "notices": [
+            "Palpitations or heart-awareness can feel easier to notice for some people during solar wind spikes.",
+            "A wired or restless feeling may show up for some people when autonomic load feels touchier.",
+            "Energy can feel less steady or more drained after stimulation for some people.",
+        ],
+        "actions": [
+            "Hydrate and use electrolytes if that is already part of your routine.",
+            "Avoid sudden exertion or fast position changes if those usually hit you.",
+            "Use shorter, steadier activity blocks with recovery breaks.",
+        ],
+        "quick_log": [
+            {"code": "PALPITATIONS", "label": "Palpitations"},
+            {"code": "WIRED", "label": "Wired"},
+            {"code": "DRAINED", "label": "Drained"},
+        ],
+    },
+    ("bz", "autonomic"): {
+        "notices": [
+            "Palpitations or heart-awareness can feel easier to notice for some people during stronger Bz coupling.",
+            "A wired or restless feeling may show up for some people when autonomic load feels touchier.",
+            "Energy can feel less steady or more drained after stimulation for some people.",
+        ],
+        "actions": [
+            "Hydrate and use electrolytes if that is already part of your routine.",
+            "Avoid sudden exertion or fast position changes if those usually hit you.",
+            "Use shorter, steadier activity blocks with recovery breaks.",
+        ],
+        "quick_log": [
+            {"code": "PALPITATIONS", "label": "Palpitations"},
+            {"code": "WIRED", "label": "Wired"},
+            {"code": "DRAINED", "label": "Drained"},
+        ],
+    },
+    ("kp", "sleep"): {
+        "notices": [
+            "Restless sleep or longer sleep onset can show up for some people during geomagnetic activity.",
+            "A wired feeling later in the day can make wind-down less predictable for some people.",
+            "Energy or mood can feel more reactive after a rough night for some people.",
+        ],
+        "actions": [
+            "Lower light and stimulation earlier if your sleep is feeling touchy.",
+            "Protect your wind-down window and keep bedtime cues simple.",
+            "Keep late caffeine and extra activation lighter than usual.",
+        ],
+        "quick_log": [
+            {"code": "RESTLESS_SLEEP", "label": "Restless sleep"},
+            {"code": "INSOMNIA", "label": "Insomnia"},
+            {"code": "WIRED", "label": "Wired"},
+        ],
+    },
+    ("sw", "sleep"): {
+        "notices": [
+            "Restless sleep or longer sleep onset can show up for some people during solar wind spikes.",
+            "A wired feeling later in the day can make wind-down less predictable for some people.",
+            "Energy or mood can feel more reactive after a rough night for some people.",
+        ],
+        "actions": [
+            "Lower light and stimulation earlier if your sleep is feeling touchy.",
+            "Protect your wind-down window and keep bedtime cues simple.",
+            "Keep late caffeine and extra activation lighter than usual.",
+        ],
+        "quick_log": [
+            {"code": "RESTLESS_SLEEP", "label": "Restless sleep"},
+            {"code": "INSOMNIA", "label": "Insomnia"},
+            {"code": "WIRED", "label": "Wired"},
+        ],
+    },
+    ("bz", "sleep"): {
+        "notices": [
+            "Restless sleep or longer sleep onset can show up for some people during stronger Bz coupling.",
+            "A wired feeling later in the day can make wind-down less predictable for some people.",
+            "Energy or mood can feel more reactive after a rough night for some people.",
+        ],
+        "actions": [
+            "Lower light and stimulation earlier if your sleep is feeling touchy.",
+            "Protect your wind-down window and keep bedtime cues simple.",
+            "Keep late caffeine and extra activation lighter than usual.",
+        ],
+        "quick_log": [
+            {"code": "RESTLESS_SLEEP", "label": "Restless sleep"},
+            {"code": "INSOMNIA", "label": "Insomnia"},
+            {"code": "WIRED", "label": "Wired"},
+        ],
+    },
+    ("schumann", "sleep"): {
+        "notices": [
+            "A buzzy or restless feeling may show up for some people when Schumann variability is larger.",
+            "Sleep sensitivity can feel more noticeable for some people when the day already feels overstimulating.",
+            "Focus or mood can feel a little more reactive for some people after lighter sleep.",
+        ],
+        "actions": [
+            "Lower light and sensory load earlier if sleep feels easier to disrupt.",
+            "Keep your wind-down routine simple and predictable tonight.",
+            "Reduce extra stimulation and leave more buffer before bed.",
+        ],
+        "quick_log": [
+            {"code": "RESTLESS_SLEEP", "label": "Restless sleep"},
+            {"code": "INSOMNIA", "label": "Insomnia"},
+            {"code": "WIRED", "label": "Wired"},
+        ],
+    },
 }
 
 _GAUGE_SHORT_BODY = {
@@ -429,6 +646,69 @@ def _delta_line(delta: int) -> Optional[str]:
     return f"This gauge moved {abs(delta)} points {direction} from the prior reading."
 
 
+def _driver_variant(profile: PersonalizationProfile, key: str) -> Optional[str]:
+    if key == "pressure":
+        if profile.includes_any(HEAD_PRESSURE_KEYS):
+            return "head_pressure"
+        if profile.includes_any(PAIN_FLARE_KEYS):
+            return "pain_flare"
+        return None
+    if key == "temp":
+        return "pain_flare" if profile.includes_any(PAIN_FLARE_KEYS) else None
+    if key == "aqi":
+        if profile.has_any("asthma_breathing_sensitive"):
+            return "airway"
+        if profile.includes_any(SINUS_KEYS):
+            return "sinus"
+        return None
+    if key in {"kp", "sw", "bz"}:
+        if profile.includes_any(AUTONOMIC_KEYS):
+            return "autonomic"
+        if profile.includes_any(SLEEP_DISRUPTION_KEYS):
+            return "sleep"
+        return None
+    if key == "schumann":
+        return "sleep" if profile.includes_any(SLEEP_DISRUPTION_KEYS) else None
+    return None
+
+
+def _driver_personalized_content(
+    key: str,
+    profile: PersonalizationProfile,
+) -> Dict[str, Any]:
+    variant = _driver_variant(profile, key)
+    if not variant:
+        return {}
+    return dict(_PERSONALIZED_DRIVER_CONTENT.get((key, variant)) or {})
+
+
+def _merge_quick_log_options(*groups: Iterable[Dict[str, str]]) -> List[Dict[str, str]]:
+    seen: set[str] = set()
+    out: List[Dict[str, str]] = []
+    for group in groups:
+        for item in group or []:
+            code = str(item.get("code") or "").strip().upper()
+            label = str(item.get("label") or "").strip()
+            if not code or not label or code in seen:
+                continue
+            seen.add(code)
+            out.append({"code": code, "label": label})
+    return out
+
+
+def _merge_prefill_codes(*groups: Iterable[str]) -> List[str]:
+    seen: set[str] = set()
+    out: List[str] = []
+    for group in groups:
+        for raw in group or []:
+            code = str(raw or "").strip().upper()
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            out.append(code)
+    return out
+
+
 def _quick_log(
     *,
     context_type: str,
@@ -436,20 +716,18 @@ def _quick_log(
     zone: str,
     default_options: List[Dict[str, str]],
     default_prefill: List[str],
+    priority_options: Optional[List[Dict[str, str]]] = None,
+    priority_prefill: Optional[List[str]] = None,
     delta: Optional[int | float] = None,
 ) -> Dict[str, Any]:
-    options = [
-        {"code": str(item.get("code") or "").strip(), "label": str(item.get("label") or "").strip()}
-        for item in default_options
-        if str(item.get("code") or "").strip() and str(item.get("label") or "").strip()
-    ]
+    options = _merge_quick_log_options(priority_options or [], default_options)
     if not options:
         options = [
             {
                 "code": str(code or "").strip(),
                 "label": str(code or "").strip().replace("_", " ").title(),
             }
-            for code in default_prefill
+            for code in _merge_prefill_codes(priority_prefill or [], default_prefill)
             if str(code or "").strip()
         ]
 
@@ -474,6 +752,7 @@ def _quick_log(
         "options": options[:3],
         "default_severity": _default_severity(zone),
         "base_tags": tags,
+        "prefill_codes": _merge_prefill_codes(priority_prefill or [], default_prefill),
     }
 
 
@@ -570,10 +849,13 @@ def _gauge_notice_lines(
     day: date,
     gauge_key: str,
     related: List[Dict[str, Any]],
+    profile: PersonalizationProfile,
 ) -> List[str]:
     lines: List[str] = []
     for driver in related[:2]:
         driver_key = str(driver.get("key") or "").strip()
+        personalized = _driver_personalized_content(driver_key, profile).get("notices") or []
+        lines.extend(_rotate_pick(personalized, day, f"{gauge_key}:{driver_key}", "driver-personalized-notice", 1))
         lines.extend(_rotate_pick(_DRIVER_NOTICE.get(driver_key, []), day, f"{gauge_key}:{driver_key}", "driver-notice", 1))
     lines.extend(_rotate_pick(_GAUGE_NOTICES.get(gauge_key, []), day, gauge_key, "notice", 2))
     return _unique_lines(lines)[:3]
@@ -584,23 +866,32 @@ def _gauge_action_lines(
     day: date,
     gauge_key: str,
     related: List[Dict[str, Any]],
+    profile: PersonalizationProfile,
 ) -> List[str]:
     lines: List[str] = []
     for driver in related[:2]:
         driver_key = str(driver.get("key") or "").strip()
+        personalized = _driver_personalized_content(driver_key, profile).get("actions") or []
+        lines.extend(_rotate_pick(personalized, day, f"{gauge_key}:{driver_key}", "driver-personalized-actions", 1))
         lines.extend(_rotate_pick(_DRIVER_ACTIONS.get(driver_key, []), day, f"{gauge_key}:{driver_key}", "driver-actions", 1))
     lines.extend(_rotate_pick(_GAUGE_ACTIONS.get(gauge_key, []), day, gauge_key, "actions", 3))
     lines = _unique_lines(lines)
     return lines[:4] if lines else ["Hydrate, pace tasks, and protect your sleep window."]
 
 
-def _driver_notice_lines(day: date, key: str) -> List[str]:
-    notices = _rotate_pick(_DRIVER_NOTICE.get(key, []), day, key, "driver-notice", 3)
+def _driver_notice_lines(day: date, key: str, profile: PersonalizationProfile) -> List[str]:
+    personalized = _driver_personalized_content(key, profile).get("notices") or []
+    notices = _rotate_pick(personalized, day, key, "driver-personalized-notice", 3)
+    notices.extend(_rotate_pick(_DRIVER_NOTICE.get(key, []), day, key, "driver-notice", 3))
+    notices = _unique_lines(notices)
     return notices[:3] if notices else ["Some people may notice mild sensitivity shifts with this driver."]
 
 
-def _driver_action_lines(day: date, key: str) -> List[str]:
-    actions = _rotate_pick(_DRIVER_ACTIONS.get(key, []), day, key, "driver-actions", 3)
+def _driver_action_lines(day: date, key: str, profile: PersonalizationProfile) -> List[str]:
+    personalized = _driver_personalized_content(key, profile).get("actions") or []
+    actions = _rotate_pick(personalized, day, key, "driver-personalized-actions", 3)
+    actions.extend(_rotate_pick(_DRIVER_ACTIONS.get(key, []), day, key, "driver-actions", 3))
+    actions = _unique_lines(actions)
     return actions[:4] if actions else ["Use steady pacing and track symptoms to see personal patterns."]
 
 
@@ -612,11 +903,13 @@ def build_modal_models(
     gauge_labels: Optional[Dict[str, str]],
     drivers: Optional[Iterable[Dict[str, Any]]] = None,
     gauges_delta: Optional[Dict[str, int]] = None,
+    user_tags: Optional[Iterable[Any]] = None,
 ) -> Dict[str, Dict[str, Dict[str, Any]]]:
     gauges = gauges or {}
     gauges_meta = gauges_meta or {}
     gauge_labels = gauge_labels or {}
     gauges_delta = gauges_delta or {}
+    profile = build_personalization_profile(user_tags)
     driver_rows = [d for d in list(drivers or []) if isinstance(d, dict)]
     drivers_by_key = {
         str(d.get("key") or "").strip(): d
@@ -634,6 +927,12 @@ def build_modal_models(
         related_keys = _GAUGE_DRIVER_MAP.get(gauge_key) or []
         related = [drivers_by_key[k] for k in related_keys if k in drivers_by_key]
         modal_type = _gauge_modal_type(zone, delta, related)
+        personalized_options: List[Dict[str, str]] = []
+        personalized_prefill: List[str] = []
+        for driver in related:
+            content = _driver_personalized_content(str(driver.get("key") or "").strip(), profile)
+            personalized_options.extend(content.get("quick_log") or [])
+            personalized_prefill.extend([item.get("code") for item in content.get("quick_log") or [] if item.get("code")])
 
         quick_log = _quick_log(
             context_type="gauge",
@@ -641,8 +940,11 @@ def build_modal_models(
             zone=zone,
             default_options=_GAUGE_QUICK_LOG.get(gauge_key, []),
             default_prefill=_GAUGE_PREFILL.get(gauge_key, ["OTHER"]),
+            priority_options=personalized_options,
+            priority_prefill=personalized_prefill,
             delta=delta if abs(delta) >= 1 else None,
         )
+        cta_prefill = quick_log.get("prefill_codes") or _GAUGE_PREFILL.get(gauge_key, ["OTHER"])
 
         if modal_type == "short":
             gauge_models[gauge_key] = {
@@ -654,7 +956,7 @@ def build_modal_models(
                 "cta": {
                     "label": "Log symptoms",
                     "action": "open_symptom_log",
-                    "prefill": _GAUGE_PREFILL.get(gauge_key, ["OTHER"]),
+                    "prefill": cta_prefill,
                 },
             }
             continue
@@ -663,13 +965,13 @@ def build_modal_models(
             "modal_type": "full",
             "title": f"{label} \u2014 {status}",
             "why": _gauge_why_lines(day=day, gauge_key=gauge_key, related=related, delta=delta),
-            "what_you_may_notice": _gauge_notice_lines(day=day, gauge_key=gauge_key, related=related),
-            "suggested_actions": _gauge_action_lines(day=day, gauge_key=gauge_key, related=related),
+            "what_you_may_notice": _gauge_notice_lines(day=day, gauge_key=gauge_key, related=related, profile=profile),
+            "suggested_actions": _gauge_action_lines(day=day, gauge_key=gauge_key, related=related, profile=profile),
             "quick_log": quick_log,
             "cta": {
                 "label": "Log symptoms",
                 "action": "open_symptom_log",
-                "prefill": _GAUGE_PREFILL.get(gauge_key, ["OTHER"]),
+                "prefill": cta_prefill,
             },
         }
 
@@ -681,14 +983,20 @@ def build_modal_models(
         label = str(driver.get("label") or key.replace("_", " ").title())
         state = str(driver.get("state") or "Elevated")
         zone = _driver_zone_key(driver)
+        personalized = _driver_personalized_content(key, profile)
+        personalized_options = personalized.get("quick_log") or []
+        personalized_prefill = [item.get("code") for item in personalized_options if item.get("code")]
         quick_log = _quick_log(
             context_type="driver",
             context_key=key,
             zone=zone,
             default_options=_DRIVER_QUICK_LOG.get(key, []),
             default_prefill=_DRIVER_PREFILL.get(key, ["OTHER"]),
+            priority_options=personalized_options,
+            priority_prefill=personalized_prefill,
             delta=driver.get("value") if key in {"pressure", "temp"} else None,
         )
+        cta_prefill = quick_log.get("prefill_codes") or _DRIVER_PREFILL.get(key, ["OTHER"])
         why_lines = [
             _driver_why_line(driver),
             _rotate_pick(
@@ -713,7 +1021,7 @@ def build_modal_models(
                 "cta": {
                     "label": "Log symptoms",
                     "action": "open_symptom_log",
-                    "prefill": _DRIVER_PREFILL.get(key, ["OTHER"]),
+                    "prefill": cta_prefill,
                 },
             }
             continue
@@ -722,13 +1030,13 @@ def build_modal_models(
             "modal_type": "full",
             "title": f"{label} \u2014 {state}",
             "why": why_lines[:3],
-            "what_you_may_notice": _driver_notice_lines(day, key),
-            "suggested_actions": _driver_action_lines(day, key),
+            "what_you_may_notice": _driver_notice_lines(day, key, profile),
+            "suggested_actions": _driver_action_lines(day, key, profile),
             "quick_log": quick_log,
             "cta": {
                 "label": "Log symptoms",
                 "action": "open_symptom_log",
-                "prefill": _DRIVER_PREFILL.get(key, ["OTHER"]),
+                "prefill": cta_prefill,
             },
         }
 

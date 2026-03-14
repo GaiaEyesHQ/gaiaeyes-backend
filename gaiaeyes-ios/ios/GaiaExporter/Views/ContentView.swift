@@ -508,6 +508,38 @@ private struct UserTagsUpsert: Codable {
     let tags: [String]
 }
 
+private let healthContextTagKeys: Set<String> = [
+    "migraine_history",
+    "chronic_pain",
+    "arthritis",
+    "fibromyalgia",
+    "hypermobility_eds",
+    "pots_dysautonomia",
+    "mcas_histamine",
+    "allergies_sinus",
+    "asthma_breathing_sensitive",
+    "heart_rhythm_sensitive",
+    "autoimmune_condition",
+    "nervous_system_dysregulation",
+    "insomnia_sleep_disruption",
+]
+
+private func canonicalProfileTagKey(_ raw: String) -> String {
+    let normalized = raw
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
+        .replacingOccurrences(of: "-", with: "_")
+        .replacingOccurrences(of: " ", with: "_")
+    switch normalized {
+    case "aqi_sensitive":
+        return "air_quality_sensitive"
+    case "temp_sensitive":
+        return "temperature_sensitive"
+    default:
+        return normalized
+    }
+}
+
 private struct SpaceOutlookEntry: Codable, Identifiable, Hashable {
     let id: String
     let title: String?
@@ -1931,7 +1963,7 @@ struct ContentView: View {
         do {
             let payload: UserTagsEnvelope = try await api.getJSON("v1/profile/tags", as: UserTagsEnvelope.self, perRequestTimeout: 20)
             await MainActor.run {
-                selectedTagKeys = Set((payload.tags ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+                selectedTagKeys = Set((payload.tags ?? []).map(canonicalProfileTagKey))
             }
         } catch {
             appLog("[UI] selected tags fetch error: \(error.localizedDescription)")
@@ -1948,14 +1980,14 @@ struct ContentView: View {
             let _: UserTagsEnvelope = try await putJSON("v1/profile/tags", body: payload, as: UserTagsEnvelope.self)
             await MainActor.run {
                 tagsSaving = false
-                tagSaveMessage = "Sensitivities saved"
+                tagSaveMessage = "Personalization saved"
             }
         } catch {
             await MainActor.run {
                 tagsSaving = false
-                tagSaveMessage = "Could not save sensitivities"
+                tagSaveMessage = "Could not save personalization"
             }
-            appLog("[UI] save sensitivities error: \(error.localizedDescription)")
+            appLog("[UI] save personalization error: \(error.localizedDescription)")
         }
     }
 
@@ -4400,11 +4432,15 @@ struct ContentView: View {
         @Binding var showMagnetosphere: Bool
 
         private enum SensitivitySection: String {
-            case environmental = "Environmental Sensitivities"
+            case environmental = "Sensitivities"
             case health = "Health Context"
         }
 
         private func sectionForTag(_ item: TagCatalogItem) -> SensitivitySection {
+            let key = canonicalProfileTagKey(item.tagKey)
+            if healthContextTagKeys.contains(key) {
+                return .health
+            }
             let section = (item.section ?? "").lowercased()
             if section.contains("health") || section.contains("context") {
                 return .health
@@ -4421,17 +4457,18 @@ struct ContentView: View {
         }
 
         private func toggleBinding(for key: String) -> Binding<Bool> {
-            Binding(
-                get: { selectedTagKeys.contains(key) },
+            let canonicalKey = canonicalProfileTagKey(key)
+            return Binding(
+                get: { selectedTagKeys.contains(canonicalKey) },
                 set: { isOn in
-                    if isOn { selectedTagKeys.insert(key) } else { selectedTagKeys.remove(key) }
+                    if isOn { selectedTagKeys.insert(canonicalKey) } else { selectedTagKeys.remove(canonicalKey) }
                 }
             )
         }
 
         @ViewBuilder
         private func tagToggle(_ item: TagCatalogItem) -> some View {
-            let key = item.tagKey
+            let key = canonicalProfileTagKey(item.tagKey)
             Toggle(isOn: toggleBinding(for: key)) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.label ?? key)
@@ -4487,7 +4524,7 @@ struct ContentView: View {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 10) {
                         if tagCatalog.isEmpty {
-                            Text("No sensitivity tags available yet.")
+                            Text("No personalization tags available yet.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         } else {
@@ -4518,7 +4555,7 @@ struct ContentView: View {
                                 if tagsSaving {
                                     ProgressView().scaleEffect(0.8)
                                 }
-                                Text(tagsSaving ? "Saving..." : "Save Sensitivities")
+                                Text(tagsSaving ? "Saving..." : "Save Personalization")
                             }
                             .frame(maxWidth: .infinity)
                         }
@@ -4531,7 +4568,7 @@ struct ContentView: View {
                         }
                     }
                 } label: {
-                    Label("Sensitivities", systemImage: "slider.horizontal.3")
+                    Label("Personalization", systemImage: "slider.horizontal.3")
                 }
                 .padding(.horizontal)
 
@@ -5069,7 +5106,18 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showMissionSettingsSheet) {
-            let sortedTags = tagCatalog.sorted {
+            let sectionForTag: (TagCatalogItem) -> Bool = { item in
+                let canonicalKey = canonicalProfileTagKey(item.tagKey)
+                if healthContextTagKeys.contains(canonicalKey) {
+                    return true
+                }
+                let section = (item.section ?? "").lowercased()
+                return section.contains("health") || section.contains("context")
+            }
+            let environmentalTags = tagCatalog.filter { !sectionForTag($0) }.sorted {
+                ($0.label ?? $0.tagKey).localizedCaseInsensitiveCompare($1.label ?? $1.tagKey) == .orderedAscending
+            }
+            let healthTags = tagCatalog.filter(sectionForTag).sorted {
                 ($0.label ?? $0.tagKey).localizedCaseInsensitiveCompare($1.label ?? $1.tagKey) == .orderedAscending
             }
             NavigationStack {
@@ -5117,7 +5165,7 @@ struct ContentView: View {
 
                         GroupBox {
                             VStack(alignment: .leading, spacing: 10) {
-                                if sortedTags.isEmpty {
+                                if environmentalTags.isEmpty && healthTags.isEmpty {
                                     Text("Catalog not loaded.")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
@@ -5129,37 +5177,69 @@ struct ContentView: View {
                                     }
                                     .buttonStyle(.bordered)
                                 } else {
-                                    ForEach(sortedTags) { item in
-                                        Toggle(isOn: Binding(
-                                            get: { selectedTagKeys.contains(item.tagKey) },
-                                            set: { isOn in
-                                                if isOn {
-                                                    selectedTagKeys.insert(item.tagKey)
-                                                } else {
-                                                    selectedTagKeys.remove(item.tagKey)
+                                    if !environmentalTags.isEmpty {
+                                        Text("Sensitivities")
+                                            .font(.subheadline.weight(.semibold))
+                                        ForEach(environmentalTags) { item in
+                                            let canonicalKey = canonicalProfileTagKey(item.tagKey)
+                                            Toggle(isOn: Binding(
+                                                get: { selectedTagKeys.contains(canonicalKey) },
+                                                set: { isOn in
+                                                    if isOn {
+                                                        selectedTagKeys.insert(canonicalKey)
+                                                    } else {
+                                                        selectedTagKeys.remove(canonicalKey)
+                                                    }
                                                 }
-                                            }
-                                        )) {
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(item.label ?? item.tagKey)
-                                                if let desc = item.description, !desc.isEmpty {
-                                                    Text(desc)
-                                                        .font(.caption2)
-                                                        .foregroundColor(.secondary)
+                                            )) {
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text(item.label ?? canonicalKey)
+                                                    if let desc = item.description, !desc.isEmpty {
+                                                        Text(desc)
+                                                            .font(.caption2)
+                                                            .foregroundColor(.secondary)
+                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                    Text("Self-reported health context only. Not for diagnosis.")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
+                                    if !healthTags.isEmpty {
+                                        Divider()
+                                        Text("Health Context (Optional)")
+                                            .font(.subheadline.weight(.semibold))
+                                        ForEach(healthTags) { item in
+                                            let canonicalKey = canonicalProfileTagKey(item.tagKey)
+                                            Toggle(isOn: Binding(
+                                                get: { selectedTagKeys.contains(canonicalKey) },
+                                                set: { isOn in
+                                                    if isOn {
+                                                        selectedTagKeys.insert(canonicalKey)
+                                                    } else {
+                                                        selectedTagKeys.remove(canonicalKey)
+                                                    }
+                                                }
+                                            )) {
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text(item.label ?? canonicalKey)
+                                                    if let desc = item.description, !desc.isEmpty {
+                                                        Text(desc)
+                                                            .font(.caption2)
+                                                            .foregroundColor(.secondary)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Text("Self-reported health context only. Not for diagnosis.")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
                                 Button(action: { Task { await saveSelectedTags() } }) {
                                     HStack {
                                         if tagsSaving {
                                             ProgressView().scaleEffect(0.8)
                                         }
-                                        Text(tagsSaving ? "Saving..." : "Save Sensitivities")
+                                        Text(tagsSaving ? "Saving..." : "Save Personalization")
                                     }
                                     .frame(maxWidth: .infinity)
                                 }
@@ -5172,7 +5252,7 @@ struct ContentView: View {
                                 }
                             }
                         } label: {
-                            Label("Sensitivities", systemImage: "slider.horizontal.3")
+                            Label("Personalization", systemImage: "slider.horizontal.3")
                         }
                         .padding(.horizontal)
 

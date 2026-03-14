@@ -14,6 +14,7 @@ from psycopg.rows import dict_row
 from app.db import get_db
 from app.security.auth import require_read_auth, require_write_auth
 from bots.definitions.load_definition_base import load_definition_base
+from bots.gauges.gauge_scorer import fetch_user_tags
 from bots.gauges.local_payload import get_local_payload
 from bots.gauges.signal_resolver import resolve_signals
 from services.drivers.driver_normalize import normalize_environmental_drivers
@@ -409,6 +410,7 @@ async def dashboard(
     out["gauges_delta"] = await _fetch_gauges_delta(conn, user_id, day)
 
     active_states, local_payload = await _resolve_signal_context(user_id, day, definition)
+    user_tags = await asyncio.to_thread(fetch_user_tags, user_id)
     drivers = normalize_environmental_drivers(
         active_states=active_states,
         local_payload=local_payload,
@@ -429,6 +431,7 @@ async def dashboard(
         gauge_labels=gauge_labels_payload,
         drivers=drivers,
         gauges_delta=out.get("gauges_delta") if isinstance(out.get("gauges_delta"), dict) else {},
+        user_tags=user_tags,
     )
     out["earthscope_summary"] = build_earthscope_summary(
         day=day,
