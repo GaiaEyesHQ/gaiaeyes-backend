@@ -8,7 +8,8 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Depends, Query, Response
 from psycopg.rows import dict_row
 
-from app.db import get_db
+from app.db import get_db, settings
+from app.routers.schumann_tomsk_params import build_schumann_tomsk_fusion, fetch_tomsk_latest_payload
 
 
 router = APIRouter(prefix="/v1")
@@ -234,6 +235,7 @@ async def schumann_latest(
     Fallback:       marts.schumann_daily_v2, then marts.schumann_daily
     """
     row = None
+    tomsk_latest = None
     attempts: List[Dict] = []
 
     # Prefer realtime ext.schumann (Cumiana OK)
@@ -333,11 +335,37 @@ async def schumann_latest(
                 continue
 
     if not row:
-        out = {"ok": True, "generated_at": None, "harmonics": {}, "amplitude": {}, "quality": {}}
+        out = {
+            "ok": True,
+            "generated_at": None,
+            "harmonics": {},
+            "amplitude": {},
+            "quality": {},
+            "fusion": {
+                "enabled": bool(getattr(settings, "SCHUMANN_FUSE_TOMSK", True)),
+                "tomsk_usable": False,
+                "display_f0_hz": None,
+                "display_f0_source": "cumiana",
+                "secondary_f0_hz": None,
+                "secondary_f0_source": None,
+                "coherence": None,
+            },
+        }
         if debug:
             out["debug"] = {"attempts": attempts}
         _apply_cache_headers(response, out, 60)
         return out
+
+    try:
+        tomsk_latest = await fetch_tomsk_latest_payload(conn, station_id="tomsk")
+        attempts.append({"source": "tomsk_params", "ok": bool(tomsk_latest and tomsk_latest.get("generated_at"))})
+    except Exception as exc:
+        attempts.append({"source": "tomsk_params", "ok": False, "error": str(exc)})
+        tomsk_latest = None
+        try:
+            await conn.rollback()
+        except Exception:
+            pass
 
     ts = row.get("generated_at") or row.get("ts_utc")
     out = {
@@ -350,6 +378,7 @@ async def schumann_latest(
             "usable": row.get("usable"),
             "quality_score": row.get("quality_score"),
         },
+        "fusion": build_schumann_tomsk_fusion(_project_harmonics(row), tomsk_latest),
     }
     if debug:
         out["debug"] = {"attempts": attempts, "row_keys": sorted(list(row.keys()))}

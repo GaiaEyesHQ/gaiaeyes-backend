@@ -10,6 +10,7 @@ private struct SchumannLatestResponse: Codable {
     let harmonics: SchumannHarmonics?
     let amplitude: SchumannAmplitude?
     let quality: SchumannQuality?
+    let fusion: SchumannFusionResponse?
 
     enum CodingKeys: String, CodingKey {
         case ok
@@ -17,6 +18,7 @@ private struct SchumannLatestResponse: Codable {
         case harmonics
         case amplitude
         case quality
+        case fusion
     }
 }
 
@@ -198,6 +200,158 @@ private struct SchumannAxis: Codable {
     }
 }
 
+private struct TomskCoherence: Codable {
+    let label: String?
+    let percentile: Double?
+    let q1Value: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case label
+        case percentile
+        case q1Value = "q1_value"
+    }
+}
+
+private struct SchumannFusionResponse: Codable {
+    let enabled: Bool?
+    let tomskUsable: Bool?
+    let displayF0Hz: Double?
+    let displayF0Source: String?
+    let secondaryF0Hz: Double?
+    let secondaryF0Source: String?
+    let coherence: TomskCoherence?
+
+    enum CodingKeys: String, CodingKey {
+        case enabled
+        case tomskUsable = "tomsk_usable"
+        case displayF0Hz = "display_f0_hz"
+        case displayF0Source = "display_f0_source"
+        case secondaryF0Hz = "secondary_f0_hz"
+        case secondaryF0Source = "secondary_f0_source"
+        case coherence
+    }
+}
+
+private struct TomskTrendDelta: Codable {
+    let delta: Double?
+    let dir: String?
+}
+
+private struct TomskParamsLatestResponse: Codable {
+    let ok: Bool?
+    let generatedAt: String?
+    let stationId: String?
+    let usable: Bool?
+    let usableForFusion: Bool?
+    let qualityScore: Double?
+    let frequencyHz: [String: Double]?
+    let amplitude: [String: Double]?
+    let qFactor: [String: Double]?
+    let trend2h: [String: TomskTrendDelta]?
+    let coherence: TomskCoherence?
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case generatedAt = "generated_at"
+        case stationId = "station_id"
+        case usable
+        case usableForFusion = "usable_for_fusion"
+        case qualityScore = "quality_score"
+        case frequencyHz = "frequency_hz"
+        case amplitude
+        case qFactor = "q_factor"
+        case trend2h = "trend_2h"
+        case coherence
+    }
+}
+
+private struct TomskParamsSeriesResponse: Codable {
+    let ok: Bool?
+    let stationId: String?
+    let count: Int?
+    let points: [TomskParamsSeriesPoint]?
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case stationId = "station_id"
+        case count
+        case points
+    }
+}
+
+private struct TomskParamsSeriesPoint: Codable, Identifiable {
+    let ts: String?
+    let usable: Bool?
+    let qualityScore: Double?
+    let qualityFlags: [String]?
+    let values: [String: Double]
+
+    var id: String { ts ?? UUID().uuidString }
+
+    enum ReservedCodingKeys: String, CodingKey {
+        case ts
+        case usable
+        case qualityScore = "quality_score"
+        case qualityFlags = "quality_flags"
+    }
+
+    init(from decoder: Decoder) throws {
+        let reserved = try decoder.container(keyedBy: ReservedCodingKeys.self)
+        let dynamic = try decoder.container(keyedBy: SchumannDynamicCodingKey.self)
+
+        ts = try reserved.decodeIfPresent(String.self, forKey: .ts)
+        usable = try reserved.decodeIfPresent(Bool.self, forKey: .usable)
+        qualityScore = try? reserved.decodeIfPresent(Double.self, forKey: .qualityScore)
+        qualityFlags = try reserved.decodeIfPresent([String].self, forKey: .qualityFlags)
+
+        var mapped: [String: Double] = [:]
+        for key in dynamic.allKeys {
+            if ["ts", "usable", "quality_score", "quality_flags"].contains(key.stringValue) {
+                continue
+            }
+            if let value = try? dynamic.decodeIfPresent(Double.self, forKey: key) {
+                mapped[key.stringValue] = value
+            } else if let intValue = try? dynamic.decodeIfPresent(Int.self, forKey: key) {
+                mapped[key.stringValue] = Double(intValue)
+            } else if let stringValue = try? dynamic.decodeIfPresent(String.self, forKey: key),
+                      let number = Double(stringValue) {
+                mapped[key.stringValue] = number
+            }
+        }
+        values = mapped
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var reserved = encoder.container(keyedBy: ReservedCodingKeys.self)
+        try reserved.encodeIfPresent(ts, forKey: .ts)
+        try reserved.encodeIfPresent(usable, forKey: .usable)
+        try reserved.encodeIfPresent(qualityScore, forKey: .qualityScore)
+        try reserved.encodeIfPresent(qualityFlags, forKey: .qualityFlags)
+
+        var dynamic = encoder.container(keyedBy: SchumannDynamicCodingKey.self)
+        for (key, value) in values {
+            guard let codingKey = SchumannDynamicCodingKey(stringValue: key) else { continue }
+            try dynamic.encode(value, forKey: codingKey)
+        }
+    }
+
+    func value(_ key: String) -> Double? {
+        values[key]
+    }
+}
+
+private struct TomskSparkPoint: Identifiable {
+    let id: String
+    let ts: String
+    let date: Date
+    let values: [String: Double]
+    let usable: Bool
+
+    func value(_ key: String) -> Double? {
+        values[key]
+    }
+}
+
 private struct SchumannSeriesSample: Identifiable {
     let id: String
     let ts: String
@@ -295,6 +449,10 @@ private final class SchumannDashboardViewModel: ObservableObject {
     @Published var latest: SchumannLatestResponse?
     @Published var seriesRows: [SchumannSeriesRow] = []
     @Published var heatmap: SchumannHeatmapResponse?
+    @Published var tomskLatest: TomskParamsLatestResponse?
+    @Published var tomskSeries: [TomskParamsSeriesPoint] = []
+    @Published var isTomskSeriesLoading: Bool = false
+    @Published var tomskErrorMessage: String?
 
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
@@ -337,10 +495,14 @@ private final class SchumannDashboardViewModel: ObservableObject {
         async let heatmapResult: Result<SchumannHeatmapResponse, Error> = run {
             try await self.fetchHeatmap(api: api, force: force)
         }
+        async let tomskLatestResult: Result<TomskParamsLatestResponse, Error> = run {
+            try await self.fetchTomskLatest(api: api, force: force)
+        }
 
         let resolvedLatest = await latestResult
         let resolvedSeries = await seriesResult
         let resolvedHeatmap = await heatmapResult
+        let resolvedTomskLatest = await tomskLatestResult
 
         var errorParts: [String] = []
 
@@ -363,6 +525,15 @@ private final class SchumannDashboardViewModel: ObservableObject {
             heatmap = response
         case .failure(let err):
             errorParts.append("heatmap: \(err.localizedDescription)")
+        }
+
+        switch resolvedTomskLatest {
+        case .success(let response):
+            tomskLatest = response
+            tomskErrorMessage = nil
+        case .failure(let err):
+            tomskErrorMessage = "Tomsk detail is temporarily unavailable."
+            errorParts.append("tomsk: \(err.localizedDescription)")
         }
 
         if !errorParts.isEmpty && latest == nil && seriesRows.isEmpty && heatmap == nil {
@@ -418,6 +589,72 @@ private final class SchumannDashboardViewModel: ObservableObject {
             return generated
         }
         return samplesAscending.last?.ts
+    }
+
+    var tomskSamplesAscending: [TomskSparkPoint] {
+        let mapped = tomskSeries.compactMap { point -> TomskSparkPoint? in
+            guard let ts = point.ts, let date = parseDate(ts) else {
+                return nil
+            }
+            let isUsable = (point.usable != false) && !(point.qualityFlags?.contains("low_quality") ?? false)
+            return TomskSparkPoint(
+                id: ts,
+                ts: ts,
+                date: date,
+                values: point.values,
+                usable: isUsable
+            )
+        }
+        return mapped.sorted { $0.date < $1.date }
+    }
+
+    var fusionEnabled: Bool {
+        latest?.fusion?.enabled ?? true
+    }
+
+    var displayedFundamentalHz: Double? {
+        if let fused = latest?.fusion?.displayF0Hz {
+            return fused
+        }
+        if fusionEnabled, tomskLatest?.usableForFusion == true {
+            return tomskLatest?.frequencyHz?["F1"]
+        }
+        return latest?.harmonics?.f0
+    }
+
+    var displayedFundamentalSource: String {
+        if let source = latest?.fusion?.displayF0Source, !source.isEmpty {
+            return source
+        }
+        if fusionEnabled, tomskLatest?.usableForFusion == true {
+            return "tomsk"
+        }
+        return "cumiana"
+    }
+
+    var secondaryFundamentalHz: Double? {
+        if let secondary = latest?.fusion?.secondaryF0Hz {
+            return secondary
+        }
+        if fusionEnabled, tomskLatest?.usableForFusion == true {
+            return latest?.harmonics?.f0
+        }
+        return nil
+    }
+
+    var coherence: TomskCoherence? {
+        latest?.fusion?.coherence ?? tomskLatest?.coherence
+    }
+
+    var tomskStatusText: String {
+        if fusionEnabled, tomskLatest?.usableForFusion == true {
+            return "Tomsk: OK"
+        }
+        return "Tomsk: unavailable"
+    }
+
+    var tomskUpdatedTimestamp: String? {
+        tomskLatest?.generatedAt
     }
 
     private func parseDate(_ iso: String?) -> Date? {
@@ -481,6 +718,54 @@ private final class SchumannDashboardViewModel: ObservableObject {
         }
     }
 
+    private func fetchTomskLatest(api: APIClient, force: Bool) async throws -> TomskParamsLatestResponse {
+        try await fetchCached(
+            key: "sch_tomsk_latest",
+            ttl: 60,
+            force: force,
+            type: TomskParamsLatestResponse.self
+        ) {
+            try await api.getJSON(
+                "v1/earth/schumann/tomsk_params/latest?station_id=tomsk",
+                as: TomskParamsLatestResponse.self,
+                retries: 2,
+                perRequestTimeout: 20
+            )
+        }
+    }
+
+    func loadTomskSeriesIfNeeded(using state: AppState, force: Bool = false) async {
+        if !force, !tomskSeries.isEmpty {
+            return
+        }
+        isTomskSeriesLoading = true
+        tomskErrorMessage = nil
+
+        defer {
+            isTomskSeriesLoading = false
+        }
+
+        do {
+            let api = state.apiWithAuth()
+            let response: TomskParamsSeriesResponse = try await fetchCached(
+                key: "sch_tomsk_series_48h",
+                ttl: 300,
+                force: force,
+                type: TomskParamsSeriesResponse.self
+            ) {
+                try await api.getJSON(
+                    "v1/earth/schumann/tomsk_params/series?hours=48&station_id=tomsk",
+                    as: TomskParamsSeriesResponse.self,
+                    retries: 2,
+                    perRequestTimeout: 20
+                )
+            }
+            tomskSeries = response.points ?? []
+        } catch {
+            tomskErrorMessage = "Tomsk 48h detail could not be loaded."
+        }
+    }
+
     private func fetchCached<T: Codable>(
         key: String,
         ttl: TimeInterval,
@@ -509,6 +794,7 @@ struct SchumannDashboardView: View {
     @ObservedObject var state: AppState
     @StateObject private var viewModel = SchumannDashboardViewModel()
     @State private var showHowToRead: Bool = false
+    @State private var showTomskDetails: Bool = false
 
     private let timer = Timer.publish(every: 12 * 60, on: .main, in: .common).autoconnect()
 
@@ -519,6 +805,7 @@ struct SchumannDashboardView: View {
                 gaugeCard
                 heatmapCard
                 bandsCard
+                tomskCard
                 pulseCard
                 proCard
             }
@@ -538,6 +825,12 @@ struct SchumannDashboardView: View {
                 await viewModel.refresh(using: state, force: false)
             }
         }
+        .onChange(of: showTomskDetails) { _, expanded in
+            guard expanded else { return }
+            Task {
+                await viewModel.loadTomskSeriesIfNeeded(using: state, force: false)
+            }
+        }
     }
 
     private var headerCard: some View {
@@ -555,6 +848,36 @@ struct SchumannDashboardView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.secondary.opacity(0.15), in: Capsule())
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text("F0: \(formattedFundamental(viewModel.displayedFundamentalHz))")
+                            .font(.subheadline.weight(.semibold))
+                        Text(viewModel.displayedFundamentalSource.capitalized)
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background((viewModel.displayedFundamentalSource == "tomsk" ? Color.cyan : Color.secondary).opacity(0.18), in: Capsule())
+                    }
+
+                    if let secondary = viewModel.secondaryFundamentalHz {
+                        Text("Cumiana F0: \(String(format: "%.2f Hz", secondary))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    if let coherence = viewModel.coherence,
+                       let label = coherence.label,
+                       viewModel.fusionEnabled,
+                       viewModel.tomskLatest?.usableForFusion == true || viewModel.latest?.fusion?.tomskUsable == true {
+                        Text("Coherence: Q1 \(label.capitalized)")
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(coherenceColor(label).opacity(0.2), in: Capsule())
+                            .foregroundStyle(coherenceColor(label))
+                    }
                 }
 
                 Toggle("High contrast", isOn: $viewModel.highContrast)
@@ -656,6 +979,92 @@ struct SchumannDashboardView: View {
         }
     }
 
+    private var tomskCard: some View {
+        GroupBox {
+            DisclosureGroup(isExpanded: $showTomskDetails) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 10) {
+                        Text("Usable: \((viewModel.tomskLatest?.usableForFusion == true) ? "Yes" : "No")")
+                            .font(.caption)
+                        Text("Quality: \(viewModel.tomskLatest?.qualityScore.map { String(format: "%.2f", $0) } ?? "-")")
+                            .font(.caption)
+                        Spacer()
+                        Text("Updated: \(formattedTimestamp(viewModel.tomskUpdatedTimestamp))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    if let latest = viewModel.tomskLatest {
+                        TomskMetricSectionView(
+                            title: "Frequencies",
+                            legend: "F = frequency tracking",
+                            keys: ["F1", "F2", "F3", "F4"],
+                            unit: "Hz",
+                            values: latest.frequencyHz ?? [:],
+                            trends: latest.trend2h ?? [:]
+                        )
+                        TomskMetricSectionView(
+                            title: "Amplitudes",
+                            legend: "A = amplitude tracking",
+                            keys: ["A1", "A2", "A3", "A4"],
+                            unit: nil,
+                            values: latest.amplitude ?? [:],
+                            trends: latest.trend2h ?? [:]
+                        )
+                        TomskMetricSectionView(
+                            title: "Q Factors",
+                            legend: "Q = resonance quality proxy",
+                            keys: ["Q1", "Q2", "Q3", "Q4"],
+                            unit: nil,
+                            values: latest.qFactor ?? [:],
+                            trends: latest.trend2h ?? [:]
+                        )
+                    } else {
+                        Text("Tomsk detail is currently unavailable.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    if viewModel.isTomskSeriesLoading {
+                        ProgressView("Loading Tomsk 48h series…")
+                            .font(.caption)
+                    } else if !viewModel.tomskSamplesAscending.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("48h Mini Sparklines")
+                                .font(.caption.weight(.semibold))
+                            TomskSparklineView(title: "F1", unit: "Hz", key: "F1", color: .cyan, points: viewModel.tomskSamplesAscending)
+                            TomskSparklineView(title: "A1", unit: nil, key: "A1", color: .yellow, points: viewModel.tomskSamplesAscending)
+                            TomskSparklineView(title: "Q1", unit: nil, key: "Q1", color: .green, points: viewModel.tomskSamplesAscending)
+                        }
+                    }
+
+                    if let tomskError = viewModel.tomskErrorMessage {
+                        Text(tomskError)
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                }
+                .padding(.top, 8)
+            } label: {
+                HStack {
+                    Text("Tomsk Details (F/A/Q)")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text(viewModel.tomskStatusText)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background((viewModel.tomskLatest?.usableForFusion == true ? Color.green : Color.secondary).opacity(0.18), in: Capsule())
+                    Text(formattedTimestamp(viewModel.tomskUpdatedTimestamp))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+        } label: {
+            Label("Tomsk Detail", systemImage: "point.3.connected.trianglepath.dotted")
+        }
+    }
+
     private var proCard: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 8) {
@@ -690,6 +1099,22 @@ struct SchumannDashboardView: View {
         out.dateStyle = .medium
         out.timeStyle = .short
         return out.string(from: date)
+    }
+
+    private func formattedFundamental(_ value: Double?) -> String {
+        guard let value else { return "-" }
+        return String(format: "%.2f Hz", value)
+    }
+
+    private func coherenceColor(_ label: String) -> Color {
+        switch label.lowercased() {
+        case "high":
+            return .green
+        case "medium":
+            return .yellow
+        default:
+            return .orange
+        }
     }
 }
 
@@ -1036,6 +1461,186 @@ private struct SchumannPulseChartView: View {
         df.dateStyle = .medium
         df.timeStyle = .short
         return df.string(from: date)
+    }
+}
+
+private struct TomskMetricSectionView: View {
+    let title: String
+    let legend: String
+    let keys: [String]
+    let unit: String?
+    let values: [String: Double]
+    let trends: [String: TomskTrendDelta]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 8) {
+                ForEach(keys, id: \.self) { key in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(key)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(metricValue(for: key))
+                            .font(.subheadline.weight(.semibold))
+                        Text(trendText(for: key))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(trendColor(for: key))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                }
+            }
+
+            Text(legend)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private func metricValue(for key: String) -> String {
+        guard let value = values[key] else {
+            return "-"
+        }
+        if let unit {
+            return String(format: "%.2f %@", value, unit)
+        }
+        return String(format: "%.2f", value)
+    }
+
+    private func trendText(for key: String) -> String {
+        guard let trend = trends[key], let delta = trend.delta else {
+            return "→ -"
+        }
+        let arrow: String
+        switch trend.dir?.lowercased() {
+        case "up":
+            arrow = "↑"
+        case "down":
+            arrow = "↓"
+        default:
+            arrow = "→"
+        }
+        if let unit {
+            return "\(arrow) \(String(format: "%.2f %@", delta, unit))"
+        }
+        return "\(arrow) \(String(format: "%.2f", delta))"
+    }
+
+    private func trendColor(for key: String) -> Color {
+        switch trends[key]?.dir?.lowercased() {
+        case "up":
+            return .green
+        case "down":
+            return .orange
+        default:
+            return .secondary
+        }
+    }
+}
+
+private struct TomskSparklineView: View {
+    let title: String
+    let unit: String?
+    let key: String
+    let color: Color
+    let points: [TomskSparkPoint]
+
+    @State private var selectedPoint: TomskSparkPoint?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+
+            Chart {
+                ForEach(points) { point in
+                    if let value = point.value(key) {
+                        LineMark(
+                            x: .value("Time", point.date),
+                            y: .value("Value", value),
+                            series: .value("Series", title)
+                        )
+                        .foregroundStyle(color)
+                        .lineStyle(StrokeStyle(lineWidth: 1.8))
+                        .opacity(point.usable ? 1 : 0.28)
+                    }
+                }
+
+                ForEach(points.filter { !$0.usable }) { point in
+                    if let value = point.value(key) {
+                        PointMark(
+                            x: .value("Time", point.date),
+                            y: .value("Value", value)
+                        )
+                        .symbolSize(20)
+                        .foregroundStyle(.orange)
+                    }
+                }
+
+                if let selectedPoint, let value = selectedPoint.value(key) {
+                    RuleMark(x: .value("Selected", selectedPoint.date))
+                        .foregroundStyle(.secondary.opacity(0.35))
+                    PointMark(
+                        x: .value("SelectedTime", selectedPoint.date),
+                        y: .value("SelectedValue", value)
+                    )
+                    .symbolSize(36)
+                    .foregroundStyle(.white)
+                }
+            }
+            .frame(height: 90)
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+            .chartOverlay { proxy in
+                GeometryReader { geo in
+                    Rectangle()
+                        .fill(Color.clear)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    guard let plotFrame = proxy.plotFrame else { return }
+                                    let origin = geo[plotFrame].origin
+                                    let locationX = value.location.x - origin.x
+                                    guard let date: Date = proxy.value(atX: locationX) else { return }
+                                    selectedPoint = nearestPoint(to: date)
+                                }
+                        )
+                }
+            }
+
+            if let selectedPoint, let value = selectedPoint.value(key) {
+                Text("\(formattedDate(selectedPoint.date)) • \(formattedValue(value)) • \(selectedPoint.usable ? "OK" : "Low confidence")")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            } else {
+                Text("Low-confidence points are dimmed.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private func nearestPoint(to date: Date) -> TomskSparkPoint? {
+        points.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
+    }
+
+    private func formattedValue(_ value: Double) -> String {
+        if let unit {
+            return String(format: "%.2f %@", value, unit)
+        }
+        return String(format: "%.2f", value)
+    }
+
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
 

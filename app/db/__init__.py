@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     SUPABASE_JWT_SECRET: Optional[str] = None
     REDIS_URL: Optional[str] = None
     FEATURES_CACHE_TTL_SECONDS: Optional[int] = None
+    SCHUMANN_FUSE_TOMSK: bool = True
+    SCHUMANN_TOMSK_MIN_QUALITY_SCORE: float = 0.55
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

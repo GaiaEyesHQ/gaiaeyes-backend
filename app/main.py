@@ -16,6 +16,7 @@ from .routers import (
     local,
     profile,
     quakes,
+    schumann_tomsk_params,
     space,
     space_visuals,
     space_forecasts,
@@ -130,6 +131,7 @@ app.include_router(badges.router)
 app.include_router(space_visuals.router, dependencies=[Depends(require_read_auth)])
 app.include_router(quakes.router, dependencies=[Depends(require_read_auth)])
 app.include_router(earth.router, dependencies=[Depends(require_read_auth)])
+app.include_router(schumann_tomsk_params.router, dependencies=[Depends(require_read_auth)])
 app.include_router(space.router, dependencies=[Depends(require_read_auth)])
 app.include_router(summary.router, dependencies=[Depends(require_read_auth)])
 app.include_router(space_forecasts.router, dependencies=[Depends(require_read_auth)])

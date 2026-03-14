@@ -123,6 +123,7 @@ if (!function_exists('gaiaeyes_schumann_dashboard_clear_cache')) {
         delete_transient('ge_sch_dash_latest');
         delete_transient('ge_sch_dash_series');
         delete_transient('ge_sch_dash_heatmap');
+        delete_transient('ge_sch_dash_tomsk_latest');
     }
 }
 
@@ -150,6 +151,12 @@ if (!function_exists('gaiaeyes_schumann_dashboard_payload')) {
             gaiaeyes_schumann_dashboard_ttl('heatmap')
         );
 
+        $tomsk_latest = gaiaeyes_schumann_dashboard_fetch_json(
+            '/v1/earth/schumann/tomsk_params/latest?station_id=tomsk',
+            'ge_sch_dash_tomsk_latest',
+            gaiaeyes_schumann_dashboard_ttl('latest')
+        );
+
         return [
             'ok' => true,
             'fetched_at' => gmdate('c'),
@@ -157,12 +164,46 @@ if (!function_exists('gaiaeyes_schumann_dashboard_payload')) {
             'latest' => $latest,
             'series' => $series,
             'heatmap' => $heatmap,
+            'tomsk_latest' => $tomsk_latest,
             'status' => [
                 'latest_ok' => is_array($latest) && !empty($latest['ok']),
                 'series_ok' => is_array($series) && !empty($series['ok']),
                 'heatmap_ok' => is_array($heatmap) && !empty($heatmap['ok']),
+                'tomsk_latest_ok' => is_array($tomsk_latest) && !empty($tomsk_latest['ok']),
             ],
         ];
+    }
+}
+
+if (!function_exists('gaiaeyes_schumann_dashboard_tomsk_series_proxy')) {
+    function gaiaeyes_schumann_dashboard_tomsk_series_proxy(WP_REST_Request $request) {
+        $hours = max(1, min(168, intval($request->get_param('hours') ?: 48)));
+        $station_id = sanitize_key((string) ($request->get_param('station_id') ?: 'tomsk'));
+        if ($station_id === '') {
+            $station_id = 'tomsk';
+        }
+
+        $path = '/v1/earth/schumann/tomsk_params/series?hours=' . rawurlencode((string) $hours)
+            . '&station_id=' . rawurlencode($station_id);
+        $cache_key = 'ge_sch_dash_tomsk_series_' . md5($station_id . ':' . $hours);
+
+        $payload = gaiaeyes_schumann_dashboard_fetch_json(
+            $path,
+            $cache_key,
+            gaiaeyes_schumann_dashboard_ttl('series')
+        );
+
+        if (!is_array($payload)) {
+            return new WP_REST_Response([
+                'ok' => false,
+                'error' => 'Tomsk series unavailable',
+                'station_id' => $station_id,
+                'count' => 0,
+                'points' => [],
+            ], 200);
+        }
+
+        return new WP_REST_Response($payload, 200);
     }
 }
 
@@ -193,6 +234,7 @@ if (!function_exists('gaiaeyes_schumann_dashboard_enqueue_assets')) {
 
         wp_localize_script('gaiaeyes-schumann-dashboard', 'GAIAEYES_SCHUMANN_DASHBOARD_CFG', [
             'restUrl' => esc_url_raw(rest_url('gaia/v1/schumann/dashboard')),
+            'tomskSeriesRestUrl' => esc_url_raw(rest_url('gaia/v1/schumann/tomsk-series')),
             'appLink' => esc_url_raw((string) apply_filters('gaiaeyes_schumann_app_link', GAIAEYES_SCHUMANN_APP_LINK)),
             'proEnabled' => (bool) apply_filters('gaiaeyes_schumann_pro_enabled', false),
         ]);
@@ -279,6 +321,22 @@ add_action('rest_api_init', function () {
             'refresh' => [
                 'required' => false,
                 'sanitize_callback' => 'sanitize_text_field',
+            ],
+        ],
+    ]);
+
+    register_rest_route('gaia/v1', '/schumann/tomsk-series', [
+        'methods' => WP_REST_Server::READABLE,
+        'permission_callback' => '__return_true',
+        'callback' => 'gaiaeyes_schumann_dashboard_tomsk_series_proxy',
+        'args' => [
+            'hours' => [
+                'required' => false,
+                'sanitize_callback' => 'absint',
+            ],
+            'station_id' => [
+                'required' => false,
+                'sanitize_callback' => 'sanitize_key',
             ],
         ],
     ]);

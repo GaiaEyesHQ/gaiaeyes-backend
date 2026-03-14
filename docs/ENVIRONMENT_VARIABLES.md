@@ -25,6 +25,8 @@
 | `CORS_ORIGINS` | CORS origin list | `*` | `app/db/__init__.py` |
 | `REDIS_URL` | Optional caching/queues | `redis://...` | `app/db/__init__.py` |
 | `FEATURES_CACHE_TTL_SECONDS` | Features cache TTL | `300` | `app/db/__init__.py` |
+| `SCHUMANN_FUSE_TOMSK` | Enable Tomsk display fusion in Schumann latest/dashboard payloads | `true` | `app/db/__init__.py`, `app/routers/earth.py` |
+| `SCHUMANN_TOMSK_MIN_QUALITY_SCORE` | Minimum Tomsk quality score required for fusion | `0.55` | `app/db/__init__.py`, `app/routers/schumann_tomsk_params.py` |
 | `MEDIA_BASE_URL` | Default CDN base for visuals | `https://.../gaiaeyes-media` | `app/routers/summary.py` |
 | `GAIA_MEDIA_BASE` | Alternate CDN base | `https://.../gaiaeyes-media` | `app/routers/summary.py` |
 | `VISUALS_MEDIA_BASE_URL` | Visuals-specific CDN base | `https://.../gaiaeyes-media` | `app/routers/space_visuals.py` |

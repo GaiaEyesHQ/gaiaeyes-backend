@@ -71,6 +71,90 @@
     return { text: "OK", className: "ge-sch-chip-ok" };
   }
 
+  function trendSymbol(dir) {
+    switch (String(dir || "").toLowerCase()) {
+      case "up":
+        return "\u2191";
+      case "down":
+        return "\u2193";
+      default:
+        return "\u2192";
+    }
+  }
+
+  function trendClass(dir) {
+    switch (String(dir || "").toLowerCase()) {
+      case "up":
+        return "ge-sch-trend-up";
+      case "down":
+        return "ge-sch-trend-down";
+      default:
+        return "ge-sch-trend-flat";
+    }
+  }
+
+  function formatDelta(delta, digits, unit) {
+    if (!Number.isFinite(delta)) {
+      return trendSymbol("flat") + " -";
+    }
+    var suffix = unit ? " " + unit : "";
+    return trendSymbol(delta > 0 ? "up" : (delta < 0 ? "down" : "flat")) + " " + formatNumber(delta, digits) + suffix;
+  }
+
+  function coherenceStatus(coherence) {
+    var label = coherence && coherence.label ? String(coherence.label).toLowerCase() : "";
+    if (!label) {
+      return null;
+    }
+    var className = "ge-sch-chip-low";
+    if (label === "high") {
+      className = "ge-sch-chip-ok";
+    } else if (label === "medium") {
+      className = "ge-sch-chip-mid";
+    }
+    return {
+      text: "Coherence: Q1 " + label,
+      className: className,
+    };
+  }
+
+  function tomskUsable(tomskLatest) {
+    if (!tomskLatest || typeof tomskLatest !== "object") {
+      return false;
+    }
+    if (tomskLatest.usable_for_fusion === true) {
+      return true;
+    }
+    return tomskLatest.usable === true && toNumber(tomskLatest.quality_score, 0) >= 0.55;
+  }
+
+  function deriveFusion(latestPayload, tomskLatest) {
+    var fusion = latestPayload && latestPayload.fusion ? latestPayload.fusion : null;
+    if (fusion && typeof fusion === "object") {
+      return fusion;
+    }
+
+    var harmonics = latestPayload && latestPayload.harmonics ? latestPayload.harmonics : {};
+    var displayF0 = toNumber(harmonics.f0, Number.NaN);
+    var displaySource = "cumiana";
+    var secondaryF0 = null;
+    if (tomskUsable(tomskLatest) && tomskLatest.frequency_hz && Number.isFinite(toNumber(tomskLatest.frequency_hz.F1, Number.NaN))) {
+      displayF0 = toNumber(tomskLatest.frequency_hz.F1, Number.NaN);
+      displaySource = "tomsk";
+      secondaryF0 = Number.isFinite(toNumber(harmonics.f0, Number.NaN)) ? toNumber(harmonics.f0, Number.NaN) : null;
+    }
+
+    return {
+      enabled: true,
+      tomsk_usable: tomskUsable(tomskLatest),
+      display_f0_hz: Number.isFinite(displayF0) ? displayF0 : null,
+      display_f0_source: displaySource,
+      secondary_f0_hz: secondaryF0,
+      secondary_f0_source: secondaryF0 !== null ? "cumiana" : null,
+      coherence: tomskLatest && tomskLatest.coherence ? tomskLatest.coherence : null,
+    };
+  }
+
   function deriveState(amplitude) {
     var value = toNumber(amplitude, 0);
     for (var i = 0; i < STATE_LEVELS.length; i += 1) {
@@ -165,6 +249,24 @@
     return sharedPayloadPromise;
   }
 
+  function fetchTomskSeries(restUrl, hours, stationId) {
+    if (!restUrl) {
+      return Promise.reject(new Error("Missing Tomsk series rest URL"));
+    }
+    var params = new URLSearchParams();
+    params.set("hours", String(hours || 48));
+    params.set("station_id", stationId || "tomsk");
+    return fetch(restUrl + "?" + params.toString(), {
+      credentials: "same-origin",
+      cache: "no-store",
+    }).then(function (resp) {
+      if (!resp.ok) {
+        throw new Error("HTTP " + resp.status);
+      }
+      return resp.json();
+    });
+  }
+
   function normalizeSeriesRows(seriesPayload) {
     var rows = Array.isArray(seriesPayload && seriesPayload.rows) ? seriesPayload.rows.slice() : [];
     return rows
@@ -228,6 +330,39 @@
     };
   }
 
+  function normalizeTomskSeries(seriesPayload) {
+    var points = Array.isArray(seriesPayload && seriesPayload.points) ? seriesPayload.points.slice() : [];
+    return points
+      .map(function (point) {
+        var ts = point && point.ts ? point.ts : null;
+        var date = ts ? new Date(ts) : null;
+        var normalized = {
+          ts: ts,
+          date: date,
+          usable: point && point.usable !== false,
+          qualityScore: toNumber(point && point.quality_score, 1),
+          qualityFlags: Array.isArray(point && point.quality_flags) ? point.quality_flags.slice() : [],
+        };
+
+        Object.keys(point || {}).forEach(function (key) {
+          if (["ts", "usable", "quality_score", "quality_flags"].indexOf(key) !== -1) {
+            return;
+          }
+          var numeric = toNumber(point[key], Number.NaN);
+          if (Number.isFinite(numeric)) {
+            normalized[key] = numeric;
+          }
+        });
+        return normalized;
+      })
+      .filter(function (point) {
+        return point.date && !Number.isNaN(point.date.getTime());
+      })
+      .sort(function (a, b) {
+        return a.date.getTime() - b.date.getTime();
+      });
+  }
+
   function SchumannWidget(root) {
     this.root = root;
     var cfg = parseJSON(root.getAttribute("data-config"), {});
@@ -239,11 +374,17 @@
       payload: null,
       seriesRows: [],
       heatmap: null,
+      tomskLatest: null,
+      tomskSeriesRows: [],
+      tomskSeriesLoaded: false,
+      tomskSeriesLoading: false,
+      tomskSeriesError: "",
     };
 
     this.refs = {};
     this.cachedHeatmap = null;
     this.cachedHeatmapKey = "";
+    this.tomskSeriesPromise = null;
 
     this.mount();
     this.bindEvents();
@@ -273,6 +414,7 @@
       '  <div class="ge-sch-meta-row">',
       '    <span class="ge-sch-chip" data-role="updated">Last updated: -</span>',
       '    <span class="ge-sch-chip" data-role="quality">Quality: -</span>',
+      '    <span class="ge-sch-chip" data-role="coherence" style="display:none"></span>',
       '    <span class="ge-sch-chip" data-role="station">Station: -</span>',
       '  </div>',
       '  <div class="ge-sch-grid">',
@@ -310,6 +452,34 @@
       '      <div class="ge-sch-muted ge-sch-legend">Cyan: Intensity (0-20 Hz) \u2022 Yellow dashed: Fundamental (Hz)</div>',
       '      <div class="ge-sch-axes" data-role="pulse-axes"></div>',
       '    </section>',
+      '    <section class="ge-sch-card ge-sch-card--tomsk">',
+      '      <details class="ge-sch-tomsk-details" data-role="tomsk-details">',
+      '        <summary class="ge-sch-tomsk-summary">',
+      '          <span>Tomsk Details (F/A/Q)</span>',
+      '          <span class="ge-sch-chip" data-role="tomsk-status">Tomsk: unavailable</span>',
+      '          <span class="ge-sch-muted" data-role="tomsk-updated">-</span>',
+      '        </summary>',
+      '        <div class="ge-sch-tomsk-body">',
+      '          <div class="ge-sch-tomsk-meta" data-role="tomsk-meta"></div>',
+      '          <div class="ge-sch-tomsk-grid" data-role="tomsk-grid"></div>',
+      '          <div class="ge-sch-tomsk-sparklines">',
+      '            <div class="ge-sch-tomsk-spark">',
+      '              <div class="ge-sch-tomsk-spark-label">F1 \u2022 48h</div>',
+      '              <canvas class="ge-sch-tomsk-canvas" data-role="tomsk-spark-f1"></canvas>',
+      '            </div>',
+      '            <div class="ge-sch-tomsk-spark">',
+      '              <div class="ge-sch-tomsk-spark-label">A1 \u2022 48h</div>',
+      '              <canvas class="ge-sch-tomsk-canvas" data-role="tomsk-spark-a1"></canvas>',
+      '            </div>',
+      '            <div class="ge-sch-tomsk-spark">',
+      '              <div class="ge-sch-tomsk-spark-label">Q1 \u2022 48h</div>',
+      '              <canvas class="ge-sch-tomsk-canvas" data-role="tomsk-spark-q1"></canvas>',
+      '            </div>',
+      '          </div>',
+      '          <div class="ge-sch-muted" data-role="tomsk-spark-note">Expand to load 48h Tomsk sparklines. Low-confidence points are dimmed.</div>',
+      '        </div>',
+      '      </details>',
+      '    </section>',
       '    <section class="ge-sch-card ge-sch-card--pro">',
       '      <h3>History</h3>',
       '      <div class="ge-sch-pro-lock" data-role="pro-lock"></div>',
@@ -324,6 +494,7 @@
 
     this.refs.updated = this.root.querySelector('[data-role="updated"]');
     this.refs.quality = this.root.querySelector('[data-role="quality"]');
+    this.refs.coherence = this.root.querySelector('[data-role="coherence"]');
     this.refs.station = this.root.querySelector('[data-role="station"]');
     this.refs.gaugeCanvas = this.root.querySelector('.ge-sch-gauge-canvas');
     this.refs.gaugeValue = this.root.querySelector('[data-role="gauge-value"]');
@@ -339,6 +510,15 @@
     this.refs.pulseCanvas = this.root.querySelector('.ge-sch-pulse-canvas');
     this.refs.pulseTooltip = this.root.querySelector('[data-role="pulse-tooltip"]');
     this.refs.pulseAxes = this.root.querySelector('[data-role="pulse-axes"]');
+    this.refs.tomskDetails = this.root.querySelector('[data-role="tomsk-details"]');
+    this.refs.tomskStatus = this.root.querySelector('[data-role="tomsk-status"]');
+    this.refs.tomskUpdated = this.root.querySelector('[data-role="tomsk-updated"]');
+    this.refs.tomskMeta = this.root.querySelector('[data-role="tomsk-meta"]');
+    this.refs.tomskGrid = this.root.querySelector('[data-role="tomsk-grid"]');
+    this.refs.tomskSparkF1 = this.root.querySelector('[data-role="tomsk-spark-f1"]');
+    this.refs.tomskSparkA1 = this.root.querySelector('[data-role="tomsk-spark-a1"]');
+    this.refs.tomskSparkQ1 = this.root.querySelector('[data-role="tomsk-spark-q1"]');
+    this.refs.tomskSparkNote = this.root.querySelector('[data-role="tomsk-spark-note"]');
 
     this.refs.proLock = this.root.querySelector('[data-role="pro-lock"]');
     if (this.refs.openApp) {
@@ -361,8 +541,10 @@
       if (!self.refs.heatmapCanvas) {
         return;
       }
+      var latest = self.latestSnapshot();
+      var exportCanvas = self.buildHeatmapExport(latest, self.state.tomskLatest);
       var anchor = document.createElement("a");
-      anchor.href = self.refs.heatmapCanvas.toDataURL("image/png");
+      anchor.href = exportCanvas.toDataURL("image/png");
       anchor.download = "gaiaeyes-schumann-heatmap.png";
       document.body.appendChild(anchor);
       anchor.click();
@@ -384,6 +566,14 @@
     this.refs.pulseCanvas.addEventListener("mouseleave", function () {
       self.refs.pulseTooltip.style.display = "none";
     });
+
+    if (this.refs.tomskDetails) {
+      this.refs.tomskDetails.addEventListener("toggle", function () {
+        if (self.refs.tomskDetails.open) {
+          self.loadTomskSeries();
+        }
+      });
+    }
   };
 
   SchumannWidget.prototype.load = function () {
@@ -394,6 +584,7 @@
         self.state.payload = payload;
         self.state.seriesRows = normalizeSeriesRows(payload && payload.series);
         self.state.heatmap = normalizeHeatmap(payload && payload.heatmap);
+        self.state.tomskLatest = payload && payload.tomsk_latest ? payload.tomsk_latest : null;
         self.render();
       })
       .catch(function (err) {
@@ -437,6 +628,7 @@
     this.root.classList.toggle("ge-sch-high-contrast", this.state.highContrast);
 
     var latest = this.latestSnapshot();
+    var fusion = deriveFusion(latest, this.state.tomskLatest);
     var amplitude = latest && latest.amplitude ? latest.amplitude : {};
     var harmonics = latest && latest.harmonics ? latest.harmonics : {};
     var quality = latest && latest.quality ? latest.quality : {};
@@ -450,15 +642,24 @@
     this.refs.quality.textContent = "Quality: " + qualityText.text;
     this.refs.quality.className = "ge-sch-chip " + qualityText.className;
     this.refs.station.textContent = "Station: " + ((quality && quality.primary_source) || "cumiana");
+    var coherence = coherenceStatus(fusion && fusion.coherence);
+    if (coherence) {
+      this.refs.coherence.style.display = "";
+      this.refs.coherence.textContent = coherence.text;
+      this.refs.coherence.className = "ge-sch-chip " + coherence.className;
+    } else {
+      this.refs.coherence.style.display = "none";
+    }
 
     this.refs.gaugeValue.textContent = formatNumber(gaugeIndex, 1) + " \u2014 " + stateLevel.label;
     this.refs.gaugeLabel.textContent = "Index (0-20 Hz intensity; updates every 15 minutes).";
     this.refs.interpretation.textContent = "Current state: " + stateLevel.label + ".";
 
     this.renderGauge(gaugeIndex, stateLevel.color);
-    this.renderReadouts(harmonics, amplitude, quality);
+    this.renderReadouts(harmonics, amplitude, quality, fusion);
     this.renderBandBars();
     this.renderHeatmap();
+    this.renderTomskAccordion(this.state.tomskLatest);
     this.renderPulseLine();
     this.renderProState();
   };
@@ -499,16 +700,29 @@
     ctx.fillText("100", cx + radius - 4, cy + 6);
   };
 
-  SchumannWidget.prototype.renderReadouts = function (harmonics, amplitude, quality) {
+  SchumannWidget.prototype.renderReadouts = function (harmonics, amplitude, quality, fusion) {
     var station = quality && quality.primary_source ? quality.primary_source : "cumiana";
-
+    var displayF0 = fusion && Number.isFinite(toNumber(fusion.display_f0_hz, Number.NaN))
+      ? formatNumber(toNumber(fusion.display_f0_hz, 0), 2) + " Hz"
+      : (Number.isFinite(toNumber(harmonics.f0, Number.NaN)) ? formatNumber(toNumber(harmonics.f0, 0), 2) + " Hz" : "-");
+    var displaySource = fusion && fusion.display_f0_source ? String(fusion.display_f0_source).toLowerCase() : "cumiana";
     var rows = [
-      { label: "f0", value: Number.isFinite(toNumber(harmonics.f0, Number.NaN)) ? formatNumber(toNumber(harmonics.f0, 0), 2) + " Hz" : "-" },
+      { label: "F0", value: displayF0 + (displaySource ? " \u2022 " + displaySource.charAt(0).toUpperCase() + displaySource.slice(1) : "") }
+    ];
+
+    if (fusion && Number.isFinite(toNumber(fusion.secondary_f0_hz, Number.NaN))) {
+      rows.push({
+        label: "Cumiana F0",
+        value: formatNumber(toNumber(fusion.secondary_f0_hz, 0), 2) + " Hz"
+      });
+    }
+
+    rows = rows.concat([
       { label: BAND_LABELS.band_7_9, value: Number.isFinite(toNumber(amplitude.band_7_9, Number.NaN)) ? formatNumber(toNumber(amplitude.band_7_9, 0) * 100, 1) + "%" : "-" },
       { label: BAND_LABELS.band_13_15, value: Number.isFinite(toNumber(amplitude.band_13_15, Number.NaN)) ? formatNumber(toNumber(amplitude.band_13_15, 0) * 100, 1) + "%" : "-" },
       { label: BAND_LABELS.band_18_20, value: Number.isFinite(toNumber(amplitude.band_18_20, Number.NaN)) ? formatNumber(toNumber(amplitude.band_18_20, 0) * 100, 1) + "%" : "-" },
-      { label: "Source", value: station },
-    ];
+      { label: "Source", value: station }
+    ]);
 
     this.refs.readouts.innerHTML = rows
       .map(function (row) {
@@ -923,6 +1137,227 @@
       '<div>f0: ' + (Number.isFinite(row.f0) ? formatNumber(row.f0, 2) + ' Hz' : '-') + '</div>',
       '<div>' + (row.usable ? 'Quality OK' : 'Low confidence') + '</div>'
     ].join("");
+  };
+
+  SchumannWidget.prototype.loadTomskSeries = function () {
+    var self = this;
+    if (this.state.tomskSeriesLoaded || this.state.tomskSeriesLoading) {
+      return this.tomskSeriesPromise;
+    }
+
+    this.state.tomskSeriesLoading = true;
+    this.state.tomskSeriesError = "";
+    this.renderTomskAccordion(this.state.tomskLatest);
+
+    this.tomskSeriesPromise = fetchTomskSeries(GLOBAL_CFG.tomskSeriesRestUrl, 48, "tomsk")
+      .then(function (payload) {
+        self.state.tomskSeriesRows = normalizeTomskSeries(payload);
+        self.state.tomskSeriesLoaded = true;
+        self.state.tomskSeriesLoading = false;
+        self.state.tomskSeriesError = "";
+        self.renderTomskAccordion(self.state.tomskLatest);
+      })
+      .catch(function (err) {
+        self.state.tomskSeriesLoading = false;
+        self.state.tomskSeriesError = "Tomsk 48h series unavailable.";
+        self.renderTomskAccordion(self.state.tomskLatest);
+        return null;
+      });
+
+    return this.tomskSeriesPromise;
+  };
+
+  SchumannWidget.prototype.renderTomskAccordion = function (tomskLatest) {
+    var usable = tomskUsable(tomskLatest);
+    this.refs.tomskStatus.textContent = usable ? "Tomsk: OK" : "Tomsk: unavailable";
+    this.refs.tomskStatus.className = "ge-sch-chip " + (usable ? "ge-sch-chip-ok" : "ge-sch-chip-low");
+    this.refs.tomskUpdated.textContent = formatDateTime(tomskLatest && tomskLatest.generated_at);
+
+    if (!tomskLatest || tomskLatest.ok === false) {
+      this.refs.tomskMeta.innerHTML = '<div class="ge-sch-muted">Tomsk latest detail unavailable.</div>';
+      this.refs.tomskGrid.innerHTML = "";
+      this.refs.tomskSparkNote.textContent = this.state.tomskSeriesError || "Expand to load 48h Tomsk sparklines.";
+      return;
+    }
+
+    var coherence = coherenceStatus(tomskLatest.coherence);
+    var qualityText = Number.isFinite(toNumber(tomskLatest.quality_score, Number.NaN))
+      ? formatNumber(toNumber(tomskLatest.quality_score, 0), 2)
+      : "-";
+
+    this.refs.tomskMeta.innerHTML = [
+      '<div class="ge-sch-tomsk-meta-item"><span>Usable</span><strong>' + (usable ? "Yes" : "No") + "</strong></div>",
+      '<div class="ge-sch-tomsk-meta-item"><span>Quality</span><strong>' + qualityText + "</strong></div>",
+      '<div class="ge-sch-tomsk-meta-item"><span>Updated</span><strong>' + formatDateTime(tomskLatest.generated_at) + "</strong></div>",
+      coherence ? '<div class="ge-sch-tomsk-meta-item"><span>Coherence</span><strong>' + coherence.text.replace("Coherence: ", "") + "</strong></div>" : ""
+    ].join("");
+
+    var sections = [
+      {
+        title: "Frequencies",
+        legend: "F = frequency tracking",
+        unit: "Hz",
+        keys: ["F1", "F2", "F3", "F4"],
+        values: tomskLatest.frequency_hz || {}
+      },
+      {
+        title: "Amplitudes",
+        legend: "A = amplitude tracking",
+        unit: "",
+        keys: ["A1", "A2", "A3", "A4"],
+        values: tomskLatest.amplitude || {}
+      },
+      {
+        title: "Q Factors",
+        legend: "Q = resonance quality proxy",
+        unit: "",
+        keys: ["Q1", "Q2", "Q3", "Q4"],
+        values: tomskLatest.q_factor || {}
+      }
+    ];
+
+    var trendMap = tomskLatest.trend_2h || {};
+    this.refs.tomskGrid.innerHTML = sections.map(function (section) {
+      var cards = section.keys.map(function (key) {
+        var value = Number.isFinite(toNumber(section.values[key], Number.NaN))
+          ? formatNumber(toNumber(section.values[key], 0), 2) + (section.unit ? " " + section.unit : "")
+          : "-";
+        var trend = trendMap[key] || {};
+        return [
+          '<div class="ge-sch-tomsk-cell">',
+          '  <span class="ge-sch-tomsk-key">' + key + '</span>',
+          '  <strong>' + value + '</strong>',
+          '  <span class="' + trendClass(trend.dir) + '">' + formatDelta(toNumber(trend.delta, Number.NaN), 2, section.unit) + "</span>",
+          '</div>'
+        ].join("");
+      }).join("");
+
+      return [
+        '<section class="ge-sch-tomsk-section">',
+        '  <h4>' + section.title + "</h4>",
+        '  <div class="ge-sch-tomsk-cells">' + cards + "</div>",
+        '  <div class="ge-sch-muted">' + section.legend + "</div>",
+        '</section>'
+      ].join("");
+    }).join("");
+
+    if (this.state.tomskSeriesLoading) {
+      this.refs.tomskSparkNote.textContent = "Loading Tomsk 48h sparklines…";
+      return;
+    }
+    if (this.state.tomskSeriesError) {
+      this.refs.tomskSparkNote.textContent = this.state.tomskSeriesError;
+      return;
+    }
+    if (!this.state.tomskSeriesRows.length) {
+      this.refs.tomskSparkNote.textContent = "Expand to load 48h Tomsk sparklines. Low-confidence points are dimmed.";
+      return;
+    }
+
+    this.renderTomskSparkline(this.refs.tomskSparkF1, this.state.tomskSeriesRows, "F1", "#7ce0d8");
+    this.renderTomskSparkline(this.refs.tomskSparkA1, this.state.tomskSeriesRows, "A1", "#ffd17e");
+    this.renderTomskSparkline(this.refs.tomskSparkQ1, this.state.tomskSeriesRows, "Q1", "#8de68d");
+    this.refs.tomskSparkNote.textContent = "Low-confidence points are dimmed.";
+  };
+
+  SchumannWidget.prototype.renderTomskSparkline = function (canvas, rows, key, color) {
+    if (!canvas) {
+      return;
+    }
+    var cssWidth = canvas.clientWidth || canvas.parentElement.clientWidth || 240;
+    var cssHeight = canvas.clientHeight || 78;
+    var ctx = resizeCanvas(canvas, cssWidth, cssHeight);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+    var values = rows.map(function (row) { return row[key]; }).filter(Number.isFinite);
+    if (!values.length) {
+      ctx.fillStyle = "rgba(255,255,255,0.65)";
+      ctx.font = "12px sans-serif";
+      ctx.fillText("Unavailable", 10, 18);
+      return;
+    }
+
+    var sorted = values.slice().sort(function (a, b) { return a - b; });
+    var minValue = sorted[Math.max(0, Math.floor((sorted.length - 1) * 0.05))];
+    var maxValue = sorted[Math.max(0, Math.floor((sorted.length - 1) * 0.95))];
+    if (!(maxValue > minValue)) {
+      maxValue = minValue + 0.001;
+    }
+
+    var margin = { top: 8, right: 4, bottom: 8, left: 4 };
+    var plotWidth = cssWidth - margin.left - margin.right;
+    var plotHeight = cssHeight - margin.top - margin.bottom;
+
+    function xForIndex(index) {
+      if (rows.length <= 1) {
+        return margin.left + plotWidth / 2;
+      }
+      return margin.left + (index / (rows.length - 1)) * plotWidth;
+    }
+
+    function yForValue(value) {
+      return margin.top + (1 - (value - minValue) / (maxValue - minValue)) * plotHeight;
+    }
+
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top + plotHeight);
+    ctx.lineTo(margin.left + plotWidth, margin.top + plotHeight);
+    ctx.stroke();
+
+    for (var i = 1; i < rows.length; i += 1) {
+      var a = rows[i - 1];
+      var b = rows[i];
+      if (!Number.isFinite(a[key]) || !Number.isFinite(b[key])) {
+        continue;
+      }
+      var lowConfidence = (a.usable === false || b.usable === false || (a.qualityFlags || []).indexOf("low_quality") !== -1 || (b.qualityFlags || []).indexOf("low_quality") !== -1);
+      ctx.strokeStyle = lowConfidence ? "rgba(255,255,255,0.28)" : color;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(xForIndex(i - 1), yForValue(a[key]));
+      ctx.lineTo(xForIndex(i), yForValue(b[key]));
+      ctx.stroke();
+    }
+
+    rows.forEach(function (row, index) {
+      if (!Number.isFinite(row[key])) {
+        return;
+      }
+      var lowConfidence = row.usable === false || (row.qualityFlags || []).indexOf("low_quality") !== -1;
+      if (!lowConfidence) {
+        return;
+      }
+      ctx.fillStyle = "rgba(243,159,150,0.85)";
+      ctx.beginPath();
+      ctx.arc(xForIndex(index), yForValue(row[key]), 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  };
+
+  SchumannWidget.prototype.buildHeatmapExport = function (latest, tomskLatest) {
+    var source = this.refs.heatmapCanvas;
+    var footerHeight = Math.max(42, Math.round(source.height * 0.12));
+    var exportCanvas = document.createElement("canvas");
+    exportCanvas.width = source.width;
+    exportCanvas.height = source.height + footerHeight;
+    var ctx = exportCanvas.getContext("2d");
+
+    ctx.fillStyle = "#061a23";
+    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    ctx.drawImage(source, 0, 0);
+
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.font = Math.max(12, Math.round(footerHeight * 0.42)) + "px sans-serif";
+    ctx.textBaseline = "middle";
+    var footerY = source.height + footerHeight / 2;
+    var tomskText = tomskUsable(tomskLatest) ? "Tomsk OK" : "Tomsk unavailable";
+    var tomskUpdated = formatDateTime(tomskLatest && tomskLatest.generated_at);
+    var updatedText = "Updated " + formatDateTime(latest && latest.generated_at);
+    ctx.fillText(updatedText + " \u2022 " + tomskText + " \u2022 Tomsk " + tomskUpdated, 18, footerY);
+
+    return exportCanvas;
   };
 
   SchumannWidget.prototype.renderProState = function () {
