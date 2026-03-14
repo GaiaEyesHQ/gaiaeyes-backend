@@ -18,7 +18,11 @@ class _FakeOpenAI:  # pragma: no cover - test shim
 fake_openai.OpenAI = _FakeOpenAI
 sys.modules.setdefault("openai", fake_openai)
 
-from bots.earthscope_post.member_earthscope_generate import _active_state_lines, _observed_driver_lines
+from bots.earthscope_post.member_earthscope_generate import (
+    _active_state_lines,
+    _observed_driver_lines,
+    _render_member_post,
+)
 
 
 def test_active_state_lines_merges_pressure_solar_and_aqi() -> None:
@@ -51,3 +55,43 @@ def test_observed_driver_lines_dedupes_alert_repeats() -> None:
 
     pressure_lines = [line for line in lines if "Pressure swing" in line]
     assert pressure_lines == ["Pressure swing: High (12h, 24h) (Δ24h +12.0 hPa)"]
+
+
+def test_render_member_post_uses_now_headings_and_live_tone() -> None:
+    rendered = _render_member_post(
+        "user-123",
+        "2026-03-13T20:45:00+00:00",
+        {
+            "gauges": [
+                {"key": "pain", "label": "Pain"},
+                {"key": "energy", "label": "Energy"},
+                {"key": "health_status", "label": "Health Status"},
+            ],
+            "normalization": {"alert_thresholds": {"info": 40, "watch": 70, "high": 85}},
+            "global_disclaimer": "Self-reported context only.",
+        },
+        {
+            "day": "2026-03-13",
+            "pain": 52,
+            "energy": 31,
+            "health_status": 22,
+            "alerts_json": [],
+        },
+        [
+            {"signal_key": "spaceweather.sw_speed", "state": "elevated", "value": 615.0},
+            {"signal_key": "earthweather.air_quality", "state": "moderate", "value": 61.0},
+        ],
+        {},
+        [],
+        {},
+        None,
+    )
+
+    body = rendered["body_markdown"]
+    assert "## Now" in body
+    assert "## Current Drivers" in body
+    assert "## What You May Feel" in body
+    assert "## Supportive Actions" in body
+    assert "Today’s Check-in" not in body
+    assert "Summary Note" not in body
+    assert "Today" not in rendered["caption"]

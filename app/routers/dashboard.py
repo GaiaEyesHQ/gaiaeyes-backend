@@ -434,6 +434,7 @@ async def dashboard(
         user_tags=user_tags,
     )
     out["earthscope_summary"] = build_earthscope_summary(
+        user_id=user_id,
         day=day,
         gauges=gauges_payload,
         gauges_meta=gauges_meta_payload,

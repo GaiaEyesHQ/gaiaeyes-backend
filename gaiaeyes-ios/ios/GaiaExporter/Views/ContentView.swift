@@ -1222,6 +1222,7 @@ struct ContentView: View {
     @State private var dashboardLastUpdatedText: String? = nil
     @State private var showMissionSettingsSheet: Bool = false
     @State private var showMissionInsightsSheet: Bool = false
+    @State private var showLocalConditionsSheet: Bool = false
     @State private var showSchumannDashboardSheet: Bool = false
     @State private var showCameraHealthCheckSheet: Bool = false
     @State private var latestCameraCheck: CameraHealthDailySummary? = nil
@@ -3180,6 +3181,7 @@ struct ContentView: View {
             MissionMenuSectionView(
                 onSymptoms: { showSymptomSheet = true },
                 onInsights: { showMissionInsightsSheet = true },
+                onLocalConditions: { showLocalConditionsSheet = true },
                 onSettings: { showMissionSettingsSheet = true },
                 onQuickCheck: { showCameraHealthCheckSheet = true },
                 onSchumann: { showSchumannDashboardSheet = true },
@@ -3198,6 +3200,7 @@ struct ContentView: View {
     private struct MissionMenuSectionView: View {
         let onSymptoms: () -> Void
         let onInsights: () -> Void
+        let onLocalConditions: () -> Void
         let onSettings: () -> Void
         let onQuickCheck: () -> Void
         let onSchumann: () -> Void
@@ -3210,12 +3213,13 @@ struct ContentView: View {
                         Button(action: onQuickCheck) { Label("Quick Check", systemImage: "camera.fill") }
                         Button(action: onSymptoms) { Label("Symptoms", systemImage: "plus.circle") }
                         Button(action: onInsights) { Label("Insights", systemImage: "chart.xyaxis.line") }
+                        Button(action: onLocalConditions) { Label("Local", systemImage: "location.fill") }
                         Button(action: onSettings) { Label("Settings", systemImage: "gearshape") }
                         Button(action: onSchumann) { Label("Schumann", systemImage: "waveform.path.ecg") }
                         Button(action: onResearch) { Label("Research", systemImage: "book.closed") }
                     }
                 }
-                Text("Quick links open dedicated views for insights and Schumann.")
+                Text("Quick links open dedicated views for insights, local conditions, and Schumann.")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -4985,6 +4989,13 @@ struct ContentView: View {
                     await fetchLocalHealth()
                 }
             }
+            .onChange(of: showLocalConditionsSheet, initial: false) { _, newValue in
+                guard newValue else { return }
+                Task {
+                    await fetchLocalHealth()
+                    await fetchDashboardPayload()
+                }
+            }
             .onChange(of: showCameraHealthCheckSheet, initial: false) { _, newValue in
                 if !newValue {
                     Task { await fetchLatestCameraCheck() }
@@ -5189,13 +5200,24 @@ struct ContentView: View {
             NavigationStack {
                 ScrollView {
                     VStack(spacing: 16) {
-                        LocalHealthCard(
+                        LocalConditionsSummaryCard(
                             zip: $localHealthZip,
                             snapshot: localHealth,
                             isLoading: localHealthLoading,
                             error: localHealthError,
-                            onRefresh: { Task { await fetchLocalHealth() } }
-                        )
+                            useGPS: profileUseGPS,
+                            localInsightsEnabled: profileLocalInsightsEnabled
+                        ) {
+                            LocalConditionsView(
+                                zip: localHealthZip,
+                                snapshot: localHealth,
+                                drivers: dashboardPayload?.drivers ?? [],
+                                isLoading: localHealthLoading,
+                                error: localHealthError,
+                                useGPS: profileUseGPS,
+                                onRefresh: { Task { await fetchLocalHealth() } }
+                            )
+                        }
                         .padding(.horizontal)
 
                         GroupBox {
@@ -5420,6 +5442,24 @@ struct ContentView: View {
                 }
                 .navigationTitle("Settings")
                 .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+        .sheet(isPresented: $showLocalConditionsSheet) {
+            NavigationStack {
+                LocalConditionsView(
+                    zip: localHealthZip,
+                    snapshot: localHealth,
+                    drivers: dashboardPayload?.drivers ?? [],
+                    isLoading: localHealthLoading,
+                    error: localHealthError,
+                    useGPS: profileUseGPS,
+                    onRefresh: { Task { await fetchLocalHealth() } }
+                )
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { showLocalConditionsSheet = false }
+                    }
+                }
             }
         }
         .sheet(isPresented: $showSchumannDashboardSheet) {
@@ -7208,6 +7248,337 @@ struct ContentView: View {
         }
     }
 
+    private enum LocalConditionsFormatting {
+        static func formatNumber(_ value: Double?, decimals: Int = 1) -> String {
+            guard let value else { return "—" }
+            return String(format: "%.\(decimals)f", value)
+        }
+
+        static func formatTempMetric(_ celsius: Double?) -> String {
+            guard let celsius else { return "—" }
+            return "\(String(format: "%.1f", celsius)) °C"
+        }
+
+        static func formatTempImperial(_ celsius: Double?) -> String {
+            guard let celsius else { return "—" }
+            let fahrenheit = (celsius * 9.0 / 5.0) + 32.0
+            return "\(String(format: "%.1f", fahrenheit)) °F"
+        }
+
+        static func formatTempDelta(_ celsius: Double?) -> String {
+            guard let celsius else { return "—" }
+            return "\(String(format: "%+.1f", celsius)) °C"
+        }
+
+        static func formatPressure(_ hpa: Double?) -> String {
+            guard let hpa else { return "—" }
+            let inHg = hpa * 0.02953
+            return "\(String(format: "%.1f", hpa)) hPa (\(String(format: "%.2f", inHg)) inHg)"
+        }
+
+        static func formatPressureShort(_ hpa: Double?) -> String {
+            guard let hpa else { return "—" }
+            return "\(String(format: "%.1f", hpa)) hPa"
+        }
+
+        static func formatPressureImperial(_ hpa: Double?) -> String {
+            guard let hpa else { return "—" }
+            return "\(String(format: "%.2f", hpa * 0.02953)) inHg"
+        }
+
+        static func formatPressureDelta(_ hpa: Double?) -> String {
+            guard let hpa else { return "—" }
+            return "\(String(format: "%+.1f", hpa)) hPa"
+        }
+
+        static func formatPercent(_ value: Double?) -> String {
+            guard let value else { return "—" }
+            return "\(String(format: "%.0f", value)) %"
+        }
+
+        static func normalizedTrend(_ raw: String?) -> String? {
+            guard let raw, !raw.isEmpty else { return nil }
+            switch raw.lowercased() {
+            case "rising": return "rising"
+            case "falling": return "falling"
+            case "steady": return "steady"
+            default: return raw.lowercased()
+            }
+        }
+
+        static func formatTrend(_ raw: String?) -> String {
+            normalizedTrend(raw) ?? "—"
+        }
+
+        static func asofText(_ iso: String?) -> String? {
+            guard let iso else { return nil }
+            let formatter = ISO8601DateFormatter()
+            if let date = formatter.date(from: iso) {
+                return DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .short)
+            }
+            return nil
+        }
+
+        static func illuminationFraction(_ value: Double?) -> Double {
+            guard let value else { return 0 }
+            if value > 1 { return clamped(value / 100.0) }
+            return clamped(value)
+        }
+
+        static func illuminationText(_ value: Double?) -> String {
+            guard let value else { return "—" }
+            let percent = value > 1 ? value : value * 100.0
+            return "\(String(format: "%.0f", percent)) %"
+        }
+
+        static func clamped(_ value: Double) -> Double {
+            min(max(value, 0), 1)
+        }
+    }
+
+    private enum LocalConditionsStyle {
+        static func severityKey(_ raw: String?) -> String {
+            switch (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "high", "alert":
+                return "high"
+            case "watch", "elevated":
+                return "elevated"
+            case "mild", "moderate":
+                return "mild"
+            default:
+                return "low"
+            }
+        }
+
+        static func progress(_ raw: String?) -> Double {
+            switch severityKey(raw) {
+            case "high":
+                return 0.95
+            case "elevated":
+                return 0.72
+            case "mild":
+                return 0.45
+            default:
+                return 0.20
+            }
+        }
+
+        static func pillSeverity(_ raw: String?) -> StatusPill.Severity {
+            switch severityKey(raw) {
+            case "high":
+                return .alert
+            case "elevated", "mild":
+                return .warn
+            default:
+                return .ok
+            }
+        }
+    }
+
+    private struct LocalConditionsDriverStatus {
+        let label: String
+        let state: String
+        let severityKey: String
+        let progress: Double
+        let detail: String?
+    }
+
+    private struct LocalConditionsSurfaceCard<Content: View>: View {
+        let title: String
+        let icon: String
+        let content: Content
+
+        init(title: String, icon: String, @ViewBuilder content: () -> Content) {
+            self.title = title
+            self.icon = icon
+            self.content = content()
+        }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .font(.headline)
+                        .foregroundColor(.white.opacity(0.88))
+                    Text(title)
+                        .font(.headline.weight(.semibold))
+                    Spacer()
+                }
+                content
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+        }
+    }
+
+    private struct LocalConditionsBar: View {
+        let progress: Double
+        let tint: Color
+
+        var body: some View {
+            GeometryReader { geo in
+                let safeProgress = LocalConditionsFormatting.clamped(progress)
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.08))
+                    Capsule()
+                        .fill(tint.opacity(0.72))
+                        .frame(width: max(12, geo.size.width * safeProgress))
+                }
+            }
+            .frame(height: 9)
+        }
+    }
+
+    private struct LocalConditionsMetricTile: View {
+        let title: String
+        let value: String
+        let progress: Double
+        let tint: Color
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.secondary)
+                Text(value)
+                    .font(.title3.weight(.semibold))
+                LocalConditionsBar(progress: progress, tint: tint)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(Color.black.opacity(0.20))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+
+    private struct LocalConditionsValueChip: View {
+        let label: String
+        let value: String
+        let tint: Color
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label.uppercased())
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.secondary)
+                Text(value)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(tint.opacity(0.14))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(tint.opacity(0.26), lineWidth: 1)
+            )
+        }
+    }
+
+    private struct LocalConditionsStatusStrip: View {
+        let status: LocalConditionsDriverStatus
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(status.label)
+                            .font(.subheadline.weight(.semibold))
+                        if let detail = status.detail, !detail.isEmpty, detail != "—" {
+                            Text(detail)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Spacer()
+                    StatusPill(status.state, severity: LocalConditionsStyle.pillSeverity(status.severityKey))
+                }
+                LocalConditionsBar(
+                    progress: status.progress,
+                    tint: GaugePalette.zoneColor(status.severityKey)
+                )
+            }
+            .padding(12)
+            .background(Color.black.opacity(0.20))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(GaugePalette.zoneColor(status.severityKey).opacity(0.22), lineWidth: 1)
+            )
+        }
+    }
+
+    private struct LocalConditionsSummaryCard<Destination: View>: View {
+        @Binding var zip: String
+        let snapshot: LocalCheckResponse?
+        let isLoading: Bool
+        let error: String?
+        let useGPS: Bool
+        let localInsightsEnabled: Bool
+        let destination: () -> Destination
+
+        private var locationStatus: String {
+            let resolvedZip = (snapshot?.whereInfo?.zip ?? zip).trimmingCharacters(in: .whitespacesAndNewlines)
+            if useGPS {
+                return resolvedZip.isEmpty ? "GPS preferred" : "GPS preferred • ZIP \(resolvedZip)"
+            }
+            return resolvedZip.isEmpty ? "ZIP not set" : "ZIP \(resolvedZip)"
+        }
+
+        private var lastUpdated: String {
+            LocalConditionsFormatting.asofText(snapshot?.asof) ?? "—"
+        }
+
+        var body: some View {
+            GroupBox {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Text("Local Conditions")
+                            .font(.headline)
+                        Spacer()
+                        if isLoading { ProgressView().scaleEffect(0.8) }
+                    }
+                    HStack(spacing: 8) {
+                        StatusPill(localInsightsEnabled ? "Ready" : "Off", severity: localInsightsEnabled ? .ok : .warn)
+                        Text(locationStatus)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Text("Last updated \(lastUpdated)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    if let error, !error.isEmpty {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    NavigationLink {
+                        destination()
+                    } label: {
+                        HStack {
+                            Text("Open Local Conditions")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } label: {
+                Label("Local Conditions", systemImage: "location.fill")
+            }
+        }
+    }
+
     private struct LocalHealthCard: View {
         @Binding var zip: String
         let snapshot: LocalCheckResponse?
@@ -7215,140 +7586,329 @@ struct ContentView: View {
         let error: String?
         let onRefresh: () -> Void
 
-        private func formatNumber(_ value: Double?, decimals: Int = 1) -> String {
-            guard let value else { return "—" }
-            return String(format: "%.\(decimals)f", value)
-        }
-
-        private func formatTemp(_ celsius: Double?) -> String {
-            guard let c = celsius else { return "—" }
-            let f = (c * 9.0/5.0) + 32.0
-            return "\(String(format: "%.1f", c)) °C (\(String(format: "%.1f", f)) °F)"
-        }
-
-        private func formatTempDelta(_ celsius: Double?) -> String {
-            guard let c = celsius else { return "—" }
-            return "\(String(format: "%+.1f", c)) °C"
-        }
-
-        private func formatPressure(_ hpa: Double?) -> String {
-            guard let hpa else { return "—" }
-            let inHg = hpa * 0.02953
-            return "\(String(format: "%.1f", hpa)) hPa (\(String(format: "%.2f", inHg)) inHg)"
-        }
-
-        private func formatPressureDelta(_ hpa: Double?) -> String {
-            guard let hpa else { return "—" }
-            return "\(String(format: "%+.1f", hpa)) hPa"
-        }
-
-        private func formatPercent(_ value: Double?) -> String {
-            guard let value else { return "—" }
-            return "\(String(format: "%.0f", value)) %"
-        }
-
-        private func formatBaroTrend(_ trend: String?) -> String {
-            guard let trend, !trend.isEmpty else { return "—" }
-            switch trend.lowercased() {
-            case "rising": return "rising"
-            case "falling": return "falling"
-            case "steady": return "steady"
-            default: return trend
-            }
-        }
-
-        private func asofText(_ iso: String?) -> String? {
-            guard let iso else { return nil }
-            let fmt = ISO8601DateFormatter()
-            if let d = fmt.date(from: iso) {
-                return DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .short)
-            }
-            return nil
-        }
-
         var body: some View {
-            let weather = snapshot?.weather
-            let air = snapshot?.air
-            let moon = snapshot?.moon
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
-                        Text("Local Health (\(zip.isEmpty ? "ZIP" : zip))")
+                        Text("Local Conditions")
                             .font(.headline)
                         Spacer()
                         if isLoading { ProgressView().scaleEffect(0.8) }
                         Button("Refresh") { onRefresh() }
                             .font(.caption)
                     }
-                    HStack(spacing: 8) {
-                        TextField("ZIP", text: $zip)
-                            .keyboardType(.numbersAndPunctuation)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: 120)
-                            .onSubmit { onRefresh() }
-                        if let asof = asofText(snapshot?.asof) {
-                            Text("as of \(asof)")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-
+                    Text((snapshot?.whereInfo?.zip ?? zip).isEmpty ? "ZIP not set" : "ZIP \(snapshot?.whereInfo?.zip ?? zip)")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Last updated \(LocalConditionsFormatting.asofText(snapshot?.asof) ?? "—")")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                     if let error, !error.isEmpty {
                         Text(error)
                             .font(.caption)
                             .foregroundColor(.orange)
                     }
-                    if snapshot == nil && !isLoading && (error == nil || error?.isEmpty == true) {
-                        Text("Local health unavailable.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Weather").font(.subheadline)
-                        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
-                            GridRow { Text("Temp"); Text(formatTemp(weather?.tempC)) }
-                            GridRow { Text("Temp 24h Δ"); Text(formatTempDelta(weather?.tempDelta24hC)) }
-                            GridRow { Text("Humidity"); Text(formatPercent(weather?.humidityPct)) }
-                            GridRow { Text("Precip"); Text(formatPercent(weather?.precipProbPct)) }
-                            GridRow { Text("Pressure"); Text(formatPressure(weather?.pressureHpa)) }
-                            GridRow { Text("Baro 24h Δ"); Text(formatPressureDelta(weather?.baroDelta24hHpa)) }
-                            GridRow { Text("Trend"); Text(formatBaroTrend(weather?.pressureTrend ?? weather?.baroTrend)) }
-                        }
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    }
-
-                    Divider()
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Air Quality").font(.subheadline)
-                        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
-                            GridRow { Text("AQI"); Text(formatNumber(air?.aqi, decimals: 0)) }
-                            GridRow { Text("Category"); Text(air?.category ?? "—") }
-                            GridRow { Text("Pollutant"); Text(air?.pollutant ?? "—") }
-                        }
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    }
-
-                    Divider()
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Moon").font(.subheadline)
-                        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
-                            GridRow { Text("Phase"); Text(moon?.phase ?? "—") }
-                            GridRow {
-                                Text("Illumination")
-                                Text(moon?.illum.map { "\(String(format: "%.0f", $0 * 100)) %" } ?? "—")
-                            }
-                        }
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } label: {
-                Label("Local Health", systemImage: "location.fill")
+                Label("Local Conditions", systemImage: "location.fill")
             }
+        }
+    }
+
+    private struct LocalConditionsView: View {
+        let zip: String
+        let snapshot: LocalCheckResponse?
+        let drivers: [DashboardDriverItem]
+        let isLoading: Bool
+        let error: String?
+        let useGPS: Bool
+        let onRefresh: () -> Void
+
+        private func driver(for key: String) -> DashboardDriverItem? {
+            drivers.first { $0.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == key.lowercased() }
+        }
+
+        private func formattedDriverValue(_ driver: DashboardDriverItem) -> String? {
+            guard let value = driver.value else { return nil }
+            let unit = (driver.unit ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            switch driver.key.lowercased() {
+            case "aqi", "sw":
+                return unit.isEmpty ? String(Int(round(value))) : "\(String(Int(round(value)))) \(unit)"
+            case "temp":
+                return "\(String(format: "%+.1f", value))°C"
+            case "pressure", "bz":
+                return unit.isEmpty ? String(format: "%+.1f", value) : "\(String(format: "%+.1f", value)) \(unit)"
+            case "schumann":
+                return unit.isEmpty ? String(format: "%.2f", value) : "\(String(format: "%.2f", value)) \(unit)"
+            default:
+                return unit.isEmpty ? String(format: "%.1f", value) : "\(String(format: "%.1f", value)) \(unit)"
+            }
+        }
+
+        private func driverStatus(
+            for key: String,
+            fallbackLabel: String,
+            fallbackState: String,
+            fallbackSeverity: String,
+            fallbackDetail: String?
+        ) -> LocalConditionsDriverStatus {
+            if let driver = driver(for: key) {
+                let severityKey = LocalConditionsStyle.severityKey(driver.severity)
+                return LocalConditionsDriverStatus(
+                    label: driver.label ?? fallbackLabel,
+                    state: driver.state ?? fallbackState,
+                    severityKey: severityKey,
+                    progress: LocalConditionsStyle.progress(severityKey),
+                    detail: formattedDriverValue(driver) ?? fallbackDetail
+                )
+            }
+            let severityKey = LocalConditionsStyle.severityKey(fallbackSeverity)
+            return LocalConditionsDriverStatus(
+                label: fallbackLabel,
+                state: fallbackState,
+                severityKey: severityKey,
+                progress: LocalConditionsStyle.progress(severityKey),
+                detail: fallbackDetail
+            )
+        }
+
+        private func pressureStatus(weather: LocalWeather?) -> LocalConditionsDriverStatus {
+            let delta = abs(weather?.baroDelta24hHpa ?? 0)
+            let trend = LocalConditionsFormatting.normalizedTrend(weather?.pressureTrend ?? weather?.baroTrend)
+            let pressure = weather?.pressureHpa
+            let state: String
+            let severity: String
+            if delta >= 12 {
+                state = "Swing"
+                severity = "high"
+            } else if delta >= 8 {
+                state = "Swing"
+                severity = "elevated"
+            } else if delta >= 6 {
+                state = "Swing"
+                severity = "mild"
+            } else if trend == "rising" {
+                state = "Rising"
+                severity = "low"
+            } else if trend == "falling" {
+                state = "Falling"
+                severity = "low"
+            } else if let pressure, pressure <= 1008 {
+                state = "Low"
+                severity = "mild"
+            } else if let pressure, pressure >= 1025 {
+                state = "Elevated"
+                severity = "mild"
+            } else {
+                state = "Steady"
+                severity = "low"
+            }
+            return driverStatus(
+                for: "pressure",
+                fallbackLabel: "Pressure Swing",
+                fallbackState: state,
+                fallbackSeverity: severity,
+                fallbackDetail: LocalConditionsFormatting.formatPressureDelta(weather?.baroDelta24hHpa)
+            )
+        }
+
+        private func temperatureStatus(weather: LocalWeather?) -> LocalConditionsDriverStatus {
+            let delta = abs(weather?.tempDelta24hC ?? 0)
+            let severity: String
+            if delta >= 12 {
+                severity = "high"
+            } else if delta >= 8 {
+                severity = "elevated"
+            } else if delta >= 6 {
+                severity = "mild"
+            } else {
+                severity = "low"
+            }
+            let state = delta >= 6 ? "Swing" : "Steady"
+            return driverStatus(
+                for: "temp",
+                fallbackLabel: "Temperature Swing",
+                fallbackState: state,
+                fallbackSeverity: severity,
+                fallbackDetail: LocalConditionsFormatting.formatTempDelta(weather?.tempDelta24hC)
+            )
+        }
+
+        private func airQualityStatus(air: LocalAir?) -> LocalConditionsDriverStatus {
+            let aqi = air?.aqi
+            let severity: String
+            if let aqi, aqi >= 151 {
+                severity = "high"
+            } else if let aqi, aqi >= 101 {
+                severity = "elevated"
+            } else if let aqi, aqi >= 51 {
+                severity = "mild"
+            } else {
+                severity = "low"
+            }
+            let trimmedCategory = air?.category?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let state: String
+            if let trimmedCategory, !trimmedCategory.isEmpty {
+                state = trimmedCategory
+            } else {
+                state = severity == "high" ? "Unhealthy" : severity == "elevated" ? "USG" : severity == "mild" ? "Moderate" : "Good"
+            }
+            return driverStatus(
+                for: "aqi",
+                fallbackLabel: "Air Quality",
+                fallbackState: state,
+                fallbackSeverity: severity,
+                fallbackDetail: LocalConditionsFormatting.formatNumber(aqi, decimals: 0)
+            )
+        }
+
+        private var locationSummary: String {
+            let resolvedZip = (snapshot?.whereInfo?.zip ?? zip).trimmingCharacters(in: .whitespacesAndNewlines)
+            if useGPS {
+                return resolvedZip.isEmpty ? "GPS preferred" : "GPS preferred • ZIP \(resolvedZip)"
+            }
+            return resolvedZip.isEmpty ? "ZIP not set" : "ZIP \(resolvedZip)"
+        }
+
+        var body: some View {
+            let weather = snapshot?.weather
+            let air = snapshot?.air
+            let moon = snapshot?.moon
+            let tempStatus = temperatureStatus(weather: weather)
+            let baroStatus = pressureStatus(weather: weather)
+            let airStatus = airQualityStatus(air: air)
+            let updatedText = LocalConditionsFormatting.asofText(snapshot?.asof) ?? "—"
+
+            ZStack {
+                Color.black.opacity(0.96).ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 16) {
+                        LocalConditionsSurfaceCard(title: "Local Conditions", icon: "location.fill") {
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(snapshot?.whereInfo?.zip ?? (zip.isEmpty ? "ZIP" : zip))
+                                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                                    Text(locationSummary)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text("Updated \(updatedText)")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                if isLoading { ProgressView().scaleEffect(0.85) }
+                                Button("Refresh") { onRefresh() }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                            }
+                            if let error, !error.isEmpty {
+                                Text(error)
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                            } else if snapshot == nil && !isLoading {
+                                Text("Local conditions are not available yet.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        LocalConditionsSurfaceCard(title: "Weather", icon: "thermometer.medium") {
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(LocalConditionsFormatting.formatTempMetric(weather?.tempC))
+                                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                                    Text(LocalConditionsFormatting.formatTempImperial(weather?.tempC))
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                LocalConditionsValueChip(
+                                    label: "Temp 24h Δ",
+                                    value: LocalConditionsFormatting.formatTempDelta(weather?.tempDelta24hC),
+                                    tint: GaugePalette.zoneColor(tempStatus.severityKey)
+                                )
+                            }
+                            LocalConditionsStatusStrip(status: tempStatus)
+                            HStack(spacing: 12) {
+                                LocalConditionsMetricTile(
+                                    title: "Humidity",
+                                    value: LocalConditionsFormatting.formatPercent(weather?.humidityPct),
+                                    progress: LocalConditionsFormatting.clamped((weather?.humidityPct ?? 0) / 100.0),
+                                    tint: GaugePalette.low
+                                )
+                                LocalConditionsMetricTile(
+                                    title: "Precip",
+                                    value: LocalConditionsFormatting.formatPercent(weather?.precipProbPct),
+                                    progress: LocalConditionsFormatting.clamped((weather?.precipProbPct ?? 0) / 100.0),
+                                    tint: GaugePalette.mild
+                                )
+                            }
+                        }
+
+                        LocalConditionsSurfaceCard(title: "Barometric", icon: "gauge.with.dots.needle.bottom.50percent") {
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(LocalConditionsFormatting.formatPressureShort(weather?.pressureHpa))
+                                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                                    Text(LocalConditionsFormatting.formatPressureImperial(weather?.pressureHpa))
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 8) {
+                                    LocalConditionsValueChip(
+                                        label: "Pressure 24h Δ",
+                                        value: LocalConditionsFormatting.formatPressureDelta(weather?.baroDelta24hHpa),
+                                        tint: GaugePalette.zoneColor(baroStatus.severityKey)
+                                    )
+                                    LocalConditionsValueChip(
+                                        label: "Trend",
+                                        value: LocalConditionsFormatting.formatTrend(weather?.pressureTrend ?? weather?.baroTrend),
+                                        tint: GaugePalette.zoneColor(baroStatus.severityKey)
+                                    )
+                                }
+                            }
+                            LocalConditionsStatusStrip(status: baroStatus)
+                        }
+
+                        LocalConditionsSurfaceCard(title: "Air Quality", icon: "wind") {
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(LocalConditionsFormatting.formatNumber(air?.aqi, decimals: 0))
+                                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                                    Text(air?.category ?? airStatus.state)
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                LocalConditionsValueChip(
+                                    label: "Pollutant",
+                                    value: air?.pollutant ?? "—",
+                                    tint: GaugePalette.zoneColor(airStatus.severityKey)
+                                )
+                            }
+                            LocalConditionsStatusStrip(status: airStatus)
+                        }
+
+                        LocalConditionsSurfaceCard(title: "Moon", icon: "moon.stars.fill") {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text(moon?.phase ?? "—")
+                                    .font(.title2.weight(.semibold))
+                                LocalConditionsMetricTile(
+                                    title: "Illumination",
+                                    value: LocalConditionsFormatting.illuminationText(moon?.illum),
+                                    progress: LocalConditionsFormatting.illuminationFraction(moon?.illum),
+                                    tint: GaugePalette.mild
+                                )
+                            }
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle("Local Conditions")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
@@ -7563,10 +8123,12 @@ struct ContentView: View {
 
         private static func sectionKey(for heading: String) -> EarthscopeBriefingKey? {
             let h = heading.lowercased()
-            if h.contains("check") || h.contains("today") { return .checkin }
-            if h.contains("driver") { return .drivers }
+            if h == "now" || h.contains("check") || h.contains("today") { return .checkin }
+            if h.contains("current driver") || h.contains("driver") { return .drivers }
             if h.contains("supportive action") || h == "actions" || h.contains("action") { return .actions }
-            if h.contains("summary") || h.contains("note") { return .summary }
+            if h.contains("what you may feel") || h.contains("may feel") || h.contains("summary") || h.contains("note") || h.contains("feel") {
+                return .summary
+            }
             return nil
         }
 
@@ -7586,9 +8148,9 @@ struct ContentView: View {
 
         private static func sectionTitle(_ key: EarthscopeBriefingKey) -> String {
             switch key {
-            case .checkin: return "Today's Check-in"
-            case .drivers: return "Drivers"
-            case .summary: return "Summary Note"
+            case .checkin: return "Now"
+            case .drivers: return "Current Drivers"
+            case .summary: return "What You May Feel"
             case .actions: return "Supportive Actions"
             }
         }
@@ -7596,11 +8158,11 @@ struct ContentView: View {
         private static func defaultBody(_ key: EarthscopeBriefingKey) -> String {
             switch key {
             case .checkin:
-                return "Today's check-in is still being prepared."
+                return "The current EarthScope update is still being prepared."
             case .drivers:
                 return "No primary driver is highlighted right now."
             case .summary:
-                return "Keep an eye on your gauges for the latest context."
+                return "Most gauges look fairly steady right now. Check highlighted gauges for fresher context."
             case .actions:
                 return "• Hydrate\n• Keep your sleep window steady\n• Use gentle movement"
             }
@@ -7763,11 +8325,11 @@ struct ContentView: View {
             let names: [String]
             switch section.key {
             case "checkin":
-                names = ["checkin", "today_checkin", "todays_checkin"]
+                names = ["now", "checkin", "today_checkin", "todays_checkin"]
             case "drivers":
-                names = ["drivers"]
+                names = ["current_drivers", "drivers"]
             case "summary":
-                names = ["summary", "note"]
+                names = ["what_you_may_feel", "feel", "summary", "note"]
             case "actions":
                 names = ["actions", "supportive_actions"]
             default:

@@ -135,6 +135,7 @@ def test_solar_wind_modal_personalizes_for_autonomic_context() -> None:
 
 def test_build_earthscope_summary_mentions_top_drivers_and_gauges() -> None:
     summary = build_earthscope_summary(
+        user_id="user-123",
         day=date(2026, 2, 27),
         gauges={"pain": 88, "sleep": 74, "focus": 42},
         gauges_meta={
@@ -151,4 +152,5 @@ def test_build_earthscope_summary_mentions_top_drivers_and_gauges() -> None:
 
     assert "Pressure Swing" in summary
     assert "Pain" in summary
-    assert "Tap any gauge or driver" in summary
+    assert "Tap highlighted gauges or drivers" in summary
+    assert "Today" not in summary

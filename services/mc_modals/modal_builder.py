@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
 from services.personalization.health_context import (
@@ -818,6 +818,76 @@ def _driver_modal_type(driver: Dict[str, Any]) -> str:
     return "full" if zone in {"mild", "elevated", "high"} else "short"
 
 
+def _earthscope_refresh_bucket(now: Optional[datetime] = None) -> str:
+    current = now or datetime.now(timezone.utc)
+    minute_bucket = (current.minute // 15) * 15
+    snapped = current.replace(minute=minute_bucket, second=0, microsecond=0)
+    return snapped.isoformat()
+
+
+def _earthscope_template_pick(
+    options: List[str],
+    *,
+    user_id: str,
+    bucket_key: str,
+    driver_family: str,
+    slot: str,
+) -> str:
+    values = [item for item in options if item]
+    if not values:
+        return ""
+    seed = f"{user_id}|{bucket_key}|{driver_family}|{slot}".encode("utf-8")
+    digest = hashlib.sha256(seed).hexdigest()
+    index = int(digest[:8], 16) % len(values)
+    return values[index]
+
+
+def _earthscope_driver_family_key(driver: Dict[str, Any]) -> str:
+    key = str(driver.get("key") or "").strip().lower()
+    if key == "pressure":
+        return "pressure"
+    if key == "temp":
+        return "temperature"
+    if key == "aqi":
+        return "air_quality"
+    if key == "sw":
+        return "solar_wind"
+    if key in {"kp", "bz"}:
+        return "geomagnetic"
+    if key == "schumann":
+        return "schumann"
+    if key == "moon":
+        return "moon"
+    return "mixed"
+
+
+def _earthscope_driver_state_fragment(driver: Dict[str, Any]) -> str:
+    family = _earthscope_driver_family_key(driver)
+    state = str(driver.get("state") or "").strip().lower()
+    if not state:
+        return "active"
+    if family == "air_quality":
+        return state
+    return f"running {state}"
+
+
+def _earthscope_gauge_sentence(
+    top_gauges: List[Dict[str, Any]],
+    gauge_labels: Dict[str, str],
+) -> str:
+    if not top_gauges:
+        return "Most gauges are still sitting in lower zones, though lighter energy or focus shifts can still show up for some people."
+
+    labels: List[str] = []
+    for gauge in top_gauges[:2]:
+        key = gauge["key"]
+        label = gauge_labels.get(key) or _GAUGE_FALLBACK_LABELS.get(key) or key
+        labels.append(label)
+    if len(labels) == 1:
+        return f"{labels[0]} looks most changeable right now, so that area may feel less steady for some people."
+    return f"{labels[0]} and {labels[1]} look most changeable right now, so those areas may feel less steady for some people."
+
+
 def _gauge_why_lines(
     *,
     day: date,
@@ -1048,6 +1118,7 @@ def build_modal_models(
 
 def build_earthscope_summary(
     *,
+    user_id: str = "",
     day: date,
     gauges: Optional[Dict[str, Any]],
     gauges_meta: Optional[Dict[str, Dict[str, Any]]],
@@ -1061,42 +1132,55 @@ def build_earthscope_summary(
     driver_rows.sort(key=lambda item: _driver_rank(item), reverse=True)
     top_drivers = driver_rows[:2]
     top_gauges = _elevated_gauges(gauges, gauges_meta)[:2]
+    bucket_key = _earthscope_refresh_bucket()
 
     sentences: List[str] = []
     if top_drivers:
-        parts = [f"{d.get('label')} ({d.get('state')})" for d in top_drivers]
-        if len(parts) == 1:
-            sentences.append(f"Today\u2019s strongest environmental driver is {parts[0]}.")
-        else:
-            sentences.append(f"Today\u2019s strongest environmental drivers are {parts[0]} and {parts[1]}.")
+        primary = top_drivers[0]
+        primary_label = str(primary.get("label") or "The current mix").strip()
+        primary_phrase = f"{primary_label} is {_earthscope_driver_state_fragment(primary)}"
+        secondary_clause = ""
+        if len(top_drivers) > 1:
+            secondary = top_drivers[1]
+            secondary_label = str(secondary.get("label") or "another driver").strip()
+            secondary_clause = f", with {secondary_label} also {_earthscope_driver_state_fragment(secondary)}"
+        sentences.append(
+            _earthscope_template_pick(
+                [
+                    "Right now, {primary}{secondary_clause}.",
+                    "At the moment, {primary}{secondary_clause}.",
+                    "Currently, {primary}{secondary_clause}.",
+                    "In the current pattern, {primary}{secondary_clause}.",
+                    "For now, {primary}{secondary_clause}.",
+                    "At this point, {primary}{secondary_clause}.",
+                    "Right now, the main environmental pull is that {primary}{secondary_clause}.",
+                    "Currently, the strongest pull in the mix is that {primary}{secondary_clause}.",
+                    "At the moment, the clearest signal is that {primary}{secondary_clause}.",
+                    "For now, the lead signal is that {primary}{secondary_clause}.",
+                ],
+                user_id=user_id,
+                bucket_key=bucket_key,
+                driver_family=_earthscope_driver_family_key(primary),
+                slot="summary-lead",
+            ).format(primary=primary_phrase, secondary_clause=secondary_clause)
+        )
     else:
-        sentences.append("Environmental drivers look mostly low to mild right now.")
+        sentences.append(
+            _earthscope_template_pick(
+                [
+                    "Right now, the environmental picture looks fairly even, with no single driver dominating.",
+                    "At the moment, the outside signal mix looks relatively quiet, with no strong lead.",
+                    "Currently, most environmental drivers are staying in lower zones.",
+                    "In the current pattern, the driver mix looks lighter and fairly balanced.",
+                    "For now, no single environmental signal is pulling especially hard.",
+                ],
+                user_id=user_id,
+                bucket_key=bucket_key,
+                driver_family="mixed",
+                slot="summary-lead-fallback",
+            )
+        )
 
-    if top_gauges:
-        labels: List[str] = []
-        for gauge in top_gauges:
-            key = gauge["key"]
-            label = gauge_labels.get(key) or _GAUGE_FALLBACK_LABELS.get(key) or key
-            status = _normalized_zone_label(gauge.get("meta") or {})
-            labels.append(f"{label} ({status})")
-        if len(labels) == 1:
-            sentences.append(f"Your most elevated gauge is {labels[0]}.")
-        else:
-            sentences.append(f"Your most elevated gauges are {labels[0]} and {labels[1]}.")
-    else:
-        sentences.append("Most gauges are currently in lower zones.")
-
-    bridge = _rotate_pick(
-        [
-            "These patterns may align with sensitivity or fatigue shifts for some people.",
-            "For some people, this context can coincide with sleep, mood, or energy shifts.",
-            "Individual response can vary, so use this as context rather than certainty.",
-        ],
-        day,
-        "earthscope_summary",
-        "bridge",
-        1,
-    )
-    sentences.extend(bridge[:1])
-    sentences.append("Tap any gauge or driver for details, supportive actions, and quick logging.")
-    return " ".join(sentences[:4]).strip()
+    sentences.append(_earthscope_gauge_sentence(top_gauges, gauge_labels))
+    sentences.append("Keep pacing flexible if you need it, and tap highlighted gauges or drivers for context, supportive actions, and quick logging.")
+    return " ".join(sentences[:3]).strip()
