@@ -285,18 +285,28 @@
 
   const sectionOrder = ["checkin", "drivers", "summary", "actions"];
   const sectionTitles = {
-    checkin: "Today's Check-in",
-    drivers: "Drivers",
-    summary: "Summary Note",
+    checkin: "Now",
+    drivers: "Current Drivers",
+    summary: "What You May Feel",
     actions: "Supportive Actions",
   };
 
   const sectionDefaults = {
-    checkin: "Today's check-in is still being prepared.",
+    checkin: "The current EarthScope update is still being prepared.",
     drivers: "No primary driver is highlighted right now.",
-    summary: "Keep an eye on your gauges for the latest context.",
+    summary: "Most gauges look fairly steady right now. Check highlighted gauges for fresher context.",
     actions: "• Hydrate\n• Keep your sleep window steady\n• Use gentle movement",
   };
+  const legacyEarthscopePrefixRegex = /^\s*Gaia Eyes\s+[—-]\s+Daily EarthScope\s*/i;
+  const legacyActionMarkers = [
+    "5-10 minutes paced breathing",
+    "Work in 25-50 minute blocks",
+    "Hydrate, add gentle movement",
+    "Wind down earlier",
+    "If pain flares",
+  ];
+  const legacyActionSplitRegex =
+    /(?=(?:5-10 minutes paced breathing|Work in 25-50 minute blocks|Hydrate, add gentle movement|Wind down earlier|If pain flares))/gi;
 
   const mediaBase = () => {
     const fromCfg = normalizeBase(cfg.mediaBase);
@@ -306,12 +316,20 @@
     return "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals";
   };
 
+  const cleanEarthscopeTitle = (value) => {
+    const cleaned = String(value || "")
+      .trim()
+      .replace(/\s+—\s+\d{4}-\d{2}-\d{2}$/, "")
+      .trim();
+    return cleaned || "EarthScope";
+  };
+
   const sectionKeyForHeading = (heading) => {
     const h = String(heading || "").toLowerCase();
-    if (h.includes("check") || h.includes("today")) return "checkin";
-    if (h.includes("driver")) return "drivers";
+    if (h === "now" || h.includes("check") || h.includes("today")) return "checkin";
+    if (h.includes("current driver") || h.includes("driver")) return "drivers";
     if (h.includes("supportive action") || h === "actions" || h.includes("action")) return "actions";
-    if (h.includes("summary") || h.includes("note")) return "summary";
+    if (h.includes("what you may feel") || h.includes("may feel") || h.includes("summary") || h.includes("note") || h.includes("feel")) return "summary";
     return null;
   };
 
@@ -322,7 +340,78 @@
       .replace(/__/g, "")
       .replace(/^[-*]\s+/, "")
       .replace(/^\d+\.\s+/, "")
+      .replace(legacyEarthscopePrefixRegex, "")
+      .replace(/–/g, "-")
       .trim();
+
+  const dedupePreservingOrder = (lines) => {
+    const seen = new Set();
+    return (Array.isArray(lines) ? lines : [])
+      .map((line) => cleanMarkdownLine(line))
+      .filter((line) => {
+        if (!line) return false;
+        const key = line.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  };
+
+  const splitLegacyActionChunks = (text) => {
+    const input = String(text || "").trim();
+    if (!input) return [];
+    const starts = [];
+    legacyActionSplitRegex.lastIndex = 0;
+    let match = legacyActionSplitRegex.exec(input);
+    while (match) {
+      starts.push(match.index);
+      if (legacyActionSplitRegex.lastIndex === match.index) {
+        legacyActionSplitRegex.lastIndex += 1;
+      }
+      match = legacyActionSplitRegex.exec(input);
+    }
+    if (!starts.length) return [input];
+    return starts
+      .map((start, index) => input.slice(start, starts[index + 1] || input.length).trim())
+      .filter(Boolean);
+  };
+
+  const extractLegacyActionsFromSummary = (lines) => {
+    const summary = [];
+    const actions = [];
+
+    (Array.isArray(lines) ? lines : []).forEach((raw) => {
+      const cleaned = cleanMarkdownLine(raw);
+      if (!cleaned) return;
+
+      const lower = cleaned.toLowerCase();
+      const markerPositions = legacyActionMarkers
+        .map((marker) => lower.indexOf(marker.toLowerCase()))
+        .filter((index) => index >= 0)
+        .sort((a, b) => a - b);
+
+      if (!markerPositions.length) {
+        summary.push(cleaned);
+        return;
+      }
+
+      const markerIndex = markerPositions[0];
+      const summaryPrefix = cleaned.slice(0, markerIndex).trim();
+      if (summaryPrefix) {
+        summary.push(summaryPrefix);
+      }
+
+      splitLegacyActionChunks(cleaned.slice(markerIndex)).forEach((chunk) => {
+        const action = cleanMarkdownLine(chunk);
+        if (action) actions.push(action);
+      });
+    });
+
+    return {
+      summary: dedupePreservingOrder(summary),
+      actions: dedupePreservingOrder(actions),
+    };
+  };
 
   const parseEarthscopeSections = (markdown, driversCompact) => {
     const buckets = { checkin: [], drivers: [], summary: [], actions: [] };
@@ -380,6 +469,13 @@
     if (compactDrivers.length) {
       buckets.drivers = compactDrivers;
     }
+    const extracted = extractLegacyActionsFromSummary(buckets.summary);
+    if (extracted.actions.length || extracted.summary.length) {
+      buckets.summary = extracted.summary;
+    }
+    if (extracted.actions.length) {
+      buckets.actions = dedupePreservingOrder([...(buckets.actions || []), ...extracted.actions]);
+    }
 
     return {
       checkin: buckets.checkin.length ? buckets.checkin.join("\n") : sectionDefaults.checkin,
@@ -393,9 +489,9 @@
 
   const backgroundCandidates = (key) => {
     const namesByKey = {
-      checkin: ["checkin", "today_checkin", "todays_checkin"],
-      drivers: ["drivers"],
-      summary: ["summary", "note"],
+      checkin: ["now", "checkin", "today_checkin", "todays_checkin"],
+      drivers: ["current_drivers", "drivers"],
+      summary: ["what_you_may_feel", "summary", "note"],
       actions: ["actions", "supportive_actions"],
     };
     const names = namesByKey[key] || [key];
@@ -747,12 +843,7 @@
       }
       ${renderDriversSection(drivers, modalModels)}
       <div class="gaia-dashboard__earthscope">
-        <h4>${esc((earthscope && earthscope.title) || "EarthScope")}</h4>
-        ${
-          earthscope && earthscope.caption
-            ? `<p class="gaia-dashboard__muted">${esc(earthscope.caption)}</p>`
-            : ""
-        }
+        <h4>${esc(cleanEarthscopeTitle(earthscope && earthscope.title))}</h4>
         <p class="gaia-dashboard__earthscope-summary">${esc(earthscopeSummary)}</p>
         <button class="gaia-dashboard__earthscope-link" type="button" data-earthscope-full="1">Read full EarthScope</button>
       </div>
@@ -830,12 +921,7 @@
       earthscopeBtn.addEventListener("click", () => {
         const blocks = renderEarthscopeBlocks(earthscope, driversCompact);
         const html = `
-          <h3 class="gaia-dashboard__modal-title">${esc((earthscope && earthscope.title) || "EarthScope")}</h3>
-          ${
-            earthscope && earthscope.caption
-              ? `<p class="gaia-dashboard__muted">${esc(earthscope.caption)}</p>`
-              : ""
-          }
+          <h3 class="gaia-dashboard__modal-title">${esc(cleanEarthscopeTitle(earthscope && earthscope.title))}</h3>
           <div class="gaia-dashboard__es-grid">${blocks}</div>
           <div class="gaia-dashboard__modal-actions">
             <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-modal-close="1">Close</button>
