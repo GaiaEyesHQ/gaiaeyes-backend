@@ -56,7 +56,7 @@ private struct SchumannDay: Codable {
     let f2: Double?
 }
 
-private struct LocalCheckResponse: Codable {
+private struct LocalCheckResponse: Decodable {
     let ok: Bool?
     let whereInfo: LocalWhere?
     let weather: LocalWeather?
@@ -71,13 +71,13 @@ private struct LocalCheckResponse: Codable {
     }
 }
 
-private struct LocalWhere: Codable {
+private struct LocalWhere: Decodable {
     let zip: String?
     let lat: Double?
     let lon: Double?
 }
 
-private struct LocalWeather: Codable {
+private struct LocalWeather: Decodable {
     let tempC: Double?
     let tempDelta24hC: Double?
     let humidityPct: Double?
@@ -165,13 +165,13 @@ private struct LocalWeather: Codable {
     }
 }
 
-private struct LocalAir: Codable {
+private struct LocalAir: Decodable {
     let aqi: Double?
     let category: String?
     let pollutant: String?
 }
 
-private struct LocalMoon: Codable {
+private struct LocalMoon: Decodable {
     let phase: String?
     let illum: Double?
     let cycle: Double?
