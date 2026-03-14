@@ -8135,6 +8135,21 @@ struct ContentView: View {
 
     private struct EarthscopeBriefingParser {
         private static let listMarkerRegex = try? NSRegularExpression(pattern: #"^\d+\.\s+"#)
+        private static let legacyEarthscopePrefixRegex = try? NSRegularExpression(
+            pattern: #"^\s*Gaia Eyes\s+[—-]\s+Daily EarthScope\s*"#,
+            options: [.caseInsensitive]
+        )
+        private static let legacyActionSplitRegex = try? NSRegularExpression(
+            pattern: #"(?=(?:5-10 minutes paced breathing|Work in 25-50 minute blocks|Hydrate, add gentle movement|Wind down earlier|If pain flares))"#,
+            options: [.caseInsensitive]
+        )
+        private static let legacyActionMarkers = [
+            "5-10 minutes paced breathing",
+            "Work in 25-50 minute blocks",
+            "Hydrate, add gentle movement",
+            "Wind down earlier",
+            "If pain flares",
+        ]
 
         private static func sectionKey(for heading: String) -> EarthscopeBriefingKey? {
             let h = heading.lowercased()
@@ -8158,7 +8173,78 @@ struct ContentView: View {
                 let range = NSRange(location: 0, length: out.utf16.count)
                 out = regex.stringByReplacingMatches(in: out, options: [], range: range, withTemplate: "")
             }
+            if let regex = legacyEarthscopePrefixRegex {
+                let range = NSRange(location: 0, length: out.utf16.count)
+                out = regex.stringByReplacingMatches(in: out, options: [], range: range, withTemplate: "")
+            }
+            out = out.replacingOccurrences(of: "–", with: "-")
             return out.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        private static func dedupePreservingOrder(_ lines: [String]) -> [String] {
+            var seen: Set<String> = []
+            var output: [String] = []
+            for raw in lines {
+                let cleaned = cleanLine(raw)
+                guard !cleaned.isEmpty else { continue }
+                let key = cleaned.lowercased()
+                guard !seen.contains(key) else { continue }
+                seen.insert(key)
+                output.append(cleaned)
+            }
+            return output
+        }
+
+        private static func extractLegacyActions(fromSummary lines: [String]) -> (summary: [String], actions: [String]) {
+            var summary: [String] = []
+            var actions: [String] = []
+
+            for raw in lines {
+                let cleaned = cleanLine(raw)
+                guard !cleaned.isEmpty else { continue }
+
+                let firstMarkerIndex = legacyActionMarkers
+                    .compactMap { marker in cleaned.range(of: marker, options: [.caseInsensitive])?.lowerBound }
+                    .min()
+
+                guard let markerIndex = firstMarkerIndex else {
+                    summary.append(cleaned)
+                    continue
+                }
+
+                let summaryPrefix = String(cleaned[..<markerIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !summaryPrefix.isEmpty {
+                    summary.append(summaryPrefix)
+                }
+
+                let tail = String(cleaned[markerIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !tail.isEmpty else { continue }
+
+                if let regex = legacyActionSplitRegex {
+                    let nsRange = NSRange(location: 0, length: tail.utf16.count)
+                    let matches = regex.matches(in: tail, options: [], range: nsRange)
+                    let starts = matches.map(\.range.location).sorted()
+                    if !starts.isEmpty {
+                        let nsTail = tail as NSString
+                        for (index, start) in starts.enumerated() {
+                            let end = (index + 1 < starts.count) ? starts[index + 1] : nsTail.length
+                            let chunk = nsTail.substring(with: NSRange(location: start, length: end - start))
+                            let action = cleanLine(chunk)
+                            if !action.isEmpty {
+                                actions.append(action)
+                            }
+                        }
+                        continue
+                    }
+                }
+
+                actions.append(tail)
+            }
+
+            return (
+                summary: dedupePreservingOrder(summary),
+                actions: dedupePreservingOrder(actions)
+            )
         }
 
         private static func sectionTitle(_ key: EarthscopeBriefingKey) -> String {
@@ -8264,6 +8350,15 @@ struct ContentView: View {
             let compactDrivers = driversCompact.map { cleanLine($0) }.filter { !$0.isEmpty }
             if !compactDrivers.isEmpty {
                 buckets[.drivers] = compactDrivers
+            }
+
+            let extracted = extractLegacyActions(fromSummary: buckets[.summary] ?? [])
+            if !extracted.actions.isEmpty || !extracted.summary.isEmpty {
+                buckets[.summary] = extracted.summary
+            }
+            let existingActions = buckets[.actions] ?? []
+            if !extracted.actions.isEmpty {
+                buckets[.actions] = dedupePreservingOrder(existingActions + extracted.actions)
             }
 
             var sections: [EarthscopeBriefingSection] = []
