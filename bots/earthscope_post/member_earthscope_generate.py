@@ -21,6 +21,7 @@ from bots.gauges.gauge_scorer import (
 )
 from bots.gauges.signal_resolver import resolve_signals
 from bots.gauges.db_utils import upsert_row
+from services.mc_modals.modal_builder import earthscope_condition_note, earthscope_ranked_symptoms
 
 try:
     from openai import OpenAI
@@ -199,12 +200,6 @@ def _default_actions(alerts: List[Dict[str, Any]]) -> List[str]:
         "protect your evening wind-down and sleep window",
         "keep late caffeine and extra stimulation lighter",
     ]
-
-
-def _light_wit_line(alerts: List[Dict[str, Any]]) -> str:
-    if alerts:
-        return "Cosmic note: this looks more like a trim-tabs stretch than a full-throttle stretch."
-    return "Cosmic note: even calm days run better with a little maintenance."
 
 
 def _state_rank(state: str) -> int:
@@ -444,224 +439,210 @@ def _join_labels(labels: List[str]) -> str:
     return f"{', '.join(cleaned[:-1])}, and {cleaned[-1]}"
 
 
-_DRIVER_FAMILY_LABELS = {
-    "pressure": "pressure swing",
-    "temperature": "temperature swing",
-    "air_quality": "local air quality",
-    "solar_wind": "solar wind",
-    "geomagnetic": "geomagnetic activity",
-    "schumann": "Schumann variability",
-    "moon": "moon phase",
-    "mixed": "the current environmental mix",
+def _member_post_requires_refresh(post: Optional[Dict[str, Any]]) -> bool:
+    if not isinstance(post, dict):
+        return False
+    body = str(post.get("body_markdown") or "")
+    title = str(post.get("title") or "")
+    legacy_markers = [
+        "## Today’s Check-in",
+        "## Summary Note",
+        "Cosmic note:",
+        "most noticeable changes since yesterday",
+        "today's drivers",
+    ]
+    if any(marker.lower() in body.lower() for marker in legacy_markers):
+        return True
+    return bool(re.search(r"\s+—\s+\d{4}-\d{2}-\d{2}$", title))
+
+
+_MEMBER_DRIVER_LABELS = {
+    "pressure": "Pressure Swing",
+    "temp": "Temperature Swing",
+    "aqi": "Air Quality",
+    "kp": "Kp Index",
+    "bz": "Bz Coupling",
+    "sw": "Solar Wind",
+    "schumann": "Schumann Variability",
 }
 
 
-def _driver_family_from_signal(signal_key: str) -> str:
+def _member_driver_key_from_signal(signal_key: str) -> str:
     key = str(signal_key or "").strip().lower()
     if key in {"earthweather.pressure_swing_12h", "earthweather.pressure_swing_24h_big", "earthweather.pressure_drop_3h"}:
         return "pressure"
     if key == "earthweather.temp_swing_24h":
-        return "temperature"
+        return "temp"
     if key == "earthweather.air_quality":
-        return "air_quality"
+        return "aqi"
+    if key == "spaceweather.kp":
+        return "kp"
+    if key == "spaceweather.bz_coupling":
+        return "bz"
     if key == "spaceweather.sw_speed":
-        return "solar_wind"
-    if key in {"spaceweather.kp", "spaceweather.bz_coupling"}:
-        return "geomagnetic"
+        return "sw"
     if key == "schumann.variability_24h":
         return "schumann"
-    if "moon" in key or "lunar" in key:
-        return "moon"
-    return "mixed"
+    return ""
 
 
-def _driver_family_from_text(value: str) -> str:
-    text = str(value or "").lower()
+def _member_driver_key_from_alert(title: str) -> str:
+    text = str(title or "").strip().lower()
     if "pressure" in text:
         return "pressure"
     if "temperature" in text or "temp" in text:
-        return "temperature"
-    if "aqi" in text or "air quality" in text:
-        return "air_quality"
+        return "temp"
+    if "air quality" in text or "aqi" in text:
+        return "aqi"
     if "solar wind" in text:
-        return "solar_wind"
-    if "kp" in text or "geomagnetic" in text or "bz" in text:
-        return "geomagnetic"
+        return "sw"
+    if "bz" in text:
+        return "bz"
+    if "kp" in text or "geomagnetic" in text:
+        return "kp"
     if "schumann" in text:
         return "schumann"
-    if "moon" in text or "lunar" in text:
-        return "moon"
-    return "mixed"
+    return ""
 
 
-def _driver_family_label(family: str) -> str:
-    return _DRIVER_FAMILY_LABELS.get(family, "the current environmental mix")
+def _normalized_member_drivers(active_states: List[Dict[str, Any]], alerts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    family_priority = {"pressure": 0, "sw": 1, "aqi": 2, "kp": 3, "bz": 4, "temp": 5, "schumann": 6}
+    best_by_key: Dict[str, Dict[str, Any]] = {}
 
-
-def _driver_state_phrase(family: str, state: str) -> str:
-    lowered = str(state or "").strip().lower()
-    if not lowered:
-        return "running active"
-    if family == "air_quality":
-        return lowered
-    if lowered in {"watch", "moderate", "elevated", "high", "strong", "storm", "active", "steady"}:
-        return f"running {lowered}"
-    return lowered
-
-
-def _collect_driver_candidates(active_states: List[Dict[str, Any]], alerts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    family_priority = {
-        "pressure": 0,
-        "solar_wind": 1,
-        "air_quality": 2,
-        "geomagnetic": 3,
-        "temperature": 4,
-        "schumann": 5,
-        "moon": 6,
-        "mixed": 7,
-    }
-    best_by_family: Dict[str, Dict[str, Any]] = {}
-
-    def _score(family: str, state_name: str, has_value: bool) -> tuple[int, int, int]:
-        return (_state_rank(state_name), 1 if has_value else 0, -family_priority.get(family, 99))
+    def _score(key: str, severity: str, has_value: bool) -> tuple[int, int, int]:
+        return (_state_rank(severity), 1 if has_value else 0, -family_priority.get(key, 99))
 
     for state in active_states or []:
-        signal_key = str(state.get("signal_key") or "").strip()
-        family = _driver_family_from_signal(signal_key)
-        if family == "mixed":
+        key = _member_driver_key_from_signal(str(state.get("signal_key") or ""))
+        if not key:
             continue
-        state_name = str(state.get("state") or "active").strip() or "active"
+        severity = str(state.get("state") or "active").strip() or "active"
         candidate = {
-            "family": family,
-            "label": _driver_family_label(family),
-            "state": _state_label(state_name),
-            "score": _score(family, state_name, state.get("value") is not None),
+            "key": key,
+            "label": _MEMBER_DRIVER_LABELS.get(key, key.replace("_", " ").title()),
+            "severity": severity.lower(),
+            "state": _state_label(severity),
+            "score": _score(key, severity, state.get("value") is not None),
         }
-        existing = best_by_family.get(family)
+        existing = best_by_key.get(key)
         if not existing or candidate["score"] > existing["score"]:
-            best_by_family[family] = candidate
+            best_by_key[key] = candidate
 
     for alert in alerts or []:
-        title = str(alert.get("title") or alert.get("key") or "").strip()
-        family = _driver_family_from_text(title)
-        if family == "mixed":
+        key = _member_driver_key_from_alert(str(alert.get("title") or alert.get("key") or ""))
+        if not key:
             continue
-        state_name = str(alert.get("severity") or "active").strip() or "active"
+        severity = str(alert.get("severity") or "active").strip() or "active"
         candidate = {
-            "family": family,
-            "label": title if title else _driver_family_label(family),
-            "state": _state_label(state_name),
-            "score": _score(family, state_name, False),
+            "key": key,
+            "label": _MEMBER_DRIVER_LABELS.get(key, key.replace("_", " ").title()),
+            "severity": severity.lower(),
+            "state": _state_label(severity),
+            "score": _score(key, severity, False),
         }
-        existing = best_by_family.get(family)
+        existing = best_by_key.get(key)
         if not existing or candidate["score"] > existing["score"]:
-            best_by_family[family] = candidate
+            best_by_key[key] = candidate
 
-    return sorted(best_by_family.values(), key=lambda item: item["score"], reverse=True)
-
-
-def _trend_insight(trend: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    if not isinstance(trend, dict):
-        return {"deltas": {}, "mean": 0.0, "notable": []}
-    raw = trend.get("gauges") if isinstance(trend.get("gauges"), dict) else {}
-    deltas: Dict[str, float] = {}
-    for key, payload in raw.items():
-        if not isinstance(payload, dict):
-            continue
-        try:
-            delta = float(payload.get("delta"))
-        except Exception:
-            continue
-        deltas[str(key)] = delta
-    if not deltas:
-        return {"deltas": {}, "mean": 0.0, "notable": []}
-    mean_delta = sum(deltas.values()) / max(len(deltas), 1)
-    ranked = sorted(deltas.items(), key=lambda kv: abs(kv[1]), reverse=True)
-    notable = [k for k, v in ranked if abs(v) >= 5][:3]
-    return {"deltas": deltas, "mean": mean_delta, "notable": notable}
+    return sorted(best_by_key.values(), key=lambda item: item["score"], reverse=True)
 
 
-def _lead_now_line(
-    *,
-    user_id: str,
-    bucket_key: str,
-    active_states: List[Dict[str, Any]],
-    alerts: List[Dict[str, Any]],
-) -> str:
-    candidates = _collect_driver_candidates(active_states, alerts)
-    if not candidates:
-        fallback = _rotating_template(
+def _lead_state_text(driver: Dict[str, Any]) -> str:
+    state = str(driver.get("state") or "").strip().lower()
+    if not state:
+        return "still active"
+    if str(driver.get("key") or "") == "aqi":
+        return f"at {state} levels"
+    return f"still {state}"
+
+
+def _lead_now_line(*, user_id: str, bucket_key: str, drivers: List[Dict[str, Any]]) -> str:
+    if not drivers:
+        return _rotating_template(
             [
-                "Right now, the current pattern looks fairly even, with no single driver dominating.",
-                "At the moment, the environmental mix looks relatively quiet, with no strong external lead.",
-                "Currently, the signal mix is lighter, with most drivers staying in low to mild ranges.",
-                "In the current pattern, no single outside driver is pulling especially hard.",
-                "For now, the environmental picture looks mixed, with no major signal taking over.",
+                "Right now, the outside signal mix looks fairly even, with no single driver taking over.",
+                "At the moment, the environmental mix is quieter, with no strong leader.",
+                "Currently, the broader signal picture looks mixed and relatively light.",
+                "For now, no single outside driver is pulling especially hard.",
+                "Right now, the external context looks balanced, without one clear lead.",
             ],
             user_id=user_id,
             bucket_key=bucket_key,
             driver_family="mixed",
             slot="lead-fallback",
         )
-        return fallback
 
-    primary = candidates[0]
-    primary_phrase = f"{primary['label']} is the strongest signal right now, {_driver_state_phrase(primary['family'], primary['state'])}"
+    primary = drivers[0]
     secondary_clause = ""
-    if len(candidates) > 1:
-        secondary = candidates[1]
-        secondary_clause = f", with {secondary['label']} also {_driver_state_phrase(secondary['family'], secondary['state'])}"
+    if len(drivers) > 1:
+        secondary = drivers[1]
+        secondary_clause = f", while {secondary['label']} stays {str(secondary.get('state') or '').strip().lower() or 'active'}"
 
     template = _rotating_template(
         [
-            "Right now, {primary}{secondary_clause}.",
-            "At the moment, {primary}{secondary_clause}.",
-            "Currently, {primary}{secondary_clause}.",
-            "In the current pattern, {primary}{secondary_clause}.",
-            "For now, {primary}{secondary_clause}.",
-            "At this point, {primary}{secondary_clause}.",
-            "Right now, the main environmental pull is that {primary}{secondary_clause}.",
-            "Currently, the strongest pull in the mix is that {primary}{secondary_clause}.",
-            "At the moment, the clearest signal is that {primary}{secondary_clause}.",
-            "For now, the lead signal is that {primary}{secondary_clause}.",
+            "{label} is setting the pace right now, {state_text}{secondary_clause}.",
+            "Right now, {label} is carrying the most weight, {state_text}{secondary_clause}.",
+            "At the moment, {label} is the clearest influence, {state_text}{secondary_clause}.",
+            "Currently, {label} is leading the mix, {state_text}{secondary_clause}.",
+            "For now, {label} is doing more of the talking, {state_text}{secondary_clause}.",
+            "Right now, {label} is out front, {state_text}{secondary_clause}.",
+            "At the moment, {label} is the main thing to watch, {state_text}{secondary_clause}.",
+            "Currently, {label} is the strongest external pull, {state_text}{secondary_clause}.",
         ],
         user_id=user_id,
         bucket_key=bucket_key,
-        driver_family=primary["family"],
+        driver_family=str(primary.get("key") or "mixed"),
         slot="lead",
     )
-    return template.format(primary=primary_phrase, secondary_clause=secondary_clause)
+    return template.format(label=primary["label"], state_text=_lead_state_text(primary), secondary_clause=secondary_clause)
+
+
+def _health_status_now_sentence(value: Optional[Any], highlights: List[Dict[str, Any]]) -> str:
+    try:
+        strain = float(value) if value is not None else None
+    except Exception:
+        strain = None
+
+    if strain is None:
+        base = "Body load is still calibrating right now."
+    elif strain >= 86:
+        base = "Body load looks very high right now."
+    elif strain >= 71:
+        base = "Body load looks high right now."
+    elif strain >= 41:
+        base = "Body load looks moderate right now."
+    elif strain >= 21:
+        base = "Body load looks low right now."
+    else:
+        base = "Body load looks very low right now."
+
+    labels = [str(item.get("label") or "").strip() for item in highlights[:2] if str(item.get("label") or "").strip()]
+    if len(labels) == 1:
+        return f"{base} {labels[0]} is the gauge worth watching most closely."
+    if len(labels) >= 2:
+        return f"{base} {_join_labels(labels)} are the gauges worth watching most closely."
+    return f"{base} Most gauges are still sitting in lower zones."
 
 
 def _what_you_may_feel(
     *,
-    trend: Optional[Dict[str, Any]],
-    highlights: List[Dict[str, Any]],
-    drivers: List[str],
+    ranked_symptoms: List[Dict[str, Any]],
+    condition_note: Optional[str],
 ) -> str:
-    insight = _trend_insight(trend)
-    label_map = {
-        "energy": "energy",
-        "sleep": "sleep",
-        "focus": "focus",
-        "mood": "mood",
-        "stamina": "recovery load",
-        "pain": "pain",
-        "heart": "heart",
-        "health_status": "health status",
-    }
-    notable_labels = [label_map.get(k, k.replace("_", " ")) for k in insight.get("notable") or []]
-    if highlights:
-        focus_labels = [str(item.get("label") or "").lower() for item in highlights[:2] if str(item.get("label") or "").strip()]
-        if len(focus_labels) == 1:
-            return f"{focus_labels[0].capitalize()} may feel less steady right now, and smaller pacing adjustments may matter more than usual."
-        if len(focus_labels) >= 2:
-            return f"{focus_labels[0].capitalize()} and {focus_labels[1]} may feel less steady right now, so a lighter pace may help the mix feel more manageable."
-    if notable_labels:
-        return f"The clearest current shifts are landing in {_join_labels(notable_labels)}, so that part of the day may feel more changeable."
-    if drivers and drivers[0] != "No major external drivers are flagged right now.":
-        return "You may notice a mixed pattern right now, with energy, focus, or patience feeling less predictable for some people."
-    return "Most gauges are still sitting in lower zones right now, with only lighter shifts likely to stand out."
+    phrases = [str(item.get("phrase") or "").strip() for item in ranked_symptoms if str(item.get("phrase") or "").strip()]
+    lines: List[str] = []
+    if phrases:
+        lines.append(
+            f"Based on the current drivers and your gauges, the strongest possibilities right now are {_join_labels(phrases)}."
+        )
+    else:
+        lines.append("Based on the current drivers and your gauges, the main shifts still look fairly light right now.")
+    if condition_note:
+        lines.append(condition_note)
+    lines.append(
+        "These are possibilities, not certainties. If something stands out, log it in the symptom tracker so your personal pattern gets sharper over time."
+    )
+    return " ".join(lines)
 
 
 def _render_trigger_advisory(trigger_events: List[Dict[str, Any]], health_status: Optional[Any]) -> str:
@@ -697,60 +678,50 @@ def _render_member_post(
     symptoms: Dict[str, Any],
     trend: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    day = gauges_row.get("day")
-    day_str = day.isoformat() if isinstance(day, date) else str(day)
-
     highlights = _highlight_gauges(definition, gauges_row)
     alerts = gauges_row.get("alerts_json") or []
+    normalized_drivers = _normalized_member_drivers(active_states, alerts)
     actions = _default_actions(alerts)
-    wit_line = _light_wit_line(alerts)
+    ranked_symptoms = earthscope_ranked_symptoms(
+        gauge_keys=[item.get("key") for item in highlights],
+        drivers=normalized_drivers,
+        user_tags=tags,
+        limit=3,
+    )
+    condition_note = earthscope_condition_note(ranked_symptoms=ranked_symptoms, user_tags=tags)
 
     hook = _lead_now_line(
         user_id=user_id,
         bucket_key=bucket_key,
-        active_states=active_states,
-        alerts=alerts,
+        drivers=normalized_drivers,
     )
-    if highlights:
-        top = highlights[0]
-        try:
-            if float(top.get("value") or 0) >= 45:
-                hook = f"{hook} The clearest gauge pressure right now is {top['label'].lower()}."
-        except Exception:
-            pass
-
-    health_line = _health_status_line(gauges_row.get("health_status"), include_value=False)
+    now_text = f"{hook} {_health_status_now_sentence(gauges_row.get('health_status'), highlights)}".strip()
 
     all_driver_lines = _observed_driver_lines(active_states, alerts, local_payload)
     driver_lines = "\n".join([f"- {line}" for line in all_driver_lines])
 
     action_lines = "\n".join([f"- {a}" for a in actions])
-    summary = _what_you_may_feel(trend=trend, highlights=highlights, drivers=all_driver_lines)
+    summary = _what_you_may_feel(ranked_symptoms=ranked_symptoms, condition_note=condition_note)
 
     disclaimer = definition.get("global_disclaimer") or ""
 
-    checkin_parts = [health_line, "", hook]
-    if wit_line:
-        checkin_parts.extend(["", wit_line])
-    checkin_block = "\n".join(checkin_parts)
-
     body = (
-        f"## Now\n{checkin_block}\n\n"
+        f"## Now\n{now_text}\n\n"
         f"## Current Drivers\n{driver_lines}\n\n"
         f"## What You May Feel\n{summary}\n\n"
         f"## Supportive Actions\n{action_lines}\n\n"
         f"## Disclaimer\n{disclaimer}\n"
     )
 
-    title = f"Your EarthScope — {day_str}"
-    caption = hook
+    title = "Your EarthScope"
+    caption = None
     return {
         "title": title,
         "caption": caption,
         "body_markdown": body,
         "driver_lines": all_driver_lines,
         "actions": actions,
-        "health_line": health_line,
+        "health_line": _health_status_line(gauges_row.get("health_status"), include_value=False),
     }
 
 
@@ -1025,11 +996,13 @@ def generate_member_post_for_user(
     inputs_snapshot["refresh_bucket"] = refresh_bucket
     inputs_hash = _hash_inputs(inputs_snapshot)
 
+    existing = _fetch_existing_member_post(user_id, day)
     existing_hash = _fetch_existing_inputs_hash(user_id, day)
-    if existing_hash == inputs_hash and not force:
+    if existing_hash == inputs_hash and not force and not _member_post_requires_refresh(existing):
         return {"ok": True, "skipped": True}
 
-    existing = _fetch_existing_member_post(user_id, day)
+    if _member_post_requires_refresh(existing):
+        existing = None
 
     deterministic = _render_member_post(
         user_id,
@@ -1049,8 +1022,8 @@ def generate_member_post_for_user(
         # Triggered advisory: append to existing post if present
         if existing and existing.get("body_markdown"):
             rendered = {
-                "title": existing.get("title") or f"Your EarthScope — {day.isoformat()}",
-                "caption": existing.get("caption") or "Triggered advisory",
+                "title": deterministic.get("title"),
+                "caption": deterministic.get("caption"),
                 "body_markdown": existing.get("body_markdown"),
             }
         else:

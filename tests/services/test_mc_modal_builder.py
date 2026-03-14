@@ -148,9 +148,11 @@ def test_build_earthscope_summary_mentions_top_drivers_and_gauges() -> None:
             {"key": "pressure", "label": "Pressure Swing", "severity": "high", "state": "High"},
             {"key": "sw", "label": "Solar Wind", "severity": "elevated", "state": "Elevated"},
         ],
+        user_tags=["fibromyalgia"],
     )
 
     assert "Pressure Swing" in summary
-    assert "Pain" in summary
-    assert "Tap highlighted gauges or drivers" in summary
+    assert "pain flare" in summary.lower() or "joint pain" in summary.lower()
+    assert "fibromyalgia" in summary.lower()
+    assert "sharpen your personal pattern" in summary
     assert "Today" not in summary

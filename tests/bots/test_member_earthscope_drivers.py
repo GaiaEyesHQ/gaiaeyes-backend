@@ -94,4 +94,7 @@ def test_render_member_post_uses_now_headings_and_live_tone() -> None:
     assert "## Supportive Actions" in body
     assert "Today’s Check-in" not in body
     assert "Summary Note" not in body
-    assert "Today" not in rendered["caption"]
+    assert "Cosmic note" not in body
+    assert "strongest possibilities right now" in body
+    assert rendered["title"] == "Your EarthScope"
+    assert rendered["caption"] is None

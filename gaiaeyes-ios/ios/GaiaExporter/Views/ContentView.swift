@@ -1718,6 +1718,13 @@ struct ContentView: View {
         return try? decoder.decode(DashboardPayload.self, from: data)
     }
 
+    private func currentEarthscopePost(_ post: DashboardEarthscopePost?, requestedDay: String) -> DashboardEarthscopePost? {
+        guard let post else { return nil }
+        let day = (post.day ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !day.isEmpty, day == requestedDay else { return nil }
+        return post
+    }
+
     private func fetchDashboardPayload(force: Bool = false) async {
         let shouldStart = await MainActor.run { () -> Bool in
             if dashboardFetchInFlight { return false }
@@ -1776,12 +1783,12 @@ struct ContentView: View {
                             drivers: payload.drivers ?? older.drivers,
                             driversCompact: payload.driversCompact ?? older.driversCompact,
                             modalModels: payload.modalModels ?? older.modalModels,
-                            earthscopeSummary: payload.earthscopeSummary ?? older.earthscopeSummary,
+                            earthscopeSummary: payload.earthscopeSummary,
                             alerts: (payload.alerts?.isEmpty == false) ? payload.alerts : older.alerts,
                             entitled: payload.entitled ?? older.entitled,
-                            memberPost: payload.memberPost ?? payload.personalPost ?? older.memberPost ?? older.personalPost,
-                            publicPost: payload.publicPost ?? older.publicPost,
-                            personalPost: payload.personalPost ?? older.personalPost
+                            memberPost: payload.memberPost ?? payload.personalPost,
+                            publicPost: payload.publicPost,
+                            personalPost: payload.personalPost
                         )
                         fallbackUsed = true
                         fallbackSourceDay = fallbackDay
@@ -1789,7 +1796,12 @@ struct ContentView: View {
                     }
                 }
 
-                if resolvedPayload.gauges == nil || (resolvedPayload.memberPost == nil && resolvedPayload.personalPost == nil) {
+                let currentMemberPost = currentEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay)
+                let currentPersonalPost = currentEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
+                let currentPublicPost = currentEarthscopePost(resolvedPayload.publicPost, requestedDay: dashboardDay)
+                let hasCurrentMemberEarthscope = (currentMemberPost != nil || currentPersonalPost != nil)
+
+                if resolvedPayload.gauges == nil || !hasCurrentMemberEarthscope {
                     if let memberEnv: MemberEarthscopeEnvelope = try? await api.getJSON(
                         "v1/earthscope/member?day=\(dashboardDay)",
                         as: MemberEarthscopeEnvelope.self,
@@ -1817,14 +1829,18 @@ struct ContentView: View {
                             earthscopeSummary: resolvedPayload.earthscopeSummary,
                             alerts: resolvedPayload.alerts,
                             entitled: resolvedPayload.entitled,
-                            memberPost: resolvedPayload.memberPost ?? normalizedMember,
-                            publicPost: resolvedPayload.publicPost,
-                            personalPost: resolvedPayload.personalPost
+                            memberPost: currentMemberPost ?? currentPersonalPost ?? normalizedMember,
+                            publicPost: currentPublicPost,
+                            personalPost: currentPersonalPost
                         )
                     }
                 }
 
-                if resolvedPayload.memberPost == nil && resolvedPayload.personalPost == nil && resolvedPayload.publicPost == nil {
+                let resolvedCurrentMemberPost = currentEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay)
+                let resolvedCurrentPersonalPost = currentEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
+                let resolvedCurrentPublicPost = currentEarthscopePost(resolvedPayload.publicPost, requestedDay: dashboardDay)
+
+                if resolvedCurrentMemberPost == nil && resolvedCurrentPersonalPost == nil && resolvedCurrentPublicPost == nil {
                     if let features: FeaturesToday = try? await api.getJSON("v1/features/today", as: FeaturesToday.self, perRequestTimeout: 15),
                        (features.postTitle != nil || features.postCaption != nil || features.postBody != nil) {
                         let fallbackPublic = DashboardEarthscopePost(
@@ -1847,9 +1863,9 @@ struct ContentView: View {
                             earthscopeSummary: resolvedPayload.earthscopeSummary,
                             alerts: resolvedPayload.alerts,
                             entitled: resolvedPayload.entitled,
-                            memberPost: resolvedPayload.memberPost,
-                            publicPost: fallbackPublic,
-                            personalPost: resolvedPayload.personalPost
+                            memberPost: resolvedCurrentMemberPost,
+                            publicPost: currentEarthscopePost(fallbackPublic, requestedDay: dashboardDay),
+                            personalPost: resolvedCurrentPersonalPost
                         )
                     }
                 }
@@ -1875,9 +1891,9 @@ struct ContentView: View {
                         earthscopeSummary: resolvedPayload.earthscopeSummary,
                         alerts: resolvedPayload.alerts,
                         entitled: resolvedPayload.entitled,
-                        memberPost: resolvedPayload.memberPost,
-                        publicPost: resolvedPayload.publicPost,
-                        personalPost: resolvedPayload.personalPost
+                        memberPost: currentEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay),
+                        publicPost: currentEarthscopePost(resolvedPayload.publicPost, requestedDay: dashboardDay),
+                        personalPost: currentEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
                     )
                     dashboardPayload = effectivePayload
                     if let json {
@@ -3138,10 +3154,11 @@ struct ContentView: View {
         let dashboardModalModels = dashboardPayload?.modalModels
         let dashboardEarthscopeSummary = dashboardPayload?.earthscopeSummary
         let dashboardAlerts = dashboardPayload?.alerts ?? []
+        let requestedEarthscopeDay = chicagoTodayString()
         let resolvedEarthscope: DashboardEarthscopePost? = {
-            return dashboardPayload?.memberPost
-                ?? dashboardPayload?.personalPost
-                ?? dashboardPayload?.publicPost
+            return currentEarthscopePost(dashboardPayload?.memberPost, requestedDay: requestedEarthscopeDay)
+                ?? currentEarthscopePost(dashboardPayload?.personalPost, requestedDay: requestedEarthscopeDay)
+                ?? currentEarthscopePost(dashboardPayload?.publicPost, requestedDay: requestedEarthscopeDay)
         }()
 
         return VStack(spacing: 16) {
@@ -3161,7 +3178,6 @@ struct ContentView: View {
                 cameraCheckLoading: latestCameraCheckLoading,
                 cameraCheckError: latestCameraCheckError,
                 fallbackTitle: fallbackFeatures?.postTitle,
-                fallbackCaption: fallbackFeatures?.postCaption,
                 fallbackBody: fallbackFeatures?.postBody,
                 isLoading: dashboardLoading,
                 errorMessage: ContentView.scrubError(dashboardError),
@@ -3244,7 +3260,6 @@ struct ContentView: View {
         let cameraCheckLoading: Bool
         let cameraCheckError: String?
         let fallbackTitle: String?
-        let fallbackCaption: String?
         let fallbackBody: String?
         let isLoading: Bool
         let errorMessage: String?
@@ -3995,7 +4010,7 @@ struct ContentView: View {
 
                     EarthscopeCardV2(
                         title: earthscope?.title ?? fallbackTitle,
-                        caption: earthscope?.caption ?? fallbackCaption,
+                        updatedAt: earthscope?.updatedAt,
                         bodyMarkdown: earthscope?.bodyMarkdown ?? fallbackBody,
                         summaryText: earthscopeSummary,
                         driversCompact: driversCompact
@@ -8384,11 +8399,25 @@ struct ContentView: View {
 
     private struct EarthscopeCardV2: View {
         let title: String?
-        let caption: String?
+        let updatedAt: String?
         let bodyMarkdown: String?
         let summaryText: String?
         let driversCompact: [String]
         @State private var showFull: Bool = false
+
+        private func displayTitle() -> String {
+            let raw = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleaned = raw.replacingOccurrences(
+                of: #"\s+—\s+\d{4}-\d{2}-\d{2}$"#,
+                with: "",
+                options: .regularExpression
+            )
+            return cleaned.isEmpty ? "Your EarthScope" : cleaned
+        }
+
+        private func displayUpdatedText() -> String? {
+            LocalConditionsFormatting.asofText(updatedAt).map { "Updated \($0)" }
+        }
 
         private func resolvedSummary() -> String {
             if let summaryText, !summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -8405,13 +8434,12 @@ struct ContentView: View {
         var body: some View {
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) {
-                    if let t = title, !t.isEmpty { Text(t).font(.headline) }
-                    if let c = caption, !c.isEmpty {
-                        Text(c)
-                            .font(.subheadline)
+                    Text(displayTitle())
+                        .font(.headline)
+                    if let updated = displayUpdatedText() {
+                        Text(updated)
+                            .font(.caption2)
                             .foregroundColor(.secondary)
-                            .padding(8)
-                            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
                     }
 
                     Text(resolvedSummary())
@@ -8429,7 +8457,7 @@ struct ContentView: View {
             .sheet(isPresented: $showFull) {
                 EarthscopeFullSheetV2(
                     title: title,
-                    caption: caption,
+                    updatedAt: updatedAt,
                     bodyText: bodyMarkdown,
                     driversCompact: driversCompact
                 )
@@ -8439,18 +8467,34 @@ struct ContentView: View {
 
     private struct EarthscopeFullSheetV2: View {
         let title: String?
-        let caption: String?
+        let updatedAt: String?
         let bodyText: String?
         let driversCompact: [String]
         @Environment(\.dismiss) private var dismiss
+
+        private func displayTitle() -> String {
+            let raw = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleaned = raw.replacingOccurrences(
+                of: #"\s+—\s+\d{4}-\d{2}-\d{2}$"#,
+                with: "",
+                options: .regularExpression
+            )
+            return cleaned.isEmpty ? "Your EarthScope" : cleaned
+        }
 
         var body: some View {
             let sections = EarthscopeBriefingParser.parse(bodyText, driversCompact: driversCompact)
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        if let t = title, !t.isEmpty { Text(t).font(.title3).bold() }
-                        if let c = caption, !c.isEmpty { Text(c).font(.subheadline).foregroundColor(.secondary) }
+                        Text(displayTitle())
+                            .font(.title3)
+                            .bold()
+                        if let updated = LocalConditionsFormatting.asofText(updatedAt) {
+                            Text("Updated \(updated)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
 
                         ForEach(sections) { section in
                             EarthscopeBriefingBlock(section: section, compact: false)

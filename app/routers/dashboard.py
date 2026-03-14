@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from datetime import date, datetime, timezone
 from functools import lru_cache
@@ -278,6 +279,23 @@ def _post_row_to_payload(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, An
     }
 
 
+def _member_post_requires_refresh(post: Optional[Dict[str, Any]]) -> bool:
+    if not isinstance(post, dict):
+        return False
+    body = str(post.get("body_markdown") or "")
+    title = str(post.get("title") or "")
+    legacy_markers = [
+        "## Today’s Check-in",
+        "## Summary Note",
+        "Cosmic note:",
+        "most noticeable changes since yesterday",
+        "today's drivers",
+    ]
+    if any(marker.lower() in body.lower() for marker in legacy_markers):
+        return True
+    return bool(re.search(r"\s+—\s+\d{4}-\d{2}-\d{2}$", title))
+
+
 async def _fetch_public_post(conn, day: date) -> Optional[Dict[str, Any]]:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
@@ -302,16 +320,17 @@ async def _fetch_member_post(conn, user_id: str, day: date) -> Optional[Dict[str
             select day, title, caption, body_markdown, updated_at
               from content.daily_posts_user
              where user_id = %s
-               and day <= %s
+               and day = %s
                and platform = 'member'
-             order by day desc, updated_at desc
+             order by updated_at desc
              limit 1
             """,
             (user_id, day),
             prepare=False,
         )
         row = await cur.fetchone()
-    return _post_row_to_payload(row)
+    payload = _post_row_to_payload(row)
+    return None if _member_post_requires_refresh(payload) else payload
 
 
 async def _fetch_latest_gauges(conn, user_id: str, day: date) -> Dict[str, Any]:
@@ -440,6 +459,7 @@ async def dashboard(
         gauges_meta=gauges_meta_payload,
         gauge_labels=gauge_labels_payload,
         drivers=drivers,
+        user_tags=user_tags,
     )
 
     if debug:
@@ -503,6 +523,37 @@ async def earthscope_member(
             row = await cur.fetchone()
     except Exception as exc:
         return {"ok": False, "error": f"member earthscope fetch failed: {exc}"}
+
+    payload = _post_row_to_payload(row)
+    if row and _member_post_requires_refresh(payload):
+        row = None
+
+    if not row:
+        try:
+            def _run() -> Dict[str, Any]:
+                from bots.earthscope_post.member_earthscope_generate import generate_member_post_for_user
+                return generate_member_post_for_user(user_id, day, force=True)
+
+            result = await asyncio.to_thread(_run)
+            if result.get("ok"):
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    await cur.execute(
+                        """
+                        select day, title, caption, body_markdown, hashtags,
+                               metrics_json, sources_json, updated_at
+                          from content.daily_posts_user
+                         where user_id = %s
+                           and day = %s
+                           and platform = 'member'
+                         order by updated_at desc
+                         limit 1
+                        """,
+                        (user_id, day),
+                        prepare=False,
+                    )
+                    row = await cur.fetchone()
+        except Exception as exc:
+            return {"ok": False, "error": f"member earthscope generate failed: {exc}"}
 
     if not row:
         return {"ok": True, "post": None}

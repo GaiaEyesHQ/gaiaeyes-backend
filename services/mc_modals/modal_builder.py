@@ -5,6 +5,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
 from services.personalization.health_context import (
+    AIRWAY_KEYS,
     AUTONOMIC_KEYS,
     HEAD_PRESSURE_KEYS,
     PAIN_FLARE_KEYS,
@@ -871,6 +872,15 @@ def _earthscope_driver_state_fragment(driver: Dict[str, Any]) -> str:
     return f"running {state}"
 
 
+def _earthscope_lead_state_text(driver: Dict[str, Any]) -> str:
+    state = str(driver.get("state") or "").strip().lower()
+    if not state:
+        return "still active"
+    if _earthscope_driver_family_key(driver) == "air_quality":
+        return f"at {state} levels"
+    return f"still {state}"
+
+
 def _earthscope_gauge_sentence(
     top_gauges: List[Dict[str, Any]],
     gauge_labels: Dict[str, str],
@@ -886,6 +896,178 @@ def _earthscope_gauge_sentence(
     if len(labels) == 1:
         return f"{labels[0]} looks most changeable right now, so that area may feel less steady for some people."
     return f"{labels[0]} and {labels[1]} look most changeable right now, so those areas may feel less steady for some people."
+
+
+def _join_labels(labels: List[str]) -> str:
+    cleaned = [str(item).strip() for item in labels if str(item).strip()]
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return cleaned[0]
+    if len(cleaned) == 2:
+        return f"{cleaned[0]} and {cleaned[1]}"
+    return f"{', '.join(cleaned[:-1])}, and {cleaned[-1]}"
+
+
+_EARTHSCOPE_GAUGE_PHRASES = {
+    "pain": ["pain flare", "joint pain", "stiffness"],
+    "focus": ["brain fog", "focus drift", "headache"],
+    "heart": ["palpitations", "restlessness", "low energy"],
+    "stamina": ["fatigue", "low energy", "body aches"],
+    "energy": ["low energy", "fatigue", "wired feeling"],
+    "sleep": ["disruptive sleep", "restless sleep", "wired feeling"],
+    "mood": ["anxious edge", "low energy", "wired feeling"],
+    "health_status": ["low energy", "fatigue", "pain flare"],
+}
+
+_EARTHSCOPE_PHRASE_OVERRIDES = {
+    "anxious": "anxious edge",
+    "drained": "low energy",
+    "insomnia": "disruptive sleep",
+    "jittery": "jittery feeling",
+    "restless": "restlessness",
+    "sleep sensitivity": "disruptive sleep",
+    "unrefreshed": "unrefreshing sleep",
+    "wired": "wired feeling",
+}
+
+_EARTHSCOPE_SKIP_PHRASES = frozenset({"other"})
+_EARTHSCOPE_DRIVER_WEIGHTS = {
+    "high": 3.4,
+    "watch": 2.8,
+    "elevated": 2.8,
+    "moderate": 2.6,
+    "active": 2.1,
+    "mild": 1.5,
+    "low": 1.0,
+}
+_EARTHSCOPE_HEAD_PHRASES = frozenset({"headache", "sinus pressure", "light sensitivity"})
+_EARTHSCOPE_PAIN_PHRASES = frozenset({"pain flare", "joint pain", "stiffness", "nerve pain", "body aches", "fatigue"})
+_EARTHSCOPE_SINUS_PHRASES = frozenset({"sinus pressure", "brain fog", "headache"})
+_EARTHSCOPE_AIRWAY_PHRASES = frozenset({"breathing irritation", "chest tightness", "fatigue"})
+_EARTHSCOPE_AUTONOMIC_PHRASES = frozenset({"palpitations", "wired feeling", "low energy", "restlessness"})
+_EARTHSCOPE_SLEEP_PHRASES = frozenset({"restless sleep", "disruptive sleep", "wired feeling", "unrefreshing sleep"})
+
+
+def _earthscope_phrase(raw: Any) -> Optional[str]:
+    label = str(raw or "").strip().lower()
+    if not label:
+        return None
+    normalized = _EARTHSCOPE_PHRASE_OVERRIDES.get(label, label)
+    return None if normalized in _EARTHSCOPE_SKIP_PHRASES else normalized
+
+
+def _earthscope_add_phrase(
+    scores: Dict[str, float],
+    phrase_labels: Dict[str, str],
+    raw_label: Any,
+    score: float,
+) -> None:
+    phrase = _earthscope_phrase(raw_label)
+    if not phrase or score <= 0:
+        return
+    scores[phrase] = scores.get(phrase, 0.0) + score
+    phrase_labels.setdefault(phrase, phrase)
+
+
+def earthscope_ranked_symptoms(
+    *,
+    gauge_keys: Iterable[str],
+    drivers: Iterable[Dict[str, Any]],
+    user_tags: Optional[Iterable[Any]] = None,
+    limit: int = 3,
+) -> List[Dict[str, Any]]:
+    profile = build_personalization_profile(user_tags)
+    scores: Dict[str, float] = {}
+    labels: Dict[str, str] = {}
+
+    seen_gauges: set[str] = set()
+    ordered_gauges: List[str] = []
+    for raw_key in gauge_keys:
+        key = str(raw_key or "").strip()
+        if not key or key in seen_gauges:
+            continue
+        seen_gauges.add(key)
+        ordered_gauges.append(key)
+
+    for gauge_idx, gauge_key in enumerate(ordered_gauges[:3]):
+        base = max(2.8 - (gauge_idx * 0.45), 1.4)
+        for phrase_idx, phrase in enumerate(_EARTHSCOPE_GAUGE_PHRASES.get(gauge_key, [])):
+            _earthscope_add_phrase(scores, labels, phrase, base - (phrase_idx * 0.35))
+        for option_idx, option in enumerate((_GAUGE_QUICK_LOG.get(gauge_key) or [])[:3]):
+            _earthscope_add_phrase(scores, labels, option.get("label"), base - (option_idx * 0.25))
+
+    seen_drivers: set[str] = set()
+    ordered_drivers: List[Dict[str, Any]] = []
+    for raw_driver in drivers or []:
+        key = str((raw_driver or {}).get("key") or "").strip()
+        if not key or key in seen_drivers:
+            continue
+        seen_drivers.add(key)
+        ordered_drivers.append(dict(raw_driver))
+
+    for driver_idx, driver in enumerate(ordered_drivers[:4]):
+        key = str(driver.get("key") or "").strip()
+        if not key:
+            continue
+        severity = str(driver.get("severity") or driver.get("state") or "").strip().lower()
+        base = max(_EARTHSCOPE_DRIVER_WEIGHTS.get(severity, 1.4) - (driver_idx * 0.25), 1.0)
+        personalized = _driver_personalized_content(key, profile).get("quick_log") or []
+        options = _merge_quick_log_options(personalized, _DRIVER_QUICK_LOG.get(key) or [])
+        for option_idx, option in enumerate(options[:3]):
+            _earthscope_add_phrase(scores, labels, option.get("label"), base - (option_idx * 0.35))
+
+    if profile.includes_any(HEAD_PRESSURE_KEYS):
+        for phrase in _EARTHSCOPE_HEAD_PHRASES:
+            _earthscope_add_phrase(scores, labels, phrase, 0.85)
+    if profile.includes_any(PAIN_FLARE_KEYS):
+        for phrase in _EARTHSCOPE_PAIN_PHRASES:
+            _earthscope_add_phrase(scores, labels, phrase, 0.75)
+    if profile.includes_any(SINUS_KEYS):
+        for phrase in _EARTHSCOPE_SINUS_PHRASES:
+            _earthscope_add_phrase(scores, labels, phrase, 0.7)
+    if profile.includes_any(AIRWAY_KEYS):
+        for phrase in _EARTHSCOPE_AIRWAY_PHRASES:
+            _earthscope_add_phrase(scores, labels, phrase, 0.7)
+    if profile.includes_any(AUTONOMIC_KEYS):
+        for phrase in _EARTHSCOPE_AUTONOMIC_PHRASES:
+            _earthscope_add_phrase(scores, labels, phrase, 0.75)
+    if profile.includes_any(SLEEP_DISRUPTION_KEYS):
+        for phrase in _EARTHSCOPE_SLEEP_PHRASES:
+            _earthscope_add_phrase(scores, labels, phrase, 0.75)
+
+    ranked = sorted(scores.items(), key=lambda item: (-item[1], item[0]))
+    return [
+        {"phrase": labels.get(phrase, phrase), "score": round(score, 2)}
+        for phrase, score in ranked[:max(limit, 0)]
+    ]
+
+
+def earthscope_condition_note(
+    *,
+    ranked_symptoms: Iterable[Dict[str, Any]],
+    user_tags: Optional[Iterable[Any]] = None,
+) -> Optional[str]:
+    profile = build_personalization_profile(user_tags)
+    phrases = {str(item.get("phrase") or "").strip().lower() for item in ranked_symptoms if str(item.get("phrase") or "").strip()}
+    if not phrases:
+        return None
+
+    if profile.has_any("migraine_history") and phrases & _EARTHSCOPE_HEAD_PHRASES:
+        return "Because you've marked migraine history, head pressure or light sensitivity may be easier to notice than usual."
+    if profile.has_any("fibromyalgia") and phrases & (_EARTHSCOPE_PAIN_PHRASES | {"low energy"}):
+        return "Because you've marked fibromyalgia, pain, stiffness, or fatigue may feel closer to the surface than usual."
+    if profile.includes_any(PAIN_FLARE_KEYS) and phrases & _EARTHSCOPE_PAIN_PHRASES:
+        return "Because you've marked pain or joint sensitivity, pain or stiffness may be easier to notice than usual."
+    if profile.includes_any(AUTONOMIC_KEYS) and phrases & _EARTHSCOPE_AUTONOMIC_PHRASES:
+        return "Because you've marked autonomic sensitivity, palpitations, wired energy, or a drained feeling may stand out faster."
+    if profile.has_any("allergies_sinus") and phrases & _EARTHSCOPE_SINUS_PHRASES:
+        return "Because you've marked allergies or sinus sensitivity, sinus pressure or foggier focus may stand out faster."
+    if profile.includes_any(AIRWAY_KEYS) and phrases & _EARTHSCOPE_AIRWAY_PHRASES:
+        return "Because you've marked breathing sensitivity, irritation or chest tightness may show up faster than usual."
+    if profile.includes_any(SLEEP_DISRUPTION_KEYS) and phrases & _EARTHSCOPE_SLEEP_PHRASES:
+        return "Because you've marked sleep sensitivity, lighter or more disruptive sleep may be easier to notice tonight."
+    return None
 
 
 def _gauge_why_lines(
@@ -1124,6 +1306,7 @@ def build_earthscope_summary(
     gauges_meta: Optional[Dict[str, Dict[str, Any]]],
     gauge_labels: Optional[Dict[str, str]],
     drivers: Optional[Iterable[Dict[str, Any]]],
+    user_tags: Optional[Iterable[Any]] = None,
 ) -> str:
     gauges = gauges or {}
     gauges_meta = gauges_meta or {}
@@ -1133,36 +1316,46 @@ def build_earthscope_summary(
     top_drivers = driver_rows[:2]
     top_gauges = _elevated_gauges(gauges, gauges_meta)[:2]
     bucket_key = _earthscope_refresh_bucket()
+    ranked_symptoms = earthscope_ranked_symptoms(
+        gauge_keys=[item.get("key") for item in top_gauges],
+        drivers=driver_rows,
+        user_tags=user_tags,
+        limit=3,
+    )
+    symptom_phrases = [str(item.get("phrase") or "").strip() for item in ranked_symptoms if str(item.get("phrase") or "").strip()]
+    condition_note = earthscope_condition_note(ranked_symptoms=ranked_symptoms, user_tags=user_tags)
 
     sentences: List[str] = []
     if top_drivers:
         primary = top_drivers[0]
         primary_label = str(primary.get("label") or "The current mix").strip()
-        primary_phrase = f"{primary_label} is {_earthscope_driver_state_fragment(primary)}"
         secondary_clause = ""
         if len(top_drivers) > 1:
             secondary = top_drivers[1]
             secondary_label = str(secondary.get("label") or "another driver").strip()
-            secondary_clause = f", with {secondary_label} also {_earthscope_driver_state_fragment(secondary)}"
+            secondary_state = str(secondary.get("state") or "").strip().lower()
+            secondary_clause = f", while {secondary_label} stays {secondary_state or 'active'}"
         sentences.append(
             _earthscope_template_pick(
                 [
-                    "Right now, {primary}{secondary_clause}.",
-                    "At the moment, {primary}{secondary_clause}.",
-                    "Currently, {primary}{secondary_clause}.",
-                    "In the current pattern, {primary}{secondary_clause}.",
-                    "For now, {primary}{secondary_clause}.",
-                    "At this point, {primary}{secondary_clause}.",
-                    "Right now, the main environmental pull is that {primary}{secondary_clause}.",
-                    "Currently, the strongest pull in the mix is that {primary}{secondary_clause}.",
-                    "At the moment, the clearest signal is that {primary}{secondary_clause}.",
-                    "For now, the lead signal is that {primary}{secondary_clause}.",
+                    "{primary_label} is setting the pace right now, {state_text}{secondary_clause}.",
+                    "Right now, {primary_label} is carrying the most weight, {state_text}{secondary_clause}.",
+                    "At the moment, {primary_label} is the clearest influence, {state_text}{secondary_clause}.",
+                    "Currently, {primary_label} is leading the mix, {state_text}{secondary_clause}.",
+                    "For now, {primary_label} is doing more of the talking, {state_text}{secondary_clause}.",
+                    "Right now, {primary_label} is out front, {state_text}{secondary_clause}.",
+                    "At the moment, {primary_label} is the main thing to watch, {state_text}{secondary_clause}.",
+                    "Currently, {primary_label} is the strongest external pull, {state_text}{secondary_clause}.",
                 ],
                 user_id=user_id,
                 bucket_key=bucket_key,
                 driver_family=_earthscope_driver_family_key(primary),
                 slot="summary-lead",
-            ).format(primary=primary_phrase, secondary_clause=secondary_clause)
+            ).format(
+                primary_label=primary_label,
+                state_text=_earthscope_lead_state_text(primary),
+                secondary_clause=secondary_clause,
+            )
         )
     else:
         sentences.append(
@@ -1181,6 +1374,15 @@ def build_earthscope_summary(
             )
         )
 
-    sentences.append(_earthscope_gauge_sentence(top_gauges, gauge_labels))
-    sentences.append("Keep pacing flexible if you need it, and tap highlighted gauges or drivers for context, supportive actions, and quick logging.")
-    return " ".join(sentences[:3]).strip()
+    if symptom_phrases:
+        sentences.append(
+            f"Based on the current drivers and your gauges, the strongest possibilities right now are {_join_labels(symptom_phrases)}."
+        )
+    else:
+        sentences.append(_earthscope_gauge_sentence(top_gauges, gauge_labels))
+
+    if condition_note:
+        sentences.append(condition_note)
+
+    sentences.append("These are possibilities, not certainties. Tap in for context or log symptoms to sharpen your personal pattern.")
+    return " ".join(sentences[:4]).strip()
