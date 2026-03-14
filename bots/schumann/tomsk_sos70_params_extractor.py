@@ -354,6 +354,9 @@ def refine_series_recent_consensus(
     max_y_px=None,
     inlier_tol_px=6,
     min_support_cols=3,
+    min_support_weight_ratio=0.55,
+    strong_support_weight_ratio=0.72,
+    max_jump_px=16,
 ):
     """
     Final y-only pass that aggregates the same series over several nearby columns.
@@ -362,6 +365,7 @@ def refine_series_recent_consensus(
     """
     if series_name not in picks:
         return picks, {}
+    anchor_y_px = int(picks[series_name]["y_px"])
     style = find_series_style(chart_type, series_name)
     if style is None:
         return picks, {}
@@ -428,6 +432,8 @@ def refine_series_recent_consensus(
         return picks, {
             f"{series_name.lower()}_consensus_applied": False,
             f"{series_name.lower()}_consensus_support_cols": int(len(candidates)),
+            f"{series_name.lower()}_consensus_anchor_y_px": int(anchor_y_px),
+            f"{series_name.lower()}_consensus_reason": "insufficient_candidates",
         }
 
     tol = max(2, int(inlier_tol_px))
@@ -457,12 +463,36 @@ def refine_series_recent_consensus(
         return picks, {
             f"{series_name.lower()}_consensus_applied": False,
             f"{series_name.lower()}_consensus_support_cols": int(len(inlier_vals)),
+            f"{series_name.lower()}_consensus_anchor_y_px": int(anchor_y_px),
             f"{series_name.lower()}_consensus_seed_y_px": int(best_seed),
+            f"{series_name.lower()}_consensus_reason": "insufficient_inliers",
         }
 
     y_pix = weighted_median_int(inlier_vals, inlier_wts)
     if y_pix is None:
         return picks, {}
+    total_weight = float(np.sum(weights)) if len(weights) > 0 else 0.0
+    support_weight = float(np.sum(inlier_wts)) if len(inlier_wts) > 0 else 0.0
+    support_ratio = float(support_weight / max(total_weight, 1e-6))
+    jump_px = int(abs(int(y_pix) - int(anchor_y_px)))
+    support_ok = support_ratio >= float(min_support_weight_ratio)
+    jump_ok = (jump_px <= int(max_jump_px)) or (support_ratio >= float(strong_support_weight_ratio))
+    if not (support_ok and jump_ok):
+        reason = "low_support"
+        if support_ok and not jump_ok:
+            reason = "excessive_jump"
+        return picks, {
+            f"{series_name.lower()}_consensus_applied": False,
+            f"{series_name.lower()}_consensus_x_range": [int(x_lo), int(x_hi)],
+            f"{series_name.lower()}_consensus_y_px": int(y_pix),
+            f"{series_name.lower()}_consensus_anchor_y_px": int(anchor_y_px),
+            f"{series_name.lower()}_consensus_seed_y_px": int(best_seed),
+            f"{series_name.lower()}_consensus_support_cols": int(len(inlier_vals)),
+            f"{series_name.lower()}_consensus_support_ratio": float(support_ratio),
+            f"{series_name.lower()}_consensus_jump_px": int(jump_px),
+            f"{series_name.lower()}_consensus_tol_px": int(tol),
+            f"{series_name.lower()}_consensus_reason": reason,
+        }
     y_norm = (float(y_pix) - float(y0i)) / max(1.0, float(y1i - y0i))
     lane_norm = (float(y_pix) - float(lane_y0)) / max(1.0, float(lane_y1 - lane_y0))
     picks[series_name]["y_px"] = int(y_pix)
@@ -472,9 +502,13 @@ def refine_series_recent_consensus(
     dbg = {
         f"{series_name.lower()}_consensus_x_range": [int(x_lo), int(x_hi)],
         f"{series_name.lower()}_consensus_y_px": int(y_pix),
+        f"{series_name.lower()}_consensus_anchor_y_px": int(anchor_y_px),
         f"{series_name.lower()}_consensus_seed_y_px": int(best_seed),
         f"{series_name.lower()}_consensus_support_cols": int(len(inlier_vals)),
+        f"{series_name.lower()}_consensus_support_ratio": float(support_ratio),
+        f"{series_name.lower()}_consensus_jump_px": int(jump_px),
         f"{series_name.lower()}_consensus_tol_px": int(tol),
+        f"{series_name.lower()}_consensus_reason": "accepted",
         f"{series_name.lower()}_consensus_applied": True,
     }
     return picks, dbg
