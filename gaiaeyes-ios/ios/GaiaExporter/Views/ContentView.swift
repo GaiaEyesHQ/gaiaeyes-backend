@@ -88,14 +88,80 @@ private struct LocalWeather: Codable {
     let baroTrend: String?
 
     private enum CodingKeys: String, CodingKey {
-        case tempC = "temp_c"
-        case tempDelta24hC = "temp_delta_24h_c"
-        case humidityPct = "humidity_pct"
-        case precipProbPct = "precip_prob_pct"
-        case pressureHpa = "pressure_hpa"
-        case baroDelta24hHpa = "baro_delta_24h_hpa"
-        case pressureTrend = "pressure_trend"
-        case baroTrend = "baro_trend"
+        case tempC
+        case tempCSnake = "temp_c"
+        case tempDelta24hC
+        case tempDelta24HC = "tempDelta24HC"
+        case tempDelta24hCSnake = "temp_delta_24h_c"
+        case humidityPct
+        case humidityPctSnake = "humidity_pct"
+        case precipProbPct
+        case precipProbPctSnake = "precip_prob_pct"
+        case pressureHpa
+        case pressureHpaSnake = "pressure_hpa"
+        case baroDelta24hHpa
+        case baroDelta24HHpa = "baroDelta24HHpa"
+        case baroDelta24hHpaSnake = "baro_delta_24h_hpa"
+        case pressureTrend
+        case pressureTrendSnake = "pressure_trend"
+        case baroTrend
+        case baroTrendSnake = "baro_trend"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        tempC = Self.decodeDouble(from: container, keys: [.tempC, .tempCSnake])
+        tempDelta24hC = Self.decodeDouble(from: container, keys: [.tempDelta24hC, .tempDelta24HC, .tempDelta24hCSnake])
+        humidityPct = Self.decodeDouble(from: container, keys: [.humidityPct, .humidityPctSnake])
+        precipProbPct = Self.decodeDouble(from: container, keys: [.precipProbPct, .precipProbPctSnake])
+        pressureHpa = Self.decodeDouble(from: container, keys: [.pressureHpa, .pressureHpaSnake])
+        baroDelta24hHpa = Self.decodeDouble(from: container, keys: [.baroDelta24hHpa, .baroDelta24HHpa, .baroDelta24hHpaSnake])
+        pressureTrend = Self.decodeString(from: container, keys: [.pressureTrend, .pressureTrendSnake])
+        baroTrend = Self.decodeString(from: container, keys: [.baroTrend, .baroTrendSnake])
+    }
+
+    init(
+        tempC: Double?,
+        tempDelta24hC: Double?,
+        humidityPct: Double?,
+        precipProbPct: Double?,
+        pressureHpa: Double?,
+        baroDelta24hHpa: Double?,
+        pressureTrend: String?,
+        baroTrend: String?
+    ) {
+        self.tempC = tempC
+        self.tempDelta24hC = tempDelta24hC
+        self.humidityPct = humidityPct
+        self.precipProbPct = precipProbPct
+        self.pressureHpa = pressureHpa
+        self.baroDelta24hHpa = baroDelta24hHpa
+        self.pressureTrend = pressureTrend
+        self.baroTrend = baroTrend
+    }
+
+    private static func decodeDouble(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        keys: [CodingKeys]
+    ) -> Double? {
+        for key in keys {
+            if let value = try? container.decodeIfPresent(Double.self, forKey: key) {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func decodeString(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        keys: [CodingKeys]
+    ) -> String? {
+        for key in keys {
+            if let value = try? container.decodeIfPresent(String.self, forKey: key) {
+                return value
+            }
+        }
+        return nil
     }
 }
 
