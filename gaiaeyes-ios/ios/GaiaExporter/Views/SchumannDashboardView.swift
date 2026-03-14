@@ -263,6 +263,80 @@ private struct TomskParamsLatestResponse: Codable {
         case trend2h = "trend_2h"
         case coherence
     }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        ok = try? c.decodeIfPresent(Bool.self, forKey: .ok)
+        generatedAt = try? c.decodeIfPresent(String.self, forKey: .generatedAt)
+        stationId = try? c.decodeIfPresent(String.self, forKey: .stationId)
+        usable = Self.decodeBool(c, forKey: .usable)
+        usableForFusion = Self.decodeBool(c, forKey: .usableForFusion)
+        qualityScore = Self.decodeDouble(c, forKey: .qualityScore)
+        frequencyHz = Self.decodeNumericMap(c, forKey: .frequencyHz)
+        amplitude = Self.decodeNumericMap(c, forKey: .amplitude)
+        qFactor = Self.decodeNumericMap(c, forKey: .qFactor)
+        trend2h = try? c.decodeIfPresent([String: TomskTrendDelta].self, forKey: .trend2h)
+        coherence = try? c.decodeIfPresent(TomskCoherence.self, forKey: .coherence)
+    }
+
+    private static func decodeBool(_ c: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Bool? {
+        if let value = try? c.decode(Bool.self, forKey: key) {
+            return value
+        }
+        if let stringValue = try? c.decode(String.self, forKey: key) {
+            switch stringValue.lowercased() {
+            case "true", "1", "yes":
+                return true
+            case "false", "0", "no":
+                return false
+            default:
+                return nil
+            }
+        }
+        return nil
+    }
+
+    private static func decodeDouble(_ c: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double? {
+        if let value = try? c.decode(Double.self, forKey: key) {
+            return value
+        }
+        if let intValue = try? c.decode(Int.self, forKey: key) {
+            return Double(intValue)
+        }
+        if let stringValue = try? c.decode(String.self, forKey: key) {
+            return Double(stringValue)
+        }
+        return nil
+    }
+
+    private static func decodeNumericMap(
+        _ c: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) -> [String: Double]? {
+        guard c.contains(key),
+              let nested = try? c.nestedContainer(keyedBy: SchumannDynamicCodingKey.self, forKey: key)
+        else {
+            return nil
+        }
+
+        var mapped: [String: Double] = [:]
+        for nestedKey in nested.allKeys {
+            if let value = try? nested.decode(Double.self, forKey: nestedKey) {
+                mapped[nestedKey.stringValue] = value
+                continue
+            }
+            if let intValue = try? nested.decode(Int.self, forKey: nestedKey) {
+                mapped[nestedKey.stringValue] = Double(intValue)
+                continue
+            }
+            if let stringValue = try? nested.decode(String.self, forKey: nestedKey),
+               let value = Double(stringValue) {
+                mapped[nestedKey.stringValue] = value
+            }
+        }
+
+        return mapped.isEmpty ? nil : mapped
+    }
 }
 
 private struct TomskParamsSeriesResponse: Codable {
@@ -1549,72 +1623,79 @@ private struct TomskSparklineView: View {
     let color: Color
     let points: [TomskSparkPoint]
 
-    @State private var selectedPoint: TomskSparkPoint?
-
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-
-            Chart {
-                ForEach(points) { point in
-                    if let value = point.value(key) {
-                        LineMark(
-                            x: .value("Time", point.date),
-                            y: .value("Value", value),
-                            series: .value("Series", title)
-                        )
-                        .foregroundStyle(color)
-                        .lineStyle(StrokeStyle(lineWidth: 1.8))
-                        .opacity(point.usable ? 1 : 0.28)
-                    }
+            HStack {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                Spacer()
+                if let latestValue = plottedValues.last?.value {
+                    Text(formattedValue(latestValue))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(.secondary)
                 }
+            }
 
-                ForEach(points.filter { !$0.usable }) { point in
-                    if let value = point.value(key) {
-                        PointMark(
-                            x: .value("Time", point.date),
-                            y: .value("Value", value)
-                        )
-                        .symbolSize(20)
-                        .foregroundStyle(.orange)
+            if plottedValues.isEmpty {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.secondary.opacity(0.08))
+                    .frame(height: 72)
+                    .overlay {
+                        Text("No data")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
                     }
-                }
+            } else {
+                Canvas { context, size in
+                    let lastIndex = max(plottedValues.count - 1, 1)
+                    let range = valueRange
 
-                if let selectedPoint, let value = selectedPoint.value(key) {
-                    RuleMark(x: .value("Selected", selectedPoint.date))
-                        .foregroundStyle(.secondary.opacity(0.35))
-                    PointMark(
-                        x: .value("SelectedTime", selectedPoint.date),
-                        y: .value("SelectedValue", value)
+                    var path = Path()
+                    for (index, entry) in plottedValues.enumerated() {
+                        let point = CGPoint(
+                            x: xPosition(for: index, width: size.width, lastIndex: lastIndex),
+                            y: yPosition(for: entry.value, height: size.height, range: range)
+                        )
+                        if index == 0 {
+                            path.move(to: point)
+                        } else {
+                            path.addLine(to: point)
+                        }
+                    }
+
+                    context.stroke(
+                        path,
+                        with: .color(color),
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
                     )
-                    .symbolSize(36)
-                    .foregroundStyle(.white)
-                }
-            }
-            .frame(height: 90)
-            .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
-            .chartOverlay { proxy in
-                GeometryReader { geo in
-                    Rectangle()
-                        .fill(Color.clear)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { value in
-                                    guard let plotFrame = proxy.plotFrame else { return }
-                                    let origin = geo[plotFrame].origin
-                                    let locationX = value.location.x - origin.x
-                                    guard let date: Date = proxy.value(atX: locationX) else { return }
-                                    selectedPoint = nearestPoint(to: date)
-                                }
+
+                    for entry in plottedValues where !entry.point.usable {
+                        let center = CGPoint(
+                            x: xPosition(for: entry.index, width: size.width, lastIndex: lastIndex),
+                            y: yPosition(for: entry.value, height: size.height, range: range)
                         )
+                        let dotRect = CGRect(x: center.x - 3, y: center.y - 3, width: 6, height: 6)
+                        context.fill(Path(ellipseIn: dotRect), with: .color(.orange))
+                    }
+
+                    if let latest = plottedValues.last {
+                        let center = CGPoint(
+                            x: xPosition(for: latest.index, width: size.width, lastIndex: lastIndex),
+                            y: yPosition(for: latest.value, height: size.height, range: range)
+                        )
+                        let dotRect = CGRect(x: center.x - 3.5, y: center.y - 3.5, width: 7, height: 7)
+                        context.fill(Path(ellipseIn: dotRect), with: .color(.white))
+                    }
                 }
+                .frame(height: 72)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.secondary.opacity(0.08))
+                )
             }
 
-            if let selectedPoint, let value = selectedPoint.value(key) {
-                Text("\(formattedDate(selectedPoint.date)) • \(formattedValue(value)) • \(selectedPoint.usable ? "OK" : "Low confidence")")
+            if let latest = plottedValues.last {
+                Text("\(formattedDate(latest.point.date)) • \(formattedValue(latest.value)) • \(latest.point.usable ? "OK" : "Low confidence")")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             } else {
@@ -1625,8 +1706,37 @@ private struct TomskSparklineView: View {
         }
     }
 
-    private func nearestPoint(to date: Date) -> TomskSparkPoint? {
-        points.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
+    private var plottedValues: [(index: Int, point: TomskSparkPoint, value: Double)] {
+        points.enumerated().compactMap { index, point in
+            guard let value = point.value(key) else {
+                return nil
+            }
+            return (index, point, value)
+        }
+    }
+
+    private var valueRange: ClosedRange<Double> {
+        let values = plottedValues.map(\.value)
+        guard let minValue = values.min(), let maxValue = values.max() else {
+            return 0...1
+        }
+        if abs(maxValue - minValue) < 0.0001 {
+            let padding = max(abs(maxValue) * 0.05, 0.1)
+            return (minValue - padding)...(maxValue + padding)
+        }
+        let padding = (maxValue - minValue) * 0.08
+        return (minValue - padding)...(maxValue + padding)
+    }
+
+    private func xPosition(for index: Int, width: CGFloat, lastIndex: Int) -> CGFloat {
+        guard lastIndex > 0 else { return width / 2 }
+        return CGFloat(index) / CGFloat(lastIndex) * width
+    }
+
+    private func yPosition(for value: Double, height: CGFloat, range: ClosedRange<Double>) -> CGFloat {
+        let span = max(range.upperBound - range.lowerBound, 0.0001)
+        let normalized = (value - range.lowerBound) / span
+        return height - (CGFloat(normalized) * height)
     }
 
     private func formattedValue(_ value: Double) -> String {
