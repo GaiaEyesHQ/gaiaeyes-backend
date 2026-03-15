@@ -75,6 +75,9 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     @Published var symptomQueueCount: Int = 0
     @Published var backendDBAvailable: Bool = true
 
+    private var cachedAPIClient: APIClient?
+    private var cachedAPIClientSignature: String?
+
     // MARK: - BLE (CoreBluetooth HR)
     // MARK: - HealthKit
     private let healthStore = HKHealthStore()
@@ -266,10 +269,20 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         let trimmedBase = baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedBearer = bearer.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedBase = trimmedBase.isEmpty ? "http://127.0.0.1:8000" : trimmedBase
+        let clientSignature = "\(normalizedBase)|\(trimmedBearer)"
         let cfg = APIConfig(baseURLString: trimmedBase.isEmpty ? "http://127.0.0.1:8000" : trimmedBase,
                             bearer: trimmedBearer,
                             timeout: 60)
-        let client = APIClient(config: cfg)
+        let client: APIClient
+        if let cached = cachedAPIClient, cachedAPIClientSignature == clientSignature {
+            client = cached
+        } else {
+            client = APIClient(config: cfg)
+            cachedAPIClient = client
+            cachedAPIClientSignature = clientSignature
+            append("[NET] client ready base=\(cfg.baseURLString) bearer=\(!trimmedBearer.isEmpty) uid=\(trimmedUserId.isEmpty ? "nil" : trimmedUserId)")
+        }
         // Always scope requests when using the developer bearer; fallback to the known dev user id if needed
         if let eff = effectiveDeveloperUserId() {
             client.devUserId = eff
@@ -287,7 +300,6 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             append("⚠️ Developer bearer requests need X-Dev-UserId; tap ‘Use Developer Credentials’ in Connection Settings.")
             warnedAboutAnonymousDevRequest = true
         }
-        append("[NET] client ready base=\(cfg.baseURLString) bearer=\(!trimmedBearer.isEmpty) uid=\(trimmedUserId.isEmpty ? "nil" : trimmedUserId)")
         return client
     }
 

@@ -198,6 +198,10 @@ final class APIClient {
         pathMonitor.start(queue: q)
     }
 
+    deinit {
+        pathMonitor.cancel()
+    }
+
     /// Send a prepared request using the tuned session (short timeouts, limited concurrency)
     func send(_ request: URLRequest) async throws -> (Data, URLResponse) {
         try await self.session.data(for: request)
