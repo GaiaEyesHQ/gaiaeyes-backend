@@ -690,6 +690,20 @@ private final class SchumannDashboardViewModel: ObservableObject {
         tomskLatest?.generatedAt
     }
 
+    private func isIncompleteTomskLatest(_ response: TomskParamsLatestResponse) -> Bool {
+        let hasAmplitude = !(response.amplitude ?? [:]).isEmpty
+        let hasFrequency = !(response.frequencyHz ?? [:]).isEmpty
+        let hasQFactor = !(response.qFactor ?? [:]).isEmpty
+        let hasStatus = response.usable != nil || response.usableForFusion != nil || response.qualityScore != nil
+        let hasTimestamp = !(response.generatedAt ?? "").isEmpty
+
+        if hasAmplitude && (!hasFrequency || !hasQFactor || !hasStatus || !hasTimestamp) {
+            return true
+        }
+
+        return false
+    }
+
     private func parseDate(_ iso: String?) -> Date? {
         guard let iso else { return nil }
         return Self.isoFractional.date(from: iso) ?? Self.isoPlain.date(from: iso)
@@ -767,6 +781,17 @@ private final class SchumannDashboardViewModel: ObservableObject {
         }
     }
 
+    private func fetchTomskLatestFresh(api: APIClient) async throws -> TomskParamsLatestResponse {
+        let response = try await api.getJSON(
+            "v1/earth/schumann/tomsk_params/latest?station_id=tomsk",
+            as: TomskParamsLatestResponse.self,
+            retries: 2,
+            perRequestTimeout: 20
+        )
+        await cache.write(response, key: "sch_tomsk_latest", ttl: 60)
+        return response
+    }
+
     func loadTomskLatestIfNeeded(using state: AppState, force: Bool = false) async {
         if !force, tomskLatest != nil {
             return
@@ -780,7 +805,10 @@ private final class SchumannDashboardViewModel: ObservableObject {
 
         do {
             let api = state.apiWithAuth()
-            let response = try await fetchTomskLatest(api: api, force: force)
+            var response = try await fetchTomskLatest(api: api, force: force)
+            if !force, isIncompleteTomskLatest(response) {
+                response = try await fetchTomskLatestFresh(api: api)
+            }
             tomskLatest = response
         } catch {
             tomskErrorMessage = "Tomsk detail is temporarily unavailable."
