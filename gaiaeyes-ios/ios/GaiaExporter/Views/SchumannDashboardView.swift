@@ -527,6 +527,8 @@ private final class SchumannDashboardViewModel: ObservableObject {
     @Published var tomskSeries: [TomskParamsSeriesPoint] = []
     @Published var isTomskLatestLoading: Bool = false
     @Published var isTomskSeriesLoading: Bool = false
+    @Published var isSeriesLoading: Bool = false
+    @Published var isHeatmapLoading: Bool = false
     @Published var tomskErrorMessage: String?
 
     @Published var isLoading: Bool = false
@@ -554,7 +556,7 @@ private final class SchumannDashboardViewModel: ObservableObject {
     }
 
     func refresh(using state: AppState, force: Bool) async {
-        if latest == nil && seriesRows.isEmpty && heatmap == nil {
+        if latest == nil {
             isLoading = true
         }
         errorMessage = nil
@@ -564,15 +566,7 @@ private final class SchumannDashboardViewModel: ObservableObject {
         async let latestResult: Result<SchumannLatestResponse, Error> = run {
             try await self.fetchLatest(api: api, force: force)
         }
-        async let seriesResult: Result<SchumannSeriesResponse, Error> = run {
-            try await self.fetchSeries(api: api, force: force)
-        }
-        async let heatmapResult: Result<SchumannHeatmapResponse, Error> = run {
-            try await self.fetchHeatmap(api: api, force: force)
-        }
         let resolvedLatest = await latestResult
-        let resolvedSeries = await seriesResult
-        let resolvedHeatmap = await heatmapResult
 
         var errorParts: [String] = []
 
@@ -583,24 +577,8 @@ private final class SchumannDashboardViewModel: ObservableObject {
             errorParts.append("latest: \(err.localizedDescription)")
         }
 
-        switch resolvedSeries {
-        case .success(let response):
-            seriesRows = response.rows ?? []
-        case .failure(let err):
-            errorParts.append("series: \(err.localizedDescription)")
-        }
-
-        switch resolvedHeatmap {
-        case .success(let response):
-            heatmap = response
-        case .failure(let err):
-            errorParts.append("heatmap: \(err.localizedDescription)")
-        }
-
-        if !errorParts.isEmpty && latest == nil && seriesRows.isEmpty && heatmap == nil {
+        if !errorParts.isEmpty && latest == nil {
             errorMessage = "Unable to load Schumann data (\(errorParts.joined(separator: " | ")))."
-        } else if !errorParts.isEmpty {
-            errorMessage = "Some sections are unavailable right now."
         }
 
         isLoading = false
@@ -841,6 +819,38 @@ private final class SchumannDashboardViewModel: ObservableObject {
         }
     }
 
+    func loadSeriesIfNeeded(using state: AppState, force: Bool = false) async {
+        if !force, !seriesRows.isEmpty {
+            return
+        }
+        isSeriesLoading = true
+        defer { isSeriesLoading = false }
+
+        do {
+            let api = state.apiWithAuth()
+            let response = try await fetchSeries(api: api, force: force)
+            seriesRows = response.rows ?? []
+        } catch {
+            errorMessage = "Trend series is temporarily unavailable."
+        }
+    }
+
+    func loadHeatmapIfNeeded(using state: AppState, force: Bool = false) async {
+        if !force, heatmap != nil {
+            return
+        }
+        isHeatmapLoading = true
+        defer { isHeatmapLoading = false }
+
+        do {
+            let api = state.apiWithAuth()
+            let response = try await fetchHeatmap(api: api, force: force)
+            heatmap = response
+        } catch {
+            errorMessage = "Heatmap is temporarily unavailable."
+        }
+    }
+
     private func fetchCached<T: Codable>(
         key: String,
         ttl: TimeInterval,
@@ -869,9 +879,10 @@ struct SchumannDashboardView: View {
     @ObservedObject var state: AppState
     @StateObject private var viewModel = SchumannDashboardViewModel()
     @State private var showHowToRead: Bool = false
+    @State private var showBandsDetails: Bool = false
+    @State private var showHeatmapDetails: Bool = false
+    @State private var showPulseDetails: Bool = false
     @State private var showTomskDetails: Bool = false
-
-    private let timer = Timer.publish(every: 12 * 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ScrollView {
@@ -889,22 +900,46 @@ struct SchumannDashboardView: View {
         .background(viewModel.highContrast ? Color.black : Color(.systemGroupedBackground))
         .navigationTitle("Schumann")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable {
-            await viewModel.refresh(using: state, force: true)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task {
+                        await viewModel.refresh(using: state, force: true)
+                    }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .accessibilityLabel("Refresh Schumann")
+            }
         }
         .task {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
             await viewModel.loadIfNeeded(using: state)
-        }
-        .onReceive(timer) { _ in
-            Task {
-                await viewModel.refresh(using: state, force: false)
-            }
         }
         .onChange(of: showTomskDetails) { _, expanded in
             guard expanded else { return }
             Task {
                 await viewModel.loadTomskLatestIfNeeded(using: state, force: false)
                 await viewModel.loadTomskSeriesIfNeeded(using: state, force: false)
+            }
+        }
+        .onChange(of: showBandsDetails) { _, expanded in
+            guard expanded else { return }
+            Task {
+                await viewModel.loadSeriesIfNeeded(using: state, force: false)
+            }
+        }
+        .onChange(of: showHeatmapDetails) { _, expanded in
+            guard expanded else { return }
+            Task {
+                await viewModel.loadHeatmapIfNeeded(using: state, force: false)
+            }
+        }
+        .onChange(of: showPulseDetails) { _, expanded in
+            guard expanded else { return }
+            Task {
+                await viewModel.loadSeriesIfNeeded(using: state, force: false)
             }
         }
     }
@@ -1025,11 +1060,30 @@ struct SchumannDashboardView: View {
 
     private var heatmapCard: some View {
         GroupBox {
-            SchumannHeatmapView(
-                heatmap: viewModel.heatmap,
-                samples: viewModel.samplesAscending,
-                highContrast: viewModel.highContrast
-            )
+            DisclosureGroup(isExpanded: $showHeatmapDetails) {
+                if showHeatmapDetails {
+                    if viewModel.isHeatmapLoading && viewModel.heatmap == nil {
+                        ProgressView("Loading heatmap…")
+                            .font(.caption)
+                            .padding(.top, 8)
+                    } else {
+                        SchumannHeatmapView(
+                            heatmap: viewModel.heatmap,
+                            samples: viewModel.samplesAscending,
+                            highContrast: viewModel.highContrast
+                        )
+                        .padding(.top, 8)
+                    }
+                } else {
+                    Text("Tap to load the 48h heatmap.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 8)
+                }
+            } label: {
+                Text("Load heatmap")
+                    .font(.subheadline.weight(.semibold))
+            }
         } label: {
             Label("48h Heatmap", systemImage: "square.grid.3x3.fill")
         }
@@ -1037,9 +1091,28 @@ struct SchumannDashboardView: View {
 
     private var bandsCard: some View {
         GroupBox {
-            SchumannBandBarsView(
-                samples: viewModel.samplesAscending
-            )
+            DisclosureGroup(isExpanded: $showBandsDetails) {
+                if showBandsDetails {
+                    if viewModel.isSeriesLoading && viewModel.seriesRows.isEmpty {
+                        ProgressView("Loading band trends…")
+                            .font(.caption)
+                            .padding(.top, 8)
+                    } else {
+                        SchumannBandBarsView(
+                            samples: viewModel.samplesAscending
+                        )
+                        .padding(.top, 8)
+                    }
+                } else {
+                    Text("Tap to load harmonic band trends.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 8)
+                }
+            } label: {
+                Text("Load band trends")
+                    .font(.subheadline.weight(.semibold))
+            }
         } label: {
             Label("Harmonic Bands", systemImage: "chart.bar.fill")
         }
@@ -1047,9 +1120,28 @@ struct SchumannDashboardView: View {
 
     private var pulseCard: some View {
         GroupBox {
-            SchumannPulseChartView(
-                samples: viewModel.samplesAscending
-            )
+            DisclosureGroup(isExpanded: $showPulseDetails) {
+                if showPulseDetails {
+                    if viewModel.isSeriesLoading && viewModel.seriesRows.isEmpty {
+                        ProgressView("Loading pulse line…")
+                            .font(.caption)
+                            .padding(.top, 8)
+                    } else {
+                        SchumannPulseChartView(
+                            samples: viewModel.samplesAscending
+                        )
+                        .padding(.top, 8)
+                    }
+                } else {
+                    Text("Tap to load the 48h pulse line.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 8)
+                }
+            } label: {
+                Text("Load pulse line")
+                    .font(.subheadline.weight(.semibold))
+            }
         } label: {
             Label("48h Pulse Line", systemImage: "waveform.path.ecg")
         }

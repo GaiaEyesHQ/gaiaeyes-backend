@@ -162,6 +162,7 @@ final class APIClient {
     private let bearer: String
     private let session: URLSession
     private let timeout: TimeInterval
+    private let stateLock = NSLock()
 
     // Network path monitoring (decide chunk sizes)
     private let pathMonitor = NWPathMonitor()
@@ -190,9 +191,7 @@ final class APIClient {
         // Start path monitor
         let q = DispatchQueue(label: "api.path.monitor")
         pathMonitor.pathUpdateHandler = { [weak self] path in
-            self?.pathIsConstrained = path.isConstrained
-            self?.pathIsExpensive = path.isExpensive
-            self?.pathIsSatisfied = (path.status == .satisfied)
+            self?.updatePathState(path)
             self?.logger?("[NET] satisfied=\(path.status == .satisfied) exp=\(path.isExpensive) constr=\(path.isConstrained)")
         }
         pathMonitor.start(queue: q)
@@ -205,6 +204,29 @@ final class APIClient {
     /// Send a prepared request using the tuned session (short timeouts, limited concurrency)
     func send(_ request: URLRequest) async throws -> (Data, URLResponse) {
         try await self.session.data(for: request)
+    }
+
+    private func updatePathState(_ path: NWPath) {
+        stateLock.lock()
+        pathIsConstrained = path.isConstrained
+        pathIsExpensive = path.isExpensive
+        pathIsSatisfied = (path.status == .satisfied)
+        stateLock.unlock()
+    }
+
+    private func currentPathState() -> (isConstrained: Bool, isExpensive: Bool, isSatisfied: Bool) {
+        stateLock.lock()
+        let snapshot = (pathIsConstrained, pathIsExpensive, pathIsSatisfied)
+        stateLock.unlock()
+        return snapshot
+    }
+
+    private func beginPreflightIfNeeded() -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        guard !didPreflight else { return false }
+        didPreflight = true
+        return true
     }
 
     // MARK: - CDN fallback
@@ -487,7 +509,12 @@ final class APIClient {
         await preflightHealth()
 
         var effectiveChunk = chunkSize
-        if pathIsConstrained || pathIsExpensive { effectiveChunk = min(chunkSize, 150) } else { effectiveChunk = min(chunkSize, 200) }
+        let pathState = currentPathState()
+        if pathState.isConstrained || pathState.isExpensive {
+            effectiveChunk = min(chunkSize, 150)
+        } else {
+            effectiveChunk = min(chunkSize, 200)
+        }
 
         var offset = 0
         var didUpload = false
@@ -612,8 +639,7 @@ final class APIClient {
     }
 
     private func preflightHealth() async {
-        guard !didPreflight else { return }
-        didPreflight = true
+        guard beginPreflightIfNeeded() else { return }
         var healthURL = baseURL
         healthURL.appendPathComponent("health")
         var req = URLRequest(url: healthURL)
