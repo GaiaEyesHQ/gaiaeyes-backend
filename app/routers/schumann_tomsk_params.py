@@ -44,7 +44,7 @@ TOMSK_F1_CHANNEL = TOMSK_FREQUENCY_CHANNELS["F1"]
 TREND_WINDOW_POINTS = 8
 
 _PIVOT_SELECT = ",\n              ".join(
-    f"max(s.value_num) filter (where s.channel='{channel}') as {label}"
+    f'max(s.value_num) filter (where s.channel=\'{channel}\') as "{label}"'
     for label, channel in TOMSK_ALL_CHANNELS.items()
 )
 
@@ -93,6 +93,37 @@ def _quality_threshold() -> float:
     return float(getattr(settings, "SCHUMANN_TOMSK_MIN_QUALITY_SCORE", 0.55) or 0.55)
 
 
+def _row_get(row: Dict[str, Any], key: str) -> Any:
+    if key in row:
+        return row.get(key)
+    lowered = key.lower()
+    if lowered in row:
+        return row.get(lowered)
+    return None
+
+
+def _derive_quality_from_meta(meta: Any) -> tuple[Optional[bool], Optional[float]]:
+    if not isinstance(meta, dict):
+        return None, None
+
+    chart_status = meta.get("chart_status")
+    if not isinstance(chart_status, dict):
+        return None, None
+
+    statuses = [
+        str(status).strip().lower()
+        for status in (chart_status.get("F"), chart_status.get("A"), chart_status.get("Q"))
+        if status is not None
+    ]
+    if not statuses:
+        return None, None
+
+    ok_count = sum(1 for status in statuses if status == "ok")
+    quality_score = ok_count / len(statuses)
+    usable = ok_count == len(statuses)
+    return usable, quality_score
+
+
 def _tomsk_is_usable(usable: Optional[bool], quality_score: Optional[float]) -> bool:
     return usable is True and quality_score is not None and quality_score >= _quality_threshold()
 
@@ -115,17 +146,26 @@ def _trend_direction(delta: Optional[float]) -> str:
 
 
 def _build_value_map(row: Dict[str, Any], labels: Dict[str, str]) -> Dict[str, Optional[float]]:
-    return {label: _to_float(row.get(label)) for label in labels}
+    return {label: _to_float(_row_get(row, label)) for label in labels}
 
 
 def _build_point(row: Dict[str, Any]) -> Dict[str, Any]:
+    usable = _to_bool(row.get("usable"))
+    quality_score = _to_float(row.get("quality_score"))
+    if usable is None or quality_score is None:
+        derived_usable, derived_quality = _derive_quality_from_meta(row.get("meta"))
+        if usable is None:
+            usable = derived_usable
+        if quality_score is None:
+            quality_score = derived_quality
+
     point: Dict[str, Any] = {
         "ts": _iso(row.get("ts_utc")),
-        "usable": _to_bool(row.get("usable")),
-        "quality_score": _to_float(row.get("quality_score")),
+        "usable": usable,
+        "quality_score": quality_score,
     }
     for label in TOMSK_ALL_CHANNELS:
-        point[label] = _to_float(row.get(label))
+        point[label] = _to_float(_row_get(row, label))
     point["quality_flags"] = _quality_flags(point["usable"], point["quality_score"])
     return point
 
@@ -201,6 +241,12 @@ def _structured_latest_payload(
     points = [_build_point(row) for row in series_rows]
     usable = _to_bool(latest_row.get("usable"))
     quality_score = _to_float(latest_row.get("quality_score"))
+    if usable is None or quality_score is None:
+        derived_usable, derived_quality = _derive_quality_from_meta(latest_row.get("meta"))
+        if usable is None:
+            usable = derived_usable
+        if quality_score is None:
+            quality_score = derived_quality
     usable_for_fusion = _tomsk_is_usable(usable, quality_score)
 
     return {
@@ -278,6 +324,7 @@ async def _fetch_tomsk_latest_row(conn, station_id: str) -> Optional[Dict[str, A
             )
             select
               a.ts_utc,
+              a.meta,
               {_PIVOT_SELECT},
               COALESCE(
                 (a.meta->>'usable')::boolean,
@@ -313,6 +360,7 @@ async def _fetch_tomsk_series_rows(conn, station_id: str, hours: int) -> List[Di
             )
             select
               a.ts_utc,
+              a.meta,
               {_PIVOT_SELECT},
               COALESCE(
                 (a.meta->>'usable')::boolean,

@@ -525,6 +525,7 @@ private final class SchumannDashboardViewModel: ObservableObject {
     @Published var heatmap: SchumannHeatmapResponse?
     @Published var tomskLatest: TomskParamsLatestResponse?
     @Published var tomskSeries: [TomskParamsSeriesPoint] = []
+    @Published var isTomskLatestLoading: Bool = false
     @Published var isTomskSeriesLoading: Bool = false
     @Published var tomskErrorMessage: String?
 
@@ -569,14 +570,9 @@ private final class SchumannDashboardViewModel: ObservableObject {
         async let heatmapResult: Result<SchumannHeatmapResponse, Error> = run {
             try await self.fetchHeatmap(api: api, force: force)
         }
-        async let tomskLatestResult: Result<TomskParamsLatestResponse, Error> = run {
-            try await self.fetchTomskLatest(api: api, force: force)
-        }
-
         let resolvedLatest = await latestResult
         let resolvedSeries = await seriesResult
         let resolvedHeatmap = await heatmapResult
-        let resolvedTomskLatest = await tomskLatestResult
 
         var errorParts: [String] = []
 
@@ -599,15 +595,6 @@ private final class SchumannDashboardViewModel: ObservableObject {
             heatmap = response
         case .failure(let err):
             errorParts.append("heatmap: \(err.localizedDescription)")
-        }
-
-        switch resolvedTomskLatest {
-        case .success(let response):
-            tomskLatest = response
-            tomskErrorMessage = nil
-        case .failure(let err):
-            tomskErrorMessage = "Tomsk detail is temporarily unavailable."
-            errorParts.append("tomsk: \(err.localizedDescription)")
         }
 
         if !errorParts.isEmpty && latest == nil && seriesRows.isEmpty && heatmap == nil {
@@ -690,9 +677,6 @@ private final class SchumannDashboardViewModel: ObservableObject {
         if let fused = latest?.fusion?.displayF0Hz {
             return fused
         }
-        if fusionEnabled, tomskLatest?.usableForFusion == true {
-            return tomskLatest?.frequencyHz?["F1"]
-        }
         return latest?.harmonics?.f0
     }
 
@@ -700,18 +684,12 @@ private final class SchumannDashboardViewModel: ObservableObject {
         if let source = latest?.fusion?.displayF0Source, !source.isEmpty {
             return source
         }
-        if fusionEnabled, tomskLatest?.usableForFusion == true {
-            return "tomsk"
-        }
         return "cumiana"
     }
 
     var secondaryFundamentalHz: Double? {
         if let secondary = latest?.fusion?.secondaryF0Hz {
             return secondary
-        }
-        if fusionEnabled, tomskLatest?.usableForFusion == true {
-            return latest?.harmonics?.f0
         }
         return nil
     }
@@ -721,6 +699,9 @@ private final class SchumannDashboardViewModel: ObservableObject {
     }
 
     var tomskStatusText: String {
+        if fusionEnabled, latest?.fusion?.tomskUsable == true {
+            return "Tomsk: OK"
+        }
         if fusionEnabled, tomskLatest?.usableForFusion == true {
             return "Tomsk: OK"
         }
@@ -808,6 +789,26 @@ private final class SchumannDashboardViewModel: ObservableObject {
         }
     }
 
+    func loadTomskLatestIfNeeded(using state: AppState, force: Bool = false) async {
+        if !force, tomskLatest != nil {
+            return
+        }
+        isTomskLatestLoading = true
+        tomskErrorMessage = nil
+
+        defer {
+            isTomskLatestLoading = false
+        }
+
+        do {
+            let api = state.apiWithAuth()
+            let response = try await fetchTomskLatest(api: api, force: force)
+            tomskLatest = response
+        } catch {
+            tomskErrorMessage = "Tomsk detail is temporarily unavailable."
+        }
+    }
+
     func loadTomskSeriesIfNeeded(using state: AppState, force: Bool = false) async {
         if !force, !tomskSeries.isEmpty {
             return
@@ -874,7 +875,7 @@ struct SchumannDashboardView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            LazyVStack(alignment: .leading, spacing: 14) {
                 headerCard
                 gaugeCard
                 heatmapCard
@@ -902,6 +903,7 @@ struct SchumannDashboardView: View {
         .onChange(of: showTomskDetails) { _, expanded in
             guard expanded else { return }
             Task {
+                await viewModel.loadTomskLatestIfNeeded(using: state, force: false)
                 await viewModel.loadTomskSeriesIfNeeded(using: state, force: false)
             }
         }
@@ -1056,69 +1058,73 @@ struct SchumannDashboardView: View {
     private var tomskCard: some View {
         GroupBox {
             DisclosureGroup(isExpanded: $showTomskDetails) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 10) {
-                        Text("Usable: \((viewModel.tomskLatest?.usableForFusion == true) ? "Yes" : "No")")
-                            .font(.caption)
-                        Text("Quality: \(viewModel.tomskLatest?.qualityScore.map { String(format: "%.2f", $0) } ?? "-")")
-                            .font(.caption)
-                        Spacer()
-                        Text("Updated: \(formattedTimestamp(viewModel.tomskUpdatedTimestamp))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                if showTomskDetails {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 10) {
+                            Text("Usable: \((viewModel.tomskLatest?.usableForFusion == true) ? "Yes" : "No")")
+                                .font(.caption)
+                            Text("Quality: \(viewModel.tomskLatest?.qualityScore.map { String(format: "%.2f", $0) } ?? "-")")
+                                .font(.caption)
+                            Spacer()
+                            Text("Updated: \(formattedTimestamp(viewModel.tomskUpdatedTimestamp))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
 
-                    if let latest = viewModel.tomskLatest {
-                        TomskMetricSectionView(
-                            title: "Frequencies",
-                            legend: "F = frequency tracking",
-                            keys: ["F1", "F2", "F3", "F4"],
-                            unit: "Hz",
-                            values: latest.frequencyHz ?? [:],
-                            trends: latest.trend2h ?? [:]
-                        )
-                        TomskMetricSectionView(
-                            title: "Amplitudes",
-                            legend: "A = amplitude tracking",
-                            keys: ["A1", "A2", "A3", "A4"],
-                            unit: nil,
-                            values: latest.amplitude ?? [:],
-                            trends: latest.trend2h ?? [:]
-                        )
-                        TomskMetricSectionView(
-                            title: "Q Factors",
-                            legend: "Q = resonance quality proxy",
-                            keys: ["Q1", "Q2", "Q3", "Q4"],
-                            unit: nil,
-                            values: latest.qFactor ?? [:],
-                            trends: latest.trend2h ?? [:]
-                        )
-                    } else {
-                        Text("Tomsk detail is currently unavailable.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                        if viewModel.isTomskLatestLoading || viewModel.isTomskSeriesLoading {
+                            ProgressView(viewModel.tomskLatest == nil ? "Loading Tomsk detail…" : "Loading Tomsk 48h series…")
+                                .font(.caption)
+                        }
 
-                    if viewModel.isTomskSeriesLoading {
-                        ProgressView("Loading Tomsk 48h series…")
-                            .font(.caption)
-                    } else if !viewModel.tomskSamplesAscending.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("48h Mini Sparklines")
-                                .font(.caption.weight(.semibold))
-                            TomskSparklineView(title: "F1", unit: "Hz", key: "F1", color: .cyan, points: viewModel.tomskSamplesAscending)
-                            TomskSparklineView(title: "A1", unit: nil, key: "A1", color: .yellow, points: viewModel.tomskSamplesAscending)
-                            TomskSparklineView(title: "Q1", unit: nil, key: "Q1", color: .green, points: viewModel.tomskSamplesAscending)
+                        if let latest = viewModel.tomskLatest {
+                            TomskMetricSectionView(
+                                title: "Frequencies",
+                                legend: "F = frequency tracking",
+                                keys: ["F1", "F2", "F3", "F4"],
+                                unit: "Hz",
+                                values: latest.frequencyHz ?? [:],
+                                trends: latest.trend2h ?? [:]
+                            )
+                            TomskMetricSectionView(
+                                title: "Amplitudes",
+                                legend: "A = amplitude tracking",
+                                keys: ["A1", "A2", "A3", "A4"],
+                                unit: nil,
+                                values: latest.amplitude ?? [:],
+                                trends: latest.trend2h ?? [:]
+                            )
+                            TomskMetricSectionView(
+                                title: "Q Factors",
+                                legend: "Q = resonance quality proxy",
+                                keys: ["Q1", "Q2", "Q3", "Q4"],
+                                unit: nil,
+                                values: latest.qFactor ?? [:],
+                                trends: latest.trend2h ?? [:]
+                            )
+                        } else if !viewModel.isTomskLatestLoading {
+                            Text("Tomsk detail is currently unavailable.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if !viewModel.tomskSamplesAscending.isEmpty {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("48h Mini Sparklines")
+                                    .font(.caption.weight(.semibold))
+                                TomskSparklineView(title: "F1", unit: "Hz", key: "F1", color: .cyan, points: viewModel.tomskSamplesAscending)
+                                TomskSparklineView(title: "A1", unit: nil, key: "A1", color: .yellow, points: viewModel.tomskSamplesAscending)
+                                TomskSparklineView(title: "Q1", unit: nil, key: "Q1", color: .green, points: viewModel.tomskSamplesAscending)
+                            }
+                        }
+
+                        if let tomskError = viewModel.tomskErrorMessage {
+                            Text(tomskError)
+                                .font(.caption)
+                                .foregroundColor(.orange)
                         }
                     }
-
-                    if let tomskError = viewModel.tomskErrorMessage {
-                        Text(tomskError)
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                    }
+                    .padding(.top, 8)
                 }
-                .padding(.top, 8)
             } label: {
                 HStack {
                     Text("Tomsk Details (F/A/Q)")
@@ -1368,8 +1374,6 @@ private struct SchumannBandBarsView: View {
 private struct SchumannPulseChartView: View {
     let samples: [SchumannSeriesSample]
 
-    @State private var selectedSample: SchumannSeriesSample?
-
     private var srUpperBound: Double {
         let maxValue = samples.compactMap(\.srTotal).max() ?? 0.12
         return max(0.16, maxValue * 1.2)
@@ -1427,13 +1431,6 @@ private struct SchumannPulseChartView: View {
                         }
                     }
 
-                    if let selectedSample, let sr = selectedSample.srTotal {
-                        RuleMark(x: .value("Selected", selectedSample.date))
-                            .foregroundStyle(.secondary.opacity(0.35))
-                        PointMark(x: .value("Selected", selectedSample.date), y: .value("SelectedPulse", sr))
-                            .symbolSize(46)
-                            .foregroundStyle(.white)
-                    }
                 }
                 .chartYScale(domain: 0...srUpperBound)
                 .frame(height: 230)
@@ -1449,28 +1446,6 @@ private struct SchumannPulseChartView: View {
                         }
                     }
                 }
-                .chartOverlay { proxy in
-                    GeometryReader { geo in
-                        Rectangle()
-                            .fill(Color.clear)
-                            .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onChanged { value in
-                                        guard let plotFrame = proxy.plotFrame else {
-                                            return
-                                        }
-                                        let origin = geo[plotFrame].origin
-                                        let locationX = value.location.x - origin.x
-                                        guard let date: Date = proxy.value(atX: locationX) else {
-                                            return
-                                        }
-                                        selectedSample = nearestSample(to: date)
-                                    }
-                                    .onEnded { _ in }
-                            )
-                    }
-                }
                 HStack(spacing: 12) {
                     Text("Cyan: Intensity (0-20 Hz)")
                         .font(.caption2)
@@ -1480,30 +1455,26 @@ private struct SchumannPulseChartView: View {
                         .foregroundColor(.yellow)
                 }
 
-                if let selected = selectedSample {
+                if let latest = samples.last {
                     HStack(spacing: 10) {
-                        Text(formattedTooltipDate(selected.date))
+                        Text(formattedTooltipDate(latest.date))
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        Text("Pulse \(selected.srTotal.map { String(format: "%.3f", $0) } ?? "-")")
+                        Text("Pulse \(latest.srTotal.map { String(format: "%.3f", $0) } ?? "-")")
                             .font(.caption)
-                        Text("f0 \(selected.f0.map { String(format: "%.2f", $0) } ?? "-") Hz")
+                        Text("f0 \(latest.f0.map { String(format: "%.2f", $0) } ?? "-") Hz")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        Text(selected.usable ? "OK" : "Low confidence")
+                        Text(latest.usable ? "OK" : "Low confidence")
                             .font(.caption2.weight(.semibold))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background((selected.usable ? Color.green : Color.orange).opacity(0.2), in: Capsule())
+                            .background((latest.usable ? Color.green : Color.orange).opacity(0.2), in: Capsule())
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func nearestSample(to date: Date) -> SchumannSeriesSample? {
-        samples.min(by: { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) })
     }
 
     private func mapF0ToPulseScale(_ f0: Double) -> Double {
@@ -1915,7 +1886,6 @@ private struct SchumannHeatmapView: View {
     let highContrast: Bool
 
     @State private var bitmap: SchumannHeatmapBitmap?
-    @State private var hover: SchumannHeatmapHover?
 
     #if canImport(UIKit)
     @State private var sharePayload: SchumannShareImagePayload?
@@ -1970,32 +1940,8 @@ private struct SchumannHeatmapView: View {
                     if let bitmap {
                         harmonicOverlay(size: geo.size, axis: heatmap?.axis, bins: bitmap.binCount)
                     }
-
-                    if let hover {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(hover.ts)
-                                .bold()
-                            Text(String(format: "Freq %.2f Hz", hover.freqHz))
-                            Text(String(format: "Intensity %.3f", hover.intensity))
-                        }
-                        .font(.caption2)
-                        .padding(8)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-                        .position(
-                            x: min(max(hover.position.x + 70, 70), geo.size.width - 70),
-                            y: min(max(hover.position.y - 34, 24), geo.size.height - 24)
-                        )
-                    }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10))
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { gesture in
-                            updateHover(location: gesture.location, size: geo.size)
-                        }
-                        .onEnded { _ in }
-                )
             }
             .frame(height: 220)
 
@@ -2063,61 +2009,6 @@ private struct SchumannHeatmapView: View {
             }
         }
         .stroke(Color.white.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-    }
-
-    private func updateHover(location: CGPoint, size: CGSize) {
-        guard let heatmap,
-              let points = heatmap.points,
-              let first = points.first,
-              !points.isEmpty,
-              !first.bins.isEmpty
-        else {
-            hover = nil
-            return
-        }
-
-        let x = min(max(0, location.x), size.width - 1)
-        let y = min(max(0, location.y), size.height - 1)
-
-        let pointIndex = Int((x / max(1, size.width)) * CGFloat(points.count - 1))
-        let clampedPointIndex = max(0, min(points.count - 1, pointIndex))
-
-        let binCount = first.bins.count
-        let normalizedY = 1 - (y / max(1, size.height))
-        let rawBinIndex = Int(normalizedY * CGFloat(binCount - 1))
-        let binIndex = max(0, min(binCount - 1, rawBinIndex))
-
-        let point = points[clampedPointIndex]
-        guard point.bins.indices.contains(binIndex) else {
-            hover = nil
-            return
-        }
-
-        let freqStart = heatmap.axis?.freqStartHz ?? 0
-        let freqStep = heatmap.axis?.freqStepHz ?? (20.0 / Double(max(1, binCount)))
-        let freq = freqStart + (Double(binIndex) * freqStep)
-
-        hover = SchumannHeatmapHover(
-            ts: formattedHoverTimestamp(point.ts),
-            freqHz: freq,
-            intensity: point.bins[binIndex],
-            position: CGPoint(x: x, y: y)
-        )
-    }
-
-    private func formattedHoverTimestamp(_ iso: String?) -> String {
-        guard let iso else { return "-" }
-        let frac = ISO8601DateFormatter()
-        frac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        guard let date = frac.date(from: iso) ?? plain.date(from: iso) else {
-            return iso
-        }
-        let out = DateFormatter()
-        out.dateStyle = .medium
-        out.timeStyle = .short
-        return out.string(from: date)
     }
 
     private func axisSummary() -> (start: String, middle: String, end: String) {
