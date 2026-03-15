@@ -647,6 +647,78 @@ private final class SchumannDashboardViewModel: ObservableObject {
         return mapped.sorted { $0.date < $1.date }
     }
 
+    private func normalizeTomskMap(_ raw: [String: Double]?) -> [String: Double] {
+        var normalized: [String: Double] = [:]
+        for (key, value) in raw ?? [:] {
+            normalized[key.uppercased()] = value
+        }
+        return normalized
+    }
+
+    private func normalizeTomskTrendMap(_ raw: [String: TomskTrendDelta]?) -> [String: TomskTrendDelta] {
+        var normalized: [String: TomskTrendDelta] = [:]
+        for (key, value) in raw ?? [:] {
+            normalized[key.uppercased()] = value
+        }
+        return normalized
+    }
+
+    private var latestTomskSeriesPoint: TomskParamsSeriesPoint? {
+        tomskSeries
+            .compactMap { point -> (TomskParamsSeriesPoint, Date)? in
+                guard let ts = point.ts, let date = parseDate(ts) else { return nil }
+                return (point, date)
+            }
+            .sorted { $0.1 < $1.1 }
+            .last?
+            .0
+    }
+
+    private func latestSeriesValues(prefix: String) -> [String: Double] {
+        guard let point = latestTomskSeriesPoint else { return [:] }
+        var filtered: [String: Double] = [:]
+        for (key, value) in point.values {
+            let normalizedKey = key.uppercased()
+            if normalizedKey.hasPrefix(prefix) {
+                filtered[normalizedKey] = value
+            }
+        }
+        return filtered
+    }
+
+    private func derivedTomskTrend2hFromSeries() -> [String: TomskTrendDelta] {
+        let sortedPoints = tomskSeries
+            .compactMap { point -> (TomskParamsSeriesPoint, Date)? in
+                guard let ts = point.ts, let date = parseDate(ts) else { return nil }
+                return (point, date)
+            }
+            .sorted { $0.1 < $1.1 }
+            .map(\.0)
+
+        let window = Array(sortedPoints.suffix(8))
+        guard window.count >= 2 else { return [:] }
+
+        var trendMap: [String: TomskTrendDelta] = [:]
+        let keys = ["F1", "F2", "F3", "F4", "A1", "A2", "A3", "A4", "Q1", "Q2", "Q3", "Q4"]
+
+        for key in keys {
+            let values = window.compactMap { point -> Double? in
+                point.values[key] ?? point.values[key.lowercased()] ?? point.values[key.uppercased()]
+            }
+            guard values.count >= 2 else { continue }
+            let delta = values[values.count - 1] - values[0]
+            let dir: String
+            if abs(delta) < 0.000_000_1 {
+                dir = "flat"
+            } else {
+                dir = delta > 0 ? "up" : "down"
+            }
+            trendMap[key] = TomskTrendDelta(delta: delta, dir: dir)
+        }
+
+        return trendMap
+    }
+
     var fusionEnabled: Bool {
         latest?.fusion?.enabled ?? true
     }
@@ -676,18 +748,65 @@ private final class SchumannDashboardViewModel: ObservableObject {
         latest?.fusion?.coherence ?? tomskLatest?.coherence
     }
 
-    var tomskStatusText: String {
-        if fusionEnabled, latest?.fusion?.tomskUsable == true {
-            return "Tomsk: OK"
+    var tomskDisplayFrequencyHz: [String: Double] {
+        let latestValues = normalizeTomskMap(tomskLatest?.frequencyHz)
+        return latestValues.isEmpty ? latestSeriesValues(prefix: "F") : latestValues
+    }
+
+    var tomskDisplayAmplitude: [String: Double] {
+        let latestValues = normalizeTomskMap(tomskLatest?.amplitude)
+        return latestValues.isEmpty ? latestSeriesValues(prefix: "A") : latestValues
+    }
+
+    var tomskDisplayQFactor: [String: Double] {
+        let latestValues = normalizeTomskMap(tomskLatest?.qFactor)
+        return latestValues.isEmpty ? latestSeriesValues(prefix: "Q") : latestValues
+    }
+
+    var tomskDisplayTrend2h: [String: TomskTrendDelta] {
+        let latestTrends = normalizeTomskTrendMap(tomskLatest?.trend2h)
+        return latestTrends.isEmpty ? derivedTomskTrend2hFromSeries() : latestTrends
+    }
+
+    var tomskDisplayQualityScore: Double? {
+        tomskLatest?.qualityScore ?? latestTomskSeriesPoint?.qualityScore
+    }
+
+    var tomskDisplayUpdatedTimestamp: String? {
+        tomskLatest?.generatedAt ?? latestTomskSeriesPoint?.ts
+    }
+
+    var tomskDisplayUsable: Bool {
+        if latest?.fusion?.tomskUsable == true {
+            return true
         }
-        if fusionEnabled, tomskLatest?.usableForFusion == true {
+        if tomskLatest?.usableForFusion == true || tomskLatest?.usable == true {
+            return true
+        }
+        if let point = latestTomskSeriesPoint,
+           point.usable == true,
+           !(point.qualityFlags?.contains("low_quality") ?? false) {
+            if let score = point.qualityScore {
+                return score >= 0.55
+            }
+            return true
+        }
+        return false
+    }
+
+    var hasTomskDisplayData: Bool {
+        !tomskDisplayFrequencyHz.isEmpty || !tomskDisplayAmplitude.isEmpty || !tomskDisplayQFactor.isEmpty
+    }
+
+    var tomskStatusText: String {
+        if tomskDisplayUsable {
             return "Tomsk: OK"
         }
         return "Tomsk: unavailable"
     }
 
     var tomskUpdatedTimestamp: String? {
-        tomskLatest?.generatedAt
+        tomskDisplayUpdatedTimestamp
     }
 
     private func isIncompleteTomskLatest(_ response: TomskParamsLatestResponse) -> Bool {
@@ -847,6 +966,29 @@ private final class SchumannDashboardViewModel: ObservableObject {
         }
     }
 
+    func refreshVisibleContent(
+        using state: AppState,
+        includeTomsk: Bool,
+        includeTomskSeries: Bool,
+        includeBands: Bool,
+        includeHeatmap: Bool,
+        includePulse: Bool
+    ) async {
+        await refresh(using: state, force: true)
+        if includeTomsk {
+            await loadTomskLatestIfNeeded(using: state, force: true)
+        }
+        if includeTomskSeries {
+            await loadTomskSeriesIfNeeded(using: state, force: true)
+        }
+        if includeBands || includePulse {
+            await loadSeriesIfNeeded(using: state, force: true)
+        }
+        if includeHeatmap {
+            await loadHeatmapIfNeeded(using: state, force: true)
+        }
+    }
+
     func loadSeriesIfNeeded(using state: AppState, force: Bool = false) async {
         if !force, !seriesRows.isEmpty {
             return
@@ -932,7 +1074,14 @@ struct SchumannDashboardView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     Task {
-                        await viewModel.refresh(using: state, force: true)
+                        await viewModel.refreshVisibleContent(
+                            using: state,
+                            includeTomsk: showTomskDetails || viewModel.tomskLatest != nil,
+                            includeTomskSeries: showTomskDetails || !viewModel.tomskSeries.isEmpty,
+                            includeBands: showBandsDetails || !viewModel.seriesRows.isEmpty,
+                            includeHeatmap: showHeatmapDetails || viewModel.heatmap != nil,
+                            includePulse: showPulseDetails
+                        )
                     }
                 } label: {
                     Image(systemName: "arrow.clockwise")
@@ -1181,12 +1330,12 @@ struct SchumannDashboardView: View {
                 if showTomskDetails {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 10) {
-                            Text("Usable: \((viewModel.tomskLatest?.usableForFusion == true) ? "Yes" : "No")")
+                            Text("Usable: \(viewModel.tomskDisplayUsable ? "Yes" : "No")")
                                 .font(.caption)
-                            Text("Quality: \(viewModel.tomskLatest?.qualityScore.map { String(format: "%.2f", $0) } ?? "-")")
+                            Text("Quality: \(viewModel.tomskDisplayQualityScore.map { String(format: "%.2f", $0) } ?? "-")")
                                 .font(.caption)
                             Spacer()
-                            Text("Updated: \(formattedTimestamp(viewModel.tomskUpdatedTimestamp))")
+                            Text("Updated: \(formattedTimestamp(viewModel.tomskDisplayUpdatedTimestamp))")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -1196,30 +1345,30 @@ struct SchumannDashboardView: View {
                                 .font(.caption)
                         }
 
-                        if let latest = viewModel.tomskLatest {
+                        if viewModel.hasTomskDisplayData {
                             TomskMetricSectionView(
                                 title: "Frequencies",
                                 legend: "F = frequency tracking",
                                 keys: ["F1", "F2", "F3", "F4"],
                                 unit: "Hz",
-                                values: latest.frequencyHz ?? [:],
-                                trends: latest.trend2h ?? [:]
+                                values: viewModel.tomskDisplayFrequencyHz,
+                                trends: viewModel.tomskDisplayTrend2h
                             )
                             TomskMetricSectionView(
                                 title: "Amplitudes",
                                 legend: "A = amplitude tracking",
                                 keys: ["A1", "A2", "A3", "A4"],
                                 unit: nil,
-                                values: latest.amplitude ?? [:],
-                                trends: latest.trend2h ?? [:]
+                                values: viewModel.tomskDisplayAmplitude,
+                                trends: viewModel.tomskDisplayTrend2h
                             )
                             TomskMetricSectionView(
                                 title: "Q Factors",
                                 legend: "Q = resonance quality proxy",
                                 keys: ["Q1", "Q2", "Q3", "Q4"],
                                 unit: nil,
-                                values: latest.qFactor ?? [:],
-                                trends: latest.trend2h ?? [:]
+                                values: viewModel.tomskDisplayQFactor,
+                                trends: viewModel.tomskDisplayTrend2h
                             )
                         } else if !viewModel.isTomskLatestLoading {
                             Text("Tomsk detail is currently unavailable.")
@@ -1254,7 +1403,7 @@ struct SchumannDashboardView: View {
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background((viewModel.tomskLatest?.usableForFusion == true ? Color.green : Color.secondary).opacity(0.18), in: Capsule())
+                        .background((viewModel.tomskDisplayUsable ? Color.green : Color.secondary).opacity(0.18), in: Capsule())
                     Text(formattedTimestamp(viewModel.tomskUpdatedTimestamp))
                         .font(.caption2)
                         .foregroundColor(.secondary)
@@ -1667,7 +1816,7 @@ private struct TomskMetricSectionView: View {
     }
 
     private func metricValue(for key: String) -> String {
-        guard let value = values[key] else {
+        guard let value = values[key] ?? values[key.lowercased()] ?? values[key.uppercased()] else {
             return "-"
         }
         if let unit {
@@ -1677,7 +1826,8 @@ private struct TomskMetricSectionView: View {
     }
 
     private func trendText(for key: String) -> String {
-        guard let trend = trends[key], let delta = trend.delta else {
+        let trend = trends[key] ?? trends[key.lowercased()] ?? trends[key.uppercased()]
+        guard let trend, let delta = trend.delta else {
             return "→ -"
         }
         let arrow: String
@@ -1696,7 +1846,8 @@ private struct TomskMetricSectionView: View {
     }
 
     private func trendColor(for key: String) -> Color {
-        switch trends[key]?.dir?.lowercased() {
+        let trend = trends[key] ?? trends[key.lowercased()] ?? trends[key.uppercased()]
+        switch trend?.dir?.lowercased() {
         case "up":
             return .green
         case "down":
