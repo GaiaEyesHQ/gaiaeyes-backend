@@ -141,6 +141,16 @@ def _required_env(name: str) -> str:
     return value
 
 
+def _missing_apns_env() -> List[str]:
+    required = [
+        "APNS_TEAM_ID",
+        "APNS_KEY_ID",
+        "APNS_BUNDLE_ID",
+        "APNS_PRIVATE_KEY",
+    ]
+    return [name for name in required if not os.getenv(name, "").strip()]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Send queued Gaia Eyes push notifications through APNs.")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of queued events processed.")
@@ -150,6 +160,15 @@ def main() -> None:
     queued_events = _fetch_queued_events(limit=args.limit, user_id=args.user_id)
     if not queued_events:
         logger.info("[push-send] no queued events")
+        return
+
+    missing_env = _missing_apns_env()
+    if missing_env:
+        logger.warning(
+            "[push-send] missing APNS env (%s); leaving %d queued events in queued status",
+            ", ".join(missing_env),
+            len(queued_events),
+        )
         return
 
     team_id = _required_env("APNS_TEAM_ID")

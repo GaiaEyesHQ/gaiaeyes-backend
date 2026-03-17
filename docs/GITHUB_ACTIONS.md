@@ -30,7 +30,7 @@ This repo relies heavily on GitHub Actions for scheduled ingestion, JSON snapsho
 - `health-daily-rollup.yml` — daily health rollups.
 - `daily-features-rollup.yml` — rolling daily features refresh.
 - `evaluate_push_notifications.yml` — evaluate current user state into queued push events every 15 minutes.
-- `send_push_notifications.yml` — send queued APNs notifications and disable invalid tokens every 5 minutes.
+- `send_push_notifications.yml` — send queued APNs notifications and disable invalid tokens every 5 minutes. Requires GitHub Actions secrets `SUPABASE_DB_URL`, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_BUNDLE_ID`, and `APNS_PRIVATE_KEY`.
 
 ### Content + social
 - `gaia_eyes_daily.yml` — daily Earthscope pipeline (Supabase + media JSON).
