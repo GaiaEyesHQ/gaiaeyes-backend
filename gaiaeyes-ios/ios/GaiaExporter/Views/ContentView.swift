@@ -2229,7 +2229,8 @@ struct ContentView: View {
         } catch {
             await MainActor.run {
                 notificationSettingsSaving = false
-                notificationSettingsMessage = "Could not save notification settings"
+                let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+                notificationSettingsMessage = message.isEmpty ? "Could not save notification settings" : message
             }
             appLog("[UI] save notification settings error: \(error.localizedDescription)")
         }

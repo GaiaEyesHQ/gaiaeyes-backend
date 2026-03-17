@@ -30,6 +30,20 @@ struct AppNotificationFamilies: Codable, Equatable {
         case temp
         case gaugeSpikes = "gauge_spikes"
     }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        geomagnetic = try container.decodeIfPresent(Bool.self, forKey: .geomagnetic) ?? true
+        solarWind = try container.decodeIfPresent(Bool.self, forKey: .solarWind) ?? true
+        flareCmeSep = try container.decodeIfPresent(Bool.self, forKey: .flareCmeSep) ?? true
+        schumann = try container.decodeIfPresent(Bool.self, forKey: .schumann) ?? true
+        pressure = try container.decodeIfPresent(Bool.self, forKey: .pressure) ?? true
+        aqi = try container.decodeIfPresent(Bool.self, forKey: .aqi) ?? true
+        temp = try container.decodeIfPresent(Bool.self, forKey: .temp) ?? true
+        gaugeSpikes = try container.decodeIfPresent(Bool.self, forKey: .gaugeSpikes) ?? true
+    }
 }
 
 struct AppNotificationPreferences: Codable, Equatable {
@@ -58,11 +72,29 @@ struct AppNotificationPreferences: Codable, Equatable {
         case sensitivity
         case families
     }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        signalAlertsEnabled = try container.decodeIfPresent(Bool.self, forKey: .signalAlertsEnabled) ?? true
+        localConditionAlertsEnabled = try container.decodeIfPresent(Bool.self, forKey: .localConditionAlertsEnabled) ?? true
+        personalizedGaugeAlertsEnabled = try container.decodeIfPresent(Bool.self, forKey: .personalizedGaugeAlertsEnabled) ?? true
+        quietHoursEnabled = try container.decodeIfPresent(Bool.self, forKey: .quietHoursEnabled) ?? false
+        quietStart = try container.decodeIfPresent(String.self, forKey: .quietStart) ?? "22:00"
+        quietEnd = try container.decodeIfPresent(String.self, forKey: .quietEnd) ?? "08:00"
+        timeZone = try container.decodeIfPresent(String.self, forKey: .timeZone) ?? TimeZone.current.identifier
+        sensitivity = try container.decodeIfPresent(String.self, forKey: .sensitivity) ?? "normal"
+        families = try container.decodeIfPresent(AppNotificationFamilies.self, forKey: .families) ?? AppNotificationFamilies()
+    }
 }
 
 private struct NotificationPreferencesEnvelope: Codable {
     let ok: Bool?
     let preferences: AppNotificationPreferences?
+    let error: String?
+    let detail: String?
 }
 
 private struct PushTokenRegistrationPayload: Codable {
@@ -158,6 +190,14 @@ enum PushNotificationService {
     private static let deviceTokenKey = "gaia.push.device_token"
     private static let permissionGrantedKey = "gaia.push.permission_granted"
     private static let pendingRouteKey = "gaia.push.pending_route_json"
+    private static let tokenSyncCooldownSeconds: TimeInterval = 15
+    private static let registrationThrottleSeconds: TimeInterval = 5
+    private static let requestTimeout: TimeInterval = 60
+    private static let resourceTimeout: TimeInterval = 90
+    private static var lastRemoteRegistrationRequestAt: Date?
+    private static var lastTokenSyncAt: Date?
+    private static var lastSyncedDeviceToken: String?
+    private static var tokenSyncTask: Task<Bool, Never>?
 
     static func currentPreferencesDefault() -> AppNotificationPreferences {
         var defaults = AppNotificationPreferences.default
@@ -170,11 +210,16 @@ enum PushNotificationService {
         return (token?.isEmpty == false) ? token : nil
     }
 
-    static func storeDeviceToken(_ token: String) {
+    @discardableResult
+    static func storeDeviceToken(_ token: String) -> Bool {
         let cleaned = token.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !cleaned.isEmpty else { return }
+        guard !cleaned.isEmpty else { return false }
+        if storedDeviceToken() == cleaned {
+            return false
+        }
         UserDefaults.standard.set(cleaned, forKey: deviceTokenKey)
         NotificationCenter.default.post(name: .gaiaPushTokenDidChange, object: nil, userInfo: ["device_token": cleaned])
+        return true
     }
 
     static func storedPermissionGranted() -> Bool {
@@ -225,6 +270,11 @@ enum PushNotificationService {
 
     static func registerForRemoteNotifications() {
 #if canImport(UIKit)
+        let now = Date()
+        if let lastRemoteRegistrationRequestAt, now.timeIntervalSince(lastRemoteRegistrationRequestAt) < registrationThrottleSeconds {
+            return
+        }
+        lastRemoteRegistrationRequestAt = now
         DispatchQueue.main.async {
             UIApplication.shared.registerForRemoteNotifications()
         }
@@ -233,13 +283,15 @@ enum PushNotificationService {
 
     static func fetchPreferences(auth: AuthManager? = nil) async throws -> AppNotificationPreferences {
         let req = try await makeRequest(path: "v1/profile/notifications", method: "GET", body: nil, auth: auth)
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await performRequest(req, label: "notification-preferences-fetch")
         try validate(response: response, data: data)
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        let envelope = try decoder.decode(NotificationPreferencesEnvelope.self, from: data)
-        var prefs = envelope.preferences ?? currentPreferencesDefault()
-        prefs.timeZone = prefs.timeZone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? TimeZone.current.identifier : prefs.timeZone
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        var prefs = try decodeNotificationPreferencesEnvelope(
+            data: data,
+            responseStatus: status,
+            fallback: currentPreferencesDefault()
+        )
+        prefs.timeZone = prefs.timeZone.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty ? TimeZone.current.identifier : prefs.timeZone
         return prefs
     }
 
@@ -247,17 +299,45 @@ enum PushNotificationService {
         let payload = normalized(preferences)
         let body = try JSONEncoder().encode(payload)
         let req = try await makeRequest(path: "v1/profile/notifications", method: "PUT", body: body, auth: auth)
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await performRequest(req, label: "notification-preferences-save")
         try validate(response: response, data: data)
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        let envelope = try decoder.decode(NotificationPreferencesEnvelope.self, from: data)
-        return envelope.preferences ?? payload
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        return try decodeNotificationPreferencesEnvelope(data: data, responseStatus: status, fallback: payload)
     }
 
     @discardableResult
     static func syncTokenRegistration(preferences: AppNotificationPreferences, auth: AuthManager? = nil) async -> Bool {
         guard let deviceToken = storedDeviceToken() else { return false }
+        if let tokenSyncTask {
+            return await tokenSyncTask.value
+        }
+        if preferences.enabled,
+           storedPermissionGranted(),
+           lastSyncedDeviceToken == deviceToken,
+           let lastTokenSyncAt,
+           Date().timeIntervalSince(lastTokenSyncAt) < tokenSyncCooldownSeconds {
+            return true
+        }
+        let task = Task<Bool, Never> {
+            let result = await performTokenSync(preferences: preferences, auth: auth, deviceToken: deviceToken)
+            await MainActor.run {
+                tokenSyncTask = nil
+                if result {
+                    lastTokenSyncAt = Date()
+                    lastSyncedDeviceToken = deviceToken
+                }
+            }
+            return result
+        }
+        tokenSyncTask = task
+        return await task.value
+    }
+
+    private static func performTokenSync(
+        preferences: AppNotificationPreferences,
+        auth: AuthManager?,
+        deviceToken: String
+    ) async -> Bool {
         if preferences.enabled && storedPermissionGranted() {
             do {
                 let payload = PushTokenRegistrationPayload(
@@ -269,7 +349,7 @@ enum PushNotificationService {
                 )
                 let body = try JSONEncoder().encode(payload)
                 let req = try await makeRequest(path: "v1/profile/push-tokens", method: "POST", body: body, auth: auth)
-                let (_, response) = try await URLSession.shared.data(for: req)
+                let (_, response) = try await performRequest(req, label: "push-token-upsert")
                 try validate(response: response, data: Data())
                 return true
             } catch {
@@ -298,7 +378,7 @@ enum PushNotificationService {
                 bearerTokenOverride: bearerTokenOverride,
                 devUserIdOverride: devUserIdOverride
             )
-            let (_, response) = try await URLSession.shared.data(for: req)
+            let (_, response) = try await performRequest(req, label: "push-token-disable")
             try validate(response: response, data: Data())
             return true
         } catch {
@@ -376,7 +456,7 @@ enum PushNotificationService {
         base.appendPathComponent(cleanPath)
         var req = URLRequest(url: base)
         req.httpMethod = method
-        req.timeoutInterval = 30
+        req.timeoutInterval = requestTimeout
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         if body != nil {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -410,6 +490,76 @@ enum PushNotificationService {
         guard (200...299).contains(http.statusCode) else {
             let message = String(data: data, encoding: .utf8) ?? HTTPURLResponse.localizedString(forStatusCode: http.statusCode)
             throw PushNotificationError.server(message)
+        }
+    }
+
+    private static func performRequest(_ request: URLRequest, label: String) async throws -> (Data, URLResponse) {
+        let session = pushURLSession()
+        let maxAttempts = 2
+        var lastError: Error?
+        for attempt in 1...maxAttempts {
+            do {
+                return try await session.data(for: request)
+            } catch {
+                lastError = error
+                guard attempt < maxAttempts, isTransientNetworkError(error) else {
+                    throw error
+                }
+                appLog("[PUSH] retrying \(label) after transient error: \(error.localizedDescription)")
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+        }
+        throw lastError ?? PushNotificationError.invalidResponse
+    }
+
+    private static func pushURLSession() -> URLSession {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = requestTimeout
+        config.timeoutIntervalForResource = resourceTimeout
+        config.waitsForConnectivity = true
+        return URLSession(configuration: config)
+    }
+
+    private static func isTransientNetworkError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        guard nsError.domain == NSURLErrorDomain else { return false }
+        return [
+            NSURLErrorTimedOut,
+            NSURLErrorNetworkConnectionLost,
+            NSURLErrorCannotConnectToHost,
+            NSURLErrorNotConnectedToInternet,
+            NSURLErrorCannotFindHost,
+            NSURLErrorDNSLookupFailed,
+        ].contains(nsError.code)
+    }
+
+    private static func decodeNotificationPreferencesEnvelope(
+        data: Data,
+        responseStatus: Int,
+        fallback: AppNotificationPreferences
+    ) throws -> AppNotificationPreferences {
+        if data.isEmpty {
+            appLog("[PUSH] notification preferences response empty status=\(responseStatus)")
+            return fallback
+        }
+
+        do {
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let envelope = try decoder.decode(NotificationPreferencesEnvelope.self, from: data)
+            if envelope.ok == false {
+                let message = (envelope.error ?? envelope.detail ?? "Notification settings request failed")
+                    .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+                throw PushNotificationError.server(message.isEmpty ? "Notification settings request failed" : message)
+            }
+            if let error = envelope.error ?? envelope.detail, !(error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                appLog("[PUSH] notification preferences server note: \(error)")
+            }
+            return envelope.preferences ?? fallback
+        } catch {
+            let body = String(data: data, encoding: .utf8) ?? "<non-utf8 body>"
+            appLog("[PUSH] notification preferences decode failed status=\(responseStatus) body=\(body)")
+            throw error
         }
     }
 
@@ -474,8 +624,10 @@ final class PushNotificationAppDelegate: NSObject, UIApplicationDelegate, UNUser
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         let token = deviceToken.map { String(format: "%02x", $0) }.joined()
-        PushNotificationService.storeDeviceToken(token)
-        appLog("[PUSH] APNs token updated")
+        let changed = PushNotificationService.storeDeviceToken(token)
+        if changed {
+            appLog("[PUSH] APNs token updated")
+        }
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
