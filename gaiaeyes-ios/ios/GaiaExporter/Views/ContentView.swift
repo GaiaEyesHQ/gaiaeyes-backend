@@ -5446,9 +5446,9 @@ struct ContentView: View {
 
                         sectionView(
                             title: "Body Signals / Biometrics",
-                            subtitle: "Body-based patterns only show when wearable or quick-check history is strong enough.",
+                            subtitle: "Body-based patterns show when wearable history and signal overlap are strong enough to meet the current evidence rules.",
                             cards: bodySignals,
-                            emptyMessage: "Not enough biometric history is available yet for body-signal patterns."
+                            emptyMessage: "No body-signal patterns meet the current evidence rules yet."
                         )
                     }
                     .padding(16)

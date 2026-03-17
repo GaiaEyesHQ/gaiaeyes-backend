@@ -20,7 +20,7 @@ Pattern Engine v1 is Gaia Eyes' first deterministic personal pattern layer. It d
 - `marts.user_daily_features`
   - Materialized by the batch job from `marts.daily_features` plus user/day joins.
 - `marts.user_daily_outcomes`
-  - Binary grouped outcomes such as `headache_day`, `pain_flare_day`, `fatigue_day`, `poor_sleep_day`, and biometric flags like `hrv_dip_day` when enough history exists.
+  - Binary grouped outcomes such as `headache_day`, `pain_flare_day`, `fatigue_day`, `poor_sleep_day`, and biometric flags like `high_hr_day`, `short_sleep_day`, and `hrv_dip_day` when enough history exists.
 - `marts.user_pattern_associations`
   - Stores all computed lag rows, including unsurfaced rows.
 - `marts.user_pattern_associations_best`

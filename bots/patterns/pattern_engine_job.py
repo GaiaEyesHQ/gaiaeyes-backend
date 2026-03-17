@@ -177,6 +177,14 @@ ASSOCIATION_PAIRS = [
     ("schumann_exposed", "poor_sleep_day"),
     ("schumann_exposed", "focus_fog_day"),
     ("schumann_exposed", "anxiety_day"),
+    # Body-signal cards should use the biometric outcomes we already derive
+    # from watch history, not just HRV. This keeps the section useful for
+    # users with sleep and heart-rate data but no HRV feed.
+    ("kp_g1_plus_exposed", "short_sleep_day"),
+    ("bz_south_exposed", "short_sleep_day"),
+    ("solar_wind_exposed", "short_sleep_day"),
+    ("solar_wind_exposed", "high_hr_day"),
+    ("schumann_exposed", "short_sleep_day"),
     ("solar_wind_exposed", "hrv_dip_day"),
 ]
 

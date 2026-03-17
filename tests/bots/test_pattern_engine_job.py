@@ -2,6 +2,7 @@ import unittest
 from datetime import date, datetime, timezone
 
 from bots.patterns.pattern_engine_job import (
+    ASSOCIATION_PAIRS,
     build_user_daily_features,
     confidence_bucket,
     percentile_nearest_rank,
@@ -83,6 +84,11 @@ class PatternEngineJobTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["flares_count"], 0)
         self.assertEqual(rows[0]["cmes_count"], 0)
+
+    def test_body_signal_pairs_include_sleep_and_heart_rate_outcomes(self) -> None:
+        self.assertIn(("solar_wind_exposed", "high_hr_day"), ASSOCIATION_PAIRS)
+        self.assertIn(("solar_wind_exposed", "short_sleep_day"), ASSOCIATION_PAIRS)
+        self.assertIn(("kp_g1_plus_exposed", "short_sleep_day"), ASSOCIATION_PAIRS)
 
 
 if __name__ == "__main__":
