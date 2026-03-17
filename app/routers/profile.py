@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -13,6 +15,18 @@ from services.personalization.health_context import canonicalize_tag_key, canoni
 
 
 router = APIRouter(prefix="/v1/profile", tags=["profile"])
+
+_NOTIFICATION_FAMILY_DEFAULTS: Dict[str, bool] = {
+    "geomagnetic": True,
+    "solar_wind": True,
+    "flare_cme_sep": True,
+    "schumann": True,
+    "pressure": True,
+    "aqi": True,
+    "temp": True,
+    "gauge_spikes": True,
+}
+_NOTIFICATION_SENSITIVITIES = {"minimal", "normal", "detailed"}
 
 
 def _require_user_id(request: Request) -> str:
@@ -63,6 +77,72 @@ def _normalize_zip(value: Optional[str]) -> Optional[str]:
     if not cleaned:
         return None
     return cleaned[:10]
+
+
+def _normalize_clock_hhmm(value: Optional[str], *, fallback: str) -> str:
+    candidate = (value or "").strip() or fallback
+    try:
+        parsed = datetime.strptime(candidate, "%H:%M")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="quiet hours must use HH:MM format") from exc
+    return parsed.strftime("%H:%M")
+
+
+def _normalize_notification_sensitivity(value: Optional[str]) -> str:
+    normalized = str(value or "normal").strip().lower() or "normal"
+    if normalized not in _NOTIFICATION_SENSITIVITIES:
+        raise HTTPException(status_code=400, detail="invalid notification sensitivity")
+    return normalized
+
+
+def _normalize_time_zone(value: Optional[str]) -> str:
+    candidate = (value or "").strip() or "UTC"
+    try:
+        ZoneInfo(candidate)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="invalid time_zone") from exc
+    return candidate
+
+
+def _normalize_notification_families(value: Any) -> Dict[str, bool]:
+    merged = dict(_NOTIFICATION_FAMILY_DEFAULTS)
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            value = None
+    if isinstance(value, dict):
+        for key in _NOTIFICATION_FAMILY_DEFAULTS:
+            if key in value:
+                merged[key] = bool(value.get(key))
+    return merged
+
+
+def _default_notification_preferences() -> Dict[str, Any]:
+    return {
+        "enabled": False,
+        "signal_alerts_enabled": True,
+        "local_condition_alerts_enabled": True,
+        "personalized_gauge_alerts_enabled": True,
+        "quiet_hours_enabled": False,
+        "quiet_start": "22:00",
+        "quiet_end": "08:00",
+        "time_zone": "UTC",
+        "sensitivity": "normal",
+        "families": dict(_NOTIFICATION_FAMILY_DEFAULTS),
+    }
+
+
+def _normalize_device_token(value: str) -> str:
+    cleaned = (
+        value.strip()
+        .replace(" ", "")
+        .replace("<", "")
+        .replace(">", "")
+    )
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="device_token is required")
+    return cleaned.lower()
 
 
 async def _fetch_location_row(conn, user_id: str) -> Optional[Dict[str, Any]]:
@@ -201,6 +281,31 @@ class ProfileTagsIn(BaseModel):
     tags: List[str] = Field(default_factory=list)
 
 
+class NotificationPreferencesIn(BaseModel):
+    enabled: bool = False
+    signal_alerts_enabled: bool = True
+    local_condition_alerts_enabled: bool = True
+    personalized_gauge_alerts_enabled: bool = True
+    quiet_hours_enabled: bool = False
+    quiet_start: str = "22:00"
+    quiet_end: str = "08:00"
+    time_zone: str = "UTC"
+    sensitivity: str = "normal"
+    families: Dict[str, bool] = Field(default_factory=lambda: dict(_NOTIFICATION_FAMILY_DEFAULTS))
+
+
+class PushTokenUpsertIn(BaseModel):
+    platform: str = "ios"
+    device_token: str
+    app_version: Optional[str] = None
+    environment: str = "prod"
+    enabled: bool = True
+
+
+class PushTokenDisableIn(BaseModel):
+    device_token: str
+
+
 async def _fetch_catalog_rows(conn) -> List[Dict[str, Any]]:
     cols = await _table_columns(conn, "dim", "user_tag_catalog")
     if not cols:
@@ -319,3 +424,248 @@ async def profile_tags_upsert(
             )
 
     return {"ok": True, "tags": cleaned}
+
+
+async def _fetch_notification_preferences(conn, user_id: str) -> Dict[str, Any]:
+    defaults = _default_notification_preferences()
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select enabled,
+                   signal_alerts_enabled,
+                   local_condition_alerts_enabled,
+                   personalized_gauge_alerts_enabled,
+                   quiet_hours_enabled,
+                   to_char(quiet_start, 'HH24:MI') as quiet_start,
+                   to_char(quiet_end, 'HH24:MI') as quiet_end,
+                   time_zone,
+                   sensitivity,
+                   families
+              from app.user_notification_preferences
+             where user_id = %s
+             limit 1
+            """,
+            (user_id,),
+            prepare=False,
+        )
+        row = await cur.fetchone()
+
+    if not row:
+        return defaults
+
+    return {
+        "enabled": bool(row.get("enabled")),
+        "signal_alerts_enabled": bool(row.get("signal_alerts_enabled")),
+        "local_condition_alerts_enabled": bool(row.get("local_condition_alerts_enabled")),
+        "personalized_gauge_alerts_enabled": bool(row.get("personalized_gauge_alerts_enabled")),
+        "quiet_hours_enabled": bool(row.get("quiet_hours_enabled")),
+        "quiet_start": _normalize_clock_hhmm(row.get("quiet_start"), fallback=defaults["quiet_start"]),
+        "quiet_end": _normalize_clock_hhmm(row.get("quiet_end"), fallback=defaults["quiet_end"]),
+        "time_zone": _normalize_time_zone(row.get("time_zone")),
+        "sensitivity": _normalize_notification_sensitivity(row.get("sensitivity")),
+        "families": _normalize_notification_families(row.get("families")),
+    }
+
+
+@router.get("/notifications", dependencies=[Depends(require_read_auth)])
+async def profile_notifications(request: Request, conn=Depends(get_db)):
+    user_id = _require_user_id(request)
+    return {"ok": True, "preferences": await _fetch_notification_preferences(conn, user_id)}
+
+
+@router.put("/notifications", dependencies=[Depends(require_write_auth)])
+async def profile_notifications_upsert(
+    payload: NotificationPreferencesIn,
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    now = datetime.now(timezone.utc)
+    quiet_start = _normalize_clock_hhmm(payload.quiet_start, fallback="22:00")
+    quiet_end = _normalize_clock_hhmm(payload.quiet_end, fallback="08:00")
+    time_zone_name = _normalize_time_zone(payload.time_zone)
+    sensitivity = _normalize_notification_sensitivity(payload.sensitivity)
+    families = _normalize_notification_families(payload.families)
+
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            insert into app.user_notification_preferences (
+                user_id,
+                enabled,
+                signal_alerts_enabled,
+                local_condition_alerts_enabled,
+                personalized_gauge_alerts_enabled,
+                quiet_hours_enabled,
+                quiet_start,
+                quiet_end,
+                time_zone,
+                sensitivity,
+                families,
+                created_at,
+                updated_at
+            )
+            values (
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s,
+                %s::time,
+                %s::time,
+                %s,
+                %s,
+                %s::jsonb,
+                %s,
+                %s
+            )
+            on conflict (user_id) do update
+               set enabled = excluded.enabled,
+                   signal_alerts_enabled = excluded.signal_alerts_enabled,
+                   local_condition_alerts_enabled = excluded.local_condition_alerts_enabled,
+                   personalized_gauge_alerts_enabled = excluded.personalized_gauge_alerts_enabled,
+                   quiet_hours_enabled = excluded.quiet_hours_enabled,
+                   quiet_start = excluded.quiet_start,
+                   quiet_end = excluded.quiet_end,
+                   time_zone = excluded.time_zone,
+                   sensitivity = excluded.sensitivity,
+                   families = excluded.families,
+                   updated_at = excluded.updated_at
+            """,
+            (
+                user_id,
+                bool(payload.enabled),
+                bool(payload.signal_alerts_enabled),
+                bool(payload.local_condition_alerts_enabled),
+                bool(payload.personalized_gauge_alerts_enabled),
+                bool(payload.quiet_hours_enabled),
+                quiet_start,
+                quiet_end,
+                time_zone_name,
+                sensitivity,
+                json.dumps(families, separators=(",", ":"), sort_keys=True),
+                now,
+                now,
+            ),
+            prepare=False,
+        )
+
+    return {"ok": True, "preferences": await _fetch_notification_preferences(conn, user_id)}
+
+
+@router.post("/push-tokens", dependencies=[Depends(require_write_auth)])
+async def profile_push_token_upsert(
+    payload: PushTokenUpsertIn,
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    platform = str(payload.platform or "ios").strip().lower() or "ios"
+    if platform != "ios":
+        raise HTTPException(status_code=400, detail="unsupported push platform")
+    environment = str(payload.environment or "prod").strip().lower() or "prod"
+    if environment not in {"dev", "prod"}:
+        raise HTTPException(status_code=400, detail="invalid push environment")
+
+    device_token = _normalize_device_token(payload.device_token)
+    now = datetime.now(timezone.utc)
+
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            update app.user_push_tokens
+               set enabled = false,
+                   updated_at = %s
+             where device_token = %s
+               and user_id <> %s
+            """,
+            (now, device_token, user_id),
+            prepare=False,
+        )
+        await cur.execute(
+            """
+            insert into app.user_push_tokens (
+                user_id,
+                platform,
+                device_token,
+                app_version,
+                environment,
+                enabled,
+                created_at,
+                updated_at,
+                last_seen_at
+            )
+            values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            on conflict (user_id, device_token) do update
+               set platform = excluded.platform,
+                   app_version = excluded.app_version,
+                   environment = excluded.environment,
+                   enabled = excluded.enabled,
+                   updated_at = excluded.updated_at,
+                   last_seen_at = excluded.last_seen_at
+            returning id,
+                      user_id,
+                      platform,
+                      device_token,
+                      app_version,
+                      environment,
+                      enabled,
+                      created_at,
+                      updated_at,
+                      last_seen_at
+            """,
+            (
+                user_id,
+                platform,
+                device_token,
+                (payload.app_version or "").strip() or None,
+                environment,
+                bool(payload.enabled),
+                now,
+                now,
+                now,
+            ),
+            prepare=False,
+        )
+        row = await cur.fetchone()
+
+    return {"ok": True, "token": row}
+
+
+@router.post("/push-tokens/disable", dependencies=[Depends(require_write_auth)])
+async def profile_push_token_disable(
+    payload: PushTokenDisableIn,
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    device_token = _normalize_device_token(payload.device_token)
+    now = datetime.now(timezone.utc)
+
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            update app.user_push_tokens
+               set enabled = false,
+                   updated_at = %s,
+                   last_seen_at = %s
+             where user_id = %s
+               and device_token = %s
+            returning id,
+                      user_id,
+                      platform,
+                      device_token,
+                      app_version,
+                      environment,
+                      enabled,
+                      created_at,
+                      updated_at,
+                      last_seen_at
+            """,
+            (now, now, user_id, device_token),
+            prepare=False,
+        )
+        row = await cur.fetchone()
+
+    return {"ok": True, "disabled": row is not None, "token": row}

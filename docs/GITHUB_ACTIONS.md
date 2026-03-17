@@ -29,6 +29,8 @@ This repo relies heavily on GitHub Actions for scheduled ingestion, JSON snapsho
 ### Health + features rollups
 - `health-daily-rollup.yml` — daily health rollups.
 - `daily-features-rollup.yml` — rolling daily features refresh.
+- `evaluate_push_notifications.yml` — evaluate current user state into queued push events every 15 minutes.
+- `send_push_notifications.yml` — send queued APNs notifications and disable invalid tokens every 5 minutes.
 
 ### Content + social
 - `gaia_eyes_daily.yml` — daily Earthscope pipeline (Supabase + media JSON).

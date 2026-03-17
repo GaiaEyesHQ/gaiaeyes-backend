@@ -42,6 +42,10 @@
 | `STRIPE_PRICE_PLUS_YEARLY` | Stripe price id for Plus yearly | `price_...` | `app/routers/billing.py` |
 | `STRIPE_PRICE_PRO_MONTHLY` | Stripe price id for Pro monthly | `price_...` | `app/routers/billing.py` |
 | `STRIPE_PRICE_PRO_YEARLY` | Stripe price id for Pro yearly | `price_...` | `app/routers/billing.py` |
+| `APNS_TEAM_ID` | Apple Developer Team ID for APNs auth | `ABCDE12345` | `bots/notifications/send_push_notifications.py` |
+| `APNS_KEY_ID` | APNs auth key id (`.p8`) | `1A2BC3D4E5` | `bots/notifications/send_push_notifications.py` |
+| `APNS_BUNDLE_ID` | iOS app bundle id / APNs topic | `com.gaiaexporter` | `bots/notifications/send_push_notifications.py` |
+| `APNS_PRIVATE_KEY` | APNs auth key PEM contents | `-----BEGIN PRIVATE KEY-----...` | `bots/notifications/send_push_notifications.py` |
 
 ## iOS (runtime/in-app)
 | Variable | Purpose | Where set |

@@ -109,6 +109,15 @@ final class AuthManager: ObservableObject {
 
     func signOutSupabase() {
         lastError = nil
+        let accessToken = supabaseAccessToken
+        let currentUserId = supabaseUserId
+        Task {
+            _ = await PushNotificationService.disableStoredToken(
+                auth: nil,
+                bearerTokenOverride: accessToken,
+                devUserIdOverride: currentUserId
+            )
+        }
         supabaseAccessToken = nil
         supabaseRefreshToken = nil
         supabaseUserId = nil

@@ -316,8 +316,10 @@ private struct HazardItem: Codable, Identifiable, Hashable {
         severity = try container.decodeIfPresent(String.self, forKey: .severity)
         startedAt = try container.decodeIfPresent(String.self, forKey: .startedAt)
 
-        let base = url ?? title ?? location ?? UUID().uuidString
-        id = base
+        let parts = [url, title, source, kind, location, severity, startedAt]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        id = parts.isEmpty ? UUID().uuidString : parts.joined(separator: "|")
     }
 
     init(id: String = UUID().uuidString,
@@ -662,11 +664,24 @@ private struct SpaceOutlookEntry: Codable, Identifiable, Hashable {
         case title, summary, probability, confidence, severity, region, windowStart, windowEnd, issuedAt, driver, metric, value, unit, source, meta
     }
 
+    private static func decodeDouble(_ container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double? {
+        if let value = try? container.decodeIfPresent(Double.self, forKey: key) {
+            return value
+        }
+        if let intValue = try? container.decodeIfPresent(Int.self, forKey: key) {
+            return Double(intValue)
+        }
+        if let stringValue = try? container.decodeIfPresent(String.self, forKey: key) {
+            return Double(stringValue.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return nil
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.title = try container.decodeIfPresent(String.self, forKey: .title)
         self.summary = try container.decodeIfPresent(String.self, forKey: .summary)
-        self.probability = try container.decodeIfPresent(Double.self, forKey: .probability)
+        self.probability = Self.decodeDouble(container, forKey: .probability)
         self.confidence = try container.decodeIfPresent(String.self, forKey: .confidence)
         self.severity = try container.decodeIfPresent(String.self, forKey: .severity)
         self.region = try container.decodeIfPresent(String.self, forKey: .region)
@@ -675,7 +690,7 @@ private struct SpaceOutlookEntry: Codable, Identifiable, Hashable {
         self.issuedAt = try container.decodeIfPresent(String.self, forKey: .issuedAt)
         self.driver = try container.decodeIfPresent(String.self, forKey: .driver)
         self.metric = try container.decodeIfPresent(String.self, forKey: .metric)
-        self.value = try container.decodeIfPresent(Double.self, forKey: .value)
+        self.value = Self.decodeDouble(container, forKey: .value)
         self.unit = try container.decodeIfPresent(String.self, forKey: .unit)
         self.source = try container.decodeIfPresent(String.self, forKey: .source)
         self.meta = try container.decodeIfPresent([String: String].self, forKey: .meta)
@@ -853,6 +868,19 @@ private struct SpaceForecastOutlook: Codable {
         init?(intValue: Int) { return nil }
     }
 
+    private static func decodeDouble(_ container: KeyedDecodingContainer<DynamicKey>, forKey key: DynamicKey) -> Double? {
+        if let value = try? container.decodeIfPresent(Double.self, forKey: key) {
+            return value
+        }
+        if let intValue = try? container.decodeIfPresent(Int.self, forKey: key) {
+            return Double(intValue)
+        }
+        if let stringValue = try? container.decodeIfPresent(String.self, forKey: key) {
+            return Double(stringValue.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return nil
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicKey.self)
         var tmpSections: [SpaceOutlookSection] = []
@@ -882,11 +910,11 @@ private struct SpaceForecastOutlook: Codable {
             case "kp":
                 kp = try? container.decode(OutlookKp.self, forKey: key)
             case "bz_now":
-                bzNow = try? container.decode(Double.self, forKey: key)
+                bzNow = Self.decodeDouble(container, forKey: key)
             case "sw_speed_now_kms":
-                swSpeedNowKms = try? container.decode(Double.self, forKey: key)
+                swSpeedNowKms = Self.decodeDouble(container, forKey: key)
             case "sw_density_now_cm3":
-                swDensityNowCm3 = try? container.decode(Double.self, forKey: key)
+                swDensityNowCm3 = Self.decodeDouble(container, forKey: key)
             case "headline":
                 headline = try? container.decode(String.self, forKey: key)
             case "confidence":
@@ -1212,6 +1240,12 @@ struct ContentView: View {
     @State private var selectedTagKeys: Set<String> = []
     @State private var tagSaveMessage: String?
     @State private var tagsSaving: Bool = false
+    @State private var notificationPreferences: AppNotificationPreferences = PushNotificationService.currentPreferencesDefault()
+    @State private var notificationSettingsSaving: Bool = false
+    @State private var notificationSettingsMessage: String?
+    @State private var pushPermissionGranted: Bool = PushNotificationService.storedPermissionGranted()
+    @State private var pushDeviceToken: String? = PushNotificationService.storedDeviceToken()
+    @State private var pendingPushRoute: GaiaPushRoute? = nil
     @AppStorage("dashboard_payload_cache_json") private var dashboardPayloadCacheJSON: String = ""
     @State private var dashboardPayload: DashboardPayload? = nil
     @State private var lastNonNilDashboardGauges: DashboardGaugeSet? = nil
@@ -1275,6 +1309,48 @@ struct ContentView: View {
     private struct MissionControlQuickLogRequest {
         let label: String
         let event: SymptomQueuedEvent
+    }
+
+    private enum InsightsRoute: String, Hashable, Identifiable {
+        case spaceWeather
+        case localConditions
+        case magnetosphere
+        case schumann
+        case healthSymptoms
+        case earthquakes
+        case hazards
+
+        var id: String { rawValue }
+    }
+
+    private enum InsightsTrendRange: String, CaseIterable, Identifiable {
+        case days7 = "7D"
+        case days14 = "14D"
+        case days30 = "30D"
+
+        var id: String { rawValue }
+
+        var days: Int {
+            switch self {
+            case .days7:
+                return 7
+            case .days14:
+                return 14
+            case .days30:
+                return 30
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .days7:
+                return "7 days"
+            case .days14:
+                return "14 days"
+            case .days30:
+                return "30 days"
+            }
+        }
     }
     
     private func chicagoDayString(offsetDays: Int = 0) -> String {
@@ -2078,6 +2154,93 @@ struct ContentView: View {
         await fetchProfileLocation()
         await fetchTagCatalog()
         await fetchSelectedTags()
+        await fetchNotificationPreferences()
+    }
+
+    private func refreshPushState() async {
+        await PushNotificationService.refreshAuthorizationState()
+        await MainActor.run {
+            pushPermissionGranted = PushNotificationService.storedPermissionGranted()
+            pushDeviceToken = PushNotificationService.storedDeviceToken()
+        }
+    }
+
+    private func fetchNotificationPreferences() async {
+        do {
+            let prefs = try await PushNotificationService.fetchPreferences()
+            await MainActor.run {
+                notificationPreferences = prefs
+                pushPermissionGranted = PushNotificationService.storedPermissionGranted()
+                pushDeviceToken = PushNotificationService.storedDeviceToken()
+                notificationSettingsMessage = nil
+            }
+        } catch {
+            await MainActor.run {
+                notificationPreferences.timeZone = TimeZone.current.identifier
+                pushPermissionGranted = PushNotificationService.storedPermissionGranted()
+                pushDeviceToken = PushNotificationService.storedDeviceToken()
+            }
+            appLog("[UI] notification preferences fetch error: \(error.localizedDescription)")
+        }
+    }
+
+    private func saveNotificationPreferences(requestAuthorizationIfNeeded: Bool = false) async {
+        await MainActor.run {
+            notificationSettingsSaving = true
+            notificationSettingsMessage = nil
+            notificationPreferences.timeZone = TimeZone.current.identifier
+        }
+
+        var payload = await MainActor.run { notificationPreferences }
+        let permissionGranted = await MainActor.run { pushPermissionGranted }
+        if requestAuthorizationIfNeeded && payload.enabled && !permissionGranted {
+            let granted = await PushNotificationService.requestAuthorization()
+            await MainActor.run {
+                pushPermissionGranted = granted
+            }
+            if !granted {
+                await MainActor.run {
+                    notificationSettingsSaving = false
+                    notificationSettingsMessage = "Allow notifications in iOS Settings to finish enabling pushes."
+                    notificationPreferences.enabled = false
+                }
+                return
+            }
+            await refreshPushState()
+            payload = await MainActor.run { notificationPreferences }
+        }
+
+        do {
+            let saved = try await PushNotificationService.savePreferences(payload)
+            let synced = await PushNotificationService.syncTokenRegistration(preferences: saved)
+            await MainActor.run {
+                notificationPreferences = saved
+                notificationSettingsSaving = false
+                pushPermissionGranted = PushNotificationService.storedPermissionGranted()
+                pushDeviceToken = PushNotificationService.storedDeviceToken()
+                if saved.enabled && pushDeviceToken == nil {
+                    notificationSettingsMessage = "Settings saved. APNs token will sync after iOS registration completes."
+                } else if saved.enabled && !synced {
+                    notificationSettingsMessage = "Settings saved. Push token sync is waiting on auth or APNs registration."
+                } else {
+                    notificationSettingsMessage = "Notification settings saved"
+                }
+            }
+        } catch {
+            await MainActor.run {
+                notificationSettingsSaving = false
+                notificationSettingsMessage = "Could not save notification settings"
+            }
+            appLog("[UI] save notification settings error: \(error.localizedDescription)")
+        }
+    }
+
+    private func handleIncomingPushRoute(_ route: GaiaPushRoute) {
+        pendingPushRoute = route
+        showMissionInsightsSheet = false
+        showLocalConditionsSheet = false
+        showSchumannDashboardSheet = false
+        showMissionSettingsSheet = false
     }
 
     private func resolveLocationInput(zip: String, useGPS: Bool) async -> (zip: String?, lat: Double?, lon: Double?, usedGPS: Bool) {
@@ -2987,6 +3150,24 @@ struct ContentView: View {
             await MainActor.run { self.isSymptomServiceOffline = true }
         }
     }
+
+    private func fetchInsightsHubData() async {
+        let api = state.apiWithAuth()
+        async let featuresTask: Void = fetchFeaturesToday(trigger: .initial)
+        async let forecastTask: Void = fetchForecastSummary()
+        async let outlookTask: Void = fetchSpaceOutlook()
+        async let symptomsTask: Void = fetchSymptoms(api: api)
+        async let localTask: Void = fetchLocalHealth()
+        async let magnetosphereTask: Void = fetchMagnetosphere()
+        _ = await (featuresTask, forecastTask, outlookTask, symptomsTask, localTask, magnetosphereTask)
+
+        if hazardsBrief == nil {
+            await fetchHazardsBrief()
+        }
+        if quakeLatest == nil && quakeEvents.isEmpty {
+            await fetchQuakes()
+        }
+    }
     
     private func logSymptomEvent(
         _ event: SymptomQueuedEvent,
@@ -3177,6 +3358,7 @@ struct ContentView: View {
                 latestCameraCheck: latestCameraCheck,
                 cameraCheckLoading: latestCameraCheckLoading,
                 cameraCheckError: latestCameraCheckError,
+                pushRoute: $pendingPushRoute,
                 fallbackTitle: fallbackFeatures?.postTitle,
                 fallbackBody: fallbackFeatures?.postBody,
                 isLoading: dashboardLoading,
@@ -3259,6 +3441,7 @@ struct ContentView: View {
         let latestCameraCheck: CameraHealthDailySummary?
         let cameraCheckLoading: Bool
         let cameraCheckError: String?
+        @Binding var pushRoute: GaiaPushRoute?
         let fallbackTitle: String?
         let fallbackBody: String?
         let isLoading: Bool
@@ -3910,6 +4093,22 @@ struct ContentView: View {
             selectedModal = ModalPresentation(id: "driver:\(key)", entry: entry)
         }
 
+        private func presentPushRouteIfPossible(_ route: GaiaPushRoute?) {
+            guard let route else { return }
+            let targetKey = route.targetKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !targetKey.isEmpty else {
+                pushRoute = nil
+                return
+            }
+            let targetType = route.targetType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if targetType == "gauge", let entry = modalModels?.gauges?[targetKey] {
+                selectedModal = ModalPresentation(id: "gauge:\(targetKey)", entry: entry)
+            } else if targetType == "driver", let entry = modalModels?.drivers?[targetKey] {
+                selectedModal = ModalPresentation(id: "driver:\(targetKey)", entry: entry)
+            }
+            pushRoute = nil
+        }
+
         private func inferredZoneKey(for value: Double?) -> String? {
             guard let value else { return nil }
             let zones = resolvedZones()
@@ -4042,6 +4241,12 @@ struct ContentView: View {
                         }
                     }
                 )
+            }
+            .onAppear {
+                presentPushRouteIfPossible(pushRoute)
+            }
+            .onChange(of: pushRoute, initial: false) { _, newValue in
+                presentPushRouteIfPossible(newValue)
             }
         }
     }
@@ -4207,6 +4412,7 @@ struct ContentView: View {
         let bzNow: Double?
         let swSpeedNow: Double?
         let swSpeedMax: Double?
+        let swDensityNow: Double?
         let sScale: String?
         let protonFlux: Double?
 
@@ -4265,6 +4471,7 @@ struct ContentView: View {
             swSpeedMax = last24.compactMap { $0.sw }.max()
                 ?? swSpeedNow
                 ?? current.swSpeedAvg?.value
+            swDensityNow = outlook?.swDensityNowCm3
             sScale = outlook?.data?.sep?.sScale
                 ?? sepScaleIndex.map { "S\(Int($0.rounded()))" }
                 ?? Self.sScale(for: sepFlux)
@@ -4469,6 +4676,1277 @@ struct ContentView: View {
                     ForecastCard(summary: fc).padding(.horizontal)
                 }
             }
+        }
+    }
+
+    private struct InsightsHubView: View {
+        let current: FeaturesToday?
+        let outlook: SpaceForecastOutlook?
+        let updatedText: String?
+        let usingYesterdayFallback: Bool
+        let localHealthZip: String
+        let localHealth: LocalCheckResponse?
+        let localHealthLoading: Bool
+        let localHealthError: String?
+        let useGPS: Bool
+        let localInsightsEnabled: Bool
+        let dashboardDrivers: [DashboardDriverItem]
+        let magnetosphere: MagnetosphereData?
+        let magnetosphereLoading: Bool
+        let magnetosphereError: String?
+        let symptomsTodayCount: Int
+        let queuedSymptomsCount: Int
+        let topSymptomSummary: String?
+        let latestCameraCheck: CameraHealthDailySummary?
+        let latestCameraCheckLoading: Bool
+        let latestCameraCheckError: String?
+        let quakeLatest: QuakeDaily?
+        let quakeEvents: [QuakeEvent]
+        let quakeLoading: Bool
+        let quakeError: String?
+        let hazardsBrief: HazardsBriefResponse?
+        let hazardsLoading: Bool
+        let hazardsError: String?
+        let onRefresh: () async -> Void
+
+        private struct HubMetric: Identifiable {
+            let id = UUID()
+            let label: String
+            let value: String
+            let tint: Color
+        }
+
+        private struct HubCard: View {
+            private static let metricColumns = [
+                GridItem(.adaptive(minimum: 96, maximum: 220), spacing: 10, alignment: .topLeading)
+            ]
+
+            let title: String
+            let icon: String
+            let status: String
+            let pillText: String
+            let severity: StatusPill.Severity
+            let metrics: [HubMetric]
+            let isExplore: Bool
+
+            var body: some View {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.white.opacity(isExplore ? 0.05 : 0.10))
+                            Image(systemName: icon)
+                                .font(.headline)
+                                .foregroundColor(.white.opacity(isExplore ? 0.72 : 0.90))
+                        }
+                        .frame(width: isExplore ? 42 : 48, height: isExplore ? 42 : 48)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(title)
+                                .font(isExplore ? .headline : .title3.weight(.semibold))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(status)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        VStack(alignment: .trailing, spacing: 10) {
+                            StatusPill(pillText, severity: severity)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.44))
+                        }
+                    }
+
+                    if !metrics.isEmpty {
+                        LazyVGrid(columns: Self.metricColumns, alignment: .leading, spacing: 10) {
+                            ForEach(metrics.prefix(3)) { metric in
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(metric.label.uppercased())
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundColor(.secondary)
+                                    Text(metric.value)
+                                        .font(.subheadline.weight(.semibold))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.78)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(metric.tint.opacity(isExplore ? 0.10 : 0.15))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(metric.tint.opacity(isExplore ? 0.14 : 0.22), lineWidth: 1)
+                                )
+                            }
+                        }
+                    }
+                }
+                .padding(isExplore ? 14 : 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white.opacity(isExplore ? 0.035 : 0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.white.opacity(isExplore ? 0.05 : 0.08), lineWidth: 1)
+                )
+            }
+        }
+
+        private func statusSeverity(for kp: Double?) -> StatusPill.Severity {
+            guard let kp else { return .ok }
+            if kp >= 6 { return .alert }
+            if kp >= 4 { return .warn }
+            return .ok
+        }
+
+        private func severity(for raw: String?) -> StatusPill.Severity {
+            LocalConditionsStyle.pillSeverity(raw)
+        }
+
+        private func dashboardDriver(for key: String) -> DashboardDriverItem? {
+            dashboardDrivers.first {
+                $0.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == key.lowercased()
+            }
+        }
+
+        private func normalizedPillText(_ raw: String?, fallback: String) -> String {
+            let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? fallback : trimmed
+        }
+
+        private func localConditionsPill(weather: LocalWeather?, air: LocalAir?) -> (text: String, severity: StatusPill.Severity) {
+            let tempSwing = abs(weather?.tempDelta24hC ?? 0)
+            let pressureSwing = abs(weather?.baroDelta24hHpa ?? 0)
+            let aqi = air?.aqi ?? 0
+
+            if tempSwing >= 12 || pressureSwing >= 12 || aqi >= 151 {
+                return ("High", .alert)
+            }
+            if tempSwing >= 6 || pressureSwing >= 6 || aqi >= 51 {
+                return ("Watch", .warn)
+            }
+            return ("Stable", .ok)
+        }
+
+        private func countHazardSeverities(_ items: [HazardItem]) -> (red: Int, orange: Int) {
+            items.reduce(into: (red: 0, orange: 0)) { counts, item in
+                let severity = (item.severity ?? "").lowercased()
+                if severity.contains("red") {
+                    counts.red += 1
+                } else if severity.contains("orange") {
+                    counts.orange += 1
+                }
+            }
+        }
+
+        private var localLocationSummary: String {
+            let resolvedZip = (localHealth?.whereInfo?.zip ?? localHealthZip).trimmingCharacters(in: .whitespacesAndNewlines)
+            if useGPS {
+                return resolvedZip.isEmpty ? "GPS preferred" : "GPS preferred • ZIP \(resolvedZip)"
+            }
+            return resolvedZip.isEmpty ? "ZIP not set" : "ZIP \(resolvedZip)"
+        }
+
+        private var spaceWeatherCard: some View {
+            let kpNow = current?.kpCurrent?.value
+            let swSpeed = current?.swSpeedAvg?.value
+            let flares = Int((current?.flaresCount?.value ?? 0).rounded())
+            let geomagneticState = normalizedPillText(
+                outlook?.kp?.gScaleNow?.capitalized,
+                fallback: (kpNow.map { $0 >= 5 ? "Active" : "Quiet" } ?? "Quiet")
+            )
+            let kpText = kpNow.map { String(format: "%.1f", $0) } ?? "—"
+            let swText = swSpeed.map { String(format: "%.0f km/s", $0) } ?? "—"
+            let flareText = flares == 0 ? "0" : "\(flares)"
+            let status: String
+            if let kpNow, kpNow >= 5 {
+                status = "Geomagnetic activity is elevated right now."
+            } else if let updatedText, !updatedText.isEmpty {
+                status = "\(geomagneticState) geomagnetic conditions. Updated \(updatedText)."
+            } else {
+                status = "\(geomagneticState) geomagnetic conditions with fresh summary metrics."
+            }
+
+            return NavigationLink(value: InsightsRoute.spaceWeather) {
+                HubCard(
+                    title: "Space Weather",
+                    icon: "sun.max.fill",
+                    status: status,
+                    pillText: geomagneticState,
+                    severity: statusSeverity(for: kpNow),
+                    metrics: [
+                        HubMetric(label: "Kp", value: kpText, tint: GaugePalette.zoneColor(kpNow.map { $0 >= 4 ? "elevated" : "low" })),
+                        HubMetric(label: "Wind", value: swText, tint: GaugePalette.mild),
+                        HubMetric(label: "Flares", value: flareText, tint: GaugePalette.elevated)
+                    ],
+                    isExplore: false
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
+        private var localConditionsCard: some View {
+            let weather = localHealth?.weather
+            let air = localHealth?.air
+            let pill = localConditionsPill(weather: weather, air: air)
+            let tempText = LocalConditionsFormatting.formatTempMetric(weather?.tempC)
+            let pressureText = LocalConditionsFormatting.formatPressureShort(weather?.pressureHpa)
+            let aqiText = LocalConditionsFormatting.formatNumber(air?.aqi, decimals: 0)
+            let status: String
+            if let error = ContentView.scrubError(localHealthError) {
+                status = error
+            } else if !localInsightsEnabled {
+                status = "Local insights are off until location sharing is enabled."
+            } else if localHealthLoading {
+                status = "Refreshing local conditions for \(localLocationSummary)."
+            } else {
+                status = "Weather, air quality, and moon signals for \(localLocationSummary)."
+            }
+
+            return NavigationLink(value: InsightsRoute.localConditions) {
+                HubCard(
+                    title: "Local Conditions",
+                    icon: "location.fill",
+                    status: status,
+                    pillText: !localInsightsEnabled ? "Off" : pill.text,
+                    severity: !localInsightsEnabled ? .warn : (ContentView.scrubError(localHealthError) == nil ? pill.severity : .warn),
+                    metrics: [
+                        HubMetric(label: "Temp", value: tempText, tint: GaugePalette.low),
+                        HubMetric(label: "AQI", value: aqiText, tint: GaugePalette.mild),
+                        HubMetric(label: "Pressure", value: pressureText, tint: GaugePalette.elevated)
+                    ],
+                    isExplore: false
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
+        private var magnetosphereCard: some View {
+            let kpis = magnetosphere?.kpis
+            let sw = magnetosphere?.sw
+            let storminess = (kpis?.storminess ?? "Quiet").capitalized
+            let geoRisk = (kpis?.geoRisk ?? "Low").capitalized
+            let bzText = sw?.bzNt.map { String(format: "%.1f nT", $0) } ?? "—"
+            let r0Text = kpis?.r0Re.map { String(format: "%.1f Re", $0) } ?? "—"
+            let kpText = kpis?.kp.map { String(format: "%.1f", $0) } ?? "—"
+            let severity: StatusPill.Severity = {
+                if storminess.lowercased().contains("storm") || geoRisk.lowercased().contains("high") {
+                    return .alert
+                }
+                if storminess.lowercased().contains("active") || geoRisk.lowercased().contains("elev") {
+                    return .warn
+                }
+                if ContentView.scrubError(magnetosphereError) != nil {
+                    return .warn
+                }
+                return .ok
+            }()
+            let status: String
+            if let error = ContentView.scrubError(magnetosphereError) {
+                status = error
+            } else if magnetosphereLoading {
+                status = "Refreshing coupling and shield-edge conditions."
+            } else {
+                status = "\(storminess) storminess with \(geoRisk.lowercased()) GEO risk."
+            }
+
+            return NavigationLink(value: InsightsRoute.magnetosphere) {
+                HubCard(
+                    title: "Magnetosphere",
+                    icon: "shield.lefthalf.filled",
+                    status: status,
+                    pillText: storminess,
+                    severity: severity,
+                    metrics: [
+                        HubMetric(label: "R0", value: r0Text, tint: GaugePalette.low),
+                        HubMetric(label: "Bz", value: bzText, tint: GaugePalette.elevated),
+                        HubMetric(label: "Kp", value: kpText, tint: GaugePalette.mild)
+                    ],
+                    isExplore: false
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
+        private var schumannCard: some View {
+            let schumannDriver = dashboardDriver(for: "schumann")
+            let station = current?.schStation?.capitalized ?? "Station"
+            let f0Text = current?.schF0Hz?.value.map { String(format: "%.2f Hz", $0) } ?? "—"
+            let f1Text = current?.schF1Hz?.value.map { String(format: "%.2f Hz", $0) } ?? "—"
+            let updated = updatedText ?? "recent"
+            let pillText = normalizedPillText(
+                schumannDriver?.state?.capitalized,
+                fallback: current?.schF0Hz?.value == nil ? "Pending" : "Active"
+            )
+            let status = "Dedicated resonance dashboard with live harmonics and quality detail."
+
+            return NavigationLink(value: InsightsRoute.schumann) {
+                HubCard(
+                    title: "Schumann Resonance",
+                    icon: "waveform.path.ecg",
+                    status: "\(status) Last app summary \(updated).",
+                    pillText: pillText,
+                    severity: schumannDriver == nil ? .warn : severity(for: schumannDriver?.severity),
+                    metrics: [
+                        HubMetric(label: "Source", value: station, tint: GaugePalette.low),
+                        HubMetric(label: "f0", value: f0Text, tint: GaugePalette.mild),
+                        HubMetric(label: "f1", value: f1Text, tint: GaugePalette.elevated)
+                    ],
+                    isExplore: false
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
+        private var healthCard: some View {
+            let sleepText: String = {
+                guard let current else { return "—" }
+                let total = Int((current.sleepTotalMinutes?.value ?? 0).rounded())
+                return "\(total / 60)h \(total % 60)m"
+            }()
+            let stepsText = current.map { "\(Int(($0.stepsTotal?.value ?? 0).rounded()))" } ?? "—"
+            let cameraText = latestCameraCheck?.bpm.map { "\(Int($0.rounded())) bpm" } ?? "—"
+            let status: String
+            if symptomsTodayCount > 0 {
+                status = "\(symptomsTodayCount) symptoms logged today. Open for sleep, vitals, and comparisons."
+            } else if let topSymptomSummary, !topSymptomSummary.isEmpty {
+                status = topSymptomSummary
+            } else if queuedSymptomsCount > 0 {
+                status = "\(queuedSymptomsCount) symptom entries are queued to sync."
+            } else {
+                status = "Symptoms are quiet right now. Open for deeper health context."
+            }
+            let severity: StatusPill.Severity = symptomsTodayCount >= 4 ? .alert : queuedSymptomsCount > 0 ? .warn : .ok
+            let pillText = symptomsTodayCount > 0 ? "Active" : (queuedSymptomsCount > 0 ? "Syncing" : "Quiet")
+
+            return NavigationLink(value: InsightsRoute.healthSymptoms) {
+                HubCard(
+                    title: "Health & Symptoms",
+                    icon: "heart.text.square.fill",
+                    status: status,
+                    pillText: pillText,
+                    severity: severity,
+                    metrics: [
+                        HubMetric(label: "Sleep", value: sleepText, tint: GaugePalette.low),
+                        HubMetric(label: "Steps", value: stepsText, tint: GaugePalette.mild),
+                        HubMetric(label: "Quick Check", value: cameraText, tint: GaugePalette.elevated)
+                    ],
+                    isExplore: false
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
+        private var earthquakesCard: some View {
+            let total = quakeLatest?.allQuakes ?? quakeEvents.count
+            let maxMag = quakeEvents.max(by: { ($0.mag ?? 0) < ($1.mag ?? 0) })?.mag
+            let status: String
+            if let error = ContentView.scrubError(quakeError) {
+                status = error
+            } else if quakeLoading {
+                status = "Refreshing the global quake snapshot."
+            } else if maxMag != nil {
+                status = "Interesting global quake context, outside the core daily loop."
+            } else {
+                status = "Open for recent quake context when you want to explore."
+            }
+
+            return NavigationLink(value: InsightsRoute.earthquakes) {
+                HubCard(
+                    title: "Earthquakes",
+                    icon: "waveform.path",
+                    status: status,
+                    pillText: (maxMag ?? 0) >= 6.5 ? "Watch" : "Ready",
+                    severity: (maxMag ?? 0) >= 6.5 ? .warn : .ok,
+                    metrics: [
+                        HubMetric(label: "Total", value: total > 0 ? "\(total)" : "—", tint: GaugePalette.low),
+                        HubMetric(label: "Max", value: maxMag.map { String(format: "M%.1f", $0) } ?? "—", tint: GaugePalette.elevated),
+                        HubMetric(label: "M6+", value: quakeLatest?.m6p.map(String.init) ?? "—", tint: GaugePalette.mild)
+                    ],
+                    isExplore: true
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
+        private var hazardsCard: some View {
+            let items = hazardsBrief?.items ?? []
+            let severityCounts = countHazardSeverities(items)
+            let total = items.count
+            let status: String
+            if let error = ContentView.scrubError(hazardsError) {
+                status = error
+            } else if hazardsLoading {
+                status = "Refreshing the GDACS hazard brief."
+            } else if total > 0 {
+                status = "Global hazards stay available as optional exploration."
+            } else {
+                status = "Open for the latest hazard brief if you want broader context."
+            }
+
+            return NavigationLink(value: InsightsRoute.hazards) {
+                HubCard(
+                    title: "Hazards",
+                    icon: "exclamationmark.triangle.fill",
+                    status: status,
+                    pillText: severityCounts.red > 0 ? "Alert" : severityCounts.orange > 0 ? "Watch" : "Ready",
+                    severity: severityCounts.red > 0 ? .alert : severityCounts.orange > 0 ? .warn : .ok,
+                    metrics: [
+                        HubMetric(label: "Active", value: total > 0 ? "\(total)" : "—", tint: GaugePalette.low),
+                        HubMetric(label: "Red", value: "\(severityCounts.red)", tint: GaugePalette.high),
+                        HubMetric(label: "Orange", value: "\(severityCounts.orange)", tint: GaugePalette.elevated)
+                    ],
+                    isExplore: true
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
+        var body: some View {
+            ZStack {
+                Color.black.opacity(0.97).ignoresSafeArea()
+
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Fast scan first.")
+                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                            Text("Open a focused section when you want detail on how signals may relate to how you feel.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            if usingYesterdayFallback {
+                                Label("Showing yesterday’s features while today finishes updating.", systemImage: "clock.arrow.circlepath")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        spaceWeatherCard
+                        localConditionsCard
+                        magnetosphereCard
+                        schumannCard
+                        healthCard
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Explore")
+                                .font(.headline.weight(.semibold))
+                            Text("Interesting context, but kept secondary so Insights stays fast and personal.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            earthquakesCard
+                            hazardsCard
+                        }
+                        .padding(.top, 4)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .refreshable {
+                    await onRefresh()
+                }
+            }
+            .navigationTitle("Insights")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private struct InsightsSpaceWeatherView: View {
+        let current: FeaturesToday?
+        let updatedText: String?
+        let usingYesterdayFallback: Bool
+        let forecast: ForecastSummary?
+        let outlook: SpaceForecastOutlook?
+        let series: SpaceSeries?
+
+        private func geomagneticSeverity(kp: Double?) -> StatusPill.Severity {
+            guard let kp else { return .ok }
+            if kp >= 6 { return .alert }
+            if kp >= 4 { return .warn }
+            return .ok
+        }
+
+        private func progress(_ value: Double?, max: Double) -> Double {
+            guard let value, max > 0 else { return 0.12 }
+            return LocalConditionsFormatting.clamped(abs(value) / max)
+        }
+
+        private func bzSeverity(_ bz: Double?) -> String {
+            guard let bz else { return "low" }
+            if bz <= -10 { return "high" }
+            if bz <= -5 { return "elevated" }
+            if bz < 0 { return "mild" }
+            return "low"
+        }
+
+        private func windSeverity(_ speed: Double?) -> String {
+            guard let speed else { return "low" }
+            if speed >= 650 { return "high" }
+            if speed >= 550 { return "elevated" }
+            if speed >= 450 { return "mild" }
+            return "low"
+        }
+
+        private var metrics: SpaceWeatherCardMetrics? {
+            current.map { SpaceWeatherCardMetrics(current: $0, outlook: outlook, series: series) }
+        }
+
+        private func cleanedOutlookLine(_ raw: String?) -> String? {
+            guard let raw else { return nil }
+            let trimmed = raw
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "•", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            let lower = trimmed.lowercased()
+            if lower == "space weather outlook" || lower == "outlook" || lower == "forecast" {
+                return nil
+            }
+            return trimmed
+        }
+
+        private var forecastBodyLines: [String] {
+            guard let body = forecast?.body, !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return []
+            }
+            return body
+                .components(separatedBy: .newlines)
+                .compactMap(cleanedOutlookLine)
+        }
+
+        private var sectionSummaryLines: [String] {
+            (outlook?.sections ?? [])
+                .flatMap { section in
+                    section.entries.compactMap { entry in
+                        cleanedOutlookLine(entry.summary ?? entry.title)
+                    }
+                }
+        }
+
+        private func outlookMetricValue(matching keywords: [String]) -> Double? {
+            let lowered = keywords.map { $0.lowercased() }
+            for section in outlook?.sections ?? [] {
+                for entry in section.entries {
+                    let haystack = [
+                        entry.title?.lowercased(),
+                        entry.summary?.lowercased(),
+                        entry.driver?.lowercased(),
+                        entry.metric?.lowercased()
+                    ]
+                    .compactMap { $0 }
+                    .joined(separator: " ")
+                    if lowered.contains(where: { haystack.contains($0) }), let value = entry.value {
+                        return value
+                    }
+                }
+            }
+            return nil
+        }
+
+        private var outlookSummaryLines: [String] {
+            var lines: [String] = []
+            if let headline = cleanedOutlookLine(outlook?.headline), !lines.contains(headline) {
+                lines.append(headline)
+            }
+            if let summary = cleanedOutlookLine(outlook?.summary), !lines.contains(summary) {
+                lines.append(summary)
+            }
+            if let forecastHeadline = cleanedOutlookLine(forecast?.headline), !lines.contains(forecastHeadline) {
+                lines.append(forecastHeadline)
+            }
+            for bucket in [forecast?.lines ?? [], forecastBodyLines, outlook?.alerts ?? [], sectionSummaryLines, outlook?.notes ?? []] {
+                for rawLine in bucket {
+                    if let line = cleanedOutlookLine(rawLine), !lines.contains(line) {
+                        lines.append(line)
+                    }
+                    if lines.count >= 4 {
+                        return Array(lines.prefix(4))
+                    }
+                }
+            }
+            return Array(lines.prefix(4))
+        }
+
+        var body: some View {
+            let metrics = metrics
+            let kpNow = metrics?.kpNow
+            let kpMax = metrics?.kpMax
+            let bzNow = metrics?.bzNow
+            let swSpeed = metrics?.swSpeedNow
+            let density = metrics?.swDensityNow
+                ?? outlookMetricValue(matching: ["density", "cm^-3", "cm-3", "cm3"])
+            let protonFlux = metrics?.protonFlux
+            let flaresCount = outlook?.flares?.total24h ?? Int((current?.flaresCount?.value ?? 0).rounded())
+            let cmeCount = outlook?.cmes?.stats?.total72h ?? Int((current?.cmesCount?.value ?? 0).rounded())
+            let geomagneticState = outlook?.kp?.gScaleNow ?? (kpNow.map { $0 >= 5 ? "Active" : "Quiet" } ?? "Quiet")
+
+            ZStack {
+                Color.black.opacity(0.97).ignoresSafeArea()
+
+                ScrollView {
+                    LazyVStack(spacing: 16) {
+                        LocalConditionsSurfaceCard(title: "Geomagnetic State", icon: "sun.max.fill") {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(alignment: .top, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(geomagneticState)
+                                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                                        if let updatedText {
+                                            Text("Updated \(updatedText)")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    StatusPill(geomagneticState, severity: geomagneticSeverity(kp: kpNow))
+                                }
+
+                                HStack(spacing: 12) {
+                                    LocalConditionsMetricTile(
+                                        title: "Kp Now",
+                                        value: kpNow.map { String(format: "%.1f", $0) } ?? "—",
+                                        progress: progress(kpNow, max: 9),
+                                        tint: GaugePalette.zoneColor(kpNow.map { $0 >= 4 ? "elevated" : "low" })
+                                    )
+                                    LocalConditionsMetricTile(
+                                        title: "Kp 24h Max",
+                                        value: kpMax.map { String(format: "%.1f", $0) } ?? "—",
+                                        progress: progress(kpMax, max: 9),
+                                        tint: GaugePalette.zoneColor(kpMax.map { $0 >= 5 ? "high" : $0 >= 4 ? "elevated" : "low" })
+                                    )
+                                }
+
+                                if usingYesterdayFallback {
+                                    Text("Showing yesterday’s feature summary while today updates.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+
+                        LocalConditionsSurfaceCard(title: "Solar Wind", icon: "dot.radiowaves.left.and.right") {
+                            HStack(spacing: 12) {
+                                LocalConditionsMetricTile(
+                                    title: "Bz",
+                                    value: bzNow.map { String(format: "%.1f nT", $0) } ?? "—",
+                                    progress: progress(bzNow, max: 20),
+                                    tint: GaugePalette.zoneColor(bzSeverity(bzNow))
+                                )
+                                LocalConditionsMetricTile(
+                                    title: "Speed",
+                                    value: swSpeed.map { String(format: "%.0f km/s", $0) } ?? "—",
+                                    progress: progress(swSpeed, max: 800),
+                                    tint: GaugePalette.zoneColor(windSeverity(swSpeed))
+                                )
+                            }
+                            HStack(spacing: 10) {
+                                LocalConditionsValueChip(
+                                    label: "Density",
+                                    value: density.map { String(format: "%.1f cm^-3", $0) } ?? "—",
+                                    tint: GaugePalette.mild
+                                )
+                                LocalConditionsValueChip(
+                                    label: "Proton Flux",
+                                    value: protonFlux.map { String(format: "%.1f pfu", $0) } ?? "—",
+                                    tint: GaugePalette.elevated
+                                )
+                                LocalConditionsValueChip(
+                                    label: "S-Scale",
+                                    value: metrics?.sScale ?? "S0",
+                                    tint: GaugePalette.zoneColor((metrics?.sScale ?? "S0") == "S0" ? "low" : "elevated")
+                                )
+                            }
+                        }
+
+                        LocalConditionsSurfaceCard(title: "Events", icon: "bolt.horizontal.fill") {
+                            HStack(spacing: 10) {
+                                LocalConditionsValueChip(
+                                    label: "Flares",
+                                    value: "\(flaresCount)",
+                                    tint: GaugePalette.mild
+                                )
+                                LocalConditionsValueChip(
+                                    label: "CMEs",
+                                    value: "\(cmeCount)",
+                                    tint: GaugePalette.elevated
+                                )
+                                LocalConditionsValueChip(
+                                    label: "Confidence",
+                                    value: outlook?.confidence ?? "—",
+                                    tint: GaugePalette.low
+                                )
+                            }
+                            if let headline = outlook?.cmes?.headline, !headline.isEmpty {
+                                Text(headline)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        if !outlookSummaryLines.isEmpty {
+                            LocalConditionsSurfaceCard(title: "Outlook", icon: "text.justify.left") {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    ForEach(Array(outlookSummaryLines.enumerated()), id: \.offset) { _, line in
+                                        Text("• \(line)")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .navigationTitle("Space Weather")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private struct InsightsMagnetosphereView: View {
+        let data: MagnetosphereData?
+        let isLoading: Bool
+        let error: String?
+
+        private func formatValue(_ value: Double?, decimals: Int = 1, suffix: String = "") -> String {
+            guard let value else { return "—" }
+            let base = String(format: "%.\(decimals)f", value)
+            return suffix.isEmpty ? base : "\(base) \(suffix)"
+        }
+
+        private func progress(_ value: Double?, max: Double) -> Double {
+            guard let value, max > 0 else { return 0.12 }
+            return LocalConditionsFormatting.clamped(abs(value) / max)
+        }
+
+        private func chartPoints() -> [(Date, Double)] {
+            let fmt = ISO8601DateFormatter()
+            return (data?.series?.r0 ?? []).compactMap { point in
+                guard let t = point.t, let v = point.v, let d = fmt.date(from: t) else { return nil }
+                return (d, v)
+            }
+        }
+
+        var body: some View {
+            let kpis = data?.kpis
+            let sw = data?.sw
+
+            ZStack {
+                Color.black.opacity(0.97).ignoresSafeArea()
+
+                ScrollView {
+                    LazyVStack(spacing: 16) {
+                        LocalConditionsSurfaceCard(title: "Magnetosphere Summary", icon: "shield.lefthalf.filled") {
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text((kpis?.storminess ?? "Quiet").capitalized)
+                                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                                    Text("GEO risk \((kpis?.geoRisk ?? "Low").capitalized) • GIC feel \((kpis?.dbdt ?? "Low").capitalized)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    if let ts = data?.ts {
+                                        Text("Updated \(ts)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                if isLoading {
+                                    ProgressView()
+                                } else {
+                                    StatusPill(
+                                        (kpis?.storminess ?? "Quiet"),
+                                        severity: (kpis?.storminess ?? "").lowercased().contains("storm")
+                                            ? .alert
+                                            : (kpis?.storminess ?? "").lowercased().contains("active")
+                                            ? .warn
+                                            : .ok
+                                    )
+                                }
+                            }
+                            if let cleanError = ContentView.scrubError(error) {
+                                Text(cleanError)
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                            }
+                        }
+
+                        LocalConditionsSurfaceCard(title: "KPIs", icon: "gauge.with.dots.needle.bottom.50percent") {
+                            HStack(spacing: 12) {
+                                LocalConditionsMetricTile(
+                                    title: "R0",
+                                    value: formatValue(kpis?.r0Re, suffix: "Re"),
+                                    progress: progress(kpis?.r0Re, max: 16),
+                                    tint: GaugePalette.low
+                                )
+                                LocalConditionsMetricTile(
+                                    title: "Plasmapause",
+                                    value: formatValue(kpis?.lppRe, suffix: "Re"),
+                                    progress: progress(kpis?.lppRe, max: 8),
+                                    tint: GaugePalette.mild
+                                )
+                                LocalConditionsMetricTile(
+                                    title: "Kp",
+                                    value: formatValue(kpis?.kp),
+                                    progress: progress(kpis?.kp, max: 9),
+                                    tint: GaugePalette.elevated
+                                )
+                            }
+                            HStack(spacing: 10) {
+                                LocalConditionsValueChip(label: "Storminess", value: (kpis?.storminess ?? "—").capitalized, tint: GaugePalette.mild)
+                                LocalConditionsValueChip(label: "GEO Risk", value: (kpis?.geoRisk ?? "—").capitalized, tint: GaugePalette.elevated)
+                                LocalConditionsValueChip(label: "Trend", value: (data?.trend?.r0 ?? "—").capitalized, tint: GaugePalette.low)
+                            }
+                        }
+
+                        LocalConditionsSurfaceCard(title: "Solar Wind Coupling", icon: "arrow.triangle.2.circlepath") {
+                            HStack(spacing: 12) {
+                                LocalConditionsMetricTile(
+                                    title: "Density",
+                                    value: formatValue(sw?.nCm3, suffix: "cm^-3"),
+                                    progress: progress(sw?.nCm3, max: 20),
+                                    tint: GaugePalette.mild
+                                )
+                                LocalConditionsMetricTile(
+                                    title: "Speed",
+                                    value: formatValue(sw?.vKms, decimals: 0, suffix: "km/s"),
+                                    progress: progress(sw?.vKms, max: 800),
+                                    tint: GaugePalette.elevated
+                                )
+                                LocalConditionsMetricTile(
+                                    title: "Bz",
+                                    value: formatValue(sw?.bzNt, suffix: "nT"),
+                                    progress: progress(sw?.bzNt, max: 20),
+                                    tint: GaugePalette.zoneColor((sw?.bzNt ?? 0) <= -5 ? "elevated" : "low")
+                                )
+                            }
+                        }
+
+                        if !chartPoints().isEmpty {
+                            LocalConditionsSurfaceCard(title: "Shield Edge Trend", icon: "chart.xyaxis.line") {
+                                Chart(chartPoints(), id: \.0) { point in
+                                    LineMark(
+                                        x: .value("Time", point.0),
+                                        y: .value("R0", point.1)
+                                    )
+                                    .interpolationMethod(.catmullRom)
+                                    .foregroundStyle(GaugePalette.low)
+                                }
+                                .frame(height: 200)
+                            }
+                        }
+
+                        LocalConditionsSurfaceCard(title: "How to Read This", icon: "text.book.closed.fill") {
+                            Text("R0 tracks the magnetopause boundary, while the coupling metrics summarize how solar wind pressure and Bz may be loading the system. Higher Kp, stronger southward Bz, and tighter shield-edge values usually mean more active geospace conditions.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .navigationTitle("Magnetosphere")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private struct InsightsHealthStatsCard: View {
+        let current: FeaturesToday?
+        let updatedText: String?
+
+        private func metric(_ label: String, value: String, tint: Color) -> some View {
+            LocalConditionsValueChip(label: label, value: value, tint: tint)
+        }
+
+        var body: some View {
+            LocalConditionsSurfaceCard(title: "Health Stats", icon: "heart.fill") {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let updatedText {
+                        Text("Updated \(updatedText)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    HStack(spacing: 10) {
+                        metric("Steps", value: current.map { "\(Int(($0.stepsTotal?.value ?? 0).rounded()))" } ?? "—", tint: GaugePalette.low)
+                        metric("HRV", value: current?.hrvAvg?.value.map { "\(Int($0.rounded()))" } ?? "—", tint: GaugePalette.mild)
+                        metric("SpO₂", value: current?.spo2AvgDisplay.map { String(format: "%.0f%%", $0) } ?? "—", tint: GaugePalette.elevated)
+                    }
+                    HStack(spacing: 10) {
+                        metric(
+                            "Heart Rate",
+                            value: {
+                                let minText = current?.hrMin?.value.map { "\(Int($0.rounded()))" } ?? "—"
+                                let maxText = current?.hrMax?.value.map { "\(Int($0.rounded()))" } ?? "—"
+                                return "\(minText)-\(maxText)"
+                            }(),
+                            tint: GaugePalette.low
+                        )
+                        metric(
+                            "Blood Pressure",
+                            value: {
+                                let sys = current?.bpSysAvg?.value.map { "\(Int($0.rounded()))" } ?? "—"
+                                let dia = current?.bpDiaAvg?.value.map { "\(Int($0.rounded()))" } ?? "—"
+                                return "\(sys)/\(dia)"
+                            }(),
+                            tint: GaugePalette.mild
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private struct InsightsCameraCheckCard: View {
+        let summary: CameraHealthDailySummary?
+        let isLoading: Bool
+        let errorText: String?
+        let onOpenQuickCheck: () -> Void
+
+        private func qualityColor(_ quality: String?) -> Color {
+            let token = (quality ?? "").lowercased()
+            if token == "good" { return GaugePalette.low }
+            if token == "ok" { return GaugePalette.mild }
+            if token == "poor" { return GaugePalette.elevated }
+            return .secondary
+        }
+
+        private func qualityLabel(_ quality: String?) -> String {
+            let token = (quality ?? "unknown").trimmingCharacters(in: .whitespacesAndNewlines)
+            if token.isEmpty { return "Unknown" }
+            return token.capitalized
+        }
+
+        private func timeText(_ raw: String?) -> String {
+            guard let raw, let date = ISO8601DateFormatter().date(from: raw) else { return "—" }
+            let out = DateFormatter()
+            out.dateStyle = .none
+            out.timeStyle = .short
+            return out.string(from: date)
+        }
+
+        var body: some View {
+            LocalConditionsSurfaceCard(title: "Quick Health Check", icon: "camera.metering.center.weighted") {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(summary?.qualityLabel.map(qualityLabel) ?? "Latest check")
+                                .font(.title3.weight(.semibold))
+                            Text("Camera-based wellness estimate only. Not medical advice.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        StatusPill(summary?.qualityLabel.map(qualityLabel) ?? "Pending", severity: {
+                            let quality = summary?.qualityLabel
+                            let token = (quality ?? "").lowercased()
+                            if token == "poor" { return .alert }
+                            if token == "ok" { return .warn }
+                            return .ok
+                        }())
+                    }
+
+                    if isLoading {
+                        ProgressView("Loading latest check…")
+                            .font(.caption)
+                    } else if let errorText, !errorText.isEmpty, summary == nil {
+                        Text(errorText)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else if let summary {
+                        HStack(spacing: 10) {
+                            LocalConditionsValueChip(
+                                label: "BPM",
+                                value: summary.bpm.map { "\(Int($0.rounded()))" } ?? "—",
+                                tint: qualityColor(summary.qualityLabel)
+                            )
+                            LocalConditionsValueChip(
+                                label: "RMSSD",
+                                value: summary.rmssdMs.map { "\(Int($0.rounded())) ms" } ?? "—",
+                                tint: GaugePalette.low
+                            )
+                            LocalConditionsValueChip(
+                                label: "Time",
+                                value: timeText(summary.latestTsUtc),
+                                tint: GaugePalette.mild
+                            )
+                        }
+                    } else {
+                        Text("No quick check recorded yet today.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Button(action: onOpenQuickCheck) {
+                        Label("Open Quick Health Check", systemImage: "camera.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
+    }
+
+    private struct InsightsHealthSymptomsView: View {
+        let current: FeaturesToday?
+        let todayString: String
+        let updatedText: String?
+        let bannerText: String?
+        let usingYesterdayFallback: Bool
+        let todayCount: Int
+        let queuedCount: Int
+        let sparklinePoints: [SymptomSparkPoint]
+        let topSummary: String?
+        let diagnostics: [SymptomDiagSummary]
+        let series: SpaceSeries?
+        let highlights: [SymptomHighlight]
+        let latestCameraCheck: CameraHealthDailySummary?
+        let latestCameraCheckLoading: Bool
+        let latestCameraCheckError: String?
+        @Binding var showSymptomSheet: Bool
+        let onOpenQuickCheck: () -> Void
+        let onLoadComparison: () async -> Void
+        @State private var selectedRange: InsightsTrendRange = .days7
+        @State private var isComparisonExpanded: Bool = false
+        @State private var hasStartedComparisonLoad: Bool = false
+
+        private var topDiagnostics: [SymptomDiagSummary] {
+            diagnostics.sorted { $0.events > $1.events }
+        }
+
+        private func ensureComparisonLoad(immediate: Bool = false) {
+            guard series == nil, !hasStartedComparisonLoad else { return }
+            hasStartedComparisonLoad = true
+            Task {
+                if !immediate {
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                }
+                if Task.isCancelled { return }
+                await onLoadComparison()
+            }
+        }
+
+        var body: some View {
+            ZStack {
+                Color.black.opacity(0.97).ignoresSafeArea()
+
+                ScrollView {
+                    LazyVStack(spacing: 16) {
+                        SymptomsTileView(
+                            todayCount: todayCount,
+                            queuedCount: queuedCount,
+                            sparklinePoints: sparklinePoints,
+                            topSummary: topSummary,
+                            onLogTap: { showSymptomSheet = true }
+                        )
+
+                        if let current {
+                            SleepCard(
+                                title: current.day == todayString ? "Sleep (Today)" : "Sleep (\(current.day))",
+                                totalMin: Int((current.sleepTotalMinutes?.value ?? 0).rounded()),
+                                remMin: Int((current.remM?.value ?? 0).rounded()),
+                                coreMin: Int((current.coreM?.value ?? 0).rounded()),
+                                deepMin: Int((current.deepM?.value ?? 0).rounded()),
+                                awakeMin: Int((current.awakeM?.value ?? 0).rounded()),
+                                inbedMin: Int((current.inbedM?.value ?? 0).rounded()),
+                                efficiency: current.sleepEfficiency?.value
+                            )
+                        }
+
+                        if let bannerText, !bannerText.isEmpty {
+                            LocalConditionsSurfaceCard(title: "Sleep Sync", icon: "clock.arrow.circlepath") {
+                                Text(bannerText)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        if usingYesterdayFallback {
+                            LocalConditionsSurfaceCard(title: "Feature Lag", icon: "calendar.badge.clock") {
+                                Text("Today’s health features are still filling in, so this page is currently showing yesterday’s summary where needed.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        InsightsHealthStatsCard(
+                            current: current,
+                            updatedText: updatedText
+                        )
+
+                        if !topDiagnostics.isEmpty {
+                            LocalConditionsSurfaceCard(title: "Top Symptoms", icon: "waveform.path.ecg") {
+                                VStack(spacing: 10) {
+                                    ForEach(Array(topDiagnostics.prefix(3).enumerated()), id: \.offset) { _, item in
+                                        HStack(spacing: 10) {
+                                            Text(item.symptomCode.replacingOccurrences(of: "_", with: " ").capitalized)
+                                                .font(.subheadline.weight(.semibold))
+                                            Spacer()
+                                            LocalConditionsValueChip(
+                                                label: "Events",
+                                                value: "\(item.events)",
+                                                tint: GaugePalette.mild
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        LocalConditionsSurfaceCard(title: "Comparison Chart", icon: "chart.xyaxis.line") {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.18)) {
+                                        isComparisonExpanded.toggle()
+                                    }
+                                    if isComparisonExpanded {
+                                        ensureComparisonLoad(immediate: true)
+                                    }
+                                } label: {
+                                    HStack(alignment: .center, spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Signals vs Symptoms")
+                                                .font(.subheadline.weight(.semibold))
+                                            Text(
+                                                series == nil
+                                                    ? "Loads after the page opens and stays hidden until you want the deeper comparison."
+                                                    : "7, 14, or 30 day signal comparison is ready on demand."
+                                            )
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        }
+                                        Spacer()
+                                        if hasStartedComparisonLoad && series == nil {
+                                            ProgressView()
+                                                .scaleEffect(0.82)
+                                        }
+                                        Image(systemName: isComparisonExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
+                                            .foregroundColor(.white.opacity(0.72))
+                                    }
+                                }
+                                .buttonStyle(.plain)
+
+                                if isComparisonExpanded {
+                                    Picker("Range", selection: $selectedRange) {
+                                        ForEach(InsightsTrendRange.allCases) { range in
+                                            Text(range.rawValue).tag(range)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+
+                                    Text("Signals vs symptoms over \(selectedRange.title.lowercased()). Default is 7 days for a faster read, with 14 and 30 day context on demand.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+
+                                    if let series {
+                                        SpaceChartsCard(
+                                            title: "Signals vs Symptoms",
+                                            series: series,
+                                            highlights: highlights,
+                                            window: selectedRange,
+                                            showsSchumann: true
+                                        )
+                                    } else if hasStartedComparisonLoad {
+                                        ProgressView("Loading comparison…")
+                                            .font(.caption)
+                                    } else {
+                                        Text("Open the chart to load the full signal comparison.")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+
+                        InsightsCameraCheckCard(
+                            summary: latestCameraCheck,
+                            isLoading: latestCameraCheckLoading,
+                            errorText: latestCameraCheckError,
+                            onOpenQuickCheck: onOpenQuickCheck
+                        )
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .navigationTitle("Health & Symptoms")
+            .navigationBarTitleDisplayMode(.inline)
+            .task {
+                ensureComparisonLoad()
+            }
+        }
+    }
+
+    private struct InsightsHazardsView: View {
+        let payload: HazardsBriefResponse?
+        let isLoading: Bool
+        let error: String?
+
+        private var items: [HazardItem] {
+            payload?.items ?? []
+        }
+
+        private func severityTint(_ value: String?) -> Color {
+            let token = (value ?? "").lowercased()
+            if token.contains("red") { return GaugePalette.high }
+            if token.contains("orange") { return GaugePalette.elevated }
+            if token.contains("yellow") { return GaugePalette.mild }
+            return GaugePalette.low
+        }
+
+        var body: some View {
+            ZStack {
+                Color.black.opacity(0.97).ignoresSafeArea()
+
+                ScrollView {
+                    LazyVStack(spacing: 16) {
+                        HazardsBriefCard(payload: payload, isLoading: isLoading, error: error)
+
+                        if items.isEmpty, !isLoading {
+                            LocalConditionsSurfaceCard(title: "Hazard Feed", icon: "globe.americas.fill") {
+                                Text("No active hazard items are available right now.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        } else if !items.isEmpty {
+                            LocalConditionsSurfaceCard(title: "Latest Items", icon: "list.bullet.rectangle") {
+                                VStack(spacing: 10) {
+                                    ForEach(Array(items.prefix(12).enumerated()), id: \.offset) { _, item in
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            HStack(spacing: 10) {
+                                                Text(item.title ?? item.kind ?? "Hazard")
+                                                    .font(.subheadline.weight(.semibold))
+                                                Spacer()
+                                                LocalConditionsValueChip(
+                                                    label: "Severity",
+                                                    value: item.severity?.capitalized ?? "Info",
+                                                    tint: severityTint(item.severity)
+                                                )
+                                            }
+                                            Text([item.location, item.source, item.startedAt].compactMap { $0 }.joined(separator: " • "))
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .navigationTitle("Hazards")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
@@ -4984,22 +6462,13 @@ struct ContentView: View {
             .onChange(of: showMissionInsightsSheet, initial: false) { _, newValue in
                 guard newValue else { return }
                 Task {
-                    let api = state.apiWithAuth()
-                    async let a: Void = fetchFeaturesToday(trigger: .initial)
-                    async let b: Void = fetchForecastSummary()
-                    async let c: Void = fetchSpaceSeries(days: 30)
-                    async let d: Void = fetchSpaceOutlook()
-                    async let e: Void = fetchSpaceVisuals()
-                    async let f: Void = fetchSymptoms(api: api)
-                    _ = await (a, b, c, d, e, f)
-                    if hazardsBrief == nil { await fetchHazardsBrief() }
-                    if quakeEvents.isEmpty { await fetchQuakes() }
-                    if magnetosphere == nil { await fetchMagnetosphere() }
+                    await fetchInsightsHubData()
                 }
             }
             .onChange(of: showMissionSettingsSheet, initial: false) { _, newValue in
                 guard newValue else { return }
                 Task {
+                    await refreshPushState()
                     await fetchProfileSettings()
                     await fetchLocalHealth()
                 }
@@ -5047,6 +6516,28 @@ struct ContentView: View {
                     }
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .gaiaPushTokenDidChange).receive(on: RunLoop.main)) { _ in
+                Task {
+                    await refreshPushState()
+                    let prefs = await MainActor.run { notificationPreferences }
+                    _ = await PushNotificationService.syncTokenRegistration(preferences: prefs)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .gaiaPushAuthorizationDidChange).receive(on: RunLoop.main)) { _ in
+                Task {
+                    await refreshPushState()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .gaiaPushDeepLinkReceived).receive(on: RunLoop.main)) { note in
+                guard let userInfo = note.userInfo, let route = GaiaPushRoute(userInfo: userInfo) else { return }
+                handleIncomingPushRoute(route)
+            }
+            .task {
+                await refreshPushState()
+                if let pendingRoute = PushNotificationService.consumePendingRoute() {
+                    handleIncomingPushRoute(pendingRoute)
+                }
+            }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("AppLogLine")).receive(on: RunLoop.main)) { note in
                 guard let line = note.object as? String else { return }
                 let now = Date()
@@ -5080,121 +6571,140 @@ struct ContentView: View {
             let current = selected?.0
             let usingYesterdayFallback = selected?.1 ?? false
             let updatedText = current?.updatedAt.flatMap { formatUpdated($0) }
-            let visualsSnapshot = spaceVisuals ?? lastKnownSpaceVisuals
-            let overlayCount = visualOverlayCount(visualsSnapshot)
-            let overlayUpdated = latestVisualTimestamp(visualsSnapshot)
             let seriesDetail = series ?? lastKnownSeries
             let resolvedOutlook = spaceOutlook ?? lastKnownSpaceOutlook
             let symptomPoints = symptomSparkPoints()
             let symptomSummary = topSymptomSummary()
             let symptomHighlightList = symptomHighlights()
-            let seriesForCharts = series ?? lastKnownSeries ?? .empty
-            let onSelectVisual: (SpaceVisualItem) -> Void = { item in
-                prepareInteractiveViewer(for: item)
-                showInteractiveViewer = true
-            }
-            let outlookAurora = resolvedOutlook?
-                .data?
-                .auroraOutlook?
-                .first(where: { ($0.hemisphere ?? "").lowercased() == "north" })
-                ?? resolvedOutlook?.data?.auroraOutlook?.first
-            let auroraPowerValue: Double? = {
-                if let current {
-                    if let v = current.auroraPowerGw?.value { return v }
-                    if let v = current.auroraPowerNhGw?.value { return v }
-                    if let v = current.auroraPowerShGw?.value { return v }
-                    if let v = current.auroraHpNorthGw?.value { return v }
-                    if let v = current.auroraHpSouthGw?.value { return v }
-                }
-                if let v = outlookAurora?.powerGw { return v }
-                return latestAuroraPower(from: visualsSnapshot)
-            }()
-            let auroraProbability = current.flatMap { ContentView.auroraProbabilityText(from: $0) }
-            let auroraWingKp = outlookAurora?.wingKp
 
             NavigationStack {
-                ScrollView {
-                    VStack(spacing: 16) {
-                        if let current {
-                            DashboardSleepSectionView(
-                                current: current,
-                                todayStr: chicagoTodayString(),
-                                usingYesterdayFallback: usingYesterdayFallback,
-                                bannerText: featuresCachedBannerText
-                            )
-
-                            DashboardHealthStatsSectionView(
-                                current: current,
-                                updatedText: updatedText
-                            )
-
-                            DashboardSymptomsSectionView(
-                                todayCount: symptomsToday.count,
-                                queuedCount: state.symptomQueueCount,
-                                sparklinePoints: symptomPoints,
-                                topSummary: symptomSummary,
-                                usingYesterdayFallback: usingYesterdayFallback,
-                                showSymptomSheet: $showSymptomSheet
-                            )
-
-                            DashboardSpaceWeatherSectionView(
-                                current: current,
-                                visualsSnapshot: visualsSnapshot,
-                                overlayCount: overlayCount,
-                                overlayUpdated: overlayUpdated,
-                                updatedText: updatedText,
-                                usingYesterdayFallback: usingYesterdayFallback,
-                                forecast: forecast,
-                                outlook: resolvedOutlook,
-                                seriesDetail: seriesDetail,
-                                showVisualsPreview: AppConfig.showVisualsPreview,
-                                onSelectVisual: onSelectVisual,
-                                showSpaceWeatherDetail: $showSpaceWeatherDetail,
-                                spaceDetailFocus: $spaceDetailFocus
-                            )
-                        } else {
-                            GroupBox {
-                                Text("Insights are loading. Pull to refresh in a moment.")
-                                    .font(.footnote)
-                                    .foregroundColor(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            } label: {
-                                Text("Insights")
+                InsightsHubView(
+                    current: current,
+                    outlook: resolvedOutlook,
+                    updatedText: updatedText,
+                    usingYesterdayFallback: usingYesterdayFallback,
+                    localHealthZip: localHealthZip,
+                    localHealth: localHealth,
+                    localHealthLoading: localHealthLoading,
+                    localHealthError: localHealthError,
+                    useGPS: profileUseGPS,
+                    localInsightsEnabled: profileLocalInsightsEnabled,
+                    dashboardDrivers: dashboardPayload?.drivers ?? [],
+                    magnetosphere: magnetosphere,
+                    magnetosphereLoading: magnetosphereLoading,
+                    magnetosphereError: magnetosphereError,
+                    symptomsTodayCount: symptomsToday.count,
+                    queuedSymptomsCount: state.symptomQueueCount,
+                    topSymptomSummary: symptomSummary,
+                    latestCameraCheck: latestCameraCheck,
+                    latestCameraCheckLoading: latestCameraCheckLoading,
+                    latestCameraCheckError: latestCameraCheckError,
+                    quakeLatest: quakeLatest,
+                    quakeEvents: quakeEvents,
+                    quakeLoading: quakeLoading,
+                    quakeError: quakeError,
+                    hazardsBrief: hazardsBrief,
+                    hazardsLoading: hazardsLoading,
+                    hazardsError: hazardsError,
+                    onRefresh: { await fetchInsightsHubData() }
+                )
+                .navigationDestination(for: InsightsRoute.self) { route in
+                    switch route {
+                    case .spaceWeather:
+                        InsightsSpaceWeatherView(
+                            current: current,
+                            updatedText: updatedText,
+                            usingYesterdayFallback: usingYesterdayFallback,
+                            forecast: forecast,
+                            outlook: resolvedOutlook,
+                            series: seriesDetail
+                        )
+                        .task {
+                            if series == nil {
+                                await fetchSpaceSeries(days: 30)
                             }
-                            .padding(.horizontal)
                         }
-
-                        SpaceChartsCard(series: seriesForCharts, highlights: symptomHighlightList)
-                            .padding(.horizontal)
-
-                        HazardsBriefCard(payload: hazardsBrief, isLoading: hazardsLoading, error: hazardsError)
-                            .padding(.horizontal)
-
-                        EarthquakesSummaryCard(
+                    case .localConditions:
+                        LocalConditionsView(
+                            zip: localHealthZip,
+                            snapshot: localHealth,
+                            drivers: dashboardPayload?.drivers ?? [],
+                            isLoading: localHealthLoading,
+                            error: localHealthError,
+                            useGPS: profileUseGPS,
+                            onRefresh: { Task { await fetchLocalHealth() } }
+                        )
+                        .task {
+                            if localHealth == nil && !localHealthLoading {
+                                await fetchLocalHealth()
+                            }
+                            if dashboardPayload == nil {
+                                await fetchDashboardPayload()
+                            }
+                        }
+                    case .magnetosphere:
+                        InsightsMagnetosphereView(
+                            data: magnetosphere,
+                            isLoading: magnetosphereLoading,
+                            error: magnetosphereError
+                        )
+                        .task {
+                            if magnetosphere == nil && !magnetosphereLoading {
+                                await fetchMagnetosphere()
+                            }
+                        }
+                    case .schumann:
+                        SchumannDashboardView(state: state)
+                    case .healthSymptoms:
+                        InsightsHealthSymptomsView(
+                            current: current,
+                            todayString: chicagoTodayString(),
+                            updatedText: updatedText,
+                            bannerText: featuresCachedBannerText,
+                            usingYesterdayFallback: usingYesterdayFallback,
+                            todayCount: symptomsToday.count,
+                            queuedCount: state.symptomQueueCount,
+                            sparklinePoints: symptomPoints,
+                            topSummary: symptomSummary,
+                            diagnostics: symptomDiagnostics,
+                            series: seriesDetail,
+                            highlights: symptomHighlightList,
+                            latestCameraCheck: latestCameraCheck,
+                            latestCameraCheckLoading: latestCameraCheckLoading,
+                            latestCameraCheckError: latestCameraCheckError,
+                            showSymptomSheet: $showSymptomSheet,
+                            onOpenQuickCheck: { showCameraHealthCheckSheet = true },
+                            onLoadComparison: { await fetchSpaceSeries(days: 30) }
+                        )
+                        .task {
+                            if symptomDaily.isEmpty && symptomsToday.isEmpty {
+                                await fetchSymptoms(api: state.apiWithAuth())
+                            }
+                        }
+                    case .earthquakes:
+                        EarthquakesDetailView(
                             latest: quakeLatest,
                             events: quakeEvents,
                             error: quakeError
                         )
-                        .padding(.horizontal)
-
-                        AuroraThumbsSectionView(
-                            auroraPowerValue: auroraPowerValue,
-                            auroraWingKp: auroraWingKp,
-                            auroraProbabilityText: auroraProbability
+                        .task {
+                            if quakeLatest == nil && quakeEvents.isEmpty && !quakeLoading {
+                                await fetchQuakes()
+                            }
+                        }
+                    case .hazards:
+                        InsightsHazardsView(
+                            payload: hazardsBrief,
+                            isLoading: hazardsLoading,
+                            error: hazardsError
                         )
-
-                        MagnetosphereCard(
-                            data: magnetosphere,
-                            isLoading: magnetosphereLoading,
-                            error: magnetosphereError,
-                            onOpenDetail: { showMagnetosphereDetail = true }
-                        )
-                        .padding(.horizontal)
+                        .task {
+                            if hazardsBrief == nil && !hazardsLoading {
+                                await fetchHazardsBrief()
+                            }
+                        }
                     }
-                    .padding(.vertical, 16)
                 }
-                .navigationTitle("Insights")
-                .navigationBarTitleDisplayMode(.inline)
             }
         }
         .sheet(isPresented: $showMissionSettingsSheet) {
@@ -5356,6 +6866,120 @@ struct ContentView: View {
                             }
                         } label: {
                             Label("Personalization", systemImage: "slider.horizontal.3")
+                        }
+                        .padding(.horizontal)
+
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Toggle("Enable push notifications", isOn: $notificationPreferences.enabled)
+
+                                HStack(alignment: .center, spacing: 8) {
+                                    Text(pushPermissionGranted ? "iOS permission granted" : "iOS permission not granted yet")
+                                        .font(.caption)
+                                        .foregroundColor(pushPermissionGranted ? .secondary : .orange)
+                                    Spacer()
+                                    Text(pushDeviceToken == nil ? "APNs pending" : "APNs ready")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundColor(pushDeviceToken == nil ? .secondary : .green)
+                                }
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Signal alerts")
+                                        .font(.subheadline.weight(.semibold))
+                                    Toggle("Signal alerts", isOn: $notificationPreferences.signalAlertsEnabled)
+                                    if notificationPreferences.signalAlertsEnabled {
+                                        Toggle("Geomagnetic / Kp", isOn: $notificationPreferences.families.geomagnetic)
+                                        Toggle("Solar wind / Bz coupling", isOn: $notificationPreferences.families.solarWind)
+                                        Toggle("Flares / CME / SEP / DRAP", isOn: $notificationPreferences.families.flareCmeSep)
+                                        Toggle("Schumann spike / elevated", isOn: $notificationPreferences.families.schumann)
+                                    }
+                                }
+                                .disabled(!notificationPreferences.enabled)
+
+                                Divider()
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Local condition alerts")
+                                        .font(.subheadline.weight(.semibold))
+                                    Toggle("Local condition alerts", isOn: $notificationPreferences.localConditionAlertsEnabled)
+                                    if notificationPreferences.localConditionAlertsEnabled {
+                                        Toggle("Pressure swing", isOn: $notificationPreferences.families.pressure)
+                                        Toggle("AQI", isOn: $notificationPreferences.families.aqi)
+                                        Toggle("Temperature swing", isOn: $notificationPreferences.families.temp)
+                                    }
+                                }
+                                .disabled(!notificationPreferences.enabled)
+
+                                Divider()
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Personalized gauge alerts")
+                                        .font(.subheadline.weight(.semibold))
+                                    Toggle("Personalized gauge alerts", isOn: $notificationPreferences.personalizedGaugeAlertsEnabled)
+                                    if notificationPreferences.personalizedGaugeAlertsEnabled {
+                                        Toggle("Gauge spikes (Pain / Energy / Sleep / Heart / Health Status)", isOn: $notificationPreferences.families.gaugeSpikes)
+                                    }
+                                }
+                                .disabled(!notificationPreferences.enabled)
+
+                                Divider()
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Toggle("Enable quiet hours", isOn: $notificationPreferences.quietHoursEnabled)
+                                    if notificationPreferences.quietHoursEnabled {
+                                        HStack(spacing: 10) {
+                                            TextField("Start (22:00)", text: $notificationPreferences.quietStart)
+                                                .textFieldStyle(.roundedBorder)
+                                                .textInputAutocapitalization(.never)
+                                                .autocorrectionDisabled()
+                                            TextField("End (08:00)", text: $notificationPreferences.quietEnd)
+                                                .textFieldStyle(.roundedBorder)
+                                                .textInputAutocapitalization(.never)
+                                                .autocorrectionDisabled()
+                                        }
+                                        Text("Quiet hours use your current time zone: \(TimeZone.current.identifier)")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .disabled(!notificationPreferences.enabled)
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Alert sensitivity")
+                                        .font(.subheadline.weight(.semibold))
+                                    Picker("Alert sensitivity", selection: $notificationPreferences.sensitivity) {
+                                        Text("Minimal").tag("minimal")
+                                        Text("Normal").tag("normal")
+                                        Text("Detailed").tag("detailed")
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .disabled(!notificationPreferences.enabled)
+                                }
+
+                                Button(action: {
+                                    Task {
+                                        await saveNotificationPreferences(requestAuthorizationIfNeeded: notificationPreferences.enabled)
+                                    }
+                                }) {
+                                    HStack {
+                                        if notificationSettingsSaving {
+                                            ProgressView().scaleEffect(0.8)
+                                        }
+                                        Text(notificationSettingsSaving ? "Saving..." : "Save Notifications")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(notificationSettingsSaving)
+
+                                if let msg = notificationSettingsMessage {
+                                    Text(msg)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        } label: {
+                            Label("Notifications", systemImage: "bell.badge.fill")
                         }
                         .padding(.horizontal)
 
@@ -7025,16 +8649,22 @@ struct ContentView: View {
             return counts
         }
 
-        private func typeCounts(_ items: [HazardItem]) -> (quakes: Int, cyclones: Int, volcano: Int, other: Int) {
-            var counts = (quakes: 0, cyclones: 0, volcano: 0, other: 0)
+        private func typeCounts(_ items: [HazardItem]) -> (quakes: Int, cyclones: Int, volcano: Int, fire: Int, flood: Int, other: Int) {
+            var counts = (quakes: 0, cyclones: 0, volcano: 0, fire: 0, flood: 0, other: 0)
             for item in items {
                 let kind = item.kind?.lowercased() ?? ""
-                if kind.contains("quake") || kind.contains("earth") {
+                let title = item.title?.lowercased() ?? ""
+                let haystack = "\(kind) \(title)"
+                if haystack.contains("quake") || haystack.contains("earth") {
                     counts.quakes += 1
-                } else if kind.contains("cyclone") || kind.contains("storm") || kind.contains("severe") {
+                } else if haystack.contains("cyclone") || haystack.contains("storm") || haystack.contains("severe") {
                     counts.cyclones += 1
-                } else if kind.contains("volcano") || kind.contains("ash") {
+                } else if haystack.contains("volcano") || haystack.contains("ash") {
                     counts.volcano += 1
+                } else if haystack.contains("wildfire") || haystack.contains("forest fire") || haystack.contains("fire") {
+                    counts.fire += 1
+                } else if haystack.contains("flash flood") || haystack.contains("flood") {
+                    counts.flood += 1
                 } else {
                     counts.other += 1
                 }
@@ -7089,27 +8719,12 @@ struct ContentView: View {
                                     GridRow { Text("Earthquakes"); Text("\(types.quakes)") }
                                     GridRow { Text("Cyclones/Severe"); Text("\(types.cyclones)") }
                                     GridRow { Text("Volcano/Ash"); Text("\(types.volcano)") }
+                                    GridRow { Text("Fire"); Text("\(types.fire)") }
+                                    GridRow { Text("Flood"); Text("\(types.flood)") }
                                     GridRow { Text("Other"); Text("\(types.other)") }
                                 }
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
-                            }
-                        }
-
-                        Divider()
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Recent Highlights")
-                                .font(.subheadline)
-                            ForEach(Array(items.prefix(4))) { item in
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.title ?? item.location ?? "—")
-                                        .font(.caption)
-                                    if let severity = item.severity, !severity.isEmpty {
-                                        Text(severity)
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
                             }
                         }
                     }
@@ -7194,13 +8809,15 @@ struct ContentView: View {
         let events: [QuakeEvent]
         let error: String?
 
+        private let fullDetailsURL = URL(string: "https://gaiaeyes.com/earthquakes/")
+
         private func summaryText() -> String {
-            let count = latest?.allQuakes
+            let count = latest?.m5p ?? events.count
             let maxEvent = events.max { ($0.mag ?? 0) < ($1.mag ?? 0) }
             let mag = maxEvent?.mag
             let region = maxEvent?.place
             var parts: [String] = []
-            if let count { parts.append(count == 1 ? "1 quake" : "\(count) quakes") }
+            parts.append(count == 1 ? "1 M5+ quake" : "\(count) M5+ quakes")
             if let mag { parts.append(String(format: "max M%.1f", mag)) }
             if let region, !region.isEmpty { parts.append(region) }
             return parts.isEmpty ? "Live quake feed" : parts.joined(separator: " · ")
@@ -7223,6 +8840,13 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(summaryText())
                         .font(.headline)
+                    Text("This page focuses on M5+ earthquakes from the last 24 hours. For full details and more charts, visit the website.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    if let fullDetailsURL {
+                        Link("Open the full earthquakes page", destination: fullDetailsURL)
+                            .font(.caption.weight(.semibold))
+                    }
                     if let error = cleanError, !error.isEmpty {
                         Text(error)
                             .font(.caption)
@@ -7257,6 +8881,7 @@ struct ContentView: View {
                         .padding(.top, 6)
                 }
                 .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .navigationTitle("Earthquakes")
             .navigationBarTitleDisplayMode(.inline)
@@ -7321,8 +8946,26 @@ struct ContentView: View {
             }
         }
 
+        static func derivedPressureTrend(raw: String?, deltaHpa: Double?) -> String? {
+            let normalized = normalizedTrend(raw)
+            guard let deltaHpa else { return normalized }
+            if abs(deltaHpa) < 1 {
+                return normalized ?? "steady"
+            }
+            if normalized == nil || normalized == "steady" {
+                return deltaHpa > 0 ? "rising" : "falling"
+            }
+            if normalized == "rising", deltaHpa < 0 {
+                return "falling"
+            }
+            if normalized == "falling", deltaHpa > 0 {
+                return "rising"
+            }
+            return normalized
+        }
+
         static func formatTrend(_ raw: String?) -> String {
-            normalizedTrend(raw) ?? "—"
+            normalizedTrend(raw)?.capitalized ?? "—"
         }
 
         static func asofText(_ iso: String?) -> String? {
@@ -7464,6 +9107,8 @@ struct ContentView: View {
                     .foregroundColor(.secondary)
                 Text(value)
                     .font(.title3.weight(.semibold))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.78)
                 LocalConditionsBar(progress: progress, tint: tint)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -7485,6 +9130,8 @@ struct ContentView: View {
                     .foregroundColor(.secondary)
                 Text(value)
                     .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -7689,7 +9336,10 @@ struct ContentView: View {
 
         private func pressureStatus(weather: LocalWeather?) -> LocalConditionsDriverStatus {
             let delta = abs(weather?.baroDelta24hHpa ?? 0)
-            let trend = LocalConditionsFormatting.normalizedTrend(weather?.pressureTrend ?? weather?.baroTrend)
+            let trend = LocalConditionsFormatting.derivedPressureTrend(
+                raw: weather?.pressureTrend ?? weather?.baroTrend,
+                deltaHpa: weather?.baroDelta24hHpa
+            )
             let pressure = weather?.pressureHpa
             let state: String
             let severity: String
@@ -7798,7 +9448,7 @@ struct ContentView: View {
                 Color.black.opacity(0.96).ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 16) {
+                    LazyVStack(spacing: 16) {
                         LocalConditionsSurfaceCard(title: "Local Conditions", icon: "location.fill") {
                             HStack(alignment: .top, spacing: 12) {
                                 VStack(alignment: .leading, spacing: 6) {
@@ -7879,7 +9529,12 @@ struct ContentView: View {
                                     )
                                     LocalConditionsValueChip(
                                         label: "Trend",
-                                        value: LocalConditionsFormatting.formatTrend(weather?.pressureTrend ?? weather?.baroTrend),
+                                        value: LocalConditionsFormatting.formatTrend(
+                                            LocalConditionsFormatting.derivedPressureTrend(
+                                                raw: weather?.pressureTrend ?? weather?.baroTrend,
+                                                deltaHpa: weather?.baroDelta24hHpa
+                                            )
+                                        ),
                                         tint: GaugePalette.zoneColor(baroStatus.severityKey)
                                     )
                                 }
@@ -7920,6 +9575,7 @@ struct ContentView: View {
                         }
                     }
                     .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .navigationTitle("Local Conditions")
@@ -8743,191 +10399,205 @@ struct ContentView: View {
     }
     
     private struct SpaceChartsCard: View {
+        let title: String
         let series: SpaceSeries
         let highlights: [SymptomHighlight]
-        
-        // Helper structs for chart points (nested, not inside body)
+        let window: InsightsTrendRange
+        let showsSchumann: Bool
+
+        init(
+            title: String = "Signals vs Symptoms",
+            series: SpaceSeries,
+            highlights: [SymptomHighlight],
+            window: InsightsTrendRange = .days7,
+            showsSchumann: Bool = false
+        ) {
+            self.title = title
+            self.series = series
+            self.highlights = highlights
+            self.window = window
+            self.showsSchumann = showsSchumann
+        }
+
         private struct SWPoint: Identifiable {
             let id: Date
             let date: Date
             let kp: Double?
             let bz: Double?
-            init(date: Date, kp: Double?, bz: Double?) { self.id = date; self.date = date; self.kp = kp; self.bz = bz }
+            init(date: Date, kp: Double?, bz: Double?) {
+                self.id = date
+                self.date = date
+                self.kp = kp
+                self.bz = bz
+            }
         }
-        
+
         private struct SchPoint: Identifiable {
-            let id: String
-            let day: String
+            let id: Date
+            let date: Date
             let f0: Double?
-            init(day: String, f0: Double?) { self.id = day; self.day = day; self.f0 = f0 }
+            let f1: Double?
+
+            var schumannValue: Double? {
+                f1 ?? f0
+            }
         }
-        
+
         private struct HRTSPoint: Identifiable {
             let id: Date
             let date: Date
             let hr: Double
         }
-        
-        // Static ISO8601 formatter with fractional seconds
+
         private static let isoFmt: ISO8601DateFormatter = {
             let f = ISO8601DateFormatter()
             f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             return f
         }()
-        // Tolerant ISO8601 parsing: with and without fractional seconds
+
         private static let isoFmtSimple: ISO8601DateFormatter = {
             let f = ISO8601DateFormatter()
             f.formatOptions = [.withInternetDateTime]
             return f
         }()
+
         private static func parseISODate(_ s: String) -> Date? {
-            return SpaceChartsCard.isoFmt.date(from: s) ?? SpaceChartsCard.isoFmtSimple.date(from: s)
+            SpaceChartsCard.isoFmt.date(from: s) ?? SpaceChartsCard.isoFmtSimple.date(from: s)
         }
-        
+
+        private var cutoffDate: Date {
+            Calendar.current.date(byAdding: .day, value: -(window.days - 1), to: Date()) ?? .distantPast
+        }
+
+        private var filteredHighlights: [SymptomHighlight] {
+            highlights.filter { $0.date >= cutoffDate }
+        }
+
+        private var swPoints: [SWPoint] {
+            (series.spaceWeather ?? []).compactMap { point in
+                guard let ts = point.ts, let date = Self.parseISODate(ts), date >= cutoffDate else { return nil }
+                return SWPoint(date: date, kp: point.kp, bz: point.bz)
+            }
+        }
+
+        private var schPoints: [SchPoint] {
+            (series.schumannDaily ?? []).compactMap { day in
+                guard let rawDay = day.day, let date = ContentView.symptomDayFormatter.date(from: rawDay), date >= cutoffDate else { return nil }
+                return SchPoint(id: date, date: date, f0: day.f0, f1: day.f1)
+            }
+        }
+
+        private var hrPoints: [HRTSPoint] {
+            (series.hrTimeseries ?? []).compactMap { point in
+                guard let ts = point.ts, let date = Self.parseISODate(ts), date >= cutoffDate, let hr = point.hr else { return nil }
+                return HRTSPoint(id: date, date: date, hr: hr)
+            }
+        }
+
+        private func emptyText(_ label: String) -> String {
+            "No \(label) samples in the last \(window.days) days"
+        }
+
         var body: some View {
-            GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
-                    if #available(iOS 16.0, *) {
-                        // Simple legend
-                        HStack(spacing: 12) {
-                            Label("Kp", systemImage: "circle.fill").foregroundColor(.green).font(.caption)
-                            Label("Bz", systemImage: "circle.fill").foregroundColor(.blue).font(.caption)
-                            Label("f0", systemImage: "circle.fill").foregroundColor(.purple).font(.caption)
-                            Label("HR", systemImage: "circle.fill").foregroundColor(.gray).font(.caption)
+            VStack(alignment: .leading, spacing: 12) {
+                Text(title)
+                    .font(.headline)
+
+                if #available(iOS 16.0, *) {
+                    HStack(spacing: 12) {
+                        Label("Kp", systemImage: "circle.fill").foregroundColor(.green).font(.caption)
+                        Label("Bz", systemImage: "circle.fill").foregroundColor(.blue).font(.caption)
+                        if showsSchumann {
+                            Label("F1", systemImage: "circle.fill").foregroundColor(.purple).font(.caption)
                         }
-                        
-                        // Debug counts line
-                        let swCount = series.spaceWeather?.count ?? 0
-                        let schCount = series.schumannDaily?.count ?? 0
-                        let hrtsCount = series.hrTimeseries?.count ?? 0
-                        Text("Counts — sw: \(swCount) sch: \(schCount) hrts: \(hrtsCount)")
-                            .font(.caption2)
+                        Label("HR", systemImage: "circle.fill").foregroundColor(.gray).font(.caption)
+                    }
+
+                    if swPoints.compactMap(\.kp).isEmpty {
+                        Text(emptyText("Kp"))
+                            .font(.caption)
                             .foregroundColor(.secondary)
-                        
-                        // Row 1: Kp
-                        if let sw = series.spaceWeather, !sw.isEmpty {
-                            let pts: [SWPoint] = sw.compactMap { pt in
-                                guard let ts = pt.ts, let d = SpaceChartsCard.parseISODate(ts) else { return nil }
-                                return SWPoint(date: d, kp: pt.kp, bz: pt.bz)
-                            }
-                            let kpPts = pts.compactMap { $0.kp }
-                            if kpPts.isEmpty {
-                                Text("No Kp samples (last 14 days)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Chart {
-                                    ForEach(highlights) { highlight in
-                                        RuleMark(x: .value("Symptom", highlight.date))
-                                            .foregroundStyle(.pink.opacity(0.2))
-                                            .lineStyle(StrokeStyle(lineWidth: 14, lineCap: .round))
-                                            .annotation(position: .top) {
-                                                Text("▲ \(highlight.events)")
-                                                    .font(.caption2)
-                                                    .foregroundColor(.pink)
-                                            }
+                    } else {
+                        Chart {
+                            ForEach(filteredHighlights) { highlight in
+                                RuleMark(x: .value("Symptom", highlight.date))
+                                    .foregroundStyle(.pink.opacity(0.20))
+                                    .lineStyle(StrokeStyle(lineWidth: 14, lineCap: .round))
+                                    .annotation(position: .top) {
+                                        Text("▲ \(highlight.events)")
+                                            .font(.caption2)
+                                            .foregroundColor(.pink)
                                     }
-                                    ForEach(pts) { item in
-                                        if let kp = item.kp {
-                                            LineMark(x: .value("Date", item.date), y: .value("Kp", kp))
-                                                .interpolationMethod(.catmullRom)
-                                                .foregroundStyle(.green)
-                                        }
-                                    }
-                                }
-                                .chartYScale(domain: 0...9)
-                                .frame(height: 120)
-                                if let last = pts.last?.date {
-                                    Text("Updated: \(DateFormatter.localizedString(from: last, dateStyle: .none, timeStyle: .short))")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
                             }
-                        } else {
-                            Text("No Kp samples (last 14 days)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        // Row 2: Bz
-                        if let sw = series.spaceWeather, !sw.isEmpty {
-                            let pts: [SWPoint] = sw.compactMap { pt in
-                                guard let ts = pt.ts, let d = SpaceChartsCard.parseISODate(ts) else { return nil }
-                                return SWPoint(date: d, kp: pt.kp, bz: pt.bz)
-                            }
-                            let bzPts = pts.compactMap { $0.bz }
-                            if bzPts.isEmpty {
-                                Text("No Bz samples (last 14 days)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Chart {
-                                    ForEach(highlights) { highlight in
-                                        RuleMark(x: .value("Symptom", highlight.date))
-                                            .foregroundStyle(.pink.opacity(0.18))
-                                            .lineStyle(StrokeStyle(lineWidth: 12, lineCap: .round))
-                                    }
-                                    ForEach(pts) { item in
-                                        if let bz = item.bz {
-                                            LineMark(x: .value("Date", item.date), y: .value("Bz nT", bz))
-                                                .interpolationMethod(.catmullRom)
-                                                .foregroundStyle(.blue)
-                                        }
-                                    }
-                                }
-                                .frame(height: 120)
-                            }
-                        } else {
-                            Text("No Bz samples (last 14 days)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        // Row 3: Schumann f0 (daily)
-                        if let sch = series.schumannDaily, !sch.isEmpty {
-                            let schPts: [SchPoint] = sch.compactMap { d in
-                                guard let day = d.day else { return nil }
-                                return SchPoint(day: day, f0: d.f0)
-                            }
-                            if schPts.isEmpty {
-                                Text("No Schumann f0 (last 14 days)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Chart(schPts) { item in
-                                    if let f0 = item.f0 {
-                                        PointMark(x: .value("Day", item.day), y: .value("f0 Hz", f0))
-                                            .foregroundStyle(.purple)
-                                    }
-                                }
-                                .frame(height: 100)
-                            }
-                        } else {
-                            Text("No Schumann f0 (last 14 days)")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        // Row 4: HR time series (5-min buckets)
-                        if let hrts = series.hrTimeseries, !hrts.isEmpty {
-                            let pts: [HRTSPoint] = hrts.compactMap { p in
-                                guard let ts = p.ts, let d = SpaceChartsCard.parseISODate(ts), let v = p.hr else { return nil }
-                                return HRTSPoint(id: d, date: d, hr: v)
-                            }
-                            if pts.isEmpty {
-                                Text("No HR samples (last 14 days)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Chart(pts) { p in
-                                    LineMark(x: .value("Time", p.date), y: .value("HR", p.hr))
+                            ForEach(swPoints) { point in
+                                if let kp = point.kp {
+                                    LineMark(x: .value("Date", point.date), y: .value("Kp", kp))
                                         .interpolationMethod(.catmullRom)
-                                        .foregroundStyle(.gray)
+                                        .foregroundStyle(.green)
                                 }
-                                .frame(height: 100)
                             }
+                        }
+                        .chartYScale(domain: 0...9)
+                        .frame(height: 120)
+                    }
+
+                    if swPoints.compactMap(\.bz).isEmpty {
+                        Text(emptyText("Bz"))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Chart {
+                            ForEach(filteredHighlights) { highlight in
+                                RuleMark(x: .value("Symptom", highlight.date))
+                                    .foregroundStyle(.pink.opacity(0.18))
+                                    .lineStyle(StrokeStyle(lineWidth: 12, lineCap: .round))
+                            }
+                            ForEach(swPoints) { point in
+                                if let bz = point.bz {
+                                    LineMark(x: .value("Date", point.date), y: .value("Bz nT", bz))
+                                        .interpolationMethod(.catmullRom)
+                                        .foregroundStyle(.blue)
+                                }
+                            }
+                        }
+                        .frame(height: 120)
+                    }
+
+                    if showsSchumann {
+                        if schPoints.compactMap(\.schumannValue).isEmpty {
+                            Text(emptyText("Schumann"))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Chart(schPoints) { point in
+                                if let schumannValue = point.schumannValue {
+                                    LineMark(x: .value("Day", point.date), y: .value("Schumann Hz", schumannValue))
+                                        .interpolationMethod(.catmullRom)
+                                        .foregroundStyle(.purple)
+                                    PointMark(x: .value("Day", point.date), y: .value("Schumann Hz", schumannValue))
+                                        .foregroundStyle(.purple)
+                                }
+                            }
+                            .frame(height: 100)
                         }
                     }
+
+                    if hrPoints.isEmpty {
+                        Text(emptyText("HR"))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Chart(hrPoints) { point in
+                            LineMark(x: .value("Time", point.date), y: .value("HR", point.hr))
+                                .interpolationMethod(.catmullRom)
+                                .foregroundStyle(.gray)
+                        }
+                        .frame(height: 100)
+                    }
+                } else {
+                    Text("Charts require iOS 16 or later.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
             .transaction { $0.disablesAnimations = true }
