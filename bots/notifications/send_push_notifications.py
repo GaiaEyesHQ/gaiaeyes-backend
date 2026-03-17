@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 _INVALID_TOKEN_REASONS = {
     "BadDeviceToken",
     "DeviceTokenNotForTopic",
-    "TopicDisallowed",
     "Unregistered",
 }
 

@@ -46,6 +46,13 @@ jobs:
           set -euo pipefail
           python bots/gauges/gauge_delta_job.py
 
+      - name: Pattern engine v1
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          python bots/patterns/pattern_engine_job.py --days-back 180
+
       - name: Member EarthScope writer
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}

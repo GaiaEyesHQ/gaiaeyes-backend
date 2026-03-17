@@ -480,6 +480,41 @@ private struct DashboardPayload: Codable {
     }
 }
 
+private struct UserPatternCard: Decodable, Hashable, Identifiable {
+    let signalKey: String
+    let signal: String
+    let outcomeKey: String
+    let outcome: String
+    let explanation: String
+    let confidence: String?
+    let sampleSize: Int?
+    let lagHours: Int?
+    let lagLabel: String?
+    let lastSeenAt: String?
+    let relativeLift: Double?
+    let exposedRate: Double?
+    let unexposedRate: Double?
+    let rateDiff: Double?
+    let exposedDays: Int?
+    let unexposedDays: Int?
+    let thresholdValue: Double?
+    let thresholdOperator: String?
+    let thresholdText: String?
+
+    var id: String {
+        "\(signalKey)|\(outcomeKey)|\(lagHours ?? 0)"
+    }
+}
+
+private struct UserPatternsPayload: Decodable {
+    let ok: Bool?
+    let generatedAt: String?
+    let disclaimer: String?
+    let strongestPatterns: [UserPatternCard]?
+    let emergingPatterns: [UserPatternCard]?
+    let bodySignalsPatterns: [UserPatternCard]?
+}
+
 private struct MemberEarthscopeMetricsPayload: Decodable {
     let gauges: DashboardGaugeSet?
 }
@@ -1314,6 +1349,7 @@ struct ContentView: View {
     private enum InsightsRoute: String, Hashable, Identifiable {
         case spaceWeather
         case localConditions
+        case yourPatterns
         case magnetosphere
         case schumann
         case healthSymptoms
@@ -4934,6 +4970,25 @@ struct ContentView: View {
             .buttonStyle(.plain)
         }
 
+        private var yourPatternsCard: some View {
+            NavigationLink(value: InsightsRoute.yourPatterns) {
+                HubCard(
+                    title: "Your Patterns",
+                    icon: "chart.line.text.clipboard",
+                    status: "Explainable links between your logged outcomes and recurring pressure, AQI, solar, and resonance signals.",
+                    pillText: "Deterministic",
+                    severity: .ok,
+                    metrics: [
+                        HubMetric(label: "Source", value: "Your logs", tint: GaugePalette.low),
+                        HubMetric(label: "Window", value: "0-48h", tint: GaugePalette.mild),
+                        HubMetric(label: "Method", value: "No ML", tint: GaugePalette.elevated)
+                    ],
+                    isExplore: false
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
         private var magnetosphereCard: some View {
             let kpis = magnetosphere?.kpis
             let sw = magnetosphere?.sw
@@ -5136,6 +5191,7 @@ struct ContentView: View {
 
                         spaceWeatherCard
                         localConditionsCard
+                        yourPatternsCard
                         magnetosphereCard
                         schumannCard
                         healthCard
@@ -5160,6 +5216,268 @@ struct ContentView: View {
             }
             .navigationTitle("Insights")
             .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private struct YourPatternsView: View {
+        @EnvironmentObject private var state: AppState
+        @State private var payload: UserPatternsPayload? = nil
+        @State private var isLoading: Bool = false
+        @State private var errorMessage: String? = nil
+
+        private func confidenceSeverity(_ confidence: String?) -> StatusPill.Severity {
+            switch (confidence ?? "").lowercased() {
+            case "strong":
+                return .ok
+            case "moderate":
+                return .warn
+            case "emerging":
+                return .warn
+            default:
+                return .ok
+            }
+        }
+
+        private func displayDate(_ value: String?) -> String {
+            guard let value, let parsed = ISO8601DateFormatter().date(from: value) else { return "—" }
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            return formatter.string(from: parsed)
+        }
+
+        private func liftLine(_ card: UserPatternCard) -> String {
+            let lift = String(format: "%.1fx", card.relativeLift ?? 0)
+            let lag = card.lagLabel ?? "same day"
+            let sample = card.sampleSize ?? card.exposedDays ?? 0
+            return "\(lift) more often • \(sample) exposed days • Lag: \(lag)"
+        }
+
+        private func rateLine(_ card: UserPatternCard) -> String {
+            let exposedRate = Int(round((card.exposedRate ?? 0) * 100))
+            let baselineRate = Int(round((card.unexposedRate ?? 0) * 100))
+            let lastSeen = displayDate(card.lastSeenAt)
+            return "Exposed days: \(exposedRate)% • Other days: \(baselineRate)% • Last seen: \(lastSeen)"
+        }
+
+        private func iconName(for signalKey: String) -> String {
+            switch signalKey {
+            case "pressure_swing_exposed":
+                return "gauge.with.dots.needle.bottom.50percent"
+            case "aqi_moderate_plus_exposed":
+                return "aqi.low"
+            case "temp_swing_exposed":
+                return "thermometer.medium"
+            case "kp_g1_plus_exposed":
+                return "sun.max.fill"
+            case "bz_south_exposed":
+                return "arrow.down.circle"
+            case "solar_wind_exposed":
+                return "wind"
+            case "schumann_exposed":
+                return "waveform.path.ecg"
+            default:
+                return "chart.line.uptrend.xyaxis"
+            }
+        }
+
+        private func loadPatterns(force: Bool = false) async {
+            if isLoading && !force {
+                return
+            }
+            isLoading = true
+            defer { isLoading = false }
+
+            do {
+                let api = state.apiWithAuth()
+                let decoded: UserPatternsPayload = try await api.getJSON("v1/patterns", as: UserPatternsPayload.self, perRequestTimeout: 20)
+                payload = decoded
+                errorMessage = nil
+            } catch {
+                if payload == nil {
+                    errorMessage = ContentView.scrubError(error.localizedDescription)
+                }
+            }
+        }
+
+        private struct PatternCardView: View {
+            let card: UserPatternCard
+            let iconName: String
+            let confidenceSeverity: StatusPill.Severity
+            let liftLine: String
+            let rateLine: String
+
+            var body: some View {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.white.opacity(0.06))
+                            Image(systemName: iconName)
+                                .font(.headline)
+                                .foregroundColor(.white.opacity(0.88))
+                        }
+                        .frame(width: 44, height: 44)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(card.outcome)
+                                .font(.headline.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.95))
+                            Text(card.signal)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        StatusPill(card.confidence ?? "Observed", severity: confidenceSeverity)
+                    }
+
+                    Text(card.explanation)
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.88))
+
+                    Text(liftLine)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Text(rateLine)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+            }
+        }
+
+        @ViewBuilder
+        private func sectionView(title: String, subtitle: String, cards: [UserPatternCard], emptyMessage: String) -> some View {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.title3.weight(.semibold))
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                if cards.isEmpty {
+                    Text(emptyMessage)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.04))
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                } else {
+                    ForEach(cards) { card in
+                        PatternCardView(
+                            card: card,
+                            iconName: iconName(for: card.signalKey),
+                            confidenceSeverity: confidenceSeverity(card.confidence),
+                            liftLine: liftLine(card),
+                            rateLine: rateLine(card)
+                        )
+                    }
+                }
+            }
+        }
+
+        var body: some View {
+            let strongest = payload?.strongestPatterns ?? []
+            let emerging = payload?.emergingPatterns ?? []
+            let bodySignals = payload?.bodySignalsPatterns ?? []
+
+            ZStack {
+                Color.black.opacity(0.97).ignoresSafeArea()
+
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Explainable, personal, and calm.")
+                                .font(.system(size: 30, weight: .bold, design: .rounded))
+                            Text(payload?.disclaimer ?? "Patterns compare your own logged outcomes against recurring signals in your recent history.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if let errorMessage, payload == nil {
+                            Text(errorMessage)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .padding(16)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.white.opacity(0.04))
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        }
+
+                        if isLoading && payload == nil {
+                            HStack(spacing: 10) {
+                                ProgressView()
+                                Text("Refreshing your latest pattern cards.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.white.opacity(0.04))
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        }
+
+                        sectionView(
+                            title: "Strongest Patterns",
+                            subtitle: "Highest-confidence links from your recent history.",
+                            cards: strongest,
+                            emptyMessage: "No higher-confidence patterns are ready yet. Keep logging symptoms and daily history will sharpen this section."
+                        )
+
+                        sectionView(
+                            title: "Emerging Patterns",
+                            subtitle: "Early signals that are repeating, but still need more history.",
+                            cards: emerging,
+                            emptyMessage: "Nothing is emerging yet. This section fills in after repeated signal and symptom overlap."
+                        )
+
+                        sectionView(
+                            title: "Body Signals / Biometrics",
+                            subtitle: "Body-based patterns only show when wearable or quick-check history is strong enough.",
+                            cards: bodySignals,
+                            emptyMessage: "Not enough biometric history is available yet for body-signal patterns."
+                        )
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .refreshable {
+                    await loadPatterns(force: true)
+                }
+            }
+            .navigationTitle("Your Patterns")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task { await loadPatterns(force: true) }
+                    } label: {
+                        if isLoading {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                }
+            }
+            .task {
+                if payload == nil {
+                    await loadPatterns()
+                }
+            }
         }
     }
 
@@ -6649,6 +6967,8 @@ struct ContentView: View {
                                 await fetchDashboardPayload()
                             }
                         }
+                    case .yourPatterns:
+                        YourPatternsView()
                     case .magnetosphere:
                         InsightsMagnetosphereView(
                             data: magnetosphere,
