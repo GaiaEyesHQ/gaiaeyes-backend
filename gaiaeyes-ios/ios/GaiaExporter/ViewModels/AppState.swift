@@ -512,6 +512,18 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
                 append("[API] DB recovered; triggering UI refresh")
                 NotificationCenter.default.post(name: .gaiaBackendDBRecovered, object: nil)
             }
+        } catch is CancellationError {
+            append("[API] /health probe cancelled; leaving db=\(backendDBAvailable)")
+        } catch let uerr as URLError where [
+            .cancelled,
+            .timedOut,
+            .networkConnectionLost,
+            .cannotConnectToHost,
+            .notConnectedToInternet,
+            .cannotFindHost,
+            .dnsLookupFailed,
+        ].contains(uerr.code) {
+            append("[API] /health probe transient failure; leaving db=\(backendDBAvailable): \(uerr.localizedDescription)")
         } catch {
             // If probe fails, assume unavailable until next successful check
             backendDBAvailable = false

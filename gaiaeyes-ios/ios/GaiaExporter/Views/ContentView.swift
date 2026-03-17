@@ -2150,19 +2150,25 @@ struct ContentView: View {
         }
     }
 
-    private func fetchProfileSettings() async {
+    private func fetchProfileSettings(includeNotifications: Bool = false) async {
         await fetchProfileLocation()
         await fetchTagCatalog()
         await fetchSelectedTags()
-        await fetchNotificationPreferences()
+        if includeNotifications {
+            await fetchNotificationPreferences()
+        }
     }
 
-    private func refreshPushState() async {
-        await PushNotificationService.refreshAuthorizationState()
+    private func applyStoredPushState() async {
         await MainActor.run {
             pushPermissionGranted = PushNotificationService.storedPermissionGranted()
             pushDeviceToken = PushNotificationService.storedDeviceToken()
         }
+    }
+
+    private func refreshPushState() async {
+        await PushNotificationService.refreshAuthorizationState()
+        await applyStoredPushState()
     }
 
     private func fetchNotificationPreferences() async {
@@ -6470,7 +6476,7 @@ struct ContentView: View {
                 guard newValue else { return }
                 Task {
                     await refreshPushState()
-                    await fetchProfileSettings()
+                    await fetchProfileSettings(includeNotifications: true)
                     await fetchLocalHealth()
                 }
             }
@@ -6519,14 +6525,14 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .gaiaPushTokenDidChange).receive(on: RunLoop.main)) { _ in
                 Task {
-                    await refreshPushState()
+                    await applyStoredPushState()
                     let prefs = await MainActor.run { notificationPreferences }
                     _ = await PushNotificationService.syncTokenRegistration(preferences: prefs)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .gaiaPushAuthorizationDidChange).receive(on: RunLoop.main)) { _ in
                 Task {
-                    await refreshPushState()
+                    await applyStoredPushState()
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .gaiaPushDeepLinkReceived).receive(on: RunLoop.main)) { note in
