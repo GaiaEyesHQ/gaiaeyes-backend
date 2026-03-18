@@ -273,6 +273,39 @@ _DRIVER_ACTIONS = {
     ],
 }
 
+_DRIVER_CONTEXT = {
+    "pressure": "This driver is most often about head pressure, sinus or ear pressure, and joint stiffness.",
+    "temp": "This driver is more about body load, stiffness, and recovery drag.",
+    "aqi": "This driver is more about fatigue, fogginess, sinus irritation, or breathing irritation.",
+    "kp": "This driver is more about restless edge, sleep disruption, focus drift, and nervous-system reactivity.",
+    "bz": "This driver is more about restless edge, sleep disruption, focus drift, and nervous-system reactivity.",
+    "sw": "This driver is more about restless edge, sleep disruption, focus drift, and nervous-system reactivity.",
+    "schumann": "This driver is more about restless edge, sleep sensitivity, focus drift, and nervous-system reactivity.",
+}
+
+_GAUGE_SUPPORT_TERMS = {
+    "pain": "pain, stiffness, or body load",
+    "focus": "focus drift, brain fog, or sensory overload",
+    "heart": "heart load, reactivity, or recovery strain",
+    "stamina": "fatigue, body load, or recovery drag",
+    "energy": "fatigue, energy swings, or recovery drag",
+    "sleep": "lighter sleep, a harder wind-down, or restless edge",
+    "mood": "overstimulation, nervous-system reactivity, or restless edge",
+    "health_status": "overall body load and recovery strain",
+}
+
+_THEME_SUMMARY_LINES = {
+    "headache_day": "Head pressure may be easier to notice than usual if this pattern holds.",
+    "pain_flare_day": "Pain or stiffness may be easier to notice than usual if this pattern holds.",
+    "fatigue_day": "Fatigue may stand out more than usual if this pattern holds.",
+    "anxiety_day": "A restless edge may be easier to notice than usual if this pattern holds.",
+    "poor_sleep_day": "Sleep may feel lighter or less settled if this pattern holds.",
+    "focus_fog_day": "Focus may feel driftier than usual if this pattern holds.",
+    "hrv_dip_day": "Recovery may feel less steady than usual if this pattern holds.",
+    "high_hr_day": "Your system may feel a little more loaded than usual if this pattern holds.",
+    "short_sleep_day": "Sleep length or recovery may feel lighter than usual if this pattern holds.",
+}
+
 _DRIVER_PREFILL = {
     "pressure": ["HEADACHE", "NERVE_PAIN", "PAIN"],
     "temp": ["FATIGUE", "PAIN", "STIFFNESS"],
@@ -640,6 +673,13 @@ def _unique_lines(items: Iterable[str]) -> List[str]:
     return out
 
 
+def _sentence(text: str) -> str:
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return ""
+    return cleaned if cleaned.endswith((".", "!", "?")) else f"{cleaned}."
+
+
 def _delta_line(delta: int) -> Optional[str]:
     if abs(int(delta or 0)) < 5:
         return None
@@ -657,6 +697,69 @@ def _personal_relevance_gauge_summary(personal_relevance: Optional[Dict[str, Any
         if summary:
             return summary
     return None
+
+
+def _driver_role_rank(driver: Dict[str, Any]) -> int:
+    role = str(driver.get("role") or "").strip().lower()
+    if role == "primary":
+        return 0
+    if role == "supporting":
+        return 1
+    if role == "background":
+        return 2
+    return 3
+
+
+def _sorted_related_drivers(related: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows = [dict(item) for item in related if isinstance(item, dict)]
+    rows.sort(
+        key=lambda item: (
+            _driver_role_rank(item),
+            -float(item.get("personal_relevance_score") or 0.0),
+            -float(item.get("raw_severity_score") or 0.0),
+            -_driver_rank(item),
+        )
+    )
+    return rows
+
+
+def _driver_role_context(driver: Dict[str, Any]) -> str:
+    role = str(driver.get("role") or "").strip().lower()
+    if role == "primary":
+        return "Right now, this is the clearest external factor in your mix."
+    if role == "supporting":
+        return "Right now, this is also in play, but it is not the lead."
+    if role == "background":
+        return "Right now, this stays in the background rather than leading the mix."
+    return ""
+
+
+def _gauge_support_line(gauge_key: str, driver: Dict[str, Any]) -> str:
+    label = str(driver.get("label") or driver.get("key") or "This driver").strip()
+    role = str(driver.get("role_label") or "").strip().lower()
+    terms = _GAUGE_SUPPORT_TERMS.get(gauge_key, "this gauge")
+    if role:
+        return f"{label} is {role} and can add pressure around {terms}."
+    return f"{label} is also in the mix and can add pressure around {terms}."
+
+
+def _summary_theme_sentence(theme: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not isinstance(theme, dict):
+        return None
+    key = str(theme.get("key") or "").strip()
+    return _THEME_SUMMARY_LINES.get(key)
+
+
+def _summary_action_sentence(day: date, driver: Optional[Dict[str, Any]], profile: PersonalizationProfile) -> Optional[str]:
+    if not isinstance(driver, dict):
+        return None
+    key = str(driver.get("key") or "").strip()
+    if not key:
+        return None
+    actions = _driver_action_lines(day, key, profile)
+    if not actions:
+        return None
+    return _sentence(actions[0])
 
 
 def _driver_variant(profile: PersonalizationProfile, key: str) -> Optional[str]:
@@ -786,7 +889,7 @@ def _driver_why_line(driver: Dict[str, Any]) -> str:
         value_text = str(value)
 
     suffix = f" {unit}" if unit else ""
-    return f"{label} is {state.lower()} ({value_text}{suffix})."
+    return f"{label} is {state.lower()} at {value_text}{suffix} right now."
 
 
 def _driver_rank(driver: Dict[str, Any]) -> int:
@@ -1102,23 +1205,28 @@ def _gauge_why_lines(
     delta: int,
     personal_summary: Optional[str] = None,
 ) -> List[str]:
+    ordered = _sorted_related_drivers(related)
+    primary = ordered[0] if ordered else None
+    supporting = ordered[1] if len(ordered) > 1 else None
+
     lines: List[str] = []
     if personal_summary:
         lines.append(personal_summary)
-    for item in related[:3]:
-        personal_reason = str(item.get("personal_reason") or "").strip()
-        if personal_reason:
-            lines.append(personal_reason)
-        lines.append(_driver_why_line(item))
+    elif primary:
+        lines.append(str(primary.get("personal_reason") or "").strip())
+    if primary:
+        lines.append(_driver_why_line(primary))
+    if supporting:
+        lines.append(_gauge_support_line(gauge_key, supporting))
     delta_line = _delta_line(delta)
-    if delta_line:
+    if delta_line and len(lines) < 3:
         lines.append(delta_line)
     if not lines:
         lines = _rotate_pick(
             [
                 "This gauge combines your current environmental context and personal baseline.",
                 "Recent local and space drivers can nudge this gauge up or down.",
-                "Today’s score reflects context, not certainty, and can change quickly.",
+                "This score reflects context, not certainty, and can change quickly.",
             ],
             day,
             gauge_key,
@@ -1136,7 +1244,7 @@ def _gauge_notice_lines(
     profile: PersonalizationProfile,
 ) -> List[str]:
     lines: List[str] = []
-    for driver in related[:2]:
+    for driver in _sorted_related_drivers(related)[:2]:
         driver_key = str(driver.get("key") or "").strip()
         personalized = _driver_personalized_content(driver_key, profile).get("notices") or []
         lines.extend(_rotate_pick(personalized, day, f"{gauge_key}:{driver_key}", "driver-personalized-notice", 1))
@@ -1153,14 +1261,14 @@ def _gauge_action_lines(
     profile: PersonalizationProfile,
 ) -> List[str]:
     lines: List[str] = []
-    for driver in related[:2]:
+    for driver in _sorted_related_drivers(related)[:2]:
         driver_key = str(driver.get("key") or "").strip()
         personalized = _driver_personalized_content(driver_key, profile).get("actions") or []
         lines.extend(_rotate_pick(personalized, day, f"{gauge_key}:{driver_key}", "driver-personalized-actions", 1))
         lines.extend(_rotate_pick(_DRIVER_ACTIONS.get(driver_key, []), day, f"{gauge_key}:{driver_key}", "driver-actions", 1))
     lines.extend(_rotate_pick(_GAUGE_ACTIONS.get(gauge_key, []), day, gauge_key, "actions", 3))
     lines = _unique_lines(lines)
-    return lines[:4] if lines else ["Hydrate, pace tasks, and protect your sleep window."]
+    return lines[:3] if lines else ["Hydrate, pace tasks, and protect your sleep window."]
 
 
 def _driver_notice_lines(day: date, key: str, profile: PersonalizationProfile) -> List[str]:
@@ -1176,7 +1284,7 @@ def _driver_action_lines(day: date, key: str, profile: PersonalizationProfile) -
     actions = _rotate_pick(personalized, day, key, "driver-personalized-actions", 3)
     actions.extend(_rotate_pick(_DRIVER_ACTIONS.get(key, []), day, key, "driver-actions", 3))
     actions = _unique_lines(actions)
-    return actions[:4] if actions else ["Use steady pacing and track symptoms to see personal patterns."]
+    return actions[:3] if actions else ["Use steady pacing and track symptoms to see personal patterns."]
 
 
 def build_modal_models(
@@ -1210,7 +1318,7 @@ def build_modal_models(
         status = _normalized_zone_label(meta)
         delta = int(gauges_delta.get(gauge_key) or 0)
         related_keys = _GAUGE_DRIVER_MAP.get(gauge_key) or []
-        related = [drivers_by_key[k] for k in related_keys if k in drivers_by_key]
+        related = _sorted_related_drivers([drivers_by_key[k] for k in related_keys if k in drivers_by_key])
         personal_summary = _personal_relevance_gauge_summary(personal_relevance, gauge_key)
         modal_type = _gauge_modal_type(zone, delta, related, personal_summary=personal_summary)
         personalized_options: List[Dict[str, str]] = []
@@ -1291,18 +1399,9 @@ def build_modal_models(
         cta_prefill = quick_log.get("prefill_codes") or _DRIVER_PREFILL.get(key, ["OTHER"])
         why_lines = [
             str(driver.get("personal_reason") or "").strip(),
+            _driver_role_context(driver),
             _driver_why_line(driver),
-            _rotate_pick(
-                [
-                    "This signal may coincide with sensitivity shifts for some people.",
-                    "Responses vary by person, so treat this as context, not destiny.",
-                    "This can be useful context when pacing your day and recovery.",
-                ],
-                day,
-                key,
-                "driver-why",
-                1,
-            )[0],
+            _DRIVER_CONTEXT.get(key, "This signal can be useful context when your system feels more reactive than usual."),
         ]
         why_lines = _unique_lines([line for line in why_lines if line])
         if _driver_modal_type(driver) == "short":
@@ -1354,29 +1453,52 @@ def build_earthscope_summary(
     gauges = gauges or {}
     gauges_meta = gauges_meta or {}
     gauge_labels = gauge_labels or {}
+    profile = build_personalization_profile(user_tags)
     driver_rows = [d for d in list(drivers or []) if isinstance(d, dict)]
     driver_rows.sort(key=lambda item: _driver_rank(item), reverse=True)
     top_drivers = driver_rows[:2]
     top_gauges = _elevated_gauges(gauges, gauges_meta)[:2]
     bucket_key = _earthscope_refresh_bucket()
-    ranked_symptoms = earthscope_ranked_symptoms(
-        gauge_keys=[item.get("key") for item in top_gauges],
-        drivers=driver_rows,
-        user_tags=user_tags,
-        limit=3,
-    )
-    symptom_phrases = [str(item.get("phrase") or "").strip() for item in ranked_symptoms if str(item.get("phrase") or "").strip()]
-    condition_note = earthscope_condition_note(ranked_symptoms=ranked_symptoms, user_tags=user_tags)
     relevance_explanations = (
         personal_relevance.get("today_relevance_explanations")
         if isinstance(personal_relevance, dict)
         else {}
     ) or {}
     daily_brief = str(relevance_explanations.get("daily_brief") or "").strip()
+    personal_primary = (
+        dict(personal_relevance.get("primary_driver"))
+        if isinstance(personal_relevance, dict) and isinstance(personal_relevance.get("primary_driver"), dict)
+        else None
+    )
+    personal_supporting = [
+        dict(item)
+        for item in (
+            personal_relevance.get("supporting_drivers") or []
+            if isinstance(personal_relevance, dict)
+            else []
+        )
+        if isinstance(item, dict)
+    ]
+    personal_themes = [
+        dict(item)
+        for item in (
+            personal_relevance.get("today_personal_themes") or []
+            if isinstance(personal_relevance, dict)
+            else []
+        )
+        if isinstance(item, dict)
+    ]
 
     sentences: List[str] = []
     if daily_brief:
         sentences.append(daily_brief)
+    elif personal_primary:
+        label = str(personal_primary.get("label") or personal_primary.get("key") or "This signal").strip()
+        short_reason = str(personal_primary.get("personal_reason_short") or "").strip()
+        if short_reason:
+            sentences.append(f"Right now, {label.lower()} looks most relevant for you. {short_reason}")
+        else:
+            sentences.append(f"Right now, {label.lower()} looks like the clearest current factor in your mix.")
     elif top_drivers:
         primary = top_drivers[0]
         primary_label = str(primary.get("label") or "The current mix").strip()
@@ -1425,15 +1547,21 @@ def build_earthscope_summary(
             )
         )
 
-    if symptom_phrases:
-        sentences.append(
-            f"Based on the current drivers and your gauges, the strongest possibilities right now are {_join_labels(symptom_phrases)}."
-        )
+    support_driver = personal_supporting[0] if personal_supporting else (top_drivers[1] if len(top_drivers) > 1 else None)
+    if support_driver:
+        support_label = str(support_driver.get("label") or support_driver.get("key") or "").strip()
+        if support_label and support_label.lower() not in daily_brief.lower():
+            sentences.append(f"{support_label} is also in the mix right now.")
+
+    theme_sentence = _summary_theme_sentence(personal_themes[0] if personal_themes else None)
+    if theme_sentence:
+        sentences.append(theme_sentence)
     else:
         sentences.append(_earthscope_gauge_sentence(top_gauges, gauge_labels))
 
-    if condition_note:
-        sentences.append(condition_note)
+    action_sentence = _summary_action_sentence(day, personal_primary or (top_drivers[0] if top_drivers else None), profile)
+    if action_sentence:
+        sentences.append(action_sentence)
 
-    sentences.append("These are possibilities, not certainties. Tap in for context or log symptoms to sharpen your personal pattern.")
+    sentences.append("These are patterns to watch, not certainties.")
     return " ".join(sentences[:4]).strip()

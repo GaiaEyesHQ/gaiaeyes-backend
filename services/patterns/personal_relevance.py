@@ -112,9 +112,102 @@ DRIVER_SEVERITY_SCORE = {
 }
 
 ROLE_LABELS = {
-    0: ("primary", "Primary today"),
-    1: ("supporting", "Also relevant"),
-    2: ("supporting", "Background context"),
+    0: ("primary", "Leading now"),
+    1: ("supporting", "Also in play"),
+    2: ("background", "In the background"),
+}
+
+_PATTERN_MESSAGE_MAP = {
+    ("pressure_swing_exposed", "pain_flare_day"): {
+        "full": "Pressure swings are a known repeating pattern in your pain flare history.",
+        "short": "Pressure often matches your pain pattern.",
+        "clause": "it often matches your pain pattern",
+    },
+    ("pressure_swing_exposed", "headache_day"): {
+        "full": "Pressure swings are a known repeating pattern in your headache history.",
+        "short": "Pressure often matches your headache pattern.",
+        "clause": "it often matches your headache pattern",
+    },
+    ("pressure_swing_exposed", "focus_fog_day"): {
+        "full": "Pressure swings have shown up before brain-fog days in your history.",
+        "short": "Pressure can precede brain-fog days for you.",
+        "clause": "it can precede brain-fog days for you",
+    },
+    ("temp_swing_exposed", "pain_flare_day"): {
+        "full": "Temperature swings have shown up before your pain flare days.",
+        "short": "Temperature swings often show up before pain flare days.",
+        "clause": "they often show up before pain flare days",
+    },
+    ("temp_swing_exposed", "fatigue_day"): {
+        "full": "Temperature swings have lined up with fatigue in your history.",
+        "short": "Temperature swings often match fatigue for you.",
+        "clause": "they often match fatigue for you",
+    },
+    ("aqi_moderate_plus_exposed", "fatigue_day"): {
+        "full": "AQI has lined up with fatigue in your history.",
+        "short": "AQI often matches fatigue for you.",
+        "clause": "it often matches fatigue for you",
+    },
+    ("aqi_moderate_plus_exposed", "focus_fog_day"): {
+        "full": "AQI has lined up with brain-fog days in your history.",
+        "short": "AQI often matches brain-fog days for you.",
+        "clause": "it often matches brain-fog days for you",
+    },
+    ("aqi_moderate_plus_exposed", "headache_day"): {
+        "full": "AQI has lined up with headache days in your history.",
+        "short": "AQI often matches headache days for you.",
+        "clause": "it often matches headache days for you",
+    },
+    ("solar_wind_exposed", "high_hr_day"): {
+        "full": "Elevated solar wind has shown up before higher heart-rate days in your history.",
+        "short": "Elevated solar wind has shown up before higher heart-rate days for you.",
+        "clause": "it has shown up before higher heart-rate days for you",
+    },
+    ("solar_wind_exposed", "short_sleep_day"): {
+        "full": "Elevated solar wind has shown up before shorter-sleep days in your history.",
+        "short": "Elevated solar wind has shown up before shorter-sleep days for you.",
+        "clause": "it has shown up before shorter-sleep days for you",
+    },
+    ("solar_wind_exposed", "fatigue_day"): {
+        "full": "Elevated solar wind has lined up with fatigue in your history.",
+        "short": "Elevated solar wind often matches fatigue for you.",
+        "clause": "it often matches fatigue for you",
+    },
+    ("solar_wind_exposed", "anxiety_day"): {
+        "full": "Elevated solar wind has lined up with restless days in your history.",
+        "short": "Elevated solar wind often matches restless days for you.",
+        "clause": "it often matches restless days for you",
+    },
+    ("kp_g1_plus_exposed", "poor_sleep_day"): {
+        "full": "Geomagnetic activity has shown up before poorer-sleep days in your history.",
+        "short": "Geomagnetic activity has shown up before poorer sleep for you.",
+        "clause": "it has shown up before poorer sleep for you",
+    },
+    ("bz_south_exposed", "poor_sleep_day"): {
+        "full": "Strong southward Bz has shown up before poorer-sleep days in your history.",
+        "short": "Strong southward Bz has shown up before poorer sleep for you.",
+        "clause": "it has shown up before poorer sleep for you",
+    },
+    ("schumann_exposed", "poor_sleep_day"): {
+        "full": "Elevated Schumann variability has shown up before lighter or shorter sleep in your history.",
+        "short": "Schumann variability has shown up before lighter sleep for you.",
+        "clause": "it has shown up before lighter sleep for you",
+    },
+    ("schumann_exposed", "short_sleep_day"): {
+        "full": "Elevated Schumann variability has shown up before lighter or shorter sleep in your history.",
+        "short": "Schumann variability has shown up before shorter sleep for you.",
+        "clause": "it has shown up before shorter sleep for you",
+    },
+    ("schumann_exposed", "focus_fog_day"): {
+        "full": "Elevated Schumann variability has lined up with focus drift in your history.",
+        "short": "Schumann variability often matches focus drift for you.",
+        "clause": "it often matches focus drift for you",
+    },
+    ("schumann_exposed", "anxiety_day"): {
+        "full": "Elevated Schumann variability has lined up with restless days in your history.",
+        "short": "Schumann variability often matches restless days for you.",
+        "clause": "it often matches restless days for you",
+    },
 }
 
 
@@ -214,60 +307,46 @@ def _outcome_relevance_weight(outcome_key: str, profile: PersonalizationProfile)
     return 1.0
 
 
-def pattern_anchor_statement(row: Mapping[str, Any]) -> str:
+def pattern_anchor_statement(row: Mapping[str, Any], *, variant: str = "full") -> str:
     signal_key = str(row.get("signal_key") or "")
     outcome_key = str(row.get("outcome_key") or "")
-
-    if signal_key == "pressure_swing_exposed" and outcome_key == "pain_flare_day":
-        return "Pressure swings are a known repeating pattern in your pain flare history."
-    if signal_key == "pressure_swing_exposed" and outcome_key == "headache_day":
-        return "Pressure swings are a known repeating pattern in your headache history."
-    if signal_key == "pressure_swing_exposed" and outcome_key == "focus_fog_day":
-        return "Pressure swings have shown up before brain-fog days in your recent history."
-    if signal_key == "temp_swing_exposed" and outcome_key == "pain_flare_day":
-        return "Temperature swings have shown up before your pain flare days."
-    if signal_key == "temp_swing_exposed" and outcome_key == "fatigue_day":
-        return "Temperature swings have lined up with fatigue in your recent history."
-    if signal_key == "aqi_moderate_plus_exposed" and outcome_key == "fatigue_day":
-        return "AQI has lined up with fatigue in your recent history."
-    if signal_key == "aqi_moderate_plus_exposed" and outcome_key == "focus_fog_day":
-        return "AQI has lined up with brain-fog days in your recent history."
-    if signal_key == "aqi_moderate_plus_exposed" and outcome_key == "headache_day":
-        return "AQI has lined up with headache days in your recent history."
-    if signal_key == "solar_wind_exposed" and outcome_key == "high_hr_day":
-        return "Elevated solar wind has shown up before higher heart-rate days in your recent history."
-    if signal_key == "solar_wind_exposed" and outcome_key == "short_sleep_day":
-        return "Elevated solar wind has shown up before shorter-sleep days in your recent history."
-    if signal_key == "solar_wind_exposed" and outcome_key == "fatigue_day":
-        return "Elevated solar wind has lined up with fatigue in your recent history."
-    if signal_key == "solar_wind_exposed" and outcome_key == "anxiety_day":
-        return "Elevated solar wind has lined up with restless days in your recent history."
-    if signal_key == "kp_g1_plus_exposed" and outcome_key == "poor_sleep_day":
-        return "Geomagnetic activity has shown up before poorer-sleep days in your recent history."
-    if signal_key == "bz_south_exposed" and outcome_key == "poor_sleep_day":
-        return "Strong southward Bz has shown up before poorer-sleep days in your recent history."
-    if signal_key == "schumann_exposed" and outcome_key in {"poor_sleep_day", "short_sleep_day"}:
-        return "Elevated Schumann variability has shown up before lighter or shorter sleep in your recent history."
-    if signal_key == "schumann_exposed" and outcome_key == "focus_fog_day":
-        return "Elevated Schumann variability has lined up with focus drift in your recent history."
-    if signal_key == "schumann_exposed" and outcome_key == "anxiety_day":
-        return "Elevated Schumann variability has lined up with restless days in your recent history."
-    return f"{signal_label(signal_key)} have lined up with {outcome_label(outcome_key).lower()} in your recent history."
+    entry = _PATTERN_MESSAGE_MAP.get((signal_key, outcome_key)) or {}
+    if entry.get(variant):
+        return str(entry[variant])
+    if variant == "short":
+        return f"{signal_label(signal_key)} often match your {outcome_label(outcome_key).lower()} pattern."
+    if variant == "clause":
+        return f"they often match your {outcome_label(outcome_key).lower()} pattern"
+    return f"{signal_label(signal_key)} have lined up with {outcome_label(outcome_key).lower()} in your history."
 
 
 def _role_for_index(index: int) -> tuple[str | None, str | None]:
     return ROLE_LABELS.get(index, (None, None))
 
 
-def _driver_reason(driver: Mapping[str, Any], top_refs: Sequence[Mapping[str, Any]], profile: PersonalizationProfile) -> str:
+def _driver_reason(
+    driver: Mapping[str, Any],
+    top_refs: Sequence[Mapping[str, Any]],
+    profile: PersonalizationProfile,
+    *,
+    variant: str = "full",
+) -> str:
     if top_refs:
-        return pattern_anchor_statement(top_refs[0])
+        return pattern_anchor_statement(top_refs[0], variant=variant)
     key = str(driver.get("key") or "")
     if _driver_sensitivity_boost(key, profile) > 0:
         label = str(driver.get("label") or key.replace("_", " ").title())
+        if variant == "clause":
+            return "it lines up with your sensitivity profile"
+        if variant == "short":
+            return f"{label} lines up with your sensitivity profile."
         return f"{label} matters a bit more for you because it matches your sensitivity profile."
     label = str(driver.get("label") or key.replace("_", " ").title())
-    return f"{label} is active today, but no stronger personal pattern is leading with it yet."
+    if variant == "clause":
+        return "it is active right now"
+    if variant == "short":
+        return f"{label} is active right now."
+    return f"{label} is active right now, but no stronger personal pattern is leading with it yet."
 
 
 def _serialize_pattern_ref(
@@ -294,9 +373,9 @@ def _serialize_pattern_ref(
             last_seen.astimezone(timezone.utc).isoformat() if isinstance(last_seen, datetime) else None
         ),
         "used_today": True,
-        "used_today_label": "Used today",
+        "used_today_label": "Active now",
         "relevance_score": round(score, 2),
-        "explanation": pattern_anchor_statement(row),
+        "explanation": pattern_anchor_statement(row, variant="full"),
     }
 
 
@@ -314,13 +393,16 @@ def _dedupe_pattern_refs(rows: Iterable[Mapping[str, Any]]) -> List[Dict[str, An
 
 def _theme_summary(label: str, ref: Mapping[str, Any]) -> str:
     signal = str(ref.get("signal") or "This signal")
-    return f"{label} rises in priority today because {signal.lower()} matches your recent pattern history."
+    return f"{label} rises in priority right now because {signal.lower()} matches your pattern history."
 
 
 def _compact_driver_line(driver: Mapping[str, Any]) -> str:
     label = str(driver.get("label") or driver.get("key") or "Driver")
     role_label = str(driver.get("role_label") or "").strip()
-    reason = str(driver.get("personal_reason") or "").strip()
+    reason = str(driver.get("personal_reason_short") or driver.get("personal_reason") or "").strip()
+    clause = str(driver.get("personal_reason_clause") or "").strip().rstrip(".")
+    if str(driver.get("role") or "").strip() == "primary" and driver.get("override_active") and clause:
+        reason = f"More relevant for you right now because {clause}."
     if role_label and reason:
         return f"{role_label}: {label} — {reason}"
     if role_label:
@@ -383,7 +465,9 @@ def compute_personal_relevance(
         enriched["raw_severity_score"] = round(severity_score, 2)
         enriched["personal_relevance_score"] = round(personal_score, 2)
         enriched["active_pattern_refs"] = top_refs
-        enriched["personal_reason"] = _driver_reason(enriched, top_refs, profile)
+        enriched["personal_reason"] = _driver_reason(enriched, top_refs, profile, variant="full")
+        enriched["personal_reason_short"] = _driver_reason(enriched, top_refs, profile, variant="short")
+        enriched["personal_reason_clause"] = _driver_reason(enriched, top_refs, profile, variant="clause")
         enriched["_sort_index"] = raw_index
         scored_rows.append(enriched)
 
@@ -405,6 +489,25 @@ def compute_personal_relevance(
 
     primary_driver = dict(scored_rows[0]) if scored_rows else None
     supporting_drivers = [dict(row) for row in scored_rows[1:3]]
+    raw_primary = dict(raw_top_drivers[0]) if raw_top_drivers else None
+    override_note = ""
+    if primary_driver and raw_primary:
+        raw_key = str(raw_primary.get("key") or "").strip()
+        primary_key = str(primary_driver.get("key") or "").strip()
+        if raw_key and primary_key and raw_key != primary_key:
+            primary_driver["override_active"] = True
+            for row in scored_rows:
+                if str(row.get("key") or "").strip() == primary_key:
+                    row["override_active"] = True
+            clause = str(primary_driver.get("personal_reason_clause") or "").strip().rstrip(".")
+            raw_label = str(raw_primary.get("label") or raw_key.replace("_", " ").title())
+            primary_label = str(primary_driver.get("label") or primary_key.replace("_", " ").title())
+            if clause:
+                override_note = (
+                    f"{raw_label} is active, but {primary_label} matters more for you right now because {clause}."
+                )
+            else:
+                override_note = f"{raw_label} is active, but {primary_label} looks more relevant for you right now."
     active_pattern_refs = _dedupe_pattern_refs(
         ref
         for row in scored_rows[:3]
@@ -456,21 +559,24 @@ def compute_personal_relevance(
 
     primary_reason = str(primary_driver.get("personal_reason") or "").strip() if primary_driver else ""
     supporting_reasons = [
-        str(row.get("personal_reason") or "").strip()
+        str(row.get("personal_reason_short") or row.get("personal_reason") or "").strip()
         for row in supporting_drivers
-        if str(row.get("personal_reason") or "").strip()
+        if str(row.get("personal_reason_short") or row.get("personal_reason") or "").strip()
     ]
     daily_brief = ""
     if primary_driver:
-        label = str(primary_driver.get("label") or primary_driver.get("key") or "Today")
-        if primary_reason:
-            daily_brief = f"Lead with {label.lower()} today. {primary_reason}"
+        label = str(primary_driver.get("label") or primary_driver.get("key") or "This signal")
+        primary_short = str(primary_driver.get("personal_reason_short") or "").strip()
+        if override_note:
+            daily_brief = override_note
+        elif primary_short:
+            daily_brief = f"Right now, {label.lower()} looks most relevant for you. {primary_short}"
         else:
-            daily_brief = f"Lead with {label.lower()} today. It is the strongest current driver in your mix."
+            daily_brief = f"Right now, {label.lower()} looks like the clearest current driver in your mix."
         if supporting_drivers:
             support_label = str(supporting_drivers[0].get("label") or supporting_drivers[0].get("key") or "").strip()
             if support_label:
-                daily_brief += f" {support_label} stays secondary."
+                daily_brief += f" {support_label} is also in the mix."
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -485,6 +591,7 @@ def compute_personal_relevance(
             "primary_driver": primary_reason,
             "supporting_drivers": supporting_reasons,
             "daily_brief": daily_brief,
+            "override_note": override_note,
         },
         "compact_driver_lines": [_compact_driver_line(row) for row in scored_rows[:3]],
     }

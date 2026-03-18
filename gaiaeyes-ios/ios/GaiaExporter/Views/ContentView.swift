@@ -4009,7 +4009,7 @@ struct ContentView: View {
                             }
                             if let notice = entry.whatYouMayNotice, !notice.isEmpty {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("What You May Notice")
+                                    Text("What Might Stand Out")
                                         .font(.headline)
                                     ForEach(Array(notice.enumerated()), id: \.offset) { _, line in
                                         Text("\u{2022} \(line)")
@@ -4019,7 +4019,7 @@ struct ContentView: View {
                             }
                             if let actions = entry.suggestedActions, !actions.isEmpty {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Supportive Actions")
+                                    Text("What May Help Right Now")
                                         .font(.headline)
                                     ForEach(Array(actions.enumerated()), id: \.offset) { _, line in
                                         Text("\u{2022} \(line)")
@@ -4034,7 +4034,7 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
                     }
-                    .navigationTitle("Mission Context")
+                    .navigationTitle("Why This Matters Now")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
@@ -4317,7 +4317,7 @@ struct ContentView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Today's Driver Focus")
+                        Text("What Matters Now")
                             .font(.headline)
                         if drivers.isEmpty {
                             Text("No major environmental drivers are elevated right now.")
@@ -5064,7 +5064,7 @@ struct ContentView: View {
                 HubCard(
                     title: "Your Patterns",
                     icon: "chart.line.text.clipboard",
-                    status: "Explainable links between your logged outcomes and recurring pressure, AQI, solar, and resonance signals.",
+                    status: "Patterns drawn from your own logs and repeating signal overlap.",
                     pillText: "Deterministic",
                     severity: .ok,
                     metrics: [
@@ -5266,9 +5266,9 @@ struct ContentView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Fast scan first.")
+                            Text("Start with what matters now.")
                                 .font(.system(size: 32, weight: .bold, design: .rounded))
-                            Text("Open a focused section when you want detail on how signals may relate to how you feel.")
+                            Text("Open a card for plain-language context on what may matter for you right now.")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                             if usingYesterdayFallback {
@@ -5421,7 +5421,7 @@ struct ContentView: View {
 
                         VStack(alignment: .trailing, spacing: 6) {
                             if card.usedToday == true {
-                                Text(card.usedTodayLabel ?? "Used today")
+                                Text(card.usedTodayLabel ?? "Active now")
                                     .font(.caption2.weight(.semibold))
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
@@ -5500,7 +5500,7 @@ struct ContentView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Explainable, personal, and calm.")
+                            Text("What keeps showing up for you.")
                                 .font(.system(size: 30, weight: .bold, design: .rounded))
                             Text(payload?.disclaimer ?? "Patterns compare your own logged outcomes against recurring signals in your recent history.")
                                 .font(.subheadline)
@@ -5531,24 +5531,24 @@ struct ContentView: View {
                         }
 
                         sectionView(
-                            title: "Strongest Patterns",
-                            subtitle: "Highest-confidence links from your recent history.",
+                            title: "Clearest Patterns",
+                            subtitle: "The most reliable repeats in your history so far.",
                             cards: strongest,
                             emptyMessage: "No higher-confidence patterns are ready yet. Keep logging symptoms and daily history will sharpen this section."
                         )
 
                         sectionView(
-                            title: "Emerging Patterns",
-                            subtitle: "Early signals that are repeating, but still need more history.",
+                            title: "Still Taking Shape",
+                            subtitle: "Signals that may be repeating, but still need more overlap.",
                             cards: emerging,
                             emptyMessage: "Nothing is emerging yet. This section fills in after repeated signal and symptom overlap."
                         )
 
                         sectionView(
-                            title: "Body Signals / Biometrics",
-                            subtitle: "Body-based patterns show when wearable history and signal overlap are strong enough to meet the current evidence rules.",
+                            title: "Body Signals",
+                            subtitle: "Wearable-based patterns only show when the overlap is strong enough to meet the current evidence rules.",
                             cards: bodySignals,
-                            emptyMessage: "No body-signal patterns meet the current evidence rules yet."
+                            emptyMessage: "No clear body-signal patterns are standing out yet."
                         )
                     }
                     .padding(16)
@@ -10333,9 +10333,9 @@ struct ContentView: View {
         private static func sectionTitle(_ key: EarthscopeBriefingKey) -> String {
             switch key {
             case .checkin: return "Now"
-            case .drivers: return "Current Drivers"
-            case .summary: return "What You May Feel"
-            case .actions: return "Supportive Actions"
+            case .drivers: return "What's Shaping Things Now"
+            case .summary: return "What Might Stand Out"
+            case .actions: return "What May Help Right Now"
             }
         }
 

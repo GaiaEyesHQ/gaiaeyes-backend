@@ -152,7 +152,6 @@ def test_build_earthscope_summary_mentions_top_drivers_and_gauges() -> None:
     )
 
     assert "Pressure Swing" in summary
-    assert "pain flare" in summary.lower() or "joint pain" in summary.lower()
-    assert "fibromyalgia" in summary.lower()
-    assert "sharpen your personal pattern" in summary
-    assert "Today" not in summary
+    assert "right now" in summary.lower()
+    assert "patterns to watch, not certainties" in summary.lower()
+    assert "today" not in summary.lower()

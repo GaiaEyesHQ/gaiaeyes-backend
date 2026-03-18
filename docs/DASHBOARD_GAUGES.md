@@ -162,6 +162,10 @@ When trigger events are detected for paid users, the engine appends a “Trigger
     - raw severity still matters
     - stored user pattern matches can raise a moderate driver above a globally louder but less personal signal
     - health context and recent symptom history only affect display priority, not pattern-engine statistics
+  - Explanation behavior:
+    - live-refreshing surfaces use current-state wording (`right now`, `currently`, `at the moment`) rather than defaulting to day-summary wording
+    - summaries and modals aim to follow a `Now -> For you -> Next` structure
+    - when the personally most relevant driver differs from the globally louder signal, the summary explains that override in plain language
 - `GET /v1/earthscope/member`
   - Returns member EarthScope for the authenticated user + day
 - `POST /v1/earthscope/member/regenerate`

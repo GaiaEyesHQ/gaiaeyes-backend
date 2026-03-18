@@ -157,7 +157,7 @@ def _serialize_card(row: Dict[str, Any], *, used_today_ids: Optional[set[str]] =
         "thresholdOperator": row.get("exposure_operator"),
         "thresholdText": row.get("exposure_threshold_text"),
         "usedToday": used_today,
-        "usedTodayLabel": "Used today" if used_today else None,
+        "usedTodayLabel": "Active now" if used_today else None,
     }
 
 

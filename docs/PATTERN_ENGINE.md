@@ -59,12 +59,12 @@ The batch job documents the concrete thresholds inline in `bots/patterns/pattern
 
 - Backend route:
   - `GET /v1/patterns`
-  - Pattern cards now include `usedToday` / `usedTodayLabel` when that association is actively shaping today's guidance.
+  - Pattern cards now include `usedToday` / `usedTodayLabel` when that association is actively shaping current guidance.
 - iOS surface:
   - `YourPatternsView` inside the Insights flow
   - Sections:
-    - Strongest Patterns
-    - Emerging Patterns
+    - Clearest Patterns
+    - Still Taking Shape
     - Body Signals
 
 ## Pattern-Aware Guidance Integration
@@ -86,6 +86,8 @@ The batch job documents the concrete thresholds inline in `bots/patterns/pattern
   - reorder today's drivers by personal relevance
   - use explicit personal pattern language in gauge and driver modals
   - lead the EarthScope / daily brief with the user's strongest current pattern match
+  - explain when a personally relevant driver outranks a globally louder signal
+  - use live-state phrasing (`right now`, `currently`, `at the moment`) on refresh-driven surfaces
 
 ## Language + Privacy
 

@@ -50,6 +50,8 @@ class PatternPersonalRelevanceTests(unittest.TestCase):
         self.assertIsNotNone(primary)
         self.assertEqual(primary["key"], "pressure")
         self.assertIn("pain flare history", primary["personal_reason"].lower())
+        self.assertEqual(primary["role_label"], "Leading now")
+        self.assertIn("matters more for you right now", relevance["today_relevance_explanations"]["daily_brief"])
 
     def test_modal_builder_uses_pattern_summary_when_present(self) -> None:
         payload = build_modal_models(
@@ -117,12 +119,12 @@ class PatternPersonalRelevanceTests(unittest.TestCase):
             user_tags=["fibromyalgia"],
             personal_relevance={
                 "today_relevance_explanations": {
-                    "daily_brief": "Lead with pressure swing today. Pressure swings are a known repeating pattern in your pain flare history. Air quality stays secondary."
+                    "daily_brief": "Right now, pressure swing looks most relevant for you. Pressure swings are a known repeating pattern in your pain flare history. Air quality is also in the mix."
                 }
             },
         )
 
-        self.assertTrue(summary.startswith("Lead with pressure swing today."))
+        self.assertTrue(summary.startswith("Right now, pressure swing looks most relevant for you."))
         self.assertIn("pain flare history", summary.lower())
 
 
