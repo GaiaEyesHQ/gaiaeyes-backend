@@ -191,6 +191,12 @@ def main() -> None:
         tokens = _fetch_user_tokens(user_id)
         if not tokens:
             _mark_event_status(event_id, "skipped", now_utc, "no_enabled_tokens")
+            logger.info(
+                "[push-send] skipped event=%s user=%s family=%s reason=no_enabled_tokens",
+                event_id,
+                user_id,
+                str(event.get("family") or "").strip() or "unknown",
+            )
             skipped += 1
             continue
 
@@ -223,14 +229,37 @@ def main() -> None:
                 or f"http_{result.get('status_code') or 0}"
             )
             errors.append(str(reason))
+            logger.warning(
+                "[push-send] apns rejected event=%s user=%s family=%s token=%s status=%s reason=%s",
+                event_id,
+                user_id,
+                str(event.get("family") or "").strip() or "unknown",
+                token_id or "<missing>",
+                result.get("status_code") or 0,
+                str(reason),
+            )
             if str(reason) in _INVALID_TOKEN_REASONS and token_id:
                 _disable_token(token_id, str(reason), now_utc)
 
         if any_success:
             _mark_event_status(event_id, "sent", now_utc, None)
+            logger.info(
+                "[push-send] sent event=%s user=%s family=%s",
+                event_id,
+                user_id,
+                str(event.get("family") or "").strip() or "unknown",
+            )
             sent += 1
         else:
-            _mark_event_status(event_id, "failed", now_utc, "; ".join(errors[:3]) or "apns_send_failed")
+            error_text = "; ".join(errors[:3]) or "apns_send_failed"
+            _mark_event_status(event_id, "failed", now_utc, error_text)
+            logger.warning(
+                "[push-send] failed event=%s user=%s family=%s error=%s",
+                event_id,
+                user_id,
+                str(event.get("family") or "").strip() or "unknown",
+                error_text,
+            )
             failed += 1
 
     logger.info("[push-send] done sent=%d skipped=%d failed=%d", sent, skipped, failed)
