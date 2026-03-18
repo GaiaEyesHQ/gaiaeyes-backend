@@ -59,12 +59,33 @@ The batch job documents the concrete thresholds inline in `bots/patterns/pattern
 
 - Backend route:
   - `GET /v1/patterns`
+  - Pattern cards now include `usedToday` / `usedTodayLabel` when that association is actively shaping today's guidance.
 - iOS surface:
   - `YourPatternsView` inside the Insights flow
   - Sections:
     - Strongest Patterns
     - Emerging Patterns
     - Body Signals
+
+## Pattern-Aware Guidance Integration
+
+- The dashboard and Mission Control surfaces consume stored pattern rows without changing the underlying scoring math.
+- Deterministic personal-relevance weighting combines:
+  - current driver severity
+  - pattern confidence + lift
+  - health-context relevance
+  - recent outcome history
+- Outputs are exposed through `GET /v1/dashboard` as:
+  - `primary_driver`
+  - `supporting_drivers`
+  - `pattern_relevant_gauges`
+  - `active_pattern_refs`
+  - `today_personal_themes`
+  - `today_relevance_explanations`
+- These fields let the app:
+  - reorder today's drivers by personal relevance
+  - use explicit personal pattern language in gauge and driver modals
+  - lead the EarthScope / daily brief with the user's strongest current pattern match
 
 ## Language + Privacy
 

@@ -9,9 +9,16 @@ from psycopg.rows import dict_row
 
 from app.db import get_db
 from app.security.auth import require_read_auth
+from bots.definitions.load_definition_base import load_definition_base
 from bots.gauges.gauge_scorer import fetch_user_tags
 from bots.patterns.pattern_engine_job import confidence_rank, select_best_lag
 from services.personalization.health_context import canonicalize_tag_keys
+from services.patterns.personal_relevance import (
+    compute_personal_relevance,
+    fetch_best_pattern_rows,
+    fetch_recent_outcome_summary,
+    resolve_current_drivers,
+)
 
 
 router = APIRouter(prefix="/v1/patterns", tags=["patterns"])
@@ -122,18 +129,23 @@ def _sort_rows(rows: List[Dict[str, Any]], user_tags: set[str]) -> List[Dict[str
     )
 
 
-def _serialize_card(row: Dict[str, Any]) -> Dict[str, Any]:
+def _serialize_card(row: Dict[str, Any], *, used_today_ids: Optional[set[str]] = None) -> Dict[str, Any]:
     last_seen_at = row.get("last_seen_at")
+    signal_key = str(row.get("signal_key") or "")
+    outcome_key = str(row.get("outcome_key") or "")
+    lag_hours = int(row.get("lag_hours") or 0)
+    card_id = f"{signal_key}|{outcome_key}|{lag_hours}"
+    used_today = card_id in (used_today_ids or set())
     return {
-        "signalKey": row.get("signal_key"),
-        "signal": _signal_label(str(row.get("signal_key") or "")),
-        "outcomeKey": row.get("outcome_key"),
-        "outcome": _outcome_label(str(row.get("outcome_key") or "")),
+        "signalKey": signal_key,
+        "signal": _signal_label(signal_key),
+        "outcomeKey": outcome_key,
+        "outcome": _outcome_label(outcome_key),
         "explanation": _build_explanation(row),
         "confidence": row.get("confidence"),
         "sampleSize": int(row.get("exposed_n") or 0),
-        "lagHours": int(row.get("lag_hours") or 0),
-        "lagLabel": _lag_label(int(row.get("lag_hours") or 0)),
+        "lagHours": lag_hours,
+        "lagLabel": _lag_label(lag_hours),
         "lastSeenAt": last_seen_at.astimezone(timezone.utc).isoformat() if isinstance(last_seen_at, datetime) else None,
         "relativeLift": float(row.get("relative_lift") or 0),
         "exposedRate": float(row.get("exposed_rate") or 0),
@@ -144,6 +156,8 @@ def _serialize_card(row: Dict[str, Any]) -> Dict[str, Any]:
         "thresholdValue": float(row.get("exposure_threshold")) if row.get("exposure_threshold") is not None else None,
         "thresholdOperator": row.get("exposure_operator"),
         "thresholdText": row.get("exposure_threshold_text"),
+        "usedToday": used_today,
+        "usedTodayLabel": "Used today" if used_today else None,
     }
 
 
@@ -165,15 +179,9 @@ async def _fetch_best_rows(conn, user_id: str) -> List[Dict[str, Any]]:
 @router.get("", dependencies=[Depends(require_read_auth)])
 async def user_patterns(request: Request, conn=Depends(get_db)):
     user_id = _require_user_id(request)
+    today = datetime.now(timezone.utc).date()
 
-    try:
-        rows = await _fetch_best_rows(conn, user_id)
-    except Exception:
-        try:
-            await conn.rollback()
-        except Exception:
-            pass
-        rows = []
+    rows = await fetch_best_pattern_rows(conn, user_id)
 
     # Defensive fallback when older databases do not yet have the best-lag view.
     if not rows:
@@ -203,6 +211,28 @@ async def user_patterns(request: Request, conn=Depends(get_db)):
 
     raw_tags = await asyncio.to_thread(fetch_user_tags, user_id)
     user_tags = set(canonicalize_tag_keys(raw_tags))
+    try:
+        definition, _ = load_definition_base()
+    except Exception:
+        definition = {}
+    recent_outcomes = await fetch_recent_outcome_summary(conn, user_id, today)
+    today_drivers, _, _ = await resolve_current_drivers(
+        user_id=user_id,
+        day=today,
+        definition=definition,
+    )
+    personal_relevance = compute_personal_relevance(
+        day=today,
+        drivers=today_drivers,
+        pattern_rows=rows,
+        user_tags=user_tags,
+        recent_outcomes=recent_outcomes,
+    )
+    used_today_ids = {
+        str(item.get("id") or "")
+        for item in personal_relevance.get("active_pattern_refs") or []
+        if str(item.get("id") or "")
+    }
 
     body_rows = _sort_rows([row for row in rows if str(row.get("outcome_kind") or "") == "biometric"], user_tags)[:3]
     strongest_rows = _sort_rows(
@@ -231,7 +261,7 @@ async def user_patterns(request: Request, conn=Depends(get_db)):
             "Patterns are based on your self-reported logs and recent sensor history. "
             "They do not diagnose, prove causes, or replace medical care."
         ),
-        "strongestPatterns": [_serialize_card(row) for row in strongest_rows],
-        "emergingPatterns": [_serialize_card(row) for row in emerging_rows],
-        "bodySignalsPatterns": [_serialize_card(row) for row in body_rows],
+        "strongestPatterns": [_serialize_card(row, used_today_ids=used_today_ids) for row in strongest_rows],
+        "emergingPatterns": [_serialize_card(row, used_today_ids=used_today_ids) for row in emerging_rows],
+        "bodySignalsPatterns": [_serialize_card(row, used_today_ids=used_today_ids) for row in body_rows],
     }

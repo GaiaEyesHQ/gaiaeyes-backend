@@ -391,6 +391,44 @@ private struct DashboardAlertItem: Codable, Hashable, Identifiable {
     }
 }
 
+private struct DashboardPatternRef: Codable, Hashable, Identifiable {
+    let id: String
+    let driverKey: String?
+    let signalKey: String?
+    let signal: String?
+    let outcomeKey: String?
+    let outcome: String?
+    let confidence: String?
+    let usedToday: Bool?
+    let usedTodayLabel: String?
+    let relevanceScore: Double?
+    let explanation: String?
+}
+
+private struct DashboardGaugeRelevanceItem: Codable, Hashable, Identifiable {
+    let gaugeKey: String
+    let gaugeLabel: String?
+    let summary: String?
+    let activePatternRefs: [DashboardPatternRef]?
+
+    var id: String { gaugeKey }
+}
+
+private struct DashboardPersonalTheme: Codable, Hashable, Identifiable {
+    let key: String
+    let label: String
+    let score: Double?
+    let summary: String?
+
+    var id: String { key }
+}
+
+private struct DashboardTodayRelevanceExplanations: Codable, Hashable {
+    let primaryDriver: String?
+    let supportingDrivers: [String]?
+    let dailyBrief: String?
+}
+
 private struct DashboardDriverItem: Codable, Hashable, Identifiable {
     let key: String
     let label: String?
@@ -399,6 +437,12 @@ private struct DashboardDriverItem: Codable, Hashable, Identifiable {
     let value: Double?
     let unit: String?
     let display: String?
+    let role: String?
+    let roleLabel: String?
+    let rawSeverityScore: Double?
+    let personalRelevanceScore: Double?
+    let personalReason: String?
+    let activePatternRefs: [DashboardPatternRef]?
 
     var id: String { key }
 }
@@ -464,6 +508,12 @@ private struct DashboardPayload: Codable {
     let gaugesDelta: [String: Int]?
     let drivers: [DashboardDriverItem]?
     let driversCompact: [String]?
+    let primaryDriver: DashboardDriverItem?
+    let supportingDrivers: [DashboardDriverItem]?
+    let patternRelevantGauges: [DashboardGaugeRelevanceItem]?
+    let activePatternRefs: [DashboardPatternRef]?
+    let todayPersonalThemes: [DashboardPersonalTheme]?
+    let todayRelevanceExplanations: DashboardTodayRelevanceExplanations?
     let modalModels: DashboardModalModels?
     let earthscopeSummary: String?
     let alerts: [DashboardAlertItem]?
@@ -473,7 +523,7 @@ private struct DashboardPayload: Codable {
     let personalPost: DashboardEarthscopePost?
 
     private enum CodingKeys: String, CodingKey {
-        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, gaugesDelta, drivers, driversCompact, modalModels, earthscopeSummary, alerts, entitled
+        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, gaugesDelta, drivers, driversCompact, primaryDriver, supportingDrivers, patternRelevantGauges, activePatternRefs, todayPersonalThemes, todayRelevanceExplanations, modalModels, earthscopeSummary, alerts, entitled
         case memberPost
         case publicPost
         case personalPost
@@ -500,6 +550,8 @@ private struct UserPatternCard: Decodable, Hashable, Identifiable {
     let thresholdValue: Double?
     let thresholdOperator: String?
     let thresholdText: String?
+    let usedToday: Bool?
+    let usedTodayLabel: String?
 
     var id: String {
         "\(signalKey)|\(outcomeKey)|\(lagHours ?? 0)"
@@ -1894,6 +1946,12 @@ struct ContentView: View {
                             gaugesDelta: payload.gaugesDelta ?? older.gaugesDelta,
                             drivers: payload.drivers ?? older.drivers,
                             driversCompact: payload.driversCompact ?? older.driversCompact,
+                            primaryDriver: payload.primaryDriver ?? older.primaryDriver,
+                            supportingDrivers: payload.supportingDrivers ?? older.supportingDrivers,
+                            patternRelevantGauges: payload.patternRelevantGauges ?? older.patternRelevantGauges,
+                            activePatternRefs: payload.activePatternRefs ?? older.activePatternRefs,
+                            todayPersonalThemes: payload.todayPersonalThemes ?? older.todayPersonalThemes,
+                            todayRelevanceExplanations: payload.todayRelevanceExplanations ?? older.todayRelevanceExplanations,
                             modalModels: payload.modalModels ?? older.modalModels,
                             earthscopeSummary: payload.earthscopeSummary,
                             alerts: (payload.alerts?.isEmpty == false) ? payload.alerts : older.alerts,
@@ -1937,6 +1995,12 @@ struct ContentView: View {
                             gaugesDelta: resolvedPayload.gaugesDelta,
                             drivers: resolvedPayload.drivers,
                             driversCompact: resolvedPayload.driversCompact,
+                            primaryDriver: resolvedPayload.primaryDriver,
+                            supportingDrivers: resolvedPayload.supportingDrivers,
+                            patternRelevantGauges: resolvedPayload.patternRelevantGauges,
+                            activePatternRefs: resolvedPayload.activePatternRefs,
+                            todayPersonalThemes: resolvedPayload.todayPersonalThemes,
+                            todayRelevanceExplanations: resolvedPayload.todayRelevanceExplanations,
                             modalModels: resolvedPayload.modalModels,
                             earthscopeSummary: resolvedPayload.earthscopeSummary,
                             alerts: resolvedPayload.alerts,
@@ -1971,6 +2035,12 @@ struct ContentView: View {
                             gaugesDelta: resolvedPayload.gaugesDelta,
                             drivers: resolvedPayload.drivers,
                             driversCompact: resolvedPayload.driversCompact,
+                            primaryDriver: resolvedPayload.primaryDriver,
+                            supportingDrivers: resolvedPayload.supportingDrivers,
+                            patternRelevantGauges: resolvedPayload.patternRelevantGauges,
+                            activePatternRefs: resolvedPayload.activePatternRefs,
+                            todayPersonalThemes: resolvedPayload.todayPersonalThemes,
+                            todayRelevanceExplanations: resolvedPayload.todayRelevanceExplanations,
                             modalModels: resolvedPayload.modalModels,
                             earthscopeSummary: resolvedPayload.earthscopeSummary,
                             alerts: resolvedPayload.alerts,
@@ -1999,6 +2069,12 @@ struct ContentView: View {
                         gaugesDelta: resolvedPayload.gaugesDelta,
                         drivers: resolvedPayload.drivers,
                         driversCompact: resolvedPayload.driversCompact,
+                        primaryDriver: resolvedPayload.primaryDriver,
+                        supportingDrivers: resolvedPayload.supportingDrivers,
+                        patternRelevantGauges: resolvedPayload.patternRelevantGauges,
+                        activePatternRefs: resolvedPayload.activePatternRefs,
+                        todayPersonalThemes: resolvedPayload.todayPersonalThemes,
+                        todayRelevanceExplanations: resolvedPayload.todayRelevanceExplanations,
                         modalModels: resolvedPayload.modalModels,
                         earthscopeSummary: resolvedPayload.earthscopeSummary,
                         alerts: resolvedPayload.alerts,
@@ -3713,8 +3789,15 @@ struct ContentView: View {
             private var content: some View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized)
-                            .font(.subheadline.weight(.semibold))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized)
+                                .font(.subheadline.weight(.semibold))
+                            if let roleLabel = driver.roleLabel, !roleLabel.isEmpty {
+                                Text(roleLabel)
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundColor(GaugePalette.zoneColor(zoneKey))
+                            }
+                        }
                         Spacer(minLength: 6)
                         Text(driver.state ?? "Low")
                             .font(.caption)
@@ -3743,6 +3826,12 @@ struct ContentView: View {
                         }
                     }
                     .frame(height: 10)
+                    if let personalReason = driver.personalReason, !personalReason.isEmpty {
+                        Text(personalReason)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .padding(10)
                 .background(Color.black.opacity(0.20))
@@ -4228,14 +4317,14 @@ struct ContentView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Environmental Drivers")
+                        Text("Today's Driver Focus")
                             .font(.headline)
                         if drivers.isEmpty {
                             Text("No major environmental drivers are elevated right now.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         } else {
-                            ForEach(Array(drivers.prefix(6))) { driver in
+                            ForEach(Array(drivers.prefix(3))) { driver in
                                 let zoneKey = driverSeverityKey(driver.severity)
                                 let tappable = modalModels?.drivers?[driver.key] != nil
                                 DriverStatusRow(
@@ -5330,7 +5419,18 @@ struct ContentView: View {
 
                         Spacer(minLength: 8)
 
-                        StatusPill(card.confidence ?? "Observed", severity: confidenceSeverity)
+                        VStack(alignment: .trailing, spacing: 6) {
+                            if card.usedToday == true {
+                                Text(card.usedTodayLabel ?? "Used today")
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Color.green.opacity(0.16))
+                                    .foregroundColor(Color.green.opacity(0.95))
+                                    .clipShape(Capsule())
+                            }
+                            StatusPill(card.confidence ?? "Observed", severity: confidenceSeverity)
+                        }
                     }
 
                     Text(card.explanation)

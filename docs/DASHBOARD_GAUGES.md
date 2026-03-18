@@ -150,8 +150,18 @@ When trigger events are detected for paid users, the engine appends a “Trigger
     - `gauges_delta`: integer day-over-day deltas keyed by gauge
     - `drivers`: normalized environmental drivers with `{key,label,severity,state,value,unit,display}` (max 6)
     - `drivers_compact`: compact display strings derived from `drivers`
+    - `primary_driver`: top current driver after deterministic personal-relevance weighting
+    - `supporting_drivers`: up to 2 secondary drivers after personal-relevance weighting
+    - `pattern_relevant_gauges`: gauge-level personal pattern anchors for modal copy
+    - `active_pattern_refs`: pattern cards actively influencing today's guidance
+    - `today_personal_themes`: top symptom/body themes raised by current drivers + stored patterns
+    - `today_relevance_explanations`: deterministic explanation anchors for driver emphasis and daily brief copy
     - `modal_models`: deterministic modal content for gauges and drivers
     - `earthscope_summary`: short deterministic summary paragraph for home cards
+  - Driver ranking remains deterministic:
+    - raw severity still matters
+    - stored user pattern matches can raise a moderate driver above a globally louder but less personal signal
+    - health context and recent symptom history only affect display priority, not pattern-engine statistics
 - `GET /v1/earthscope/member`
   - Returns member EarthScope for the authenticated user + day
 - `POST /v1/earthscope/member/regenerate`

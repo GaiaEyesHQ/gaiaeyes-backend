@@ -22,6 +22,11 @@ from services.drivers.driver_normalize import normalize_environmental_drivers
 from services.gauges.alerts import dedupe_alert_pills
 from services.gauges.zones import decorate_gauge
 from services.mc_modals.modal_builder import build_earthscope_summary, build_modal_models
+from services.patterns.personal_relevance import (
+    compute_personal_relevance,
+    fetch_best_pattern_rows,
+    fetch_recent_outcome_summary,
+)
 
 
 router = APIRouter(prefix="/v1", tags=["dashboard"])
@@ -429,15 +434,37 @@ async def dashboard(
     out["gauges_delta"] = await _fetch_gauges_delta(conn, user_id, day)
 
     active_states, local_payload = await _resolve_signal_context(user_id, day, definition)
-    user_tags = await asyncio.to_thread(fetch_user_tags, user_id)
+    user_tags, pattern_rows, recent_outcomes = await asyncio.gather(
+        asyncio.to_thread(fetch_user_tags, user_id),
+        fetch_best_pattern_rows(conn, user_id),
+        fetch_recent_outcome_summary(conn, user_id, day),
+    )
     drivers = normalize_environmental_drivers(
         active_states=active_states,
         local_payload=local_payload,
         alerts_json=out.get("alerts"),
         limit=6,
     )
-    out["drivers"] = drivers
-    out["drivers_compact"] = [str(item.get("display") or "").strip() for item in drivers if str(item.get("display") or "").strip()]
+    personal_relevance = compute_personal_relevance(
+        day=day,
+        drivers=drivers,
+        pattern_rows=pattern_rows,
+        user_tags=user_tags,
+        recent_outcomes=recent_outcomes,
+    )
+    ranked_drivers = personal_relevance.get("ranked_drivers") or drivers
+    out["drivers"] = ranked_drivers
+    out["drivers_compact"] = personal_relevance.get("compact_driver_lines") or [
+        str(item.get("display") or "").strip()
+        for item in ranked_drivers
+        if str(item.get("display") or "").strip()
+    ]
+    out["primary_driver"] = personal_relevance.get("primary_driver")
+    out["supporting_drivers"] = personal_relevance.get("supporting_drivers")
+    out["pattern_relevant_gauges"] = personal_relevance.get("pattern_relevant_gauges")
+    out["active_pattern_refs"] = personal_relevance.get("active_pattern_refs")
+    out["today_personal_themes"] = personal_relevance.get("today_personal_themes")
+    out["today_relevance_explanations"] = personal_relevance.get("today_relevance_explanations")
 
     gauges_payload = out.get("gauges") if isinstance(out.get("gauges"), dict) else {}
     gauges_meta_payload = out.get("gauges_meta") if isinstance(out.get("gauges_meta"), dict) else {}
@@ -448,9 +475,10 @@ async def dashboard(
         gauges=gauges_payload,
         gauges_meta=gauges_meta_payload,
         gauge_labels=gauge_labels_payload,
-        drivers=drivers,
+        drivers=ranked_drivers,
         gauges_delta=out.get("gauges_delta") if isinstance(out.get("gauges_delta"), dict) else {},
         user_tags=user_tags,
+        personal_relevance=personal_relevance,
     )
     out["earthscope_summary"] = build_earthscope_summary(
         user_id=user_id,
@@ -458,8 +486,9 @@ async def dashboard(
         gauges=gauges_payload,
         gauges_meta=gauges_meta_payload,
         gauge_labels=gauge_labels_payload,
-        drivers=drivers,
+        drivers=ranked_drivers,
         user_tags=user_tags,
+        personal_relevance=personal_relevance,
     )
 
     if debug:
@@ -474,7 +503,7 @@ async def dashboard(
                 or (not payload.get("alerts") and gauge_fallback.get("alerts"))
             ),
             "active_states_count": len(active_states),
-            "drivers_count": len(drivers),
+            "drivers_count": len(ranked_drivers),
         }
 
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)

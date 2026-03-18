@@ -647,6 +647,18 @@ def _delta_line(delta: int) -> Optional[str]:
     return f"This gauge moved {abs(delta)} points {direction} from the prior reading."
 
 
+def _personal_relevance_gauge_summary(personal_relevance: Optional[Dict[str, Any]], gauge_key: str) -> Optional[str]:
+    if not isinstance(personal_relevance, dict):
+        return None
+    for item in personal_relevance.get("pattern_relevant_gauges") or []:
+        if str((item or {}).get("gauge_key") or "").strip() != gauge_key:
+            continue
+        summary = str((item or {}).get("summary") or "").strip()
+        if summary:
+            return summary
+    return None
+
+
 def _driver_variant(profile: PersonalizationProfile, key: str) -> Optional[str]:
     if key == "pressure":
         if profile.includes_any(HEAD_PRESSURE_KEYS):
@@ -804,7 +816,17 @@ def _driver_is_watch_or_high(driver: Dict[str, Any]) -> bool:
     return str(driver.get("severity") or "").strip().lower() in {"watch", "high"}
 
 
-def _gauge_modal_type(zone: str, delta: int, related: List[Dict[str, Any]]) -> str:
+def _gauge_modal_type(
+    zone: str,
+    delta: int,
+    related: List[Dict[str, Any]],
+    *,
+    personal_summary: Optional[str] = None,
+) -> str:
+    if personal_summary:
+        return "full"
+    if any((driver.get("active_pattern_refs") or []) for driver in related):
+        return "full"
     if zone in {"mild", "elevated", "high"}:
         return "full"
     if abs(int(delta or 0)) >= 5:
@@ -815,6 +837,8 @@ def _gauge_modal_type(zone: str, delta: int, related: List[Dict[str, Any]]) -> s
 
 
 def _driver_modal_type(driver: Dict[str, Any]) -> str:
+    if (driver.get("active_pattern_refs") or []) or str(driver.get("role") or "").strip() in {"primary", "supporting"}:
+        return "full"
     zone = _driver_zone_key(driver)
     return "full" if zone in {"mild", "elevated", "high"} else "short"
 
@@ -1076,8 +1100,16 @@ def _gauge_why_lines(
     gauge_key: str,
     related: List[Dict[str, Any]],
     delta: int,
+    personal_summary: Optional[str] = None,
 ) -> List[str]:
-    lines = [_driver_why_line(item) for item in related[:3]]
+    lines: List[str] = []
+    if personal_summary:
+        lines.append(personal_summary)
+    for item in related[:3]:
+        personal_reason = str(item.get("personal_reason") or "").strip()
+        if personal_reason:
+            lines.append(personal_reason)
+        lines.append(_driver_why_line(item))
     delta_line = _delta_line(delta)
     if delta_line:
         lines.append(delta_line)
@@ -1156,6 +1188,7 @@ def build_modal_models(
     drivers: Optional[Iterable[Dict[str, Any]]] = None,
     gauges_delta: Optional[Dict[str, int]] = None,
     user_tags: Optional[Iterable[Any]] = None,
+    personal_relevance: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Dict[str, Dict[str, Any]]]:
     gauges = gauges or {}
     gauges_meta = gauges_meta or {}
@@ -1178,7 +1211,8 @@ def build_modal_models(
         delta = int(gauges_delta.get(gauge_key) or 0)
         related_keys = _GAUGE_DRIVER_MAP.get(gauge_key) or []
         related = [drivers_by_key[k] for k in related_keys if k in drivers_by_key]
-        modal_type = _gauge_modal_type(zone, delta, related)
+        personal_summary = _personal_relevance_gauge_summary(personal_relevance, gauge_key)
+        modal_type = _gauge_modal_type(zone, delta, related, personal_summary=personal_summary)
         personalized_options: List[Dict[str, str]] = []
         personalized_prefill: List[str] = []
         for driver in related:
@@ -1216,7 +1250,13 @@ def build_modal_models(
         gauge_models[gauge_key] = {
             "modal_type": "full",
             "title": f"{label} \u2014 {status}",
-            "why": _gauge_why_lines(day=day, gauge_key=gauge_key, related=related, delta=delta),
+            "why": _gauge_why_lines(
+                day=day,
+                gauge_key=gauge_key,
+                related=related,
+                delta=delta,
+                personal_summary=personal_summary,
+            ),
             "what_you_may_notice": _gauge_notice_lines(day=day, gauge_key=gauge_key, related=related, profile=profile),
             "suggested_actions": _gauge_action_lines(day=day, gauge_key=gauge_key, related=related, profile=profile),
             "quick_log": quick_log,
@@ -1250,6 +1290,7 @@ def build_modal_models(
         )
         cta_prefill = quick_log.get("prefill_codes") or _DRIVER_PREFILL.get(key, ["OTHER"])
         why_lines = [
+            str(driver.get("personal_reason") or "").strip(),
             _driver_why_line(driver),
             _rotate_pick(
                 [
@@ -1263,6 +1304,7 @@ def build_modal_models(
                 1,
             )[0],
         ]
+        why_lines = _unique_lines([line for line in why_lines if line])
         if _driver_modal_type(driver) == "short":
             driver_models[key] = {
                 "modal_type": "short",
@@ -1307,6 +1349,7 @@ def build_earthscope_summary(
     gauge_labels: Optional[Dict[str, str]],
     drivers: Optional[Iterable[Dict[str, Any]]],
     user_tags: Optional[Iterable[Any]] = None,
+    personal_relevance: Optional[Dict[str, Any]] = None,
 ) -> str:
     gauges = gauges or {}
     gauges_meta = gauges_meta or {}
@@ -1324,9 +1367,17 @@ def build_earthscope_summary(
     )
     symptom_phrases = [str(item.get("phrase") or "").strip() for item in ranked_symptoms if str(item.get("phrase") or "").strip()]
     condition_note = earthscope_condition_note(ranked_symptoms=ranked_symptoms, user_tags=user_tags)
+    relevance_explanations = (
+        personal_relevance.get("today_relevance_explanations")
+        if isinstance(personal_relevance, dict)
+        else {}
+    ) or {}
+    daily_brief = str(relevance_explanations.get("daily_brief") or "").strip()
 
     sentences: List[str] = []
-    if top_drivers:
+    if daily_brief:
+        sentences.append(daily_brief)
+    elif top_drivers:
         primary = top_drivers[0]
         primary_label = str(primary.get("label") or "The current mix").strip()
         secondary_clause = ""
