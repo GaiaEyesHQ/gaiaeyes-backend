@@ -100,17 +100,26 @@ struct CameraHealthCheckView: View {
                         .padding()
                     }
 
+                    if let feedback = viewModel.liveFeedback, viewModel.isRunning {
+                        liveSignalCard(feedback)
+                    }
+
                     Text("Estimates for wellness context only. Not medical advice.")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    if let result = viewModel.result {
-                        resultCard(result)
+                    if let record = viewModel.result {
+                        resultCard(record)
                     } else if let err = viewModel.errorMessage {
                         GroupBox {
-                            Text(err)
-                                .font(.footnote)
-                                .foregroundColor(.secondary)
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(err)
+                                    .font(.footnote)
+                                    .foregroundColor(.secondary)
+                                if !viewModel.retryHints.isEmpty {
+                                    retryChecklist(viewModel.retryHints)
+                                }
+                            }
                         } label: {
                             Label("Quick Check", systemImage: "exclamationmark.triangle")
                         }
@@ -118,11 +127,11 @@ struct CameraHealthCheckView: View {
 
                     actionButtons
 
-                    if debugExportEnabled, let result = viewModel.result {
+                    if debugExportEnabled, let record = viewModel.result {
                         Button {
-                            copyDebugJSON(result)
+                            copyDebugJSON(record)
                         } label: {
-                            Label(copiedDebugJSON ? "Debug JSON Copied" : "Copy Debug JSON", systemImage: "doc.on.doc")
+                            Label(copiedDebugJSON ? "Debug JSON Copied" : "Open Debug JSON", systemImage: "doc.on.doc")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)
@@ -175,49 +184,36 @@ struct CameraHealthCheckView: View {
         }
     }
 
-    private func resultCard(_ result: CameraPPGComputedResult) -> some View {
+    private func resultCard(_ record: CameraHealthCheckRecord) -> some View {
+        let result = record.result
         let quality = result.quality.label
-        let runMode = viewModel.lastRunMode
         return GroupBox {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    MetricValueBlock(
-                        title: "BPM",
-                        value: result.metrics.bpm.map { String(Int($0.rounded())) } ?? "--",
-                        subtitle: "Heart Rate"
-                    )
-                    if let rmssd = result.metrics.rmssdMs {
-                        Spacer(minLength: 12)
-                        MetricValueBlock(
-                            title: "RMSSD",
-                            value: "\(Int(rmssd.rounded())) ms",
-                            subtitle: "HRV"
-                        )
+                saveStatusBanner
+
+                if record.overallStatus != .poor {
+                    HStack {
+                        if record.hrStatus == .usable {
+                            MetricValueBlock(
+                                title: "BPM",
+                                value: result.metrics.bpm.map { String(Int($0.rounded())) } ?? "--",
+                                subtitle: "Heart Rate"
+                            )
+                        }
+                        if record.hrvStatus == .usable, let rmssd = result.metrics.rmssdMs {
+                            Spacer(minLength: 12)
+                            MetricValueBlock(
+                                title: "RMSSD",
+                                value: "\(Int(rmssd.rounded())) ms",
+                                subtitle: "HRV"
+                            )
+                        }
                     }
                 }
 
                 qualityBadge(quality, score: result.quality.score)
 
-                if result.metrics.rmssdMs == nil {
-                    let guidance = "Try lighter pressure, cover the flash and one rear lens (usually the 1x lens), and warm your fingers if cold."
-                    if runMode == .quickHR, result.metrics.bpm != nil {
-                        Text("Quick HR mode captures heart rate only. Switch to HRV Mode for HRV metrics.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    } else if result.metrics.bpm != nil {
-                        Text("Heart rate captured, but HRV was not reliable enough. \(guidance)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    } else if runMode == .quickHR {
-                        Text("Signal quality was low for heart rate. \(guidance)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    } else {
-                        Text("Signal quality was low for both heart rate and HRV. \(guidance)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                } else {
+                if record.overallStatus == .good {
                     HStack(spacing: 10) {
                         if let sdnn = result.metrics.sdnnMs {
                             smallMetric("SDNN", "\(Int(sdnn.rounded())) ms")
@@ -232,12 +228,29 @@ struct CameraHealthCheckView: View {
                             smallMetric("lnRMSSD", String(format: "%.2f", ln))
                         }
                     }
-                }
-
-                if result.metrics.rmssdMs == nil && result.metrics.bpm == nil {
-                    Text("Re-run tip: keep your finger still for the full \(Int(runMode.maxRecordDurationSec.rounded())) seconds.")
+                } else if record.overallStatus == .partial {
+                    Text(partialSummary(for: record))
                         .font(.caption)
                         .foregroundColor(.secondary)
+                } else if record.overallStatus == .poor {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("No reliable reading captured")
+                            .font(.subheadline.weight(.semibold))
+                        if let reason = record.debugMeta.failureReason {
+                            Text(reason)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        if let nextStep = record.debugMeta.nextStepSuggestion {
+                            Text(nextStep)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                if record.overallStatus != .good, !record.debugMeta.guidanceHints.isEmpty {
+                    retryChecklist(record.debugMeta.guidanceHints)
                 }
 
                 Text("Duration \(result.durationSec)s")
@@ -247,6 +260,19 @@ struct CameraHealthCheckView: View {
         } label: {
             Label("Latest Result", systemImage: "heart.text.square")
         }
+    }
+
+    private func partialSummary(for record: CameraHealthCheckRecord) -> String {
+        if record.hrStatus == .usable, record.hrvStatus == .notRequested {
+            return "Heart rate was captured. Switch to HRV Mode when you want an HRV estimate."
+        }
+        if record.hrStatus == .usable {
+            return "Heart rate was usable, but HRV quality was too low for a reliable estimate."
+        }
+        if record.hrvStatus == .usable {
+            return "HRV was captured, but heart rate was too unstable to show confidently."
+        }
+        return "Only part of the signal was usable."
     }
 
     private func smallMetric(_ title: String, _ value: String) -> some View {
@@ -293,10 +319,118 @@ struct CameraHealthCheckView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    private func copyDebugJSON(_ result: CameraPPGComputedResult) {
+    private var saveStatusBanner: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: saveStatusIcon)
+                .font(.subheadline.weight(.semibold))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(viewModel.saveStatusTitle ?? "Saving check...")
+                    .font(.subheadline.weight(.semibold))
+                if let detail = viewModel.saveStatusDetail {
+                    Text(detail)
+                        .font(.caption)
+                }
+            }
+            Spacer()
+        }
+        .padding(10)
+        .background(saveStatusColor.opacity(0.14))
+        .foregroundColor(saveStatusColor)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var saveStatusColor: Color {
+        if viewModel.isSavingResult {
+            return .blue
+        }
+        switch viewModel.saveScope {
+        case .account:
+            return .green
+        case .localOnly:
+            return .yellow
+        case .notSaved:
+            return .orange
+        }
+    }
+
+    private var saveStatusIcon: String {
+        if viewModel.isSavingResult {
+            return "arrow.triangle.2.circlepath"
+        }
+        switch viewModel.saveScope {
+        case .account:
+            return "checkmark.circle.fill"
+        case .localOnly:
+            return "internaldrive.fill"
+        case .notSaved:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private func liveSignalCard(_ feedback: CameraPPGLiveFeedback) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Live Quality", systemImage: "waveform.path.ecg")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(feedback.state.rawValue.capitalized)
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(liveQualityColor(feedback.state).opacity(0.16))
+                    .foregroundColor(liveQualityColor(feedback.state))
+                    .clipShape(Capsule())
+            }
+
+            ProgressView(value: feedback.score)
+                .tint(liveQualityColor(feedback.state))
+
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(feedback.guidance, id: \.self) { hint in
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(12)
+        .background(Color.secondary.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func liveQualityColor(_ state: CameraLiveQualityState) -> Color {
+        switch state {
+        case .weak:
+            return .orange
+        case .improving:
+            return .yellow
+        case .good:
+            return .green
+        case .excellent:
+            return .mint
+        }
+    }
+
+    private func retryChecklist(_ hints: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Retry checklist")
+                .font(.caption.weight(.semibold))
+            ForEach(hints, id: \.self) { hint in
+                Text("- \(hint)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func copyDebugJSON(_ record: CameraHealthCheckRecord) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(result),
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(record),
               let text = String(data: data, encoding: .utf8) else {
             return
         }
@@ -392,9 +526,15 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
     @Published private(set) var progress: Double = 0
     @Published private(set) var secondsRemaining: Int = Int(CameraMeasurementMode.quickHR.maxRecordDurationSec)
     @Published private(set) var previewSession: AVCaptureSession?
-    @Published private(set) var result: CameraPPGComputedResult?
+    @Published private(set) var result: CameraHealthCheckRecord?
     @Published private(set) var errorMessage: String?
     @Published private(set) var isRunning: Bool = false
+    @Published private(set) var liveFeedback: CameraPPGLiveFeedback?
+    @Published private(set) var retryHints: [String] = []
+    @Published private(set) var saveScope: CameraSaveScope = .notSaved
+    @Published private(set) var isSavingResult: Bool = false
+    @Published private(set) var saveStatusTitle: String?
+    @Published private(set) var saveStatusDetail: String?
     @Published private(set) var saveStateMessage: String?
     @Published var selectedMode: CameraMeasurementMode = .quickHR {
         didSet {
@@ -439,6 +579,8 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
     private var output: AVCaptureVideoDataOutput?
     private var isStopping = false
     private var lastGreenMean: Double?
+    private var lastLiveFeedbackAt: TimeInterval = 0
+    private var observedGuidanceHints: [String] = []
 
     init(onSaved: (() -> Void)? = nil) {
         self.onSaved = onSaved
@@ -453,10 +595,18 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
             self.result = nil
             self.progress = 0
             self.secondsRemaining = Int(mode.maxRecordDurationSec.rounded())
+            self.liveFeedback = nil
+            self.retryHints = []
+            self.saveScope = .notSaved
+            self.isSavingResult = false
+            self.saveStatusTitle = nil
+            self.saveStatusDetail = nil
             self.saveStateMessage = nil
             self.phase = .requestingPermission
             self.lastRunMode = mode
         }
+        observedGuidanceHints = []
+        lastLiveFeedbackAt = 0
         requestPermissionIfNeeded { [weak self] granted in
             guard let self else { return }
             guard granted else {
@@ -464,6 +614,9 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
                     self.phase = .failed
                     self.errorMessage = "Camera permission is required for the quick check."
                     self.isRunning = false
+                    self.saveScope = .notSaved
+                    self.saveStatusTitle = "Not saved"
+                    self.saveStatusDetail = "Camera access is required to run the check."
                 }
                 return
             }
@@ -588,6 +741,7 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
         publish {
             self.phase = .processing
             self.isRunning = false
+            self.liveFeedback = nil
         }
 
         let now = CACurrentMediaTime()
@@ -595,71 +749,219 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
         stopCaptureSession()
 
         guard let computed else {
+            let guidanceHints = fallbackGuidanceHints(for: mode)
             publish {
                 self.phase = .failed
-                self.errorMessage = "Need a steadier \(Int(mode.minRecordDurationSec.rounded()))-\(Int(mode.maxRecordDurationSec.rounded())) second signal. Keep still and retry."
+                self.retryHints = guidanceHints
+                self.errorMessage = "No reliable reading captured. \(self.failureReason(for: guidanceHints, result: nil))"
+                self.saveScope = .notSaved
+                self.isSavingResult = false
+                self.saveStatusTitle = "Not saved"
+                self.saveStatusDetail = "No reliable reading was captured."
+                self.saveStateMessage = "Not saved."
             }
             return
         }
 
+        let record = buildRecord(from: computed, mode: mode)
         publish {
-            self.result = computed
+            self.result = record
             self.phase = .completed
             self.errorMessage = nil
-        }
-        saveResult(computed, mode: mode)
-    }
-
-    private func saveResult(_ result: CameraPPGComputedResult, mode: CameraMeasurementMode) {
-        guard shouldUpload(result, mode: mode) else {
-            publish {
-                self.saveStateMessage = "Not synced: launch-safe quality gate blocked this run."
-            }
-            return
-        }
-
-        publish {
+            self.retryHints = record.debugMeta.guidanceHints
+            self.saveScope = .notSaved
+            self.isSavingResult = true
+            self.saveStatusTitle = "Saving check..."
+            self.saveStatusDetail = "Creating a local copy and preparing sync."
             self.saveStateMessage = "Saving check..."
         }
+        saveResult(record)
+    }
+
+    private func saveResult(_ record: CameraHealthCheckRecord) {
         Task {
+            var localRecord = record
+            localRecord.saveScope = .localOnly
+            await CameraHealthLocalStore.shared.save(record: localRecord, saveScope: .localOnly)
+            await MainActor.run {
+                self.result = localRecord
+                self.onSaved?()
+            }
+
             do {
                 await MainActor.run {
                     AuthManager.shared.loadFromKeychain()
                 }
-                try await supabase.saveCheck(result)
+                try await supabase.saveCheck(localRecord)
+                var accountRecord = localRecord
+                accountRecord.saveScope = .account
+                await CameraHealthLocalStore.shared.save(record: accountRecord, saveScope: .account)
                 await MainActor.run {
+                    self.result = accountRecord
+                    self.saveScope = .account
+                    self.isSavingResult = false
+                    self.saveStatusTitle = "Saved to your account"
+                    self.saveStatusDetail = "This check is available on your account and this device."
                     self.saveStateMessage = "Saved to your account."
                     self.onSaved?()
                 }
             } catch {
                 await MainActor.run {
+                    self.result = localRecord
+                    self.saveScope = .localOnly
+                    self.isSavingResult = false
                     if let authError = error as? CameraHealthSupabaseError {
                         switch authError {
                         case .notAuthenticated, .missingUserId:
-                            self.saveStateMessage = "Not synced: Supabase sign-in missing. Open Settings > Subscribe and sign in."
+                            self.saveStatusTitle = "Saved locally only"
+                            self.saveStatusDetail = "Sign in to sync future checks to your account."
+                            self.saveStateMessage = "Saved locally only."
                         case .server(_, let body)
                             where body.localizedCaseInsensitiveContains("permission denied for schema raw")
                             || body.localizedCaseInsensitiveContains("permission denied for schema marts")
                             || body.contains("\"code\":\"42501\""):
-                            self.saveStateMessage = "Sync blocked by Supabase permissions. Run the camera-health grants migration, then retry."
+                            self.saveStatusTitle = "Saved locally only"
+                            self.saveStatusDetail = "Sync is blocked by current camera-health permissions."
+                            self.saveStateMessage = "Saved locally only."
                         default:
-                            self.saveStateMessage = "Sync failed: \(authError.localizedDescription)"
+                            self.saveStatusTitle = "Saved locally only"
+                            self.saveStatusDetail = "Sync failed this time, but the result is still on this device."
+                            self.saveStateMessage = "Saved locally only."
                         }
                     } else {
-                        self.saveStateMessage = "Sync failed: \(error.localizedDescription)"
+                        self.saveStatusTitle = "Saved locally only"
+                        self.saveStatusDetail = "Sync failed this time, but the result is still on this device."
+                        self.saveStateMessage = "Saved locally only."
                     }
                 }
             }
         }
     }
 
-    private func shouldUpload(_ result: CameraPPGComputedResult, mode: CameraMeasurementMode) -> Bool {
-        guard result.quality.score >= mode.minUploadQuality else { return false }
-        guard result.quality.label != .poor else { return false }
-        if mode.allowsHRVOutput {
-            return result.metrics.rmssdMs != nil && result.metrics.bpm != nil
+    private func buildRecord(from result: CameraPPGComputedResult, mode: CameraMeasurementMode) -> CameraHealthCheckRecord {
+        let guidanceHints = fallbackGuidanceHints(for: mode, result: result)
+
+        let hrStatus: CameraMetricStatus
+        var hrReasons: [String] = []
+        if result.metrics.bpm != nil {
+            hrStatus = .usable
+        } else if result.quality.label == .poor || result.quality.score < 0.50 || result.artifacts.validIbiCount < 6 {
+            hrStatus = .withheldLowQuality
+            hrReasons.append("low_signal_quality")
+        } else {
+            hrStatus = .notCaptured
+            hrReasons.append("unstable_pulse")
         }
-        return result.metrics.bpm != nil
+
+        let hrvStatus: CameraMetricStatus
+        var hrvReasons: [String] = []
+        if !mode.allowsHRVOutput {
+            hrvStatus = .notRequested
+            hrvReasons.append("mode_hr_only")
+        } else if result.metrics.rmssdMs != nil {
+            hrvStatus = .usable
+        } else if result.quality.label == .poor || result.quality.score < 0.58 || result.artifacts.validIbiCount < 18 || (result.fps ?? 0) < 24 {
+            hrvStatus = .withheldLowQuality
+            if result.quality.score < 0.58 || result.quality.label == .poor {
+                hrvReasons.append("low_signal_quality")
+            }
+            if result.artifacts.validIbiCount < 18 {
+                hrvReasons.append("too_few_clean_beats")
+            }
+            if (result.fps ?? 0) < 24 {
+                hrvReasons.append("low_frame_rate")
+            }
+        } else {
+            hrvStatus = .notCaptured
+            hrvReasons.append("insufficient_hrv_confidence")
+        }
+
+        let overallStatus: CameraCheckSummaryStatus
+        switch (hrStatus, hrvStatus) {
+        case (.usable, .usable):
+            overallStatus = .good
+        case (.usable, _), (_, .usable):
+            overallStatus = .partial
+        default:
+            overallStatus = .poor
+        }
+
+        let failureReasonText = overallStatus == .good ? nil : failureReason(for: guidanceHints, result: result)
+        let nextStepSuggestion = guidanceHints.first ?? defaultNextStep(for: mode)
+
+        return CameraHealthCheckRecord(
+            capturedAt: Date(),
+            measurementMode: mode.rawValue,
+            hrStatus: hrStatus,
+            hrvStatus: hrvStatus,
+            overallStatus: overallStatus,
+            saveScope: .notSaved,
+            result: result,
+            debugMeta: CameraHealthDebugMeta(
+                hrReasons: hrReasons,
+                hrvReasons: hrvReasons,
+                guidanceHints: guidanceHints,
+                failureReason: failureReasonText,
+                nextStepSuggestion: nextStepSuggestion,
+                quality: CameraHealthQualityBreakdown(
+                    validIBIRatio: result.quality.validIBIRatio,
+                    snrProxy: result.quality.snrProxy,
+                    stabilityScore: result.quality.stabilityScore,
+                    saturationPenalty: result.quality.saturationPenalty,
+                    motionPenalty: result.quality.motionPenalty,
+                    droppedFramePenalty: result.quality.droppedFramePenalty
+                )
+            )
+        )
+    }
+
+    private func fallbackGuidanceHints(for mode: CameraMeasurementMode, result: CameraPPGComputedResult? = nil) -> [String] {
+        var hints = observedGuidanceHints
+        if let result {
+            if result.artifacts.motionScore > 0.20 {
+                hints.append("Keep still")
+            }
+            if result.artifacts.saturationHitRatio > 0.88 {
+                hints.append("Use lighter pressure")
+            }
+            if result.quality.snrProxy < 0.10 && result.artifacts.validIbiCount < 8 {
+                hints.append("Cover flash and one rear lens fully")
+            }
+            if result.quality.snrProxy < 0.14 && result.artifacts.validIbiCount < 8 {
+                hints.append("Warm fingers help")
+            }
+        }
+        if hints.isEmpty {
+            hints.append("Cover flash and one rear lens fully")
+            hints.append(mode.allowsHRVOutput ? "Keep still" : "Use lighter pressure")
+        }
+        return Array(hints.uniqued().prefix(3))
+    }
+
+    private func failureReason(for guidanceHints: [String], result: CameraPPGComputedResult?) -> String {
+        if guidanceHints.contains("Keep still") {
+            return "Movement disrupted the signal."
+        }
+        if guidanceHints.contains("Use lighter pressure") {
+            return "Pressure looked too heavy on the lens."
+        }
+        if guidanceHints.contains("Cover flash and one rear lens fully") {
+            return "Finger placement did not fully cover the flash and lens."
+        }
+        if guidanceHints.contains("Warm fingers help") {
+            return "The pulse signal stayed weak."
+        }
+        if let result, result.artifacts.validIbiCount < 6 {
+            return "Too few clean pulse beats were captured."
+        }
+        return "The signal was not reliable enough."
+    }
+
+    private func defaultNextStep(for mode: CameraMeasurementMode) -> String {
+        if mode.allowsHRVOutput {
+            return "Keep still for the full capture and breathe naturally."
+        }
+        return "Keep still and cover the flash and one rear lens fully."
     }
 
     private func stopCaptureSession() {
@@ -725,6 +1027,18 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
             self.phase = warmup > 0 ? .warmingUp : .measuring
             self.secondsRemaining = remaining
             self.progress = progress
+        }
+
+        if warmup <= 0, now - lastLiveFeedbackAt >= 1.0 {
+            lastLiveFeedbackAt = now
+            let feedback = processor.liveFeedback(now: now, allowHRVOutput: lastRunMode.allowsHRVOutput)
+            if let feedback {
+                observedGuidanceHints.append(contentsOf: feedback.guidance)
+                observedGuidanceHints = Array(observedGuidanceHints.uniqued().prefix(4))
+            }
+            publish {
+                self.liveFeedback = feedback
+            }
         }
 
         if processor.shouldAutoStop(now: now) {
@@ -825,5 +1139,12 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
 
         guard let selected = best else { return nil }
         return (selected.format, selected.frameDuration, selected.fps)
+    }
+}
+
+private extension Array where Element: Hashable {
+    func uniqued() -> [Element] {
+        var seen: Set<Element> = []
+        return filter { seen.insert($0).inserted }
     }
 }

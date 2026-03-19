@@ -2135,26 +2135,45 @@ struct ContentView: View {
         }
 
         do {
-            let summary = try await CameraHealthSupabaseClient.shared.fetchLatestDailySummary()
+            let remoteSummary = try await CameraHealthSupabaseClient.shared.fetchLatestDailySummary()
+            let localSummary = await CameraHealthLocalStore.shared.latestSummary()
+            let summary = newestCameraCheckSummary(remote: remoteSummary, local: localSummary)
             await MainActor.run {
                 latestCameraCheck = summary
                 latestCameraCheckError = nil
             }
         } catch CameraHealthSupabaseError.notAuthenticated {
+            let localSummary = await CameraHealthLocalStore.shared.latestSummary()
             await MainActor.run {
-                latestCameraCheck = nil
+                latestCameraCheck = localSummary
                 latestCameraCheckError = nil
             }
         } catch CameraHealthSupabaseError.missingUserId {
+            let localSummary = await CameraHealthLocalStore.shared.latestSummary()
             await MainActor.run {
-                latestCameraCheck = nil
+                latestCameraCheck = localSummary
                 latestCameraCheckError = nil
             }
         } catch {
+            let localSummary = await CameraHealthLocalStore.shared.latestSummary()
             await MainActor.run {
-                latestCameraCheckError = "Latest check unavailable"
+                latestCameraCheck = localSummary
+                latestCameraCheckError = localSummary == nil ? "Latest check unavailable" : nil
             }
             appLog("[UI] camera check fetch error: \(error.localizedDescription)")
+        }
+    }
+
+    private func newestCameraCheckSummary(remote: CameraHealthDailySummary?, local: CameraHealthDailySummary?) -> CameraHealthDailySummary? {
+        switch (remote, local) {
+        case let (remote?, local?):
+            return (remote.captureDate ?? .distantPast) >= (local.captureDate ?? .distantPast) ? remote : local
+        case let (remote?, nil):
+            return remote
+        case let (nil, local?):
+            return local
+        case (nil, nil):
+            return nil
         }
     }
 
@@ -4050,18 +4069,61 @@ struct ContentView: View {
             let isLoading: Bool
             let errorText: String?
 
-            private func qualityColor(_ quality: String?) -> Color {
-                let token = (quality ?? "").lowercased()
-                if token == "good" { return .green }
-                if token == "ok" { return .yellow }
-                if token == "poor" { return .orange }
-                return .secondary
+            private func statusColor(_ summary: CameraHealthDailySummary?) -> Color {
+                switch summary?.summaryStatus ?? .pending {
+                case .good:
+                    return .green
+                case .partial:
+                    return .yellow
+                case .poor:
+                    return .orange
+                case .pending:
+                    return .secondary
+                }
+            }
+
+            private func statusLabel(_ summary: CameraHealthDailySummary?) -> String {
+                (summary?.summaryStatus ?? .pending).rawValue.capitalized
             }
 
             private func qualityLabel(_ quality: String?) -> String {
                 let token = (quality ?? "unknown").trimmingCharacters(in: .whitespacesAndNewlines)
                 if token.isEmpty { return "Unknown" }
                 return token.capitalized
+            }
+
+            private func saveScopeText(_ summary: CameraHealthDailySummary) -> String {
+                switch summary.persistedSaveScope {
+                case .account:
+                    return "Saved to your account"
+                case .localOnly:
+                    return "Saved locally only"
+                case .notSaved:
+                    return "Not saved"
+                }
+            }
+
+            private func summaryText(_ summary: CameraHealthDailySummary) -> String {
+                switch summary.summaryStatus {
+                case .good:
+                    return "Heart rate and HRV were captured."
+                case .partial:
+                    if summary.hrvMetricStatus == .notRequested {
+                        return "Heart rate captured. HRV was not requested in Quick HR mode."
+                    }
+                    return "Heart rate captured. HRV was withheld because quality was too low."
+                case .poor:
+                    return "No reliable reading captured."
+                case .pending:
+                    return "Latest check pending."
+                }
+            }
+
+            private func poorSuggestion(_ summary: CameraHealthDailySummary) -> String {
+                if summary.qualityScore ?? 0 < 0.45 {
+                    return "Try lighter pressure, full lens coverage, and keep still."
+                }
+                return "Try another run after adjusting finger placement."
             }
 
             private func timeText(_ raw: String?) -> String? {
@@ -4078,13 +4140,13 @@ struct ContentView: View {
                         Label("Latest Check", systemImage: "camera.metering.center.weighted")
                             .font(.headline)
                         Spacer()
-                        if let q = summary?.qualityLabel {
-                            Text(qualityLabel(q))
+                        if summary != nil {
+                            Text(statusLabel(summary))
                                 .font(.caption.weight(.semibold))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(qualityColor(q).opacity(0.18))
-                                .foregroundColor(qualityColor(q))
+                                .background(statusColor(summary).opacity(0.18))
+                                .foregroundColor(statusColor(summary))
                                 .clipShape(Capsule())
                         }
                     }
@@ -4096,30 +4158,47 @@ struct ContentView: View {
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     } else if let summary {
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("BPM")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                Text(summary.bpm.map { String(Int($0.rounded())) } ?? "--")
-                                    .font(.title3.weight(.bold))
-                            }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("RMSSD")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                Text(summary.rmssdMs.map { "\(Int($0.rounded())) ms" } ?? "N/A")
-                                    .font(.subheadline.weight(.semibold))
-                            }
-                            if let timestamp = timeText(summary.latestTsUtc) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Time")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                    Text(timestamp)
-                                        .font(.caption.weight(.semibold))
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 12) {
+                                if summary.hasUsableHR {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("BPM")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Text(summary.bpm.map { String(Int($0.rounded())) } ?? "--")
+                                            .font(.title3.weight(.bold))
+                                    }
+                                }
+                                if summary.hasUsableHRV {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("RMSSD")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Text(summary.rmssdMs.map { "\(Int($0.rounded())) ms" } ?? "--")
+                                            .font(.subheadline.weight(.semibold))
+                                    }
+                                }
+                                if let timestamp = timeText(summary.latestTsUtc) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Time")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Text(timestamp)
+                                            .font(.caption.weight(.semibold))
+                                    }
                                 }
                             }
+                            Text(summaryText(summary))
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            if summary.summaryStatus == .poor {
+                                Text(poorSuggestion(summary))
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            Text("\(saveScopeText(summary)) | Quality \(qualityLabel(summary.qualityLabel))")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
                         }
                         Text("Wellness estimate only. Not medical advice.")
                             .font(.caption2)
@@ -6035,18 +6114,91 @@ struct ContentView: View {
         let errorText: String?
         let onOpenQuickCheck: () -> Void
 
-        private func qualityColor(_ quality: String?) -> Color {
-            let token = (quality ?? "").lowercased()
-            if token == "good" { return GaugePalette.low }
-            if token == "ok" { return GaugePalette.mild }
-            if token == "poor" { return GaugePalette.elevated }
-            return .secondary
+        private func statusColor(_ summary: CameraHealthDailySummary?) -> Color {
+            switch summary?.summaryStatus ?? .pending {
+            case .good:
+                return GaugePalette.low
+            case .partial:
+                return GaugePalette.mild
+            case .poor:
+                return GaugePalette.elevated
+            case .pending:
+                return .secondary
+            }
+        }
+
+        private func statusLabel(_ summary: CameraHealthDailySummary?) -> String {
+            (summary?.summaryStatus ?? .pending).rawValue.capitalized
+        }
+
+        private func statusSeverity(_ summary: CameraHealthDailySummary?) -> StatusPill.Severity {
+            switch summary?.summaryStatus ?? .pending {
+            case .good:
+                return .ok
+            case .partial:
+                return .warn
+            case .poor:
+                return .alert
+            case .pending:
+                return .warn
+            }
         }
 
         private func qualityLabel(_ quality: String?) -> String {
             let token = (quality ?? "unknown").trimmingCharacters(in: .whitespacesAndNewlines)
             if token.isEmpty { return "Unknown" }
             return token.capitalized
+        }
+
+        private func saveScopeText(_ summary: CameraHealthDailySummary) -> String {
+            switch summary.persistedSaveScope {
+            case .account:
+                return "Saved to your account"
+            case .localOnly:
+                return "Saved locally only"
+            case .notSaved:
+                return "Not saved"
+            }
+        }
+
+        private func summaryText(_ summary: CameraHealthDailySummary) -> String {
+            switch summary.summaryStatus {
+            case .good:
+                return "Heart rate and HRV were captured."
+            case .partial:
+                if summary.hrvMetricStatus == .notRequested {
+                    return "Heart rate captured. HRV was not requested in Quick HR mode."
+                }
+                return "Heart rate captured. HRV was withheld because quality was too low."
+            case .poor:
+                return "No reliable reading captured. Try lighter pressure and keep still."
+            case .pending:
+                return "No quick check recorded yet today."
+            }
+        }
+
+        private func metricChips(_ summary: CameraHealthDailySummary) -> some View {
+            HStack(spacing: 10) {
+                if summary.hasUsableHR {
+                    LocalConditionsValueChip(
+                        label: "BPM",
+                        value: summary.bpm.map { "\(Int($0.rounded()))" } ?? "--",
+                        tint: statusColor(summary)
+                    )
+                }
+                if summary.hasUsableHRV {
+                    LocalConditionsValueChip(
+                        label: "RMSSD",
+                        value: summary.rmssdMs.map { "\(Int($0.rounded())) ms" } ?? "--",
+                        tint: GaugePalette.low
+                    )
+                }
+                LocalConditionsValueChip(
+                    label: "Time",
+                    value: timeText(summary.latestTsUtc),
+                    tint: GaugePalette.mild
+                )
+            }
         }
 
         private func timeText(_ raw: String?) -> String {
@@ -6062,46 +6214,32 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .top, spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(summary?.qualityLabel.map(qualityLabel) ?? "Latest check")
+                            Text(statusLabel(summary))
                                 .font(.title3.weight(.semibold))
                             Text("Camera-based wellness estimate only. Not medical advice.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
-                        StatusPill(summary?.qualityLabel.map(qualityLabel) ?? "Pending", severity: {
-                            let quality = summary?.qualityLabel
-                            let token = (quality ?? "").lowercased()
-                            if token == "poor" { return .alert }
-                            if token == "ok" { return .warn }
-                            return .ok
-                        }())
+                        StatusPill(statusLabel(summary), severity: statusSeverity(summary))
                     }
 
                     if isLoading {
-                        ProgressView("Loading latest check…")
+                        ProgressView("Loading latest check...")
                             .font(.caption)
                     } else if let errorText, !errorText.isEmpty, summary == nil {
                         Text(errorText)
                             .font(.caption)
                             .foregroundColor(.secondary)
                     } else if let summary {
-                        HStack(spacing: 10) {
-                            LocalConditionsValueChip(
-                                label: "BPM",
-                                value: summary.bpm.map { "\(Int($0.rounded()))" } ?? "—",
-                                tint: qualityColor(summary.qualityLabel)
-                            )
-                            LocalConditionsValueChip(
-                                label: "RMSSD",
-                                value: summary.rmssdMs.map { "\(Int($0.rounded())) ms" } ?? "—",
-                                tint: GaugePalette.low
-                            )
-                            LocalConditionsValueChip(
-                                label: "Time",
-                                value: timeText(summary.latestTsUtc),
-                                tint: GaugePalette.mild
-                            )
+                        VStack(alignment: .leading, spacing: 10) {
+                            metricChips(summary)
+                            Text(summaryText(summary))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("\(saveScopeText(summary)) | Quality \(qualityLabel(summary.qualityLabel))")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                     } else {
                         Text("No quick check recorded yet today.")

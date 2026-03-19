@@ -32,6 +32,20 @@ struct CameraPPGComputedResult: Codable {
     let ppgDownsampledHz: Double?
 }
 
+enum CameraLiveQualityState: String {
+    case weak
+    case improving
+    case good
+    case excellent
+}
+
+struct CameraPPGLiveFeedback {
+    let score: Double
+    let state: CameraLiveQualityState
+    let guidance: [String]
+    let validBeatCount: Int
+}
+
 final class CameraPPGProcessor {
     private(set) var warmupDurationSec: Double = 3.0
     private(set) var minRecordDurationSec: Double = 30.0
@@ -40,6 +54,10 @@ final class CameraPPGProcessor {
     private let baseTargetHz: Double = 30.0
     private let highFpsTargetHz: Double = 45.0
     private let maxDownsampledPoints = 1500
+    private let minHRVQualityScore = 0.58
+    private let minHRVBeatCount = 18
+    private let maxHRVRobustCV = 0.24
+    private let minHRVFPS = 24
 
     private var captureStartTime: TimeInterval?
     private var frameTimes: [Double] = []
@@ -141,6 +159,34 @@ final class CameraPPGProcessor {
         return computeResult(now: now, requireQualityForHRV: true, allowHRVOutput: allowHRVOutput)
     }
 
+    func liveFeedback(now: TimeInterval, allowHRVOutput: Bool) -> CameraPPGLiveFeedback? {
+        let elapsed = recordElapsed(now: now)
+        guard elapsed >= 2.0 else { return nil }
+
+        let saturationHitRatio = average(saturationRatios)
+        let motionScore = average(motionSamples)
+        let meanSignal = average(frameSignal)
+        let preview = computeResult(now: now, requireQualityForHRV: false, allowHRVOutput: allowHRVOutput)
+        let score = preview?.quality.score ?? 0.0
+        let validBeatCount = preview?.artifacts.validIbiCount ?? 0
+        let snrProxy = preview?.quality.snrProxy ?? 0.0
+
+        return CameraPPGLiveFeedback(
+            score: score,
+            state: liveQualityState(score: score, validBeatCount: validBeatCount, elapsed: elapsed),
+            guidance: liveGuidanceHints(
+                score: score,
+                elapsed: elapsed,
+                validBeatCount: validBeatCount,
+                saturationHitRatio: saturationHitRatio,
+                motionScore: motionScore,
+                meanSignal: meanSignal,
+                snrProxy: snrProxy
+            ),
+            validBeatCount: validBeatCount
+        )
+    }
+
     private func computeResult(
         now: TimeInterval,
         requireQualityForHRV: Bool,
@@ -195,11 +241,11 @@ final class CameraPPGProcessor {
         )
         let hrvRobustCV = robustCoefficientOfVariation(hrvIbi) ?? 1.0
         let hrvPrecheck =
-            hrvIbi.count >= 20 &&
-            quality.score >= 0.65 &&
+            hrvIbi.count >= minHRVBeatCount &&
+            quality.score >= minHRVQualityScore &&
             quality.label != .poor &&
-            (estimatedFps ?? 0) >= 30 &&
-            hrvRobustCV <= 0.20
+            (estimatedFps ?? 0) >= minHRVFPS &&
+            hrvRobustCV <= maxHRVRobustCV
 
         let hrvMetrics: (sdnn: Double?, rmssd: Double?, pnn50: Double?, lnRmssd: Double?, stress: Double?, resp: Double?)
         let canComputeRawHRVMetrics = allowHRVOutput && (hrvPrecheck || !requireQualityForHRV)
@@ -723,11 +769,11 @@ final class CameraPPGProcessor {
         guard let avnn, let sdnn, let rmssd, let pnn50 else { return false }
         guard avnn > 0 else { return false }
         // Camera-PPG short-window HRV tends to be unstable when these explode.
-        guard robustCV <= 0.20 else { return false }
+        guard robustCV <= maxHRVRobustCV else { return false }
         guard sdnn >= 8.0, sdnn <= 180.0 else { return false }
         guard rmssd >= 8.0, rmssd <= 180.0 else { return false }
-        guard pnn50 >= 0.0, pnn50 <= 80.0 else { return false }
-        guard (rmssd / avnn) <= 0.25 else { return false }
+        guard pnn50 >= 0.0, pnn50 <= 85.0 else { return false }
+        guard (rmssd / avnn) <= 0.30 else { return false }
         return true
     }
 
@@ -908,6 +954,63 @@ final class CameraPPGProcessor {
 
     private func clamp(_ value: Double, min minValue: Double, max maxValue: Double) -> Double {
         Swift.min(maxValue, Swift.max(minValue, value))
+    }
+
+    private func liveQualityState(score: Double, validBeatCount: Int, elapsed: Double) -> CameraLiveQualityState {
+        if elapsed < 5.0 || validBeatCount < 4 || score < 0.30 {
+            return .weak
+        }
+        if validBeatCount < 10 || score < 0.58 {
+            return .improving
+        }
+        if score >= 0.80 && validBeatCount >= 20 {
+            return .excellent
+        }
+        return .good
+    }
+
+    private func liveGuidanceHints(
+        score: Double,
+        elapsed: Double,
+        validBeatCount: Int,
+        saturationHitRatio: Double,
+        motionScore: Double,
+        meanSignal: Double,
+        snrProxy: Double
+    ) -> [String] {
+        var hints: [String] = []
+
+        if (meanSignal < 110.0 || (snrProxy < 0.10 && validBeatCount < 4)) && saturationHitRatio < 0.04 {
+            hints.append("Cover flash and one rear lens fully")
+        }
+        if saturationHitRatio > 0.88 {
+            hints.append("Use lighter pressure")
+        }
+        if motionScore > 0.20 {
+            hints.append("Keep still")
+        }
+        if elapsed >= 8.0 && validBeatCount < 8 && snrProxy < 0.14 {
+            hints.append("Warm fingers help")
+        }
+
+        if hints.isEmpty {
+            if score >= 0.78 {
+                hints.append("Keep still")
+            } else if score >= 0.45 {
+                hints.append("Keep holding steady")
+            } else {
+                hints.append("Cover flash and one rear lens fully")
+            }
+        }
+
+        return Array(hints.uniqued().prefix(2))
+    }
+}
+
+private extension Array where Element: Hashable {
+    func uniqued() -> [Element] {
+        var seen: Set<Element> = []
+        return filter { seen.insert($0).inserted }
     }
 }
 

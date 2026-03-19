@@ -14,14 +14,18 @@ Safety language in app UI:
   - Record: 30-45 seconds
   - Early stop when quality is good and enough beats are collected
 - Result screen shows:
-  - BPM
-  - RMSSD (if quality passes)
-  - Optional SDNN, pNN50, AVNN, lnRMSSD
-  - Quality badge (`Good`, `OK`, `Poor`)
-- Poor quality behavior:
-  - Save event anyway with quality/artifacts/raw series
-  - HRV metrics are null-gated when quality is below threshold
-- One-tap rerun.
+  - live signal quality (`Weak`, `Improving`, `Good`, `Excellent`) during capture
+  - live guidance before the run completes (for example lens coverage, pressure, stillness)
+  - BPM when usable
+  - RMSSD when HRV quality passes
+  - Optional SDNN, pNN50, AVNN, lnRMSSD for successful HRV runs
+  - explicit partial state when HR is usable but HRV is withheld
+  - explicit poor state with one short reason and a retry checklist
+- Save behavior:
+  - local copy is stored for completed runs
+  - signed-in users sync to account when remote save succeeds
+  - result UI states whether the run was saved to account, saved locally only, or not saved
+- One-tap rerun with preserved guidance hints after poor runs.
 - Optional developer toggle for "Copy Debug JSON."
 
 ## Supabase schema
@@ -29,12 +33,20 @@ Safety language in app UI:
 Migration file:
 - `supabase/migrations/20260307113000_create_camera_health_checks.sql`
 - `supabase/migrations/20260308020500_grant_camera_health_schema_access.sql`
+- `supabase/migrations/20260318103000_expand_camera_health_check_statuses.sql`
 
 Objects added:
 - `raw.camera_health_checks` table
 - `marts.camera_health_daily` view (latest check per user/day)
 - RLS policies for own-row select/insert/delete
 - Grants for `authenticated` role to use `raw`/`marts` schemas and query camera-health objects
+
+Additional stored fields:
+- `measurement_mode`
+- `hr_status`
+- `hrv_status`
+- `save_scope`
+- `debug_meta`
 
 Common troubleshooting:
 - If the app shows:
@@ -53,6 +65,7 @@ The app writes directly to Supabase PostgREST using authenticated session header
 Relevant files:
 - `gaiaeyes-ios/ios/GaiaExporter/Services/Camera/CameraHealthSupabaseClient.swift`
 - `gaiaeyes-ios/ios/GaiaExporter/Services/Auth/AuthManager.swift`
+- `gaiaeyes-ios/ios/GaiaExporter/Views/Camera/CameraHealthCheckView.swift`
 
 Auth details:
 - `AuthManager.validAccessToken()` refreshes token before use
@@ -85,16 +98,30 @@ Pipeline:
    - Respiration estimate only when confidence is adequate
 
 Quality gate for HRV persistence:
-- `quality_score >= 0.65`
+- `quality_score >= 0.58`
 - `quality_label in ('good', 'ok')`
 - Sufficient valid beats
+
+Partial result behavior:
+- HR can still be surfaced and saved when HRV is withheld.
+- HRV can be marked `withheld_low_quality` without turning the whole run into a failure.
+- Latest-check cards use overall states:
+  - `Good`
+  - `Partial`
+  - `Poor`
+  - `Pending`
 
 ## Dashboard integration
 
 Home integration:
 - `Quick Check` button opens camera check sheet.
-- "Latest Check" card shows latest camera summary (BPM/RMSSD/quality/time).
+- "Latest Check" card shows latest camera summary with overall status, available metrics only, and save scope.
 - Card reads `marts.camera_health_daily` directly from iOS via Supabase.
+
+Health & Symptoms integration:
+- Latest Quick Health Check card labels runs as `Good`, `Partial`, `Poor`, or `Pending`.
+- Partial summaries show HR when available and hide unavailable HRV instead of placeholder values.
+- Local-only saves can still appear through iOS local fallback storage.
 
 Relevant file:
 - `gaiaeyes-ios/ios/GaiaExporter/Views/ContentView.swift`
@@ -125,7 +152,8 @@ Torch uses camera hardware and does not require extra permission key.
    - partial cover case
 2. Confirm insert rows:
 ```sql
-select ts_utc, bpm, rmssd_ms, sdnn_ms, pnn50, ln_rmssd, stress_index, quality_score, quality_label
+select ts_utc, bpm, rmssd_ms, sdnn_ms, pnn50, ln_rmssd, stress_index, quality_score, quality_label,
+       measurement_mode, hr_status, hrv_status, save_scope
 from raw.camera_health_checks
 where user_id = '<your_user_id>'
 order by ts_utc desc
@@ -140,3 +168,4 @@ order by day desc
 limit 14;
 ```
 4. Confirm home dashboard card updates after save.
+5. Confirm a signed-out run shows `Saved locally only` and still appears on-device.
