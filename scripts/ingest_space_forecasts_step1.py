@@ -54,13 +54,19 @@ import logging
 import math
 import os
 import re
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any, Sequence
 
 import asyncpg
 import httpx
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from services.forecast_outlook import parse_swpc_three_day_forecast
 
