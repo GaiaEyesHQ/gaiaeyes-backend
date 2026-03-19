@@ -101,11 +101,12 @@
 
 ## Testing
 - `tests/` exists for backend-related tests.
-- No unified test runner is documented; if you add new tests, document the command in this file.
+- Targeted command for the forecast outlook work: `python3 -m unittest tests.services.test_forecast_outlook tests.test_outlook_route`.
 
 ## Recent changes
 - New: `/webhooks/stripe` and `/webhooks/revenuecat` for subscription billing (Stripe/RevenueCat).
 - New: `/v1/hazards/gdacs` and `/v1/hazards/gdacs/full` (GDACS RSS upgrade; includes fires, floods, droughts, etc.).
 - New: `/v1/local/check` aggregates NWS hourly grid, AirNow AQI, and moon phase; supports ZIP or lat/lon; cached snapshots power 24h deltas.
+- New: `/v1/users/me/outlook` builds a user-scoped 24h/72h outlook from normalized local forecast inputs plus the parsed SWPC 3-day bulletin.
 - Updated: `/v1/space/forecast/outlook` now includes real‑time `kp/bz/solar_wind` “now” fields from `marts.space_weather_daily`, and returns `bulletins`/SWPC text when available.
 - Deprecated: legacy root endpoints `/gdacs`, `/brief`, `/kp_schumann` in favor of `/v1/hazards/*` namespace.

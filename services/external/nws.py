@@ -41,6 +41,19 @@ async def _gridpoints(pts_or_lat: Any, maybe_lon: Optional[float] = None) -> Dic
     return await _get_json(grid_url)
 
 
+async def gridpoints_by_latlon(lat: float, lon: float) -> Dict[str, Any]:
+    pts = await _points(lat, lon)
+    return await _gridpoints(pts)
+
+
+async def forecast_hourly_by_latlon(lat: float, lon: float) -> Dict[str, Any]:
+    pts = await _points(lat, lon)
+    fh_url = pts.get("properties", {}).get("forecastHourly")
+    if not fh_url:
+        return {}
+    return await _get_json(fh_url)
+
+
 def _grid_first_value(props: Dict[str, Any], field: str) -> Optional[float]:
     """
     Read the first value from a gridpoints field:

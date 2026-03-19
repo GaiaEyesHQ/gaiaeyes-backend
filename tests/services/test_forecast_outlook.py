@@ -1,0 +1,220 @@
+from __future__ import annotations
+
+import sys
+import unittest
+from datetime import UTC, date, datetime
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from services.forecast_outlook import (  # noqa: E402
+    build_window_outlook,
+    parse_swpc_three_day_forecast,
+    summarize_local_forecast_days,
+)
+
+
+class ForecastOutlookTests(unittest.TestCase):
+    def test_parse_swpc_three_day_forecast_extracts_daily_fields(self) -> None:
+        text = """
+:Product: 3-Day Forecast
+:Issued: 2026 Mar 18 2200 UTC
+#
+A. NOAA Geomagnetic Activity Observation and Forecast
+NOAA Kp index breakdown Mar 19-Mar 21 2026
+
+               Mar 19        Mar 20        Mar 21
+00-03UT      3.67 (G0)     4.67 (G0)     5.33 (G1)
+03-06UT      4.00 (G0)     5.00 (G1)     5.67 (G1)
+
+Rationale: G1 storming is possible on 21 Mar due to recurrent high speed stream effects.
+
+B. NOAA Solar Radiation Activity Observation and Forecast
+Solar Radiation Storm Forecast for Mar 19-Mar 21 2026
+
+               Mar 19    Mar 20    Mar 21
+S1 or greater    5%       10%       15%
+
+Rationale: No significant solar radiation storms are expected.
+
+C. NOAA Radio Blackout Activity and Forecast
+Radio Blackout Forecast for Mar 19-Mar 21 2026
+
+               Mar 19    Mar 20    Mar 21
+R1-R2           15%       20%       35%
+R3 or greater    1%        1%        5%
+
+Rationale: Active regions may keep a modest flare chance in the outlook.
+"""
+
+        rows = parse_swpc_three_day_forecast(
+            text,
+            source_product_ts=datetime(2026, 3, 18, 22, 5, tzinfo=UTC),
+        )
+
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["forecast_day"], date(2026, 3, 19))
+        self.assertEqual(rows[2]["g_scale_max"], "G1")
+        self.assertAlmostEqual(rows[2]["kp_max_forecast"], 5.67, places=2)
+        self.assertEqual(rows[1]["s1_or_greater_pct"], 10.0)
+        self.assertEqual(rows[2]["r1_r2_pct"], 35.0)
+        self.assertTrue(rows[2]["solar_wind_watch"])
+        self.assertTrue(rows[2]["flare_watch"])
+        self.assertEqual(rows[2]["geomagnetic_severity_bucket"], "watch")
+        self.assertEqual(rows[2]["radio_severity_bucket"], "watch")
+
+    def test_summarize_local_forecast_days_aggregates_hourly_periods(self) -> None:
+        hourly_payload = {
+            "properties": {
+                "generatedAt": "2026-03-18T10:00:00Z",
+                "periods": [
+                    {
+                        "startTime": "2026-03-18T11:00:00-05:00",
+                        "temperature": 64,
+                        "temperatureUnit": "F",
+                        "relativeHumidity": {"value": 60},
+                        "probabilityOfPrecipitation": {"value": 20},
+                        "windSpeed": "5 to 10 mph",
+                        "windGust": "18 mph",
+                        "shortForecast": "Mostly Cloudy",
+                    },
+                    {
+                        "startTime": "2026-03-18T17:00:00-05:00",
+                        "temperature": 72,
+                        "temperatureUnit": "F",
+                        "relativeHumidity": {"value": 52},
+                        "probabilityOfPrecipitation": {"value": 35},
+                        "windSpeed": "10 mph",
+                        "windGust": "20 mph",
+                        "shortForecast": "Mostly Cloudy",
+                    },
+                    {
+                        "startTime": "2026-03-19T11:00:00-05:00",
+                        "temperature": 68,
+                        "temperatureUnit": "F",
+                        "relativeHumidity": {"value": 58},
+                        "probabilityOfPrecipitation": {"value": 40},
+                        "windSpeed": "8 mph",
+                        "windGust": "15 mph",
+                        "shortForecast": "Chance Showers",
+                    },
+                    {
+                        "startTime": "2026-03-19T17:00:00-05:00",
+                        "temperature": 78,
+                        "temperatureUnit": "F",
+                        "relativeHumidity": {"value": 48},
+                        "probabilityOfPrecipitation": {"value": 55},
+                        "windSpeed": "12 mph",
+                        "windGust": "25 mph",
+                        "shortForecast": "Chance Showers",
+                    },
+                    {
+                        "startTime": "2026-03-20T11:00:00-05:00",
+                        "temperature": 70,
+                        "temperatureUnit": "F",
+                        "relativeHumidity": {"value": 62},
+                        "probabilityOfPrecipitation": {"value": 10},
+                        "windSpeed": "6 mph",
+                        "windGust": "14 mph",
+                        "shortForecast": "Sunny",
+                    },
+                    {
+                        "startTime": "2026-03-20T17:00:00-05:00",
+                        "temperature": 82,
+                        "temperatureUnit": "F",
+                        "relativeHumidity": {"value": 44},
+                        "probabilityOfPrecipitation": {"value": 15},
+                        "windSpeed": "9 mph",
+                        "windGust": "18 mph",
+                        "shortForecast": "Sunny",
+                    },
+                ]
+            }
+        }
+        grid_payload = {
+            "properties": {
+                "barometricPressure": {
+                    "values": [
+                        {"validTime": "2026-03-18T00:00:00+00:00/PT12H", "value": 101300},
+                        {"validTime": "2026-03-19T00:00:00+00:00/PT12H", "value": 100800},
+                        {"validTime": "2026-03-20T00:00:00+00:00/PT12H", "value": 101600},
+                    ]
+                }
+            }
+        }
+
+        rows = summarize_local_forecast_days(
+            hourly_payload,
+            grid_payload,
+            location_key="zip:78701",
+            zip_code="78701",
+            lat=30.2672,
+            lon=-97.7431,
+            now=datetime(2026, 3, 18, 10, 0, tzinfo=UTC),
+        )
+
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["day"], date(2026, 3, 18))
+        self.assertAlmostEqual(rows[0]["temp_high_c"], 22.2, places=1)
+        self.assertAlmostEqual(rows[0]["temp_low_c"], 17.8, places=1)
+        self.assertEqual(rows[0]["condition_code"], "mostly-cloudy")
+        self.assertEqual(rows[1]["condition_summary"], "Chance Showers")
+        self.assertAlmostEqual(rows[1]["temp_delta_from_prior_day_c"], 2.8, places=1)
+        self.assertAlmostEqual(rows[2]["pressure_delta_from_prior_day_hpa"], 8.0, places=1)
+        self.assertGreater(rows[1]["wind_gust"], rows[1]["wind_speed"])
+
+    def test_build_window_outlook_prioritizes_pattern_linked_driver(self) -> None:
+        merged_rows = [
+            {
+                "day": date(2026, 3, 19),
+                "pressure_delta_from_prior_day_hpa": -7.4,
+                "temp_delta_from_prior_day_c": 2.0,
+                "kp_max_forecast": 5.3,
+                "g_scale_max": "G1",
+            },
+            {
+                "day": date(2026, 3, 20),
+                "pressure_delta_from_prior_day_hpa": -3.0,
+                "temp_delta_from_prior_day_c": 1.5,
+                "kp_max_forecast": 4.0,
+                "g_scale_max": "G0",
+            },
+        ]
+        pattern_rows = [
+            {
+                "signal_key": "pressure_swing_exposed",
+                "outcome_key": "pain_flare_day",
+                "confidence": "Strong",
+                "relative_lift": 2.4,
+                "lag_hours": 24,
+            },
+            {
+                "signal_key": "kp_g1_plus_exposed",
+                "outcome_key": "poor_sleep_day",
+                "confidence": "Moderate",
+                "relative_lift": 1.7,
+                "lag_hours": 24,
+            },
+        ]
+        gauges = {"pain": 78, "sleep": 61}
+
+        payload = build_window_outlook(
+            merged_rows,
+            pattern_rows=pattern_rows,
+            gauges=gauges,
+            window_hours=24,
+        )
+
+        self.assertIsNotNone(payload)
+        assert payload is not None
+        self.assertEqual(payload["likely_elevated_domains"][0]["key"], "pain")
+        self.assertEqual(payload["top_drivers"][0]["key"], "pressure")
+        self.assertIn("pressure may swing", payload["summary"].lower())
+        self.assertIn("pacing and hydration", payload["support_line"].lower())
+        self.assertIn("pain", payload["likely_elevated_domains"][0]["explanation"].lower())
+
+
+if __name__ == "__main__":
+    unittest.main()

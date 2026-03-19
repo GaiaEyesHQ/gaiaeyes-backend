@@ -14,6 +14,7 @@ from .routers import (
     hazards,
     ingest,
     local,
+    outlook,
     patterns,
     profile,
     quakes,
@@ -136,6 +137,7 @@ app.include_router(schumann_tomsk_params.router, dependencies=[Depends(require_r
 app.include_router(space.router, dependencies=[Depends(require_read_auth)])
 app.include_router(summary.router, dependencies=[Depends(require_read_auth)])
 app.include_router(space_forecasts.router, dependencies=[Depends(require_read_auth)])
+app.include_router(outlook.router)
 app.include_router(dashboard.router)
 app.include_router(patterns.router)
 app.include_router(profile.router)

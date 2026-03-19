@@ -62,6 +62,8 @@ from typing import Any, Sequence
 import asyncpg
 import httpx
 
+from services.forecast_outlook import parse_swpc_three_day_forecast
+
 logger = logging.getLogger("gaiaeyes.ingest.step1")
 
 
@@ -1807,6 +1809,28 @@ async def ingest_swpc_bulletins(
             skip_update_cols=["fetched_at", "src"],
         )
         logger.info("Upserted %d SWPC bulletins into ext.space_forecast", inserted)
+
+        parsed_daily_rows: list[dict[str, Any]] = []
+        for row in rows:
+            if row.get("src") != "noaa-swpc:3-day-forecast":
+                continue
+            parsed_daily_rows.extend(
+                parse_swpc_three_day_forecast(
+                    str(row.get("body_text") or ""),
+                    source_product_ts=row.get("fetched_at") or now,
+                    src=str(row.get("src") or "noaa-swpc:3-day-forecast"),
+                )
+            )
+        if parsed_daily_rows:
+            inserted_daily = await writer.upsert_many(
+                "marts",
+                "space_forecast_daily",
+                parsed_daily_rows,
+                conflict_cols=None,
+                constraint="space_forecast_daily_pkey",
+                skip_update_cols=["forecast_day", "source_product_ts"],
+            )
+            logger.info("Upserted %d structured SWPC daily rows into marts.space_forecast_daily", inserted_daily)
     else:
         logger.info("No SWPC bulletins ingested (all fetches failed?)")
 
