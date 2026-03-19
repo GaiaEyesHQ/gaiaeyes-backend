@@ -65,6 +65,38 @@ Rationale: Active regions may keep a modest flare chance in the outlook.
         self.assertEqual(rows[2]["geomagnetic_severity_bucket"], "watch")
         self.assertEqual(rows[2]["radio_severity_bucket"], "watch")
 
+    def test_parse_swpc_three_day_forecast_handles_compact_live_style_text(self) -> None:
+        text = (
+            ":Product: 3-Day Forecast :Issued: 2026 Mar 19 0030 UTC "
+            "A. NOAA Geomagnetic Activity Observation and Forecast "
+            "The greatest expected 3 hr Kp for Mar 19-Mar 21 2026 is 6.33 (NOAA Scale G2). "
+            "NOAA Kp index breakdown Mar 19-Mar 21 2026 Mar 19 Mar 20 Mar 21 "
+            "00-03UT 1.67 6.33 (G2) 4.33 03-06UT 2.00 6.00 (G2) 6.33 (G2) "
+            "Rationale: G1-G2 storms are expected due to CME arrivals and a sector boundary crossing. "
+            "B. NOAA Solar Radiation Activity Observation and Forecast "
+            "Solar Radiation Storm Forecast for Mar 19-Mar 21 2026 Mar 19 Mar 20 Mar 21 "
+            "S1 or greater 10% 10% 10% Rationale: There is a slight chance for S1 storms. "
+            "C. NOAA Radio Blackout Activity and Forecast "
+            "Radio Blackout Forecast for Mar 19-Mar 21 2026 Mar 19 Mar 20 Mar 21 "
+            "R1-R2 35% 35% 35% R3 or greater 10% 10% 10% "
+            "Rationale: There is a chance for R1-R2 blackouts with a slight chance for R3 events."
+        )
+
+        rows = parse_swpc_three_day_forecast(
+            text,
+            source_product_ts=datetime(2026, 3, 19, 0, 35, tzinfo=UTC),
+        )
+
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["forecast_day"], date(2026, 3, 19))
+        self.assertEqual(rows[0]["kp_max_forecast"], 2.0)
+        self.assertEqual(rows[1]["kp_max_forecast"], 6.33)
+        self.assertEqual(rows[2]["kp_max_forecast"], 6.33)
+        self.assertEqual(rows[0]["s1_or_greater_pct"], 10.0)
+        self.assertEqual(rows[2]["r3_or_greater_pct"], 10.0)
+        self.assertTrue(rows[0]["cme_watch"])
+        self.assertEqual(rows[1]["geomagnetic_severity_bucket"], "watch")
+
     def test_summarize_local_forecast_days_aggregates_hourly_periods(self) -> None:
         hourly_payload = {
             "properties": {

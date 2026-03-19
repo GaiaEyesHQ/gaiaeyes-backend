@@ -109,7 +109,6 @@ SWPC_RANGE_RE = re.compile(
     re.IGNORECASE,
 )
 SWPC_DAY_TOKEN_RE = re.compile(r"\b([A-Z][a-z]{2})\s+(\d{1,2})\b")
-SWPC_KP_BLOCK_RE = re.compile(r"^\s*(\d{2}-\d{2}UT)\s+(.*)$")
 SWPC_KP_CELL_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*(?:\((G\d)\))?")
 PERCENT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
 
@@ -384,12 +383,38 @@ def _parse_rationale(section_text: str) -> str | None:
 
 
 def _parse_percent_row(section_text: str, row_label: str) -> list[float | None]:
-    pattern = rf"^\s*{row_label}\s+(.*)$"
-    match = re.search(pattern, section_text, re.IGNORECASE | re.MULTILINE)
+    compact = _compress_whitespace(section_text) or ""
+    pattern = rf"{row_label}\s+((?:\d+(?:\.\d+)?%\s*)+)"
+    match = re.search(pattern, compact, re.IGNORECASE)
     if not match:
         return []
     values = PERCENT_RE.findall(match.group(1))
     return [float(item) for item in values]
+
+
+def _parse_kp_blocks(section_text: str, forecast_days: Sequence[date]) -> dict[date, list[dict[str, Any]]]:
+    compact = _compress_whitespace(section_text) or ""
+    out: dict[date, list[dict[str, Any]]] = {day_key: [] for day_key in forecast_days[:3]}
+    for match in re.finditer(r"(\d{2}-\d{2}UT)\s+(.*?)(?=\d{2}-\d{2}UT|Rationale:|$)", compact):
+        block = match.group(1)
+        cells = SWPC_KP_CELL_RE.findall(match.group(2))
+        if not cells:
+            continue
+        for idx, day_key in enumerate(forecast_days[:3]):
+            if idx >= len(cells):
+                break
+            kp_value = _safe_float(cells[idx][0])
+            if kp_value is None:
+                continue
+            g_scale = cells[idx][1] or f"G{_g_from_kp(kp_value)}"
+            out[day_key].append(
+                {
+                    "block": block,
+                    "kp": round(kp_value, 2),
+                    "g_scale": g_scale,
+                }
+            )
+    return out
 
 
 def parse_swpc_three_day_forecast(
@@ -426,29 +451,7 @@ def parse_swpc_three_day_forecast(
     if not forecast_days:
         return []
 
-    kp_blocks_by_day: dict[date, list[dict[str, Any]]] = {day_key: [] for day_key in forecast_days[:3]}
-    for raw_line in geomagnetic_section.splitlines():
-        match = SWPC_KP_BLOCK_RE.match(raw_line.strip())
-        if not match:
-            continue
-        block = match.group(1)
-        cells = SWPC_KP_CELL_RE.findall(match.group(2))
-        if not cells:
-            continue
-        for idx, day_key in enumerate(forecast_days[:3]):
-            if idx >= len(cells):
-                break
-            kp_value = _safe_float(cells[idx][0])
-            if kp_value is None:
-                continue
-            g_scale = cells[idx][1] or f"G{_g_from_kp(kp_value)}"
-            kp_blocks_by_day[day_key].append(
-                {
-                    "block": block,
-                    "kp": round(kp_value, 2),
-                    "g_scale": g_scale,
-                }
-            )
+    kp_blocks_by_day = _parse_kp_blocks(geomagnetic_section, forecast_days)
 
     geomagnetic_rationale = _parse_rationale(geomagnetic_section)
     radiation_rationale = _parse_rationale(radiation_section)
