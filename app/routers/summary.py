@@ -26,6 +26,7 @@ from app.db import (
     handle_pool_timeout,
 )
 from app.db.health import get_health_monitor
+from services.forecast_outlook import ensure_space_forecast_daily, serialize_space_forecast_rows
 from app.utils.auth import require_admin
 
 DEFAULT_TIMEZONE = "America/Chicago"
@@ -2278,6 +2279,11 @@ async def space_forecast_outlook(
     except Exception as exc:  # pragma: no cover - defensive
         return {"ok": False, "error": f"space_forecast_outlook failed: {exc}"}
 
+    try:
+        forecast_daily = serialize_space_forecast_rows(await ensure_space_forecast_daily(conn))
+    except Exception:
+        forecast_daily = []
+
     def iso(ts):
         if isinstance(ts, datetime):
             return ts.astimezone(timezone.utc).isoformat()
@@ -2485,6 +2491,7 @@ async def space_forecast_outlook(
         "confidence": _normalize_confidence(payload.get("confidence") or aurora_confidence) or "medium",
         "summary": _first_str(payload.get("summary"), payload.get("body")),
         "alerts": payload.get("alerts") or [],
+        "forecast_daily": forecast_daily,
         "impacts": _normalize_impacts(impacts_source),
         "flares": _normalize_flares(payload.get("flares")),
         "cmes": _normalize_cmes(payload.get("cme_arrivals")),

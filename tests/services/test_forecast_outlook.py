@@ -12,6 +12,8 @@ if str(ROOT) not in sys.path:
 from services.forecast_outlook import (  # noqa: E402
     build_window_outlook,
     parse_swpc_three_day_forecast,
+    serialize_local_forecast_rows,
+    serialize_space_forecast_rows,
     summarize_local_forecast_days,
 )
 
@@ -246,6 +248,42 @@ Rationale: Active regions may keep a modest flare chance in the outlook.
         self.assertIn("pressure may swing", payload["summary"].lower())
         self.assertIn("pacing and hydration", payload["support_line"].lower())
         self.assertIn("pain", payload["likely_elevated_domains"][0]["explanation"].lower())
+
+    def test_forecast_row_serializers_emit_json_safe_shapes(self) -> None:
+        local_rows = [
+            {
+                "location_key": "zip:78754",
+                "day": date(2026, 3, 19),
+                "issued_at": datetime(2026, 3, 19, 3, 0, tzinfo=UTC),
+                "temp_high_c": 29.4,
+                "temp_low_c": 11.1,
+                "pressure_hpa": None,
+                "updated_at": datetime(2026, 3, 19, 3, 5, tzinfo=UTC),
+            }
+        ]
+        space_rows = [
+            {
+                "forecast_day": date(2026, 3, 19),
+                "issued_at": datetime(2026, 3, 19, 0, 30, tzinfo=UTC),
+                "source_product_ts": datetime(2026, 3, 19, 0, 35, tzinfo=UTC),
+                "kp_max_forecast": 6.33,
+                "g_scale_max": "G2",
+                "flare_watch": True,
+                "cme_watch": False,
+                "solar_wind_watch": True,
+                "updated_at": datetime(2026, 3, 19, 0, 40, tzinfo=UTC),
+            }
+        ]
+
+        local_payload = serialize_local_forecast_rows(local_rows)
+        space_payload = serialize_space_forecast_rows(space_rows)
+
+        self.assertEqual(local_payload[0]["day"], "2026-03-19")
+        self.assertIsNone(local_payload[0]["pressure_hpa"])
+        self.assertEqual(space_payload[0]["forecast_day"], "2026-03-19")
+        self.assertEqual(space_payload[0]["g_scale_max"], "G2")
+        self.assertTrue(space_payload[0]["flare_watch"])
+        self.assertFalse(space_payload[0]["cme_watch"])
 
 
 if __name__ == "__main__":

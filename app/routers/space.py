@@ -38,6 +38,7 @@ from fastapi import APIRouter, Depends
 from psycopg.rows import dict_row
 
 from app.db import get_db
+from services.forecast_outlook import ensure_space_forecast_daily, serialize_space_forecast_rows
 
 import json
 import os
@@ -876,6 +877,11 @@ async def space_forecast_outlook(conn = Depends(get_db)) -> Dict[str, Any]:
     except Exception as exc:
         return {"ok": False, "error": f"outlook query failed: {exc}"}
 
+    try:
+        forecast_daily = serialize_space_forecast_rows(await ensure_space_forecast_daily(conn))
+    except Exception:
+        forecast_daily = []
+
     # ---- Build KP block ----
     kp_now = daily.get("kp_now")
     kp24 = daily.get("kp_max")
@@ -1043,6 +1049,7 @@ async def space_forecast_outlook(conn = Depends(get_db)) -> Dict[str, Any]:
         "cmes": cmes_block,
         "bulletins": bulletins,
         "swpc_text_alerts": swpc_text_alerts,
+        "forecast_daily": forecast_daily,
         "data": {
             "cme_arrivals": arrivals_fmt,
             "sep": sep_block,

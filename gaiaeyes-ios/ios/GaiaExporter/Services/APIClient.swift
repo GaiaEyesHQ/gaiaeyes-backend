@@ -263,6 +263,8 @@ final class APIClient {
             return "data/space_weather.json"
         case "v1/space/forecast/outlook":
             return "data/space_outlook.json"
+        case "v1/users/me/outlook":
+            return "data/user_outlook.json"
         case "v1/space/series", "v1/series":
             let d = extractDays(query)
             // If you publish only a generic series snapshot, change to: return "data/series.json"

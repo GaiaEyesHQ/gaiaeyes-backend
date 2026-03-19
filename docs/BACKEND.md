@@ -36,7 +36,7 @@
 - `GET /v1/space/xray/history`
 - `GET /v1/space/magnetosphere`
 - `GET /v1/space/forecast/summary`
-- `GET /v1/space/forecast/outlook` — consolidated outlook with `kp/bz/sw` **now** fields (from `marts.space_weather_daily`), plus `bulletins` and `swpc_text_alerts` when available.
+- `GET /v1/space/forecast/outlook` — consolidated outlook with `kp/bz/sw` **now** fields (from `marts.space_weather_daily`), plus `bulletins`, `swpc_text_alerts`, and `forecast_daily` from `marts.space_forecast_daily_latest`.
 - `GET /v1/space/forecast/bulletins`
 - `GET /v1/space/alerts/swpc`
 - `GET /v1/space/series` and `GET /v1/series` (legacy alias)
@@ -52,7 +52,7 @@
 ### Local health
 - `GET /v1/local/check`
   - Query: `zip` (preferred) or `lat`,`lon`.
-  - Returns: `weather` (temp/humidity/precip_prob/pressure + 24h deltas when cached), `air` (AQI/category/pollutant from AirNow), `moon` (phase/illum), `where` (resolved coords), `asof`.
+  - Returns: `weather` (temp/humidity/precip_prob/pressure + 24h deltas when cached), `air` (AQI/category/pollutant from AirNow), `moon` (phase/illum), `where` (resolved coords), `asof`, and `forecast_daily` from `marts.local_forecast_daily`.
   - Notes: NOAA NWS requires a User‑Agent (see `WEATHER_UA`). Endpoint may be publicly readable when allowlisted.
 
 ### Subscriptions & entitlements
@@ -108,5 +108,6 @@
 - New: `/v1/hazards/gdacs` and `/v1/hazards/gdacs/full` (GDACS RSS upgrade; includes fires, floods, droughts, etc.).
 - New: `/v1/local/check` aggregates NWS hourly grid, AirNow AQI, and moon phase; supports ZIP or lat/lon; cached snapshots power 24h deltas.
 - New: `/v1/users/me/outlook` builds a user-scoped 24h/72h outlook from normalized local forecast inputs plus the parsed SWPC 3-day bulletin.
-- Updated: `/v1/space/forecast/outlook` now includes real‑time `kp/bz/solar_wind` “now” fields from `marts.space_weather_daily`, and returns `bulletins`/SWPC text when available.
+- Updated: `/v1/local/check` now also returns the next 3 daily local forecast rows from `marts.local_forecast_daily`.
+- Updated: `/v1/space/forecast/outlook` now includes real‑time `kp/bz/solar_wind` “now” fields from `marts.space_weather_daily`, returns `bulletins`/SWPC text when available, and carries `forecast_daily` rows from `marts.space_forecast_daily_latest`.
 - Deprecated: legacy root endpoints `/gdacs`, `/brief`, `/kp_schumann` in favor of `/v1/hazards/*` namespace.

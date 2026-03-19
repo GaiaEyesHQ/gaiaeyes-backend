@@ -962,6 +962,73 @@ async def ensure_space_forecast_daily(conn) -> list[dict[str, Any]]:
     return existing
 
 
+def _serialize_iso_value(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.astimezone(UTC).isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return value
+
+
+def serialize_local_forecast_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
+    for row in rows:
+        payload.append(
+            {
+                "location_key": row.get("location_key"),
+                "day": _serialize_iso_value(row.get("day")),
+                "source": row.get("source"),
+                "issued_at": _serialize_iso_value(row.get("issued_at")),
+                "location_zip": row.get("location_zip"),
+                "lat": _safe_float(row.get("lat")),
+                "lon": _safe_float(row.get("lon")),
+                "temp_high_c": _safe_float(row.get("temp_high_c")),
+                "temp_low_c": _safe_float(row.get("temp_low_c")),
+                "temp_delta_from_prior_day_c": _safe_float(row.get("temp_delta_from_prior_day_c")),
+                "pressure_hpa": _safe_float(row.get("pressure_hpa")),
+                "pressure_delta_from_prior_day_hpa": _safe_float(row.get("pressure_delta_from_prior_day_hpa")),
+                "humidity_avg": _safe_float(row.get("humidity_avg")),
+                "precip_probability": _safe_float(row.get("precip_probability")),
+                "wind_speed": _safe_float(row.get("wind_speed")),
+                "wind_gust": _safe_float(row.get("wind_gust")),
+                "condition_code": row.get("condition_code"),
+                "condition_summary": row.get("condition_summary"),
+                "aqi_forecast": _safe_float(row.get("aqi_forecast")),
+                "updated_at": _serialize_iso_value(row.get("updated_at")),
+            }
+        )
+    return payload
+
+
+def serialize_space_forecast_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
+    for row in rows:
+        payload.append(
+            {
+                "forecast_day": _serialize_iso_value(row.get("forecast_day")),
+                "issued_at": _serialize_iso_value(row.get("issued_at")),
+                "source_product_ts": _serialize_iso_value(row.get("source_product_ts")),
+                "source_src": row.get("source_src"),
+                "kp_max_forecast": _safe_float(row.get("kp_max_forecast")),
+                "g_scale_max": row.get("g_scale_max"),
+                "s1_or_greater_pct": _safe_float(row.get("s1_or_greater_pct")),
+                "r1_r2_pct": _safe_float(row.get("r1_r2_pct")),
+                "r3_or_greater_pct": _safe_float(row.get("r3_or_greater_pct")),
+                "geomagnetic_rationale": row.get("geomagnetic_rationale"),
+                "radiation_rationale": row.get("radiation_rationale"),
+                "radio_rationale": row.get("radio_rationale"),
+                "flare_watch": bool(row.get("flare_watch")),
+                "cme_watch": bool(row.get("cme_watch")),
+                "solar_wind_watch": bool(row.get("solar_wind_watch")),
+                "geomagnetic_severity_bucket": row.get("geomagnetic_severity_bucket"),
+                "radiation_severity_bucket": row.get("radiation_severity_bucket"),
+                "radio_severity_bucket": row.get("radio_severity_bucket"),
+                "updated_at": _serialize_iso_value(row.get("updated_at")),
+            }
+        )
+    return payload
+
+
 async def fetch_latest_gauges(conn, user_id: str) -> dict[str, float | None]:
     async with conn.cursor(**_cursor_kwargs()) as cur:
         await cur.execute(

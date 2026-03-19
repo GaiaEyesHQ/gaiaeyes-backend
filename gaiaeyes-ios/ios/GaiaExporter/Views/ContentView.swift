@@ -62,11 +62,12 @@ private struct LocalCheckResponse: Decodable {
     let weather: LocalWeather?
     let air: LocalAir?
     let moon: LocalMoon?
+    let forecastDaily: [LocalForecastDay]?
     let asof: String?
     let error: String?
 
     enum CodingKeys: String, CodingKey {
-        case ok, weather, air, moon, asof, error
+        case ok, weather, air, moon, asof, error, forecastDaily
         case whereInfo = "where"
     }
 }
@@ -175,6 +176,31 @@ private struct LocalMoon: Decodable {
     let phase: String?
     let illum: Double?
     let cycle: Double?
+}
+
+private struct LocalForecastDay: Codable, Hashable, Identifiable {
+    let locationKey: String?
+    let day: String?
+    let source: String?
+    let issuedAt: String?
+    let locationZip: String?
+    let lat: Double?
+    let lon: Double?
+    let tempHighC: Double?
+    let tempLowC: Double?
+    let tempDeltaFromPriorDayC: Double?
+    let pressureHpa: Double?
+    let pressureDeltaFromPriorDayHpa: Double?
+    let humidityAvg: Double?
+    let precipProbability: Double?
+    let windSpeed: Double?
+    let windGust: Double?
+    let conditionCode: String?
+    let conditionSummary: String?
+    let aqiForecast: Double?
+    let updatedAt: String?
+
+    var id: String { "\(locationKey ?? "local")|\(day ?? "day")" }
 }
 
 private struct MagnetosphereResponse: Codable {
@@ -946,6 +972,7 @@ private struct SpaceForecastOutlook: Codable {
     let cmes: OutlookCmes?
     let bulletins: [String: SwpcBulletin]?
     let swpcTextAlerts: [SwpcTextAlert]?
+    let forecastDaily: [SpaceForecastDay]?
     let data: OutlookData?
 
     private struct DynamicKey: CodingKey {
@@ -986,6 +1013,7 @@ private struct SpaceForecastOutlook: Codable {
         var cmes: OutlookCmes? = nil
         var bulletins: [String: SwpcBulletin]? = nil
         var swpcTextAlerts: [SwpcTextAlert]? = nil
+        var forecastDaily: [SpaceForecastDay]? = nil
         var data: OutlookData? = nil
 
         for key in container.allKeys {
@@ -1020,6 +1048,8 @@ private struct SpaceForecastOutlook: Codable {
                 bulletins = try? container.decode([String: SwpcBulletin].self, forKey: key)
             case "swpc_text_alerts":
                 swpcTextAlerts = try? container.decode([SwpcTextAlert].self, forKey: key)
+            case "forecast_daily":
+                forecastDaily = try? container.decode([SpaceForecastDay].self, forKey: key)
             case "data":
                 data = try? container.decode(OutlookData.self, forKey: key)
             default:
@@ -1046,6 +1076,7 @@ private struct SpaceForecastOutlook: Codable {
         self.cmes = cmes
         self.bulletins = bulletins
         self.swpcTextAlerts = swpcTextAlerts
+        self.forecastDaily = forecastDaily
         self.data = data
     }
 
@@ -1096,6 +1127,9 @@ private struct SpaceForecastOutlook: Codable {
         if let swpcTextAlerts, let key = DynamicKey(stringValue: "swpc_text_alerts") {
             try container.encode(swpcTextAlerts, forKey: key)
         }
+        if let forecastDaily, let key = DynamicKey(stringValue: "forecast_daily") {
+            try container.encode(forecastDaily, forKey: key)
+        }
         if let data, let key = DynamicKey(stringValue: "data") {
             try container.encode(data, forKey: key)
         }
@@ -1104,6 +1138,85 @@ private struct SpaceForecastOutlook: Codable {
             try container.encode(section.entries, forKey: key)
         }
     }
+}
+
+private struct SpaceForecastDay: Codable, Hashable, Identifiable {
+    let forecastDay: String?
+    let issuedAt: String?
+    let sourceProductTs: String?
+    let sourceSrc: String?
+    let kpMaxForecast: Double?
+    let gScaleMax: String?
+    let s1OrGreaterPct: Double?
+    let r1R2Pct: Double?
+    let r3OrGreaterPct: Double?
+    let geomagneticRationale: String?
+    let radiationRationale: String?
+    let radioRationale: String?
+    let flareWatch: Bool?
+    let cmeWatch: Bool?
+    let solarWindWatch: Bool?
+    let geomagneticSeverityBucket: String?
+    let radiationSeverityBucket: String?
+    let radioSeverityBucket: String?
+    let updatedAt: String?
+
+    var id: String { forecastDay ?? "forecast-day" }
+}
+
+private struct UserOutlookDomain: Codable, Hashable, Identifiable {
+    let key: String
+    let label: String?
+    let likelihood: String?
+    let currentGauge: Double?
+    let explanation: String?
+    let topDriverKey: String?
+    let topDriverLabel: String?
+
+    var id: String { key }
+}
+
+private struct UserOutlookDriver: Codable, Hashable, Identifiable {
+    let key: String
+    let label: String?
+    let severity: String?
+    let value: Double?
+    let unit: String?
+    let day: String?
+    let detail: String?
+    let signalKey: String?
+
+    var id: String { key }
+}
+
+private struct UserOutlookWindow: Codable, Hashable {
+    let windowHours: Int?
+    let likelyElevatedDomains: [UserOutlookDomain]?
+    let topDrivers: [UserOutlookDriver]?
+    let summary: String?
+    let supportLine: String?
+}
+
+private struct UserOutlookDataReady: Codable, Hashable {
+    let locationFound: Bool?
+    let localForecastDaily: Bool?
+    let localForecastDays: Int?
+    let spaceForecastDaily: Bool?
+    let spaceForecastDays: Int?
+    let next24h: Bool?
+    let next72h: Bool?
+    let next7d: Bool?
+}
+
+private struct UserForecastOutlook: Codable {
+    let ok: Bool?
+    let generatedAt: String?
+    let availableWindows: [String]?
+    let forecastDataReady: UserOutlookDataReady?
+    let next24h: UserOutlookWindow?
+    let next72h: UserOutlookWindow?
+    let next7d: UserOutlookWindow?
+    let error: String?
 }
 
 private enum SpaceDetailSection: Hashable {
@@ -1272,6 +1385,7 @@ struct ContentView: View {
     @AppStorage("symptom_codes_cache_json") private var symptomCodesCacheJSON: String = ""
     @AppStorage("space_visuals_cache_json") private var spaceVisualsCacheJSON: String = ""
     @AppStorage("space_outlook_cache_json") private var spaceOutlookCacheJSON: String = ""
+    @AppStorage("user_outlook_cache_json") private var userOutlookCacheJSON: String = ""
     @Environment(\.scenePhase) private var scenePhase
     @State private var showConnections: Bool = false
     @State private var expandLog: Bool = false
@@ -1308,6 +1422,10 @@ struct ContentView: View {
     @State private var lastKnownSpaceVisuals: SpaceVisualsPayload? = nil
     @State private var spaceOutlook: SpaceForecastOutlook? = nil
     @State private var lastKnownSpaceOutlook: SpaceForecastOutlook? = nil
+    @State private var userOutlook: UserForecastOutlook? = nil
+    @State private var lastKnownUserOutlook: UserForecastOutlook? = nil
+    @State private var userOutlookLoading: Bool = false
+    @State private var userOutlookError: String? = nil
 
     @AppStorage("local_health_zip") private var localHealthZip: String = "78209"
     @AppStorage("did_location_onboarding") private var didLocationOnboarding: Bool = false
@@ -1399,6 +1517,7 @@ struct ContentView: View {
     }
 
     private enum InsightsRoute: String, Hashable, Identifiable {
+        case yourOutlook
         case spaceWeather
         case localConditions
         case yourPatterns
@@ -1734,6 +1853,13 @@ struct ContentView: View {
         return try? dec.decode(SpaceForecastOutlook.self, from: data)
     }
 
+    private func decodeUserOutlook(from json: String) -> UserForecastOutlook? {
+        guard !json.isEmpty, let data = json.data(using: .utf8) else { return nil }
+        let dec = JSONDecoder()
+        dec.keyDecodingStrategy = .convertFromSnakeCase
+        return try? dec.decode(UserForecastOutlook.self, from: data)
+    }
+
     private static var mediaBaseURL: URL? {
         if let raw = Bundle.main.object(forInfoDictionaryKey: "MEDIA_BASE_URL") as? String {
             let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1808,6 +1934,15 @@ struct ContentView: View {
         }
     }
 
+    @MainActor
+    private func applyUserOutlook(_ payload: UserForecastOutlook) {
+        userOutlook = payload
+        lastKnownUserOutlook = payload
+        if let encoded = try? JSONEncoder().encode(payload), let json = String(data: encoded, encoding: .utf8) {
+            userOutlookCacheJSON = json
+        }
+    }
+
     private func fetchSpaceVisuals() async {
         if let payload = await state.fetchSpaceVisuals() {
             await MainActor.run { applySpaceVisuals(payload) }
@@ -1841,6 +1976,44 @@ struct ContentView: View {
                 }
             } catch {
                 appLog("[UI] space outlook fallback decode failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func fetchUserOutlook() async {
+        let backendAvailable = await MainActor.run { state.backendDBAvailable }
+        guard backendAvailable else {
+            if let cached = decodeUserOutlook(from: userOutlookCacheJSON) {
+                await MainActor.run { lastKnownUserOutlook = cached }
+            }
+            return
+        }
+        await MainActor.run {
+            userOutlookLoading = true
+            userOutlookError = nil
+        }
+        let api = state.apiWithAuth()
+        do {
+            let payload: UserForecastOutlook = try await api.getJSON("v1/users/me/outlook", as: UserForecastOutlook.self, perRequestTimeout: 30)
+            await MainActor.run {
+                if payload.ok == false {
+                    userOutlookError = payload.error ?? "Outlook unavailable"
+                } else {
+                    applyUserOutlook(payload)
+                }
+                userOutlookLoading = false
+            }
+        } catch is CancellationError {
+            await MainActor.run { userOutlookLoading = false }
+        } catch let uerr as URLError where uerr.code == .cancelled {
+            await MainActor.run { userOutlookLoading = false }
+        } catch {
+            if let cached = decodeUserOutlook(from: userOutlookCacheJSON) {
+                await MainActor.run { lastKnownUserOutlook = cached }
+            }
+            await MainActor.run {
+                userOutlookError = error.localizedDescription
+                userOutlookLoading = false
             }
         }
     }
@@ -3294,10 +3467,11 @@ struct ContentView: View {
         async let featuresTask: Void = fetchFeaturesToday(trigger: .initial)
         async let forecastTask: Void = fetchForecastSummary()
         async let outlookTask: Void = fetchSpaceOutlook()
+        async let userOutlookTask: Void = fetchUserOutlook()
         async let symptomsTask: Void = fetchSymptoms(api: api)
         async let localTask: Void = fetchLocalHealth()
         async let magnetosphereTask: Void = fetchMagnetosphere()
-        _ = await (featuresTask, forecastTask, outlookTask, symptomsTask, localTask, magnetosphereTask)
+        _ = await (featuresTask, forecastTask, outlookTask, userOutlookTask, symptomsTask, localTask, magnetosphereTask)
 
         if hazardsBrief == nil {
             await fetchHazardsBrief()
@@ -4893,12 +5067,15 @@ struct ContentView: View {
     private struct InsightsHubView: View {
         let current: FeaturesToday?
         let outlook: SpaceForecastOutlook?
+        let userOutlook: UserForecastOutlook?
         let updatedText: String?
         let usingYesterdayFallback: Bool
         let localHealthZip: String
         let localHealth: LocalCheckResponse?
         let localHealthLoading: Bool
         let localHealthError: String?
+        let userOutlookLoading: Bool
+        let userOutlookError: String?
         let useGPS: Bool
         let localInsightsEnabled: Bool
         let dashboardDrivers: [DashboardDriverItem]
@@ -5138,6 +5315,60 @@ struct ContentView: View {
             .buttonStyle(.plain)
         }
 
+        private var yourOutlookCard: some View {
+            let next24 = userOutlook?.next24h
+            let next72 = userOutlook?.next72h
+            let available = userOutlook?.availableWindows ?? []
+            let primaryWindow = next24 ?? next72
+            let topDomain24 = next24?.likelyElevatedDomains?.first
+            let topDomain72 = next72?.likelyElevatedDomains?.first
+            let primaryDriver = primaryWindow?.topDrivers?.first
+            let pillText: String
+            let pillSeverity: StatusPill.Severity
+            if userOutlookLoading {
+                pillText = "Loading"
+                pillSeverity = .warn
+            } else if let likelihood = topDomain24?.likelihood ?? topDomain72?.likelihood {
+                pillText = likelihood.capitalized
+                pillSeverity = severity(for: likelihood)
+            } else if !available.isEmpty {
+                pillText = "Ready"
+                pillSeverity = .ok
+            } else {
+                pillText = "Pending"
+                pillSeverity = .warn
+            }
+            let status: String
+            if let error = ContentView.scrubError(userOutlookError) {
+                status = error
+            } else if userOutlookLoading {
+                status = "Building your next 24 to 72 hour outlook from your patterns and live forecast inputs."
+            } else if userOutlook?.forecastDataReady?.locationFound == false {
+                status = "Set your location to unlock a personal short-range outlook."
+            } else if let summary = primaryWindow?.summary, !summary.isEmpty {
+                status = summary
+            } else {
+                status = "Forecast inputs are syncing before the personal outlook appears."
+            }
+
+            return NavigationLink(value: InsightsRoute.yourOutlook) {
+                HubCard(
+                    title: "Your Outlook",
+                    icon: "calendar.badge.clock",
+                    status: status,
+                    pillText: pillText,
+                    severity: pillSeverity,
+                    metrics: [
+                        HubMetric(label: "24h", value: topDomain24?.label ?? "—", tint: GaugePalette.low),
+                        HubMetric(label: "72h", value: topDomain72?.label ?? "—", tint: GaugePalette.mild),
+                        HubMetric(label: "Driver", value: primaryDriver?.label ?? "—", tint: GaugePalette.elevated),
+                    ],
+                    isExplore: false
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
         private var yourPatternsCard: some View {
             NavigationLink(value: InsightsRoute.yourPatterns) {
                 HubCard(
@@ -5359,6 +5590,7 @@ struct ContentView: View {
 
                         spaceWeatherCard
                         localConditionsCard
+                        yourOutlookCard
                         yourPatternsCard
                         magnetosphereCard
                         schumannCard
@@ -5383,6 +5615,249 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Insights")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private struct YourOutlookView: View {
+        let payload: UserForecastOutlook?
+        let isLoading: Bool
+        let error: String?
+        let onRefresh: () -> Void
+
+        private let columns = [
+            GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 10, alignment: .topLeading)
+        ]
+
+        private func severity(_ raw: String?) -> StatusPill.Severity {
+            LocalConditionsStyle.pillSeverity(raw)
+        }
+
+        private func formatUpdate(_ iso: String?) -> String? {
+            guard let iso else { return nil }
+            let fmt = ISO8601DateFormatter()
+            guard let date = fmt.date(from: iso) else { return nil }
+            let out = DateFormatter()
+            out.dateStyle = .medium
+            out.timeStyle = .short
+            return out.string(from: date)
+        }
+
+        private func driverValue(_ driver: UserOutlookDriver) -> String {
+            if let value = driver.value {
+                if let unit = driver.unit, !unit.isEmpty {
+                    return "\(String(format: "%.1f", value)) \(unit)"
+                }
+                return String(format: "%.1f", value)
+            }
+            if let day = driver.day, !day.isEmpty {
+                return day
+            }
+            return (driver.severity ?? "watch").capitalized
+        }
+
+        private func availabilityText(_ raw: String) -> String {
+            switch raw {
+            case "next_24h":
+                return "24h"
+            case "next_72h":
+                return "72h"
+            case "next_7d":
+                return "7d"
+            default:
+                return raw
+            }
+        }
+
+        private func windowTitle(_ hours: Int?) -> String {
+            switch hours {
+            case 24:
+                return "Next 24 Hours"
+            case 72:
+                return "Next 72 Hours"
+            default:
+                return "Outlook"
+            }
+        }
+
+        @ViewBuilder
+        private func domainCard(_ domain: UserOutlookDomain) -> some View {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    Text(domain.label ?? domain.key.replacingOccurrences(of: "_", with: " ").capitalized)
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    StatusPill((domain.likelihood ?? "watch").capitalized, severity: severity(domain.likelihood))
+                }
+                if let gauge = domain.currentGauge {
+                    Text("Current gauge \(Int(gauge.rounded()))")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                if let explanation = domain.explanation, !explanation.isEmpty {
+                    Text(explanation)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+            )
+        }
+
+        @ViewBuilder
+        private func windowSection(_ window: UserOutlookWindow?) -> some View {
+            if let window {
+                let drivers = window.topDrivers ?? []
+                let domains = window.likelyElevatedDomains ?? []
+
+                LocalConditionsSurfaceCard(title: windowTitle(window.windowHours), icon: "sparkles.rectangle.stack.fill") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let summary = window.summary, !summary.isEmpty {
+                            Text(summary)
+                                .font(.subheadline)
+                        }
+
+                        if let primary = drivers.first {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(alignment: .top, spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("Primary driver")
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundColor(.secondary)
+                                        Text(primary.label ?? primary.key.replacingOccurrences(of: "_", with: " ").capitalized)
+                                            .font(.headline)
+                                    }
+                                    Spacer()
+                                    StatusPill((primary.severity ?? "watch").capitalized, severity: severity(primary.severity))
+                                }
+                                if let detail = primary.detail, !detail.isEmpty {
+                                    Text(detail)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+
+                        if drivers.count > 1 {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Supporting drivers")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundColor(.secondary)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 10) {
+                                        ForEach(Array(drivers.dropFirst())) { driver in
+                                            LocalConditionsValueChip(
+                                                label: driver.label ?? driver.key.capitalized,
+                                                value: driverValue(driver),
+                                                tint: GaugePalette.zoneColor(driver.severity)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if !domains.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Likely elevated domains")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundColor(.secondary)
+                                LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                                    ForEach(domains) { domain in
+                                        domainCard(domain)
+                                    }
+                                }
+                            }
+                        }
+
+                        if let supportLine = window.supportLine, !supportLine.isEmpty {
+                            Text(supportLine)
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                                .padding(.top, 2)
+                        }
+                    }
+                }
+            }
+        }
+
+        var body: some View {
+            let cleanError = ContentView.scrubError(error)
+
+            ZStack {
+                Color.black.opacity(0.97).ignoresSafeArea()
+
+                ScrollView {
+                    LazyVStack(spacing: 16) {
+                        LocalConditionsSurfaceCard(title: "Near-Future Outlook", icon: "calendar.badge.clock") {
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Next 24-72 hours")
+                                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                                    Text("Deterministic guidance from your recent patterns, current gauges, and real local plus SWPC forecast inputs.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    if let updated = formatUpdate(payload?.generatedAt) {
+                                        Text("Updated \(updated)")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                if isLoading { ProgressView().scaleEffect(0.85) }
+                                Button("Refresh") { onRefresh() }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                            }
+
+                            if let cleanError, !cleanError.isEmpty {
+                                Text(cleanError)
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                            }
+
+                            if let windows = payload?.availableWindows, !windows.isEmpty {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 10) {
+                                        ForEach(windows, id: \.self) { item in
+                                            LocalConditionsValueChip(
+                                                label: "Window",
+                                                value: availabilityText(item),
+                                                tint: GaugePalette.low
+                                            )
+                                        }
+                                    }
+                                }
+                            } else if !isLoading && cleanError == nil {
+                                Text("Forecast inputs are still syncing for a personal short-range outlook.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        windowSection(payload?.next24h)
+                        windowSection(payload?.next72h)
+
+                        if payload?.forecastDataReady?.next7d != true {
+                            LocalConditionsSurfaceCard(title: "7-Day Outlook", icon: "calendar") {
+                                Text("7-day outlook coming soon. It stays hidden until the input layer is stable enough to support it cleanly.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .navigationTitle("Your Outlook")
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -5696,6 +6171,10 @@ struct ContentView: View {
             return "low"
         }
 
+        private func severity(_ raw: String?) -> StatusPill.Severity {
+            LocalConditionsStyle.pillSeverity(raw)
+        }
+
         private var metrics: SpaceWeatherCardMetrics? {
             current.map { SpaceWeatherCardMetrics(current: $0, outlook: outlook, series: series) }
         }
@@ -5774,6 +6253,32 @@ struct ContentView: View {
                 }
             }
             return Array(lines.prefix(4))
+        }
+
+        private func forecastDayLabel(_ iso: String?) -> String {
+            guard let iso else { return "Day" }
+            let fmt = ISO8601DateFormatter()
+            if let date = fmt.date(from: iso) {
+                let out = DateFormatter()
+                out.dateFormat = "EEE, MMM d"
+                return out.string(from: date)
+            }
+            let simple = DateFormatter()
+            simple.dateFormat = "yyyy-MM-dd"
+            if let date = simple.date(from: iso) {
+                let out = DateFormatter()
+                out.dateFormat = "EEE, MMM d"
+                return out.string(from: date)
+            }
+            return iso
+        }
+
+        private func watchFlags(for day: SpaceForecastDay) -> [String] {
+            var flags: [String] = []
+            if day.cmeWatch == true { flags.append("CME watch") }
+            if day.flareWatch == true { flags.append("Flare watch") }
+            if day.solarWindWatch == true { flags.append("Solar wind watch") }
+            return flags
         }
 
         var body: some View {
@@ -5900,6 +6405,79 @@ struct ContentView: View {
                                             .font(.subheadline)
                                             .foregroundColor(.secondary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                }
+                            }
+                        }
+
+                        if let forecastDays = outlook?.forecastDaily, !forecastDays.isEmpty {
+                            LocalConditionsSurfaceCard(title: "3-Day Space Forecast", icon: "calendar") {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    ForEach(forecastDays) { day in
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            HStack(alignment: .top, spacing: 12) {
+                                                VStack(alignment: .leading, spacing: 3) {
+                                                    Text(forecastDayLabel(day.forecastDay))
+                                                        .font(.headline)
+                                                    Text(day.gScaleMax ?? "Geomagnetic outlook")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                                Spacer()
+                                                StatusPill(
+                                                    (day.geomagneticSeverityBucket ?? "mild").capitalized,
+                                                    severity: severity(day.geomagneticSeverityBucket)
+                                                )
+                                            }
+
+                                            ScrollView(.horizontal, showsIndicators: false) {
+                                                HStack(spacing: 10) {
+                                                    LocalConditionsValueChip(
+                                                        label: "Kp Max",
+                                                        value: day.kpMaxForecast.map { String(format: "%.1f", $0) } ?? "—",
+                                                        tint: GaugePalette.low
+                                                    )
+                                                    LocalConditionsValueChip(
+                                                        label: "G-Scale",
+                                                        value: day.gScaleMax ?? "—",
+                                                        tint: GaugePalette.elevated
+                                                    )
+                                                    LocalConditionsValueChip(
+                                                        label: "S1+",
+                                                        value: day.s1OrGreaterPct.map { String(format: "%.0f%%", $0) } ?? "—",
+                                                        tint: GaugePalette.mild
+                                                    )
+                                                    LocalConditionsValueChip(
+                                                        label: "R1-R2",
+                                                        value: day.r1R2Pct.map { String(format: "%.0f%%", $0) } ?? "—",
+                                                        tint: GaugePalette.elevated
+                                                    )
+                                                    LocalConditionsValueChip(
+                                                        label: "R3+",
+                                                        value: day.r3OrGreaterPct.map { String(format: "%.0f%%", $0) } ?? "—",
+                                                        tint: GaugePalette.high
+                                                    )
+                                                }
+                                            }
+
+                                            let flags = watchFlags(for: day)
+                                            if !flags.isEmpty {
+                                                Text(flags.joined(separator: " · "))
+                                                    .font(.caption2.weight(.semibold))
+                                                    .foregroundColor(.secondary)
+                                            }
+
+                                            if let rationale = cleanedOutlookLine(day.geomagneticRationale), !rationale.isEmpty {
+                                                Text(rationale)
+                                                    .font(.caption)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                        .padding(.bottom, day.id == forecastDays.last?.id ? 0 : 8)
+
+                                        if day.id != forecastDays.last?.id {
+                                            Divider().overlay(Color.white.opacity(0.08))
+                                        }
                                     }
                                 }
                             }
@@ -6942,6 +7520,11 @@ struct ContentView: View {
                     lastKnownSpaceOutlook = cached
                     appLog("[UI] preloaded space outlook from persisted snapshot")
                 }
+                if userOutlook == nil, let cached = decodeUserOutlook(from: userOutlookCacheJSON) {
+                    userOutlook = cached
+                    lastKnownUserOutlook = cached
+                    appLog("[UI] preloaded user outlook from persisted snapshot")
+                }
                 if dashboardPayload == nil, let cached = decodeDashboardPayload(from: dashboardPayloadCacheJSON) {
                     dashboardPayload = cached
                     if let g = cached.gauges {
@@ -6983,6 +7566,14 @@ struct ContentView: View {
                 if spaceOutlook == nil {
                     spaceOutlook = decoded
                     appLog("[UI] space outlook updated from cache change")
+                }
+            }
+            .onChange(of: userOutlookCacheJSON, initial: false) { oldValue, newValue in
+                guard newValue != oldValue, !newValue.isEmpty, let decoded = decodeUserOutlook(from: newValue) else { return }
+                lastKnownUserOutlook = decoded
+                if userOutlook == nil {
+                    userOutlook = decoded
+                    appLog("[UI] user outlook updated from cache change")
                 }
             }
             .onChange(of: dashboardPayloadCacheJSON, initial: false) { oldValue, newValue in
@@ -7136,6 +7727,7 @@ struct ContentView: View {
             let updatedText = current?.updatedAt.flatMap { formatUpdated($0) }
             let seriesDetail = series ?? lastKnownSeries
             let resolvedOutlook = spaceOutlook ?? lastKnownSpaceOutlook
+            let resolvedUserOutlook = userOutlook ?? lastKnownUserOutlook
             let symptomPoints = symptomSparkPoints()
             let symptomSummary = topSymptomSummary()
             let symptomHighlightList = symptomHighlights()
@@ -7144,12 +7736,15 @@ struct ContentView: View {
                 InsightsHubView(
                     current: current,
                     outlook: resolvedOutlook,
+                    userOutlook: resolvedUserOutlook,
                     updatedText: updatedText,
                     usingYesterdayFallback: usingYesterdayFallback,
                     localHealthZip: localHealthZip,
                     localHealth: localHealth,
                     localHealthLoading: localHealthLoading,
                     localHealthError: localHealthError,
+                    userOutlookLoading: userOutlookLoading,
+                    userOutlookError: userOutlookError,
                     useGPS: profileUseGPS,
                     localInsightsEnabled: profileLocalInsightsEnabled,
                     dashboardDrivers: dashboardPayload?.drivers ?? [],
@@ -7173,6 +7768,18 @@ struct ContentView: View {
                 )
                 .navigationDestination(for: InsightsRoute.self) { route in
                     switch route {
+                    case .yourOutlook:
+                        YourOutlookView(
+                            payload: resolvedUserOutlook,
+                            isLoading: userOutlookLoading,
+                            error: userOutlookError,
+                            onRefresh: { Task { await fetchUserOutlook() } }
+                        )
+                        .task {
+                            if userOutlook == nil && !userOutlookLoading {
+                                await fetchUserOutlook()
+                            }
+                        }
                     case .spaceWeather:
                         InsightsSpaceWeatherView(
                             current: current,
@@ -10000,6 +10607,30 @@ struct ContentView: View {
             return resolvedZip.isEmpty ? "ZIP not set" : "ZIP \(resolvedZip)"
         }
 
+        private func forecastDayLabel(_ iso: String?) -> String {
+            guard let iso else { return "Day" }
+            let fmt = ISO8601DateFormatter()
+            if let date = fmt.date(from: iso) {
+                let out = DateFormatter()
+                out.dateFormat = "EEE, MMM d"
+                return out.string(from: date)
+            }
+            let simple = DateFormatter()
+            simple.dateFormat = "yyyy-MM-dd"
+            if let date = simple.date(from: iso) {
+                let out = DateFormatter()
+                out.dateFormat = "EEE, MMM d"
+                return out.string(from: date)
+            }
+            return iso
+        }
+
+        private func forecastTempRange(_ day: LocalForecastDay) -> String {
+            let high = LocalConditionsFormatting.formatTempMetric(day.tempHighC)
+            let low = LocalConditionsFormatting.formatTempMetric(day.tempLowC)
+            return "\(high) / \(low)"
+        }
+
         var body: some View {
             let weather = snapshot?.weather
             let air = snapshot?.air
@@ -10124,6 +10755,87 @@ struct ContentView: View {
                                 )
                             }
                             LocalConditionsStatusStrip(status: airStatus)
+                        }
+
+                        if let forecastDays = snapshot?.forecastDaily, !forecastDays.isEmpty {
+                            LocalConditionsSurfaceCard(title: "3-Day Forecast", icon: "calendar") {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    ForEach(forecastDays) { day in
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            HStack(alignment: .top, spacing: 12) {
+                                                VStack(alignment: .leading, spacing: 3) {
+                                                    Text(forecastDayLabel(day.day))
+                                                        .font(.headline)
+                                                    Text(day.conditionSummary ?? "Forecast")
+                                                        .font(.caption)
+                                                        .foregroundColor(.secondary)
+                                                }
+                                                Spacer()
+                                                VStack(alignment: .trailing, spacing: 6) {
+                                                    Text(forecastTempRange(day))
+                                                        .font(.subheadline.weight(.semibold))
+                                                    if let tempDelta = day.tempDeltaFromPriorDayC {
+                                                        Text("\(String(format: "%+.1f", tempDelta))°C vs prior day")
+                                                            .font(.caption2)
+                                                            .foregroundColor(.secondary)
+                                                    }
+                                                }
+                                            }
+
+                                            ScrollView(.horizontal, showsIndicators: false) {
+                                                HStack(spacing: 10) {
+                                                    LocalConditionsValueChip(
+                                                        label: "Humidity",
+                                                        value: LocalConditionsFormatting.formatPercent(day.humidityAvg),
+                                                        tint: GaugePalette.low
+                                                    )
+                                                    LocalConditionsValueChip(
+                                                        label: "Precip",
+                                                        value: LocalConditionsFormatting.formatPercent(day.precipProbability),
+                                                        tint: GaugePalette.mild
+                                                    )
+                                                    LocalConditionsValueChip(
+                                                        label: "Wind",
+                                                        value: day.windSpeed.map { String(format: "%.1f m/s", $0) } ?? "—",
+                                                        tint: GaugePalette.elevated
+                                                    )
+                                                    if let gust = day.windGust {
+                                                        LocalConditionsValueChip(
+                                                            label: "Gust",
+                                                            value: String(format: "%.1f m/s", gust),
+                                                            tint: GaugePalette.elevated
+                                                        )
+                                                    }
+                                                    LocalConditionsValueChip(
+                                                        label: "Pressure",
+                                                        value: day.pressureHpa.map { String(format: "%.1f hPa", $0) } ?? "Unavailable",
+                                                        tint: GaugePalette.zoneColor(day.pressureHpa == nil ? "mild" : "low")
+                                                    )
+                                                    if let pressureDelta = day.pressureDeltaFromPriorDayHpa {
+                                                        LocalConditionsValueChip(
+                                                            label: "Pressure Δ",
+                                                            value: String(format: "%+.1f hPa", pressureDelta),
+                                                            tint: GaugePalette.zoneColor(abs(pressureDelta) >= 6 ? "elevated" : "low")
+                                                        )
+                                                    }
+                                                    if let aqiForecast = day.aqiForecast {
+                                                        LocalConditionsValueChip(
+                                                            label: "AQI",
+                                                            value: String(format: "%.0f", aqiForecast),
+                                                            tint: GaugePalette.mild
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        .padding(.bottom, day.id == forecastDays.last?.id ? 0 : 8)
+
+                                        if day.id != forecastDays.last?.id {
+                                            Divider().overlay(Color.white.opacity(0.08))
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         LocalConditionsSurfaceCard(title: "Moon", icon: "moon.stars.fill") {
