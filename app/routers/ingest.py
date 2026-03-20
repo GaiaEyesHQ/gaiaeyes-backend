@@ -47,8 +47,12 @@ _refresh_registry = _summary_module._refresh_registry
 _refresh_task_factory = _summary_module._refresh_task_factory
 
 
-async def _execute_refresh(user_id: str, day_local: date) -> None:
-    await _summary_module._execute_mart_refresh(user_id, day_local)
+async def _execute_refresh(
+    user_id: str,
+    day_local: date,
+    tz_name: str = DEFAULT_TIMEZONE,
+) -> None:
+    await _summary_module._execute_mart_refresh(user_id, day_local, tz_name)
 
 
 class BatchInsertError(Exception):
@@ -127,7 +131,7 @@ async def _drain_backlog(pool) -> None:
             if inserted > 0 and refresh_user and not REFRESH_DISABLED:
                 tz_resolved, tzinfo = _resolve_timezone(tz_name)
                 day_local = _today_local(tzinfo)
-                scheduled_refresh = await _maybe_schedule_refresh(refresh_user, day_local, inserted)
+                scheduled_refresh = await _maybe_schedule_refresh(refresh_user, day_local, inserted, tz_resolved)
                 logger.info(
                     "[BATCH] drained backlog for user=%s tz=%s inserted=%d skipped=%d",
                     refresh_user,
@@ -274,6 +278,15 @@ def _validate_sample(s: SampleIn) -> tuple[bool, str | None]:
     if t == "hrv_sdnn" and v is not None:
         if v < 0 or v > 600:
             return False, "hrv_sdnn out of range"
+    if t == "respiratory_rate" and v is not None:
+        if v < 4 or v > 80:
+            return False, "respiratory_rate out of range"
+    if t == "resting_heart_rate" and v is not None:
+        if v < 20 or v > 180:
+            return False, "resting_heart_rate out of range"
+    if t == "temperature_deviation" and v is not None:
+        if v < -10 or v > 10:
+            return False, "temperature_deviation out of range"
     return True, None
 
 
@@ -498,7 +511,7 @@ async def samples_batch(
     if db_healthy:
         if valid_rows and inserted > 0 and refresh_user and not REFRESH_DISABLED:
             day_local = _today_local(tzinfo)
-            await _maybe_schedule_refresh(refresh_user, day_local, inserted)
+            await _maybe_schedule_refresh(refresh_user, day_local, inserted, tz_name)
         if valid_rows or _backlog:
             _start_backlog_drain(pool)
 
@@ -515,7 +528,12 @@ async def samples_batch(
     }
 
 
-async def _maybe_schedule_refresh(user_id: str, day_local: date, inserted: int) -> bool:
+async def _maybe_schedule_refresh(
+    user_id: str,
+    day_local: date,
+    inserted: int,
+    tz_name: str = DEFAULT_TIMEZONE,
+) -> bool:
     if REFRESH_DISABLED or not user_id:
         return False
 
@@ -540,7 +558,7 @@ async def _maybe_schedule_refresh(user_id: str, day_local: date, inserted: int) 
         try:
             if delay > 0:
                 await asyncio.sleep(delay)
-            await _execute_refresh(user_id, day_local)
+            await _execute_refresh(user_id, day_local, tz_name)
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.warning(
                 "[MART] delayed refresh failed user=%s error=%s",

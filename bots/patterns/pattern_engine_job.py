@@ -479,50 +479,86 @@ def _fetch_base_daily_features(
     user_id: str | None,
 ) -> list[dict[str, Any]]:
     columns = _table_columns(conn, "marts", "daily_features")
+    summary_columns = _table_columns(conn, "gaia", "daily_summary")
     select_columns = [
-        "user_id",
-        "day",
-        "hr_min",
-        "hr_max",
-        "hrv_avg",
-        "steps_total",
-        "sleep_total_minutes",
-        "sleep_rem_minutes",
-        "sleep_core_minutes",
-        "sleep_deep_minutes",
-        "sleep_awake_minutes",
-        "sleep_efficiency",
-        "spo2_avg",
-        "bp_sys_avg",
-        "bp_dia_avg",
-        "kp_max",
-        "bz_min",
-        "sw_speed_avg",
-        "flares_count",
-        "cmes_count",
-        "sch_fundamental_avg_hz",
-        "sch_cumiana_fundamental_avg_hz",
-        "sch_any_fundamental_avg_hz",
+        "df.user_id as user_id",
+        "df.day as day",
+        "df.hr_min as hr_min",
+        "df.hr_max as hr_max",
+        "df.hrv_avg as hrv_avg",
+        "df.steps_total as steps_total",
+        "df.sleep_total_minutes as sleep_total_minutes",
+        "df.sleep_rem_minutes as sleep_rem_minutes",
+        "df.sleep_core_minutes as sleep_core_minutes",
+        "df.sleep_deep_minutes as sleep_deep_minutes",
+        "df.sleep_awake_minutes as sleep_awake_minutes",
+        "df.sleep_efficiency as sleep_efficiency",
+        "df.spo2_avg as spo2_avg",
+        "df.bp_sys_avg as bp_sys_avg",
+        "df.bp_dia_avg as bp_dia_avg",
+        "df.kp_max as kp_max",
+        "df.bz_min as bz_min",
+        "df.sw_speed_avg as sw_speed_avg",
+        "df.flares_count as flares_count",
+        "df.cmes_count as cmes_count",
+        "df.sch_fundamental_avg_hz as sch_fundamental_avg_hz",
+        "df.sch_cumiana_fundamental_avg_hz as sch_cumiana_fundamental_avg_hz",
+        "df.sch_any_fundamental_avg_hz as sch_any_fundamental_avg_hz",
     ]
     optional_columns = [
         "aurora_hp_north_gw",
         "aurora_hp_south_gw",
         "drap_absorption_polar_db",
     ]
-    final_columns = [col for col in select_columns if col in columns]
-    final_columns.extend([col for col in optional_columns if col in columns])
+    final_columns = [col for col in select_columns if col.split(" as ")[-1] in columns]
+    final_columns.extend(
+        [
+            f"df.{col} as {col}"
+            for col in optional_columns
+            if col in columns
+        ]
+    )
+
+    summary_select_columns = [
+        "respiratory_rate_avg",
+        "respiratory_rate_sleep_avg",
+        "respiratory_rate_baseline_delta",
+        "temperature_deviation",
+        "temperature_deviation_baseline_delta",
+        "temperature_source",
+        "resting_hr_avg",
+        "resting_hr_baseline_delta",
+        "bedtime_consistency_score",
+        "waketime_consistency_score",
+        "sleep_debt_proxy",
+        "sleep_vs_14d_baseline_delta",
+        "cycle_tracking_enabled",
+        "cycle_phase",
+        "menstrual_active",
+        "cycle_day",
+    ]
+    final_columns.extend(
+        [
+            f"ds.{col} as {col}"
+            for col in summary_select_columns
+            if col in summary_columns
+        ]
+    )
 
     params: list[Any] = [since_day, as_of_day]
-    where = ["day >= %s", "day <= %s"]
+    where = ["df.day >= %s", "df.day <= %s"]
     if user_id:
-        where.append("user_id = %s")
+        where.append("df.user_id = %s")
         params.append(user_id)
 
     sql = f"""
         select {", ".join(final_columns)}
-          from marts.daily_features
+          from marts.daily_features df
+          left join gaia.daily_summary ds
+            on ds.user_id = df.user_id
+           and ds.date = df.day
          where {" and ".join(where)}
-         order by user_id, day
+         order by df.user_id, df.day
     """
     return _fetch_rows(conn, sql, params)
 
@@ -991,6 +1027,22 @@ def build_user_daily_features(
             "spo2_avg": base.get("spo2_avg"),
             "bp_sys_avg": base.get("bp_sys_avg"),
             "bp_dia_avg": base.get("bp_dia_avg"),
+            "respiratory_rate_avg": base.get("respiratory_rate_avg"),
+            "respiratory_rate_sleep_avg": base.get("respiratory_rate_sleep_avg"),
+            "respiratory_rate_baseline_delta": base.get("respiratory_rate_baseline_delta"),
+            "temperature_deviation": base.get("temperature_deviation"),
+            "temperature_deviation_baseline_delta": base.get("temperature_deviation_baseline_delta"),
+            "temperature_source": base.get("temperature_source"),
+            "resting_hr_avg": base.get("resting_hr_avg"),
+            "resting_hr_baseline_delta": base.get("resting_hr_baseline_delta"),
+            "bedtime_consistency_score": base.get("bedtime_consistency_score"),
+            "waketime_consistency_score": base.get("waketime_consistency_score"),
+            "sleep_debt_proxy": base.get("sleep_debt_proxy"),
+            "sleep_vs_14d_baseline_delta": base.get("sleep_vs_14d_baseline_delta"),
+            "cycle_tracking_enabled": bool(base.get("cycle_tracking_enabled", False)),
+            "cycle_phase": base.get("cycle_phase"),
+            "menstrual_active": bool(base.get("menstrual_active", False)),
+            "cycle_day": base.get("cycle_day"),
             "kp_max": base.get("kp_max"),
             "bz_min": base.get("bz_min"),
             "sw_speed_avg": base.get("sw_speed_avg"),
@@ -1113,6 +1165,23 @@ def build_user_daily_outcomes(
                 if sleep_baseline is not None:
                     short_sleep = bool(short_sleep or sleep_today <= (0.85 * sleep_baseline))
 
+            respiratory_delta = _safe_float(row.get("respiratory_rate_baseline_delta"))
+            respiratory_rate_elevated = None
+            if respiratory_delta is not None:
+                respiratory_rate_elevated = respiratory_delta >= 2.0
+
+            resting_hr_delta = _safe_float(row.get("resting_hr_baseline_delta"))
+            resting_hr_elevated = None
+            if resting_hr_delta is not None:
+                resting_hr_elevated = resting_hr_delta >= 5.0
+
+            temperature_delta = _safe_float(row.get("temperature_deviation_baseline_delta"))
+            if temperature_delta is None:
+                temperature_delta = _safe_float(row.get("temperature_deviation"))
+            temperature_deviation_day = None
+            if temperature_delta is not None:
+                temperature_deviation_day = abs(temperature_delta) >= 0.3
+
             outcome_rows.append(
                 {
                     "user_id": user_id,
@@ -1126,6 +1195,9 @@ def build_user_daily_outcomes(
                     "hrv_dip_day": hrv_dip,
                     "high_hr_day": high_hr,
                     "short_sleep_day": short_sleep,
+                    "respiratory_rate_elevated_day": respiratory_rate_elevated,
+                    "resting_hr_elevated_day": resting_hr_elevated,
+                    "temperature_deviation_day": temperature_deviation_day,
                     "headache_events": headache_events,
                     "pain_flare_events": pain_events,
                     "anxiety_events": anxiety_events,
@@ -1353,6 +1425,22 @@ def _feature_insert_columns() -> list[str]:
         "spo2_avg",
         "bp_sys_avg",
         "bp_dia_avg",
+        "respiratory_rate_avg",
+        "respiratory_rate_sleep_avg",
+        "respiratory_rate_baseline_delta",
+        "temperature_deviation",
+        "temperature_deviation_baseline_delta",
+        "temperature_source",
+        "resting_hr_avg",
+        "resting_hr_baseline_delta",
+        "bedtime_consistency_score",
+        "waketime_consistency_score",
+        "sleep_debt_proxy",
+        "sleep_vs_14d_baseline_delta",
+        "cycle_tracking_enabled",
+        "cycle_phase",
+        "menstrual_active",
+        "cycle_day",
         "kp_max",
         "bz_min",
         "sw_speed_avg",
@@ -1462,6 +1550,9 @@ def _outcome_insert_columns() -> list[str]:
         "hrv_dip_day",
         "high_hr_day",
         "short_sleep_day",
+        "respiratory_rate_elevated_day",
+        "resting_hr_elevated_day",
+        "temperature_deviation_day",
         "headache_events",
         "pain_flare_events",
         "anxiety_events",

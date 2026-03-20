@@ -185,15 +185,40 @@ _background_refresh_registry: Dict[str, float] = {}
 _background_refresh_lock = asyncio.Lock()
 
 
-async def _execute_mart_refresh(user_id: str, day_local: date) -> None:
+async def _execute_mart_refresh(
+    user_id: str,
+    day_local: date,
+    tz_name: str = DEFAULT_TIMEZONE,
+) -> None:
     try:
         pool = await get_pool()
         async with pool.connection() as conn:
             async with conn.cursor() as cur:
-                await cur.execute(
-                    "select marts.refresh_daily_features_user(%s::uuid, %s::date)",
-                    (user_id, day_local),
-                )
+                try:
+                    await cur.execute(
+                        "select gaia.refresh_daily_summary_user(%s::uuid, %s::date, %s::text)",
+                        (user_id, day_local, tz_name),
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "[MART] daily summary refresh failed user=%s day=%s tz=%s error=%s",
+                        user_id,
+                        day_local,
+                        tz_name,
+                        exc,
+                    )
+                try:
+                    await cur.execute(
+                        "select marts.refresh_daily_features_user(%s::uuid, %s::date)",
+                        (user_id, day_local),
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "[MART] daily features refresh failed user=%s day=%s error=%s",
+                        user_id,
+                        day_local,
+                        exc,
+                    )
     except Exception as exc:  # pragma: no cover - diagnostic logging
         logger.warning(
             "[MART] refresh failed user=%s day=%s error=%s",
@@ -203,7 +228,7 @@ async def _execute_mart_refresh(user_id: str, day_local: date) -> None:
         )
 
 
-async def mart_refresh(user_id: str, day_local: date) -> bool:
+async def mart_refresh(user_id: str, day_local: date, tz_name: str = DEFAULT_TIMEZONE) -> bool:
     if not user_id:
         return False
     loop = asyncio.get_running_loop()
@@ -240,7 +265,7 @@ async def mart_refresh(user_id: str, day_local: date) -> bool:
     async def _runner() -> None:
         try:
             await asyncio.sleep(delay_seconds)
-            await execute_fn(user_id, day_local)
+            await execute_fn(user_id, day_local, tz_name)
         finally:
             async with _refresh_lock:
                 task = _refresh_inflight.get(key)
@@ -254,24 +279,41 @@ async def mart_refresh(user_id: str, day_local: date) -> bool:
 
 
 _MART_COLUMNS = [
-    "day",
-    "updated_at",
-    "steps_total",
-    "hr_min",
-    "hr_max",
-    "hrv_avg",
-    "spo2_avg",
-    "bp_sys_avg",
-    "bp_dia_avg",
-    "kp_max",
-    "bz_min",
-    "sw_speed_avg",
-    "aurora_hp_north_gw",
-    "aurora_hp_south_gw",
-    "xray_max_class",
-    "sep_s_max",
-    "belts_risk_level",
-    "drap_absorption_polar_db",
+    "df.day as day",
+    "coalesce(df.updated_at, ds.updated_at) as updated_at",
+    "df.steps_total as steps_total",
+    "df.hr_min as hr_min",
+    "df.hr_max as hr_max",
+    "df.hrv_avg as hrv_avg",
+    "df.spo2_avg as spo2_avg",
+    "df.bp_sys_avg as bp_sys_avg",
+    "df.bp_dia_avg as bp_dia_avg",
+    "df.kp_max as kp_max",
+    "df.bz_min as bz_min",
+    "df.sw_speed_avg as sw_speed_avg",
+    "df.aurora_hp_north_gw as aurora_hp_north_gw",
+    "df.aurora_hp_south_gw as aurora_hp_south_gw",
+    "df.xray_max_class as xray_max_class",
+    "df.sep_s_max as sep_s_max",
+    "df.belts_risk_level as belts_risk_level",
+    "df.drap_absorption_polar_db as drap_absorption_polar_db",
+    "ds.respiratory_rate_avg as respiratory_rate_avg",
+    "ds.respiratory_rate_sleep_avg as respiratory_rate_sleep_avg",
+    "ds.respiratory_rate_baseline_delta as respiratory_rate_baseline_delta",
+    "ds.temperature_deviation as temperature_deviation",
+    "ds.temperature_deviation_baseline_delta as temperature_deviation_baseline_delta",
+    "ds.temperature_source as temperature_source",
+    "ds.resting_hr_avg as resting_hr_avg",
+    "ds.resting_hr_baseline_delta as resting_hr_baseline_delta",
+    "ds.bedtime_consistency_score as bedtime_consistency_score",
+    "ds.waketime_consistency_score as waketime_consistency_score",
+    "ds.sleep_debt_proxy as sleep_debt_proxy",
+    "ds.sleep_vs_14d_baseline_delta as sleep_vs_14d_baseline_delta",
+    "ds.cycle_tracking_enabled as cycle_tracking_enabled",
+    "ds.cycle_phase as cycle_phase",
+    "ds.menstrual_active as menstrual_active",
+    "ds.cycle_day as cycle_day",
+    "ds.cycle_updated_at as cycle_updated_at",
 ]
 _MART_SELECT = ", ".join(_MART_COLUMNS)
 
@@ -463,8 +505,11 @@ async def _fetch_mart_row(conn, user_id: str, day_local: date) -> Optional[Dict[
         await cur.execute(
             f"""
             select {_MART_SELECT}
-            from marts.daily_features
-            where user_id = %s and day = %s
+            from marts.daily_features df
+            left join gaia.daily_summary ds
+              on ds.user_id = df.user_id
+             and ds.date = df.day
+            where df.user_id = %s and df.day = %s
             limit 1
             """,
             (user_id, day_local),
@@ -485,8 +530,11 @@ async def _fetch_snapshot_row(conn, user_id: str) -> Optional[Dict[str, Any]]:
         await cur.execute(
             f"""
             select {_MART_SELECT}
-            from marts.daily_features
-            where user_id = %s and day is not null
+            from marts.daily_features df
+            left join gaia.daily_summary ds
+              on ds.user_id = df.user_id
+             and ds.date = df.day
+            where df.user_id = %s and df.day is not null
             order by updated_at desc
             limit 1
             """,
@@ -568,6 +616,23 @@ async def _fetch_daily_summary(conn, user_id: str, day_local: date) -> Optional[
               spo2_avg,
               bp_sys_avg,
               bp_dia_avg,
+              respiratory_rate_avg,
+              respiratory_rate_sleep_avg,
+              respiratory_rate_baseline_delta,
+              temperature_deviation,
+              temperature_deviation_baseline_delta,
+              temperature_source,
+              resting_hr_avg,
+              resting_hr_baseline_delta,
+              bedtime_consistency_score,
+              waketime_consistency_score,
+              sleep_debt_proxy,
+              sleep_vs_14d_baseline_delta,
+              cycle_tracking_enabled,
+              cycle_phase,
+              menstrual_active,
+              cycle_day,
+              cycle_updated_at,
               sleep_total_minutes,
               sleep_rem_minutes,
               sleep_core_minutes,
@@ -794,6 +859,23 @@ _FEATURE_DEFAULTS: Dict[str, Any] = {
     "spo2_avg": None,
     "bp_sys_avg": None,
     "bp_dia_avg": None,
+    "respiratory_rate_avg": None,
+    "respiratory_rate_sleep_avg": None,
+    "respiratory_rate_baseline_delta": None,
+    "temperature_deviation": None,
+    "temperature_deviation_baseline_delta": None,
+    "temperature_source": None,
+    "resting_hr_avg": None,
+    "resting_hr_baseline_delta": None,
+    "bedtime_consistency_score": None,
+    "waketime_consistency_score": None,
+    "sleep_debt_proxy": None,
+    "sleep_vs_14d_baseline_delta": None,
+    "cycle_tracking_enabled": False,
+    "cycle_phase": None,
+    "menstrual_active": False,
+    "cycle_day": None,
+    "cycle_updated_at": None,
     "sleep_total_minutes": 0,
     "rem_m": 0,
     "core_m": 0,
@@ -837,6 +919,7 @@ _FEATURE_DEFAULTS: Dict[str, Any] = {
 
 _INT_FIELDS = {
     "steps_total",
+    "cycle_day",
     "sleep_total_minutes",
     "rem_m",
     "core_m",
@@ -855,6 +938,17 @@ _FLOAT_FIELDS = {
     "spo2_avg",
     "bp_sys_avg",
     "bp_dia_avg",
+    "respiratory_rate_avg",
+    "respiratory_rate_sleep_avg",
+    "respiratory_rate_baseline_delta",
+    "temperature_deviation",
+    "temperature_deviation_baseline_delta",
+    "resting_hr_avg",
+    "resting_hr_baseline_delta",
+    "bedtime_consistency_score",
+    "waketime_consistency_score",
+    "sleep_debt_proxy",
+    "sleep_vs_14d_baseline_delta",
     "kp_max",
     "bz_min",
     "sw_speed_avg",
@@ -932,6 +1026,10 @@ def _summarize_feature_payload(payload: Optional[Dict[str, Any]]) -> Dict[str, A
                     "spo2_avg",
                     "bp_sys_avg",
                     "bp_dia_avg",
+                    "respiratory_rate_avg",
+                    "respiratory_rate_sleep_avg",
+                    "resting_hr_avg",
+                    "temperature_deviation",
                 ),
             ),
             "sleep": _any_present(
@@ -972,6 +1070,8 @@ def _summarize_feature_payload(payload: Optional[Dict[str, Any]]) -> Dict[str, A
             "sw_speed_avg": _coerce_float_value(summary_payload.get("sw_speed_avg")),
             # Expose SpO2 in diagnostics
             "spo2_avg": _coerce_float_value(summary_payload.get("spo2_avg")),
+            "respiratory_rate_avg": _coerce_float_value(summary_payload.get("respiratory_rate_avg")),
+            "resting_hr_avg": _coerce_float_value(summary_payload.get("resting_hr_avg")),
         },
     }
 
@@ -1026,6 +1126,9 @@ def _normalize_features_payload(
     normalized["updated_at"] = _iso_dt(
         _coerce_datetime(normalized.get("updated_at"))
     )
+    normalized["cycle_updated_at"] = _iso_dt(
+        _coerce_datetime(normalized.get("cycle_updated_at"))
+    )
 
     for key in _INT_FIELDS:
         normalized[key] = _coerce_int_value(normalized.get(key))
@@ -1047,6 +1150,8 @@ def _normalize_features_payload(
 
     normalized["kp_alert"] = bool(normalized.get("kp_alert"))
     normalized["flare_alert"] = bool(normalized.get("flare_alert"))
+    normalized["cycle_tracking_enabled"] = bool(normalized.get("cycle_tracking_enabled"))
+    normalized["menstrual_active"] = bool(normalized.get("menstrual_active"))
 
     normalized["source"] = normalized.get("source") or source_hint or "snapshot"
 
@@ -1085,6 +1190,23 @@ async def _freshen_features(
         "spo2_avg": summary.get("spo2_avg"),
         "bp_sys_avg": summary.get("bp_sys_avg"),
         "bp_dia_avg": summary.get("bp_dia_avg"),
+        "respiratory_rate_avg": summary.get("respiratory_rate_avg"),
+        "respiratory_rate_sleep_avg": summary.get("respiratory_rate_sleep_avg"),
+        "respiratory_rate_baseline_delta": summary.get("respiratory_rate_baseline_delta"),
+        "temperature_deviation": summary.get("temperature_deviation"),
+        "temperature_deviation_baseline_delta": summary.get("temperature_deviation_baseline_delta"),
+        "temperature_source": summary.get("temperature_source"),
+        "resting_hr_avg": summary.get("resting_hr_avg"),
+        "resting_hr_baseline_delta": summary.get("resting_hr_baseline_delta"),
+        "bedtime_consistency_score": summary.get("bedtime_consistency_score"),
+        "waketime_consistency_score": summary.get("waketime_consistency_score"),
+        "sleep_debt_proxy": summary.get("sleep_debt_proxy"),
+        "sleep_vs_14d_baseline_delta": summary.get("sleep_vs_14d_baseline_delta"),
+        "cycle_tracking_enabled": summary.get("cycle_tracking_enabled"),
+        "cycle_phase": summary.get("cycle_phase"),
+        "menstrual_active": summary.get("menstrual_active"),
+        "cycle_day": summary.get("cycle_day"),
+        "cycle_updated_at": summary.get("cycle_updated_at"),
         "updated_at": datetime.now(timezone.utc),
     }
     payload.update(_compose_sleep_payload(summary, sleep))

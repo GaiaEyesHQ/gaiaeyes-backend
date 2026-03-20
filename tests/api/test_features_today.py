@@ -123,7 +123,7 @@ async def test_refresh_scheduled_on_ingest(monkeypatch, client: AsyncClient):
 
     scheduled: List[tuple[str, date]] = []
 
-    async def _fake_execute_refresh(user_id: str, day_local: date) -> None:
+    async def _fake_execute_refresh(user_id: str, day_local: date, tz_name: str = "UTC") -> None:  # noqa: ARG001
         scheduled.append((user_id, day_local))
 
     def _immediate_task_factory(coro):
@@ -287,6 +287,9 @@ async def test_features_returns_defaults_when_empty(monkeypatch, client: AsyncCl
     assert data["day"] == today.isoformat()
     assert data["steps_total"] == 0
     assert data["sleep_total_minutes"] == 0
+    assert data["cycle_tracking_enabled"] is False
+    assert data["menstrual_active"] is False
+    assert data["temperature_source"] is None
     assert data["flares_count"] == 0
     assert data["kp_alert"] is False
     assert data["source"] in {"snapshot", "empty"}

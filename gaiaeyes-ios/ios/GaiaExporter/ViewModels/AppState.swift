@@ -88,10 +88,17 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         if let spo2 = HKObjectType.quantityType(forIdentifier: .oxygenSaturation) { types.insert(spo2) }
         if let steps = HKObjectType.quantityType(forIdentifier: .stepCount) { types.insert(steps) }
         if let hrv = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN) { types.insert(hrv) }
+        if let respiratory = HKObjectType.quantityType(forIdentifier: .respiratoryRate) { types.insert(respiratory) }
+        if let restingHR = HKObjectType.quantityType(forIdentifier: .restingHeartRate) { types.insert(restingHR) }
         if let sys = HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic) { types.insert(sys) }
         if let dia = HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic) { types.insert(dia) }
+        if #available(iOS 16.0, *),
+           let wristTemp = HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature) {
+            types.insert(wristTemp)
+        }
         // Categories
         if let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) { types.insert(sleep) }
+        if let menstrualFlow = HKObjectType.categoryType(forIdentifier: .menstrualFlow) { types.insert(menstrualFlow) }
         return types
     }
     private let ble = BleManager()
@@ -411,6 +418,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     // MARK: - Health permissions
     @MainActor func requestHealthPermissions() async {
         append("Requesting Health permissions…")
+        append("Cycle tracking stays optional. Expanded recovery metrics sync only when your device provides them.")
         guard HKHealthStore.isHealthDataAvailable() else {
             append("❌ Health data not available on this device")
             return

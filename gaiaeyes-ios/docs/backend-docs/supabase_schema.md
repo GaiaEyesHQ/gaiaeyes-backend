@@ -39,6 +39,23 @@ This document summarizes the database objects created by the Supabase migrations
   | `sleep_efficiency` | `numeric` | Sleep efficiency score. |
   | `bp_sys_avg` | `double precision` | Average systolic blood pressure. |
   | `bp_dia_avg` | `double precision` | Average diastolic blood pressure. |
+  | `respiratory_rate_avg` | `numeric` | Daily average respiratory rate when HealthKit provides it. |
+  | `respiratory_rate_sleep_avg` | `numeric` | Respiratory-rate average limited to sleep-overlapping samples when available. |
+  | `respiratory_rate_baseline_delta` | `numeric` | Difference versus the prior 14-day respiratory baseline. |
+  | `temperature_deviation` | `numeric` | Daily temperature-deviation signal from the wearable source. Observational only. |
+  | `temperature_deviation_baseline_delta` | `numeric` | Difference versus the prior 14-day temperature-deviation baseline. |
+  | `temperature_source` | `text` | Wearable/source label for the temperature-deviation signal. |
+  | `resting_hr_avg` | `numeric` | Daily resting heart-rate average. |
+  | `resting_hr_baseline_delta` | `numeric` | Difference versus the prior 14-day resting-HR baseline. |
+  | `bedtime_consistency_score` | `numeric` | 0–100 consistency score derived from recent bedtime timing. |
+  | `waketime_consistency_score` | `numeric` | 0–100 consistency score derived from recent wake timing. |
+  | `sleep_debt_proxy` | `numeric` | Approximate missing sleep minutes versus the recent personal baseline. |
+  | `sleep_vs_14d_baseline_delta` | `numeric` | Daily sleep duration delta versus the prior 14-day baseline. |
+  | `cycle_tracking_enabled` | `boolean` | Whether optional cycle-tracking context exists in recent user history. |
+  | `cycle_phase` | `text` | Conservative cycle phase label when derivable (currently only menstrual days). |
+  | `menstrual_active` | `boolean` | True on menstrual-flow days when the user has granted optional cycle access. |
+  | `cycle_day` | `integer` | Cycle day derived from the most recent detected period start when possible. |
+  | `cycle_updated_at` | `timestamptz` | Latest cycle-related sample timestamp included in the normalized row. |
 
 #### `gaia.devices`
 - **Primary Key**: `id` (`uuid`, default `gen_random_uuid()`)

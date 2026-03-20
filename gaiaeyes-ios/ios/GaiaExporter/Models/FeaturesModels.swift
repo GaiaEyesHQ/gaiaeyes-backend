@@ -41,6 +41,23 @@ struct FeaturesToday: Codable {
     let spo2AvgPct: Num?
     let spo2AvgPercent: Num?
     let spo2Mean: Num?
+    let respiratoryRateAvg: Num?
+    let respiratoryRateSleepAvg: Num?
+    let respiratoryRateBaselineDelta: Num?
+    let temperatureDeviation: Num?
+    let temperatureDeviationBaselineDelta: Num?
+    let temperatureSource: String?
+    let restingHrAvg: Num?
+    let restingHrBaselineDelta: Num?
+    let bedtimeConsistencyScore: Num?
+    let waketimeConsistencyScore: Num?
+    let sleepDebtProxy: Num?
+    let sleepVs14dBaselineDelta: Num?
+    let cycleTrackingEnabled: Bool?
+    let cyclePhase: String?
+    let menstrualActive: Bool?
+    let cycleDay: Num?
+    let cycleUpdatedAt: String?
     let health: HealthSection?
     let sleepTotalMinutes: Num?
     let remM: Num?

@@ -6926,6 +6926,11 @@ struct ContentView: View {
             LocalConditionsValueChip(label: label, value: value, tint: tint)
         }
 
+        private func signedValue(_ value: Double?, suffix: String) -> String {
+            guard let value else { return "—" }
+            return String(format: "%+.1f%@", value, suffix)
+        }
+
         var body: some View {
             LocalConditionsSurfaceCard(title: "Health Stats", icon: "heart.fill") {
                 VStack(alignment: .leading, spacing: 12) {
@@ -6958,6 +6963,34 @@ struct ContentView: View {
                             }(),
                             tint: GaugePalette.mild
                         )
+                    }
+
+                    if current?.respiratoryRateAvg?.value != nil
+                        || current?.respiratoryRateSleepAvg?.value != nil
+                        || current?.restingHrBaselineDelta?.value != nil
+                        || current?.temperatureDeviation?.value != nil
+                    {
+                        HStack(spacing: 10) {
+                            metric(
+                                "Respiratory",
+                                value: {
+                                    let value = current?.respiratoryRateSleepAvg?.value ?? current?.respiratoryRateAvg?.value
+                                    guard let value else { return "—" }
+                                    return String(format: "%.1f br/min", value)
+                                }(),
+                                tint: GaugePalette.low
+                            )
+                            metric(
+                                "Resting HR Δ",
+                                value: signedValue(current?.restingHrBaselineDelta?.value, suffix: " bpm"),
+                                tint: GaugePalette.mild
+                            )
+                            metric(
+                                "Temp Δ",
+                                value: signedValue(current?.temperatureDeviation?.value, suffix: "°C"),
+                                tint: GaugePalette.elevated
+                            )
+                        }
                     }
                 }
             }
@@ -9156,9 +9189,24 @@ struct ContentView: View {
         
         var body: some View {
             VStack(spacing: 12) {
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Optional health context")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Cycle tracking stays optional. If you allow it, Gaia only reads menstrual-flow timing so it can add respectful body-state context.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("Expanded recovery metrics include respiratory rate, resting heart rate, and wrist temperature deviation when HealthKit and your device make them available.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.horizontal)
+
                 Button {
                     Task { await state.requestHealthPermissions() }
-                } label: { Text("Request Health Permissions").frame(maxWidth: .infinity) }
+                } label: { Text("Request / Update Health Permissions").frame(maxWidth: .infinity) }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .padding(.horizontal)

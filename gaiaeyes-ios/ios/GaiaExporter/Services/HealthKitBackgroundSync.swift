@@ -69,8 +69,17 @@ final class HealthKitBackgroundSync {
     private var spo2Type = HKObjectType.quantityType(forIdentifier: .oxygenSaturation)!
     private var stepsType = HKObjectType.quantityType(forIdentifier: .stepCount)!
     private var hrvType = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!
+    private var respiratoryRateType = HKObjectType.quantityType(forIdentifier: .respiratoryRate)
+    private var restingHeartRateType = HKObjectType.quantityType(forIdentifier: .restingHeartRate)
     private var bpType = HKObjectType.correlationType(forIdentifier: .bloodPressure)!
     private var sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+    private var menstrualFlowType = HKObjectType.categoryType(forIdentifier: .menstrualFlow)
+    private var temperatureDeviationType: HKQuantityType? {
+        if #available(iOS 16.0, *) {
+            return HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature)
+        }
+        return nil
+    }
 
     // Register observers
     func registerObservers() throws {
@@ -85,6 +94,18 @@ final class HealthKitBackgroundSync {
         try registerObserver(for: hrvType, key: "hrv_sdnn")
         try registerObserver(for: bpType, key: "blood_pressure")
         try registerObserver(for: sleepType, key: "sleep_stage")
+        if let respiratoryRateType {
+            try registerObserver(for: respiratoryRateType, key: "respiratory_rate")
+        }
+        if let restingHeartRateType {
+            try registerObserver(for: restingHeartRateType, key: "resting_heart_rate")
+        }
+        if let temperatureDeviationType {
+            try registerObserver(for: temperatureDeviationType, key: "temperature_deviation")
+        }
+        if let menstrualFlowType {
+            try registerObserver(for: menstrualFlowType, key: "menstrual_flow")
+        }
 
         healthStore.enableBackgroundDelivery(for: hrType,   frequency: .immediate) { ok, err in appLog("[HK] bg delivery heart_rate: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
         healthStore.enableBackgroundDelivery(for: spo2Type, frequency: .immediate) { ok, err in appLog("[HK] bg delivery spo2: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
@@ -93,6 +114,18 @@ final class HealthKitBackgroundSync {
         // Blood pressure background delivery is not supported by HealthKit.
         appLog("[HK] bg delivery blood_pressure: skipped (not supported)")
         healthStore.enableBackgroundDelivery(for: sleepType,frequency: .immediate) { ok, err in appLog("[HK] bg delivery sleep_stage: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
+        if let respiratoryRateType {
+            healthStore.enableBackgroundDelivery(for: respiratoryRateType, frequency: .immediate) { ok, err in appLog("[HK] bg delivery respiratory_rate: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
+        }
+        if let restingHeartRateType {
+            healthStore.enableBackgroundDelivery(for: restingHeartRateType, frequency: .immediate) { ok, err in appLog("[HK] bg delivery resting_heart_rate: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
+        }
+        if let temperatureDeviationType {
+            healthStore.enableBackgroundDelivery(for: temperatureDeviationType, frequency: .immediate) { ok, err in appLog("[HK] bg delivery temperature_deviation: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
+        }
+        if let menstrualFlowType {
+            healthStore.enableBackgroundDelivery(for: menstrualFlowType, frequency: .immediate) { ok, err in appLog("[HK] bg delivery menstrual_flow: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
+        }
     }
 
     private func registerObserver(for type: HKSampleType, key: String) throws {
@@ -105,6 +138,8 @@ final class HealthKitBackgroundSync {
                     do {
                         if type.isEqual(self.sleepType) {
                             try await self.processSleepDeltas(anchorKey: key)
+                        } else if let menstrualFlowType = self.menstrualFlowType, type.isEqual(menstrualFlowType) {
+                            try await self.processCycleDeltas(anchorKey: key)
                         } else {
                             try await self.processDeltas(for: type, anchorKey: key)
                         }
@@ -142,25 +177,34 @@ final class HealthKitBackgroundSync {
         var samples: [Sample] = []
         for s in collected {
             if let q = s as? HKQuantitySample {
-                switch q.quantityType {
-                case hrType:
+                if q.quantityType == hrType {
                     let bpm = q.quantity.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute()))
                     guard bpm.isFinite, bpm >= 20, bpm <= 250 else { continue }
                     samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "heart_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: bpm, unit: "bpm", value_text: nil))
-                case spo2Type:
+                } else if q.quantityType == spo2Type {
                     let pct = q.quantity.doubleValue(for: HKUnit.percent()) * 100.0
                     guard pct.isFinite, pct >= 50, pct <= 100 else { continue }
                     samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "spo2", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: pct, unit: "%", value_text: nil))
-                case stepsType:
+                } else if q.quantityType == stepsType {
                     let cnt = q.quantity.doubleValue(for: HKUnit.count())
                     guard cnt.isFinite, cnt >= 0 else { continue }
                     samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "step_count", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: cnt, unit: "count", value_text: nil))
-                case hrvType:
+                } else if q.quantityType == hrvType {
                     let ms = q.quantity.doubleValue(for: HKUnit.secondUnit(with: .milli))
                     guard ms.isFinite, ms >= 0, ms <= 600 else { continue }
                     samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "hrv_sdnn", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: ms, unit: "ms", value_text: nil))
-                default:
-                    break
+                } else if let respiratoryRateType, q.quantityType == respiratoryRateType {
+                    let breathsPerMinute = q.quantity.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute()))
+                    guard breathsPerMinute.isFinite, breathsPerMinute >= 4, breathsPerMinute <= 80 else { continue }
+                    samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "respiratory_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: breathsPerMinute, unit: "br/min", value_text: nil))
+                } else if let restingHeartRateType, q.quantityType == restingHeartRateType {
+                    let bpm = q.quantity.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute()))
+                    guard bpm.isFinite, bpm >= 20, bpm <= 180 else { continue }
+                    samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "resting_heart_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: bpm, unit: "bpm", value_text: nil))
+                } else if let temperatureDeviationType, q.quantityType == temperatureDeviationType {
+                    let deltaC = q.quantity.doubleValue(for: HKUnit.degreeCelsius())
+                    guard deltaC.isFinite, deltaC >= -10, deltaC <= 10 else { continue }
+                    samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "temperature_deviation", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: deltaC, unit: "degC", value_text: "apple_sleeping_wrist_temperature"))
                 }
             } else if let c = s as? HKCorrelation, c.correlationType == bpType {
                 let systolicType  = HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic)!
@@ -262,6 +306,62 @@ final class HealthKitBackgroundSync {
         }
     }
 
+    private func processCycleDeltas(anchorKey: String) async throws {
+        guard let menstrualFlowType else { return }
+        var anchor = anchorStore.anchor(forKey: anchorKey)
+        let pred = HKQuery.predicateForSamples(withStart: Date.distantPast, end: Date(), options: [])
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+
+        var collected: [HKSample] = []
+        var done = false
+        while !done {
+            let (newAnchor, batch, more) = try await anchoredQuery(type: menstrualFlowType, predicate: pred, anchor: anchor, limit: 500, sort: sort)
+            anchor = newAnchor
+            if !batch.isEmpty { collected.append(contentsOf: batch) }
+            done = !more
+        }
+
+        guard !collected.isEmpty else {
+            anchorStore.setAnchor(anchor, forKey: anchorKey)
+            return
+        }
+
+        let out: [Sample] = collected.compactMap { sample in
+            guard let cat = sample as? HKCategorySample else { return nil }
+            return Sample(
+                user_id: currentUserId(),
+                device_os: "ios",
+                source: "healthkit",
+                type: "menstrual_flow",
+                start_time: iso.string(from: cat.startDate),
+                end_time: iso.string(from: cat.endDate),
+                value: nil,
+                unit: nil,
+                value_text: "active"
+            )
+        }
+
+        guard !out.isEmpty else {
+            anchorStore.setAnchor(anchor, forKey: anchorKey)
+            return
+        }
+
+        do {
+            let api = buildAPI()
+            let uploaded = try await api.postSamplesChunked(out, chunkSize: 200)
+            let windowStart = out.map { $0.start_time }.min() ?? "-"
+            let windowEnd = out.map { $0.end_time }.max() ?? "-"
+            appLog("[HK-UP] \(anchorKey) rows=\(out.count) window=\(windowStart)..\(windowEnd)")
+            anchorStore.setAnchor(anchor, forKey: anchorKey)
+            StatusStore.shared.setUpload(for: anchorKey)
+            if uploaded {
+                await requestFeaturesRefreshAfterUpload(rows: out.count, source: "hk:menstrual_flow")
+            }
+        } catch {
+            appLog("Upload error \(anchorKey): \(error.localizedDescription)")
+        }
+    }
+
     private func anchoredQuery(type: HKSampleType, predicate: NSPredicate?, anchor: HKQueryAnchor?, limit: Int, sort: NSSortDescriptor) async throws -> (HKQueryAnchor?, [HKSample], Bool) {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<(HKQueryAnchor?, [HKSample], Bool), Error>) in
             let q = HKAnchoredObjectQuery(type: type, predicate: predicate, anchor: anchor, limit: limit) { _, samples, _, newAnchor, error in
@@ -281,7 +381,10 @@ final class HealthKitBackgroundSync {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.refreshTaskId, using: nil) { task in
             if let bg = task as? BGAppRefreshTask {
                 self.handleRefresh(task: bg)
-                Task { try? await self.processSleepDeltas(anchorKey: "sleep_stage") }
+                Task {
+                    try? await self.processSleepDeltas(anchorKey: "sleep_stage")
+                    try? await self.processCycleDeltas(anchorKey: "menstrual_flow")
+                }
             } else {
                 task.setTaskCompleted(success: true)
             }
@@ -319,6 +422,17 @@ final class HealthKitBackgroundSync {
                 try? await self.processDeltas(for: self.spo2Type, anchorKey: "spo2")
                 try? await self.processDeltas(for: self.stepsType, anchorKey: "step_count")
                 try? await self.processDeltas(for: self.hrvType, anchorKey: "hrv_sdnn")
+                if let respiratoryRateType = self.respiratoryRateType {
+                    try? await self.processDeltas(for: respiratoryRateType, anchorKey: "respiratory_rate")
+                }
+                if let restingHeartRateType = self.restingHeartRateType {
+                    try? await self.processDeltas(for: restingHeartRateType, anchorKey: "resting_heart_rate")
+                }
+                if let temperatureDeviationType = self.temperatureDeviationType {
+                    try? await self.processDeltas(for: temperatureDeviationType, anchorKey: "temperature_deviation")
+                }
+                try? await self.processSleepDeltas(anchorKey: "sleep_stage")
+                try? await self.processCycleDeltas(anchorKey: "menstrual_flow")
             }
         }
         task.expirationHandler = { op.cancel() }
@@ -334,6 +448,7 @@ final class HealthKitBackgroundSync {
             Task {
                 await self.kickOnce(reason: "processing")
                 try? await self.processSleepDeltas(anchorKey: "sleep_stage")
+                try? await self.processCycleDeltas(anchorKey: "menstrual_flow")
             }
         }
         task.expirationHandler = { op.cancel() }
@@ -431,7 +546,18 @@ final class HealthKitBackgroundSync {
     /// Clear anchors and backfill all supported quantity types from `start` until now.
     /// This is safe to run manually (e.g., from a Debug button) to recover from gaps.
     func forceBackfill(since start: Date) async {
-        let keys = ["heart_rate","spo2","step_count","hrv_sdnn","blood_pressure", "sleep_stage"]
+        let keys = [
+            "heart_rate",
+            "spo2",
+            "step_count",
+            "hrv_sdnn",
+            "respiratory_rate",
+            "resting_heart_rate",
+            "temperature_deviation",
+            "blood_pressure",
+            "sleep_stage",
+            "menstrual_flow",
+        ]
         anchorStore.clear(keys: keys)
 
         let pred = HKQuery.predicateForSamples(withStart: start, end: Date(), options: [])
@@ -441,8 +567,18 @@ final class HealthKitBackgroundSync {
         await backfillOne(type: spo2Type, anchorKey: "spo2",       pred: pred, sort: sort)
         await backfillOne(type: stepsType,anchorKey: "step_count",  pred: pred, sort: sort)
         await backfillOne(type: hrvType,  anchorKey: "hrv_sdnn",    pred: pred, sort: sort)
+        if let respiratoryRateType {
+            await backfillOne(type: respiratoryRateType, anchorKey: "respiratory_rate", pred: pred, sort: sort)
+        }
+        if let restingHeartRateType {
+            await backfillOne(type: restingHeartRateType, anchorKey: "resting_heart_rate", pred: pred, sort: sort)
+        }
+        if let temperatureDeviationType {
+            await backfillOne(type: temperatureDeviationType, anchorKey: "temperature_deviation", pred: pred, sort: sort)
+        }
         await backfillOne(type: bpType,  anchorKey: "blood_pressure", pred: pred, sort: sort)
         await backfillSleep(pred: pred, sort: sort)
+        await backfillCycle(pred: pred, sort: sort)
     }
     private func backfillSleep(pred: NSPredicate, sort: NSSortDescriptor) async {
         var anchor: HKQueryAnchor? = nil
@@ -495,6 +631,54 @@ final class HealthKitBackgroundSync {
         }
     }
 
+    private func backfillCycle(pred: NSPredicate, sort: NSSortDescriptor) async {
+        guard let menstrualFlowType else { return }
+        var anchor: HKQueryAnchor? = nil
+        var collected: [HKSample] = []
+        var more = true
+        while more {
+            do {
+                let (newAnchor, batch, hasMore) = try await anchoredQuery(type: menstrualFlowType, predicate: pred, anchor: anchor, limit: 500, sort: sort)
+                anchor = newAnchor
+                if !batch.isEmpty { collected.append(contentsOf: batch) }
+                more = hasMore
+            } catch {
+                appLog("[Backfill] anchoredQuery error menstrual_flow: \(error.localizedDescription)")
+                return
+            }
+        }
+        guard !collected.isEmpty else {
+            appLog("[Backfill] no samples for menstrual_flow in range")
+            return
+        }
+        let samples: [Sample] = collected.compactMap { sample in
+            guard let cat = sample as? HKCategorySample else { return nil }
+            return Sample(
+                user_id: currentUserId(),
+                device_os: "ios",
+                source: "healthkit",
+                type: "menstrual_flow",
+                start_time: iso.string(from: cat.startDate),
+                end_time: iso.string(from: cat.endDate),
+                value: nil,
+                unit: nil,
+                value_text: "active"
+            )
+        }
+        do {
+            let api = buildAPI()
+            let uploaded = try await api.postSamplesChunked(samples, chunkSize: 200)
+            anchorStore.setAnchor(anchor, forKey: "menstrual_flow")
+            StatusStore.shared.setUpload(for: "menstrual_flow")
+            appLog("[Backfill] uploaded \(samples.count) menstrual_flow samples")
+            if uploaded {
+                await requestFeaturesRefreshAfterUpload(rows: samples.count, source: "hk:backfill_menstrual_flow")
+            }
+        } catch {
+            appLog("[Backfill] upload error menstrual_flow: \(error.localizedDescription)")
+        }
+    }
+
     /// Lightweight sweep that mimics an observer firing now; useful for foreground or manual "sync now".
     func kickOnce(reason: String) async {
         let now = Date()
@@ -513,8 +697,18 @@ final class HealthKitBackgroundSync {
         do { try await self.processDeltas(for: self.spo2Type, anchorKey: "spo2") }       catch { appLog("[BG] kickOnce spo2 error: \(error.localizedDescription)") }
         do { try await self.processDeltas(for: self.stepsType,anchorKey: "step_count") } catch { appLog("[BG] kickOnce steps error: \(error.localizedDescription)") }
         do { try await self.processDeltas(for: self.hrvType,  anchorKey: "hrv_sdnn") }   catch { appLog("[BG] kickOnce hrv error: \(error.localizedDescription)") }
+        if let respiratoryRateType {
+            do { try await self.processDeltas(for: respiratoryRateType, anchorKey: "respiratory_rate") } catch { appLog("[BG] kickOnce respiratory error: \(error.localizedDescription)") }
+        }
+        if let restingHeartRateType {
+            do { try await self.processDeltas(for: restingHeartRateType, anchorKey: "resting_heart_rate") } catch { appLog("[BG] kickOnce resting HR error: \(error.localizedDescription)") }
+        }
+        if let temperatureDeviationType {
+            do { try await self.processDeltas(for: temperatureDeviationType, anchorKey: "temperature_deviation") } catch { appLog("[BG] kickOnce temperature error: \(error.localizedDescription)") }
+        }
         do { try await self.processDeltas(for: self.bpType,  anchorKey: "blood_pressure") } catch { appLog("[BG] kickOnce bp error: \(error.localizedDescription)") }
         do { try await self.processSleepDeltas(anchorKey: "sleep_stage") } catch { appLog("[BG] kickOnce sleep error: \(error.localizedDescription)") }
+        do { try await self.processCycleDeltas(anchorKey: "menstrual_flow") } catch { appLog("[BG] kickOnce cycle error: \(error.localizedDescription)") }
         StatusStore.shared.setBackgroundRun()
     }
 
@@ -578,34 +772,50 @@ final class HealthKitBackgroundSync {
 
     /// Mirrors the mapping in processDeltas so backfill writes identical rows.
     private func mapQuantitySampleToWire(_ q: HKQuantitySample) -> Sample? {
-        switch q.quantityType {
-        case hrType:
+        if q.quantityType == hrType {
             let bpm = q.quantity.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute()))
             guard bpm.isFinite, bpm >= 20, bpm <= 250 else { return nil }
             return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
                           type: "heart_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
                           value: bpm, unit: "bpm", value_text: nil)
-        case spo2Type:
+        } else if q.quantityType == spo2Type {
             let pct = q.quantity.doubleValue(for: HKUnit.percent()) * 100.0
             guard pct.isFinite, pct >= 50, pct <= 100 else { return nil }
             return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
                           type: "spo2", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
                           value: pct, unit: "%", value_text: nil)
-        case stepsType:
+        } else if q.quantityType == stepsType {
             let cnt = q.quantity.doubleValue(for: HKUnit.count())
             guard cnt.isFinite, cnt >= 0 else { return nil }
             return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
                           type: "step_count", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
                           value: cnt, unit: "count", value_text: nil)
-        case hrvType:
+        } else if q.quantityType == hrvType {
             let ms = q.quantity.doubleValue(for: HKUnit.secondUnit(with: .milli))
             guard ms.isFinite, ms >= 0, ms <= 600 else { return nil }
             return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
                           type: "hrv_sdnn", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
                           value: ms, unit: "ms", value_text: nil)
-        default:
-            return nil
+        } else if let respiratoryRateType, q.quantityType == respiratoryRateType {
+            let breathsPerMinute = q.quantity.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute()))
+            guard breathsPerMinute.isFinite, breathsPerMinute >= 4, breathsPerMinute <= 80 else { return nil }
+            return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
+                          type: "respiratory_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
+                          value: breathsPerMinute, unit: "br/min", value_text: nil)
+        } else if let restingHeartRateType, q.quantityType == restingHeartRateType {
+            let bpm = q.quantity.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute()))
+            guard bpm.isFinite, bpm >= 20, bpm <= 180 else { return nil }
+            return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
+                          type: "resting_heart_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
+                          value: bpm, unit: "bpm", value_text: nil)
+        } else if let temperatureDeviationType, q.quantityType == temperatureDeviationType {
+            let deltaC = q.quantity.doubleValue(for: HKUnit.degreeCelsius())
+            guard deltaC.isFinite, deltaC >= -10, deltaC <= 10 else { return nil }
+            return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
+                          type: "temperature_deviation", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
+                          value: deltaC, unit: "degC", value_text: "apple_sleeping_wrist_temperature")
         }
+        return nil
     }
 }
 

@@ -6,7 +6,7 @@ GaiaEyes now refreshes the daily features mart as soon as new samples arrive. Th
 
 1. The caller can include `?tz=<IANA name>` (default `America/Chicago`). The server converts the current time into that timezone to determine the local day.
 2. After committing the batch, the handler debounces refreshes per user. Additional batches within ~20 seconds reuse the existing refresh ticket.
-3. The refresh runs from a background coroutine that sleeps for two seconds before executing `select marts.refresh_daily_features_user(:user_id, :day_local);`, giving pgBouncer time to settle after a large ingest burst.
+3. The refresh runs from a background coroutine that sleeps for two seconds before executing `select gaia.refresh_daily_summary_user(:user_id, :day_local, :tz);` and then `select marts.refresh_daily_features_user(:user_id, :day_local);`, giving pgBouncer time to settle after a large ingest burst.
 4. Scheduling and failures are logged with the `[MART]` prefix for quick tailing (`[MART] scheduled refresh (delayed) ...`).
 
 The debounce map lives in-process, so each worker independently guards its refresh cadence.
@@ -23,6 +23,7 @@ Set the environment variable `MART_REFRESH_DISABLE=1` (accepted truthy values: `
 
 - Mart refreshes now target the **direct PostgreSQL connection** on port `5432` (no pgBouncer).  
   This ensures `marts.refresh_daily_features_user()` runs immediately after new samples insert.
+- Health-context refreshes now normalize the user’s wearable rows into `gaia.daily_summary` first, including respiratory rate, resting heart rate, wrist-temperature deviation, sleep consistency, and optional cycle context when permissions allow it.
 - The refresh coroutine now includes a **1.5–2.0 second backoff** after upload completion before triggering the mart query.  
   This gives the Supabase transaction pooler time to commit changes cleanly and avoids `pool timeout` or `transaction aborted` errors.
 - If a mart function call fails, the handler logs `[MART] refresh failed ...` but no longer aborts the ingest transaction.  
