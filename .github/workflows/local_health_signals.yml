@@ -13,6 +13,7 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       AIRNOW_API_KEY: ${{ secrets.AIRNOW_API_KEY }}
+      GOOGLE_POLLEN_API_KEY: ${{ secrets.GOOGLE_POLLEN_API_KEY }}
       WEATHER_UA: ${{ secrets.WEATHER_UA }}
       GAIA_LOG_LEVEL: INFO
       LOCAL_SIGNALS_TTL_MINUTES: "60"
