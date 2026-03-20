@@ -721,6 +721,68 @@ private func canonicalProfileTagKey(_ raw: String) -> String {
     }
 }
 
+private struct DiscardValue: Decodable {}
+
+private struct LossyArray<Element: Decodable>: Decodable {
+    let values: [Element]
+
+    init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        var items: [Element] = []
+        while !container.isAtEnd {
+            if let item = try? container.decode(Element.self) {
+                items.append(item)
+            } else {
+                _ = try? container.decode(DiscardValue.self)
+            }
+        }
+        values = items
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decodeFlexibleDouble(forKey key: Key) -> Double? {
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            return value
+        }
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return Double(value)
+        }
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            return Double(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return nil
+    }
+
+    func decodeFlexibleInt(forKey key: Key) -> Int? {
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return value
+        }
+        if let value = try? decodeIfPresent(Double.self, forKey: key) {
+            return Int(value.rounded())
+        }
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            return Int(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return nil
+    }
+
+    func decodeFlexibleBool(forKey key: Key) -> Bool? {
+        if let value = try? decodeIfPresent(Bool.self, forKey: key) {
+            return value
+        }
+        if let value = try? decodeIfPresent(Int.self, forKey: key) {
+            return value != 0
+        }
+        if let value = try? decodeIfPresent(String.self, forKey: key) {
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if ["true", "t", "yes", "y", "1"].contains(normalized) { return true }
+            if ["false", "f", "no", "n", "0"].contains(normalized) { return false }
+        }
+        return nil
+    }
+}
+
 private struct SpaceOutlookEntry: Codable, Identifiable, Hashable {
     let id: String
     let title: String?
@@ -951,7 +1013,7 @@ private struct OutlookData: Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case sep
-        case auroraOutlook = "aurora_outlook"
+        case auroraOutlook
     }
 }
 
@@ -1018,17 +1080,17 @@ private struct SpaceForecastOutlook: Codable {
 
         for key in container.allKeys {
             switch key.stringValue {
-            case "issuedAt":
+            case "issuedAt", "issued_at":
                 issued = try container.decodeIfPresent(String.self, forKey: key)
             case "notes":
                 notes = try container.decodeIfPresent([String].self, forKey: key)
             case "kp":
                 kp = try? container.decode(OutlookKp.self, forKey: key)
-            case "bz_now":
+            case "bzNow", "bz_now":
                 bzNow = Self.decodeDouble(container, forKey: key)
-            case "sw_speed_now_kms":
+            case "swSpeedNowKms", "sw_speed_now_kms":
                 swSpeedNowKms = Self.decodeDouble(container, forKey: key)
-            case "sw_density_now_cm3":
+            case "swDensityNowCm3", "sw_density_now_cm3":
                 swDensityNowCm3 = Self.decodeDouble(container, forKey: key)
             case "headline":
                 headline = try? container.decode(String.self, forKey: key)
@@ -1046,10 +1108,10 @@ private struct SpaceForecastOutlook: Codable {
                 cmes = try? container.decode(OutlookCmes.self, forKey: key)
             case "bulletins":
                 bulletins = try? container.decode([String: SwpcBulletin].self, forKey: key)
-            case "swpc_text_alerts":
+            case "swpcTextAlerts", "swpc_text_alerts":
                 swpcTextAlerts = try? container.decode([SwpcTextAlert].self, forKey: key)
-            case "forecast_daily":
-                forecastDaily = try? container.decode([SpaceForecastDay].self, forKey: key)
+            case "forecastDaily", "forecast_daily":
+                forecastDaily = (try? container.decode(LossyArray<SpaceForecastDay>.self, forKey: key))?.values
             case "data":
                 data = try? container.decode(OutlookData.self, forKey: key)
             default:
@@ -1162,6 +1224,38 @@ private struct SpaceForecastDay: Codable, Hashable, Identifiable {
     let updatedAt: String?
 
     var id: String { forecastDay ?? "forecast-day" }
+
+    private enum CodingKeys: String, CodingKey {
+        case forecastDay, issuedAt, sourceProductTs, sourceSrc, kpMaxForecast, gScaleMax
+        case s1OrGreaterPct, r1R2Pct, r3OrGreaterPct
+        case geomagneticRationale, radiationRationale, radioRationale
+        case flareWatch, cmeWatch, solarWindWatch
+        case geomagneticSeverityBucket, radiationSeverityBucket, radioSeverityBucket
+        case updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        forecastDay = try container.decodeIfPresent(String.self, forKey: .forecastDay)
+        issuedAt = try container.decodeIfPresent(String.self, forKey: .issuedAt)
+        sourceProductTs = try container.decodeIfPresent(String.self, forKey: .sourceProductTs)
+        sourceSrc = try container.decodeIfPresent(String.self, forKey: .sourceSrc)
+        kpMaxForecast = container.decodeFlexibleDouble(forKey: .kpMaxForecast)
+        gScaleMax = try container.decodeIfPresent(String.self, forKey: .gScaleMax)
+        s1OrGreaterPct = container.decodeFlexibleDouble(forKey: .s1OrGreaterPct)
+        r1R2Pct = container.decodeFlexibleDouble(forKey: .r1R2Pct)
+        r3OrGreaterPct = container.decodeFlexibleDouble(forKey: .r3OrGreaterPct)
+        geomagneticRationale = try container.decodeIfPresent(String.self, forKey: .geomagneticRationale)
+        radiationRationale = try container.decodeIfPresent(String.self, forKey: .radiationRationale)
+        radioRationale = try container.decodeIfPresent(String.self, forKey: .radioRationale)
+        flareWatch = container.decodeFlexibleBool(forKey: .flareWatch)
+        cmeWatch = container.decodeFlexibleBool(forKey: .cmeWatch)
+        solarWindWatch = container.decodeFlexibleBool(forKey: .solarWindWatch)
+        geomagneticSeverityBucket = try container.decodeIfPresent(String.self, forKey: .geomagneticSeverityBucket)
+        radiationSeverityBucket = try container.decodeIfPresent(String.self, forKey: .radiationSeverityBucket)
+        radioSeverityBucket = try container.decodeIfPresent(String.self, forKey: .radioSeverityBucket)
+        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+    }
 }
 
 private struct UserOutlookDomain: Codable, Hashable, Identifiable {
@@ -1174,6 +1268,21 @@ private struct UserOutlookDomain: Codable, Hashable, Identifiable {
     let topDriverLabel: String?
 
     var id: String { key }
+
+    private enum CodingKeys: String, CodingKey {
+        case key, label, likelihood, currentGauge, explanation, topDriverKey, topDriverLabel
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        key = (try container.decodeIfPresent(String.self, forKey: .key)) ?? "domain"
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+        likelihood = try container.decodeIfPresent(String.self, forKey: .likelihood)
+        currentGauge = container.decodeFlexibleDouble(forKey: .currentGauge)
+        explanation = try container.decodeIfPresent(String.self, forKey: .explanation)
+        topDriverKey = try container.decodeIfPresent(String.self, forKey: .topDriverKey)
+        topDriverLabel = try container.decodeIfPresent(String.self, forKey: .topDriverLabel)
+    }
 }
 
 private struct UserOutlookDriver: Codable, Hashable, Identifiable {
@@ -1187,6 +1296,22 @@ private struct UserOutlookDriver: Codable, Hashable, Identifiable {
     let signalKey: String?
 
     var id: String { key }
+
+    private enum CodingKeys: String, CodingKey {
+        case key, label, severity, value, unit, day, detail, signalKey
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        key = (try container.decodeIfPresent(String.self, forKey: .key)) ?? "driver"
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+        severity = try container.decodeIfPresent(String.self, forKey: .severity)
+        value = container.decodeFlexibleDouble(forKey: .value)
+        unit = try container.decodeIfPresent(String.self, forKey: .unit)
+        day = try container.decodeIfPresent(String.self, forKey: .day)
+        detail = try container.decodeIfPresent(String.self, forKey: .detail)
+        signalKey = try container.decodeIfPresent(String.self, forKey: .signalKey)
+    }
 }
 
 private struct UserOutlookWindow: Codable, Hashable {
@@ -1195,6 +1320,19 @@ private struct UserOutlookWindow: Codable, Hashable {
     let topDrivers: [UserOutlookDriver]?
     let summary: String?
     let supportLine: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case windowHours, likelyElevatedDomains, topDrivers, summary, supportLine
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        windowHours = container.decodeFlexibleInt(forKey: .windowHours)
+        likelyElevatedDomains = (try? container.decode(LossyArray<UserOutlookDomain>.self, forKey: .likelyElevatedDomains))?.values
+        topDrivers = (try? container.decode(LossyArray<UserOutlookDriver>.self, forKey: .topDrivers))?.values
+        summary = try container.decodeIfPresent(String.self, forKey: .summary)
+        supportLine = try container.decodeIfPresent(String.self, forKey: .supportLine)
+    }
 }
 
 private struct UserOutlookDataReady: Codable, Hashable {
@@ -1206,6 +1344,57 @@ private struct UserOutlookDataReady: Codable, Hashable {
     let next24h: Bool?
     let next72h: Bool?
     let next7d: Bool?
+
+    private struct DynamicKey: CodingKey {
+        var stringValue: String
+        init?(stringValue: String) { self.stringValue = stringValue }
+        var intValue: Int?
+        init?(intValue: Int) { return nil }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicKey.self)
+        var locationFound: Bool? = nil
+        var localForecastDaily: Bool? = nil
+        var localForecastDays: Int? = nil
+        var spaceForecastDaily: Bool? = nil
+        var spaceForecastDays: Int? = nil
+        var next24h: Bool? = nil
+        var next72h: Bool? = nil
+        var next7d: Bool? = nil
+
+        for key in container.allKeys {
+            switch key.stringValue {
+            case "locationFound", "location_found":
+                locationFound = container.decodeFlexibleBool(forKey: key)
+            case "localForecastDaily", "local_forecast_daily":
+                localForecastDaily = container.decodeFlexibleBool(forKey: key)
+            case "localForecastDays", "local_forecast_days":
+                localForecastDays = container.decodeFlexibleInt(forKey: key)
+            case "spaceForecastDaily", "space_forecast_daily":
+                spaceForecastDaily = container.decodeFlexibleBool(forKey: key)
+            case "spaceForecastDays", "space_forecast_days":
+                spaceForecastDays = container.decodeFlexibleInt(forKey: key)
+            case "next24H", "next24h", "next_24h":
+                next24h = container.decodeFlexibleBool(forKey: key)
+            case "next72H", "next72h", "next_72h":
+                next72h = container.decodeFlexibleBool(forKey: key)
+            case "next7D", "next7d", "next_7d":
+                next7d = container.decodeFlexibleBool(forKey: key)
+            default:
+                break
+            }
+        }
+
+        self.locationFound = locationFound
+        self.localForecastDaily = localForecastDaily
+        self.localForecastDays = localForecastDays
+        self.spaceForecastDaily = spaceForecastDaily
+        self.spaceForecastDays = spaceForecastDays
+        self.next24h = next24h
+        self.next72h = next72h
+        self.next7d = next7d
+    }
 }
 
 private struct UserForecastOutlook: Codable {
@@ -1217,6 +1406,57 @@ private struct UserForecastOutlook: Codable {
     let next72h: UserOutlookWindow?
     let next7d: UserOutlookWindow?
     let error: String?
+
+    private struct DynamicKey: CodingKey {
+        var stringValue: String
+        init?(stringValue: String) { self.stringValue = stringValue }
+        var intValue: Int?
+        init?(intValue: Int) { return nil }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicKey.self)
+        var ok: Bool? = nil
+        var generatedAt: String? = nil
+        var availableWindows: [String]? = nil
+        var forecastDataReady: UserOutlookDataReady? = nil
+        var next24h: UserOutlookWindow? = nil
+        var next72h: UserOutlookWindow? = nil
+        var next7d: UserOutlookWindow? = nil
+        var error: String? = nil
+
+        for key in container.allKeys {
+            switch key.stringValue {
+            case "ok":
+                ok = container.decodeFlexibleBool(forKey: key)
+            case "generatedAt", "generated_at":
+                generatedAt = try? container.decode(String.self, forKey: key)
+            case "availableWindows", "available_windows":
+                availableWindows = try? container.decode([String].self, forKey: key)
+            case "forecastDataReady", "forecast_data_ready":
+                forecastDataReady = try? container.decode(UserOutlookDataReady.self, forKey: key)
+            case "next24H", "next24h", "next_24h":
+                next24h = try? container.decode(UserOutlookWindow.self, forKey: key)
+            case "next72H", "next72h", "next_72h":
+                next72h = try? container.decode(UserOutlookWindow.self, forKey: key)
+            case "next7D", "next7d", "next_7d":
+                next7d = try? container.decode(UserOutlookWindow.self, forKey: key)
+            case "error":
+                error = try? container.decode(String.self, forKey: key)
+            default:
+                break
+            }
+        }
+
+        self.ok = ok
+        self.generatedAt = generatedAt
+        self.availableWindows = availableWindows
+        self.forecastDataReady = forecastDataReady
+        self.next24h = next24h
+        self.next72h = next72h
+        self.next7d = next7d
+        self.error = error
+    }
 }
 
 private enum SpaceDetailSection: Hashable {
@@ -1982,11 +2222,8 @@ struct ContentView: View {
 
     private func fetchUserOutlook() async {
         let backendAvailable = await MainActor.run { state.backendDBAvailable }
-        guard backendAvailable else {
-            if let cached = decodeUserOutlook(from: userOutlookCacheJSON) {
-                await MainActor.run { lastKnownUserOutlook = cached }
-            }
-            return
+        if !backendAvailable, let cached = decodeUserOutlook(from: userOutlookCacheJSON) {
+            await MainActor.run { lastKnownUserOutlook = cached }
         }
         await MainActor.run {
             userOutlookLoading = true
