@@ -55,6 +55,27 @@ class PollenNormalizationTests(unittest.TestCase):
         self.assertEqual(snapshot["primary_type"], "grass")
         self.assertEqual(snapshot["primary_label"], "Grass pollen")
 
+    def test_missing_index_info_falls_back_to_low(self) -> None:
+        payload = {
+            "dailyInfo": [
+                {
+                    "date": {"year": 2026, "month": 3, "day": 20},
+                    "pollenTypeInfo": [
+                        {"code": "TREE", "displayName": "Tree"},
+                        {"code": "GRASS", "displayName": "Grass"},
+                    ],
+                }
+            ]
+        }
+
+        rows = pollen.normalize_daily_forecast(payload)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["pollen_tree_level"], "low")
+        self.assertEqual(rows[0]["pollen_grass_level"], "low")
+        self.assertEqual(rows[0]["pollen_overall_level"], "low")
+        self.assertEqual(rows[0]["pollen_primary_type"], "tree")
+
 
 if __name__ == "__main__":
     unittest.main()

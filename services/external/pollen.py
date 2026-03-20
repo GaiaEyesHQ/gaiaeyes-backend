@@ -143,6 +143,9 @@ def _normalize_type_infos(daily_info: Mapping[str, Any]) -> dict[str, dict[str, 
             display_name=index_info.get("displayName") or item.get("displayName"),
             index_value=value,
         )
+        if level is None and not index_info:
+            # Google omits indexInfo when the pollen count is low/out of season.
+            level = "low"
         out[type_key] = {
             "level": level,
             "index": value,
