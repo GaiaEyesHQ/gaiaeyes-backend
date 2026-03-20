@@ -412,8 +412,8 @@
         "category": "space_weather",
         "unit": "km/s",
         "activation": [
-          { "state": "elevated", "rule": "sw_speed >= 500 and sw_speed < 600" },
-          { "state": "high", "rule": "sw_speed >= 600 and sw_speed < 700" },
+          { "state": "elevated", "rule": "sw_speed >= 550 and sw_speed < 650" },
+          { "state": "high", "rule": "sw_speed >= 650 and sw_speed < 700" },
           { "state": "very_high", "rule": "sw_speed >= 700" }
         ],
         "confidence": "emerging",
@@ -653,8 +653,8 @@
         {
           "key": "alert.solar_wind_speed",
           "title": "Solar wind speed",
-          "severity_by_state": { "high": "watch", "very_high": "high" },
-          "trigger": { "signal_key": "spaceweather.sw_speed", "state_any_of": ["high", "very_high"] },
+          "severity_by_state": { "elevated": "watch", "high": "high", "very_high": "high" },
+          "trigger": { "signal_key": "spaceweather.sw_speed", "state_any_of": ["elevated", "high", "very_high"] },
           "suggested_actions": [
             "protect sleep window",
             "reduce stimulation",

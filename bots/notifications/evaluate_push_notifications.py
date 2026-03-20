@@ -394,8 +394,43 @@ def _build_signal_candidates(
 
     bz_now = _safe_float(space_daily.get("bz_now"))
     sw_speed_now = _safe_float(space_daily.get("sw_speed_now_kms"))
+    sw_speed_avg = _safe_float(space_daily.get("sw_speed_avg"))
+    sw_speed_signal = max(
+        [value for value in (sw_speed_now, sw_speed_avg) if value is not None],
+        default=None,
+    )
+    solar_wind_payload = {"sw_speed_now_kms": sw_speed_now, "sw_speed_avg": sw_speed_avg}
+    if sw_speed_signal is not None:
+        if sw_speed_signal >= 650:
+            out.append(
+                NotificationCandidate(
+                    family="solar_wind",
+                    event_key="solar_wind_speed_high",
+                    severity="high",
+                    title="Solar wind speed high",
+                    body="Solar wind speed is running in a stronger range. Open Gaia Eyes for details.",
+                    target_type="driver",
+                    target_key="solar_wind",
+                    asof=asof,
+                    payload=solar_wind_payload,
+                )
+            )
+        elif sw_speed_signal >= 550:
+            out.append(
+                NotificationCandidate(
+                    family="solar_wind",
+                    event_key="solar_wind_speed_watch",
+                    severity="watch",
+                    title="Solar wind speed watch",
+                    body="Solar wind speed is elevated enough to watch. Open Gaia Eyes for details.",
+                    target_type="driver",
+                    target_key="solar_wind",
+                    asof=asof,
+                    payload=solar_wind_payload,
+                )
+            )
     if bz_now is not None:
-        if bz_now <= -12 or ((sw_speed_now or 0) >= 650 and bz_now <= -8):
+        if bz_now <= -12 or ((sw_speed_signal or 0) >= 650 and bz_now <= -8):
             out.append(
                 NotificationCandidate(
                     family="solar_wind",
@@ -406,10 +441,10 @@ def _build_signal_candidates(
                     target_type="driver",
                     target_key="solar_wind",
                     asof=asof,
-                    payload={"bz_now": bz_now, "sw_speed_now_kms": sw_speed_now},
+                    payload={"bz_now": bz_now, **solar_wind_payload},
                 )
             )
-        elif bz_now <= -8 or ((sw_speed_now or 0) >= 550 and bz_now <= -5):
+        elif bz_now <= -8 or ((sw_speed_signal or 0) >= 550 and bz_now <= -5):
             out.append(
                 NotificationCandidate(
                     family="solar_wind",
@@ -420,7 +455,7 @@ def _build_signal_candidates(
                     target_type="driver",
                     target_key="solar_wind",
                     asof=asof,
-                    payload={"bz_now": bz_now, "sw_speed_now_kms": sw_speed_now},
+                    payload={"bz_now": bz_now, **solar_wind_payload},
                 )
             )
 

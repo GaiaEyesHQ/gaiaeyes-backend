@@ -108,6 +108,11 @@ CONFIDENCE_WEIGHT = {
     "Moderate": 1.8,
     "Emerging": 1.0,
 }
+CONFIDENCE_VALUE = {
+    "Strong": 1.0,
+    "Moderate": 0.7,
+    "Emerging": 0.4,
+}
 
 DRIVER_SEVERITY_SCORE = {
     "high": 4.0,
@@ -116,6 +121,15 @@ DRIVER_SEVERITY_SCORE = {
     "mild": 2.0,
     "low": 1.0,
 }
+DEFAULT_SIGNAL_STRENGTH = {
+    "high": 1.0,
+    "watch": 0.78,
+    "elevated": 0.78,
+    "mild": 0.55,
+    "low": 0.25,
+}
+HARD_VISIBILITY_THRESHOLD = 0.9
+PATTERN_RECENT_VISIBILITY_DAYS = 14
 
 ROLE_LABELS = {
     0: ("primary", "Leading now"),
@@ -257,6 +271,47 @@ def _safe_float(value: Any) -> Optional[float]:
         return float(value)
     except Exception:
         return None
+
+
+def _normalized_signal_strength(driver: Mapping[str, Any]) -> float:
+    strength = _safe_float(driver.get("signal_strength"))
+    if strength is not None:
+        return max(0.0, min(1.0, strength))
+    severity = str(driver.get("severity") or "").strip().lower()
+    return DEFAULT_SIGNAL_STRENGTH.get(severity, 0.25)
+
+
+def _confidence_label(value: Any) -> str | None:
+    token = str(value or "").strip().title()
+    return token if token in CONFIDENCE_VALUE else None
+
+
+def _confidence_value(value: Any) -> float:
+    return CONFIDENCE_VALUE.get(str(value or "").strip().title(), 0.0)
+
+
+def _recent_pattern_seen(row: Mapping[str, Any], *, day: date) -> bool:
+    last_seen = row.get("last_seen_at")
+    if not isinstance(last_seen, datetime):
+        return False
+    return last_seen.astimezone(timezone.utc).date() >= (day - timedelta(days=PATTERN_RECENT_VISIBILITY_DAYS))
+
+
+def _visible_pattern_row(row: Mapping[str, Any], *, day: date) -> Optional[Dict[str, Any]]:
+    out = dict(row)
+    confidence = _confidence_label(out.get("confidence"))
+    recent = _recent_pattern_seen(out, day=day)
+    if _confidence_value(confidence) < 0.4 and not recent:
+        return None
+
+    if confidence is None and recent:
+        confidence = "Emerging"
+    if confidence:
+        out["confidence"] = confidence
+        out["confidence_rank"] = max(confidence_rank(confidence), int(out.get("confidence_rank") or 0))
+    out["surfaceable"] = True
+    out["recently_seen"] = recent
+    return out
 
 
 def _severity_score(value: Any) -> float:
@@ -456,7 +511,11 @@ def compute_personal_relevance(
     recent_outcomes = dict(recent_outcomes or {})
     pattern_rows = [dict(row) for row in list(pattern_rows or []) if isinstance(row, Mapping)]
 
-    raw_rows: List[Dict[str, Any]] = [dict(driver) for driver in list(drivers or []) if isinstance(driver, Mapping)]
+    raw_rows: List[Dict[str, Any]] = [
+        dict(driver)
+        for driver in list(drivers or [])
+        if isinstance(driver, Mapping) and bool(driver.get("show_driver", True))
+    ]
     raw_top_drivers = [dict(row) for row in raw_rows[:3]]
     scored_rows: List[Dict[str, Any]] = []
 
@@ -465,6 +524,7 @@ def compute_personal_relevance(
         if not key:
             continue
         signal_key = DRIVER_TO_SIGNAL_KEY.get(key)
+        signal_strength = _normalized_signal_strength(driver)
         severity_score = _severity_score(driver.get("severity"))
         sensitivity_boost = _driver_sensitivity_boost(key, profile)
         refs_with_score: List[tuple[float, Dict[str, Any]]] = []
@@ -490,11 +550,22 @@ def compute_personal_relevance(
             )
         )
         top_refs = [ref for _, ref in refs_with_score[:2]]
-        personal_score = severity_score + sensitivity_boost + sum(score for score, _ in refs_with_score[:2])
+        pattern_weight_score = sum(score for score, _ in refs_with_score[:2])
+        personal_weight = 1.0 + min(1.0, (sensitivity_boost * 0.18) + (pattern_weight_score * 0.12))
+        driver_score = signal_strength * personal_weight
+        display_score = max(signal_strength, driver_score)
+        hard_visible = bool(driver.get("force_visible")) or signal_strength >= HARD_VISIBILITY_THRESHOLD
+        show_driver = bool(driver.get("show_driver", True)) or hard_visible
 
         enriched = dict(driver)
         enriched["raw_severity_score"] = round(severity_score, 2)
-        enriched["personal_relevance_score"] = round(personal_score, 2)
+        enriched["personal_relevance_score"] = round(driver_score, 3)
+        enriched["signal_strength"] = round(signal_strength, 3)
+        enriched["personal_weight"] = round(personal_weight, 3)
+        enriched["driver_score"] = round(driver_score, 3)
+        enriched["display_score"] = round(display_score, 3)
+        enriched["hard_visible"] = hard_visible
+        enriched["show_driver"] = show_driver
         enriched["active_pattern_refs"] = top_refs
         enriched["personal_reason"] = _driver_reason(enriched, top_refs, profile, variant="full")
         enriched["personal_reason_short"] = _driver_reason(enriched, top_refs, profile, variant="short")
@@ -504,11 +575,14 @@ def compute_personal_relevance(
 
     scored_rows.sort(
         key=lambda row: (
-            -float(row.get("personal_relevance_score") or 0.0),
+            -int(bool(row.get("hard_visible"))),
+            -float(row.get("display_score") or 0.0),
+            -float(row.get("signal_strength") or 0.0),
             -float(row.get("raw_severity_score") or 0.0),
             int(row.get("_sort_index") or 0),
         )
     )
+    scored_rows = [row for row in scored_rows if bool(row.get("show_driver", True))]
 
     for index, row in enumerate(scored_rows):
         role, role_label = _role_for_index(index)
@@ -634,30 +708,9 @@ async def fetch_best_pattern_rows(conn, user_id: str) -> List[Dict[str, Any]]:
             await cur.execute(
                 """
                 select *
-                  from marts.user_pattern_associations_best
-                 where user_id = %s
-                 order by confidence_rank desc, relative_lift desc, rate_diff desc, lag_hours asc
-                """,
-                (user_id,),
-                prepare=False,
-            )
-            rows = await cur.fetchall()
-            if rows:
-                return [dict(row) for row in rows]
-    except Exception:
-        try:
-            await conn.rollback()
-        except Exception:
-            pass
-
-    try:
-        async with conn.cursor(**_cursor_kwargs()) as cur:
-            await cur.execute(
-                """
-                select *
                   from marts.user_pattern_associations
                  where user_id = %s
-                   and surfaceable = true
+                 order by confidence_rank desc, relative_lift desc, rate_diff desc, lag_hours asc
                 """,
                 (user_id,),
                 prepare=False,
@@ -670,8 +723,13 @@ async def fetch_best_pattern_rows(conn, user_id: str) -> List[Dict[str, Any]]:
             pass
         return []
 
+    today = datetime.now(timezone.utc).date()
+    visible_rows = [row for row in (_visible_pattern_row(item, day=today) for item in raw_rows) if row]
+    if not visible_rows:
+        return []
+
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
-    for row in raw_rows:
+    for row in visible_rows:
         grouped.setdefault((str(row.get("signal_key")), str(row.get("outcome_key"))), []).append(row)
     return [best for best in (select_best_lag(group) for group in grouped.values()) if best]
 

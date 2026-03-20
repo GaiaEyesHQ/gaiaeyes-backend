@@ -5517,9 +5517,10 @@ struct ContentView: View {
             let kpNow = current?.kpCurrent?.value
             let swSpeed = current?.swSpeedAvg?.value
             let flares = Int((current?.flaresCount?.value ?? 0).rounded())
+            let spaceActive = (kpNow.map { $0 >= 5 } ?? false) || (swSpeed.map { $0 >= 550 } ?? false)
             let geomagneticState = normalizedPillText(
                 outlook?.kp?.gScaleNow?.capitalized,
-                fallback: (kpNow.map { $0 >= 5 ? "Active" : "Quiet" } ?? "Quiet")
+                fallback: (spaceActive ? "Active" : "Quiet")
             )
             let kpText = kpNow.map { String(format: "%.1f", $0) } ?? "—"
             let swText = swSpeed.map { String(format: "%.0f km/s", $0) } ?? "—"
@@ -5527,6 +5528,8 @@ struct ContentView: View {
             let status: String
             if let kpNow, kpNow >= 5 {
                 status = "Geomagnetic activity is elevated right now."
+            } else if let swSpeed, swSpeed >= 550 {
+                status = "Solar wind speed is elevated right now."
             } else if let updatedText, !updatedText.isEmpty {
                 status = "\(geomagneticState) geomagnetic conditions. Updated \(updatedText)."
             } else {
@@ -6566,7 +6569,8 @@ struct ContentView: View {
             let protonFlux = metrics?.protonFlux
             let flaresCount = outlook?.flares?.total24h ?? Int((current?.flaresCount?.value ?? 0).rounded())
             let cmeCount = outlook?.cmes?.stats?.total72h ?? Int((current?.cmesCount?.value ?? 0).rounded())
-            let geomagneticState = outlook?.kp?.gScaleNow ?? (kpNow.map { $0 >= 5 ? "Active" : "Quiet" } ?? "Quiet")
+            let geomagneticFallbackActive = (kpNow.map { $0 >= 5 } ?? false) || (swSpeed.map { $0 >= 550 } ?? false) || (bzNow.map { $0 <= -5 } ?? false)
+            let geomagneticState = outlook?.kp?.gScaleNow ?? (geomagneticFallbackActive ? "Active" : "Quiet")
 
             ZStack {
                 Color.black.opacity(0.97).ignoresSafeArea()

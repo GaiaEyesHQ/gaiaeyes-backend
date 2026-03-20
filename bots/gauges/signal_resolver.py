@@ -17,6 +17,9 @@ logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 _SYNODIC_DAYS = 29.53058867
+_SOLAR_WIND_WATCH_KMS = 550.0
+_SOLAR_WIND_HIGH_KMS = 650.0
+_SOLAR_WIND_VERY_HIGH_KMS = 700.0
 
 
 def _coerce_day(value: str | date | None) -> date:
@@ -490,24 +493,40 @@ def resolve_signals(
                 }
             )
 
-    sw_speed = _safe_float(space.get("sw_speed_now_kms"))
+    sw_speed_now = _safe_float(space.get("sw_speed_now_kms"))
+    sw_speed_avg = _safe_float(space.get("sw_speed_avg"))
+    sw_candidates = [value for value in (sw_speed_now, sw_speed_avg) if value is not None]
+    sw_speed = max(sw_candidates) if sw_candidates else None
     if sw_speed is not None:
         state = None
-        if sw_speed >= 700:
+        severity = None
+        force_visibility = False
+        if sw_speed >= _SOLAR_WIND_VERY_HIGH_KMS:
             state = "very_high"
-        elif sw_speed >= 600:
+            severity = "high"
+            force_visibility = True
+        elif sw_speed >= _SOLAR_WIND_HIGH_KMS:
             state = "high"
-        elif sw_speed >= 500:
+            severity = "high"
+            force_visibility = True
+        elif sw_speed >= _SOLAR_WIND_WATCH_KMS:
             state = "elevated"
+            severity = "watch"
         if state:
             out.append(
                 {
                     "signal_key": "spaceweather.sw_speed",
                     "state": state,
+                    "severity": severity,
                     "value": sw_speed,
                     "confidence": "emerging",
+                    "force_signal": force_visibility,
+                    "force_visibility": force_visibility,
                     "evidence": {
                         "source": "marts.space_weather_daily",
+                        "metric": "sw_speed_now_or_avg",
+                        "sw_speed_now_kms": sw_speed_now,
+                        "sw_speed_avg": sw_speed_avg,
                         "ts": _iso_ts(space.get("space_now_ts") or space.get("updated_at")),
                     },
                 }

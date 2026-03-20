@@ -10,6 +10,14 @@ _SEVERITY_RANK = {
     "mild": 2,
     "low": 1,
 }
+_DEFAULT_SIGNAL_STRENGTH = {
+    "high": 1.0,
+    "watch": 0.78,
+    "elevated": 0.78,
+    "mild": 0.55,
+    "low": 0.25,
+}
+_HARD_SIGNAL_THRESHOLD = 0.9
 
 _DRIVER_ORDER = {
     "pressure": 1,
@@ -91,6 +99,10 @@ def _severity_from_alert(alert: Dict[str, Any]) -> str:
     if token == "watch":
         return "watch"
     return "mild"
+
+
+def _clamp_signal_strength(value: float) -> float:
+    return max(0.0, min(1.0, value))
 
 
 def _state_title(value: str) -> str:
@@ -183,6 +195,79 @@ def _severity_from_local_value(key: str, value: Optional[float]) -> str:
     return "low"
 
 
+def _signal_strength_from_driver(key: str, value: Optional[float], severity: str) -> float:
+    fallback = _DEFAULT_SIGNAL_STRENGTH.get(severity, 0.25)
+    if value is None:
+        return fallback
+
+    abs_value = abs(value)
+    if key == "pressure":
+        if abs_value >= 12:
+            return 1.0
+        if abs_value >= 10:
+            return 0.92
+        if abs_value >= 8:
+            return 0.8
+        if abs_value >= 6:
+            return 0.6
+        return fallback
+    if key == "temp":
+        if abs_value >= 12:
+            return 1.0
+        if abs_value >= 10:
+            return 0.9
+        if abs_value >= 8:
+            return 0.78
+        if abs_value >= 6:
+            return 0.58
+        return fallback
+    if key == "aqi":
+        if value >= 151:
+            return 1.0
+        if value >= 101:
+            return 0.82
+        if value >= 51:
+            return 0.58
+        return fallback
+    if key == "allergens":
+        if value >= 5:
+            return 1.0
+        if value >= 4:
+            return 0.82
+        if value >= 3:
+            return 0.6
+        return fallback
+    if key == "kp":
+        if value >= 6:
+            return 1.0
+        if value >= 5:
+            return 0.84
+        if value >= 4:
+            return 0.66
+        return fallback
+    if key == "bz":
+        if value <= -10:
+            return 1.0
+        if value <= -8:
+            return 0.82
+        if value <= -5:
+            return 0.64
+        return fallback
+    if key == "sw":
+        if value >= 700:
+            return 1.0
+        if value >= 650:
+            return 0.96
+        if value >= 550:
+            return 0.82
+        if value >= 500:
+            return 0.68
+        return fallback
+    if key == "schumann":
+        return 0.82 if severity in {"watch", "elevated", "high"} else fallback
+    return fallback
+
+
 def _format_value(key: str, value: Optional[float], unit: str) -> Optional[str]:
     if value is None:
         return None
@@ -214,6 +299,9 @@ def _candidate(
     severity: str,
     state: str,
     value: Optional[float],
+    signal_strength: Optional[float] = None,
+    force_visible: bool = False,
+    show_driver: bool = True,
 ) -> Dict[str, Any]:
     meta = _DRIVER_META.get(key) or {"label": key.replace("_", " ").title(), "unit": ""}
     unit = str(meta.get("unit") or "")
@@ -228,6 +316,8 @@ def _candidate(
             rounded_value = round(value, 1)
 
     state_title = _state_title(state) if state else _severity_title(severity)
+    strength = _clamp_signal_strength(signal_strength if signal_strength is not None else _signal_strength_from_driver(key, rounded_value, severity))
+    hard_visible = force_visible or (severity == "high" and strength >= _HARD_SIGNAL_THRESHOLD)
     return {
         "key": key,
         "label": label,
@@ -238,19 +328,28 @@ def _candidate(
         "display": _display_text(label, state_title, key, rounded_value, unit),
         "_rank": _SEVERITY_RANK.get(severity, 0),
         "_value_abs": abs(rounded_value) if rounded_value is not None else -1.0,
+        "_signal_strength": strength,
+        "_force_visible": hard_visible,
+        "_show_driver": bool(show_driver or hard_visible),
     }
 
 
 def _pick_stronger(existing: Optional[Dict[str, Any]], incoming: Dict[str, Any]) -> Dict[str, Any]:
     if not existing:
         return incoming
-    if incoming["_rank"] > existing["_rank"]:
-        return incoming
-    if incoming["_rank"] < existing["_rank"]:
-        return existing
-    if incoming["_value_abs"] > existing["_value_abs"]:
-        return incoming
-    return existing
+    existing_rank = (
+        int(existing.get("_force_visible") is True),
+        int(existing.get("_rank") or 0),
+        float(existing.get("_signal_strength") or 0.0),
+        float(existing.get("_value_abs") or -1.0),
+    )
+    incoming_rank = (
+        int(incoming.get("_force_visible") is True),
+        int(incoming.get("_rank") or 0),
+        float(incoming.get("_signal_strength") or 0.0),
+        float(incoming.get("_value_abs") or -1.0),
+    )
+    return incoming if incoming_rank > existing_rank else existing
 
 
 def _alerts_list(alerts_json: Any) -> List[Dict[str, Any]]:
@@ -278,11 +377,20 @@ def normalize_environmental_drivers(
             continue
 
         raw_state = str(state.get("state") or "").strip()
-        severity = _severity_from_state(raw_state)
+        explicit_severity = str(state.get("severity") or "").strip().lower()
+        severity = explicit_severity if explicit_severity in _SEVERITY_RANK else _severity_from_state(raw_state)
         value = _safe_float(state.get("value"))
         picked[driver_key] = _pick_stronger(
             picked.get(driver_key),
-            _candidate(driver_key, severity=severity, state=raw_state or severity, value=value),
+            _candidate(
+                driver_key,
+                severity=severity,
+                state=raw_state or severity,
+                value=value,
+                signal_strength=_safe_float(state.get("signal_strength")),
+                force_visible=bool(state.get("force_visibility") or state.get("force_signal")),
+                show_driver=bool(state.get("show_driver", True)),
+            ),
         )
 
     for alert in _alerts_list(alerts_json):
@@ -316,7 +424,9 @@ def normalize_environmental_drivers(
     rows = list(picked.values())
     rows.sort(
         key=lambda item: (
+            -int(item.get("_force_visible") is True),
             -int(item.get("_rank") or 0),
+            -float(item.get("_signal_strength") or 0.0),
             -float(item.get("_value_abs") or 0),
             int(_DRIVER_ORDER.get(item.get("key"), 999)),
         )
@@ -333,6 +443,9 @@ def normalize_environmental_drivers(
                 "value": item.get("value"),
                 "unit": item.get("unit"),
                 "display": item.get("display"),
+                "signal_strength": round(float(item.get("_signal_strength") or 0.0), 3),
+                "force_visible": bool(item.get("_force_visible")),
+                "show_driver": bool(item.get("_show_driver")),
             }
         )
     return out

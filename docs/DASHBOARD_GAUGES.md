@@ -34,6 +34,7 @@ The loader validates these keys and returns `(definition_obj, version)` for down
   - Temperature swing (24h)
   - AQI bucket (moderate/usg/unhealthy)
   - Kp (now or 24h max)
+  - Solar wind speed (watch at `>= 550 km/s`, high at `>= 650 km/s`)
   - Bz coupling (active/strong)
   - Schumann variability (24h stddev, threshold-controlled)
   - Full moon window (≤2 days)
@@ -160,7 +161,9 @@ When trigger events are detected for paid users, the engine appends a “Trigger
     - `earthscope_summary`: short deterministic summary paragraph for home cards
   - Driver ranking remains deterministic:
     - raw severity still matters
-    - stored user pattern matches can raise a moderate driver above a globally louder but less personal signal
+    - each driver now carries a raw `signal_strength` plus a bounded `personal_weight`
+    - display order uses `max(signal_strength, signal_strength * personal_weight)` so personalization can raise relevance but cannot hide a strong live signal
+    - high-strength signals are hard-visible even when personal weighting is low
     - health context and recent symptom history only affect display priority, not pattern-engine statistics
   - Explanation behavior:
     - live-refreshing surfaces use current-state wording (`right now`, `currently`, `at the moment`) rather than defaulting to day-summary wording

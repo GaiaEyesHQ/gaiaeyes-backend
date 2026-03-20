@@ -1,4 +1,5 @@
 import sys
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -8,52 +9,86 @@ if str(ROOT) not in sys.path:
 from services.drivers.driver_normalize import normalize_environmental_drivers
 
 
-def test_normalize_environmental_drivers_dedupes_family_and_prefers_stronger() -> None:
-    active_states = [
-        {"signal_key": "earthweather.pressure_swing_12h", "state": "moderate", "value": -6.4},
-        {"signal_key": "earthweather.pressure_drop_3h", "state": "high", "value": -5.2},
-        {"signal_key": "spaceweather.sw_speed", "state": "high", "value": 622.0},
-        {"signal_key": "spaceweather.kp", "state": "elevated", "value": 5.0},
-    ]
-    alerts = [{"key": "alert.air_quality", "severity": "watch"}]
-    local_payload = {"weather": {"baro_delta_12h_hpa": -6.0}, "air": {"aqi": 119}}
+class DriverNormalizeV2Tests(unittest.TestCase):
+    def test_normalize_environmental_drivers_dedupes_family_and_prefers_stronger(self) -> None:
+        active_states = [
+            {"signal_key": "earthweather.pressure_swing_12h", "state": "moderate", "value": -6.4},
+            {"signal_key": "earthweather.pressure_drop_3h", "state": "high", "value": -5.2},
+            {"signal_key": "spaceweather.sw_speed", "state": "high", "value": 655.0},
+            {"signal_key": "spaceweather.kp", "state": "elevated", "value": 5.0},
+        ]
+        alerts = [{"key": "alert.air_quality", "severity": "watch"}]
+        local_payload = {"weather": {"baro_delta_12h_hpa": -6.0}, "air": {"aqi": 119}}
 
-    rows = normalize_environmental_drivers(
-        active_states=active_states,
-        local_payload=local_payload,
-        alerts_json=alerts,
-    )
+        rows = normalize_environmental_drivers(
+            active_states=active_states,
+            local_payload=local_payload,
+            alerts_json=alerts,
+        )
 
-    keys = [row["key"] for row in rows]
-    assert keys.count("pressure") == 1
-    pressure = next(row for row in rows if row["key"] == "pressure")
-    assert pressure["severity"] == "high"
-    assert pressure["state"] == "High"
+        keys = [row["key"] for row in rows]
+        self.assertEqual(keys.count("pressure"), 1)
+        pressure = next(row for row in rows if row["key"] == "pressure")
+        self.assertEqual(pressure["severity"], "high")
+        self.assertEqual(pressure["state"], "High")
+        self.assertTrue(pressure["show_driver"])
 
-    aqi = next(row for row in rows if row["key"] == "aqi")
-    assert aqi["severity"] == "watch"
-    assert aqi["value"] == 119.0
+        aqi = next(row for row in rows if row["key"] == "aqi")
+        self.assertEqual(aqi["severity"], "watch")
+        self.assertEqual(aqi["value"], 119.0)
+
+        solar_wind = next(row for row in rows if row["key"] == "sw")
+        self.assertEqual(solar_wind["severity"], "high")
+        self.assertTrue(solar_wind["force_visible"])
+        self.assertGreaterEqual(solar_wind["signal_strength"], 0.9)
+
+    def test_normalize_environmental_drivers_uses_local_payload_when_no_active_signals(self) -> None:
+        local_payload = {
+            "weather": {
+                "baro_delta_12h_hpa": -9.1,
+                "temp_delta_24h_c": 6.2,
+            },
+            "air": {"aqi": 58},
+        }
+
+        rows = normalize_environmental_drivers(
+            active_states=[],
+            local_payload=local_payload,
+            alerts_json=[],
+        )
+
+        keys = [row["key"] for row in rows]
+        self.assertEqual(keys[0], "pressure")
+        self.assertEqual(set(keys), {"pressure", "temp", "aqi"})
+
+        pressure = rows[0]
+        self.assertEqual(pressure["severity"], "watch")
+        self.assertIn("Pressure Swing", pressure["display"])
+
+    def test_normalize_environmental_drivers_preserves_force_visible_high_signal(self) -> None:
+        rows = normalize_environmental_drivers(
+            active_states=[
+                {
+                    "signal_key": "spaceweather.sw_speed",
+                    "state": "high",
+                    "severity": "high",
+                    "value": 655.0,
+                    "force_visibility": True,
+                },
+                {
+                    "signal_key": "earthweather.pressure_swing_12h",
+                    "state": "moderate",
+                    "value": -6.2,
+                },
+            ],
+            local_payload={},
+            alerts_json=[],
+        )
+
+        self.assertEqual(rows[0]["key"], "sw")
+        self.assertTrue(rows[0]["force_visible"])
+        self.assertTrue(rows[0]["show_driver"])
 
 
-def test_normalize_environmental_drivers_uses_local_payload_when_no_active_signals() -> None:
-    local_payload = {
-        "weather": {
-            "baro_delta_12h_hpa": -9.1,
-            "temp_delta_24h_c": 6.2,
-        },
-        "air": {"aqi": 58},
-    }
-
-    rows = normalize_environmental_drivers(
-        active_states=[],
-        local_payload=local_payload,
-        alerts_json=[],
-    )
-
-    keys = [row["key"] for row in rows]
-    assert keys[0] == "pressure"
-    assert set(keys) == {"pressure", "temp", "aqi"}
-
-    pressure = rows[0]
-    assert pressure["severity"] == "watch"
-    assert "Pressure Swing" in pressure["display"]
+if __name__ == "__main__":
+    unittest.main()
