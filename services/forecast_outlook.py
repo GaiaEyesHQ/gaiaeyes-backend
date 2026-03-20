@@ -18,6 +18,7 @@ from services.patterns.personal_relevance import (
     fetch_best_pattern_rows,
     pattern_anchor_statement,
 )
+from services.external import pollen
 
 
 LOCAL_REFRESH_HOURS = 6
@@ -56,6 +57,7 @@ SIGNAL_TO_DRIVER = {
     "pressure_swing_exposed": "pressure",
     "temp_swing_exposed": "temp",
     "aqi_moderate_plus_exposed": "aqi",
+    "pollen_overall_exposed": "allergens",
     "kp_g1_plus_exposed": "kp",
 }
 
@@ -65,6 +67,7 @@ DRIVER_LABELS = {
     "pressure": "Pressure swing",
     "temp": "Temperature swing",
     "aqi": "Air quality",
+    "allergens": "Allergen load",
     "kp": "Geomagnetic outlook",
     "solar_wind": "Solar-wind watch",
     "radio": "Radio-blackout watch",
@@ -77,12 +80,13 @@ DRIVER_ORDER = {
     "pressure": 1,
     "temp": 2,
     "aqi": 3,
-    "kp": 4,
-    "solar_wind": 5,
-    "cme": 6,
-    "radio": 7,
-    "radiation": 8,
-    "flare": 9,
+    "allergens": 4,
+    "kp": 5,
+    "solar_wind": 6,
+    "cme": 7,
+    "radio": 8,
+    "radiation": 9,
+    "flare": 10,
 }
 
 SEVERITY_RANK = {"high": 3, "watch": 2, "mild": 1, "low": 0}
@@ -252,6 +256,17 @@ def _severity_from_aqi(aqi: float | None) -> str:
     if aqi >= 101:
         return "watch"
     if aqi >= 51:
+        return "mild"
+    return "low"
+
+
+def _severity_from_allergen_level(level: str | None) -> str:
+    token = str(level or "").strip().lower()
+    if token == "very_high":
+        return "high"
+    if token == "high":
+        return "watch"
+    if token == "moderate":
         return "mild"
     return "low"
 
@@ -518,6 +533,7 @@ def summarize_local_forecast_days(
     hourly_payload: Mapping[str, Any],
     grid_payload: Mapping[str, Any] | None,
     *,
+    allergen_payload: Mapping[str, Any] | None = None,
     location_key: str,
     zip_code: str | None,
     lat: float | None,
@@ -582,6 +598,11 @@ def summarize_local_forecast_days(
         bucket["raw_periods"] += 1
 
     pressure_by_day: dict[date, float | None] = {day_key: None for day_key in day_order}
+    pollen_by_day = {
+        row.get("day"): row
+        for row in pollen.normalize_daily_forecast(allergen_payload)
+        if isinstance(row.get("day"), date)
+    }
     grid_props = grid_payload.get("properties") if isinstance(grid_payload, Mapping) else {}
     grid_props = grid_props if isinstance(grid_props, Mapping) else {}
     pressure_values = []
@@ -628,6 +649,7 @@ def summarize_local_forecast_days(
         temp_mean = (temp_high + temp_low) / 2.0 if temp_high is not None and temp_low is not None else (fmean(temps) if temps else None)
         pressure_hpa = pressure_by_day.get(day_key)
         summary = Counter(summaries).most_common(1)[0][0] if summaries else None
+        pollen_row = pollen_by_day.get(day_key) or {}
 
         rows.append(
             {
@@ -650,10 +672,25 @@ def summarize_local_forecast_days(
                 "condition_code": _slugify_condition(summary),
                 "condition_summary": summary,
                 "aqi_forecast": None,
+                "pollen_tree_level": pollen_row.get("pollen_tree_level"),
+                "pollen_grass_level": pollen_row.get("pollen_grass_level"),
+                "pollen_weed_level": pollen_row.get("pollen_weed_level"),
+                "pollen_mold_level": pollen_row.get("pollen_mold_level"),
+                "pollen_overall_level": pollen_row.get("pollen_overall_level"),
+                "pollen_primary_type": pollen_row.get("pollen_primary_type"),
+                "pollen_source": pollen_row.get("pollen_source"),
+                "pollen_updated_at": _parse_iso_datetime(pollen_row.get("pollen_updated_at")) or updated_at,
+                "pollen_tree_index": _safe_float(pollen_row.get("pollen_tree_index")),
+                "pollen_grass_index": _safe_float(pollen_row.get("pollen_grass_index")),
+                "pollen_weed_index": _safe_float(pollen_row.get("pollen_weed_index")),
+                "pollen_mold_index": _safe_float(pollen_row.get("pollen_mold_index")),
+                "pollen_overall_index": _safe_float(pollen_row.get("pollen_overall_index")),
                 "raw": json.dumps(
                     {
                         "period_count": bucket.get("raw_periods") or 0,
                         "pressure_points": len(weighted_values.get(day_key) or []),
+                        "pollen_available": bool(pollen_row),
+                        "pollen_primary_type": pollen_row.get("pollen_primary_type"),
                     }
                 ),
                 "updated_at": updated_at,
@@ -739,7 +776,11 @@ async def _fetch_local_forecast_rows(conn, location_key: str, start_day: date) -
                    temp_high_c, temp_low_c, temp_delta_from_prior_day_c,
                    pressure_hpa, pressure_delta_from_prior_day_hpa,
                    humidity_avg, precip_probability, wind_speed, wind_gust,
-                   condition_code, condition_summary, aqi_forecast, raw, updated_at
+                   condition_code, condition_summary, aqi_forecast,
+                   pollen_tree_level, pollen_grass_level, pollen_weed_level, pollen_mold_level,
+                   pollen_overall_level, pollen_primary_type, pollen_source, pollen_updated_at,
+                   pollen_tree_index, pollen_grass_index, pollen_weed_index, pollen_mold_index, pollen_overall_index,
+                   raw, updated_at
               from marts.local_forecast_daily
              where location_key = %s
                and day >= %s
@@ -765,14 +806,22 @@ async def _upsert_local_forecast_rows(conn, rows: Sequence[Mapping[str, Any]]) -
                     temp_high_c, temp_low_c, temp_delta_from_prior_day_c,
                     pressure_hpa, pressure_delta_from_prior_day_hpa,
                     humidity_avg, precip_probability, wind_speed, wind_gust,
-                    condition_code, condition_summary, aqi_forecast, raw, updated_at
+                    condition_code, condition_summary, aqi_forecast,
+                    pollen_tree_level, pollen_grass_level, pollen_weed_level, pollen_mold_level,
+                    pollen_overall_level, pollen_primary_type, pollen_source, pollen_updated_at,
+                    pollen_tree_index, pollen_grass_index, pollen_weed_index, pollen_mold_index, pollen_overall_index,
+                    raw, updated_at
                 )
                 values (
                     %(location_key)s, %(day)s, %(source)s, %(issued_at)s, %(location_zip)s, %(lat)s, %(lon)s,
                     %(temp_high_c)s, %(temp_low_c)s, %(temp_delta_from_prior_day_c)s,
                     %(pressure_hpa)s, %(pressure_delta_from_prior_day_hpa)s,
                     %(humidity_avg)s, %(precip_probability)s, %(wind_speed)s, %(wind_gust)s,
-                    %(condition_code)s, %(condition_summary)s, %(aqi_forecast)s, %(raw)s::jsonb, %(updated_at)s
+                    %(condition_code)s, %(condition_summary)s, %(aqi_forecast)s,
+                    %(pollen_tree_level)s, %(pollen_grass_level)s, %(pollen_weed_level)s, %(pollen_mold_level)s,
+                    %(pollen_overall_level)s, %(pollen_primary_type)s, %(pollen_source)s, %(pollen_updated_at)s,
+                    %(pollen_tree_index)s, %(pollen_grass_index)s, %(pollen_weed_index)s, %(pollen_mold_index)s, %(pollen_overall_index)s,
+                    %(raw)s::jsonb, %(updated_at)s
                 )
                 on conflict (location_key, day) do update
                 set source = excluded.source,
@@ -792,6 +841,19 @@ async def _upsert_local_forecast_rows(conn, rows: Sequence[Mapping[str, Any]]) -
                     condition_code = excluded.condition_code,
                     condition_summary = excluded.condition_summary,
                     aqi_forecast = excluded.aqi_forecast,
+                    pollen_tree_level = excluded.pollen_tree_level,
+                    pollen_grass_level = excluded.pollen_grass_level,
+                    pollen_weed_level = excluded.pollen_weed_level,
+                    pollen_mold_level = excluded.pollen_mold_level,
+                    pollen_overall_level = excluded.pollen_overall_level,
+                    pollen_primary_type = excluded.pollen_primary_type,
+                    pollen_source = excluded.pollen_source,
+                    pollen_updated_at = excluded.pollen_updated_at,
+                    pollen_tree_index = excluded.pollen_tree_index,
+                    pollen_grass_index = excluded.pollen_grass_index,
+                    pollen_weed_index = excluded.pollen_weed_index,
+                    pollen_mold_index = excluded.pollen_mold_index,
+                    pollen_overall_index = excluded.pollen_overall_index,
                     raw = excluded.raw,
                     updated_at = excluded.updated_at
                 """,
@@ -827,13 +889,15 @@ async def ensure_local_forecast_daily(conn, *, zip_code: str | None, lat: float 
     try:
         from services.external import nws
 
-        hourly_payload, grid_payload = await asyncio.gather(
+        hourly_payload, grid_payload, allergen_payload = await asyncio.gather(
             nws.forecast_hourly_by_latlon(float(resolved_lat), float(resolved_lon)),
             nws.gridpoints_by_latlon(float(resolved_lat), float(resolved_lon)),
+            pollen.forecast_by_latlon(float(resolved_lat), float(resolved_lon), days=3),
         )
         rows = summarize_local_forecast_days(
             hourly_payload,
             grid_payload,
+            allergen_payload=allergen_payload,
             location_key=location_key,
             zip_code=zip_code,
             lat=float(resolved_lat),
@@ -994,6 +1058,19 @@ def serialize_local_forecast_rows(rows: Sequence[Mapping[str, Any]]) -> list[dic
                 "condition_code": row.get("condition_code"),
                 "condition_summary": row.get("condition_summary"),
                 "aqi_forecast": _safe_float(row.get("aqi_forecast")),
+                "pollen_tree_level": row.get("pollen_tree_level"),
+                "pollen_grass_level": row.get("pollen_grass_level"),
+                "pollen_weed_level": row.get("pollen_weed_level"),
+                "pollen_mold_level": row.get("pollen_mold_level"),
+                "pollen_overall_level": row.get("pollen_overall_level"),
+                "pollen_primary_type": row.get("pollen_primary_type"),
+                "pollen_source": row.get("pollen_source"),
+                "pollen_updated_at": _serialize_iso_value(row.get("pollen_updated_at")),
+                "pollen_tree_index": _safe_float(row.get("pollen_tree_index")),
+                "pollen_grass_index": _safe_float(row.get("pollen_grass_index")),
+                "pollen_weed_index": _safe_float(row.get("pollen_weed_index")),
+                "pollen_mold_index": _safe_float(row.get("pollen_mold_index")),
+                "pollen_overall_index": _safe_float(row.get("pollen_overall_index")),
                 "updated_at": _serialize_iso_value(row.get("updated_at")),
             }
         )
@@ -1078,6 +1155,17 @@ def merge_daily_forecast_inputs(
             "condition_code": row.get("condition_code"),
             "condition_summary": row.get("condition_summary"),
             "aqi_forecast": _safe_float(row.get("aqi_forecast")),
+            "pollen_tree_level": row.get("pollen_tree_level"),
+            "pollen_grass_level": row.get("pollen_grass_level"),
+            "pollen_weed_level": row.get("pollen_weed_level"),
+            "pollen_mold_level": row.get("pollen_mold_level"),
+            "pollen_overall_level": row.get("pollen_overall_level"),
+            "pollen_primary_type": row.get("pollen_primary_type"),
+            "pollen_tree_index": _safe_float(row.get("pollen_tree_index")),
+            "pollen_grass_index": _safe_float(row.get("pollen_grass_index")),
+            "pollen_weed_index": _safe_float(row.get("pollen_weed_index")),
+            "pollen_mold_index": _safe_float(row.get("pollen_mold_index")),
+            "pollen_overall_index": _safe_float(row.get("pollen_overall_index")),
         }
     for row in space_rows:
         day_key = row.get("forecast_day")
@@ -1181,6 +1269,37 @@ def derive_forecast_drivers(
             day_key=day_key if isinstance(day_key, date) else None,
             detail=f"AQI may drift up to around {aqi_value:.0f}.",
             signal_key=DRIVER_TO_SIGNAL["aqi"],
+        )
+
+    allergen_candidates = [
+        (
+            row.get("day"),
+            str(row.get("pollen_overall_level") or ""),
+            _safe_float(row.get("pollen_overall_index")),
+            str(row.get("pollen_primary_type") or ""),
+        )
+        for row in rows
+        if str(row.get("pollen_overall_level") or "").strip()
+    ]
+    if allergen_candidates:
+        day_key, overall_level, overall_index, primary_type = max(
+            allergen_candidates,
+            key=lambda item: (
+                pollen.LEVEL_RANK.get(item[1], 0),
+                item[2] or 0.0,
+            ),
+        )
+        primary_label = pollen.TYPE_LABELS.get(primary_type) if primary_type else None
+        detail_subject = primary_label or "Allergen load"
+        level_label = pollen.STATE_LABELS.get(overall_level, str(overall_level).replace("_", " ").title())
+        add_driver(
+            "allergens",
+            severity=_severity_from_allergen_level(overall_level),
+            value=overall_index,
+            unit="index",
+            day_key=day_key if isinstance(day_key, date) else None,
+            detail=f"{detail_subject} may run {level_label.lower()} in this forecast window.",
+            signal_key=DRIVER_TO_SIGNAL["allergens"],
         )
 
     kp_candidates = [
@@ -1311,6 +1430,8 @@ def _support_line(driver_key: str) -> str:
         return "Worth keeping hydration, layering, and recovery a little steadier if the temperature swing lands hard."
     if driver_key == "aqi":
         return "Worth keeping the air around you a bit cleaner if the AQI drifts up."
+    if driver_key == "allergens":
+        return "Worth keeping windows, filters, rinses, and outdoor timing a little more deliberate if allergy-type days tend to hit you."
     if driver_key in {"kp", "solar_wind", "cme", "flare", "radio", "radiation"}:
         return "Worth keeping the next couple of evenings a little lower-stimulation if the space-weather watch becomes more noticeable for you."
     return "Worth keeping your baseline routines a little steadier while this window passes."

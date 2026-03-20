@@ -178,10 +178,36 @@ Rationale: Active regions may keep a modest flare chance in the outlook.
                 }
             }
         }
+        allergen_payload = {
+            "dailyInfo": [
+                {
+                    "date": {"year": 2026, "month": 3, "day": 18},
+                    "pollenTypeInfo": [
+                        {"code": "TREE", "displayName": "Tree", "indexInfo": {"value": 4, "category": "HIGH"}},
+                        {"code": "GRASS", "displayName": "Grass", "indexInfo": {"value": 2, "category": "LOW"}},
+                        {"code": "WEED", "displayName": "Weed", "indexInfo": {"value": 3, "category": "MODERATE"}},
+                    ],
+                },
+                {
+                    "date": {"year": 2026, "month": 3, "day": 19},
+                    "pollenTypeInfo": [
+                        {"code": "TREE", "displayName": "Tree", "indexInfo": {"value": 5, "category": "VERY_HIGH"}},
+                        {"code": "GRASS", "displayName": "Grass", "indexInfo": {"value": 2, "category": "LOW"}},
+                    ],
+                },
+                {
+                    "date": {"year": 2026, "month": 3, "day": 20},
+                    "pollenTypeInfo": [
+                        {"code": "GRASS", "displayName": "Grass", "indexInfo": {"value": 4, "category": "HIGH"}},
+                    ],
+                },
+            ]
+        }
 
         rows = summarize_local_forecast_days(
             hourly_payload,
             grid_payload,
+            allergen_payload=allergen_payload,
             location_key="zip:78701",
             zip_code="78701",
             lat=30.2672,
@@ -198,6 +224,9 @@ Rationale: Active regions may keep a modest flare chance in the outlook.
         self.assertAlmostEqual(rows[1]["temp_delta_from_prior_day_c"], 2.8, places=1)
         self.assertAlmostEqual(rows[2]["pressure_delta_from_prior_day_hpa"], 8.0, places=1)
         self.assertGreater(rows[1]["wind_gust"], rows[1]["wind_speed"])
+        self.assertEqual(rows[0]["pollen_overall_level"], "high")
+        self.assertEqual(rows[1]["pollen_primary_type"], "tree")
+        self.assertEqual(rows[2]["pollen_grass_level"], "high")
 
     def test_build_window_outlook_prioritizes_pattern_linked_driver(self) -> None:
         merged_rows = [
@@ -249,6 +278,35 @@ Rationale: Active regions may keep a modest flare chance in the outlook.
         self.assertIn("pacing and hydration", payload["support_line"].lower())
         self.assertIn("pain", payload["likely_elevated_domains"][0]["explanation"].lower())
 
+    def test_build_window_outlook_surfaces_allergen_driver_when_present(self) -> None:
+        merged_rows = [
+            {
+                "day": date(2026, 3, 19),
+                "pollen_overall_level": "high",
+                "pollen_overall_index": 4.0,
+                "pollen_primary_type": "tree",
+            },
+            {
+                "day": date(2026, 3, 20),
+                "pollen_overall_level": "moderate",
+                "pollen_overall_index": 3.0,
+                "pollen_primary_type": "weed",
+            },
+        ]
+
+        payload = build_window_outlook(
+            merged_rows,
+            pattern_rows=[],
+            gauges={},
+            window_hours=24,
+        )
+
+        self.assertIsNotNone(payload)
+        assert payload is not None
+        self.assertEqual(payload["top_drivers"][0]["key"], "allergens")
+        self.assertIn("tree pollen", payload["summary"].lower())
+        self.assertIn("filters", payload["support_line"].lower())
+
     def test_forecast_row_serializers_emit_json_safe_shapes(self) -> None:
         local_rows = [
             {
@@ -280,6 +338,7 @@ Rationale: Active regions may keep a modest flare chance in the outlook.
 
         self.assertEqual(local_payload[0]["day"], "2026-03-19")
         self.assertIsNone(local_payload[0]["pressure_hpa"])
+        self.assertIsNone(local_payload[0]["pollen_overall_level"])
         self.assertEqual(space_payload[0]["forecast_day"], "2026-03-19")
         self.assertEqual(space_payload[0]["g_scale_max"], "G2")
         self.assertTrue(space_payload[0]["flare_watch"])

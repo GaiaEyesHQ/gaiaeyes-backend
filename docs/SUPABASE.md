@@ -58,7 +58,7 @@
 - `ext.solar_cycle_forecast` + `marts.solar_cycle_progress` — solar cycle forecast summaries
 - `ext.magnetometer_chain` + `marts.magnetometer_regional` — magnetometer chain rollups
 - `ext.zip_centroids` + `ext.local_signals_cache` — local weather/AQI snapshot cache keyed by ZIP (feeds Local Health Check)
-- `marts.local_forecast_daily` — normalized 3-day local forecast rows keyed by location context
+- `marts.local_forecast_daily` — normalized 3-day local forecast rows keyed by location context, now including daily pollen/allergen buckets and raw index columns when available
 - `marts.space_forecast_daily` + `marts.space_forecast_daily_latest` — structured daily parse of the SWPC 3-day bulletin stored in `ext.space_forecast`
 
 ### public schema (subscriptions)

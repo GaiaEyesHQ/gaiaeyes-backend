@@ -61,13 +61,14 @@ private struct LocalCheckResponse: Decodable {
     let whereInfo: LocalWhere?
     let weather: LocalWeather?
     let air: LocalAir?
+    let allergens: LocalAllergens?
     let moon: LocalMoon?
     let forecastDaily: [LocalForecastDay]?
     let asof: String?
     let error: String?
 
     enum CodingKeys: String, CodingKey {
-        case ok, weather, air, moon, asof, error, forecastDaily
+        case ok, weather, air, allergens, moon, asof, error, forecastDaily
         case whereInfo = "where"
     }
 }
@@ -172,6 +173,27 @@ private struct LocalAir: Decodable {
     let pollutant: String?
 }
 
+private struct LocalAllergens: Decodable {
+    let overallLevel: String?
+    let overallLabel: String?
+    let overallIndex: Double?
+    let primaryType: String?
+    let primaryLabel: String?
+    let treeLevel: String?
+    let grassLevel: String?
+    let weedLevel: String?
+    let moldLevel: String?
+    let treeIndex: Double?
+    let grassIndex: Double?
+    let weedIndex: Double?
+    let moldIndex: Double?
+    let source: String?
+    let updatedAt: String?
+    let state: String?
+    let stateLabel: String?
+    let relevanceScore: Double?
+}
+
 private struct LocalMoon: Decodable {
     let phase: String?
     let illum: Double?
@@ -198,6 +220,19 @@ private struct LocalForecastDay: Codable, Hashable, Identifiable {
     let conditionCode: String?
     let conditionSummary: String?
     let aqiForecast: Double?
+    let pollenTreeLevel: String?
+    let pollenGrassLevel: String?
+    let pollenWeedLevel: String?
+    let pollenMoldLevel: String?
+    let pollenOverallLevel: String?
+    let pollenPrimaryType: String?
+    let pollenSource: String?
+    let pollenUpdatedAt: String?
+    let pollenTreeIndex: Double?
+    let pollenGrassIndex: Double?
+    let pollenWeedIndex: Double?
+    let pollenMoldIndex: Double?
+    let pollenOverallIndex: Double?
     let updatedAt: String?
 
     var id: String { "\(locationKey ?? "local")|\(day ?? "day")" }
@@ -5559,6 +5594,8 @@ struct ContentView: View {
             let primaryWindow = next24 ?? next72
             let topDomain24 = next24?.likelyElevatedDomains?.first
             let topDomain72 = next72?.likelyElevatedDomains?.first
+            let quick24 = topDomain24?.label ?? next24?.topDrivers?.first?.label ?? "—"
+            let quick72 = topDomain72?.label ?? next72?.topDrivers?.first?.label ?? "—"
             let primaryDriver = primaryWindow?.topDrivers?.first
             let pillText: String
             let pillSeverity: StatusPill.Severity
@@ -5596,8 +5633,8 @@ struct ContentView: View {
                     pillText: pillText,
                     severity: pillSeverity,
                     metrics: [
-                        HubMetric(label: "24h", value: topDomain24?.label ?? "—", tint: GaugePalette.low),
-                        HubMetric(label: "72h", value: topDomain72?.label ?? "—", tint: GaugePalette.mild),
+                        HubMetric(label: "24h", value: quick24, tint: GaugePalette.low),
+                        HubMetric(label: "72h", value: quick72, tint: GaugePalette.mild),
                         HubMetric(label: "Driver", value: primaryDriver?.label ?? "—", tint: GaugePalette.elevated),
                     ],
                     isExplore: false
@@ -10345,6 +10382,39 @@ struct ContentView: View {
             return "\(String(format: "%.0f", value)) %"
         }
 
+        static func formatAllergenState(_ raw: String?, fallbackLabel: String? = nil) -> String {
+            if let fallbackLabel, !fallbackLabel.isEmpty {
+                return fallbackLabel
+            }
+            switch (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "very_high":
+                return "High"
+            case "high":
+                return "Elevated"
+            case "moderate":
+                return "Moderate"
+            case "low":
+                return "Quiet"
+            default:
+                return "—"
+            }
+        }
+
+        static func formatAllergenType(_ raw: String?) -> String {
+            switch (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "tree":
+                return "Tree pollen"
+            case "grass":
+                return "Grass pollen"
+            case "weed":
+                return "Weed pollen"
+            case "mold":
+                return "Mold"
+            default:
+                return "—"
+            }
+        }
+
         static func normalizedTrend(_ raw: String?) -> String? {
             guard let raw, !raw.isEmpty else { return nil }
             switch raw.lowercased() {
@@ -10406,7 +10476,7 @@ struct ContentView: View {
     private enum LocalConditionsStyle {
         static func severityKey(_ raw: String?) -> String {
             switch (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-            case "high", "alert":
+            case "high", "very_high", "alert":
                 return "high"
             case "watch", "elevated":
                 return "elevated"
@@ -10836,6 +10906,47 @@ struct ContentView: View {
             )
         }
 
+        private func allergenStatus(allergens: LocalAllergens?) -> LocalConditionsDriverStatus {
+            let rawState = allergens?.overallLevel ?? allergens?.state
+            let severity: String
+            switch (rawState ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "very_high":
+                severity = "high"
+            case "high":
+                severity = "elevated"
+            case "moderate":
+                severity = "mild"
+            default:
+                severity = "low"
+            }
+            let primaryLabel = allergens?.primaryLabel ?? LocalConditionsFormatting.formatAllergenType(allergens?.primaryType)
+            return driverStatus(
+                for: "allergens",
+                fallbackLabel: "Allergens",
+                fallbackState: LocalConditionsFormatting.formatAllergenState(rawState, fallbackLabel: allergens?.overallLabel ?? allergens?.stateLabel),
+                fallbackSeverity: severity,
+                fallbackDetail: primaryLabel == "—" ? nil : primaryLabel
+            )
+        }
+
+        private func hasAllergenData(_ allergens: LocalAllergens?) -> Bool {
+            guard let allergens else { return false }
+            return allergens.overallLevel != nil
+                || allergens.primaryType != nil
+                || allergens.treeLevel != nil
+                || allergens.grassLevel != nil
+                || allergens.weedLevel != nil
+                || allergens.moldLevel != nil
+        }
+
+        private func forecastAllergenValue(_ day: LocalForecastDay) -> String {
+            let state = LocalConditionsFormatting.formatAllergenState(day.pollenOverallLevel)
+            let primary = LocalConditionsFormatting.formatAllergenType(day.pollenPrimaryType)
+            if state == "—" { return "—" }
+            if primary == "—" { return state }
+            return "\(primary) • \(state)"
+        }
+
         private var locationSummary: String {
             let resolvedZip = (snapshot?.whereInfo?.zip ?? zip).trimmingCharacters(in: .whitespacesAndNewlines)
             if useGPS {
@@ -10871,10 +10982,12 @@ struct ContentView: View {
         var body: some View {
             let weather = snapshot?.weather
             let air = snapshot?.air
+            let allergens = snapshot?.allergens
             let moon = snapshot?.moon
             let tempStatus = temperatureStatus(weather: weather)
             let baroStatus = pressureStatus(weather: weather)
             let airStatus = airQualityStatus(air: air)
+            let allergenDriver = allergenStatus(allergens: allergens)
             let updatedText = LocalConditionsFormatting.asofText(snapshot?.asof) ?? "—"
 
             ZStack {
@@ -10994,6 +11107,61 @@ struct ContentView: View {
                             LocalConditionsStatusStrip(status: airStatus)
                         }
 
+                        if hasAllergenData(allergens) {
+                            LocalConditionsSurfaceCard(title: "Allergens", icon: "leaf.fill") {
+                                HStack(alignment: .top, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(LocalConditionsFormatting.formatAllergenState(allergens?.overallLevel ?? allergens?.state, fallbackLabel: allergens?.overallLabel ?? allergens?.stateLabel))
+                                            .font(.system(size: 30, weight: .bold, design: .rounded))
+                                        Text(allergens?.primaryLabel ?? LocalConditionsFormatting.formatAllergenType(allergens?.primaryType))
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    if let overallIndex = allergens?.overallIndex {
+                                        LocalConditionsValueChip(
+                                            label: "Index",
+                                            value: String(format: "%.1f", overallIndex),
+                                            tint: GaugePalette.zoneColor(allergenDriver.severityKey)
+                                        )
+                                    }
+                                }
+                                LocalConditionsStatusStrip(status: allergenDriver)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 10) {
+                                        if let level = allergens?.treeLevel {
+                                            LocalConditionsValueChip(
+                                                label: "Tree",
+                                                value: LocalConditionsFormatting.formatAllergenState(level),
+                                                tint: GaugePalette.zoneColor(LocalConditionsStyle.severityKey(level))
+                                            )
+                                        }
+                                        if let level = allergens?.grassLevel {
+                                            LocalConditionsValueChip(
+                                                label: "Grass",
+                                                value: LocalConditionsFormatting.formatAllergenState(level),
+                                                tint: GaugePalette.zoneColor(LocalConditionsStyle.severityKey(level))
+                                            )
+                                        }
+                                        if let level = allergens?.weedLevel {
+                                            LocalConditionsValueChip(
+                                                label: "Weed",
+                                                value: LocalConditionsFormatting.formatAllergenState(level),
+                                                tint: GaugePalette.zoneColor(LocalConditionsStyle.severityKey(level))
+                                            )
+                                        }
+                                        if let level = allergens?.moldLevel {
+                                            LocalConditionsValueChip(
+                                                label: "Mold",
+                                                value: LocalConditionsFormatting.formatAllergenState(level),
+                                                tint: GaugePalette.zoneColor(LocalConditionsStyle.severityKey(level))
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         if let forecastDays = snapshot?.forecastDaily, !forecastDays.isEmpty {
                             LocalConditionsSurfaceCard(title: "3-Day Forecast", icon: "calendar") {
                                 VStack(alignment: .leading, spacing: 12) {
@@ -11043,16 +11211,11 @@ struct ContentView: View {
                                                             tint: GaugePalette.elevated
                                                         )
                                                     }
-                                                    LocalConditionsValueChip(
-                                                        label: "Pressure",
-                                                        value: day.pressureHpa.map { String(format: "%.1f hPa", $0) } ?? "Unavailable",
-                                                        tint: GaugePalette.zoneColor(day.pressureHpa == nil ? "mild" : "low")
-                                                    )
-                                                    if let pressureDelta = day.pressureDeltaFromPriorDayHpa {
+                                                    if day.pollenOverallLevel != nil {
                                                         LocalConditionsValueChip(
-                                                            label: "Pressure Δ",
-                                                            value: String(format: "%+.1f hPa", pressureDelta),
-                                                            tint: GaugePalette.zoneColor(abs(pressureDelta) >= 6 ? "elevated" : "low")
+                                                            label: "Allergens",
+                                                            value: forecastAllergenValue(day),
+                                                            tint: GaugePalette.zoneColor(LocalConditionsStyle.severityKey(day.pollenOverallLevel))
                                                         )
                                                     }
                                                     if let aqiForecast = day.aqiForecast {

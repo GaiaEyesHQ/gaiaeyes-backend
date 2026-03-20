@@ -1,6 +1,6 @@
 {
   "gaia_eyes_logic_base": {
-    "version": "2026-02-09",
+    "version": "2026-03-19",
     "global_disclaimer": "Exploratory wellness context only. Not medical advice, diagnosis, or treatment. Some associations are speculative. For severe, unusual, or persistent symptoms, seek professional care.",
     "confidence_multiplier": {
       "established": 1.0,
@@ -332,6 +332,44 @@
         ]
       },
       {
+        "key": "earthweather.allergens",
+        "label": "Allergen Load",
+        "category": "local_weather",
+        "unit": "index",
+        "activation": [
+          { "state": "moderate", "rule": "pollen_overall_level == moderate" },
+          { "state": "high", "rule": "pollen_overall_level == high" },
+          { "state": "very_high", "rule": "pollen_overall_level == very_high" }
+        ],
+        "confidence": "established",
+        "effects": [
+          {
+            "effect_tag": "airway_irritation",
+            "direction": "up",
+            "weights_by_state": { "moderate": 6, "high": 10, "very_high": 15 },
+            "gauges": ["sleep", "energy", "stamina", "mood"]
+          },
+          {
+            "effect_tag": "headache",
+            "direction": "up",
+            "weights_by_state": { "moderate": 4, "high": 7, "very_high": 10 },
+            "gauges": ["pain", "focus"]
+          },
+          {
+            "effect_tag": "fatigue",
+            "direction": "up",
+            "weights_by_state": { "moderate": 4, "high": 7, "very_high": 11 },
+            "gauges": ["energy", "stamina", "focus"]
+          },
+          {
+            "effect_tag": "sleep_quality",
+            "direction": "down",
+            "weights_by_state": { "moderate": 3, "high": 5, "very_high": 8 },
+            "gauges": ["sleep", "energy"]
+          }
+        ]
+      },
+      {
         "key": "spaceweather.kp",
         "label": "Kp Index",
         "category": "space_weather",
@@ -598,6 +636,17 @@
           "suggested_actions": [
             "limit outdoor exertion",
             "use an air filter if available",
+            "hydrate and pace"
+          ]
+        },
+        {
+          "key": "alert.allergen_load",
+          "title": "Allergen load",
+          "severity_by_state": { "moderate": "watch", "high": "high", "very_high": "high" },
+          "trigger": { "signal_key": "earthweather.allergens", "state_any_of": ["moderate", "high", "very_high"] },
+          "suggested_actions": [
+            "limit exposure during your trigger windows",
+            "use filters or rinses if they help",
             "hydrate and pace"
           ]
         },

@@ -1,8 +1,9 @@
+import asyncio
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from .cache import latest_and_ref, get_previous_approx, nearest_row_to
 from services.geo.zip_lookup import zip_to_latlon
-from ..external import nws, airnow
+from ..external import nws, airnow, pollen
 from ..time.moon import moon_phase
 
 def _delta(curr, prev):
@@ -209,8 +210,19 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
     temp_trend_3h = _trend(temp_delta_3h, tol=1.5)  # ≈ ±1.5°C ~ meaningful perceived change
     baro_trend_3h = _trend(baro_delta_3h, tol=1.5)  # ≈ ±1.5 hPa over 3h
 
+    aq_list, pollen_payload = await asyncio.gather(
+        airnow.current_by_zip(zip_code),
+        pollen.forecast_by_latlon(lat, lon, days=3),
+        return_exceptions=True,
+    )
+    if isinstance(aq_list, Exception):
+        print(f"[local_signals] AirNow error for zip={zip_code}: {aq_list}")
+        aq_list = []
+    if isinstance(pollen_payload, Exception):
+        print(f"[local_signals] pollen forecast error for zip={zip_code}: {pollen_payload}")
+        pollen_payload = {}
+
     # Air quality (pick the highest AQI among any pollutants returned)
-    aq_list = await airnow.current_by_zip(zip_code)
     aqi = category = pollutant = None
     if aq_list:
         best = max(aq_list, key=lambda a: (a.get("AQI") or 0))
@@ -256,7 +268,24 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
     elif moon_sensitivity == "new":
         messages.append("New Moon—sleep/wind‑down habits matter; dim evening light.")
 
+    allergens = pollen.current_snapshot(pollen_payload if isinstance(pollen_payload, dict) else {})
+    allergen_state = allergens.get("state")
+    allergen_primary_type = allergens.get("primary_type")
+    allergen_primary_label = allergens.get("primary_label")
+    allergen_relevance_score = allergens.get("relevance_score")
+    if allergen_state in {"moderate", "high", "very_high"}:
+        if allergen_state == "moderate":
+            state_phrase = "is moderate today"
+        else:
+            state_phrase = "is elevated today"
+        messages.append(
+            f"{allergen_primary_label or 'Allergen load'} {state_phrase}—sinus pressure, headache, foggier energy, or breathing irritation may be worth watching."
+        )
+
     health = {"flags": flags, "messages": messages}
+    flags["allergen_state"] = allergen_state
+    flags["allergen_primary_type"] = allergen_primary_type
+    flags["allergen_relevance_score"] = allergen_relevance_score
 
     return ensure_weather_fields(zip_code, {
         "ok": True,
@@ -273,6 +302,7 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
             "pressure_trend": baro_trend_3h,
         },
         "air": {"aqi": aqi, "category": category, "pollutant": pollutant},
+        "allergens": allergens,
         "moon": m,
         "health": health,
         "asof": obs_iso or datetime.now(timezone.utc).isoformat(),

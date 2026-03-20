@@ -10,7 +10,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from services.db import pg
-from services.external import nws
+from services.external import nws, pollen
 from services.forecast_outlook import build_location_key, summarize_local_forecast_days
 from services.geo.zip_lookup import zip_to_latlon
 from services.local_signals.aggregator import assemble_for_zip
@@ -44,14 +44,22 @@ def _upsert_local_forecast_rows(rows: list[dict]) -> None:
                 temp_high_c, temp_low_c, temp_delta_from_prior_day_c,
                 pressure_hpa, pressure_delta_from_prior_day_hpa,
                 humidity_avg, precip_probability, wind_speed, wind_gust,
-                condition_code, condition_summary, aqi_forecast, raw, updated_at
+                condition_code, condition_summary, aqi_forecast,
+                pollen_tree_level, pollen_grass_level, pollen_weed_level, pollen_mold_level,
+                pollen_overall_level, pollen_primary_type, pollen_source, pollen_updated_at,
+                pollen_tree_index, pollen_grass_index, pollen_weed_index, pollen_mold_index, pollen_overall_index,
+                raw, updated_at
             )
             values (
                 %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s,
                 %s, %s,
                 %s, %s, %s, %s,
-                %s, %s, %s, %s::jsonb, %s
+                %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s, %s, %s,
+                %s::jsonb, %s
             )
             on conflict (location_key, day) do update
             set source = excluded.source,
@@ -71,6 +79,19 @@ def _upsert_local_forecast_rows(rows: list[dict]) -> None:
                 condition_code = excluded.condition_code,
                 condition_summary = excluded.condition_summary,
                 aqi_forecast = excluded.aqi_forecast,
+                pollen_tree_level = excluded.pollen_tree_level,
+                pollen_grass_level = excluded.pollen_grass_level,
+                pollen_weed_level = excluded.pollen_weed_level,
+                pollen_mold_level = excluded.pollen_mold_level,
+                pollen_overall_level = excluded.pollen_overall_level,
+                pollen_primary_type = excluded.pollen_primary_type,
+                pollen_source = excluded.pollen_source,
+                pollen_updated_at = excluded.pollen_updated_at,
+                pollen_tree_index = excluded.pollen_tree_index,
+                pollen_grass_index = excluded.pollen_grass_index,
+                pollen_weed_index = excluded.pollen_weed_index,
+                pollen_mold_index = excluded.pollen_mold_index,
+                pollen_overall_index = excluded.pollen_overall_index,
                 raw = excluded.raw,
                 updated_at = excluded.updated_at
             """,
@@ -93,6 +114,19 @@ def _upsert_local_forecast_rows(rows: list[dict]) -> None:
             payload.get("condition_code"),
             payload.get("condition_summary"),
             payload.get("aqi_forecast"),
+            payload.get("pollen_tree_level"),
+            payload.get("pollen_grass_level"),
+            payload.get("pollen_weed_level"),
+            payload.get("pollen_mold_level"),
+            payload.get("pollen_overall_level"),
+            payload.get("pollen_primary_type"),
+            payload.get("pollen_source"),
+            payload.get("pollen_updated_at"),
+            payload.get("pollen_tree_index"),
+            payload.get("pollen_grass_index"),
+            payload.get("pollen_weed_index"),
+            payload.get("pollen_mold_index"),
+            payload.get("pollen_overall_index"),
             payload.get("raw"),
             payload.get("updated_at"),
         )
@@ -114,13 +148,15 @@ async def _refresh_local_forecast(zip_code: str | None, lat: float | None, lon: 
     if not location_key:
         return 0
 
-    hourly_payload, grid_payload = await asyncio.gather(
+    hourly_payload, grid_payload, allergen_payload = await asyncio.gather(
         nws.forecast_hourly_by_latlon(resolved_lat, resolved_lon),
         nws.gridpoints_by_latlon(resolved_lat, resolved_lon),
+        pollen.forecast_by_latlon(resolved_lat, resolved_lon, days=3),
     )
     rows = summarize_local_forecast_days(
         hourly_payload,
         grid_payload,
+        allergen_payload=allergen_payload,
         location_key=location_key,
         zip_code=zip_code,
         lat=resolved_lat,

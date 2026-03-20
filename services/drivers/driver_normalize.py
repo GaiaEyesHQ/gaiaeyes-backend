@@ -15,16 +15,18 @@ _DRIVER_ORDER = {
     "pressure": 1,
     "temp": 2,
     "aqi": 3,
-    "kp": 4,
-    "bz": 5,
-    "sw": 6,
-    "schumann": 7,
+    "allergens": 4,
+    "kp": 5,
+    "bz": 6,
+    "sw": 7,
+    "schumann": 8,
 }
 
 _DRIVER_META = {
     "pressure": {"label": "Pressure Swing", "unit": "hPa"},
     "temp": {"label": "Temperature Swing", "unit": "C"},
     "aqi": {"label": "Air Quality", "unit": "AQI"},
+    "allergens": {"label": "Allergens", "unit": "index"},
     "kp": {"label": "Kp Index", "unit": "Kp"},
     "bz": {"label": "Bz Coupling", "unit": "nT"},
     "sw": {"label": "Solar Wind", "unit": "km/s"},
@@ -38,6 +40,7 @@ _SIGNAL_TO_DRIVER = {
     "earthweather.temp_swing_24h": "temp",
     "earthweather.temp_swing_24h_big": "temp",
     "earthweather.air_quality": "aqi",
+    "earthweather.allergens": "allergens",
     "spaceweather.kp": "kp",
     "spaceweather.bz_coupling": "bz",
     "spaceweather.sw_speed": "sw",
@@ -50,6 +53,7 @@ _ALERT_KEY_TO_DRIVER = {
     "alert.pressure_swing_24h": "pressure",
     "alert.temp_swing_24h": "temp",
     "alert.air_quality": "aqi",
+    "alert.allergen_load": "allergens",
     "alert.geomagnetic_active": "kp",
     "alert.bz_coupling": "bz",
     "alert.solar_wind_speed": "sw",
@@ -123,6 +127,7 @@ def _normalize_local_payload(local_payload: Optional[Dict[str, Any]]) -> Dict[st
 def _driver_value_from_local(key: str, local_payload: Dict[str, Any]) -> Optional[float]:
     weather = local_payload.get("weather") or {}
     air = local_payload.get("air") or {}
+    allergens = local_payload.get("allergens") or {}
     if key == "pressure":
         return _safe_float(
             weather.get("baro_delta_12h_hpa")
@@ -134,6 +139,8 @@ def _driver_value_from_local(key: str, local_payload: Dict[str, Any]) -> Optiona
         return _safe_float(weather.get("temp_delta_24h_c") or weather.get("temp_delta_24h"))
     if key == "aqi":
         return _safe_float(air.get("aqi"))
+    if key == "allergens":
+        return _safe_float(allergens.get("overall_index") or allergens.get("relevance_score"))
     return None
 
 
@@ -163,6 +170,14 @@ def _severity_from_local_value(key: str, value: Optional[float]) -> str:
         if value >= 101:
             return "watch"
         if value >= 51:
+            return "mild"
+        return "low"
+    if key == "allergens":
+        if value >= 5:
+            return "high"
+        if value >= 4:
+            return "watch"
+        if value >= 3:
             return "mild"
         return "low"
     return "low"

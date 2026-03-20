@@ -18,6 +18,7 @@
 | `PUBLIC_READ_ENABLED` | Enable public read allowlist | `1` | `app/security/auth.py` |
 | `PUBLIC_READ_PATHS` | CSV allowlist of public GET paths | `/health,/v1/space/visuals` | `app/security/auth.py` |
 | `AIRNOW_API_KEY` | AirNow API access key | `airnow-key` | `services/external/airnow.py` |
+| `GOOGLE_POLLEN_API_KEY` | Google Pollen API key for current + 3-day allergen context | `google-pollen-key` | `services/external/pollen.py` |
 | `WEATHER_UA` | NWS user agent string | `(gaiaeyes.com, gaiaeyes7.83@gmail.com)` | `services/external/nws.py` |
 | `GAIA_LOG_LEVEL` | Logging level for bots | `INFO` | `bots/local_health_poll.py` |
 | `LOCAL_SIGNALS_TTL_MINUTES` | Local signals cache TTL | `60` | `services/local_signals/cache.py` |

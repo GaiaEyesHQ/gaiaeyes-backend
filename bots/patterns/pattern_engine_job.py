@@ -128,6 +128,36 @@ SIGNAL_DEFINITIONS = {
         "threshold": 100.0,
         "threshold_text": "aqi >= 100",
     },
+    "pollen_overall_exposed": {
+        "family": "allergens",
+        "operator": "bucket>=",
+        "threshold": 2.0,
+        "threshold_text": "pollen_overall_level >= moderate",
+    },
+    "pollen_tree_exposed": {
+        "family": "allergens",
+        "operator": "bucket>=",
+        "threshold": 2.0,
+        "threshold_text": "pollen_tree_level >= moderate",
+    },
+    "pollen_grass_exposed": {
+        "family": "allergens",
+        "operator": "bucket>=",
+        "threshold": 2.0,
+        "threshold_text": "pollen_grass_level >= moderate",
+    },
+    "pollen_weed_exposed": {
+        "family": "allergens",
+        "operator": "bucket>=",
+        "threshold": 2.0,
+        "threshold_text": "pollen_weed_level >= moderate",
+    },
+    "pollen_mold_exposed": {
+        "family": "allergens",
+        "operator": "bucket>=",
+        "threshold": 2.0,
+        "threshold_text": "pollen_mold_level >= moderate",
+    },
     "temp_swing_exposed": {
         "family": "temperature",
         "operator": "abs>=",
@@ -168,6 +198,22 @@ ASSOCIATION_PAIRS = [
     ("aqi_moderate_plus_exposed", "fatigue_day"),
     ("aqi_moderate_plus_exposed", "focus_fog_day"),
     ("aqi_moderate_plus_exposed", "headache_day"),
+    ("pollen_overall_exposed", "headache_day"),
+    ("pollen_overall_exposed", "fatigue_day"),
+    ("pollen_overall_exposed", "focus_fog_day"),
+    ("pollen_overall_exposed", "poor_sleep_day"),
+    ("pollen_tree_exposed", "headache_day"),
+    ("pollen_tree_exposed", "fatigue_day"),
+    ("pollen_tree_exposed", "focus_fog_day"),
+    ("pollen_grass_exposed", "headache_day"),
+    ("pollen_grass_exposed", "fatigue_day"),
+    ("pollen_grass_exposed", "focus_fog_day"),
+    ("pollen_weed_exposed", "headache_day"),
+    ("pollen_weed_exposed", "fatigue_day"),
+    ("pollen_weed_exposed", "focus_fog_day"),
+    ("pollen_mold_exposed", "headache_day"),
+    ("pollen_mold_exposed", "fatigue_day"),
+    ("pollen_mold_exposed", "focus_fog_day"),
     ("temp_swing_exposed", "pain_flare_day"),
     ("temp_swing_exposed", "fatigue_day"),
     ("kp_g1_plus_exposed", "poor_sleep_day"),
@@ -253,6 +299,19 @@ def _parse_json_map(value: Any) -> dict[str, Any]:
             return {}
         return parsed if isinstance(parsed, dict) else {}
     return {}
+
+
+def _bucket_rank(value: Any) -> int | None:
+    token = str(value or "").strip().lower()
+    if token == "very_high":
+        return 4
+    if token == "high":
+        return 3
+    if token == "moderate":
+        return 2
+    if token == "low":
+        return 1
+    return None
 
 
 def _table_columns(conn: psycopg.Connection, schema: str, table: str) -> list[str]:
@@ -366,6 +425,21 @@ def signal_exposure(row: dict[str, Any], signal_key: str) -> tuple[bool | None, 
     if signal_key == "aqi_unhealthy_plus_exposed":
         value = _safe_float(row.get("aqi"))
         return (value >= 100.0, 100.0) if value is not None else (None, 100.0)
+    if signal_key == "pollen_overall_exposed":
+        rank = _bucket_rank(row.get("pollen_overall_level"))
+        return (rank >= 2, 2.0) if rank is not None else (None, 2.0)
+    if signal_key == "pollen_tree_exposed":
+        rank = _bucket_rank(row.get("pollen_tree_level"))
+        return (rank >= 2, 2.0) if rank is not None else (None, 2.0)
+    if signal_key == "pollen_grass_exposed":
+        rank = _bucket_rank(row.get("pollen_grass_level"))
+        return (rank >= 2, 2.0) if rank is not None else (None, 2.0)
+    if signal_key == "pollen_weed_exposed":
+        rank = _bucket_rank(row.get("pollen_weed_level"))
+        return (rank >= 2, 2.0) if rank is not None else (None, 2.0)
+    if signal_key == "pollen_mold_exposed":
+        rank = _bucket_rank(row.get("pollen_mold_level"))
+        return (rank >= 2, 2.0) if rank is not None else (None, 2.0)
     if signal_key == "temp_swing_exposed":
         value = _safe_float(row.get("temp_delta_24h"))
         return (abs(value) >= 6.0, 6.0) if value is not None else (None, 6.0)
@@ -723,6 +797,7 @@ def _fetch_day_zip_map(
 def _extract_local_signal_daily(payload: dict[str, Any]) -> dict[str, Any]:
     weather = payload.get("weather") if isinstance(payload.get("weather"), dict) else {}
     air = payload.get("air") if isinstance(payload.get("air"), dict) else {}
+    allergens = payload.get("allergens") if isinstance(payload.get("allergens"), dict) else {}
 
     def _from_paths(paths: Sequence[tuple[dict[str, Any], str]]) -> float | None:
         for source, key in paths:
@@ -750,6 +825,17 @@ def _extract_local_signal_daily(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "temp_delta_24h": _from_paths(((weather, "temp_delta_24h_c"), (weather, "temp_delta_24h"))),
         "humidity": _from_paths(((weather, "humidity_pct"),)),
+        "pollen_overall_index": _from_paths(((allergens, "overall_index"), (allergens, "relevance_score"))),
+        "pollen_tree_index": _from_paths(((allergens, "tree_index"),)),
+        "pollen_grass_index": _from_paths(((allergens, "grass_index"),)),
+        "pollen_weed_index": _from_paths(((allergens, "weed_index"),)),
+        "pollen_mold_index": _from_paths(((allergens, "mold_index"),)),
+        "pollen_overall_level": str(allergens.get("overall_level") or allergens.get("state") or "").strip().lower() or None,
+        "pollen_tree_level": str(allergens.get("tree_level") or "").strip().lower() or None,
+        "pollen_grass_level": str(allergens.get("grass_level") or "").strip().lower() or None,
+        "pollen_weed_level": str(allergens.get("weed_level") or "").strip().lower() or None,
+        "pollen_mold_level": str(allergens.get("mold_level") or "").strip().lower() or None,
+        "pollen_primary_type": str(allergens.get("primary_type") or "").strip().lower() or None,
     }
 
 
@@ -916,6 +1002,17 @@ def build_user_daily_features(
             "schumann_variability_proxy": sch_row.get("schumann_variability_proxy"),
             "schumann_variability_p80": sch_row.get("schumann_variability_p80"),
             "aqi": local_row.get("aqi"),
+            "pollen_overall_index": local_row.get("pollen_overall_index"),
+            "pollen_tree_index": local_row.get("pollen_tree_index"),
+            "pollen_grass_index": local_row.get("pollen_grass_index"),
+            "pollen_weed_index": local_row.get("pollen_weed_index"),
+            "pollen_mold_index": local_row.get("pollen_mold_index"),
+            "pollen_overall_level": local_row.get("pollen_overall_level"),
+            "pollen_tree_level": local_row.get("pollen_tree_level"),
+            "pollen_grass_level": local_row.get("pollen_grass_level"),
+            "pollen_weed_level": local_row.get("pollen_weed_level"),
+            "pollen_mold_level": local_row.get("pollen_mold_level"),
+            "pollen_primary_type": local_row.get("pollen_primary_type"),
             "pressure": local_row.get("pressure"),
             "pressure_delta_12h": local_row.get("pressure_delta_12h"),
             "pressure_delta_24h": local_row.get("pressure_delta_24h"),
@@ -1267,6 +1364,17 @@ def _feature_insert_columns() -> list[str]:
         "schumann_variability_proxy",
         "schumann_variability_p80",
         "aqi",
+        "pollen_overall_index",
+        "pollen_tree_index",
+        "pollen_grass_index",
+        "pollen_weed_index",
+        "pollen_mold_index",
+        "pollen_overall_level",
+        "pollen_tree_level",
+        "pollen_grass_level",
+        "pollen_weed_level",
+        "pollen_mold_level",
+        "pollen_primary_type",
         "pressure",
         "pressure_delta_12h",
         "pressure_delta_24h",
@@ -1308,6 +1416,11 @@ def _feature_insert_columns() -> list[str]:
         "pressure_swing_exposed",
         "aqi_moderate_plus_exposed",
         "aqi_unhealthy_plus_exposed",
+        "pollen_overall_exposed",
+        "pollen_tree_exposed",
+        "pollen_grass_exposed",
+        "pollen_weed_exposed",
+        "pollen_mold_exposed",
         "temp_swing_exposed",
         "kp_g1_plus_exposed",
         "bz_south_exposed",

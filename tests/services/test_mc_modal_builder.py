@@ -105,6 +105,34 @@ def test_aqi_modal_personalizes_for_allergies() -> None:
     assert "sinus" in aqi["what_you_may_notice"][0].lower()
 
 
+def test_allergen_modal_personalizes_for_allergies() -> None:
+    payload = build_modal_models(
+        day=date(2026, 2, 27),
+        gauges={"energy": 68},
+        gauges_meta={"energy": {"zone": "elevated", "label": "Variable"}},
+        gauge_labels={"energy": "Energy"},
+        drivers=[
+            {
+                "key": "allergens",
+                "label": "Allergens",
+                "severity": "high",
+                "state": "High",
+                "value": 4.0,
+                "unit": "index",
+            }
+        ],
+        user_tags=["allergies_sinus"],
+    )
+
+    allergens = payload["drivers"]["allergens"]
+    assert [item["code"] for item in allergens["quick_log"]["options"]] == [
+        "SINUS_PRESSURE",
+        "HEADACHE",
+        "BRAIN_FOG",
+    ]
+    assert "sinus" in allergens["what_you_may_notice"][0].lower()
+
+
 def test_solar_wind_modal_personalizes_for_autonomic_context() -> None:
     payload = build_modal_models(
         day=date(2026, 2, 27),

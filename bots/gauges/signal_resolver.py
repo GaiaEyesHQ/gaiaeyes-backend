@@ -264,6 +264,7 @@ def resolve_signals(
     payload = _normalize_local_payload(local_payload or _fetch_local_payload(user_id, day))
     weather = payload.get("weather") or {}
     air = payload.get("air") or {}
+    allergens = payload.get("allergens") or {}
     health_flags = (payload.get("health") or {}).get("flags") or {}
 
     out: List[Dict[str, Any]] = []
@@ -413,6 +414,30 @@ def resolve_signals(
                     "source": "local_signals",
                     "field": "air.aqi",
                     "ts": payload.get("asof") or payload.get("as_of"),
+                },
+            }
+        )
+
+    allergen_state = str(
+        allergens.get("overall_level")
+        or allergens.get("state")
+        or health_flags.get("allergen_state")
+        or ""
+    ).strip().lower()
+    if allergen_state in {"moderate", "high", "very_high"}:
+        sig = sig_defs.get("earthweather.allergens") or {}
+        overall_index = _safe_float(allergens.get("overall_index") or allergens.get("relevance_score"))
+        out.append(
+            {
+                "signal_key": "earthweather.allergens",
+                "state": allergen_state,
+                "value": overall_index,
+                "confidence": sig.get("confidence"),
+                "evidence": {
+                    "source": allergens.get("source") or "local_signals",
+                    "field": "allergens.overall_level",
+                    "primary_type": allergens.get("primary_type"),
+                    "ts": allergens.get("updated_at") or payload.get("asof") or payload.get("as_of"),
                 },
             }
         )

@@ -47,12 +47,12 @@ _SEVERITY_RANK = {
 }
 
 _GAUGE_DRIVER_MAP = {
-    "pain": ["pressure", "temp", "aqi"],
-    "focus": ["pressure", "aqi", "kp", "sw", "schumann"],
+    "pain": ["pressure", "temp", "aqi", "allergens"],
+    "focus": ["pressure", "aqi", "allergens", "kp", "sw", "schumann"],
     "heart": ["kp", "bz", "sw", "aqi"],
-    "stamina": ["temp", "aqi", "sw"],
-    "energy": ["temp", "sw", "kp"],
-    "sleep": ["pressure", "temp", "kp", "bz", "schumann"],
+    "stamina": ["temp", "aqi", "allergens", "sw"],
+    "energy": ["temp", "aqi", "allergens", "sw", "kp"],
+    "sleep": ["pressure", "temp", "allergens", "kp", "bz", "schumann"],
     "mood": ["kp", "sw", "schumann", "pressure"],
     "health_status": [],
 }
@@ -213,6 +213,11 @@ _DRIVER_NOTICE = {
         "Fatigue or brain fog can show up faster for some people.",
         "Breathing irritation may be easier to notice for some people.",
     ],
+    "allergens": [
+        "Sinus pressure or headache may feel more noticeable for some people on allergy-heavy days.",
+        "Brain fog or fatigue can show up faster for some people when pollen is up.",
+        "Breathing or histamine-style irritation may be easier to notice for some people.",
+    ],
     "kp": [
         "Scattered focus can show up for some people during geomagnetic activity.",
         "Some people may notice a wired or restless feeling.",
@@ -251,6 +256,11 @@ _DRIVER_ACTIONS = {
         "Use cleaner indoor air if available.",
         "Hydrate and use shorter activity blocks.",
     ],
+    "allergens": [
+        "Use filters, rinses, or cleaner indoor air if those usually help you.",
+        "Shift outdoor time away from your worst trigger windows when possible.",
+        "Hydrate and keep effort a little steadier if allergy load tends to stack fatigue.",
+    ],
     "kp": [
         "Reduce late stimulation.",
         "Add short regulation breaks during the day.",
@@ -277,6 +287,7 @@ _DRIVER_CONTEXT = {
     "pressure": "This driver is most often about head pressure, sinus or ear pressure, and joint stiffness.",
     "temp": "This driver is more about body load, stiffness, and recovery drag.",
     "aqi": "This driver is more about fatigue, fogginess, sinus irritation, or breathing irritation.",
+    "allergens": "This driver is more about sinus pressure, headache sensitivity, brain fog, fatigue, and breathing or histamine-style irritation.",
     "kp": "This driver is more about restless edge, sleep disruption, focus drift, and nervous-system reactivity.",
     "bz": "This driver is more about restless edge, sleep disruption, focus drift, and nervous-system reactivity.",
     "sw": "This driver is more about restless edge, sleep disruption, focus drift, and nervous-system reactivity.",
@@ -310,6 +321,7 @@ _DRIVER_PREFILL = {
     "pressure": ["HEADACHE", "NERVE_PAIN", "PAIN"],
     "temp": ["FATIGUE", "PAIN", "STIFFNESS"],
     "aqi": ["HEADACHE", "DRAINED", "RESP_IRRITATION"],
+    "allergens": ["SINUS_PRESSURE", "HEADACHE", "BRAIN_FOG"],
     "kp": ["ANXIOUS", "DRAINED", "BRAIN_FOG"],
     "bz": ["ANXIOUS", "DRAINED", "BRAIN_FOG"],
     "sw": ["ANXIOUS", "DRAINED", "BRAIN_FOG"],
@@ -331,6 +343,11 @@ _DRIVER_QUICK_LOG = {
         {"code": "HEADACHE", "label": "Headache"},
         {"code": "DRAINED", "label": "Brain fog"},
         {"code": "RESP_IRRITATION", "label": "Breathing irritation"},
+    ],
+    "allergens": [
+        {"code": "SINUS_PRESSURE", "label": "Sinus pressure"},
+        {"code": "HEADACHE", "label": "Headache"},
+        {"code": "BRAIN_FOG", "label": "Brain fog"},
     ],
     "kp": [
         {"code": "ANXIOUS", "label": "Anxious"},
@@ -433,6 +450,40 @@ _PERSONALIZED_DRIVER_CONTENT = {
             "Reduce outdoor exertion and favor cleaner indoor air when possible.",
             "Use shorter effort blocks and pause sooner if breathing feels irritated.",
             "Hydrate steadily and lower extra exposure where you can.",
+        ],
+        "quick_log": [
+            {"code": "RESP_IRRITATION", "label": "Breathing irritation"},
+            {"code": "CHEST_TIGHTNESS", "label": "Chest tightness"},
+            {"code": "FATIGUE", "label": "Fatigue"},
+        ],
+    },
+    ("allergens", "sinus"): {
+        "notices": [
+            "Sinus pressure or headache can feel more noticeable for some people on higher-pollen days.",
+            "Brain fog or drained energy can show up faster for some people when allergens stack up.",
+            "Histamine-style irritation can feel closer to the surface for some people.",
+        ],
+        "actions": [
+            "Use the allergy supports that usually help you before symptoms stack up.",
+            "Reduce exposure during your most irritating outdoor windows when possible.",
+            "Keep hydration and recovery basics steadier than usual.",
+        ],
+        "quick_log": [
+            {"code": "SINUS_PRESSURE", "label": "Sinus pressure"},
+            {"code": "HEADACHE", "label": "Headache"},
+            {"code": "BRAIN_FOG", "label": "Brain fog"},
+        ],
+    },
+    ("allergens", "airway"): {
+        "notices": [
+            "Breathing irritation can feel more noticeable for some people on allergy-heavy days.",
+            "Chest tightness or a scratchier airway feel can show up for some people.",
+            "Fatigue can land faster when allergen irritation stacks with effort.",
+        ],
+        "actions": [
+            "Shift outdoor exertion to lower-trigger windows when you can.",
+            "Use cleaner indoor air and your normal breathing supports if they help.",
+            "Pause sooner and shorten effort blocks if irritation starts building.",
         ],
         "quick_log": [
             {"code": "RESP_IRRITATION", "label": "Breathing irritation"},
@@ -587,6 +638,7 @@ _DRIVER_SHORT_BODY = {
     "pressure": "Pressure change looks fairly steady right now.",
     "temp": "Temperature change looks fairly steady right now.",
     "aqi": "Air quality looks relatively steady right now.",
+    "allergens": "Allergen load looks relatively steady right now.",
     "kp": "Geomagnetic activity looks relatively steady right now.",
     "bz": "Bz coupling looks relatively steady right now.",
     "sw": "Solar wind speed looks relatively steady right now.",
@@ -597,6 +649,7 @@ _DRIVER_SHORT_TIP = {
     "pressure": "Normal hydration and pacing should be enough for most people.",
     "temp": "Dress for comfort and keep hydration steady if conditions change.",
     "aqi": "Normal outdoor plans may be fine if you usually tolerate them well.",
+    "allergens": "Use your usual allergy supports if you already know they help.",
     "kp": "Keep your normal pacing and sleep routine steady.",
     "bz": "Keep effort steady and avoid overreacting to small shifts.",
     "sw": "Use your usual pacing and sleep routine for now.",
@@ -775,6 +828,12 @@ def _driver_variant(profile: PersonalizationProfile, key: str) -> Optional[str]:
         if profile.has_any("asthma_breathing_sensitive"):
             return "airway"
         if profile.includes_any(SINUS_KEYS):
+            return "sinus"
+        return None
+    if key == "allergens":
+        if profile.has_any("asthma_breathing_sensitive"):
+            return "airway"
+        if profile.includes_any(SINUS_KEYS) or profile.has_any("migraine_history"):
             return "sinus"
         return None
     if key in {"kp", "sw", "bz"}:

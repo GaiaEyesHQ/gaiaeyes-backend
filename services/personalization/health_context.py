@@ -73,6 +73,7 @@ TEMP_SIGNAL_KEYS = frozenset(
     }
 )
 AQI_SIGNAL_KEYS = frozenset({"earthweather.air_quality"})
+ALLERGEN_SIGNAL_KEYS = frozenset({"earthweather.allergens"})
 GEOMAGNETIC_SIGNAL_KEYS = frozenset(
     {
         "spaceweather.kp",
@@ -170,6 +171,20 @@ def gauge_personalization_multiplier(
         if gauge_key == "focus" and (profile.includes_any(SINUS_KEYS) or profile.includes_any(AIRWAY_KEYS)):
             multiplier += 0.10
 
+    if signal_key in ALLERGEN_SIGNAL_KEYS:
+        if gauge_key in {"energy", "stamina", "mood", "health_status"} and (
+            profile.includes_any(SINUS_KEYS) or profile.includes_any(AIRWAY_KEYS)
+        ):
+            multiplier += 0.25
+        if gauge_key in {"pain", "focus"} and (
+            profile.includes_any(SINUS_KEYS)
+            or profile.has_any("migraine_history")
+            or profile.has_any("mcas_histamine")
+        ):
+            multiplier += 0.15
+        if gauge_key == "sleep" and profile.includes_any(SLEEP_DISRUPTION_KEYS):
+            multiplier += 0.10
+
     if signal_key in SLEEP_CONTEXT_SIGNAL_KEYS and gauge_key in {"sleep", "energy", "mood"}:
         if profile.includes_any(SLEEP_DISRUPTION_KEYS):
             multiplier += 0.25
@@ -191,9 +206,17 @@ def health_status_contextual_adjustment(
     }
     max_adjustment = 0.0
     for state in active_states or []:
-        if canonicalize_tag_key(state.get("signal_key")) not in AQI_SIGNAL_KEYS:
+        if canonicalize_tag_key(state.get("signal_key")) not in set(AQI_SIGNAL_KEYS) | set(ALLERGEN_SIGNAL_KEYS):
             continue
         state_name = str(state.get("state") or "").strip().lower()
-        max_adjustment = max(max_adjustment, state_weights.get(state_name, 0.0))
+        if canonicalize_tag_key(state.get("signal_key")) in ALLERGEN_SIGNAL_KEYS:
+            allergen_weights = {
+                "moderate": 1.25,
+                "high": 2.75,
+                "very_high": 4.0,
+            }
+            max_adjustment = max(max_adjustment, allergen_weights.get(state_name, 0.0))
+        else:
+            max_adjustment = max(max_adjustment, state_weights.get(state_name, 0.0))
     # Health Status remains primarily wearable/symptom driven; AQI context only nudges it slightly.
     return min(max_adjustment, 4.0)

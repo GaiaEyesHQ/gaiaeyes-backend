@@ -27,6 +27,11 @@ SIGNAL_LABELS = {
     "pressure_swing_exposed": "Pressure swings",
     "aqi_moderate_plus_exposed": "Air quality",
     "temp_swing_exposed": "Temperature swings",
+    "pollen_overall_exposed": "Allergen load",
+    "pollen_tree_exposed": "Tree pollen",
+    "pollen_grass_exposed": "Grass pollen",
+    "pollen_weed_exposed": "Weed pollen",
+    "pollen_mold_exposed": "Mold",
     "kp_g1_plus_exposed": "Kp 5+",
     "bz_south_exposed": "Southward Bz",
     "solar_wind_exposed": "Solar wind",
@@ -61,6 +66,7 @@ DRIVER_TO_SIGNAL_KEY = {
     "pressure": "pressure_swing_exposed",
     "temp": "temp_swing_exposed",
     "aqi": "aqi_moderate_plus_exposed",
+    "allergens": "pollen_overall_exposed",
     "kp": "kp_g1_plus_exposed",
     "bz": "bz_south_exposed",
     "sw": "solar_wind_exposed",
@@ -157,6 +163,21 @@ _PATTERN_MESSAGE_MAP = {
         "full": "AQI has lined up with headache days in your history.",
         "short": "AQI often matches headache days for you.",
         "clause": "it often matches headache days for you",
+    },
+    ("pollen_overall_exposed", "headache_day"): {
+        "full": "Allergen load has lined up with headache days in your history.",
+        "short": "Allergen load often matches headache days for you.",
+        "clause": "it often matches headache days for you",
+    },
+    ("pollen_overall_exposed", "fatigue_day"): {
+        "full": "Allergen load has lined up with fatigue in your history.",
+        "short": "Allergen load often matches fatigue for you.",
+        "clause": "it often matches fatigue for you",
+    },
+    ("pollen_overall_exposed", "focus_fog_day"): {
+        "full": "Allergen load has lined up with brain-fog days in your history.",
+        "short": "Allergen load often matches brain-fog days for you.",
+        "clause": "it often matches brain-fog days for you",
     },
     ("solar_wind_exposed", "high_hr_day"): {
         "full": "Elevated solar wind has shown up before higher heart-rate days in your history.",
@@ -273,6 +294,11 @@ def _driver_sensitivity_boost(driver_key: str, profile: PersonalizationProfile) 
     if driver_key == "aqi":
         if profile.includes_any(SINUS_KEYS) or profile.includes_any(AIRWAY_KEYS):
             return 1.0
+    if driver_key == "allergens":
+        if profile.includes_any(SINUS_KEYS) or profile.includes_any(AIRWAY_KEYS):
+            return 1.2
+        if profile.has_any("migraine_history"):
+            return 0.85
     if driver_key in {"kp", "bz", "sw", "schumann"}:
         if profile.has_any("geomagnetic_sensitive"):
             return 1.0
@@ -293,7 +319,12 @@ def _outcome_relevance_weight(outcome_key: str, profile: PersonalizationProfile)
     if outcome_key in {"high_hr_day", "hrv_dip_day"}:
         return 1.55 if profile.includes_any(AUTONOMIC_KEYS) else 1.25
     if outcome_key == "fatigue_day":
-        if profile.includes_any(PAIN_FLARE_KEYS) or profile.includes_any(AUTONOMIC_KEYS):
+        if (
+            profile.includes_any(PAIN_FLARE_KEYS)
+            or profile.includes_any(AUTONOMIC_KEYS)
+            or profile.includes_any(SINUS_KEYS)
+            or profile.includes_any(AIRWAY_KEYS)
+        ):
             return 1.45
         return 1.15
     if outcome_key == "anxiety_day":
