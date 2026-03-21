@@ -179,31 +179,31 @@ final class HealthKitBackgroundSync {
         var samples: [Sample] = []
         for s in collected {
             if let q = s as? HKQuantitySample {
-                if q.quantityType == hrType {
+                if matchesQuantityType(q, type: hrType) {
                     let bpm = q.quantity.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute()))
                     guard bpm.isFinite, bpm >= 20, bpm <= 250 else { continue }
                     samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "heart_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: bpm, unit: "bpm", value_text: nil))
-                } else if q.quantityType == spo2Type {
+                } else if matchesQuantityType(q, type: spo2Type) {
                     let pct = q.quantity.doubleValue(for: HKUnit.percent()) * 100.0
                     guard pct.isFinite, pct >= 50, pct <= 100 else { continue }
                     samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "spo2", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: pct, unit: "%", value_text: nil))
-                } else if q.quantityType == stepsType {
+                } else if matchesQuantityType(q, type: stepsType) {
                     let cnt = q.quantity.doubleValue(for: HKUnit.count())
                     guard cnt.isFinite, cnt >= 0 else { continue }
                     samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "step_count", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: cnt, unit: "count", value_text: nil))
-                } else if q.quantityType == hrvType {
+                } else if matchesQuantityType(q, type: hrvType) {
                     let ms = q.quantity.doubleValue(for: HKUnit.secondUnit(with: .milli))
                     guard ms.isFinite, ms >= 0, ms <= 600 else { continue }
                     samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "hrv_sdnn", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: ms, unit: "ms", value_text: nil))
-                } else if let respiratoryRateType, q.quantityType == respiratoryRateType {
+                } else if matchesQuantityType(q, type: respiratoryRateType) {
                     let breathsPerMinute = q.quantity.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute()))
                     guard breathsPerMinute.isFinite, breathsPerMinute >= 4, breathsPerMinute <= 80 else { continue }
                     samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "respiratory_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: breathsPerMinute, unit: "br/min", value_text: nil))
-                } else if let restingHeartRateType, q.quantityType == restingHeartRateType {
+                } else if matchesQuantityType(q, type: restingHeartRateType) {
                     let bpm = q.quantity.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute()))
                     guard bpm.isFinite, bpm >= 20, bpm <= 180 else { continue }
                     samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "resting_heart_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: bpm, unit: "bpm", value_text: nil))
-                } else if let temperatureDeviationType, q.quantityType == temperatureDeviationType {
+                } else if matchesQuantityType(q, type: temperatureDeviationType) {
                     let deltaC = q.quantity.doubleValue(for: HKUnit.degreeCelsius())
                     guard deltaC.isFinite, deltaC >= -10, deltaC <= 10 else { continue }
                     samples.append(Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit", type: "temperature_deviation", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate), value: deltaC, unit: "degC", value_text: "apple_sleeping_wrist_temperature"))
@@ -224,6 +224,7 @@ final class HealthKitBackgroundSync {
                 }
             }
         }
+        logQuantityMapping(anchorKey: anchorKey, collected: collected, mappedCount: samples.count)
 
         guard !samples.isEmpty else {
             anchorStore.setAnchor(anchor, forKey: anchorKey)
@@ -373,6 +374,23 @@ final class HealthKitBackgroundSync {
             }
             self.healthStore.execute(q)
         }
+    }
+
+    private func matchesQuantityType(_ sample: HKQuantitySample, type: HKQuantityType?) -> Bool {
+        guard let type else { return false }
+        return sample.quantityType.identifier == type.identifier
+    }
+
+    private func logQuantityMapping(anchorKey: String, collected: [HKSample], mappedCount: Int) {
+        guard anchorKey == "respiratory_rate" else { return }
+        let quantitySamples = collected.compactMap { $0 as? HKQuantitySample }
+        let identifiers = Array(Set(quantitySamples.map { $0.quantityType.identifier })).sorted()
+        let identifierList = identifiers.joined(separator: ",")
+        let windowStart = collected.map(\.startDate).min()
+        let windowEnd = collected.map(\.endDate).max()
+        let startText = windowStart.map { iso.string(from: $0) } ?? "-"
+        let endText = windowEnd.map { iso.string(from: $0) } ?? "-"
+        appLog("[HK-DIAG] respiratory collected=\(collected.count) quantity=\(quantitySamples.count) mapped=\(mappedCount) identifiers=\(identifierList) window=\(startText)..\(endText)")
     }
 
     // BG task
@@ -789,6 +807,7 @@ final class HealthKitBackgroundSync {
                 }
             }
         }
+        logQuantityMapping(anchorKey: anchorKey, collected: collected, mappedCount: samples.count)
 
         do {
             let chunkSize = (anchorKey == "heart_rate" ? 100 : 200)
@@ -807,43 +826,43 @@ final class HealthKitBackgroundSync {
 
     /// Mirrors the mapping in processDeltas so backfill writes identical rows.
     private func mapQuantitySampleToWire(_ q: HKQuantitySample) -> Sample? {
-        if q.quantityType == hrType {
+        if matchesQuantityType(q, type: hrType) {
             let bpm = q.quantity.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute()))
             guard bpm.isFinite, bpm >= 20, bpm <= 250 else { return nil }
             return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
                           type: "heart_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
                           value: bpm, unit: "bpm", value_text: nil)
-        } else if q.quantityType == spo2Type {
+        } else if matchesQuantityType(q, type: spo2Type) {
             let pct = q.quantity.doubleValue(for: HKUnit.percent()) * 100.0
             guard pct.isFinite, pct >= 50, pct <= 100 else { return nil }
             return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
                           type: "spo2", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
                           value: pct, unit: "%", value_text: nil)
-        } else if q.quantityType == stepsType {
+        } else if matchesQuantityType(q, type: stepsType) {
             let cnt = q.quantity.doubleValue(for: HKUnit.count())
             guard cnt.isFinite, cnt >= 0 else { return nil }
             return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
                           type: "step_count", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
                           value: cnt, unit: "count", value_text: nil)
-        } else if q.quantityType == hrvType {
+        } else if matchesQuantityType(q, type: hrvType) {
             let ms = q.quantity.doubleValue(for: HKUnit.secondUnit(with: .milli))
             guard ms.isFinite, ms >= 0, ms <= 600 else { return nil }
             return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
                           type: "hrv_sdnn", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
                           value: ms, unit: "ms", value_text: nil)
-        } else if let respiratoryRateType, q.quantityType == respiratoryRateType {
+        } else if matchesQuantityType(q, type: respiratoryRateType) {
             let breathsPerMinute = q.quantity.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute()))
             guard breathsPerMinute.isFinite, breathsPerMinute >= 4, breathsPerMinute <= 80 else { return nil }
             return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
                           type: "respiratory_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
                           value: breathsPerMinute, unit: "br/min", value_text: nil)
-        } else if let restingHeartRateType, q.quantityType == restingHeartRateType {
+        } else if matchesQuantityType(q, type: restingHeartRateType) {
             let bpm = q.quantity.doubleValue(for: HKUnit.count().unitDivided(by: HKUnit.minute()))
             guard bpm.isFinite, bpm >= 20, bpm <= 180 else { return nil }
             return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
                           type: "resting_heart_rate", start_time: iso.string(from: q.startDate), end_time: iso.string(from: q.endDate),
                           value: bpm, unit: "bpm", value_text: nil)
-        } else if let temperatureDeviationType, q.quantityType == temperatureDeviationType {
+        } else if matchesQuantityType(q, type: temperatureDeviationType) {
             let deltaC = q.quantity.doubleValue(for: HKUnit.degreeCelsius())
             guard deltaC.isFinite, deltaC >= -10, deltaC <= 10 else { return nil }
             return Sample(user_id: currentUserId(), device_os: "ios", source: "healthkit",
