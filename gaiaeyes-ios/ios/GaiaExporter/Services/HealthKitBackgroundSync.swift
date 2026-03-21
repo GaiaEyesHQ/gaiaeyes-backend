@@ -48,6 +48,24 @@ private actor ProcessingGate {
     }
 }
 
+private actor Phase2BackfillState {
+    private var inProgress = false
+
+    func beginIfNeeded() -> Bool {
+        guard !inProgress else { return false }
+        inProgress = true
+        return true
+    }
+
+    func end() {
+        inProgress = false
+    }
+
+    func isInProgress() -> Bool {
+        inProgress
+    }
+}
+
 final class HealthKitBackgroundSync {
     static let shared = HealthKitBackgroundSync()
     private static let phase2BackfillVersion = 1
@@ -57,6 +75,7 @@ final class HealthKitBackgroundSync {
     private let anchorStore = AnchorStore()
     private let featuresRefresher = FeaturesRefreshDebouncer()
     private let processingGate = ProcessingGate()
+    private let phase2BackfillState = Phase2BackfillState()
     @MainActor private weak var appState: AppState?
     private var didRegisterObservers = false
     private let iso: ISO8601DateFormatter = {
@@ -393,6 +412,11 @@ final class HealthKitBackgroundSync {
         appLog("[HK-DIAG] respiratory collected=\(collected.count) quantity=\(quantitySamples.count) mapped=\(mappedCount) identifiers=\(identifierList) window=\(startText)..\(endText)")
     }
 
+    private func prioritizeRecentUploads(anchorKey: String, samples: inout [Sample]) {
+        guard anchorKey == "respiratory_rate" else { return }
+        samples.sort { $0.start_time > $1.start_time }
+    }
+
     // BG task
     static let refreshTaskId = "com.gaiaexporter.refresh"
     static let processingTaskId = "com.gaiaexporter.processing"
@@ -569,8 +593,9 @@ final class HealthKitBackgroundSync {
         let defaults = UserDefaults.standard
         let appliedVersion = defaults.integer(forKey: Self.phase2BackfillMarkerKey)
         guard appliedVersion < Self.phase2BackfillVersion else { return }
+        let started = await phase2BackfillState.beginIfNeeded()
+        guard started else { return }
 
-        defaults.set(Self.phase2BackfillVersion, forKey: Self.phase2BackfillMarkerKey)
         let keys = [
             "respiratory_rate",
             "resting_heart_rate",
@@ -594,6 +619,8 @@ final class HealthKitBackgroundSync {
             await backfillOne(type: temperatureDeviationType, anchorKey: "temperature_deviation", pred: pred, sort: sort)
         }
         await backfillCycle(pred: pred, sort: sort)
+        defaults.set(Self.phase2BackfillVersion, forKey: Self.phase2BackfillMarkerKey)
+        await phase2BackfillState.end()
     }
 
     /// Clear anchors and backfill all supported quantity types from `start` until now.
@@ -746,22 +773,28 @@ final class HealthKitBackgroundSync {
             return
         }
         appLog("[BG] kickOnce: \(reason)")
+        let phase2BackfillInProgress = await phase2BackfillState.isInProgress()
+        if phase2BackfillInProgress {
+            appLog("[BG] kickOnce: phase2 context backfill in progress; skipping duplicate respiratory/recovery fetches")
+        }
         do { try await self.processDeltas(for: self.hrType,   anchorKey: "heart_rate") } catch { appLog("[BG] kickOnce hr error: \(error.localizedDescription)") }
         do { try await self.processDeltas(for: self.spo2Type, anchorKey: "spo2") }       catch { appLog("[BG] kickOnce spo2 error: \(error.localizedDescription)") }
         do { try await self.processDeltas(for: self.stepsType,anchorKey: "step_count") } catch { appLog("[BG] kickOnce steps error: \(error.localizedDescription)") }
         do { try await self.processDeltas(for: self.hrvType,  anchorKey: "hrv_sdnn") }   catch { appLog("[BG] kickOnce hrv error: \(error.localizedDescription)") }
-        if let respiratoryRateType {
+        if !phase2BackfillInProgress, let respiratoryRateType {
             do { try await self.processDeltas(for: respiratoryRateType, anchorKey: "respiratory_rate") } catch { appLog("[BG] kickOnce respiratory error: \(error.localizedDescription)") }
         }
-        if let restingHeartRateType {
+        if !phase2BackfillInProgress, let restingHeartRateType {
             do { try await self.processDeltas(for: restingHeartRateType, anchorKey: "resting_heart_rate") } catch { appLog("[BG] kickOnce resting HR error: \(error.localizedDescription)") }
         }
-        if let temperatureDeviationType {
+        if !phase2BackfillInProgress, let temperatureDeviationType {
             do { try await self.processDeltas(for: temperatureDeviationType, anchorKey: "temperature_deviation") } catch { appLog("[BG] kickOnce temperature error: \(error.localizedDescription)") }
         }
         do { try await self.processDeltas(for: self.bpType,  anchorKey: "blood_pressure") } catch { appLog("[BG] kickOnce bp error: \(error.localizedDescription)") }
         do { try await self.processSleepDeltas(anchorKey: "sleep_stage") } catch { appLog("[BG] kickOnce sleep error: \(error.localizedDescription)") }
-        do { try await self.processCycleDeltas(anchorKey: "menstrual_flow") } catch { appLog("[BG] kickOnce cycle error: \(error.localizedDescription)") }
+        if !phase2BackfillInProgress {
+            do { try await self.processCycleDeltas(anchorKey: "menstrual_flow") } catch { appLog("[BG] kickOnce cycle error: \(error.localizedDescription)") }
+        }
         StatusStore.shared.setBackgroundRun()
     }
 
@@ -808,6 +841,7 @@ final class HealthKitBackgroundSync {
             }
         }
         logQuantityMapping(anchorKey: anchorKey, collected: collected, mappedCount: samples.count)
+        prioritizeRecentUploads(anchorKey: anchorKey, samples: &samples)
 
         do {
             let chunkSize = (anchorKey == "heart_rate" ? 100 : 200)
