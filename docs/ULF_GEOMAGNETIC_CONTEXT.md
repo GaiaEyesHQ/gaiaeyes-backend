@@ -26,7 +26,8 @@ This phase adds a lightweight backend-only ULF context layer derived from USGS 6
   - `ulf_band_proxy`: minute-resolution low-frequency proxy
 - Normalization:
   - `ulf_index_station`: rolling 7-day percentile of station `dbdt_rms`
-  - `ulf_index_localtime`: reserved for optional hour-bucket normalization; usually `NULL` in v1
+  - bootstrap fallback uses the current derived run when 7-day history is still sparse and keeps `low_history`
+  - `ulf_index_localtime`: optional hour-bucket percentile when enabled, otherwise falls back to `ulf_index_station`
 - Persistence:
   - `persistence_30m`
   - `persistence_90m`
@@ -80,6 +81,7 @@ This phase adds a lightweight backend-only ULF context layer derived from USGS 6
 - `ULF_CONTEXT_MODE`
 - `ULF_ENABLE_LOCALTIME_PERCENTILE`
 - `ULF_MIN_HISTORY_ROWS`
+- `ULF_BOOTSTRAP_MIN_ROWS`
 - shared HTTP settings:
   - `HTTP_TIMEOUT_SECS`
   - `HTTP_RETRY_TRIES`

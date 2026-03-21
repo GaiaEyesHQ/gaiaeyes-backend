@@ -2,7 +2,9 @@ from datetime import UTC, datetime
 
 import pytest
 
+from bots.geomag_ulf import ingest_ulf
 from bots.geomag_ulf.ingest_ulf import (
+    _apply_station_history,
     StationWindow,
     choose_component,
     classify_context,
@@ -27,6 +29,37 @@ def test_choose_component_falls_back_to_x() -> None:
 
 def test_compute_percentile_index_returns_none_with_sparse_history() -> None:
     assert compute_percentile_index(1.2, [0.4, 0.8, 1.0]) is None
+
+
+def test_apply_station_history_bootstraps_index_and_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ingest_ulf, "ULF_MIN_HISTORY_ROWS", 72)
+    monkeypatch.setattr(ingest_ulf, "ULF_BOOTSTRAP_MIN_ROWS", 8)
+
+    windows = [
+        StationWindow(
+            station_id="",
+            ts_utc=datetime(2026, 3, 20, 0, minute, tzinfo=UTC),
+            component_used="H",
+            component_substituted=False,
+            dbdt_rms=0.2 + (minute / 100.0),
+            ulf_rms_broad=0.2 + (minute / 100.0),
+            ulf_band_proxy=0.1,
+            ulf_index_station=None,
+            ulf_index_localtime=None,
+            persistence_30m=None,
+            persistence_90m=None,
+            quality_flags=[],
+            dbdt_trace=(0.1, 0.2, 0.3),
+        )
+        for minute in range(0, 60, 5)
+    ]
+
+    enriched = _apply_station_history("BOU", False, windows, [])
+    assert enriched[0].ulf_index_station is not None
+    assert enriched[0].ulf_index_localtime == enriched[0].ulf_index_station
+    assert enriched[0].persistence_30m is not None
+    assert enriched[-1].persistence_90m is not None
+    assert "low_history" in enriched[0].quality_flags
 
 
 def test_compute_coherence_is_none_for_single_station() -> None:

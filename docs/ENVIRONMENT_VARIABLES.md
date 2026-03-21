@@ -38,6 +38,7 @@
 | `ULF_CONTEXT_MODE` | Reserved ULF aggregation mode flag | `context` | `bots/geomag_ulf/ingest_ulf.py` |
 | `ULF_ENABLE_LOCALTIME_PERCENTILE` | Enable optional hour-bucket ULF percentile normalization | `false` | `bots/geomag_ulf/ingest_ulf.py` |
 | `ULF_MIN_HISTORY_ROWS` | Minimum prior rows before station percentile normalization is emitted | `72` | `bots/geomag_ulf/ingest_ulf.py` |
+| `ULF_BOOTSTRAP_MIN_ROWS` | Minimum rows needed for the sparse-history bootstrap percentile fallback | `12` | `bots/geomag_ulf/ingest_ulf.py` |
 | `MART_REFRESH_DISABLE` | Disable mart refresh on ingest | `0` | `app/routers/ingest.py` |
 | `DEBUG_FEATURES_DIAG` | Enable features diagnostics | `1` | `app/routers/summary.py` |
 | `WEBHOOK_SECRET` | HMAC secret for `/hooks/*` | `webhook-secret` | `api/middleware.py`, `api/webhooks.py` |

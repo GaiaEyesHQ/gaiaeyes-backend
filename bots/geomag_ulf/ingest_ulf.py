@@ -38,6 +38,7 @@ ULF_ENABLE_LOCALTIME_PERCENTILE = os.getenv("ULF_ENABLE_LOCALTIME_PERCENTILE", "
     "on",
 }
 ULF_MIN_HISTORY_ROWS = max(24, int(os.getenv("ULF_MIN_HISTORY_ROWS", "72")))
+ULF_BOOTSTRAP_MIN_ROWS = max(8, int(os.getenv("ULF_BOOTSTRAP_MIN_ROWS", "12")))
 SOURCE = "usgs"
 
 WINDOW_MINUTES = max(1, ULF_WINDOW_SECONDS // 60)
@@ -358,11 +359,16 @@ async def load_station_history_rows(
     )
 
 
-def compute_percentile_index(value: float | None, history: list[float]) -> float | None:
+def compute_percentile_index(
+    value: float | None,
+    history: list[float],
+    *,
+    min_history_rows: int = ULF_MIN_HISTORY_ROWS,
+) -> float | None:
     if value is None:
         return None
     valid = sorted(float(item) for item in history if item is not None)
-    if len(valid) < ULF_MIN_HISTORY_ROWS:
+    if len(valid) < min_history_rows:
         return None
     rank = sum(1 for item in valid if item <= value)
     return round((rank / len(valid)) * 100.0, 2)
@@ -474,6 +480,16 @@ def _apply_station_history(
         }
         for row in history_rows
     ]
+    bootstrap_dbdt_history = [
+        float(item["dbdt_rms"])
+        for item in history_metrics
+        if item.get("dbdt_rms") is not None
+    ]
+    bootstrap_dbdt_history.extend(
+        float(window.dbdt_rms)
+        for window in windows
+        if window.dbdt_rms is not None
+    )
     enriched: list[StationWindow] = []
     for window in windows:
         flags = list(window.quality_flags)
@@ -485,18 +501,41 @@ def _apply_station_history(
             for item in history_metrics
             if item.get("dbdt_rms") is not None
         ]
-        ulf_index_station = compute_percentile_index(window.dbdt_rms, dbdt_history)
+        ulf_index_station = compute_percentile_index(
+            window.dbdt_rms,
+            dbdt_history,
+            min_history_rows=ULF_MIN_HISTORY_ROWS,
+        )
+        if ulf_index_station is None:
+            ulf_index_station = compute_percentile_index(
+                window.dbdt_rms,
+                bootstrap_dbdt_history,
+                min_history_rows=ULF_BOOTSTRAP_MIN_ROWS,
+            )
         if window.dbdt_rms is not None and ulf_index_station is None:
             flags.append("low_history")
+        elif len(dbdt_history) < ULF_MIN_HISTORY_ROWS:
+            flags.append("low_history")
 
-        current_localtime = None
+        current_localtime = ulf_index_station
         if ULF_ENABLE_LOCALTIME_PERCENTILE and window.ulf_band_proxy is not None:
             same_hour_history = [
                 float(item["dbdt_rms"])
                 for item in history_metrics
                 if item.get("dbdt_rms") is not None and item["ts_utc"].hour == window.ts_utc.hour
             ]
-            current_localtime = compute_percentile_index(window.dbdt_rms, same_hour_history)
+            same_hour_history.extend(
+                float(candidate.dbdt_rms)
+                for candidate in windows
+                if candidate.dbdt_rms is not None and candidate.ts_utc.hour == window.ts_utc.hour
+            )
+            hour_bucket_index = compute_percentile_index(
+                window.dbdt_rms,
+                same_hour_history,
+                min_history_rows=ULF_BOOTSTRAP_MIN_ROWS,
+            )
+            if hour_bucket_index is not None:
+                current_localtime = hour_bucket_index
 
         recent_30m = [
             float(item["ulf_index_station"])
