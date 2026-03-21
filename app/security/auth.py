@@ -40,7 +40,8 @@ DEFAULT_PUBLIC_READ = [
     # "/v1/space/visuals/diag",
 ]
 PUBLIC_READ_ENABLED = os.getenv("PUBLIC_READ_ENABLED", "1").lower() in ("1", "true", "yes")
-PUBLIC_READ_PATHS = [p.rstrip("/") for p in os.getenv("PUBLIC_READ_PATHS", "").split(",") if p.strip()] or DEFAULT_PUBLIC_READ
+_ENV_PUBLIC_READ_PATHS = [p.rstrip("/") for p in os.getenv("PUBLIC_READ_PATHS", "").split(",") if p.strip()]
+PUBLIC_READ_PATHS = list(dict.fromkeys(DEFAULT_PUBLIC_READ + _ENV_PUBLIC_READ_PATHS))
 
 
 def _normalized(path: str) -> str:
