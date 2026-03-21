@@ -244,6 +244,7 @@ final class HealthKitBackgroundSync {
             }
         }
         logQuantityMapping(anchorKey: anchorKey, collected: collected, mappedCount: samples.count)
+        prioritizeRecentUploads(anchorKey: anchorKey, samples: &samples)
 
         guard !samples.isEmpty else {
             anchorStore.setAnchor(anchor, forKey: anchorKey)
@@ -777,23 +778,43 @@ final class HealthKitBackgroundSync {
         if phase2BackfillInProgress {
             appLog("[BG] kickOnce: phase2 context backfill in progress; skipping duplicate respiratory/recovery fetches")
         }
-        do { try await self.processDeltas(for: self.hrType,   anchorKey: "heart_rate") } catch { appLog("[BG] kickOnce hr error: \(error.localizedDescription)") }
-        do { try await self.processDeltas(for: self.spo2Type, anchorKey: "spo2") }       catch { appLog("[BG] kickOnce spo2 error: \(error.localizedDescription)") }
-        do { try await self.processDeltas(for: self.stepsType,anchorKey: "step_count") } catch { appLog("[BG] kickOnce steps error: \(error.localizedDescription)") }
-        do { try await self.processDeltas(for: self.hrvType,  anchorKey: "hrv_sdnn") }   catch { appLog("[BG] kickOnce hrv error: \(error.localizedDescription)") }
+        await self.processingGate.runOnce(key: "heart_rate") {
+            do { try await self.processDeltas(for: self.hrType, anchorKey: "heart_rate") } catch { appLog("[BG] kickOnce hr error: \(error.localizedDescription)") }
+        }
+        await self.processingGate.runOnce(key: "spo2") {
+            do { try await self.processDeltas(for: self.spo2Type, anchorKey: "spo2") } catch { appLog("[BG] kickOnce spo2 error: \(error.localizedDescription)") }
+        }
+        await self.processingGate.runOnce(key: "step_count") {
+            do { try await self.processDeltas(for: self.stepsType, anchorKey: "step_count") } catch { appLog("[BG] kickOnce steps error: \(error.localizedDescription)") }
+        }
+        await self.processingGate.runOnce(key: "hrv_sdnn") {
+            do { try await self.processDeltas(for: self.hrvType, anchorKey: "hrv_sdnn") } catch { appLog("[BG] kickOnce hrv error: \(error.localizedDescription)") }
+        }
         if !phase2BackfillInProgress, let respiratoryRateType {
-            do { try await self.processDeltas(for: respiratoryRateType, anchorKey: "respiratory_rate") } catch { appLog("[BG] kickOnce respiratory error: \(error.localizedDescription)") }
+            await self.processingGate.runOnce(key: "respiratory_rate") {
+                do { try await self.processDeltas(for: respiratoryRateType, anchorKey: "respiratory_rate") } catch { appLog("[BG] kickOnce respiratory error: \(error.localizedDescription)") }
+            }
         }
         if !phase2BackfillInProgress, let restingHeartRateType {
-            do { try await self.processDeltas(for: restingHeartRateType, anchorKey: "resting_heart_rate") } catch { appLog("[BG] kickOnce resting HR error: \(error.localizedDescription)") }
+            await self.processingGate.runOnce(key: "resting_heart_rate") {
+                do { try await self.processDeltas(for: restingHeartRateType, anchorKey: "resting_heart_rate") } catch { appLog("[BG] kickOnce resting HR error: \(error.localizedDescription)") }
+            }
         }
         if !phase2BackfillInProgress, let temperatureDeviationType {
-            do { try await self.processDeltas(for: temperatureDeviationType, anchorKey: "temperature_deviation") } catch { appLog("[BG] kickOnce temperature error: \(error.localizedDescription)") }
+            await self.processingGate.runOnce(key: "temperature_deviation") {
+                do { try await self.processDeltas(for: temperatureDeviationType, anchorKey: "temperature_deviation") } catch { appLog("[BG] kickOnce temperature error: \(error.localizedDescription)") }
+            }
         }
-        do { try await self.processDeltas(for: self.bpType,  anchorKey: "blood_pressure") } catch { appLog("[BG] kickOnce bp error: \(error.localizedDescription)") }
-        do { try await self.processSleepDeltas(anchorKey: "sleep_stage") } catch { appLog("[BG] kickOnce sleep error: \(error.localizedDescription)") }
+        await self.processingGate.runOnce(key: "blood_pressure") {
+            do { try await self.processDeltas(for: self.bpType, anchorKey: "blood_pressure") } catch { appLog("[BG] kickOnce bp error: \(error.localizedDescription)") }
+        }
+        await self.processingGate.runOnce(key: "sleep_stage") {
+            do { try await self.processSleepDeltas(anchorKey: "sleep_stage") } catch { appLog("[BG] kickOnce sleep error: \(error.localizedDescription)") }
+        }
         if !phase2BackfillInProgress {
-            do { try await self.processCycleDeltas(anchorKey: "menstrual_flow") } catch { appLog("[BG] kickOnce cycle error: \(error.localizedDescription)") }
+            await self.processingGate.runOnce(key: "menstrual_flow") {
+                do { try await self.processCycleDeltas(anchorKey: "menstrual_flow") } catch { appLog("[BG] kickOnce cycle error: \(error.localizedDescription)") }
+            }
         }
         StatusStore.shared.setBackgroundRun()
     }
