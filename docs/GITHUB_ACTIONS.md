@@ -10,7 +10,7 @@ This repo relies heavily on GitHub Actions for scheduled ingestion, JSON snapsho
 > **Note:** Cron schedules are defined inside each workflow file. Update schedules there.
 
 ### Space + earth data ingest
-- `space-weather.yml` — ingest space weather + JSON export.
+- `space-weather.yml` — ingest space weather, run ULF geomagnetic context derivation, and export JSON.
 - `space-weather-daily-rollup.yml` — daily rollup of space weather marts.
 - `ingest_space_forecasts.yml` — Step 1 space forecast ingestion.
 - `space-visuals.yml` — space visuals ingest + storage upload.

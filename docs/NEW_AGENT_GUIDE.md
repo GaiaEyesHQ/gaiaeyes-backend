@@ -32,7 +32,7 @@ Gaia Eyes combines a FastAPI backend, a Swift iOS app, and a WordPress front-end
 Backend routes are grouped by domain under `app/routers/` and registered in `app/main.py`.
 - Space/visuals: `/v1/space/*` and `/v1/space/visuals`
 - Quakes: `/v1/quakes/*`
-- Earth/Schumann: `/v1/earth/schumann/latest`
+- Earth/Schumann + ULF: `/v1/earth/schumann/latest`, `/v1/earth/ulf/latest`, `/v1/earth/ulf/series`
 - Local health: `/v1/local/*`
 - Features: `/v1/features/today`
 - Symptoms: `/v1/symptoms/*`

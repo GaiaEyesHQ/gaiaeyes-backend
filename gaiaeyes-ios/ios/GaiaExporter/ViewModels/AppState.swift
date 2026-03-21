@@ -178,6 +178,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         // Ensure observers are registered and run a quick delta sweep on launch
         Task {
             try? HealthKitBackgroundSync.shared.registerObservers()
+            await HealthKitBackgroundSync.shared.ensurePhase2RecentBackfillIfNeeded()
             await HealthKitBackgroundSync.shared.kickOnce(reason: "app launch")
         }
         HealthKitBackgroundSync.shared.registerAppState(self)
@@ -434,6 +435,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             } catch {
                 append("❌ Observer registration failed: \(error.localizedDescription)")
             }
+            await HealthKitBackgroundSync.shared.ensurePhase2RecentBackfillIfNeeded()
             await HealthKitBackgroundSync.shared.kickOnce(reason: "permissions granted")
         } catch {
             append("❌ Health permission error: \(error.localizedDescription)")

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query, Response
 from psycopg.rows import dict_row
 
 from app.db import get_db, settings
+from app.db import ulf as ulf_db
 from app.routers.schumann_tomsk_params import build_schumann_tomsk_fusion, fetch_tomsk_latest_payload
 
 
@@ -627,6 +628,51 @@ async def schumann_heatmap_48h(
         "axis": {"freq_start_hz": freq_start_hz, "freq_step_hz": freq_step_hz, "bins": 160},
         "count": len(points),
         "points": points,
+    }
+    _apply_cache_headers(response, payload, 300)
+    return payload
+
+
+@router.get("/earth/ulf/latest")
+async def ulf_latest(
+    response: Response,
+    conn=Depends(get_db),
+):
+    latest_context = await ulf_db.get_latest_ulf_context(conn)
+    latest_ts = (
+        datetime.fromisoformat(str(latest_context.get("ts_utc")).replace("Z", "+00:00"))
+        if latest_context and latest_context.get("ts_utc")
+        else None
+    )
+    latest_by_station = await ulf_db.get_latest_ulf_by_station(conn, ts_utc=latest_ts)
+
+    payload = {
+        "latest_context": latest_context,
+        "latest_by_station": latest_by_station,
+        "classification": latest_context.get("context_class") if latest_context else None,
+        "confidence": latest_context.get("confidence_score") if latest_context else None,
+    }
+    _apply_cache_headers(response, payload, 60)
+    return payload
+
+
+@router.get("/earth/ulf/series")
+async def ulf_series(
+    response: Response,
+    hours: int = Query(48, ge=1, le=168),
+    mode: str = Query("context", pattern="^(context|station)$"),
+    station_id: Optional[str] = Query(None),
+    conn=Depends(get_db),
+):
+    if mode == "station":
+        series = await ulf_db.get_ulf_station_series(conn, hours, station_id=station_id)
+    else:
+        series = await ulf_db.get_ulf_context_series(conn, hours)
+
+    payload = {
+        "mode": mode,
+        "hours": hours,
+        "series": series,
     }
     _apply_cache_headers(response, payload, 300)
     return payload

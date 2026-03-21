@@ -50,6 +50,8 @@ private actor ProcessingGate {
 
 final class HealthKitBackgroundSync {
     static let shared = HealthKitBackgroundSync()
+    private static let phase2BackfillVersion = 1
+    private static let phase2BackfillMarkerKey = "gaia.hk.phase2BackfillVersion"
 
     private let healthStore = HKHealthStore()
     private let anchorStore = AnchorStore()
@@ -541,6 +543,39 @@ final class HealthKitBackgroundSync {
         } catch {
             appLog("[BG] features snapshot error after upload (\(reason)): \(error.localizedDescription)")
         }
+    }
+
+    /// Clear stale anchors for newly-expanded context signals once so recent history
+    /// is re-uploaded even if prior anchors stopped advancing.
+    func ensurePhase2RecentBackfillIfNeeded() async {
+        let defaults = UserDefaults.standard
+        let appliedVersion = defaults.integer(forKey: Self.phase2BackfillMarkerKey)
+        guard appliedVersion < Self.phase2BackfillVersion else { return }
+
+        defaults.set(Self.phase2BackfillVersion, forKey: Self.phase2BackfillMarkerKey)
+        let keys = [
+            "respiratory_rate",
+            "resting_heart_rate",
+            "temperature_deviation",
+            "menstrual_flow",
+        ]
+        anchorStore.clear(keys: keys)
+        appLog("[Backfill] phase2 recent backfill starting")
+
+        let start = Calendar.current.date(byAdding: .day, value: -180, to: Date()) ?? Date(timeIntervalSinceNow: -180 * 24 * 60 * 60)
+        let pred = HKQuery.predicateForSamples(withStart: start, end: Date(), options: [])
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+
+        if let respiratoryRateType {
+            await backfillOne(type: respiratoryRateType, anchorKey: "respiratory_rate", pred: pred, sort: sort)
+        }
+        if let restingHeartRateType {
+            await backfillOne(type: restingHeartRateType, anchorKey: "resting_heart_rate", pred: pred, sort: sort)
+        }
+        if let temperatureDeviationType {
+            await backfillOne(type: temperatureDeviationType, anchorKey: "temperature_deviation", pred: pred, sort: sort)
+        }
+        await backfillCycle(pred: pred, sort: sort)
     }
 
     /// Clear anchors and backfill all supported quantity types from `start` until now.

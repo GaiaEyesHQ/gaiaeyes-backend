@@ -77,6 +77,9 @@ jobs:
           echo "DEBUG OUTPUT_JSON_PATH at runtime: ${OUTPUT_JSON_PATH}"
           python scripts/ingest_space_weather_swpc.py
 
+      - name: Run ULF ingester
+        run: python bots/geomag_ulf/ingest_ulf.py
+
       - name: Commit & push updated JSON
         run: |
           set -euo pipefail

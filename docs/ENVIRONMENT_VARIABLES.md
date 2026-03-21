@@ -32,6 +32,12 @@
 | `GAIA_MEDIA_BASE` | Alternate CDN base | `https://.../gaiaeyes-media` | `app/routers/summary.py` |
 | `VISUALS_MEDIA_BASE_URL` | Visuals-specific CDN base | `https://.../gaiaeyes-media` | `app/routers/space_visuals.py` |
 | `GOES_XRS_URL` | Space flares data source | `https://services.swpc.noaa.gov/...` | `app/routers/space.py` |
+| `ULF_STATIONS` | CSV list of USGS observatories used for derived ULF context | `BOU,CMO` | `bots/geomag_ulf/ingest_ulf.py` |
+| `ULF_FETCH_MINUTES` | Trailing minute window fetched from USGS on each ULF run | `180` | `bots/geomag_ulf/ingest_ulf.py` |
+| `ULF_WINDOW_SECONDS` | Derived ULF bucket size in seconds | `300` | `bots/geomag_ulf/ingest_ulf.py` |
+| `ULF_CONTEXT_MODE` | Reserved ULF aggregation mode flag | `context` | `bots/geomag_ulf/ingest_ulf.py` |
+| `ULF_ENABLE_LOCALTIME_PERCENTILE` | Enable optional hour-bucket ULF percentile normalization | `false` | `bots/geomag_ulf/ingest_ulf.py` |
+| `ULF_MIN_HISTORY_ROWS` | Minimum prior rows before station percentile normalization is emitted | `72` | `bots/geomag_ulf/ingest_ulf.py` |
 | `MART_REFRESH_DISABLE` | Disable mart refresh on ingest | `0` | `app/routers/ingest.py` |
 | `DEBUG_FEATURES_DIAG` | Enable features diagnostics | `1` | `app/routers/summary.py` |
 | `WEBHOOK_SECRET` | HMAC secret for `/hooks/*` | `webhook-secret` | `api/middleware.py`, `api/webhooks.py` |

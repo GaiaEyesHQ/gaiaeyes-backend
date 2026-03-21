@@ -33,6 +33,8 @@ DEFAULT_PUBLIC_READ = [
     "/v1/earth/schumann/heatmap_48h",
     "/v1/earth/schumann/tomsk_params/latest",
     "/v1/earth/schumann/tomsk_params/series",
+    "/v1/earth/ulf/latest",
+    "/v1/earth/ulf/series",
     "/v1/local/check",
     # diag endpoints are optional; uncomment if you want them public:
     # "/v1/space/visuals/diag",

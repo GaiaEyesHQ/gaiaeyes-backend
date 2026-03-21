@@ -147,6 +147,8 @@ sequenceDiagram
 - `/v1/space/visuals` – gallery of current images (relative paths + `cdn_base`)
 - `/v1/space/forecast/outlook` – consolidated space-weather snapshot (now + 24–72h)
 - `/v1/space/forecast/summary` – short human-readable summary + flags
+- `/v1/earth/ulf/latest` – latest derived ULF geomagnetic context + station rows
+- `/v1/earth/ulf/series` – ascending ULF context/station history for charts
 - `/v1/hazards/gdacs` and `/v1/hazards/gdacs/full` – GDACS feed (recent + detailed)
 - `/v1/local/check?zip=XXXXX` – local health signals (NWS + AirNow + moon)
 - `/v1/billing/checkout` – server-created Stripe Checkout (requires Supabase JWT)
