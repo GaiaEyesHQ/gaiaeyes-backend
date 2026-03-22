@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import os
 import sys
 import types
@@ -54,6 +55,7 @@ if "psycopg" not in sys.modules:
     sys.modules["psycopg.rows"] = rows_stub
 
 from bots.gauges.gauge_scorer import (  # noqa: E402
+    _build_symptom_signal_summary,
     apply_symptom_gauge_adjustments,
     build_health_status_explainer,
     compute_health_status,
@@ -195,6 +197,22 @@ class GaugeScorerTests(unittest.TestCase):
         self.assertEqual(payload["drivers"][1]["label"], "Sleep debt")
         self.assertEqual(payload["context"][0]["label"], "Cycle context")
         self.assertIn("luteal", payload["context"][0]["display"])
+
+    def test_symptom_signal_summary_uses_severity_tiers_and_recency_decay(self) -> None:
+        now = datetime.now(timezone.utc)
+        summary = _build_symptom_signal_summary(
+            [
+                {"symptom_code": "HEADACHE", "severity": 9, "ts_utc": now - timedelta(hours=1)},
+                {"symptom_code": "FATIGUE", "severity": 6, "ts_utc": now - timedelta(hours=10)},
+            ]
+        )
+
+        self.assertEqual(summary["gauge_boosts"]["pain"], 18.0)
+        self.assertAlmostEqual(summary["gauge_boosts"]["energy"], 3.6, places=2)
+        self.assertEqual(summary["recent_gauge_boosts"]["pain"], 18.0)
+        self.assertNotIn("energy", summary["recent_gauge_boosts"])
+        self.assertIn("pain", summary["recent_matching_gauges"])
+        self.assertGreater(summary["health_status_symptom_boost"], 12.0)
 
 
 if __name__ == "__main__":

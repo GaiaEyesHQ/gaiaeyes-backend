@@ -15,7 +15,11 @@ from psycopg.rows import dict_row
 from app.db import get_db
 from app.security.auth import require_read_auth, require_write_auth
 from bots.definitions.load_definition_base import load_definition_base
-from bots.gauges.gauge_scorer import fetch_health_status_context, fetch_user_tags
+from bots.gauges.gauge_scorer import (
+    fetch_health_status_context,
+    fetch_recent_symptom_gauge_context,
+    fetch_user_tags,
+)
 from bots.gauges.local_payload import get_local_payload
 from bots.gauges.signal_resolver import resolve_signals
 from services.drivers.driver_normalize import normalize_environmental_drivers
@@ -110,6 +114,33 @@ def _decorate_gauges(gauges: Dict[str, Any], definition: Dict[str, Any]) -> Dict
             continue
         if zone_key:
             out[gauge_key] = {"zone": zone_key, "label": zone_label}
+    return out
+
+
+def _apply_recent_symptom_meta_overrides(
+    gauges_meta: Dict[str, Dict[str, Optional[str]]],
+    recent_boosts: Dict[str, Any],
+) -> Dict[str, Dict[str, Optional[str]]]:
+    if not isinstance(gauges_meta, dict) or not isinstance(recent_boosts, dict):
+        return gauges_meta
+
+    out: Dict[str, Dict[str, Optional[str]]] = {
+        key: dict(value) if isinstance(value, dict) else {}
+        for key, value in gauges_meta.items()
+    }
+    for gauge_key, raw_boost in recent_boosts.items():
+        boost = _safe_float(raw_boost)
+        if boost is None or boost <= 0:
+            continue
+        meta = out.get(gauge_key)
+        if not isinstance(meta, dict):
+            continue
+        zone = str(meta.get("zone") or "").strip().lower()
+        label = str(meta.get("label") or "").strip().lower()
+        if zone != "low" and label not in {"quiet", "low strain"}:
+            continue
+        meta["label"] = "Watchful" if boost >= 9.0 else "Recent symptom noted"
+        out[gauge_key] = meta
     return out
 
 
@@ -434,11 +465,12 @@ async def dashboard(
     out["gauges_delta"] = await _fetch_gauges_delta(conn, user_id, day)
 
     active_states, local_payload = await _resolve_signal_context(user_id, day, definition)
-    user_tags, pattern_rows, recent_outcomes, health_status_explainer = await asyncio.gather(
+    user_tags, pattern_rows, recent_outcomes, health_status_explainer, symptom_gauge_context = await asyncio.gather(
         asyncio.to_thread(fetch_user_tags, user_id),
         fetch_best_pattern_rows(conn, user_id),
         fetch_recent_outcome_summary(conn, user_id, day),
         asyncio.to_thread(fetch_health_status_context, user_id, day),
+        asyncio.to_thread(fetch_recent_symptom_gauge_context, user_id, day),
     )
     drivers = normalize_environmental_drivers(
         active_states=active_states,
@@ -469,6 +501,14 @@ async def dashboard(
     out["health_status_explainer"] = (
         health_status_explainer if isinstance(health_status_explainer, dict) else {}
     )
+    symptom_gauge_context = symptom_gauge_context if isinstance(symptom_gauge_context, dict) else {}
+    out["gauge_recent_log_boosts"] = symptom_gauge_context.get("gauge_recent_log_boosts") or {}
+    out["last_symptom_update_at"] = symptom_gauge_context.get("last_symptom_update_at")
+    if isinstance(out.get("gauges_meta"), dict):
+        out["gauges_meta"] = _apply_recent_symptom_meta_overrides(
+            out["gauges_meta"],
+            out.get("gauge_recent_log_boosts") or {},
+        )
 
     gauges_payload = out.get("gauges") if isinstance(out.get("gauges"), dict) else {}
     gauges_meta_payload = out.get("gauges_meta") if isinstance(out.get("gauges_meta"), dict) else {}
@@ -509,6 +549,7 @@ async def dashboard(
             "active_states_count": len(active_states),
             "drivers_count": len(ranked_drivers),
             "health_status_explainer_available": bool(out.get("health_status_explainer")),
+            "recent_symptom_gauges": sorted((out.get("gauge_recent_log_boosts") or {}).keys()),
         }
 
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)

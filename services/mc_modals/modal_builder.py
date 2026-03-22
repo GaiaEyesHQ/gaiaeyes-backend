@@ -705,13 +705,7 @@ def _driver_zone_key(driver: Dict[str, Any]) -> str:
 
 
 def _default_severity(zone: str) -> int:
-    if zone == "high":
-        return 4
-    if zone == "elevated":
-        return 3
-    if zone == "mild":
-        return 2
-    return 1
+    return 5
 
 
 def _unique_lines(items: Iterable[str]) -> List[str]:

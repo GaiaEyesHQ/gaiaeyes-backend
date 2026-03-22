@@ -47,8 +47,10 @@ def test_build_modal_models_returns_gauge_and_driver_models() -> None:
     assert "drivers" in payload
     assert payload["gauges"]["pain"]["title"] == "Pain \u2014 Flare"
     assert payload["gauges"]["pain"]["cta"]["action"] == "open_symptom_log"
+    assert payload["gauges"]["pain"]["quick_log"]["default_severity"] == 5
     assert payload["drivers"]["pressure"]["title"] == "Pressure Swing \u2014 High"
     assert payload["drivers"]["pressure"]["cta"]["prefill"]
+    assert payload["drivers"]["pressure"]["quick_log"]["default_severity"] == 5
 
 
 def test_pressure_modal_personalizes_for_migraine_history() -> None:

@@ -546,6 +546,30 @@ private struct DashboardModalModels: Codable, Hashable {
     let drivers: [String: DashboardModalEntry]?
 }
 
+private struct DashboardHealthStatusDriver: Codable, Hashable {
+    let key: String?
+    let kind: String?
+    let label: String?
+    let display: String?
+    let points: Double?
+    let impact: String?
+}
+
+private struct DashboardHealthStatusContextItem: Codable, Hashable {
+    let key: String?
+    let label: String?
+    let display: String?
+}
+
+private struct DashboardHealthStatusExplainer: Codable, Hashable {
+    let healthStatus: Double?
+    let summary: String?
+    let drivers: [DashboardHealthStatusDriver]?
+    let context: [DashboardHealthStatusContextItem]?
+    let calibrating: Bool?
+    let baselineDays: Int?
+}
+
 private struct DashboardEarthscopePost: Codable, Hashable {
     let day: String?
     let title: String?
@@ -575,6 +599,9 @@ private struct DashboardPayload: Codable {
     let activePatternRefs: [DashboardPatternRef]?
     let todayPersonalThemes: [DashboardPersonalTheme]?
     let todayRelevanceExplanations: DashboardTodayRelevanceExplanations?
+    let healthStatusExplainer: DashboardHealthStatusExplainer?
+    let gaugeRecentLogBoosts: [String: Double]?
+    let lastSymptomUpdateAt: String?
     let modalModels: DashboardModalModels?
     let earthscopeSummary: String?
     let alerts: [DashboardAlertItem]?
@@ -584,7 +611,7 @@ private struct DashboardPayload: Codable {
     let personalPost: DashboardEarthscopePost?
 
     private enum CodingKeys: String, CodingKey {
-        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, gaugesDelta, drivers, driversCompact, primaryDriver, supportingDrivers, patternRelevantGauges, activePatternRefs, todayPersonalThemes, todayRelevanceExplanations, modalModels, earthscopeSummary, alerts, entitled
+        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, gaugesDelta, drivers, driversCompact, primaryDriver, supportingDrivers, patternRelevantGauges, activePatternRefs, todayPersonalThemes, todayRelevanceExplanations, healthStatusExplainer, gaugeRecentLogBoosts, lastSymptomUpdateAt, modalModels, earthscopeSummary, alerts, entitled
         case memberPost
         case publicPost
         case personalPost
@@ -1676,6 +1703,7 @@ struct ContentView: View {
     @State private var featuresDiagnostics: Diagnostics?
 
     @State private var pendingRefreshTask: Task<Void, Never>? = nil
+    @State private var pendingDashboardRefreshTask: Task<Void, Never>? = nil
     @State private var pendingRefreshToken: UInt64 = 0
 
     @State private var features: FeaturesToday? = nil
@@ -2397,6 +2425,9 @@ struct ContentView: View {
                             activePatternRefs: payload.activePatternRefs ?? older.activePatternRefs,
                             todayPersonalThemes: payload.todayPersonalThemes ?? older.todayPersonalThemes,
                             todayRelevanceExplanations: payload.todayRelevanceExplanations ?? older.todayRelevanceExplanations,
+                            healthStatusExplainer: payload.healthStatusExplainer ?? older.healthStatusExplainer,
+                            gaugeRecentLogBoosts: payload.gaugeRecentLogBoosts ?? older.gaugeRecentLogBoosts,
+                            lastSymptomUpdateAt: payload.lastSymptomUpdateAt ?? older.lastSymptomUpdateAt,
                             modalModels: payload.modalModels ?? older.modalModels,
                             earthscopeSummary: payload.earthscopeSummary,
                             alerts: (payload.alerts?.isEmpty == false) ? payload.alerts : older.alerts,
@@ -2446,6 +2477,9 @@ struct ContentView: View {
                             activePatternRefs: resolvedPayload.activePatternRefs,
                             todayPersonalThemes: resolvedPayload.todayPersonalThemes,
                             todayRelevanceExplanations: resolvedPayload.todayRelevanceExplanations,
+                            healthStatusExplainer: resolvedPayload.healthStatusExplainer,
+                            gaugeRecentLogBoosts: resolvedPayload.gaugeRecentLogBoosts,
+                            lastSymptomUpdateAt: resolvedPayload.lastSymptomUpdateAt,
                             modalModels: resolvedPayload.modalModels,
                             earthscopeSummary: resolvedPayload.earthscopeSummary,
                             alerts: resolvedPayload.alerts,
@@ -2486,6 +2520,9 @@ struct ContentView: View {
                             activePatternRefs: resolvedPayload.activePatternRefs,
                             todayPersonalThemes: resolvedPayload.todayPersonalThemes,
                             todayRelevanceExplanations: resolvedPayload.todayRelevanceExplanations,
+                            healthStatusExplainer: resolvedPayload.healthStatusExplainer,
+                            gaugeRecentLogBoosts: resolvedPayload.gaugeRecentLogBoosts,
+                            lastSymptomUpdateAt: resolvedPayload.lastSymptomUpdateAt,
                             modalModels: resolvedPayload.modalModels,
                             earthscopeSummary: resolvedPayload.earthscopeSummary,
                             alerts: resolvedPayload.alerts,
@@ -2520,6 +2557,9 @@ struct ContentView: View {
                         activePatternRefs: resolvedPayload.activePatternRefs,
                         todayPersonalThemes: resolvedPayload.todayPersonalThemes,
                         todayRelevanceExplanations: resolvedPayload.todayRelevanceExplanations,
+                        healthStatusExplainer: resolvedPayload.healthStatusExplainer,
+                        gaugeRecentLogBoosts: resolvedPayload.gaugeRecentLogBoosts,
+                        lastSymptomUpdateAt: resolvedPayload.lastSymptomUpdateAt,
                         modalModels: resolvedPayload.modalModels,
                         earthscopeSummary: resolvedPayload.earthscopeSummary,
                         alerts: resolvedPayload.alerts,
@@ -3766,6 +3806,10 @@ struct ContentView: View {
                 let freeText: String?
                 let tags: [String]?
             }
+            struct SymptomPostEnvelope: Decodable {
+                let ok: Bool?
+                let error: String?
+            }
             let body = SymptomPostBody(
                 symptomCode: event.symptomCode,
                 severity: event.severity,
@@ -3800,12 +3844,25 @@ struct ContentView: View {
             }
 
             if (200..<300).contains(http.statusCode) {
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                if let envelope = try? decoder.decode(SymptomPostEnvelope.self, from: data),
+                   envelope.ok == false {
+                    let message = envelope.error?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    appLog("[SYM] logical failure: \(message ?? "unknown")")
+                    showSymptomToast("Couldn’t log symptom")
+                    await state.refreshSymptomQueueCount()
+                    return false
+                }
                 showSymptomToast(
                     successMessage,
                     actionTitle: successPrefill == nil ? nil : "Edit",
                     prefill: successPrefill
                 )
-                await fetchSymptoms(api: api)
+                async let symptomsTask: Void = fetchSymptoms(api: api)
+                async let featuresTask: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
+                async let dashboardTask: Void = fetchDashboardPayload(force: true)
+                _ = await (symptomsTask, featuresTask, dashboardTask)
                 await state.refreshSymptomQueueCount()
                 return true
             } else if (400..<500).contains(http.statusCode) {
@@ -3914,6 +3971,9 @@ struct ContentView: View {
         let dashboardGaugeZones = dashboardPayload?.gaugeZones ?? DashboardGaugeZone.defaultZones
         let dashboardGaugeLabels = dashboardPayload?.gaugeLabels ?? [:]
         let dashboardGaugesDelta = dashboardPayload?.gaugesDelta ?? [:]
+        let dashboardGaugeRecentLogBoosts = dashboardPayload?.gaugeRecentLogBoosts ?? [:]
+        let dashboardLastSymptomUpdateAt = dashboardPayload?.lastSymptomUpdateAt
+        let dashboardHealthStatusExplainer = dashboardPayload?.healthStatusExplainer
         let dashboardDrivers = dashboardPayload?.drivers ?? []
         let dashboardDriversCompact = dashboardPayload?.driversCompact ?? []
         let dashboardModalModels = dashboardPayload?.modalModels
@@ -3933,6 +3993,9 @@ struct ContentView: View {
                 gaugeZones: dashboardGaugeZones,
                 gaugeLabels: dashboardGaugeLabels,
                 gaugesDelta: dashboardGaugesDelta,
+                gaugeRecentLogBoosts: dashboardGaugeRecentLogBoosts,
+                lastSymptomUpdateAt: dashboardLastSymptomUpdateAt,
+                healthStatusExplainer: dashboardHealthStatusExplainer,
                 drivers: dashboardDrivers,
                 driversCompact: dashboardDriversCompact,
                 modalModels: dashboardModalModels,
@@ -4016,6 +4079,9 @@ struct ContentView: View {
         let gaugeZones: [DashboardGaugeZone]
         let gaugeLabels: [String: String]
         let gaugesDelta: [String: Int]
+        let gaugeRecentLogBoosts: [String: Double]
+        let lastSymptomUpdateAt: String?
+        let healthStatusExplainer: DashboardHealthStatusExplainer?
         let drivers: [DashboardDriverItem]
         let driversCompact: [String]
         let modalModels: DashboardModalModels?
@@ -4355,7 +4421,7 @@ struct ContentView: View {
                     title: "Log what you're feeling:",
                     confirmLabel: entry.cta?.label,
                     options: options,
-                    defaultSeverity: nil,
+                    defaultSeverity: 5,
                     baseTags: nil
                 )
             }
@@ -4407,7 +4473,7 @@ struct ContentView: View {
                         }
                         Button {
                             var event = SymptomQueuedEvent(symptomCode: SymptomCodeHelper.fallbackCode, tsUtc: Date())
-                            event.severity = quickLog.defaultSeverity
+                            event.severity = quickLog.defaultSeverity ?? 5
                             event.tags = quickLog.baseTags
                             onOpenCustomLog(event)
                         } label: {
@@ -4431,7 +4497,7 @@ struct ContentView: View {
                     Button(confirmLabel) {
                         guard let selectedQuickLog else { return }
                         var event = SymptomQueuedEvent(symptomCode: selectedQuickLog.code, tsUtc: Date())
-                        event.severity = quickLog.defaultSeverity
+                        event.severity = quickLog.defaultSeverity ?? 5
                         event.tags = quickLog.baseTags
                         onQuickLog(MissionControlQuickLogRequest(label: selectedQuickLog.label, event: event))
                         dismiss()
@@ -4687,20 +4753,31 @@ struct ContentView: View {
                 "mood": "Mood",
                 "health_status": "Health Status",
             ]
+            func effectiveZoneLabel(for key: String, meta: DashboardGaugeMeta?) -> String? {
+                let baseLabel = meta?.label
+                guard let boost = gaugeRecentLogBoosts[key], boost > 0 else { return baseLabel }
+                let zone = (meta?.zone ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let normalizedLabel = (baseLabel ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if zone == "low" || normalizedLabel == "quiet" || normalizedLabel == "low strain" {
+                    return boost >= 9 ? "Watchful" : "Recent symptom noted"
+                }
+                return baseLabel
+            }
             return values.map { key, value in
                 let meta = gaugesMeta[key]
                 let zoneKey = meta?.zone ?? inferredZoneKey(for: value)
                 let delta = gaugesDelta[key] ?? 0
                 let tappable = modalModels?.gauges?[key] != nil
+                let zoneLabel = effectiveZoneLabel(for: key, meta: meta)
                 return GaugeRow(
                     key: key,
                     label: gaugeLabels[key] ?? fallbackLabels[key] ?? key,
                     value: value,
                     delta: delta,
                     zoneKey: zoneKey,
-                    zoneLabel: meta?.label,
+                    zoneLabel: zoneLabel,
                     tappable: tappable,
-                    showAffordance: gaugeShowsAffordance(zoneKey: zoneKey, zoneLabel: meta?.label)
+                    showAffordance: gaugeShowsAffordance(zoneKey: zoneKey, zoneLabel: zoneLabel)
                 )
             }
         }
@@ -4725,6 +4802,14 @@ struct ContentView: View {
             if token == "elevated" { return "elevated" }
             if token == "mild" { return "mild" }
             return "low"
+        }
+
+        private func formattedSymptomUpdate(_ raw: String?) -> String? {
+            guard let raw, let date = ISO8601DateFormatter().date(from: raw) else { return nil }
+            let formatter = DateFormatter()
+            formatter.dateStyle = .none
+            formatter.timeStyle = .short
+            return formatter.string(from: date)
         }
 
         private func driverProgress(_ raw: String?) -> Double {
@@ -4839,6 +4924,30 @@ struct ContentView: View {
                                 }
                             }
                         }
+                    }
+
+                    if let summary = healthStatusExplainer?.summary,
+                       !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Body Context")
+                                .font(.headline)
+                            Text(summary)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            if !gaugeRecentLogBoosts.isEmpty,
+                               let updateText = formattedSymptomUpdate(lastSymptomUpdateAt) {
+                                Text("Updated after your recent symptom log at \(updateText).")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(10)
+                        .background(Color.black.opacity(0.20))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                        )
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -7981,6 +8090,21 @@ struct ContentView: View {
                     }
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .dashboardShouldRefresh).receive(on: RunLoop.main)) { _ in
+                pendingDashboardRefreshTask?.cancel()
+                pendingDashboardRefreshTask = Task {
+                    do {
+                        try await Task.sleep(nanoseconds: 800_000_000)
+                    } catch {
+                        return
+                    }
+                    if Task.isCancelled { return }
+                    await fetchDashboardPayload(force: true)
+                    await MainActor.run {
+                        pendingDashboardRefreshTask = nil
+                    }
+                }
+            }
             .onReceive(NotificationCenter.default.publisher(for: .gaiaPushTokenDidChange).receive(on: RunLoop.main)) { _ in
                 Task {
                     await applyStoredPushState()
@@ -8028,6 +8152,8 @@ struct ContentView: View {
             .onDisappear {
                 pendingRefreshTask?.cancel()
                 pendingRefreshTask = nil
+                pendingDashboardRefreshTask?.cancel()
+                pendingDashboardRefreshTask = nil
             }
         }
         .sheet(isPresented: $showMissionInsightsSheet) {

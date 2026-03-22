@@ -142,8 +142,8 @@ struct SymptomsLogPage: View {
         }
 
         _selectedPreset = State(initialValue: initialPreset)
-        _includeSeverity = State(initialValue: prefill?.severity != nil)
-        _severityValue = State(initialValue: Double(prefill?.severity ?? 3))
+        _includeSeverity = State(initialValue: true)
+        _severityValue = State(initialValue: Double(max(1, prefill?.severity ?? 5)))
         _freeText = State(initialValue: prefill?.freeText ?? "")
         _occurredAt = State(initialValue: prefill?.tsUtc ?? Date())
         _hiddenTags = State(initialValue: prefill?.tags ?? [])
@@ -236,10 +236,10 @@ struct SymptomsLogPage: View {
 
                         if includeSeverity {
                             VStack(alignment: .leading) {
-                                Slider(value: $severityValue, in: 0...10, step: 1) {
+                                Slider(value: $severityValue, in: 1...10, step: 1) {
                                     Text("Severity")
                                 } minimumValueLabel: {
-                                    Text("0")
+                                    Text("1")
                                 } maximumValueLabel: {
                                     Text("10")
                                 }

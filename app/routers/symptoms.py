@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import datetime
 from typing import List, Optional
+from zoneinfo import ZoneInfo
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -15,6 +17,12 @@ from ..db import symptoms as symptoms_db
 router = APIRouter(prefix="/symptoms", tags=["symptoms"])
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_TIMEZONE = os.getenv("GAIA_TIMEZONE", "America/Chicago")
+try:
+    LOCAL_TZ = ZoneInfo(DEFAULT_TIMEZONE)
+except Exception:
+    LOCAL_TZ = ZoneInfo("America/Chicago")
 
 
 _ERR_LOAD_CODES = "Failed to load symptom codes"
@@ -106,9 +114,12 @@ async def _commit_if_supported(conn) -> None:
 
 async def _refresh_gauges_for_symptom(user_id: str, ts_utc: str) -> None:
     try:
-        event_day = datetime.fromisoformat(ts_utc.replace("Z", "+00:00")).date()
+        event_ts = datetime.fromisoformat(ts_utc.replace("Z", "+00:00"))
+        if event_ts.tzinfo is None:
+            event_ts = event_ts.replace(tzinfo=LOCAL_TZ)
+        event_day = event_ts.astimezone(LOCAL_TZ).date()
     except Exception:
-        event_day = datetime.utcnow().date()
+        event_day = datetime.now(LOCAL_TZ).date()
 
     def _run() -> None:
         from bots.gauges.gauge_scorer import score_user_day
@@ -138,6 +149,7 @@ async def create_symptom_event(
 ):
     user_id = _require_user_id(request)
     normalized_code = _normalize_symptom_code(payload.symptom_code)
+    effective_severity = payload.severity if payload.severity is not None else 5
 
     try:
         code_rows = await symptoms_db.fetch_symptom_codes(conn)
@@ -184,7 +196,7 @@ async def create_symptom_event(
         extra={
             "user_id": user_id,
             "symptom_code": normalized_code,
-            "severity": payload.severity,
+            "severity": effective_severity,
         },
     )
 
@@ -194,7 +206,7 @@ async def create_symptom_event(
             user_id,
             symptom_code=normalized_code,
             ts_utc=payload.ts_utc,
-            severity=payload.severity,
+            severity=effective_severity,
             free_text=payload.free_text,
             tags=payload.tags,
         )

@@ -16,8 +16,10 @@ if str(ROOT) not in sys.path:
 
 from app.main import app
 from app.db import get_db, symptoms as symptoms_db
+from app.routers import symptoms as symptoms_router
 
 UTC = timezone.utc
+REAL_REFRESH_GAUGES_FOR_SYMPTOM = symptoms_router._refresh_gauges_for_symptom
 
 
 class FakeSymptomStore:
@@ -154,6 +156,14 @@ def override_db_dependency():
         yield
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture(autouse=True)
+def suppress_background_gauge_refresh(monkeypatch):
+    async def _noop(user_id: str, ts_utc: str) -> None:  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr(symptoms_router, "_refresh_gauges_for_symptom", _noop)
 
 
 @pytest.fixture
@@ -294,6 +304,50 @@ async def test_daily_aggregation_flow(client: AsyncClient, fake_store: FakeSympt
             "last_ts": "2024-04-01T15:30:00+00:00",
         },
     ]
+
+
+@pytest.mark.anyio
+async def test_post_defaults_missing_severity_to_five(client: AsyncClient, fake_store: FakeSymptomStore):
+    user_id = str(uuid4())
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Dev-UserId": user_id,
+    }
+
+    response = await client.post(
+        "/v1/symptoms",
+        json={"symptom_code": "headache", "ts_utc": "2024-04-02T07:45:00Z"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert fake_store.events[-1]["severity"] == 5
+
+
+@pytest.mark.anyio
+async def test_refresh_gauges_for_symptom_uses_chicago_day(monkeypatch):
+    captured: dict[str, str] = {}
+
+    def _fake_score_user_day(user_id: str, day, force: bool = False, **kwargs):  # noqa: ANN001
+        captured["user_id"] = user_id
+        captured["day"] = day.isoformat() if hasattr(day, "isoformat") else str(day)
+        captured["force"] = str(force)
+        return {"ok": True}
+
+    import bots.gauges.gauge_scorer as gauge_scorer
+
+    monkeypatch.setattr(gauge_scorer, "score_user_day", _fake_score_user_day)
+
+    await REAL_REFRESH_GAUGES_FOR_SYMPTOM(
+        "user-123",
+        "2024-04-02T01:30:00Z",
+    )
+
+    assert captured["user_id"] == "user-123"
+    assert captured["day"] == "2024-04-01"
+    assert captured["force"] == "True"
 
 
 @pytest.mark.anyio

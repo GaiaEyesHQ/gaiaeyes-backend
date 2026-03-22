@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from collections import defaultdict
 import hashlib
 import json
 import logging
@@ -8,6 +9,7 @@ import math
 import os
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 from services.db import pg
 from bots.definitions.load_definition_base import load_definition_base
@@ -25,6 +27,13 @@ from services.personalization.health_context import (
 LOG_LEVEL = os.getenv("GAIA_LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
+
+DEFAULT_TIMEZONE = os.getenv("GAIA_TIMEZONE", "America/Chicago")
+try:
+    LOCAL_TZ = ZoneInfo(DEFAULT_TIMEZONE)
+except Exception:
+    DEFAULT_TIMEZONE = "America/Chicago"
+    LOCAL_TZ = ZoneInfo(DEFAULT_TIMEZONE)
 
 _METRIC_SPECS = {
     "sleep_total_minutes": {"weight": 0.25, "direction": "lower_is_worse"},
@@ -62,32 +71,63 @@ _TS_CANDIDATES = ["ts_utc", "ts", "sample_ts", "created_at", "timestamp"]
 _CAMERA_QUALITY_OK = {"good", "ok"}
 _CAMERA_QUALITY_THRESHOLD = 0.65
 _GAUGE_KEYS = ["pain", "focus", "heart", "stamina", "energy", "sleep", "mood"]
+_SYMPTOM_EFFECT_KEYS = [*_GAUGE_KEYS, "health_status"]
+_RECENT_MATCH_WINDOW_HOURS = 3.0
 
 _SYMPTOM_GAUGE_EFFECTS: Dict[str, Dict[str, float]] = {
-    "HEADACHE": {"pain": 1.0, "focus": 0.55, "mood": 0.35},
-    "MIGRAINE": {"pain": 1.0, "focus": 0.65, "mood": 0.4},
-    "NERVE_PAIN": {"pain": 1.0, "stamina": 0.6, "energy": 0.45},
-    "PAIN": {"pain": 0.9, "stamina": 0.55, "energy": 0.35},
-    "STIFFNESS": {"pain": 0.65, "stamina": 0.5},
-    "DRAINED": {"energy": 1.0, "stamina": 0.9, "focus": 0.55, "mood": 0.35},
-    "FATIGUE": {"energy": 1.0, "stamina": 0.85, "focus": 0.45, "mood": 0.25},
-    "BRAIN_FOG": {"focus": 1.0, "energy": 0.45, "mood": 0.2},
-    "FOCUS_DRIFT": {"focus": 0.9, "energy": 0.35},
-    "ANXIOUS": {"mood": 1.0, "heart": 0.6, "sleep": 0.45, "focus": 0.35},
-    "PALPITATIONS": {"heart": 1.0, "mood": 0.3},
-    "INSOMNIA": {"sleep": 1.0, "energy": 0.8, "focus": 0.45, "mood": 0.25},
-    "RESTLESS_SLEEP": {"sleep": 0.95, "energy": 0.65, "focus": 0.35},
-    "RESP_IRRITATION": {"energy": 0.45, "heart": 0.35, "mood": 0.2},
+    "HEADACHE": {"pain": 1.0, "focus": 0.55, "mood": 0.2, "health_status": 0.55},
+    "MIGRAINE": {"pain": 1.0, "focus": 0.65, "mood": 0.25, "health_status": 0.65},
+    "PAIN": {"pain": 1.0, "stamina": 0.5, "energy": 0.25, "health_status": 0.55},
+    "NERVE_PAIN": {"pain": 1.0, "stamina": 0.55, "energy": 0.3, "health_status": 0.55},
+    "JOINT_PAIN": {"pain": 1.0, "stamina": 0.45, "health_status": 0.45},
+    "STIFFNESS": {"pain": 0.85, "stamina": 0.45, "health_status": 0.35},
+    "SINUS_PRESSURE": {"pain": 1.0, "focus": 0.25, "health_status": 0.35},
+    "LIGHT_SENSITIVITY": {"pain": 0.6, "focus": 0.25, "mood": 0.15},
+    "ZAPS": {"pain": 0.6, "health_status": 0.2},
+    "FATIGUE": {"energy": 1.0, "stamina": 0.7, "focus": 0.45, "mood": 0.2, "health_status": 0.6},
+    "DRAINED": {"energy": 1.0, "stamina": 0.8, "focus": 0.4, "mood": 0.25, "health_status": 0.65},
+    "BRAIN_FOG": {"focus": 0.9, "energy": 0.6, "mood": 0.45, "health_status": 0.3},
+    "FOCUS_DRIFT": {"focus": 0.8, "energy": 0.3},
+    "INSOMNIA": {"sleep": 1.0, "energy": 0.55, "mood": 0.2, "health_status": 0.6},
+    "RESTLESS_SLEEP": {"sleep": 1.0, "energy": 0.5, "mood": 0.2, "health_status": 0.5},
+    "WIRED": {"sleep": 0.65, "mood": 0.75, "energy": 0.25, "health_status": 0.3},
+    "ANXIOUS": {"mood": 1.0, "heart": 0.35, "sleep": 0.4, "focus": 0.25, "health_status": 0.35},
+    "PALPITATIONS": {"heart": 1.0, "mood": 0.25, "health_status": 0.55},
+    "CHEST_TIGHTNESS": {"heart": 1.0, "energy": 0.25, "mood": 0.25, "health_status": 0.6},
+    "RESP_IRRITATION": {"heart": 0.55, "energy": 0.45, "mood": 0.2, "health_status": 0.55},
+}
+
+_SYMPTOM_CLUSTER_WEIGHTS: Dict[str, str] = {
+    "HEADACHE": "pain",
+    "MIGRAINE": "pain",
+    "PAIN": "pain",
+    "NERVE_PAIN": "pain",
+    "JOINT_PAIN": "pain",
+    "STIFFNESS": "pain",
+    "SINUS_PRESSURE": "pain",
+    "LIGHT_SENSITIVITY": "pain",
+    "ZAPS": "pain",
+    "FATIGUE": "energy",
+    "DRAINED": "energy",
+    "BRAIN_FOG": "energy",
+    "WIRED": "sleep",
+    "INSOMNIA": "sleep",
+    "RESTLESS_SLEEP": "sleep",
+    "ANXIOUS": "mood",
+    "PALPITATIONS": "heart",
+    "CHEST_TIGHTNESS": "heart",
+    "RESP_IRRITATION": "heart",
 }
 
 _SYMPTOM_GAUGE_CAPS: Dict[str, float] = {
     "pain": 28.0,
-    "focus": 24.0,
-    "heart": 20.0,
-    "stamina": 22.0,
+    "focus": 18.0,
+    "heart": 18.0,
+    "stamina": 20.0,
     "energy": 24.0,
     "sleep": 22.0,
-    "mood": 20.0,
+    "mood": 18.0,
+    "health_status": 26.0,
 }
 
 
@@ -114,6 +154,18 @@ def _normalize_symptom_code(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip().replace("-", "_").replace(" ", "_").upper()
+
+
+def _local_day_bounds(day: date) -> Tuple[datetime, datetime]:
+    start_local = datetime.combine(day, datetime.min.time(), tzinfo=LOCAL_TZ)
+    end_local = start_local + timedelta(days=1)
+    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
+
+
+def _serialize_iso_utc(ts: Any) -> Optional[str]:
+    if not isinstance(ts, datetime):
+        return None
+    return ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _iso_day(day_val: date) -> str:
@@ -164,56 +216,176 @@ def fetch_user_tags(user_id: str) -> List[Dict[str, Any]]:
 
 
 def fetch_symptom_summary(user_id: str, day: date) -> Dict[str, Any]:
-    start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
-    end = start + timedelta(days=1)
-    summary = {"total_24h": 0, "max_severity": None, "top_symptoms": []}
-
-    try:
-        row = pg.fetchrow(
-            """
-            select count(*) as total,
-                   max(severity) as max_severity
-              from raw.user_symptom_events
-             where user_id = %s
-               and ts_utc >= %s
-               and ts_utc < %s
-            """,
-            user_id,
-            start,
-            end,
-        )
-        if row:
-            summary["total_24h"] = int(row.get("total") or 0)
-            summary["max_severity"] = row.get("max_severity")
-    except Exception:
-        pass
-
+    start, end = _local_day_bounds(day)
     try:
         rows = pg.fetch(
             """
-            select
-              symptom_code,
-              count(*) as events,
-              max(severity) as max_severity,
-              avg(severity) filter (where severity is not null) as mean_severity,
-              max(ts_utc) as last_ts
+            select symptom_code, severity, ts_utc, free_text, tags
               from raw.user_symptom_events
              where user_id = %s
                and ts_utc >= %s
                and ts_utc < %s
-             group by symptom_code
-             order by events desc, max(ts_utc) desc
-             limit 5
+             order by ts_utc desc
             """,
             user_id,
             start,
             end,
         )
-        summary["top_symptoms"] = rows or []
     except Exception:
-        pass
+        rows = []
 
-    return summary
+    return _build_symptom_signal_summary(rows or [])
+
+
+def _severity_points(value: Any) -> float:
+    severity = _safe_float(value)
+    if severity is None:
+        severity = 5.0
+    if severity <= 2.0:
+        return 2.0
+    if severity <= 4.0:
+        return 5.0
+    if severity <= 6.0:
+        return 9.0
+    if severity <= 8.0:
+        return 14.0
+    return 18.0
+
+
+def _recency_multiplier(ts_utc: Optional[datetime], *, asof: Optional[datetime] = None) -> float:
+    if ts_utc is None:
+        return 0.4
+    anchor = asof or datetime.now(timezone.utc)
+    age_hours = max(0.0, (anchor - ts_utc.astimezone(timezone.utc)).total_seconds() / 3600.0)
+    if age_hours <= 3.0:
+        return 1.0
+    if age_hours <= 8.0:
+        return 0.7
+    if age_hours <= 24.0:
+        return 0.4
+    return 0.0
+
+
+def _is_recent_symptom(ts_utc: Optional[datetime], *, asof: Optional[datetime] = None) -> bool:
+    if ts_utc is None:
+        return False
+    anchor = asof or datetime.now(timezone.utc)
+    age_hours = max(0.0, (anchor - ts_utc.astimezone(timezone.utc)).total_seconds() / 3600.0)
+    return age_hours <= _RECENT_MATCH_WINDOW_HOURS
+
+
+def _build_symptom_signal_summary(events: List[Dict[str, Any]]) -> Dict[str, Any]:
+    now_utc = datetime.now(timezone.utc)
+    gauge_boosts: Dict[str, float] = {key: 0.0 for key in _SYMPTOM_EFFECT_KEYS}
+    recent_gauge_boosts: Dict[str, float] = {key: 0.0 for key in _SYMPTOM_EFFECT_KEYS}
+    grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    cluster_keys: set[str] = set()
+    last_symptom_at: Optional[datetime] = None
+    max_severity: Optional[float] = None
+
+    for raw in events:
+        code = _normalize_symptom_code(raw.get("symptom_code"))
+        severity = _safe_float(raw.get("severity"))
+        ts_utc = raw.get("ts_utc")
+        if isinstance(ts_utc, str):
+            try:
+                ts_utc = datetime.fromisoformat(ts_utc.replace("Z", "+00:00"))
+            except Exception:
+                ts_utc = None
+        if isinstance(ts_utc, datetime) and ts_utc.tzinfo is None:
+            ts_utc = ts_utc.replace(tzinfo=timezone.utc)
+
+        grouped[code].append(
+            {
+                "symptom_code": code,
+                "severity": severity,
+                "ts_utc": ts_utc,
+                "free_text": raw.get("free_text"),
+                "tags": raw.get("tags"),
+            }
+        )
+        if severity is not None:
+            max_severity = severity if max_severity is None else max(max_severity, severity)
+        if isinstance(ts_utc, datetime):
+            last_symptom_at = ts_utc if last_symptom_at is None else max(last_symptom_at, ts_utc)
+
+        effects = _SYMPTOM_GAUGE_EFFECTS.get(code) or {}
+        if not effects:
+            continue
+        recency_mult = _recency_multiplier(ts_utc, asof=now_utc)
+        if recency_mult <= 0:
+            continue
+        severity_points = _severity_points(severity)
+        cluster_key = _SYMPTOM_CLUSTER_WEIGHTS.get(code)
+        if cluster_key:
+            cluster_keys.add(cluster_key)
+        for gauge_key, weight in effects.items():
+            contribution = severity_points * float(weight) * recency_mult
+            gauge_boosts[gauge_key] = gauge_boosts.get(gauge_key, 0.0) + contribution
+            if _is_recent_symptom(ts_utc, asof=now_utc):
+                recent_gauge_boosts[gauge_key] = recent_gauge_boosts.get(gauge_key, 0.0) + (severity_points * float(weight))
+
+    cluster_bonus = 0.0
+    if len(cluster_keys) >= 2:
+        cluster_bonus = min(8.0, float(len(cluster_keys) - 1) * 3.0)
+        gauge_boosts["health_status"] = gauge_boosts.get("health_status", 0.0) + cluster_bonus
+        if recent_gauge_boosts.get("health_status", 0.0) > 0:
+            recent_gauge_boosts["health_status"] = recent_gauge_boosts.get("health_status", 0.0) + cluster_bonus
+
+    top_symptoms: List[Dict[str, Any]] = []
+    for code, rows in grouped.items():
+        severities = [value for value in (_safe_float(item.get("severity")) for item in rows) if value is not None]
+        last_ts = max(
+            (item.get("ts_utc") for item in rows if isinstance(item.get("ts_utc"), datetime)),
+            default=None,
+        )
+        top_symptoms.append(
+            {
+                "symptom_code": code,
+                "events": len(rows),
+                "max_severity": max(severities) if severities else None,
+                "mean_severity": (sum(severities) / len(severities)) if severities else None,
+                "last_ts": _serialize_iso_utc(last_ts),
+            }
+        )
+    top_symptoms.sort(
+        key=lambda item: (
+            -int(item.get("events") or 0),
+            -(_safe_float(item.get("max_severity")) or 0.0),
+            str(item.get("last_ts") or ""),
+        )
+    )
+
+    gauge_boosts = {
+        key: round(min(_SYMPTOM_GAUGE_CAPS.get(key, value), value), 2)
+        for key, value in gauge_boosts.items()
+        if value > 0
+    }
+    recent_gauge_boosts = {
+        key: round(min(_SYMPTOM_GAUGE_CAPS.get(key, value), value), 2)
+        for key, value in recent_gauge_boosts.items()
+        if value > 0
+    }
+
+    return {
+        "total_24h": len(events),
+        "max_severity": max_severity,
+        "top_symptoms": top_symptoms[:5],
+        "gauge_boosts": gauge_boosts,
+        "recent_gauge_boosts": recent_gauge_boosts,
+        "health_status_symptom_boost": gauge_boosts.get("health_status", 0.0),
+        "health_status_cluster_bonus": round(cluster_bonus, 2),
+        "last_symptom_update_at": _serialize_iso_utc(last_symptom_at),
+        "recent_matching_gauges": sorted(key for key, value in recent_gauge_boosts.items() if value > 0),
+    }
+
+
+def fetch_recent_symptom_gauge_context(user_id: str, day: date) -> Dict[str, Any]:
+    summary = fetch_symptom_summary(user_id, day)
+    return {
+        "gauge_recent_log_boosts": summary.get("recent_gauge_boosts") or {},
+        "last_symptom_update_at": summary.get("last_symptom_update_at"),
+    }
 
 
 def fetch_local_health_summary(user_id: str) -> Optional[Dict[str, Any]]:
@@ -516,16 +688,6 @@ def _compute_recovery_penalties(today_row: Dict[str, Any]) -> Dict[str, Dict[str
     return penalties
 
 
-def _symptom_row_intensity(row: Dict[str, Any]) -> float:
-    events = max(1, int(row.get("events") or 0))
-    severity = _safe_float(row.get("max_severity"))
-    severity_component = 0.18
-    if severity is not None:
-        severity_component = min(0.62, max(0.0, severity / 10.0) * 0.62)
-    event_component = min(0.24, max(0, events - 1) * 0.08)
-    return min(1.0, 0.28 + severity_component + event_component)
-
-
 def apply_symptom_gauge_adjustments(
     gauges: Dict[str, Optional[float]],
     symptoms: Dict[str, Any],
@@ -534,25 +696,41 @@ def apply_symptom_gauge_adjustments(
     applied: Dict[str, float] = {}
     drivers: List[Dict[str, Any]] = []
 
+    all_boosts = symptoms.get("gauge_boosts") or {}
+    recent_boosts = symptoms.get("recent_gauge_boosts") or {}
+    if not all_boosts:
+        derived_boosts: Dict[str, float] = {}
+        for row in symptoms.get("top_symptoms") or []:
+            code = _normalize_symptom_code(row.get("symptom_code"))
+            effects = _SYMPTOM_GAUGE_EFFECTS.get(code) or {}
+            if not effects:
+                continue
+            severity_points = _severity_points(row.get("max_severity"))
+            for gauge_key, weight in effects.items():
+                if gauge_key not in _GAUGE_KEYS:
+                    continue
+                derived_boosts[gauge_key] = derived_boosts.get(gauge_key, 0.0) + (severity_points * float(weight))
+        all_boosts = derived_boosts
+        recent_boosts = recent_boosts or derived_boosts
     for row in symptoms.get("top_symptoms") or []:
         code = _normalize_symptom_code(row.get("symptom_code"))
         effects = _SYMPTOM_GAUGE_EFFECTS.get(code)
         if not effects:
             continue
-        intensity = _symptom_row_intensity(row)
         drivers.append(
             {
                 "symptom_code": code,
                 "events": int(row.get("events") or 0),
                 "max_severity": _safe_float(row.get("max_severity")),
-                "intensity": round(intensity, 3),
+                "last_ts": row.get("last_ts"),
             }
         )
-        for gauge_key, weight in effects.items():
-            cap = _SYMPTOM_GAUGE_CAPS.get(gauge_key)
-            if cap is None:
-                continue
-            applied[gauge_key] = applied.get(gauge_key, 0.0) + (cap * weight * intensity)
+
+    for gauge_key in _GAUGE_KEYS:
+        points = _safe_float(all_boosts.get(gauge_key))
+        if points is None or points <= 0:
+            continue
+        applied[gauge_key] = points
 
     for gauge_key, points in applied.items():
         current = _safe_float(adjusted.get(gauge_key))
@@ -564,6 +742,13 @@ def apply_symptom_gauge_adjustments(
     return adjusted, {
         "drivers": drivers,
         "adjustments": {key: round(value, 2) for key, value in applied.items() if value > 0},
+        "recent_adjustments": {
+            key: round(float(value), 2)
+            for key, value in recent_boosts.items()
+            if key in _GAUGE_KEYS and _safe_float(value) and float(value) > 0
+        },
+        "last_symptom_update_at": symptoms.get("last_symptom_update_at"),
+        "health_status_symptom_boost": round(float(symptoms.get("health_status_symptom_boost") or 0.0), 2),
     }
 
 
@@ -664,7 +849,9 @@ def build_health_status_explainer(
             }
         )
 
-    symptom_points = min(15.0, max(0.0, (_safe_float(symptoms.get("max_severity")) or 0.0) * 1.5))
+    symptom_points = _safe_float(symptoms.get("health_status_symptom_boost"))
+    if symptom_points is None or symptom_points <= 0:
+        symptom_points = min(15.0, max(0.0, (_safe_float(symptoms.get("max_severity")) or 0.0) * 1.5))
     top_symptoms = [
         _normalize_symptom_code(row.get("symptom_code"))
         for row in (symptoms.get("top_symptoms") or [])
@@ -857,9 +1044,13 @@ def compute_health_status(
     if recovery_penalty_total:
         health_status = min(100.0, round(health_status + recovery_penalty_total, 1))
 
-    severity_max = _safe_float(symptoms.get("max_severity"))
-    if severity_max:
-        health_status = min(100.0, health_status + min(15.0, severity_max * 1.5))
+    symptom_health_boost = _safe_float(symptoms.get("health_status_symptom_boost"))
+    if symptom_health_boost is None or symptom_health_boost <= 0:
+        severity_max = _safe_float(symptoms.get("max_severity"))
+        if severity_max:
+            symptom_health_boost = min(15.0, severity_max * 1.5)
+    if symptom_health_boost:
+        health_status = min(100.0, health_status + symptom_health_boost)
 
     stress_penalty = 0.0
     if camera_stress_index is not None:
@@ -879,6 +1070,7 @@ def compute_health_status(
         "hrv_source": hrv_source,
         "camera_stress_index": camera_stress_index,
         "stress_penalty": round(stress_penalty, 2) if stress_penalty else 0.0,
+        "symptom_health_boost": round(float(symptom_health_boost or 0.0), 2),
     }
 
 

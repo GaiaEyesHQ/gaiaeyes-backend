@@ -43,6 +43,7 @@ struct SymptomEnvelopeTests {
     func normalizesQueuedEventCodes() {
         let event = SymptomQueuedEvent(symptomCode: "nerve pain")
         #expect(event.symptomCode == "NERVE_PAIN")
+        #expect(event.severity == 5)
 }
 
     @Test

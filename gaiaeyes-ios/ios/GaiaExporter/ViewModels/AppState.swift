@@ -3,6 +3,7 @@ import Foundation
 
 extension Notification.Name {
     static let gaiaBackendDBRecovered = Notification.Name("gaia.backend.db.recovered")
+    static let dashboardShouldRefresh = Notification.Name("DashboardShouldRefresh")
 }
 
 enum DeveloperAuthDefaults {
@@ -268,6 +269,8 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         }
         if !sentIds.isEmpty {
             await queue.remove(ids: sentIds)
+            NotificationCenter.default.post(name: .featuresShouldRefresh, object: nil)
+            NotificationCenter.default.post(name: .dashboardShouldRefresh, object: nil)
         }
         await refreshSymptomQueueCount()
     }

@@ -53,6 +53,10 @@ payload such as:
 Create a new symptom event for the authenticated user. When `ts_utc` is omitted
 the service automatically stamps the current UTC time.
 
+If `severity` is omitted, the backend now defaults it to `5` as the neutral
+midpoint on the `1–10` symptom scale. This keeps quick logs and manual logs from
+quietly biasing toward mild severity.
+
 **Request body**
 
 ```json
@@ -71,6 +75,9 @@ the service automatically stamps the current UTC time.
   with underscores, and uppercase the result (e.g., `"nerve pain" → "NERVE_PAIN"`).
 - If the normalized value does not exist in `dim.symptom_codes`, the service maps it
   to `OTHER` (assuming the catalog contains an `OTHER` entry).
+- After a successful insert, the backend immediately recomputes the affected user/day
+  gauge row using the same local day boundary as the dashboard (`GAIA_TIMEZONE`,
+  default `America/Chicago`).
 - Opt-in validation: pass `?strict=1` to reject unknown codes instead of mapping.
   The server responds with HTTP 400 and a payload of the form:
 

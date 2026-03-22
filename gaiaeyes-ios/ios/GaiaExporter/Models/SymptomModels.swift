@@ -61,7 +61,7 @@ struct SymptomQueuedEvent: Codable, Identifiable {
     var freeText: String?
     var tags: [String]?
 
-    init(id: UUID = UUID(), symptomCode: String, tsUtc: Date = Date(), severity: Int? = nil, freeText: String? = nil, tags: [String]? = nil) {
+    init(id: UUID = UUID(), symptomCode: String, tsUtc: Date = Date(), severity: Int? = 5, freeText: String? = nil, tags: [String]? = nil) {
         self.id = id
         self.symptomCode = normalize(symptomCode)
         self.tsUtc = tsUtc

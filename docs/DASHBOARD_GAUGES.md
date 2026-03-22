@@ -69,6 +69,10 @@ Scoring rules:
 - Symptom logs can also nudge gauge values immediately after `POST /v1/symptoms` persists a new event
   - high-severity pain/headache logs now raise `pain` quickly instead of waiting for the scheduled batch job
   - the same rescore path also refreshes `marts.user_gauges_delta_day` for that user/day
+  - same-day symptom weighting now uses explicit symptom-to-gauge mappings, severity tiers, and recency decay
+    (0–3h `100%`, >3–8h `70%`, >8–24h `40%`)
+  - dashboard payloads also expose `gauge_recent_log_boosts` and `last_symptom_update_at` so clients can
+    avoid contradictory calm labels right after a fresh log
 
 ## Gauge Zones + Labels (v1.3)
 - Definition source of truth:
@@ -173,6 +177,8 @@ When trigger events are detected for paid users, the engine appends a “Trigger
       - `drivers`: top recovery/symptom contributors with `label`, `display`, `points`, and bounded `impact`
       - `context`: neutral optional context such as cycle timing when enabled
       - `calibrating` / `baseline_days`: baseline readiness hints for UI copy
+    - `gauge_recent_log_boosts`: recent same-day symptom boosts keyed by gauge for client-side debug or label suppression
+    - `last_symptom_update_at`: latest same-day symptom timestamp used for the current gauge weighting
     - `modal_models`: deterministic modal content for gauges and drivers
     - `earthscope_summary`: short deterministic summary paragraph for home cards
   - Driver ranking remains deterministic:
