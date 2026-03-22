@@ -37,12 +37,58 @@ _METRIC_SPECS = {
     "bp_dia_avg": {"weight": 0.05, "direction": "higher_is_worse"},
     "hrv_avg": {"weight": 0.10, "direction": "lower_is_worse"},
 }
+_HEALTH_CONTEXT_FIELDS = [
+    "respiratory_rate_avg",
+    "respiratory_rate_sleep_avg",
+    "respiratory_rate_baseline_delta",
+    "temperature_deviation",
+    "temperature_deviation_baseline_delta",
+    "temperature_source",
+    "resting_hr_avg",
+    "resting_hr_baseline_delta",
+    "bedtime_consistency_score",
+    "waketime_consistency_score",
+    "sleep_debt_proxy",
+    "sleep_vs_14d_baseline_delta",
+    "cycle_tracking_enabled",
+    "cycle_phase",
+    "menstrual_active",
+    "cycle_day",
+]
 
 _HRV_CANDIDATES = ["hrv_avg", "hrv_rmssd", "rmssd", "hrv", "hrv_ms"]
 _DAY_CANDIDATES = ["day", "date", "day_local", "day_utc"]
 _TS_CANDIDATES = ["ts_utc", "ts", "sample_ts", "created_at", "timestamp"]
 _CAMERA_QUALITY_OK = {"good", "ok"}
 _CAMERA_QUALITY_THRESHOLD = 0.65
+_GAUGE_KEYS = ["pain", "focus", "heart", "stamina", "energy", "sleep", "mood"]
+
+_SYMPTOM_GAUGE_EFFECTS: Dict[str, Dict[str, float]] = {
+    "HEADACHE": {"pain": 1.0, "focus": 0.55, "mood": 0.35},
+    "MIGRAINE": {"pain": 1.0, "focus": 0.65, "mood": 0.4},
+    "NERVE_PAIN": {"pain": 1.0, "stamina": 0.6, "energy": 0.45},
+    "PAIN": {"pain": 0.9, "stamina": 0.55, "energy": 0.35},
+    "STIFFNESS": {"pain": 0.65, "stamina": 0.5},
+    "DRAINED": {"energy": 1.0, "stamina": 0.9, "focus": 0.55, "mood": 0.35},
+    "FATIGUE": {"energy": 1.0, "stamina": 0.85, "focus": 0.45, "mood": 0.25},
+    "BRAIN_FOG": {"focus": 1.0, "energy": 0.45, "mood": 0.2},
+    "FOCUS_DRIFT": {"focus": 0.9, "energy": 0.35},
+    "ANXIOUS": {"mood": 1.0, "heart": 0.6, "sleep": 0.45, "focus": 0.35},
+    "PALPITATIONS": {"heart": 1.0, "mood": 0.3},
+    "INSOMNIA": {"sleep": 1.0, "energy": 0.8, "focus": 0.45, "mood": 0.25},
+    "RESTLESS_SLEEP": {"sleep": 0.95, "energy": 0.65, "focus": 0.35},
+    "RESP_IRRITATION": {"energy": 0.45, "heart": 0.35, "mood": 0.2},
+}
+
+_SYMPTOM_GAUGE_CAPS: Dict[str, float] = {
+    "pain": 28.0,
+    "focus": 24.0,
+    "heart": 20.0,
+    "stamina": 22.0,
+    "energy": 24.0,
+    "sleep": 22.0,
+    "mood": 20.0,
+}
 
 
 def _coerce_day(value: str | date | None) -> date:
@@ -62,6 +108,12 @@ def _safe_float(value: Any) -> Optional[float]:
         return float(value)
     except Exception:
         return None
+
+
+def _normalize_symptom_code(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip().replace("-", "_").replace(" ", "_").upper()
 
 
 def _iso_day(day_val: date) -> str:
@@ -139,13 +191,18 @@ def fetch_symptom_summary(user_id: str, day: date) -> Dict[str, Any]:
     try:
         rows = pg.fetch(
             """
-            select symptom_code, count(*) as events
+            select
+              symptom_code,
+              count(*) as events,
+              max(severity) as max_severity,
+              avg(severity) filter (where severity is not null) as mean_severity,
+              max(ts_utc) as last_ts
               from raw.user_symptom_events
              where user_id = %s
                and ts_utc >= %s
                and ts_utc < %s
              group by symptom_code
-             order by events desc
+             order by events desc, max(ts_utc) desc
              limit 5
             """,
             user_id,
@@ -182,11 +239,11 @@ def fetch_daily_features(user_id: str, day: date) -> Dict[str, Any]:
     cols = table_columns("marts", "daily_features")
     if not cols:
         return {}
-    metrics = [m for m in _METRIC_SPECS.keys() if m in cols]
-    if not metrics:
+    fields = [m for m in [*list(_METRIC_SPECS.keys()), *_HEALTH_CONTEXT_FIELDS] if m in cols]
+    if not fields:
         return {}
     sql = f"""
-        select day, {', '.join(metrics)}
+        select day, {', '.join(fields)}
           from marts.daily_features
          where user_id = %s and day = %s
          limit 1
@@ -197,7 +254,7 @@ def fetch_daily_features(user_id: str, day: date) -> Dict[str, Any]:
 
     # Fallback: use most recent available row <= day (handles timezone/day-boundary shifts)
     sql_latest = f"""
-        select day, {', '.join(metrics)}
+        select day, {', '.join(fields)}
           from marts.daily_features
          where user_id = %s and day <= %s
          order by day desc
@@ -346,6 +403,370 @@ def _compute_baseline_stats(
     return baseline_days, stats
 
 
+def _penalty_from_threshold(
+    value: Optional[float],
+    *,
+    threshold: float,
+    span: float,
+    cap: float,
+) -> float:
+    if value is None or value <= threshold or span <= 0:
+        return 0.0
+    return min(cap, ((value - threshold) / span) * cap)
+
+
+def _compute_recovery_penalties(today_row: Dict[str, Any]) -> Dict[str, Dict[str, float | str]]:
+    penalties: Dict[str, Dict[str, float | str]] = {}
+
+    sleep_debt = _safe_float(today_row.get("sleep_debt_proxy"))
+    sleep_debt_points = _penalty_from_threshold(
+        sleep_debt,
+        threshold=30.0,
+        span=180.0,
+        cap=12.0,
+    )
+    if sleep_debt_points:
+        penalties["sleep_debt_proxy"] = {
+            "label": "Sleep debt",
+            "value": sleep_debt or 0.0,
+            "points": round(sleep_debt_points, 2),
+        }
+
+    sleep_delta = _safe_float(today_row.get("sleep_vs_14d_baseline_delta"))
+    sleep_delta_points = _penalty_from_threshold(
+        abs(sleep_delta) if sleep_delta is not None and sleep_delta < -30.0 else None,
+        threshold=30.0,
+        span=150.0,
+        cap=6.0,
+    )
+    if sleep_delta_points:
+        penalties["sleep_vs_14d_baseline_delta"] = {
+            "label": "Sleep below usual",
+            "value": sleep_delta or 0.0,
+            "points": round(sleep_delta_points, 2),
+        }
+
+    resting_hr_delta = _safe_float(today_row.get("resting_hr_baseline_delta"))
+    resting_hr_points = _penalty_from_threshold(
+        resting_hr_delta,
+        threshold=2.0,
+        span=8.0,
+        cap=12.0,
+    )
+    if resting_hr_points:
+        penalties["resting_hr_baseline_delta"] = {
+            "label": "Resting HR above usual",
+            "value": resting_hr_delta or 0.0,
+            "points": round(resting_hr_points, 2),
+        }
+
+    respiratory_delta = _safe_float(today_row.get("respiratory_rate_baseline_delta"))
+    respiratory_points = _penalty_from_threshold(
+        respiratory_delta,
+        threshold=1.0,
+        span=3.0,
+        cap=8.0,
+    )
+    if respiratory_points:
+        penalties["respiratory_rate_baseline_delta"] = {
+            "label": "Respiratory rate above usual",
+            "value": respiratory_delta or 0.0,
+            "points": round(respiratory_points, 2),
+        }
+
+    temperature_delta = _safe_float(today_row.get("temperature_deviation_baseline_delta"))
+    if temperature_delta is None:
+        temperature_delta = _safe_float(today_row.get("temperature_deviation"))
+    temperature_points = _penalty_from_threshold(
+        abs(temperature_delta) if temperature_delta is not None else None,
+        threshold=0.2,
+        span=0.6,
+        cap=8.0,
+    )
+    if temperature_points:
+        penalties["temperature_deviation"] = {
+            "label": "Temperature shifted from usual",
+            "value": temperature_delta or 0.0,
+            "points": round(temperature_points, 2),
+        }
+
+    consistency_scores = [
+        score
+        for score in (
+            _safe_float(today_row.get("bedtime_consistency_score")),
+            _safe_float(today_row.get("waketime_consistency_score")),
+        )
+        if score is not None
+    ]
+    if consistency_scores:
+        average_consistency = sum(consistency_scores) / len(consistency_scores)
+        consistency_points = _penalty_from_threshold(
+            100.0 - average_consistency,
+            threshold=15.0,
+            span=45.0,
+            cap=7.0,
+        )
+        if consistency_points:
+            penalties["sleep_consistency"] = {
+                "label": "Sleep timing inconsistent",
+                "value": round(average_consistency, 1),
+                "points": round(consistency_points, 2),
+            }
+
+    return penalties
+
+
+def _symptom_row_intensity(row: Dict[str, Any]) -> float:
+    events = max(1, int(row.get("events") or 0))
+    severity = _safe_float(row.get("max_severity"))
+    severity_component = 0.18
+    if severity is not None:
+        severity_component = min(0.62, max(0.0, severity / 10.0) * 0.62)
+    event_component = min(0.24, max(0, events - 1) * 0.08)
+    return min(1.0, 0.28 + severity_component + event_component)
+
+
+def apply_symptom_gauge_adjustments(
+    gauges: Dict[str, Optional[float]],
+    symptoms: Dict[str, Any],
+) -> Tuple[Dict[str, Optional[float]], Dict[str, Any]]:
+    adjusted = dict(gauges)
+    applied: Dict[str, float] = {}
+    drivers: List[Dict[str, Any]] = []
+
+    for row in symptoms.get("top_symptoms") or []:
+        code = _normalize_symptom_code(row.get("symptom_code"))
+        effects = _SYMPTOM_GAUGE_EFFECTS.get(code)
+        if not effects:
+            continue
+        intensity = _symptom_row_intensity(row)
+        drivers.append(
+            {
+                "symptom_code": code,
+                "events": int(row.get("events") or 0),
+                "max_severity": _safe_float(row.get("max_severity")),
+                "intensity": round(intensity, 3),
+            }
+        )
+        for gauge_key, weight in effects.items():
+            cap = _SYMPTOM_GAUGE_CAPS.get(gauge_key)
+            if cap is None:
+                continue
+            applied[gauge_key] = applied.get(gauge_key, 0.0) + (cap * weight * intensity)
+
+    for gauge_key, points in applied.items():
+        current = _safe_float(adjusted.get(gauge_key))
+        if current is None:
+            continue
+        capped_points = min(points, _SYMPTOM_GAUGE_CAPS.get(gauge_key, points))
+        adjusted[gauge_key] = round(min(100.0, current + capped_points), 2)
+
+    return adjusted, {
+        "drivers": drivers,
+        "adjustments": {key: round(value, 2) for key, value in applied.items() if value > 0},
+    }
+
+
+def _as_int_delta(today_val: Any, yesterday_val: Any) -> int:
+    today_num = _safe_float(today_val)
+    yday_num = _safe_float(yesterday_val)
+    if today_num is None or yday_num is None:
+        return 0
+    return int(round(today_num - yday_num, 0))
+
+
+def _upsert_gauge_delta(user_id: str, day: date, gauge_values: Dict[str, Optional[float]]) -> None:
+    delta_cols = table_columns("marts", "user_gauges_delta_day")
+    if not delta_cols:
+        return
+
+    yesterday = day - timedelta(days=1)
+    yesterday_row = pg.fetchrow(
+        """
+        select pain, focus, heart, stamina, energy, sleep, mood, health_status
+          from marts.user_gauges_day
+         where user_id = %s
+           and day = %s
+         limit 1
+        """,
+        user_id,
+        yesterday,
+    ) or {}
+
+    deltas = {
+        key: _as_int_delta(gauge_values.get(key), yesterday_row.get(key))
+        for key in [*_GAUGE_KEYS, "health_status"]
+    }
+    upsert_row(
+        "marts",
+        "user_gauges_delta_day",
+        {
+            "user_id": user_id,
+            "day": day,
+            "deltas_json": json.dumps(deltas, default=str),
+            "updated_at": datetime.now(timezone.utc),
+        },
+        ["user_id", "day"],
+    )
+
+
+def _health_driver_impact(points: float) -> str:
+    if points >= 8.0:
+        return "high"
+    if points >= 4.0:
+        return "moderate"
+    return "low"
+
+
+def _format_health_driver_display(key: str, value: Any) -> str:
+    numeric = _safe_float(value)
+    if numeric is None:
+        return ""
+    if key == "sleep_debt_proxy":
+        return f"{int(round(numeric))}m behind usual"
+    if key == "sleep_vs_14d_baseline_delta":
+        return f"{int(round(abs(numeric)))}m below baseline"
+    if key == "resting_hr_baseline_delta":
+        return f"+{numeric:.1f} bpm vs usual"
+    if key == "respiratory_rate_baseline_delta":
+        return f"+{numeric:.1f} breaths/min vs usual"
+    if key == "temperature_deviation":
+        sign = "+" if numeric >= 0 else ""
+        return f"{sign}{numeric:.2f} vs usual"
+    if key == "sleep_consistency":
+        return f"{numeric:.0f}/100 consistency"
+    return f"{numeric:.1f}"
+
+
+def build_health_status_explainer(
+    today_row: Dict[str, Any],
+    symptoms: Dict[str, Any],
+    health_status: Optional[float],
+    health_meta: Dict[str, Any],
+) -> Dict[str, Any]:
+    recovery_penalties = health_meta.get("recovery_penalties") or {}
+    drivers: List[Dict[str, Any]] = []
+    for key, payload in recovery_penalties.items():
+        if not isinstance(payload, dict):
+            continue
+        points = _safe_float(payload.get("points"))
+        if points is None or points <= 0:
+            continue
+        value = payload.get("value")
+        drivers.append(
+            {
+                "key": key,
+                "kind": "recovery",
+                "label": str(payload.get("label") or key).strip(),
+                "display": _format_health_driver_display(key, value),
+                "points": round(points, 2),
+                "impact": _health_driver_impact(points),
+            }
+        )
+
+    symptom_points = min(15.0, max(0.0, (_safe_float(symptoms.get("max_severity")) or 0.0) * 1.5))
+    top_symptoms = [
+        _normalize_symptom_code(row.get("symptom_code"))
+        for row in (symptoms.get("top_symptoms") or [])
+        if _normalize_symptom_code(row.get("symptom_code"))
+    ]
+    if symptom_points > 0:
+        summary_codes = ", ".join(top_symptoms[:2]) if top_symptoms else "recent symptoms"
+        drivers.append(
+            {
+                "key": "symptoms",
+                "kind": "symptom",
+                "label": "Symptoms logged",
+                "display": summary_codes,
+                "points": round(symptom_points, 2),
+                "impact": _health_driver_impact(symptom_points),
+            }
+        )
+
+    stress_penalty = _safe_float(health_meta.get("stress_penalty"))
+    if stress_penalty and stress_penalty > 0:
+        drivers.append(
+            {
+                "key": "camera_stress_index",
+                "kind": "camera",
+                "label": "Camera stress read",
+                "display": f"+{stress_penalty:.1f} load",
+                "points": round(stress_penalty, 2),
+                "impact": _health_driver_impact(stress_penalty),
+            }
+        )
+
+    drivers.sort(key=lambda item: float(item.get("points") or 0.0), reverse=True)
+
+    context_items: List[Dict[str, Any]] = []
+    if bool(today_row.get("cycle_tracking_enabled")):
+        cycle_phase = str(today_row.get("cycle_phase") or "").strip()
+        menstrual_active = bool(today_row.get("menstrual_active"))
+        cycle_day = today_row.get("cycle_day")
+        if menstrual_active or cycle_phase:
+            cycle_bits = []
+            if cycle_phase:
+                cycle_bits.append(cycle_phase.replace("_", " "))
+            if cycle_day is not None:
+                cycle_bits.append(f"day {cycle_day}")
+            if menstrual_active and not cycle_bits:
+                cycle_bits.append("menstrual phase active")
+            context_items.append(
+                {
+                    "key": "cycle_context",
+                    "label": "Cycle context",
+                    "display": ", ".join(cycle_bits) if cycle_bits else "available",
+                }
+            )
+
+    if health_meta.get("calibrating"):
+        summary = "Health Status is still calibrating as more baseline history builds."
+    elif drivers:
+        labels = [str(item.get("label") or "").strip().lower() for item in drivers[:3] if str(item.get("label") or "").strip()]
+        if len(labels) == 1:
+            summary = f"Health Status is being pushed mainly by {labels[0]}."
+        elif len(labels) == 2:
+            summary = f"Health Status is being pushed mainly by {labels[0]} and {labels[1]}."
+        else:
+            summary = f"Health Status is being pushed mainly by {labels[0]}, {labels[1]}, and {labels[2]}."
+    else:
+        summary = "No strong body-load drivers stand out right now."
+
+    return {
+        "health_status": health_status,
+        "summary": summary,
+        "drivers": drivers[:4],
+        "context": context_items,
+        "calibrating": bool(health_meta.get("calibrating")),
+        "baseline_days": int(health_meta.get("baseline_days") or 0),
+    }
+
+
+def fetch_health_status_context(user_id: str, day: date) -> Dict[str, Any]:
+    try:
+        today_features = fetch_daily_features(user_id, day)
+        baseline_rows = fetch_daily_features_baseline(user_id, day)
+        symptoms = fetch_symptom_summary(user_id, day)
+        hrv_value, hrv_source, camera_stress_index = fetch_hrv_fallback(user_id, day, today_features)
+        health_status, health_meta = compute_health_status(
+            today_features,
+            baseline_rows,
+            symptoms,
+            hrv_value=hrv_value,
+            hrv_source=hrv_source,
+            camera_stress_index=camera_stress_index,
+        )
+        return build_health_status_explainer(today_features, symptoms, health_status, health_meta)
+    except Exception as exc:
+        logger.warning(
+            "[gauges] health status explainer failed user=%s day=%s err=%s",
+            user_id,
+            day,
+            exc,
+        )
+        return {}
+
+
 def compute_health_status(
     today_row: Dict[str, Any],
     baseline_rows: List[Dict[str, Any]],
@@ -357,6 +778,10 @@ def compute_health_status(
 ) -> Tuple[Optional[float], Dict[str, Any]]:
     metrics = list(_METRIC_SPECS.keys())
     baseline_days, stats = _compute_baseline_stats(baseline_rows, metrics)
+    recovery_penalties = _compute_recovery_penalties(today_row)
+    recovery_penalty_total = sum(
+        float(item.get("points") or 0.0) for item in recovery_penalties.values()
+    )
 
     if baseline_days < 14:
         return None, {
@@ -364,6 +789,7 @@ def compute_health_status(
             "baseline_days": baseline_days,
             "metrics_used": [],
             "hrv_source": hrv_source,
+            "recovery_penalties": recovery_penalties,
         }
 
     today_values: Dict[str, float] = {}
@@ -391,7 +817,7 @@ def compute_health_status(
             "direction": spec["direction"],
         }
 
-    if not weights:
+    if not weights and recovery_penalty_total <= 0:
         return None, {
             "calibrating": True,
             "baseline_days": baseline_days,
@@ -401,7 +827,7 @@ def compute_health_status(
         }
 
     weight_sum = sum(weights.values())
-    if weight_sum <= 0:
+    if weight_sum <= 0 and recovery_penalty_total <= 0:
         return None, {
             "calibrating": True,
             "baseline_days": baseline_days,
@@ -411,22 +837,25 @@ def compute_health_status(
         }
 
     load_raw = 0.0
-    for m, spec in _METRIC_SPECS.items():
-        if m not in metric_inputs:
-            continue
-        w = weights[m] / weight_sum
-        today = metric_inputs[m]["today"]
-        mean = metric_inputs[m]["mean"]
-        std = metric_inputs[m]["std"]
-        z = (today - mean) / std
-        z = max(-3.0, min(3.0, z))
-        if spec["direction"] == "lower_is_worse":
-            bad = max(0.0, -z)
-        else:
-            bad = max(0.0, z)
-        load_raw += w * bad
+    if weight_sum > 0:
+        for m, spec in _METRIC_SPECS.items():
+            if m not in metric_inputs:
+                continue
+            w = weights[m] / weight_sum
+            today = metric_inputs[m]["today"]
+            mean = metric_inputs[m]["mean"]
+            std = metric_inputs[m]["std"]
+            z = (today - mean) / std
+            z = max(-3.0, min(3.0, z))
+            if spec["direction"] == "lower_is_worse":
+                bad = max(0.0, -z)
+            else:
+                bad = max(0.0, z)
+            load_raw += w * bad
 
     health_status = min(100.0, round(load_raw * 30.0, 0))
+    if recovery_penalty_total:
+        health_status = min(100.0, round(health_status + recovery_penalty_total, 1))
 
     severity_max = _safe_float(symptoms.get("max_severity"))
     if severity_max:
@@ -445,6 +874,8 @@ def compute_health_status(
         "baseline_days": baseline_days,
         "metrics_used": list(metric_inputs.keys()),
         "metric_inputs": metric_inputs,
+        "recovery_penalties": recovery_penalties,
+        "recovery_penalty_total": round(recovery_penalty_total, 2),
         "hrv_source": hrv_source,
         "camera_stress_index": camera_stress_index,
         "stress_penalty": round(stress_penalty, 2) if stress_penalty else 0.0,
@@ -630,6 +1061,7 @@ def score_user_day(
     profile = build_personalization_profile(tags)
 
     gauges = _score_gauges(definition, active_states, profile=profile)
+    gauges, symptom_gauge_meta = apply_symptom_gauge_adjustments(gauges, symptoms)
     if health_status is not None:
         health_adjustment = health_status_contextual_adjustment(profile, active_states)
         if health_adjustment:
@@ -659,6 +1091,7 @@ def score_user_day(
         "symptoms": symptoms,
         "wearable": wearable,
         "health_status_inputs": health_meta,
+        "symptom_gauge_inputs": symptom_gauge_meta,
     }
     inputs_hash = _hash_inputs(inputs_snapshot)
 
@@ -694,6 +1127,10 @@ def score_user_day(
     }
 
     upsert_row("marts", "user_gauges_day", payload, ["user_id", "day"])
+    try:
+        _upsert_gauge_delta(user_id, day, {**gauges, "health_status": health_status})
+    except Exception as exc:
+        logger.warning("[gauges] delta refresh failed user=%s day=%s err=%s", user_id, day, exc)
     return {"ok": True, "skipped": False, "user_id": user_id, "day": _iso_day(day)}
 
 

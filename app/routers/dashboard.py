@@ -15,7 +15,7 @@ from psycopg.rows import dict_row
 from app.db import get_db
 from app.security.auth import require_read_auth, require_write_auth
 from bots.definitions.load_definition_base import load_definition_base
-from bots.gauges.gauge_scorer import fetch_user_tags
+from bots.gauges.gauge_scorer import fetch_health_status_context, fetch_user_tags
 from bots.gauges.local_payload import get_local_payload
 from bots.gauges.signal_resolver import resolve_signals
 from services.drivers.driver_normalize import normalize_environmental_drivers
@@ -434,10 +434,11 @@ async def dashboard(
     out["gauges_delta"] = await _fetch_gauges_delta(conn, user_id, day)
 
     active_states, local_payload = await _resolve_signal_context(user_id, day, definition)
-    user_tags, pattern_rows, recent_outcomes = await asyncio.gather(
+    user_tags, pattern_rows, recent_outcomes, health_status_explainer = await asyncio.gather(
         asyncio.to_thread(fetch_user_tags, user_id),
         fetch_best_pattern_rows(conn, user_id),
         fetch_recent_outcome_summary(conn, user_id, day),
+        asyncio.to_thread(fetch_health_status_context, user_id, day),
     )
     drivers = normalize_environmental_drivers(
         active_states=active_states,
@@ -465,6 +466,9 @@ async def dashboard(
     out["active_pattern_refs"] = personal_relevance.get("active_pattern_refs")
     out["today_personal_themes"] = personal_relevance.get("today_personal_themes")
     out["today_relevance_explanations"] = personal_relevance.get("today_relevance_explanations")
+    out["health_status_explainer"] = (
+        health_status_explainer if isinstance(health_status_explainer, dict) else {}
+    )
 
     gauges_payload = out.get("gauges") if isinstance(out.get("gauges"), dict) else {}
     gauges_meta_payload = out.get("gauges_meta") if isinstance(out.get("gauges_meta"), dict) else {}
@@ -504,6 +508,7 @@ async def dashboard(
             ),
             "active_states_count": len(active_states),
             "drivers_count": len(ranked_drivers),
+            "health_status_explainer_available": bool(out.get("health_status_explainer")),
         }
 
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)

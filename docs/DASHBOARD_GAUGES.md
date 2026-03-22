@@ -66,6 +66,9 @@ Scoring rules:
 - Confidence multiplier applied per signal
 - Cap per signal (from definition JSON)
 - Clamp to 0–100
+- Symptom logs can also nudge gauge values immediately after `POST /v1/symptoms` persists a new event
+  - high-severity pain/headache logs now raise `pain` quickly instead of waiting for the scheduled batch job
+  - the same rescore path also refreshes `marts.user_gauges_delta_day` for that user/day
 
 ## Gauge Zones + Labels (v1.3)
 - Definition source of truth:
@@ -103,6 +106,14 @@ Idempotency:
 - Z-score per metric, clamp to [-3, 3], convert to “bad” direction, then weighted sum.
 - `health_status = min(100, round(load_raw * 30, 0))`
 - Symptom overlay: add `min(15, max_severity * 1.5)` when present.
+- Recovery overlay:
+  - adds bounded penalties from `sleep_debt_proxy`, `sleep_vs_14d_baseline_delta`,
+    `resting_hr_baseline_delta`, `respiratory_rate_baseline_delta`,
+    `temperature_deviation_baseline_delta`, and sleep consistency scores
+  - these body-state inputs are observational only and are intended to reflect short-term recovery load,
+    not diagnosis
+- If the legacy z-score inputs are sparse but recovery penalties are present, the gauge can still compute
+  from the recovery overlay instead of staying null.
 - If baseline is insufficient, `health_status = null` and an alert pill is added:
   - `alert.health_calibrating` (severity `info`)
 - HRV auto-upgrades when data appears (from `marts.daily_features.hrv_avg`, or fallback `gaia.daily_summary` / `gaia.samples` if present).
@@ -157,6 +168,11 @@ When trigger events are detected for paid users, the engine appends a “Trigger
     - `active_pattern_refs`: pattern cards actively influencing today's guidance
     - `today_personal_themes`: top symptom/body themes raised by current drivers + stored patterns
     - `today_relevance_explanations`: deterministic explanation anchors for driver emphasis and daily brief copy
+    - `health_status_explainer`: compact body-state explanation for the `health_status` gauge with:
+      - `summary`: one-line explanation of the main current body-load drivers
+      - `drivers`: top recovery/symptom contributors with `label`, `display`, `points`, and bounded `impact`
+      - `context`: neutral optional context such as cycle timing when enabled
+      - `calibrating` / `baseline_days`: baseline readiness hints for UI copy
     - `modal_models`: deterministic modal content for gauges and drivers
     - `earthscope_summary`: short deterministic summary paragraph for home cards
   - Driver ranking remains deterministic:

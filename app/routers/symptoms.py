@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import List, Optional
 
@@ -97,6 +98,34 @@ def _normalize_symptom_code(value: str) -> str:
     return value.strip().replace(" ", "_").replace("-", "_").upper()
 
 
+async def _commit_if_supported(conn) -> None:
+    commit = getattr(conn, "commit", None)
+    if callable(commit):
+        await commit()
+
+
+async def _refresh_gauges_for_symptom(user_id: str, ts_utc: str) -> None:
+    try:
+        event_day = datetime.fromisoformat(ts_utc.replace("Z", "+00:00")).date()
+    except Exception:
+        event_day = datetime.utcnow().date()
+
+    def _run() -> None:
+        from bots.gauges.gauge_scorer import score_user_day
+
+        score_user_day(user_id, event_day, force=True)
+
+    try:
+        await asyncio.to_thread(_run)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.warning(
+            "symptom gauge refresh failed user=%s day=%s err=%s",
+            user_id,
+            event_day,
+            exc,
+        )
+
+
 @router.post("", response_model=SymptomEventResponse)
 async def create_symptom_event(
     payload: SymptomEventIn,
@@ -182,6 +211,8 @@ async def create_symptom_event(
         )
     if not result.get("id") or not result.get("ts_utc"):
         raise HTTPException(status_code=500, detail="Failed to persist symptom event")
+    await _commit_if_supported(conn)
+    await _refresh_gauges_for_symptom(user_id, result["ts_utc"])
     data = SymptomEventData(id=result["id"], ts_utc=result["ts_utc"])
     return SymptomEventResponse(data=data, error=None)
 
