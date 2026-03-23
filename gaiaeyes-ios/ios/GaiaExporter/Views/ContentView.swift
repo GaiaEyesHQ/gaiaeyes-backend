@@ -3796,9 +3796,9 @@ struct ContentView: View {
         }
     }
 
-    private func fetchInsightsHubData() async {
+    private func fetchInsightsHubData(trigger: FeaturesFetchTrigger = .initial) async {
         let api = state.apiWithAuth()
-        async let featuresTask: Void = fetchFeaturesToday(trigger: .initial)
+        async let featuresTask: Void = fetchFeaturesToday(trigger: trigger, bypassGuard: trigger == .refresh)
         async let forecastTask: Void = fetchForecastSummary()
         async let outlookTask: Void = fetchSpaceOutlook()
         async let userOutlookTask: Void = fetchUserOutlook()
@@ -3813,6 +3813,15 @@ struct ContentView: View {
         if quakeLatest == nil && quakeEvents.isEmpty {
             await fetchQuakes()
         }
+    }
+
+    private func fetchSpaceWeatherDetailData() async {
+        async let featuresTask: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
+        async let forecastTask: Void = fetchForecastSummary()
+        async let outlookTask: Void = fetchSpaceOutlook()
+        async let magnetosphereTask: Void = fetchMagnetosphere()
+        async let seriesTask: Void = fetchSpaceSeries(days: 30)
+        _ = await (featuresTask, forecastTask, outlookTask, magnetosphereTask, seriesTask)
     }
 
     private enum SymptomLogAttemptStatus {
@@ -5431,6 +5440,133 @@ struct ContentView: View {
         }
     }
 
+    private enum SpaceWeatherPresentation {
+        static func normalizedLabel(_ raw: String?) -> String? {
+            let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !trimmed.isEmpty else { return nil }
+            let lower = trimmed.lowercased()
+
+            if lower.contains("strong") || lower.contains("storm") || lower.contains("severe") || lower == "g3" || lower == "g4" || lower == "g5" {
+                return "Strong"
+            }
+            if lower.contains("active") || lower.contains("minor") || lower == "g1" || lower == "g2" {
+                return "Active"
+            }
+            if lower.contains("elevated") || lower.contains("watch") || lower.contains("moderate") {
+                return "Elevated"
+            }
+            if lower.contains("quiet") || lower.contains("low") || lower.contains("stable") {
+                return "Quiet"
+            }
+            return trimmed.capitalized
+        }
+
+        static func rank(for raw: String?) -> Int {
+            switch normalizedLabel(raw)?.lowercased() {
+            case "strong":
+                return 3
+            case "active":
+                return 2
+            case "elevated":
+                return 1
+            default:
+                return 0
+            }
+        }
+
+        static func toneKey(for raw: String?) -> String {
+            switch rank(for: raw) {
+            case 3:
+                return "high"
+            case 2:
+                return "mild"
+            case 1:
+                return "elevated"
+            default:
+                return "low"
+            }
+        }
+
+        static func severity(for raw: String?, fallbackKp: Double?) -> StatusPill.Severity {
+            switch rank(for: raw) {
+            case 3:
+                return .alert
+            case 1, 2:
+                return .warn
+            default:
+                guard let fallbackKp else { return .ok }
+                if fallbackKp >= 6 { return .alert }
+                if fallbackKp >= 4 { return .warn }
+                return .ok
+            }
+        }
+
+        static func windToneKey(_ speed: Double?) -> String {
+            guard let speed else { return "low" }
+            if speed >= 650 { return "high" }
+            if speed >= 550 { return "elevated" }
+            if speed >= 450 { return "mild" }
+            return "low"
+        }
+
+        static func bzToneKey(_ bz: Double?) -> String {
+            guard let bz else { return "low" }
+            if bz <= -10 { return "high" }
+            if bz <= -5 { return "elevated" }
+            if bz < 0 { return "mild" }
+            return "low"
+        }
+
+        static func liveStateLabel(
+            kp: Double?,
+            speed: Double?,
+            bz: Double?,
+            storminess: String?
+        ) -> String {
+            if rank(for: storminess) >= 3 || (kp ?? 0) >= 6 || (speed ?? 0) >= 650 || (bz ?? 0) <= -10 {
+                return "Strong"
+            }
+            if rank(for: storminess) >= 2 || (kp ?? 0) >= 5 || (speed ?? 0) >= 550 || (bz ?? 0) <= -5 {
+                return "Active"
+            }
+            if rank(for: storminess) >= 1 || (kp ?? 0) >= 4 || (speed ?? 0) >= 500 || (bz ?? 0) <= -3 {
+                return "Elevated"
+            }
+            return normalizedLabel(storminess) ?? "Quiet"
+        }
+
+        static func resolvedStateLabel(
+            context: GeomagneticContextSummary?,
+            outlookLabel: String?,
+            kp: Double?,
+            speed: Double?,
+            bz: Double?,
+            storminess: String?
+        ) -> String {
+            let contextLabel = normalizedLabel(context?.label)
+            let forecastLabel = normalizedLabel(outlookLabel)
+            let baseLabel = contextLabel ?? forecastLabel
+            let liveLabel = liveStateLabel(kp: kp, speed: speed, bz: bz, storminess: storminess)
+            if rank(for: liveLabel) > rank(for: baseLabel) {
+                return liveLabel
+            }
+            return baseLabel ?? liveLabel
+        }
+
+        static func liveOverridesContext(
+            context: GeomagneticContextSummary?,
+            outlookLabel: String?,
+            kp: Double?,
+            speed: Double?,
+            bz: Double?,
+            storminess: String?
+        ) -> Bool {
+            let liveLabel = liveStateLabel(kp: kp, speed: speed, bz: bz, storminess: storminess)
+            let baseLabel = normalizedLabel(context?.label) ?? normalizedLabel(outlookLabel)
+            return rank(for: liveLabel) > rank(for: baseLabel)
+        }
+    }
+
     private struct SpaceWeatherCardMetrics {
         let kpNow: Double?
         let kpMax: Double?
@@ -5440,6 +5576,7 @@ struct ContentView: View {
         let swDensityNow: Double?
         let sScale: String?
         let protonFlux: Double?
+        let storminess: String?
 
         private static let isoFmt: ISO8601DateFormatter = {
             let f = ISO8601DateFormatter()
@@ -5468,7 +5605,19 @@ struct ContentView: View {
             return "S0"
         }
 
-        init(current: FeaturesToday, outlook: SpaceForecastOutlook?, series: SpaceSeries?) {
+        private static func latestValue(_ candidates: [(Date?, Double?)]) -> Double? {
+            let available = candidates.compactMap { date, value in
+                value.map { (date, $0) }
+            }
+            if let dated = available.compactMap({ pair in
+                pair.0.map { ($0, pair.1) }
+            }).max(by: { $0.0 < $1.0 }) {
+                return dated.1
+            }
+            return available.first?.1
+        }
+
+        init(current: FeaturesToday?, outlook: SpaceForecastOutlook?, series: SpaceSeries?, magnetosphere: MagnetosphereData? = nil) {
             let points = series?.spaceWeather ?? []
             let dated = points.compactMap { point -> (Date, SpacePoint)? in
                 guard let d = Self.parseISO(point.ts) else { return nil }
@@ -5476,31 +5625,51 @@ struct ContentView: View {
             }.sorted { $0.0 < $1.0 }
 
             let latestPoint = dated.last?.1
+            let latestPointDate = dated.last?.0
             let cutoff = Date().addingTimeInterval(-24 * 3600)
             let last24 = dated.filter { $0.0 >= cutoff }.map { $0.1 }
 
             let sepFlux = outlook?.data?.sep?.flux
             let sepScaleIndex = outlook?.data?.sep?.sScaleIndex
+            let magnetosphereTs = Self.parseISO(magnetosphere?.ts)
+            let outlookKpTs = Self.parseISO(outlook?.kp?.nowTs)
+            let outlookIssuedTs = Self.parseISO(outlook?.issuedAt)
+            let featuresTs = Self.parseISO(current?.updatedAt)
 
-            kpNow = outlook?.kp?.now
-                ?? latestPoint?.kp
-                ?? current.kpCurrent?.value
+            kpNow = Self.latestValue([
+                (magnetosphereTs, magnetosphere?.kpis?.kp),
+                (outlookKpTs, outlook?.kp?.now),
+                (latestPointDate, latestPoint?.kp),
+                (featuresTs, current?.kpCurrent?.value)
+            ])
             kpMax = outlook?.kp?.last24hMax
                 ?? last24.compactMap { $0.kp }.max()
-                ?? current.kpMax?.value
-            bzNow = outlook?.bzNow
-                ?? latestPoint?.bz
-            swSpeedNow = outlook?.swSpeedNowKms
-                ?? latestPoint?.sw
-                ?? current.swSpeedAvg?.value
+                ?? magnetosphere?.kpis?.kp
+                ?? current?.kpMax?.value
+            bzNow = Self.latestValue([
+                (magnetosphereTs, magnetosphere?.sw?.bzNt),
+                (latestPointDate, latestPoint?.bz),
+                (outlookIssuedTs, outlook?.bzNow)
+            ])
+            swSpeedNow = Self.latestValue([
+                (magnetosphereTs, magnetosphere?.sw?.vKms),
+                (latestPointDate, latestPoint?.sw),
+                (outlookIssuedTs, outlook?.swSpeedNowKms),
+                (featuresTs, current?.swSpeedAvg?.value)
+            ])
             swSpeedMax = last24.compactMap { $0.sw }.max()
                 ?? swSpeedNow
-                ?? current.swSpeedAvg?.value
-            swDensityNow = outlook?.swDensityNowCm3
+                ?? magnetosphere?.sw?.vKms
+                ?? current?.swSpeedAvg?.value
+            swDensityNow = Self.latestValue([
+                (magnetosphereTs, magnetosphere?.sw?.nCm3),
+                (outlookIssuedTs, outlook?.swDensityNowCm3)
+            ])
             sScale = outlook?.data?.sep?.sScale
                 ?? sepScaleIndex.map { "S\(Int($0.rounded()))" }
                 ?? Self.sScale(for: sepFlux)
             protonFlux = sepFlux
+            storminess = magnetosphere?.kpis?.storminess
         }
     }
 
@@ -5826,44 +5995,20 @@ struct ContentView: View {
             }
         }
 
-        private func statusSeverity(for kp: Double?) -> StatusPill.Severity {
-            guard let kp else { return .ok }
-            if kp >= 6 { return .alert }
-            if kp >= 4 { return .warn }
-            return .ok
-        }
-
-        private func geomagneticToneKey(_ context: GeomagneticContextSummary?) -> String {
-            switch (context?.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-            case "strong":
-                return "high"
-            case "elevated":
-                return "elevated"
-            case "active":
-                return "mild"
-            default:
-                return "low"
-            }
-        }
-
-        private func geomagneticSeverity(_ context: GeomagneticContextSummary?, fallbackKp: Double?) -> StatusPill.Severity {
-            switch geomagneticToneKey(context) {
-            case "high":
-                return .alert
-            case "elevated", "mild":
-                return .warn
-            default:
-                return statusSeverity(for: fallbackKp)
-            }
-        }
-
         private func geomagneticStatus(
             context: GeomagneticContextSummary?,
-            fallbackState: String,
+            resolvedState: String,
+            liveOverride: Bool,
             updatedText: String?
         ) -> String {
-            let label = (context?.label ?? fallbackState).trimmingCharacters(in: .whitespacesAndNewlines)
+            let label = resolvedState.trimmingCharacters(in: .whitespacesAndNewlines)
             let lowered = label.isEmpty ? "quiet" : label.lowercased()
+            if liveOverride {
+                if let updatedText, !updatedText.isEmpty {
+                    return "Live Kp, solar wind, and Bz suggest \(lowered) conditions. Updated \(updatedText)."
+                }
+                return "Live Kp, solar wind, and Bz suggest \(lowered) conditions right now."
+            }
             if context?.isProvisional == true {
                 return "Geomagnetic context is \(lowered) right now. Baseline still building."
             }
@@ -5928,24 +6073,38 @@ struct ContentView: View {
         }
 
         private var spaceWeatherCard: some View {
-            let kpNow = current?.kpCurrent?.value
-            let swSpeed = current?.swSpeedAvg?.value
+            let metrics = SpaceWeatherCardMetrics(current: current, outlook: outlook, series: nil, magnetosphere: magnetosphere)
+            let kpNow = metrics.kpNow
+            let swSpeed = metrics.swSpeedNow
             let geomagneticContext = current?.effectiveGeomagneticContext
-            let spaceActive = (kpNow.map { $0 >= 5 } ?? false) || (swSpeed.map { $0 >= 550 } ?? false)
             let geomagneticState = normalizedPillText(
-                geomagneticContext?.label ?? outlook?.kp?.gScaleNow?.capitalized,
-                fallback: (spaceActive ? "Active" : "Quiet")
+                SpaceWeatherPresentation.resolvedStateLabel(
+                    context: geomagneticContext,
+                    outlookLabel: outlook?.kp?.gScaleNow,
+                    kp: metrics.kpNow,
+                    speed: metrics.swSpeedNow,
+                    bz: metrics.bzNow,
+                    storminess: metrics.storminess
+                ),
+                fallback: "Quiet"
+            )
+            let liveOverride = SpaceWeatherPresentation.liveOverridesContext(
+                context: geomagneticContext,
+                outlookLabel: outlook?.kp?.gScaleNow,
+                kp: metrics.kpNow,
+                speed: metrics.swSpeedNow,
+                bz: metrics.bzNow,
+                storminess: metrics.storminess
             )
             let kpText = kpNow.map { String(format: "%.1f", $0) } ?? "—"
-            let geomagneticConfidence = geomagneticContext?.confidenceLabel
-                ?? (geomagneticContext?.isProvisional == true ? "Baseline" : nil)
-                ?? "—"
+            let windText = swSpeed.map { String(format: "%.0f km/s", $0) } ?? "—"
             let status = geomagneticStatus(
                 context: geomagneticContext,
-                fallbackState: geomagneticState,
+                resolvedState: geomagneticState,
+                liveOverride: liveOverride,
                 updatedText: updatedText
             )
-            let geomagneticTint = GaugePalette.zoneColor(geomagneticToneKey(geomagneticContext))
+            let geomagneticTint = GaugePalette.zoneColor(SpaceWeatherPresentation.toneKey(for: geomagneticState))
 
             return NavigationLink(value: InsightsRoute.spaceWeather) {
                 HubCard(
@@ -5953,11 +6112,11 @@ struct ContentView: View {
                     icon: "sun.max.fill",
                     status: status,
                     pillText: geomagneticState,
-                    severity: geomagneticSeverity(geomagneticContext, fallbackKp: kpNow),
+                    severity: SpaceWeatherPresentation.severity(for: geomagneticState, fallbackKp: kpNow),
                     metrics: [
                         HubMetric(label: "Kp", value: kpText, tint: GaugePalette.zoneColor(kpNow.map { $0 >= 4 ? "elevated" : "low" })),
                         HubMetric(label: "Geomag", value: geomagneticState, tint: geomagneticTint),
-                        HubMetric(label: "Confidence", value: geomagneticConfidence, tint: GaugePalette.mild)
+                        HubMetric(label: "Wind", value: windText, tint: GaugePalette.zoneColor(SpaceWeatherPresentation.windToneKey(swSpeed)))
                     ],
                     isExplore: false
                 )
@@ -6833,65 +6992,20 @@ struct ContentView: View {
         let forecast: ForecastSummary?
         let outlook: SpaceForecastOutlook?
         let series: SpaceSeries?
-
-        private func geomagneticSeverity(kp: Double?) -> StatusPill.Severity {
-            guard let kp else { return .ok }
-            if kp >= 6 { return .alert }
-            if kp >= 4 { return .warn }
-            return .ok
-        }
-
-        private func geomagneticToneKey(_ context: GeomagneticContextSummary?) -> String {
-            switch (context?.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-            case "strong":
-                return "high"
-            case "elevated":
-                return "elevated"
-            case "active":
-                return "mild"
-            default:
-                return "low"
-            }
-        }
-
-        private func geomagneticSeverity(context: GeomagneticContextSummary?, kp: Double?) -> StatusPill.Severity {
-            switch geomagneticToneKey(context) {
-            case "high":
-                return .alert
-            case "elevated", "mild":
-                return .warn
-            default:
-                return geomagneticSeverity(kp: kp)
-            }
-        }
+        let magnetosphere: MagnetosphereData?
+        let onRefresh: () async -> Void
 
         private func progress(_ value: Double?, max: Double) -> Double {
             guard let value, max > 0 else { return 0.12 }
             return LocalConditionsFormatting.clamped(abs(value) / max)
         }
 
-        private func bzSeverity(_ bz: Double?) -> String {
-            guard let bz else { return "low" }
-            if bz <= -10 { return "high" }
-            if bz <= -5 { return "elevated" }
-            if bz < 0 { return "mild" }
-            return "low"
-        }
-
-        private func windSeverity(_ speed: Double?) -> String {
-            guard let speed else { return "low" }
-            if speed >= 650 { return "high" }
-            if speed >= 550 { return "elevated" }
-            if speed >= 450 { return "mild" }
-            return "low"
-        }
-
         private func severity(_ raw: String?) -> StatusPill.Severity {
             LocalConditionsStyle.pillSeverity(raw)
         }
 
-        private var metrics: SpaceWeatherCardMetrics? {
-            current.map { SpaceWeatherCardMetrics(current: $0, outlook: outlook, series: series) }
+        private var metrics: SpaceWeatherCardMetrics {
+            SpaceWeatherCardMetrics(current: current, outlook: outlook, series: series, magnetosphere: magnetosphere)
         }
 
         private func cleanedOutlookLine(_ raw: String?) -> String? {
@@ -6998,18 +7112,32 @@ struct ContentView: View {
 
         var body: some View {
             let metrics = metrics
-            let kpNow = metrics?.kpNow
-            let kpMax = metrics?.kpMax
-            let bzNow = metrics?.bzNow
-            let swSpeed = metrics?.swSpeedNow
-            let density = metrics?.swDensityNow
+            let kpNow = metrics.kpNow
+            let kpMax = metrics.kpMax
+            let bzNow = metrics.bzNow
+            let swSpeed = metrics.swSpeedNow
+            let density = metrics.swDensityNow
                 ?? outlookMetricValue(matching: ["density", "cm^-3", "cm-3", "cm3"])
-            let protonFlux = metrics?.protonFlux
+            let protonFlux = metrics.protonFlux
             let flaresCount = outlook?.flares?.total24h ?? Int((current?.flaresCount?.value ?? 0).rounded())
             let cmeCount = outlook?.cmes?.stats?.total72h ?? Int((current?.cmesCount?.value ?? 0).rounded())
             let geomagneticContext = current?.effectiveGeomagneticContext
-            let geomagneticFallbackActive = (kpNow.map { $0 >= 5 } ?? false) || (swSpeed.map { $0 >= 550 } ?? false) || (bzNow.map { $0 <= -5 } ?? false)
-            let geomagneticState = geomagneticContext?.label ?? outlook?.kp?.gScaleNow ?? (geomagneticFallbackActive ? "Active" : "Quiet")
+            let geomagneticState = SpaceWeatherPresentation.resolvedStateLabel(
+                context: geomagneticContext,
+                outlookLabel: outlook?.kp?.gScaleNow,
+                kp: kpNow,
+                speed: swSpeed,
+                bz: bzNow,
+                storminess: metrics.storminess
+            )
+            let liveOverride = SpaceWeatherPresentation.liveOverridesContext(
+                context: geomagneticContext,
+                outlookLabel: outlook?.kp?.gScaleNow,
+                kp: kpNow,
+                speed: swSpeed,
+                bz: bzNow,
+                storminess: metrics.storminess
+            )
 
             ZStack {
                 Color.black.opacity(0.97).ignoresSafeArea()
@@ -7027,7 +7155,11 @@ struct ContentView: View {
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                         }
-                                        if let confidence = geomagneticContext?.confidenceLabel, !confidence.isEmpty {
+                                        if liveOverride {
+                                            Text("Live Kp, wind, and Bz are driving this state")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        } else if let confidence = geomagneticContext?.confidenceLabel, !confidence.isEmpty {
                                             Text("Confidence: \(confidence)")
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
@@ -7043,7 +7175,7 @@ struct ContentView: View {
                                         }
                                     }
                                     Spacer()
-                                    StatusPill(geomagneticState, severity: geomagneticSeverity(context: geomagneticContext, kp: kpNow))
+                                    StatusPill(geomagneticState, severity: SpaceWeatherPresentation.severity(for: geomagneticState, fallbackKp: kpNow))
                                 }
 
                                 HStack(spacing: 12) {
@@ -7075,13 +7207,13 @@ struct ContentView: View {
                                     title: "Bz",
                                     value: bzNow.map { String(format: "%.1f nT", $0) } ?? "—",
                                     progress: progress(bzNow, max: 20),
-                                    tint: GaugePalette.zoneColor(bzSeverity(bzNow))
+                                    tint: GaugePalette.zoneColor(SpaceWeatherPresentation.bzToneKey(bzNow))
                                 )
                                 LocalConditionsMetricTile(
                                     title: "Speed",
                                     value: swSpeed.map { String(format: "%.0f km/s", $0) } ?? "—",
                                     progress: progress(swSpeed, max: 800),
-                                    tint: GaugePalette.zoneColor(windSeverity(swSpeed))
+                                    tint: GaugePalette.zoneColor(SpaceWeatherPresentation.windToneKey(swSpeed))
                                 )
                             }
                             HStack(spacing: 10) {
@@ -7097,8 +7229,8 @@ struct ContentView: View {
                                 )
                                 LocalConditionsValueChip(
                                     label: "S-Scale",
-                                    value: metrics?.sScale ?? "S0",
-                                    tint: GaugePalette.zoneColor((metrics?.sScale ?? "S0") == "S0" ? "low" : "elevated")
+                                    value: metrics.sScale ?? "S0",
+                                    tint: GaugePalette.zoneColor((metrics.sScale ?? "S0") == "S0" ? "low" : "elevated")
                                 )
                             }
                         }
@@ -7116,9 +7248,9 @@ struct ContentView: View {
                                     tint: GaugePalette.elevated
                                 )
                                 LocalConditionsValueChip(
-                                    label: "Confidence",
-                                    value: outlook?.confidence ?? "—",
-                                    tint: GaugePalette.low
+                                    label: "Wind",
+                                    value: swSpeed.map { String(format: "%.0f km/s", $0) } ?? "—",
+                                    tint: GaugePalette.zoneColor(SpaceWeatherPresentation.windToneKey(swSpeed))
                                 )
                             }
                             if let headline = outlook?.cmes?.headline, !headline.isEmpty {
@@ -7217,6 +7349,9 @@ struct ContentView: View {
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .refreshable {
+                    await onRefresh()
+                }
             }
             .navigationTitle("Space Weather")
             .navigationBarTitleDisplayMode(.inline)
@@ -7227,6 +7362,7 @@ struct ContentView: View {
         let data: MagnetosphereData?
         let isLoading: Bool
         let error: String?
+        let onRefresh: () async -> Void
 
         private func formatValue(_ value: Double?, decimals: Int = 1, suffix: String = "") -> String {
             guard let value else { return "—" }
@@ -7364,6 +7500,9 @@ struct ContentView: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .refreshable {
+                    await onRefresh()
                 }
             }
             .navigationTitle("Magnetosphere")
@@ -8382,7 +8521,7 @@ struct ContentView: View {
             .onChange(of: showMissionInsightsSheet, initial: false) { _, newValue in
                 guard newValue else { return }
                 Task {
-                    await fetchInsightsHubData()
+                    await fetchInsightsHubData(trigger: .refresh)
                 }
             }
             .onChange(of: showMissionSettingsSheet, initial: false) { _, newValue in
@@ -8547,7 +8686,7 @@ struct ContentView: View {
                     hazardsBrief: hazardsBrief,
                     hazardsLoading: hazardsLoading,
                     hazardsError: hazardsError,
-                    onRefresh: { await fetchInsightsHubData() }
+                    onRefresh: { await fetchInsightsHubData(trigger: .refresh) }
                 )
                 .navigationDestination(for: InsightsRoute.self) { route in
                     switch route {
@@ -8570,11 +8709,13 @@ struct ContentView: View {
                             usingYesterdayFallback: usingYesterdayFallback,
                             forecast: forecast,
                             outlook: resolvedOutlook,
-                            series: seriesDetail
+                            series: seriesDetail,
+                            magnetosphere: magnetosphere,
+                            onRefresh: { await fetchSpaceWeatherDetailData() }
                         )
                         .task {
-                            if series == nil {
-                                await fetchSpaceSeries(days: 30)
+                            if series == nil || spaceOutlook == nil || magnetosphere == nil {
+                                await fetchSpaceWeatherDetailData()
                             }
                         }
                     case .localConditions:
@@ -8601,7 +8742,8 @@ struct ContentView: View {
                         InsightsMagnetosphereView(
                             data: magnetosphere,
                             isLoading: magnetosphereLoading,
-                            error: magnetosphereError
+                            error: magnetosphereError,
+                            onRefresh: { await fetchMagnetosphere() }
                         )
                         .task {
                             if magnetosphere == nil && !magnetosphereLoading {
