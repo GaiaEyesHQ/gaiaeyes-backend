@@ -132,12 +132,12 @@ async def test_normalizes_variants(client: AsyncClient, recording_store: Recordi
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] is True
-    assert recording_store.events[0]["symptom_code"] == "NERVE_PAIN"
+    assert recording_store.events[0]["symptom_code"] == "nerve_pain"
 
     payload_dash = {"symptom_code": "nerve-pain"}
     response_dash = await client.post("/v1/symptoms", json=payload_dash, headers=headers)
     assert response_dash.status_code == 200
-    assert recording_store.events[1]["symptom_code"] == "NERVE_PAIN"
+    assert recording_store.events[1]["symptom_code"] == "nerve_pain"
 
 
 @pytest.mark.anyio
@@ -167,7 +167,7 @@ async def test_unknown_strict_vs_default(client: AsyncClient, recording_store: R
     assert relaxed_response.status_code == 200
     relaxed_data = relaxed_response.json()
     assert relaxed_data["ok"] is True
-    assert recording_store.events[0]["symptom_code"] == "OTHER"
+    assert recording_store.events[0]["symptom_code"] == "other"
 
 
 @pytest.mark.anyio
@@ -199,6 +199,48 @@ async def test_insert_uses_catalog_canonical_code(client: AsyncClient, monkeypat
     headers = {
         "Authorization": "Bearer test-token",
         "X-Dev-UserId": "00000000-0000-0000-0000-000000000003",
+    }
+
+    response = await client.post(
+        "/v1/symptoms",
+        json={"symptom_code": "SINUS_PRESSURE"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert store.events[0]["symptom_code"] == "sinus_pressure"
+
+
+@pytest.mark.anyio
+async def test_insert_coerces_catalog_code_to_storage_casing(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    store = RecordingStore()
+
+    async def _insert(conn, user_id, **kwargs):  # noqa: ARG001
+        return store.insert(user_id, **kwargs)
+
+    async def _codes(conn, include_inactive=True):  # noqa: ARG001
+        return [
+            {
+                "symptom_code": "SINUS_PRESSURE",
+                "label": "Sinus pressure",
+                "description": None,
+                "is_active": True,
+            },
+            {
+                "symptom_code": "OTHER",
+                "label": "Other",
+                "description": None,
+                "is_active": True,
+            },
+        ]
+
+    monkeypatch.setattr(symptoms_db, "insert_symptom_event", _insert)
+    monkeypatch.setattr(symptoms_db, "fetch_symptom_codes", _codes)
+
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Dev-UserId": "00000000-0000-0000-0000-000000000004",
     }
 
     response = await client.post(

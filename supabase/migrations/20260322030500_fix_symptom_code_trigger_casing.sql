@@ -1,8 +1,11 @@
 -- If the optional raw.user_symptom_events normalization trigger was enabled
--- manually, ensure it preserves the canonical lowercase snake_case keys used by
--- dim.symptom_codes.
+-- manually, remove it. The API now resolves to canonical dim.symptom_codes
+-- values before insert, and the legacy trigger can corrupt casing and break the
+-- foreign-key constraint.
 
 create schema if not exists raw;
+
+drop trigger if exists trg_normalize_symptom_code on raw.user_symptom_events;
 
 create or replace function raw.tg_normalize_symptom_code()
 returns trigger

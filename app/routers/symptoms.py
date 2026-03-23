@@ -106,6 +106,10 @@ def _normalize_symptom_code(value: str) -> str:
     return value.strip().replace(" ", "_").replace("-", "_").upper()
 
 
+def _storage_symptom_code(value: str) -> str:
+    return value.strip().replace(" ", "_").replace("-", "_").lower()
+
+
 async def _commit_if_supported(conn) -> None:
     commit = getattr(conn, "commit", None)
     if callable(commit):
@@ -194,7 +198,7 @@ async def create_symptom_event(
     matched_row = lookup.get(normalized_code)
     if matched_row is None:
         raise HTTPException(status_code=500, detail="Resolved symptom code missing from catalog")
-    canonical_code = str(matched_row["symptom_code"]).strip()
+    canonical_code = _storage_symptom_code(str(matched_row["symptom_code"]))
 
     logger.info(
         "symptom_event",
@@ -263,7 +267,15 @@ async def get_symptoms_today(request: Request, conn=Depends(get_db)):
                 friendly_error=_ERR_LOAD_TODAY,
             )
         )
-    data = [SymptomTodayOut(**row) for row in rows or []]
+    data = [
+        SymptomTodayOut(
+            symptom_code=_normalize_symptom_code(str(row["symptom_code"])),
+            ts_utc=row["ts_utc"],
+            severity=row.get("severity"),
+            free_text=row.get("free_text"),
+        )
+        for row in rows or []
+    ]
     return _success(SymptomTodayResponse(data=data))
 
 
@@ -286,7 +298,16 @@ async def get_symptoms_daily(
                 friendly_error=_ERR_LOAD_DAILY,
             )
         )
-    data = [SymptomDailyRow(**row) for row in rows or []]
+    data = [
+        SymptomDailyRow(
+            day=row["day"],
+            symptom_code=_normalize_symptom_code(str(row["symptom_code"])),
+            events=row["events"],
+            mean_severity=row.get("mean_severity"),
+            last_ts=row.get("last_ts"),
+        )
+        for row in rows or []
+    ]
     return _success(SymptomDailyResponse(data=data))
 
 
@@ -309,7 +330,14 @@ async def get_symptom_diag(
                 friendly_error=_ERR_LOAD_DIAG,
             )
         )
-    data = [SymptomDiagRow(**row) for row in rows or []]
+    data = [
+        SymptomDiagRow(
+            symptom_code=_normalize_symptom_code(str(row["symptom_code"])),
+            events=row["events"],
+            last_ts=row.get("last_ts"),
+        )
+        for row in rows or []
+    ]
     return _success(SymptomDiagResponse(data=data))
 
 
