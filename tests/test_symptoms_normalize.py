@@ -171,6 +171,48 @@ async def test_unknown_strict_vs_default(client: AsyncClient, recording_store: R
 
 
 @pytest.mark.anyio
+async def test_insert_uses_catalog_canonical_code(client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    store = RecordingStore()
+
+    async def _insert(conn, user_id, **kwargs):  # noqa: ARG001
+        return store.insert(user_id, **kwargs)
+
+    async def _codes(conn, include_inactive=True):  # noqa: ARG001
+        return [
+            {
+                "symptom_code": "sinus_pressure",
+                "label": "Sinus pressure",
+                "description": None,
+                "is_active": True,
+            },
+            {
+                "symptom_code": "other",
+                "label": "Other",
+                "description": None,
+                "is_active": True,
+            },
+        ]
+
+    monkeypatch.setattr(symptoms_db, "insert_symptom_event", _insert)
+    monkeypatch.setattr(symptoms_db, "fetch_symptom_codes", _codes)
+
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Dev-UserId": "00000000-0000-0000-0000-000000000003",
+    }
+
+    response = await client.post(
+        "/v1/symptoms",
+        json={"symptom_code": "SINUS_PRESSURE"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert store.events[0]["symptom_code"] == "sinus_pressure"
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "path, attr, expected_friendly",
     [

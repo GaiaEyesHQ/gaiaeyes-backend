@@ -2017,6 +2017,18 @@ struct ContentView: View {
         }
         return normalizedCode.replacingOccurrences(of: "_", with: " ").capitalized
     }
+
+    private func currentSymptomSuggestionContext(prefill: SymptomQueuedEvent? = nil) -> SymptomSuggestionContext {
+        let activePatternRefs = dashboardPayload?.activePatternRefs ?? []
+        return SymptomSuggestionContext(
+            activeDriverKeys: dashboardPayload?.drivers?.map(\.key) ?? [],
+            activePatternDriverKeys: activePatternRefs.compactMap { $0.driverKey ?? $0.signalKey },
+            activePatternOutcomeKeys: activePatternRefs.compactMap(\.outcomeKey),
+            recentSymptomCodes: symptomsToday.map(\.symptomCode),
+            prefillTags: prefill?.tags ?? [],
+            prefillSymptomCode: prefill?.symptomCode
+        )
+    }
     
     private func topSymptomSummary() -> String? {
         guard let top = symptomDiagnostics.sorted(by: { $0.events > $1.events }).first, top.events > 0 else {
@@ -3792,53 +3804,89 @@ struct ContentView: View {
             await fetchQuakes()
         }
     }
-    
-    private func logSymptomEvent(
+
+    private enum SymptomLogAttemptStatus {
+        case submitted
+        case queued
+        case failed
+    }
+
+    private func submitSymptomEvent(
         _ event: SymptomQueuedEvent,
-        successMessage: String = "Symptom logged",
-        successPrefill: SymptomQueuedEvent? = nil
-    ) async -> Bool {
-        let api = state.apiWithAuth()
+        api: APIClient
+    ) async -> SymptomLogAttemptStatus {
         do {
             struct SymptomPostBody: Encodable {
                 let symptomCode: String
+                let tsUtc: String
                 let severity: Int?
                 let freeText: String?
                 let tags: [String]?
             }
+
             struct SymptomPostEnvelope: Decodable {
                 let ok: Bool?
                 let error: String?
             }
-            let body = SymptomPostBody(
-                symptomCode: event.symptomCode,
-                severity: event.severity,
-                freeText: event.freeText,
-                tags: event.tags
-            )
-            guard let base = URL(string: state.baseURLString) else {
+
+            let trimmedBase = state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let base = URL(string: trimmedBase.isEmpty ? "http://127.0.0.1:8000" : trimmedBase) else {
                 throw URLError(.badURL)
             }
+
             let url = base.appendingPathComponent("v1/symptoms")
             var req = URLRequest(url: url)
             req.httpMethod = "POST"
             req.addValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.addValue("application/json", forHTTPHeaderField: "Accept")
+            req.timeoutInterval = 20
             if !state.bearer.isEmpty {
                 req.addValue("Bearer \(state.bearer)", forHTTPHeaderField: "Authorization")
-                // Always attach a developer user id for dev/service tokens so the backend
-                // can populate request.state.user_id for user-scoped symptom routes.
                 let trimmedUID = state.userId.trimmingCharacters(in: .whitespacesAndNewlines)
-                let effUID = (trimmedUID.isEmpty || trimmedUID.lowercased() == "anonymous") ? DeveloperAuthDefaults.userId : trimmedUID
-                req.addValue(effUID, forHTTPHeaderField: "X-Dev-UserId")
+                let effectiveUserId = (trimmedUID.isEmpty || trimmedUID.lowercased() == "anonymous")
+                    ? DeveloperAuthDefaults.userId
+                    : trimmedUID
+                req.addValue(effectiveUserId, forHTTPHeaderField: "X-Dev-UserId")
             }
-            req.addValue("application/json", forHTTPHeaderField: "Accept")
-            let enc = JSONEncoder()
-            enc.keyEncodingStrategy = .convertToSnakeCase
-            req.httpBody = try enc.encode(body)
-            appLog("[SYM] POST /v1/symptoms X-Dev-UserId=\(req.value(forHTTPHeaderField: "X-Dev-UserId") ?? "nil") bearerEmpty=\(state.bearer.isEmpty)")
 
-            // Use tuned APIClient session (not URLSession.shared)
-            let (data, resp) = try await api.send(req)
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let body = SymptomPostBody(
+                symptomCode: event.symptomCode,
+                tsUtc: iso.string(from: event.tsUtc),
+                severity: event.severity,
+                freeText: event.freeText,
+                tags: event.tags
+            )
+
+            let encoder = JSONEncoder()
+            encoder.keyEncodingStrategy = .convertToSnakeCase
+            req.httpBody = try encoder.encode(body)
+
+            appLog("[SYM] POST /v1/symptoms code=\(event.symptomCode) ts=\(body.tsUtc)")
+
+            let retryableCodes: Set<URLError.Code> = [
+                .timedOut, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed
+            ]
+            var attemptsRemaining = 1
+            var responseData: Data?
+            var response: URLResponse?
+
+            while responseData == nil || response == nil {
+                do {
+                    let result = try await api.send(req)
+                    responseData = result.0
+                    response = result.1
+                } catch let uerr as URLError where retryableCodes.contains(uerr.code) && attemptsRemaining > 0 {
+                    attemptsRemaining -= 1
+                    appLog("[SYM] retrying \(event.symptomCode) after \(uerr.code.rawValue)")
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                }
+            }
+
+            guard let data = responseData, let resp = response else {
+                throw URLError(.unknown)
+            }
             guard let http = resp as? HTTPURLResponse else {
                 throw URLError(.badServerResponse)
             }
@@ -3848,67 +3896,129 @@ struct ContentView: View {
                 decoder.keyDecodingStrategy = .convertFromSnakeCase
                 if let envelope = try? decoder.decode(SymptomPostEnvelope.self, from: data),
                    envelope.ok == false {
-                    let message = envelope.error?.trimmingCharacters(in: .whitespacesAndNewlines)
-                    appLog("[SYM] logical failure: \(message ?? "unknown")")
-                    showSymptomToast("Couldn’t log symptom")
-                    await state.refreshSymptomQueueCount()
-                    return false
+                    let message = envelope.error?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown"
+                    appLog("[SYM] logical failure for \(event.symptomCode): \(message)")
+                    return .failed
                 }
-                showSymptomToast(
-                    successMessage,
-                    actionTitle: successPrefill == nil ? nil : "Edit",
-                    prefill: successPrefill
-                )
-                async let symptomsTask: Void = fetchSymptoms(api: api)
-                async let featuresTask: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
-                async let dashboardTask: Void = fetchDashboardPayload(force: true)
-                _ = await (symptomsTask, featuresTask, dashboardTask)
-                await state.refreshSymptomQueueCount()
-                return true
-            } else if (400..<500).contains(http.statusCode) {
-                // Client/validation/auth errors — do not queue
-                let preview = String(data: data, encoding: .utf8) ?? ""
-                appLog("[SYM] server rejected (\(http.statusCode)): \(preview.prefix(160))")
-                showSymptomToast("Couldn’t log symptom (\(http.statusCode))")
-                await state.refreshSymptomQueueCount()
-                return false
-            } else {
-                // 5xx — transient; queue for retry
-                let preview = String(data: data, encoding: .utf8) ?? ""
-                appLog("[SYM] server error (\(http.statusCode)): \(preview.prefix(160)) — queued")
-                await state.enqueueSymptom(event)
-                showSymptomToast("Offline — queued symptom")
-                await MainActor.run { self.isSymptomServiceOffline = true }
-                await state.refreshSymptomQueueCount()
-                return true
+                return .submitted
             }
+
+            if (400..<500).contains(http.statusCode) {
+                let preview = String(data: data, encoding: .utf8) ?? ""
+                appLog("[SYM] server rejected \(event.symptomCode) (\(http.statusCode)): \(preview.prefix(160))")
+                return .failed
+            }
+
+            let preview = String(data: data, encoding: .utf8) ?? ""
+            appLog("[SYM] server error \(event.symptomCode) (\(http.statusCode)): \(preview.prefix(160)) — queued")
+            await state.enqueueSymptom(event)
+            await MainActor.run {
+                self.isSymptomServiceOffline = true
+            }
+            return .queued
         } catch let uerr as URLError {
-            // Queue only for connectivity-related errors; otherwise show and do not queue
-            let offline: Set<URLError.Code> = [
+            let offlineCodes: Set<URLError.Code> = [
                 .timedOut, .cannotFindHost, .cannotConnectToHost,
                 .networkConnectionLost, .dnsLookupFailed, .notConnectedToInternet
             ]
-            if offline.contains(uerr.code) {
+            if offlineCodes.contains(uerr.code) {
                 await state.enqueueSymptom(event)
-                showSymptomToast("Offline — queued symptom")
-                appLog("[SYM] POST queued (\(uerr.code.rawValue))")
-                await MainActor.run { self.isSymptomServiceOffline = true }
-                await state.refreshSymptomQueueCount()
-                return true
-            } else if uerr.code == .cancelled {
-                appLog("[SYM] upload cancelled")
-            } else {
-                showSymptomToast("Couldn’t log symptom")
-                appLog("[SYM] POST error: \(uerr.localizedDescription)")
+                appLog("[SYM] queued \(event.symptomCode) (\(uerr.code.rawValue))")
+                await MainActor.run {
+                    self.isSymptomServiceOffline = true
+                }
+                return .queued
             }
-            await state.refreshSymptomQueueCount()
-            return false
+            if uerr.code != .cancelled {
+                appLog("[SYM] POST error for \(event.symptomCode): \(uerr.localizedDescription)")
+            }
+            return .failed
         } catch {
-            showSymptomToast("Couldn’t log symptom")
-            appLog("[UI] symptom log error: \(error.localizedDescription)")
+            appLog("[UI] symptom log error for \(event.symptomCode): \(error.localizedDescription)")
+            return .failed
         }
+    }
+
+    private func logSymptomEvents(
+        _ events: [SymptomQueuedEvent],
+        successMessage: String = "Symptoms logged",
+        successPrefill: SymptomQueuedEvent? = nil
+    ) async -> Bool {
+        guard !events.isEmpty else { return false }
+
+        let api = state.apiWithAuth()
+        var submittedCount = 0
+        var queuedCount = 0
+
+        for event in events {
+            switch await submitSymptomEvent(event, api: api) {
+            case .submitted:
+                submittedCount += 1
+            case .queued:
+                queuedCount += 1
+            case .failed:
+                break
+            }
+        }
+
+        let failedCount = events.count - submittedCount - queuedCount
+
+        if submittedCount > 0 {
+            async let symptomsTask: Void = fetchSymptoms(api: api)
+            async let featuresTask: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
+            async let dashboardTask: Void = fetchDashboardPayload(force: true)
+            _ = await (symptomsTask, featuresTask, dashboardTask)
+            await MainActor.run {
+                if queuedCount == 0 {
+                    self.isSymptomServiceOffline = false
+                }
+                self.didLogSymptomTimeout = false
+            }
+        }
+
         await state.refreshSymptomQueueCount()
+
+        if submittedCount > 0 && queuedCount == 0 && failedCount == 0 {
+            showSymptomToast(
+                successMessage,
+                actionTitle: successPrefill == nil ? nil : "Edit",
+                prefill: successPrefill
+            )
+            return true
+        }
+
+        if submittedCount > 0 && queuedCount > 0 && failedCount == 0 {
+            let message = "Logged \(submittedCount) symptom\(submittedCount == 1 ? "" : "s"), queued \(queuedCount)"
+            showSymptomToast(message)
+            return true
+        }
+
+        if submittedCount > 0 && failedCount > 0 {
+            let message = "Logged \(submittedCount) symptom\(submittedCount == 1 ? "" : "s"); \(failedCount) failed"
+            showSymptomToast(message)
+            return true
+        }
+
+        if queuedCount > 0 && failedCount == 0 {
+            let message = queuedCount == 1 ? "Offline — queued symptom" : "Offline — queued \(queuedCount) symptoms"
+            showSymptomToast(message)
+            return true
+        }
+
+        showSymptomToast(events.count == 1 ? "Couldn’t log symptom" : "Couldn’t log all symptoms")
         return false
+    }
+
+    private func logSymptomEvent(
+        _ event: SymptomQueuedEvent,
+        successMessage: String = "Symptom logged",
+        successPrefill: SymptomQueuedEvent? = nil
+    ) async -> Bool {
+        await logSymptomEvents(
+            [event],
+            successMessage: successMessage,
+            successPrefill: successPrefill
+        )
     }
 
     private func quickLogMissionControl(_ request: MissionControlQuickLogRequest) async {
@@ -8806,11 +8916,12 @@ struct ContentView: View {
                     isOffline: isSymptomServiceOffline,
                     isSubmitting: $isSubmittingSymptom,
                     prefill: symptomSheetPrefill,
+                    suggestionContext: currentSymptomSuggestionContext(prefill: symptomSheetPrefill),
                     showsCloseButton: true,
-                    onSubmit: { event in
+                    onSubmit: { events in
                         isSubmittingSymptom = true
                         Task {
-                            let shouldDismiss = await logSymptomEvent(event)
+                            let shouldDismiss = await logSymptomEvents(events)
                             await MainActor.run {
                                 isSubmittingSymptom = false
                                 if shouldDismiss {

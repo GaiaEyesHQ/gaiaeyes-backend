@@ -173,7 +173,7 @@ async def create_symptom_event(
     if not lookup:
         raise HTTPException(status_code=500, detail="No symptom codes configured")
 
-    other_code = "OTHER" if "OTHER" in lookup else None
+    other_key = "OTHER" if "OTHER" in lookup else None
 
     if normalized_code not in lookup:
         if strict:
@@ -187,15 +187,21 @@ async def create_symptom_event(
                     "valid": valid_codes,
                 },
             )
-        if other_code is None:
+        if other_key is None:
             raise HTTPException(status_code=500, detail="OTHER symptom code missing from catalog")
-        normalized_code = other_code
+        normalized_code = other_key
+
+    matched_row = lookup.get(normalized_code)
+    if matched_row is None:
+        raise HTTPException(status_code=500, detail="Resolved symptom code missing from catalog")
+    canonical_code = str(matched_row["symptom_code"]).strip()
 
     logger.info(
         "symptom_event",
         extra={
             "user_id": user_id,
-            "symptom_code": normalized_code,
+            "symptom_code": canonical_code,
+            "symptom_code_normalized": normalized_code,
             "severity": effective_severity,
         },
     )
@@ -204,14 +210,14 @@ async def create_symptom_event(
         result = await symptoms_db.insert_symptom_event(
             conn,
             user_id,
-            symptom_code=normalized_code,
+            symptom_code=canonical_code,
             ts_utc=payload.ts_utc,
             severity=effective_severity,
             free_text=payload.free_text,
             tags=payload.tags,
         )
     except Exception as exc:  # pragma: no cover - exercised via tests
-        logger.exception("failed to insert symptom event", extra={"user_id": user_id, "symptom_code": normalized_code})
+        logger.exception("failed to insert symptom event", extra={"user_id": user_id, "symptom_code": canonical_code})
         return JSONResponse(
             status_code=200,
             content={
