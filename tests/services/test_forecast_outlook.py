@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 
 from services.forecast_outlook import (  # noqa: E402
     build_window_outlook,
+    parse_swpc_range_forecast,
     parse_swpc_three_day_forecast,
     serialize_local_forecast_rows,
     serialize_space_forecast_rows,
@@ -98,6 +99,58 @@ Rationale: Active regions may keep a modest flare chance in the outlook.
         self.assertEqual(rows[2]["r3_or_greater_pct"], 10.0)
         self.assertTrue(rows[0]["cme_watch"])
         self.assertEqual(rows[1]["geomagnetic_severity_bucket"], "watch")
+
+    def test_parse_swpc_range_forecast_builds_seven_day_window_from_weekly(self) -> None:
+        text = """
+:Product: Weekly Highlights and Forecasts
+:Issued: 2026 Mar 23 0245 UTC
+Forecast of Solar and Geomagnetic Activity
+23 March - 18 April 2026
+
+Solar activity is expected to be at low levels with a varying chance
+for M-class (R1-R2/Minor-Moderate) flares through 18 Apr.
+
+Geomagnetic field activity is expected to reach G1-G2
+(Minor-Moderate) geomagnetic storm levels on 23 Mar due to negative
+polarity CH HSS influences. Periods of G1 (Minor) storming are
+likely on 03-04 Apr in response to negative polarity CH HSS
+influences.
+"""
+
+        rows = parse_swpc_range_forecast(
+            text,
+            source_product_ts=datetime(2026, 3, 23, 2, 50, tzinfo=UTC),
+            src="noaa-swpc:weekly",
+        )
+
+        self.assertEqual(len(rows), 7)
+        self.assertEqual(rows[0]["forecast_day"], date(2026, 3, 23))
+        self.assertEqual(rows[0]["g_scale_max"], "G2")
+        self.assertTrue(rows[0]["solar_wind_watch"])
+        self.assertTrue(rows[0]["flare_watch"])
+        self.assertEqual(rows[1]["g_scale_max"], "G0")
+
+    def test_parse_swpc_range_forecast_builds_seven_day_window_from_advisory(self) -> None:
+        text = """
+:Product: Advisory Outlook advisory-outlook.txt
+:Issued: 2026 Mar 23 0250 UTC
+**** SPACE WEATHER OUTLOOK ****
+Outlook For March 23-29
+
+-G1-G2 (Minor-Moderate) storm periods are expected on 23 Mar due to CH HSS influences.
+"""
+
+        rows = parse_swpc_range_forecast(
+            text,
+            source_product_ts=datetime(2026, 3, 23, 2, 51, tzinfo=UTC),
+            src="noaa-swpc:advisory-outlook",
+        )
+
+        self.assertEqual(len(rows), 7)
+        self.assertEqual(rows[0]["forecast_day"], date(2026, 3, 23))
+        self.assertEqual(rows[0]["g_scale_max"], "G2")
+        self.assertTrue(rows[0]["solar_wind_watch"])
+        self.assertEqual(rows[1]["g_scale_max"], "G0")
 
     def test_summarize_local_forecast_days_aggregates_hourly_periods(self) -> None:
         hourly_payload = {

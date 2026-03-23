@@ -68,7 +68,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from services.forecast_outlook import parse_swpc_three_day_forecast
+from services.forecast_outlook import parse_swpc_range_forecast, parse_swpc_three_day_forecast
 
 logger = logging.getLogger("gaiaeyes.ingest.step1")
 
@@ -1818,15 +1818,23 @@ async def ingest_swpc_bulletins(
 
         parsed_daily_rows: list[dict[str, Any]] = []
         for row in rows:
-            if row.get("src") != "noaa-swpc:3-day-forecast":
-                continue
-            parsed_daily_rows.extend(
-                parse_swpc_three_day_forecast(
-                    str(row.get("body_text") or ""),
-                    source_product_ts=row.get("fetched_at") or now,
-                    src=str(row.get("src") or "noaa-swpc:3-day-forecast"),
+            src = str(row.get("src") or "")
+            if src == "noaa-swpc:3-day-forecast":
+                parsed_daily_rows.extend(
+                    parse_swpc_three_day_forecast(
+                        str(row.get("body_text") or ""),
+                        source_product_ts=row.get("fetched_at") or now,
+                        src=src,
+                    )
                 )
-            )
+            elif src in {"noaa-swpc:weekly", "noaa-swpc:advisory-outlook"}:
+                parsed_daily_rows.extend(
+                    parse_swpc_range_forecast(
+                        str(row.get("body_text") or ""),
+                        source_product_ts=row.get("fetched_at") or now,
+                        src=src,
+                    )
+                )
         if parsed_daily_rows:
             inserted_daily = await writer.upsert_many(
                 "marts",

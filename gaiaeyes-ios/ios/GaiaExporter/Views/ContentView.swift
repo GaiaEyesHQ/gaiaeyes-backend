@@ -6163,8 +6163,9 @@ struct ContentView: View {
         private var yourOutlookCard: some View {
             let next24 = userOutlook?.next24h
             let next72 = userOutlook?.next72h
+            let next7 = userOutlook?.next7d
             let available = userOutlook?.availableWindows ?? []
-            let primaryWindow = next24 ?? next72
+            let primaryWindow = next24 ?? next72 ?? next7
             let topDomain24 = next24?.likelyElevatedDomains?.first
             let topDomain72 = next72?.likelyElevatedDomains?.first
             let quick24 = topDomain24?.label ?? next24?.topDrivers?.first?.label ?? "—"
@@ -6189,7 +6190,7 @@ struct ContentView: View {
             if let error = ContentView.scrubError(userOutlookError) {
                 status = error
             } else if userOutlookLoading {
-                status = "Building your next 24 to 72 hour outlook from your patterns and live forecast inputs."
+                status = "Building your next 24-hour to 7-day outlook from your patterns and live forecast inputs."
             } else if userOutlook?.forecastDataReady?.locationFound == false {
                 status = "Set your location to unlock a personal short-range outlook."
             } else if let summary = primaryWindow?.summary, !summary.isEmpty {
@@ -6525,6 +6526,8 @@ struct ContentView: View {
                 return "Next 24 Hours"
             case 72:
                 return "Next 72 Hours"
+            case 168:
+                return "Next 7 Days"
             default:
                 return "Outlook"
             }
@@ -6649,7 +6652,7 @@ struct ContentView: View {
                         LocalConditionsSurfaceCard(title: "Near-Future Outlook", icon: "calendar.badge.clock") {
                             HStack(alignment: .top, spacing: 12) {
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text("Next 24-72 hours")
+                                    Text("Next 24 hours to 7 days")
                                         .font(.system(size: 30, weight: .bold, design: .rounded))
                                     Text("Deterministic guidance from your recent patterns, current gauges, and real local plus SWPC forecast inputs.")
                                         .font(.caption)
@@ -6694,6 +6697,7 @@ struct ContentView: View {
 
                         windowSection(payload?.next24h)
                         windowSection(payload?.next72h)
+                        windowSection(payload?.next7d)
 
                         if payload?.forecastDataReady?.next7d != true {
                             LocalConditionsSurfaceCard(title: "7-Day Outlook", icon: "calendar") {
@@ -7274,7 +7278,7 @@ struct ContentView: View {
                         }
 
                         if let forecastDays = outlook?.forecastDaily, !forecastDays.isEmpty {
-                            LocalConditionsSurfaceCard(title: "3-Day Space Forecast", icon: "calendar") {
+                            LocalConditionsSurfaceCard(title: "7-Day Space Forecast", icon: "calendar") {
                                 VStack(alignment: .leading, spacing: 12) {
                                     ForEach(forecastDays) { day in
                                         VStack(alignment: .leading, spacing: 8) {
@@ -11814,7 +11818,7 @@ struct ContentView: View {
                         }
 
                         if let forecastDays = snapshot?.forecastDaily, !forecastDays.isEmpty {
-                            LocalConditionsSurfaceCard(title: "3-Day Forecast", icon: "calendar") {
+                            LocalConditionsSurfaceCard(title: "7-Day Forecast", icon: "calendar") {
                                 VStack(alignment: .leading, spacing: 12) {
                                     ForEach(forecastDays) { day in
                                         VStack(alignment: .leading, spacing: 8) {

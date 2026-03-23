@@ -22,6 +22,9 @@ from services.external import pollen
 
 
 LOCAL_REFRESH_HOURS = 6
+LOCAL_FORECAST_DAYS = 7
+SPACE_FORECAST_DAYS = 7
+POLLEN_FORECAST_DAYS = 5
 
 DOMAIN_LABELS = {
     "pain": "Pain",
@@ -115,6 +118,14 @@ SWPC_RANGE_RE = re.compile(
 SWPC_DAY_TOKEN_RE = re.compile(r"\b([A-Z][a-z]{2})\s+(\d{1,2})\b")
 SWPC_KP_CELL_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*(?:\((G\d)\))?")
 PERCENT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+SWPC_GEOMAG_EVENT_RE = re.compile(
+    r"(G\d(?:-G\d)?)\s*(?:\([^)]+\))?[^.]*?\bon\s+([^.]+?)(?=(?:,\s*with\s+G\d)|(?:\.)|$)",
+    re.IGNORECASE,
+)
+SWPC_MONTH_DAY_BLOCK_RE = re.compile(
+    r"((?:\d{1,2}(?:-\d{1,2})?)(?:\s*(?:,|and)\s*\d{1,2}(?:-\d{1,2})?)*)\s+([A-Z][a-z]{2,8})",
+    re.IGNORECASE,
+)
 
 
 def _cursor_kwargs() -> dict[str, Any]:
@@ -407,6 +418,57 @@ def _parse_percent_row(section_text: str, row_label: str) -> list[float | None]:
     return [float(item) for item in values]
 
 
+def _forecast_window_days(start_day: date, *, days: int) -> list[date]:
+    return [start_day + timedelta(days=offset) for offset in range(max(0, days))]
+
+
+def _resolve_month_year(month_num: int, issued_at: datetime) -> int:
+    year = issued_at.year
+    if issued_at.month >= 10 and month_num <= 3:
+        return year + 1
+    return year
+
+
+def _parse_swpc_day_expr(expr: str, issued_at: datetime) -> list[date]:
+    out: list[date] = []
+    for match in SWPC_MONTH_DAY_BLOCK_RE.finditer(expr.replace(" and ", ", ")):
+        day_block = match.group(1)
+        month_token = match.group(2)
+        month_num = MONTH_MAP.get(month_token.lower()[:3])
+        if month_num is None:
+            continue
+        year = _resolve_month_year(month_num, issued_at)
+        for token in re.findall(r"\d{1,2}(?:-\d{1,2})?", day_block):
+            if "-" in token:
+                start_token, end_token = token.split("-", 1)
+                try:
+                    start_day = int(start_token)
+                    end_day = int(end_token)
+                except Exception:
+                    continue
+                for day_num in range(start_day, end_day + 1):
+                    try:
+                        out.append(date(year, month_num, day_num))
+                    except Exception:
+                        continue
+            else:
+                try:
+                    out.append(date(year, month_num, int(token)))
+                except Exception:
+                    continue
+    return out
+
+
+def _max_g_scale_token(token: str | None) -> str:
+    values = [int(item) for item in re.findall(r"G(\d)", str(token or "").upper()) if item.isdigit()]
+    max_value = max(values) if values else 0
+    return f"G{max_value}"
+
+
+def _swpc_sentence_list(text: str) -> list[str]:
+    return [item.strip() for item in re.split(r"(?<=[.!?])\s+", text or "") if item.strip()]
+
+
 def _parse_kp_blocks(section_text: str, forecast_days: Sequence[date]) -> dict[date, list[dict[str, Any]]]:
     compact = _compress_whitespace(section_text) or ""
     out: dict[date, list[dict[str, Any]]] = {day_key: [] for day_key in forecast_days[:3]}
@@ -442,8 +504,9 @@ def parse_swpc_three_day_forecast(
     if not text:
         return []
 
-    source_ts = source_product_ts.astimezone(UTC) if source_product_ts.tzinfo else source_product_ts.replace(tzinfo=UTC)
-    issued_at = _parse_swpc_issued_at(text, source_ts)
+    fallback_ts = source_product_ts.astimezone(UTC) if source_product_ts.tzinfo else source_product_ts.replace(tzinfo=UTC)
+    issued_at = _parse_swpc_issued_at(text, fallback_ts)
+    source_ts = issued_at
     updated_at = datetime.now(UTC)
 
     geomagnetic_section = _extract_section(
@@ -529,6 +592,99 @@ def parse_swpc_three_day_forecast(
     return rows
 
 
+def parse_swpc_range_forecast(
+    body_text: str,
+    *,
+    source_product_ts: datetime,
+    src: str,
+    days: int = SPACE_FORECAST_DAYS,
+) -> list[dict[str, Any]]:
+    text = (body_text or "").strip()
+    if not text:
+        return []
+
+    fallback_ts = source_product_ts.astimezone(UTC) if source_product_ts.tzinfo else source_product_ts.replace(tzinfo=UTC)
+    issued_at = _parse_swpc_issued_at(text, fallback_ts)
+    source_ts = issued_at
+    updated_at = datetime.now(UTC)
+    forecast_days = _forecast_window_days(issued_at.date(), days=days)
+    if not forecast_days:
+        return []
+
+    forecast_section = ""
+    for marker in (
+        r"Forecast of Solar and Geomagnetic Activity",
+        r"Outlook For [A-Z][a-z]+\s+\d{1,2}(?:-\d{1,2})?",
+    ):
+        forecast_section = _extract_section(text, marker, None)
+        if forecast_section:
+            break
+    if not forecast_section:
+        forecast_section = text
+
+    compact_section = _compress_whitespace(forecast_section) or ""
+    sentences = _swpc_sentence_list(forecast_section or text)
+    flare_sentence = next(
+        (
+            sentence
+            for sentence in sentences
+            if _watch_flag(sentence, "m-class", "r1-r2", "radio blackout", "flare")
+        ),
+        None,
+    )
+
+    rows_by_day: dict[date, dict[str, Any]] = {
+        day_key: {
+            "forecast_day": day_key,
+            "issued_at": issued_at,
+            "source_product_ts": source_ts,
+            "source_src": src,
+            "kp_max_forecast": None,
+            "g_scale_max": "G0",
+            "s1_or_greater_pct": None,
+            "r1_r2_pct": None,
+            "r3_or_greater_pct": None,
+            "geomagnetic_rationale": None,
+            "radiation_rationale": None,
+            "radio_rationale": None,
+            "kp_blocks_json": json.dumps([]),
+            "raw_sections_json": json.dumps({"forecast": compact_section}),
+            "flare_watch": bool(flare_sentence),
+            "cme_watch": False,
+            "solar_wind_watch": False,
+            "geomagnetic_severity_bucket": "low",
+            "radiation_severity_bucket": "low",
+            "radio_severity_bucket": "mild" if flare_sentence else "low",
+            "updated_at": updated_at,
+        }
+        for day_key in forecast_days
+    }
+
+    for sentence in sentences:
+        for match in SWPC_GEOMAG_EVENT_RE.finditer(sentence):
+            g_scale_max = _max_g_scale_token(match.group(1))
+            event_days = _parse_swpc_day_expr(match.group(2), issued_at)
+            for day_key in event_days:
+                payload = rows_by_day.get(day_key)
+                if payload is None:
+                    continue
+                if _g_scale_int(g_scale_max) > _g_scale_int(payload.get("g_scale_max")):
+                    payload["g_scale_max"] = g_scale_max
+                    payload["geomagnetic_severity_bucket"] = _severity_from_g_scale(g_scale_max)
+                if _watch_flag(sentence, "hss", "high speed stream", "coronal hole", "solar wind"):
+                    payload["solar_wind_watch"] = True
+                if _watch_flag(sentence, "cme"):
+                    payload["cme_watch"] = True
+                payload["geomagnetic_rationale"] = _compress_whitespace(sentence)
+
+    if flare_sentence:
+        rationale = _compress_whitespace(flare_sentence)
+        for payload in rows_by_day.values():
+            payload["radio_rationale"] = rationale
+
+    return [rows_by_day[day_key] for day_key in forecast_days]
+
+
 def summarize_local_forecast_days(
     hourly_payload: Mapping[str, Any],
     grid_payload: Mapping[str, Any] | None,
@@ -539,6 +695,7 @@ def summarize_local_forecast_days(
     lat: float | None,
     lon: float | None,
     now: datetime | None = None,
+    max_days: int = LOCAL_FORECAST_DAYS,
 ) -> list[dict[str, Any]]:
     props = hourly_payload.get("properties") if isinstance(hourly_payload, Mapping) else {}
     props = props if isinstance(props, Mapping) else {}
@@ -557,7 +714,7 @@ def summarize_local_forecast_days(
             continue
         local_day = start_time.date()
         if local_day not in grouped:
-            if len(day_order) >= 3:
+            if len(day_order) >= max_days:
                 continue
             day_order.append(local_day)
             grouped[local_day] = {
@@ -768,7 +925,7 @@ def build_location_key(zip_code: str | None, lat: float | None, lon: float | Non
     return f"geo:{round(float(lat), 3):.3f},{round(float(lon), 3):.3f}"
 
 
-async def _fetch_local_forecast_rows(conn, location_key: str, start_day: date) -> list[dict[str, Any]]:
+async def _fetch_local_forecast_rows(conn, location_key: str, start_day: date, *, days: int = LOCAL_FORECAST_DAYS) -> list[dict[str, Any]]:
     async with conn.cursor(**_cursor_kwargs()) as cur:
         await cur.execute(
             """
@@ -785,9 +942,9 @@ async def _fetch_local_forecast_rows(conn, location_key: str, start_day: date) -
              where location_key = %s
                and day >= %s
              order by day asc
-             limit 3
+             limit %s
             """,
-            (location_key, start_day),
+            (location_key, start_day, days),
             prepare=False,
         )
         rows = await cur.fetchall()
@@ -868,10 +1025,10 @@ async def ensure_local_forecast_daily(conn, *, zip_code: str | None, lat: float 
         return []
 
     today = datetime.now(UTC).date() - timedelta(days=1)
-    existing = await _fetch_local_forecast_rows(conn, location_key, today)
+    existing = await _fetch_local_forecast_rows(conn, location_key, today, days=LOCAL_FORECAST_DAYS)
     if existing:
         newest = max((_parse_iso_datetime(row.get("updated_at")) for row in existing), default=None)
-        if len(existing) >= 3 and newest and newest >= datetime.now(UTC) - timedelta(hours=LOCAL_REFRESH_HOURS):
+        if len(existing) >= LOCAL_FORECAST_DAYS and newest and newest >= datetime.now(UTC) - timedelta(hours=LOCAL_REFRESH_HOURS):
             return existing
 
     resolved_lat = lat
@@ -892,7 +1049,7 @@ async def ensure_local_forecast_daily(conn, *, zip_code: str | None, lat: float 
         hourly_payload, grid_payload, allergen_payload = await asyncio.gather(
             nws.forecast_hourly_by_latlon(float(resolved_lat), float(resolved_lon)),
             nws.gridpoints_by_latlon(float(resolved_lat), float(resolved_lon)),
-            pollen.forecast_by_latlon(float(resolved_lat), float(resolved_lon), days=3),
+            pollen.forecast_by_latlon(float(resolved_lat), float(resolved_lon), days=POLLEN_FORECAST_DAYS),
         )
         rows = summarize_local_forecast_days(
             hourly_payload,
@@ -902,6 +1059,7 @@ async def ensure_local_forecast_daily(conn, *, zip_code: str | None, lat: float 
             zip_code=zip_code,
             lat=float(resolved_lat),
             lon=float(resolved_lon),
+            max_days=LOCAL_FORECAST_DAYS,
         )
     except Exception:
         return existing
@@ -912,11 +1070,11 @@ async def ensure_local_forecast_daily(conn, *, zip_code: str | None, lat: float 
             await conn.commit()
         except Exception:
             pass
-        return await _fetch_local_forecast_rows(conn, location_key, today)
+        return await _fetch_local_forecast_rows(conn, location_key, today, days=LOCAL_FORECAST_DAYS)
     return existing
 
 
-async def _fetch_space_forecast_rows(conn, start_day: date) -> list[dict[str, Any]]:
+async def _fetch_space_forecast_rows(conn, start_day: date, *, days: int = SPACE_FORECAST_DAYS) -> list[dict[str, Any]]:
     async with conn.cursor(**_cursor_kwargs()) as cur:
         await cur.execute(
             """
@@ -931,9 +1089,9 @@ async def _fetch_space_forecast_rows(conn, start_day: date) -> list[dict[str, An
               from marts.space_forecast_daily_latest
              where forecast_day >= %s
              order by forecast_day asc
-             limit 3
+             limit %s
             """,
-            (start_day,),
+            (start_day, days),
             prepare=False,
         )
         rows = await cur.fetchall()
@@ -995,34 +1153,55 @@ async def _upsert_space_forecast_rows(conn, rows: Sequence[Mapping[str, Any]]) -
 
 async def ensure_space_forecast_daily(conn) -> list[dict[str, Any]]:
     today = datetime.now(UTC).date() - timedelta(days=1)
-    existing = await _fetch_space_forecast_rows(conn, today)
+    existing = await _fetch_space_forecast_rows(conn, today, days=SPACE_FORECAST_DAYS)
     async with conn.cursor(**_cursor_kwargs()) as cur:
         await cur.execute(
             """
+            with latest as (
+              select distinct on (src) fetched_at, src, body_text
+                from ext.space_forecast
+               where src in ('noaa-swpc:3-day-forecast', 'noaa-swpc:weekly', 'noaa-swpc:advisory-outlook')
+               order by src, fetched_at desc
+            )
             select fetched_at, src, body_text
-              from ext.space_forecast
-             where src = 'noaa-swpc:3-day-forecast'
-             order by fetched_at desc
-             limit 1
+              from latest
+             order by fetched_at desc, src asc
             """,
             prepare=False,
         )
-        row = await cur.fetchone()
-    if not row:
+        source_rows = await cur.fetchall()
+    if not source_rows:
         return existing
 
-    parsed_rows = parse_swpc_three_day_forecast(
-        str(row.get("body_text") or ""),
-        source_product_ts=row.get("fetched_at") or datetime.now(UTC),
-        src=str(row.get("src") or "noaa-swpc:3-day-forecast"),
-    )
+    parsed_rows: list[dict[str, Any]] = []
+    for row in source_rows:
+        src = str(row.get("src") or "")
+        body_text = str(row.get("body_text") or "")
+        fetched_at = row.get("fetched_at") or datetime.now(UTC)
+        if src == "noaa-swpc:3-day-forecast":
+            parsed_rows.extend(
+                parse_swpc_three_day_forecast(
+                    body_text,
+                    source_product_ts=fetched_at,
+                    src=src,
+                )
+            )
+        elif src in {"noaa-swpc:weekly", "noaa-swpc:advisory-outlook"}:
+            parsed_rows.extend(
+                parse_swpc_range_forecast(
+                    body_text,
+                    source_product_ts=fetched_at,
+                    src=src,
+                    days=SPACE_FORECAST_DAYS,
+                )
+            )
     if parsed_rows:
         await _upsert_space_forecast_rows(conn, parsed_rows)
         try:
             await conn.commit()
         except Exception:
             pass
-        return await _fetch_space_forecast_rows(conn, today)
+        return await _fetch_space_forecast_rows(conn, today, days=SPACE_FORECAST_DAYS)
     return existing
 
 
@@ -1198,7 +1377,8 @@ def derive_forecast_drivers(
     *,
     window_hours: int,
 ) -> list[dict[str, Any]]:
-    rows = list(merged_rows[: (2 if window_hours <= 24 else 3)])
+    row_limit = 2 if window_hours <= 24 else 3 if window_hours <= 72 else 7
+    rows = list(merged_rows[:row_limit])
     if not rows:
         return []
 
@@ -1464,6 +1644,8 @@ def build_window_outlook(
     if not merged_rows:
         return None
 
+    window_label = "24 hours" if window_hours == 24 else "72 hours" if window_hours == 72 else "7 days" if window_hours == 168 else f"{window_hours} hours"
+
     drivers = derive_forecast_drivers(merged_rows, window_hours=window_hours)
     scoped_pattern_rows = [
         row
@@ -1507,7 +1689,7 @@ def build_window_outlook(
             driver_key = str(ref["driver"].get("key") or "")
             driver_scores[driver_key] += float(ref.get("score") or 0.0)
         explanation = (
-            f"{driver['detail']} Over the next {window_hours} hours, {_history_sentence(str(driver.get('label') or 'This signal'), pattern_row)}."
+            f"{driver['detail']} Over the next {window_label}, {_history_sentence(str(driver.get('label') or 'This signal'), pattern_row)}."
         )
         current_gauge = payload.get("current_gauge")
         if current_gauge is not None and current_gauge >= 65:
@@ -1600,11 +1782,22 @@ async def build_user_outlook_payload(conn, user_id: str) -> dict[str, Any]:
             window_hours=72,
         )
 
+    next_7d = None
+    if len(local_rows) >= LOCAL_FORECAST_DAYS and len(space_rows) >= SPACE_FORECAST_DAYS:
+        next_7d = build_window_outlook(
+            merged_rows,
+            pattern_rows=pattern_rows,
+            gauges=gauges,
+            window_hours=168,
+        )
+
     available_windows: list[str] = []
     if next_24h:
         available_windows.append("next_24h")
     if next_72h:
         available_windows.append("next_72h")
+    if next_7d:
+        available_windows.append("next_7d")
 
     return {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -1617,8 +1810,9 @@ async def build_user_outlook_payload(conn, user_id: str) -> dict[str, Any]:
             "space_forecast_days": len(space_rows),
             "next_24h": bool(next_24h),
             "next_72h": bool(next_72h),
-            "next_7d": False,
+            "next_7d": bool(next_7d),
         },
         "next_24h": next_24h,
         "next_72h": next_72h,
+        "next_7d": next_7d,
     }

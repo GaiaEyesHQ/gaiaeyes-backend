@@ -11,7 +11,12 @@ if str(_REPO_ROOT) not in sys.path:
 
 from services.db import pg
 from services.external import nws, pollen
-from services.forecast_outlook import build_location_key, summarize_local_forecast_days
+from services.forecast_outlook import (
+    LOCAL_FORECAST_DAYS,
+    POLLEN_FORECAST_DAYS,
+    build_location_key,
+    summarize_local_forecast_days,
+)
 from services.geo.zip_lookup import zip_to_latlon
 from services.local_signals.aggregator import assemble_for_zip
 from services.local_signals.cache import upsert_zip_payload
@@ -151,7 +156,7 @@ async def _refresh_local_forecast(zip_code: str | None, lat: float | None, lon: 
     hourly_payload, grid_payload, allergen_payload = await asyncio.gather(
         nws.forecast_hourly_by_latlon(resolved_lat, resolved_lon),
         nws.gridpoints_by_latlon(resolved_lat, resolved_lon),
-        pollen.forecast_by_latlon(resolved_lat, resolved_lon, days=3),
+        pollen.forecast_by_latlon(resolved_lat, resolved_lon, days=POLLEN_FORECAST_DAYS),
     )
     rows = summarize_local_forecast_days(
         hourly_payload,
@@ -161,6 +166,7 @@ async def _refresh_local_forecast(zip_code: str | None, lat: float | None, lon: 
         zip_code=zip_code,
         lat=resolved_lat,
         lon=resolved_lon,
+        max_days=LOCAL_FORECAST_DAYS,
     )
     if not rows:
         return 0

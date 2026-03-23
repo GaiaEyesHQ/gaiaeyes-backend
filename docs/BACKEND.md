@@ -53,7 +53,7 @@
 - `GET /v1/local/check`
   - Query: `zip` (preferred) or `lat`,`lon`.
   - Returns: `weather` (temp/humidity/precip_prob/pressure + 24h deltas when cached), `air` (AQI/category/pollutant from AirNow), `allergens` (overall/current pollen context when a provider key is configured), `moon` (phase/illum), `where` (resolved coords), `asof`, and `forecast_daily` from `marts.local_forecast_daily`.
-  - Notes: NOAA NWS requires a User‑Agent (see `WEATHER_UA`). Daily allergen rows are populated from Google Pollen when `GOOGLE_POLLEN_API_KEY` is present. Endpoint may be publicly readable when allowlisted.
+  - Notes: NOAA NWS requires a User‑Agent (see `WEATHER_UA`). Daily allergen rows are populated from Google Pollen when `GOOGLE_POLLEN_API_KEY` is present; Google currently provides up to 5 pollen forecast days, so later local forecast rows may keep pollen fields null. Endpoint may be publicly readable when allowlisted.
 
 ### Subscriptions & entitlements
 - `POST /v1/billing/checkout` — server-created Stripe Checkout session. **Requires Supabase JWT** and stamps `metadata.user_id` (and `subscription_data.metadata.user_id`) for webhook mapping.
@@ -108,7 +108,7 @@
 - New: `/v1/hazards/gdacs` and `/v1/hazards/gdacs/full` (GDACS RSS upgrade; includes fires, floods, droughts, etc.).
 - New: `/v1/local/check` aggregates NWS hourly grid, AirNow AQI, and moon phase; supports ZIP or lat/lon; cached snapshots power 24h deltas.
 - New: `/v1/local/check` now also carries normalized current allergen context when Google Pollen is configured.
-- New: `/v1/users/me/outlook` builds a user-scoped 24h/72h outlook from normalized local forecast inputs plus the parsed SWPC 3-day bulletin.
-- Updated: `/v1/local/check` now also returns the next 3 daily local forecast rows from `marts.local_forecast_daily`, including allergen forecast buckets/indexes when available.
+- New: `/v1/users/me/outlook` builds a user-scoped 24h/72h/7d outlook from normalized local forecast inputs plus parsed SWPC 3-day, weekly, and advisory bulletin rows.
+- Updated: `/v1/local/check` now also returns the next 7 daily local forecast rows from `marts.local_forecast_daily`, including allergen forecast buckets/indexes when available.
 - Updated: `/v1/space/forecast/outlook` now includes real‑time `kp/bz/solar_wind` “now” fields from `marts.space_weather_daily`, returns `bulletins`/SWPC text when available, and carries `forecast_daily` rows from `marts.space_forecast_daily_latest`.
 - Deprecated: legacy root endpoints `/gdacs`, `/brief`, `/kp_schumann` in favor of `/v1/hazards/*` namespace.
