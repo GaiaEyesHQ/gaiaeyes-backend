@@ -235,6 +235,98 @@ async def test_features_fallback_to_yesterday(monkeypatch, client: AsyncClient):
 
 
 @pytest.mark.anyio
+async def test_features_today_includes_geomagnetic_context(monkeypatch, client: AsyncClient):
+    def _fake_acquire():
+        return _FakeConnContext()
+
+    monkeypatch.setattr(summary, "_acquire_features_conn", _fake_acquire)
+
+    today = date(2026, 3, 22)
+
+    async def _fake_current_day(conn, tz_name):  # noqa: ARG001
+        return today
+
+    async def _fake_query_mart(conn, user_id: str, day_local: date):  # noqa: ARG001
+        return {
+            "user_id": user_id,
+            "day": today,
+            "steps_total": 1234,
+            "updated_at": datetime.now(timezone.utc),
+            "ulf_context_class_raw": "Quiet",
+            "ulf_context_label": "Quiet",
+            "ulf_confidence_score": 0.25,
+            "ulf_confidence_label": "Low",
+            "ulf_regional_intensity": 22.0,
+            "ulf_regional_coherence": None,
+            "ulf_regional_persistence": 18.0,
+            "ulf_quality_flags": [],
+            "ulf_is_provisional": False,
+            "ulf_is_usable": True,
+            "ulf_is_high_confidence": False,
+            "ulf_station_count": 1,
+            "ulf_missing_samples": False,
+            "ulf_low_history": False,
+        }, None
+
+    async def _fake_sleep(conn, user_id, start_utc, end_utc):  # noqa: ARG001
+        return {}
+
+    async def _fake_daily_wx(conn, day_local):  # noqa: ARG001
+        return {}
+
+    async def _fake_current_wx(conn):  # noqa: ARG001
+        return {}
+
+    async def _fake_ulf(conn):  # noqa: ARG001
+        return {
+            "ts_utc": "2026-03-22T12:00:00Z",
+            "stations_used": ["BOU", "CMO"],
+            "regional_intensity": 78.95,
+            "regional_coherence": 0.765,
+            "regional_persistence": 51.88,
+            "context_class": "Elevated (coherent)",
+            "confidence_score": 0.64,
+            "quality_flags": ["low_history"],
+        }
+
+    async def _fake_sch(conn, day_local):  # noqa: ARG001
+        return {}
+
+    async def _fake_post(conn, day_local):  # noqa: ARG001
+        return {}
+
+    monkeypatch.setattr(summary, "_current_day_local", _fake_current_day)
+    monkeypatch.setattr(summary, "_query_mart_with_retry", _fake_query_mart)
+    monkeypatch.setattr(summary, "_fetch_sleep_aggregate", _fake_sleep)
+    monkeypatch.setattr(summary, "_fetch_space_weather_daily", _fake_daily_wx)
+    monkeypatch.setattr(summary, "_fetch_current_space_weather", _fake_current_wx)
+    monkeypatch.setattr(summary, "_fetch_latest_ulf_context", _fake_ulf)
+    monkeypatch.setattr(summary, "_fetch_schumann_row", _fake_sch)
+    monkeypatch.setattr(summary, "_fetch_daily_post", _fake_post)
+
+    user_id = str(uuid4())
+    resp = await client.get(
+        "/v1/features/today",
+        headers={"Authorization": "Bearer test-token", "X-Dev-UserId": user_id},
+        params={"tz": "UTC"},
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    data = payload["data"]
+
+    assert data["ulf_context_label"] == "Elevated"
+    assert data["ulf_confidence_label"] == "Moderate"
+    assert data["ulf_station_count"] == 2
+    assert data["ulf_is_provisional"] is True
+    assert data["ulf_low_history"] is True
+    assert data["geomagnetic_context"]["label"] == "Elevated"
+    assert data["geomagnetic_context"]["confidence_label"] == "Moderate"
+    assert data["geomagnetic_context"]["ts_utc"] == "2026-03-22T12:00:00Z"
+
+
+@pytest.mark.anyio
 async def test_features_returns_defaults_when_empty(monkeypatch, client: AsyncClient):
     def _fake_acquire():
         return _FakeConnContext()

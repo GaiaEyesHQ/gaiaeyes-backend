@@ -1675,6 +1675,8 @@ struct ContentView: View {
         }
     }
 
+    private static let cameraHealthCheckVisible = false
+
     // Throttle / circuit-breaker for features refresh loops
     @State private var featuresRefreshBusy: Bool = false
     @State private var featuresRefreshGuardUntil: Date = .distantPast
@@ -1772,6 +1774,13 @@ struct ContentView: View {
     @State private var latestCameraCheckError: String? = nil
     @AppStorage("camera_health_debug_export_enabled") private var cameraHealthDebugExportEnabled: Bool = false
 
+    private var cameraHealthCheckSheetBinding: Binding<Bool> {
+        Binding(
+            get: { Self.cameraHealthCheckVisible && showCameraHealthCheckSheet },
+            set: { showCameraHealthCheckSheet = $0 }
+        )
+    }
+
     @State private var magnetosphere: MagnetosphereData? = nil
     @State private var magnetosphereLoading: Bool = false
     @State private var magnetosphereError: String?
@@ -1789,6 +1798,7 @@ struct ContentView: View {
     @State private var symptomDaily: [SymptomDailySummary] = []
     @State private var symptomDiagnostics: [SymptomDiagSummary] = []
     @State private var showSymptomSheet: Bool = false
+    @State private var showInsightsSymptomSheet: Bool = false
     @State private var isSubmittingSymptom: Bool = false
     @State private var symptomToast: SymptomToastState? = nil
     @State private var symptomSheetPrefill: SymptomQueuedEvent? = nil
@@ -1815,8 +1825,8 @@ struct ContentView: View {
     }
 
     private struct MissionControlQuickLogRequest {
-        let label: String
-        let event: SymptomQueuedEvent
+        let summary: String
+        let events: [SymptomQueuedEvent]
     }
 
     private enum InsightsRoute: String, Hashable, Identifiable {
@@ -4011,13 +4021,36 @@ struct ContentView: View {
         return false
     }
 
-    private func submitSymptomSheetEvents(_ events: [SymptomQueuedEvent]) {
+    private func submitSymptomSheetEvents(
+        _ events: [SymptomQueuedEvent],
+        dismissSheet: @escaping () -> Void
+    ) {
         guard !events.isEmpty else { return }
-        showSymptomSheet = false
-        symptomSheetPrefill = nil
+        dismissSheet()
 
         Task {
             _ = await logSymptomEvents(events)
+        }
+    }
+
+    @ViewBuilder
+    private func symptomLogSheet(isPresented: Binding<Bool>) -> some View {
+        NavigationStack {
+            SymptomsLogPage(
+                presets: symptomPresets,
+                queuedCount: state.symptomQueueCount,
+                isOffline: isSymptomServiceOffline,
+                isSubmitting: $isSubmittingSymptom,
+                prefill: symptomSheetPrefill,
+                suggestionContext: currentSymptomSuggestionContext(prefill: symptomSheetPrefill),
+                showsCloseButton: true,
+                onSubmit: { events in
+                    submitSymptomSheetEvents(events) {
+                        isPresented.wrappedValue = false
+                        symptomSheetPrefill = nil
+                    }
+                }
+            )
         }
     }
 
@@ -4034,10 +4067,15 @@ struct ContentView: View {
     }
 
     private func quickLogMissionControl(_ request: MissionControlQuickLogRequest) async {
-        _ = await logSymptomEvent(
-            request.event,
-            successMessage: "Logged: \(request.label)",
-            successPrefill: request.event
+        guard !request.events.isEmpty else { return }
+        let successPrefill = request.events.count == 1 ? request.events.first : nil
+        let successMessage = request.events.count == 1
+            ? "Logged: \(request.summary)"
+            : "Logged \(request.events.count) symptoms"
+        _ = await logSymptomEvents(
+            request.events,
+            successMessage: successMessage,
+            successPrefill: successPrefill
         )
     }
     
@@ -4150,7 +4188,11 @@ struct ContentView: View {
                 onInsights: { showMissionInsightsSheet = true },
                 onLocalConditions: { showLocalConditionsSheet = true },
                 onSettings: { showMissionSettingsSheet = true },
-                onQuickCheck: { showCameraHealthCheckSheet = true },
+                onQuickCheck: {
+                    if Self.cameraHealthCheckVisible {
+                        showCameraHealthCheckSheet = true
+                    }
+                },
                 onSchumann: { showSchumannDashboardSheet = true },
                 onResearch: {
 #if canImport(UIKit)
@@ -4177,7 +4219,9 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 6) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
-                        Button(action: onQuickCheck) { Label("Quick Check", systemImage: "camera.fill") }
+                        if ContentView.cameraHealthCheckVisible {
+                            Button(action: onQuickCheck) { Label("Quick Check", systemImage: "camera.fill") }
+                        }
                         Button(action: onSymptoms) { Label("Symptoms", systemImage: "plus.circle") }
                         Button(action: onInsights) { Label("Insights", systemImage: "chart.xyaxis.line") }
                         Button(action: onLocalConditions) { Label("Local", systemImage: "location.fill") }
@@ -4537,7 +4581,7 @@ struct ContentView: View {
             let onQuickLog: (MissionControlQuickLogRequest) -> Void
             let onOpenCustomLog: (SymptomQueuedEvent) -> Void
             @Environment(\.dismiss) private var dismiss
-            @State private var selectedQuickLog: DashboardQuickLogOption? = nil
+            @State private var selectedQuickLogs: Set<DashboardQuickLogOption> = []
 
             private var modalType: String {
                 (entry.modalType ?? "full").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -4629,14 +4673,15 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                     }
                     let options = quickLog.options ?? []
+                    let selectedOptions = options.filter { selectedQuickLogs.contains($0) }
                     let columns = [GridItem(.adaptive(minimum: 120), spacing: 10)]
                     LazyVGrid(columns: columns, spacing: 10) {
                         ForEach(options) { option in
                             Button {
-                                if selectedQuickLog == option {
-                                    selectedQuickLog = nil
+                                if selectedQuickLogs.contains(option) {
+                                    selectedQuickLogs.remove(option)
                                 } else {
-                                    selectedQuickLog = option
+                                    selectedQuickLogs.insert(option)
                                 }
                             } label: {
                                 Text(option.label)
@@ -4649,7 +4694,7 @@ struct ContentView: View {
                             .background(
                                 Capsule()
                                     .fill(
-                                        selectedQuickLog == option
+                                        selectedQuickLogs.contains(option)
                                         ? Color.accentColor.opacity(0.22)
                                         : Color.white.opacity(0.08)
                                     )
@@ -4657,7 +4702,7 @@ struct ContentView: View {
                             .overlay(
                                 Capsule()
                                     .stroke(
-                                        selectedQuickLog == option
+                                        selectedQuickLogs.contains(option)
                                         ? Color.accentColor.opacity(0.9)
                                         : Color.white.opacity(0.10),
                                         lineWidth: 1
@@ -4683,20 +4728,34 @@ struct ContentView: View {
                         )
                         .overlay(
                             Capsule()
-                                .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                            .stroke(Color.white.opacity(0.16), lineWidth: 1)
                         )
                     }
-                    let confirmLabel = quickLog.confirmLabel?.isEmpty == false ? quickLog.confirmLabel! : "Log Symptoms"
+                    let confirmLabel: String = {
+                        if selectedOptions.count > 1 {
+                            return "Log \(selectedOptions.count) Symptoms"
+                        }
+                        if let label = quickLog.confirmLabel, !label.isEmpty {
+                            return label
+                        }
+                        return "Log Symptoms"
+                    }()
                     Button(confirmLabel) {
-                        guard let selectedQuickLog else { return }
-                        var event = SymptomQueuedEvent(symptomCode: selectedQuickLog.code, tsUtc: Date())
-                        event.severity = quickLog.defaultSeverity ?? 5
-                        event.tags = quickLog.baseTags
-                        onQuickLog(MissionControlQuickLogRequest(label: selectedQuickLog.label, event: event))
+                        guard !selectedOptions.isEmpty else { return }
+                        let events = selectedOptions.map { option -> SymptomQueuedEvent in
+                            var event = SymptomQueuedEvent(symptomCode: option.code, tsUtc: Date())
+                            event.severity = quickLog.defaultSeverity ?? 5
+                            event.tags = quickLog.baseTags
+                            return event
+                        }
+                        let summary = selectedOptions.count == 1
+                            ? (selectedOptions.first?.label ?? "Symptom")
+                            : "\(selectedOptions.count) symptoms"
+                        onQuickLog(MissionControlQuickLogRequest(summary: summary, events: events))
                         dismiss()
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(selectedQuickLog == nil)
+                    .disabled(selectedOptions.isEmpty)
                 }
             }
 
@@ -5175,11 +5234,13 @@ struct ContentView: View {
                         driversCompact: driversCompact
                     )
 
-                    CameraCheckCard(
-                        summary: latestCameraCheck,
-                        isLoading: cameraCheckLoading,
-                        errorText: cameraCheckError
-                    )
+                    if ContentView.cameraHealthCheckVisible {
+                        CameraCheckCard(
+                            summary: latestCameraCheck,
+                            isLoading: cameraCheckLoading,
+                            errorText: cameraCheckError
+                        )
+                    }
 
                     if let lastUpdatedText, !lastUpdatedText.isEmpty {
                         Text("Last updated: \(lastUpdatedText)")
@@ -5772,6 +5833,52 @@ struct ContentView: View {
             return .ok
         }
 
+        private func geomagneticToneKey(_ context: GeomagneticContextSummary?) -> String {
+            switch (context?.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "strong":
+                return "high"
+            case "elevated":
+                return "elevated"
+            case "active":
+                return "mild"
+            default:
+                return "low"
+            }
+        }
+
+        private func geomagneticSeverity(_ context: GeomagneticContextSummary?, fallbackKp: Double?) -> StatusPill.Severity {
+            switch geomagneticToneKey(context) {
+            case "high":
+                return .alert
+            case "elevated", "mild":
+                return .warn
+            default:
+                return statusSeverity(for: fallbackKp)
+            }
+        }
+
+        private func geomagneticStatus(
+            context: GeomagneticContextSummary?,
+            fallbackState: String,
+            updatedText: String?
+        ) -> String {
+            let label = (context?.label ?? fallbackState).trimmingCharacters(in: .whitespacesAndNewlines)
+            let lowered = label.isEmpty ? "quiet" : label.lowercased()
+            if context?.isProvisional == true {
+                return "Geomagnetic context is \(lowered) right now. Baseline still building."
+            }
+            if let raw = context?.classRaw, raw.localizedCaseInsensitiveContains("coherent") {
+                return "Geomagnetic context is \(lowered) right now. Coherent ground variability detected."
+            }
+            if let confidence = context?.confidenceLabel, !confidence.isEmpty {
+                return "Geomagnetic context is \(lowered) right now. Confidence: \(confidence)."
+            }
+            if let updatedText, !updatedText.isEmpty {
+                return "\(label) geomagnetic conditions. Updated \(updatedText)."
+            }
+            return "\(label) geomagnetic conditions with fresh summary metrics."
+        }
+
         private func severity(for raw: String?) -> StatusPill.Severity {
             LocalConditionsStyle.pillSeverity(raw)
         }
@@ -5823,25 +5930,22 @@ struct ContentView: View {
         private var spaceWeatherCard: some View {
             let kpNow = current?.kpCurrent?.value
             let swSpeed = current?.swSpeedAvg?.value
-            let flares = Int((current?.flaresCount?.value ?? 0).rounded())
+            let geomagneticContext = current?.effectiveGeomagneticContext
             let spaceActive = (kpNow.map { $0 >= 5 } ?? false) || (swSpeed.map { $0 >= 550 } ?? false)
             let geomagneticState = normalizedPillText(
-                outlook?.kp?.gScaleNow?.capitalized,
+                geomagneticContext?.label ?? outlook?.kp?.gScaleNow?.capitalized,
                 fallback: (spaceActive ? "Active" : "Quiet")
             )
             let kpText = kpNow.map { String(format: "%.1f", $0) } ?? "—"
-            let swText = swSpeed.map { String(format: "%.0f km/s", $0) } ?? "—"
-            let flareText = flares == 0 ? "0" : "\(flares)"
-            let status: String
-            if let kpNow, kpNow >= 5 {
-                status = "Geomagnetic activity is elevated right now."
-            } else if let swSpeed, swSpeed >= 550 {
-                status = "Solar wind speed is elevated right now."
-            } else if let updatedText, !updatedText.isEmpty {
-                status = "\(geomagneticState) geomagnetic conditions. Updated \(updatedText)."
-            } else {
-                status = "\(geomagneticState) geomagnetic conditions with fresh summary metrics."
-            }
+            let geomagneticConfidence = geomagneticContext?.confidenceLabel
+                ?? (geomagneticContext?.isProvisional == true ? "Baseline" : nil)
+                ?? "—"
+            let status = geomagneticStatus(
+                context: geomagneticContext,
+                fallbackState: geomagneticState,
+                updatedText: updatedText
+            )
+            let geomagneticTint = GaugePalette.zoneColor(geomagneticToneKey(geomagneticContext))
 
             return NavigationLink(value: InsightsRoute.spaceWeather) {
                 HubCard(
@@ -5849,11 +5953,11 @@ struct ContentView: View {
                     icon: "sun.max.fill",
                     status: status,
                     pillText: geomagneticState,
-                    severity: statusSeverity(for: kpNow),
+                    severity: geomagneticSeverity(geomagneticContext, fallbackKp: kpNow),
                     metrics: [
                         HubMetric(label: "Kp", value: kpText, tint: GaugePalette.zoneColor(kpNow.map { $0 >= 4 ? "elevated" : "low" })),
-                        HubMetric(label: "Wind", value: swText, tint: GaugePalette.mild),
-                        HubMetric(label: "Flares", value: flareText, tint: GaugePalette.elevated)
+                        HubMetric(label: "Geomag", value: geomagneticState, tint: geomagneticTint),
+                        HubMetric(label: "Confidence", value: geomagneticConfidence, tint: GaugePalette.mild)
                     ],
                     isExplore: false
                 )
@@ -6056,7 +6160,6 @@ struct ContentView: View {
                 return "\(total / 60)h \(total % 60)m"
             }()
             let stepsText = current.map { "\(Int(($0.stepsTotal?.value ?? 0).rounded()))" } ?? "—"
-            let cameraText = latestCameraCheck?.bpm.map { "\(Int($0.rounded())) bpm" } ?? "—"
             let status: String
             if symptomsTodayCount > 0 {
                 status = "\(symptomsTodayCount) symptoms logged today. Open for sleep, vitals, and comparisons."
@@ -6069,6 +6172,14 @@ struct ContentView: View {
             }
             let severity: StatusPill.Severity = symptomsTodayCount >= 4 ? .alert : queuedSymptomsCount > 0 ? .warn : .ok
             let pillText = symptomsTodayCount > 0 ? "Active" : (queuedSymptomsCount > 0 ? "Syncing" : "Quiet")
+            var metrics: [HubMetric] = [
+                HubMetric(label: "Sleep", value: sleepText, tint: GaugePalette.low),
+                HubMetric(label: "Steps", value: stepsText, tint: GaugePalette.mild)
+            ]
+            if ContentView.cameraHealthCheckVisible {
+                let cameraText = latestCameraCheck?.bpm.map { "\(Int($0.rounded())) bpm" } ?? "—"
+                metrics.append(HubMetric(label: "Quick Check", value: cameraText, tint: GaugePalette.elevated))
+            }
 
             return NavigationLink(value: InsightsRoute.healthSymptoms) {
                 HubCard(
@@ -6077,11 +6188,7 @@ struct ContentView: View {
                     status: status,
                     pillText: pillText,
                     severity: severity,
-                    metrics: [
-                        HubMetric(label: "Sleep", value: sleepText, tint: GaugePalette.low),
-                        HubMetric(label: "Steps", value: stepsText, tint: GaugePalette.mild),
-                        HubMetric(label: "Quick Check", value: cameraText, tint: GaugePalette.elevated)
-                    ],
+                    metrics: metrics,
                     isExplore: false
                 )
             }
@@ -6734,6 +6841,30 @@ struct ContentView: View {
             return .ok
         }
 
+        private func geomagneticToneKey(_ context: GeomagneticContextSummary?) -> String {
+            switch (context?.label ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "strong":
+                return "high"
+            case "elevated":
+                return "elevated"
+            case "active":
+                return "mild"
+            default:
+                return "low"
+            }
+        }
+
+        private func geomagneticSeverity(context: GeomagneticContextSummary?, kp: Double?) -> StatusPill.Severity {
+            switch geomagneticToneKey(context) {
+            case "high":
+                return .alert
+            case "elevated", "mild":
+                return .warn
+            default:
+                return geomagneticSeverity(kp: kp)
+            }
+        }
+
         private func progress(_ value: Double?, max: Double) -> Double {
             guard let value, max > 0 else { return 0.12 }
             return LocalConditionsFormatting.clamped(abs(value) / max)
@@ -6876,8 +7007,9 @@ struct ContentView: View {
             let protonFlux = metrics?.protonFlux
             let flaresCount = outlook?.flares?.total24h ?? Int((current?.flaresCount?.value ?? 0).rounded())
             let cmeCount = outlook?.cmes?.stats?.total72h ?? Int((current?.cmesCount?.value ?? 0).rounded())
+            let geomagneticContext = current?.effectiveGeomagneticContext
             let geomagneticFallbackActive = (kpNow.map { $0 >= 5 } ?? false) || (swSpeed.map { $0 >= 550 } ?? false) || (bzNow.map { $0 <= -5 } ?? false)
-            let geomagneticState = outlook?.kp?.gScaleNow ?? (geomagneticFallbackActive ? "Active" : "Quiet")
+            let geomagneticState = geomagneticContext?.label ?? outlook?.kp?.gScaleNow ?? (geomagneticFallbackActive ? "Active" : "Quiet")
 
             ZStack {
                 Color.black.opacity(0.97).ignoresSafeArea()
@@ -6895,9 +7027,23 @@ struct ContentView: View {
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                         }
+                                        if let confidence = geomagneticContext?.confidenceLabel, !confidence.isEmpty {
+                                            Text("Confidence: \(confidence)")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        if geomagneticContext?.isProvisional == true {
+                                            Text("Baseline still building")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        } else if let raw = geomagneticContext?.classRaw, raw.localizedCaseInsensitiveContains("coherent") {
+                                            Text("Coherent ground variability detected")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
                                     }
                                     Spacer()
-                                    StatusPill(geomagneticState, severity: geomagneticSeverity(kp: kpNow))
+                                    StatusPill(geomagneticState, severity: geomagneticSeverity(context: geomagneticContext, kp: kpNow))
                                 }
 
                                 HStack(spacing: 12) {
@@ -7625,12 +7771,14 @@ struct ContentView: View {
                             }
                         }
 
-                        InsightsCameraCheckCard(
-                            summary: latestCameraCheck,
-                            isLoading: latestCameraCheckLoading,
-                            errorText: latestCameraCheckError,
-                            onOpenQuickCheck: onOpenQuickCheck
-                        )
+                        if ContentView.cameraHealthCheckVisible {
+                            InsightsCameraCheckCard(
+                                summary: latestCameraCheck,
+                                isLoading: latestCameraCheckLoading,
+                                errorText: latestCameraCheckError,
+                                onOpenQuickCheck: onOpenQuickCheck
+                            )
+                        }
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -8479,7 +8627,7 @@ struct ContentView: View {
                             latestCameraCheck: latestCameraCheck,
                             latestCameraCheckLoading: latestCameraCheckLoading,
                             latestCameraCheckError: latestCameraCheckError,
-                            showSymptomSheet: $showSymptomSheet,
+                            showSymptomSheet: $showInsightsSymptomSheet,
                             onOpenQuickCheck: { showCameraHealthCheckSheet = true },
                             onLoadComparison: { await fetchSpaceSeries(days: 30) }
                         )
@@ -8511,6 +8659,11 @@ struct ContentView: View {
                             }
                         }
                     }
+                }
+                .sheet(isPresented: $showInsightsSymptomSheet, onDismiss: {
+                    symptomSheetPrefill = nil
+                }) {
+                    symptomLogSheet(isPresented: $showInsightsSymptomSheet)
                 }
             }
         }
@@ -8873,16 +9026,18 @@ struct ContentView: View {
                         }
                         .padding(.horizontal)
 
-                        GroupBox {
-                            Toggle("Enable camera check JSON export", isOn: $cameraHealthDebugExportEnabled)
-                                .font(.subheadline)
-                            Text("Developer-only: adds a Copy Debug JSON button after Quick Check.")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        } label: {
-                            Label("Camera Check", systemImage: "ladybug")
+                        if Self.cameraHealthCheckVisible {
+                            GroupBox {
+                                Toggle("Enable camera check JSON export", isOn: $cameraHealthDebugExportEnabled)
+                                    .font(.subheadline)
+                                Text("Developer-only: adds a Copy Debug JSON button after Quick Check.")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            } label: {
+                                Label("Camera Check", systemImage: "ladybug")
+                            }
+                            .padding(.horizontal)
                         }
-                        .padding(.horizontal)
                     }
                     .padding(.vertical, 16)
                 }
@@ -8913,7 +9068,7 @@ struct ContentView: View {
                 SchumannDashboardView(state: state)
             }
         }
-        .sheet(isPresented: $showCameraHealthCheckSheet) {
+        .sheet(isPresented: cameraHealthCheckSheetBinding) {
             CameraHealthCheckView(onSaved: {
                 Task { await fetchLatestCameraCheck() }
             })
@@ -8921,20 +9076,7 @@ struct ContentView: View {
         .sheet(isPresented: $showSymptomSheet, onDismiss: {
             symptomSheetPrefill = nil
         }) {
-            NavigationStack {
-                SymptomsLogPage(
-                    presets: symptomPresets,
-                    queuedCount: state.symptomQueueCount,
-                    isOffline: isSymptomServiceOffline,
-                    isSubmitting: $isSubmittingSymptom,
-                    prefill: symptomSheetPrefill,
-                    suggestionContext: currentSymptomSuggestionContext(prefill: symptomSheetPrefill),
-                    showsCloseButton: true,
-                    onSubmit: { events in
-                        submitSymptomSheetEvents(events)
-                    }
-                )
-            }
+            symptomLogSheet(isPresented: $showSymptomSheet)
         }
         .sheet(isPresented: $showLocationOnboarding) {
             LocationOnboardingSheet(

@@ -90,6 +90,60 @@ mirroring a concise `payload_summary.aurora` block. This allows clients to confi
 whether the `/wp-json/gaia/v1/aurora/nowcast` responses and SVG viewline coordinates
 originated from a fresh fetch or a cached fallback.
 
+## Geomagnetic context
+
+`data` now carries normalized ULF geomagnetic context through the main
+`marts.daily_features` contract instead of requiring clients to call the raw ULF
+endpoints directly.
+
+- Flat compatibility fields:
+  - `ulf_context_class_raw`
+  - `ulf_context_label`
+  - `ulf_confidence_score`
+  - `ulf_confidence_label`
+  - `ulf_regional_intensity`
+  - `ulf_regional_coherence`
+  - `ulf_regional_persistence`
+  - `ulf_quality_flags`
+  - `ulf_is_provisional`
+  - `ulf_is_usable`
+  - `ulf_is_high_confidence`
+  - `ulf_station_count`
+  - `ulf_missing_samples`
+  - `ulf_low_history`
+- Preferred client object:
+
+```
+"geomagnetic_context": {
+  "label": "Elevated",
+  "class_raw": "Elevated (coherent)",
+  "confidence_score": 0.64,
+  "confidence_label": "Moderate",
+  "regional_intensity": 78.95,
+  "regional_coherence": 0.765,
+  "regional_persistence": 51.88,
+  "quality_flags": ["low_history"],
+  "is_provisional": true,
+  "is_usable": true,
+  "is_high_confidence": false,
+  "station_count": 2,
+  "missing_samples": false,
+  "low_history": true
+}
+```
+
+Label mapping is intentionally simplified for app/web UI:
+
+- `Quiet` -> `Quiet`
+- `Active (diffuse)` -> `Active`
+- `Elevated (coherent)` -> `Elevated`
+- `Strong (coherent)` -> `Strong`
+
+When `low_history` is present, the route still returns geomagnetic context but marks it
+provisional via `ulf_is_provisional` / `geomagnetic_context.is_provisional`. Clients
+should use softer language such as “Baseline still building” instead of hiding the
+module outright.
+
 ## Source selection
 
 1. **Today’s mart row** – if `marts.daily_features` already contains `(user_id, today_local)` the handler hydrates it with live sleep and space weather context.

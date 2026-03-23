@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from psycopg.rows import dict_row
 
 from app.db import get_db
+from app.db import ulf as ulf_db
 from app.security.auth import require_read_auth, require_write_auth
 from bots.definitions.load_definition_base import load_definition_base
 from bots.gauges.gauge_scorer import (
@@ -25,6 +26,7 @@ from bots.gauges.signal_resolver import resolve_signals
 from services.drivers.driver_normalize import normalize_environmental_drivers
 from services.gauges.alerts import dedupe_alert_pills
 from services.gauges.zones import decorate_gauge
+from services.geomagnetic_context import build_ulf_payload
 from services.mc_modals.modal_builder import build_earthscope_summary, build_modal_models
 from services.patterns.personal_relevance import (
     compute_personal_relevance,
@@ -446,6 +448,13 @@ async def dashboard(
     out["member_post"] = resolved_member
     out["public_post"] = public_post
 
+    try:
+        latest_ulf = await ulf_db.get_latest_ulf_context(conn)
+        out.update(build_ulf_payload(latest_ulf, include_empty=True))
+    except Exception as exc:
+        logger.warning("[dashboard] geomagnetic context lookup failed user=%s day=%s err=%s", user_id, day, exc)
+        out.update(build_ulf_payload(None, include_empty=True))
+
     gauge_fallback = await _fetch_latest_gauges(conn, user_id, day)
     if not out.get("gauges") and gauge_fallback.get("gauges"):
         out["gauges"] = gauge_fallback.get("gauges")
@@ -550,6 +559,7 @@ async def dashboard(
             "drivers_count": len(ranked_drivers),
             "health_status_explainer_available": bool(out.get("health_status_explainer")),
             "recent_symptom_gauges": sorted((out.get("gauge_recent_log_boosts") or {}).keys()),
+            "geomagnetic_context_available": bool(out.get("geomagnetic_context")),
         }
 
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)

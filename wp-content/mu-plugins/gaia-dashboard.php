@@ -86,6 +86,12 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__driver-value{font-size:12px;color:#9da9c1}
         .gaia-dashboard__driver-bar-track{margin-top:8px;height:9px;border-radius:999px;background:rgba(255,255,255,.09);overflow:hidden}
         .gaia-dashboard__driver-bar-fill{height:100%;border-radius:999px}
+        .gaia-dashboard__geomag{margin-top:12px;padding:12px;border-radius:12px;background:#151c28;border:1px solid rgba(255,255,255,.08)}
+        .gaia-dashboard__geomag-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+        .gaia-dashboard__geomag h4{margin:0 0 6px;font-size:17px}
+        .gaia-dashboard__geomag-summary{margin:0;color:#e8edf7;font-size:14px;line-height:1.45}
+        .gaia-dashboard__geomag-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+        .gaia-dashboard__geomag-chip{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;background:#1c2636;color:#c6d3ea;font-size:12px}
         .gaia-dashboard__earthscope{margin-top:12px;padding:12px;border-radius:12px;background:#151c28}
         .gaia-dashboard__earthscope h4{margin:0 0 8px;font-size:18px}
         .gaia-dashboard__earthscope-summary{font-size:14px;line-height:1.5;margin:0 0 10px;color:#e8edf7}

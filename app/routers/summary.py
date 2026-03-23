@@ -25,8 +25,10 @@ from app.db import (
     handle_connection_failure,
     handle_pool_timeout,
 )
+from app.db import ulf as ulf_db
 from app.db.health import get_health_monitor
 from services.forecast_outlook import ensure_space_forecast_daily, serialize_space_forecast_rows
+from services.geomagnetic_context import build_ulf_payload
 from app.utils.auth import require_admin
 
 DEFAULT_TIMEZONE = "America/Chicago"
@@ -297,6 +299,20 @@ _MART_COLUMNS = [
     "df.sep_s_max as sep_s_max",
     "df.belts_risk_level as belts_risk_level",
     "df.drap_absorption_polar_db as drap_absorption_polar_db",
+    "df.ulf_context_class_raw as ulf_context_class_raw",
+    "df.ulf_context_label as ulf_context_label",
+    "df.ulf_confidence_score as ulf_confidence_score",
+    "df.ulf_confidence_label as ulf_confidence_label",
+    "df.ulf_regional_intensity as ulf_regional_intensity",
+    "df.ulf_regional_coherence as ulf_regional_coherence",
+    "df.ulf_regional_persistence as ulf_regional_persistence",
+    "df.ulf_quality_flags as ulf_quality_flags",
+    "df.ulf_is_provisional as ulf_is_provisional",
+    "df.ulf_is_usable as ulf_is_usable",
+    "df.ulf_is_high_confidence as ulf_is_high_confidence",
+    "df.ulf_station_count as ulf_station_count",
+    "df.ulf_missing_samples as ulf_missing_samples",
+    "df.ulf_low_history as ulf_low_history",
     "ds.respiratory_rate_avg as respiratory_rate_avg",
     "ds.respiratory_rate_sleep_avg as respiratory_rate_sleep_avg",
     "ds.respiratory_rate_baseline_delta as respiratory_rate_baseline_delta",
@@ -468,6 +484,16 @@ async def _gather_enrichment(
     if current_exc:
         errors.append(_describe_error(current_exc))
 
+    ulf, ulf_exc = await _timed_call(
+        _fetch_latest_ulf_context(conn),
+        label="ulf context",
+        timeout_ms=FRESHEN_TIMEOUT_MS,
+    )
+    if ulf is None:
+        ulf = {}
+    if ulf_exc:
+        errors.append(_describe_error(ulf_exc))
+
     sch, sch_exc = await _timed_call(
         _fetch_schumann_row(conn, day_local),
         label="schumann daily",
@@ -494,6 +520,7 @@ async def _gather_enrichment(
         "sleep": sleep,
         "daily_wx": daily_wx,
         "current_wx": current_wx,
+        "ulf": ulf,
         "sch": sch,
         "post": post,
     }, errors
@@ -722,6 +749,11 @@ async def _fetch_current_space_weather(conn) -> Dict[str, Optional[float]]:
     }
 
 
+async def _fetch_latest_ulf_context(conn) -> Dict[str, Any]:
+    row = await ulf_db.get_latest_ulf_context(conn)
+    return row or {}
+
+
 async def _fetch_schumann_row(conn, day_local: date) -> Dict[str, Any]:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
@@ -849,6 +881,15 @@ def _compose_space_weather_payload(base: Dict[str, Any], daily: Dict[str, Any], 
         "drap_absorption_midlat_db": drap_midlat_db,
     }
 
+
+def _compose_geomagnetic_context_payload(
+    base: Dict[str, Any],
+    latest_context: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    if latest_context:
+        return build_ulf_payload(latest_context)
+    return build_ulf_payload(base, include_empty=True)
+
 _FEATURE_DEFAULTS: Dict[str, Any] = {
     "user_id": None,
     "day": None,
@@ -915,6 +956,21 @@ _FEATURE_DEFAULTS: Dict[str, Any] = {
     "aurora_hp_south_gw": None,
     "drap_absorption_polar_db": None,
     "drap_absorption_midlat_db": None,
+    "ulf_context_class_raw": None,
+    "ulf_context_label": None,
+    "ulf_confidence_score": None,
+    "ulf_confidence_label": None,
+    "ulf_regional_intensity": None,
+    "ulf_regional_coherence": None,
+    "ulf_regional_persistence": None,
+    "ulf_quality_flags": [],
+    "ulf_is_provisional": False,
+    "ulf_is_usable": False,
+    "ulf_is_high_confidence": False,
+    "ulf_station_count": None,
+    "ulf_missing_samples": False,
+    "ulf_low_history": False,
+    "geomagnetic_context": None,
 }
 
 _INT_FIELDS = {
@@ -929,6 +985,7 @@ _INT_FIELDS = {
     "flares_count",
     "cmes_count",
     "sep_s_max",
+    "ulf_station_count",
 }
 
 _FLOAT_FIELDS = {
@@ -967,6 +1024,10 @@ _FLOAT_FIELDS = {
     "aurora_hp_south_gw",
     "drap_absorption_polar_db",
     "drap_absorption_midlat_db",
+    "ulf_confidence_score",
+    "ulf_regional_intensity",
+    "ulf_regional_coherence",
+    "ulf_regional_persistence",
 }
 
 
@@ -1059,6 +1120,16 @@ def _summarize_feature_payload(payload: Optional[Dict[str, Any]]) -> Dict[str, A
                 summary_payload,
                 ("post_title", "post_caption", "post_body"),
             ),
+            "geomagnetic": _any_present(
+                summary_payload,
+                (
+                    "ulf_context_label",
+                    "ulf_confidence_score",
+                    "ulf_regional_intensity",
+                    "ulf_regional_coherence",
+                    "ulf_regional_persistence",
+                ),
+            ),
         },
         "metrics": {
             "steps_total": _coerce_int_value(summary_payload.get("steps_total")),
@@ -1068,6 +1139,8 @@ def _summarize_feature_payload(payload: Optional[Dict[str, Any]]) -> Dict[str, A
             "kp_max": _coerce_float_value(summary_payload.get("kp_max")),
             "bz_min": _coerce_float_value(summary_payload.get("bz_min")),
             "sw_speed_avg": _coerce_float_value(summary_payload.get("sw_speed_avg")),
+            "ulf_confidence_score": _coerce_float_value(summary_payload.get("ulf_confidence_score")),
+            "ulf_regional_intensity": _coerce_float_value(summary_payload.get("ulf_regional_intensity")),
             # Expose SpO2 in diagnostics
             "spo2_avg": _coerce_float_value(summary_payload.get("spo2_avg")),
             "respiratory_rate_avg": _coerce_float_value(summary_payload.get("respiratory_rate_avg")),
@@ -1152,6 +1225,22 @@ def _normalize_features_payload(
     normalized["flare_alert"] = bool(normalized.get("flare_alert"))
     normalized["cycle_tracking_enabled"] = bool(normalized.get("cycle_tracking_enabled"))
     normalized["menstrual_active"] = bool(normalized.get("menstrual_active"))
+    normalized["ulf_is_provisional"] = bool(normalized.get("ulf_is_provisional"))
+    normalized["ulf_is_usable"] = bool(normalized.get("ulf_is_usable"))
+    normalized["ulf_is_high_confidence"] = bool(normalized.get("ulf_is_high_confidence"))
+    normalized["ulf_missing_samples"] = bool(normalized.get("ulf_missing_samples"))
+    normalized["ulf_low_history"] = bool(normalized.get("ulf_low_history"))
+
+    raw_flags = normalized.get("ulf_quality_flags")
+    if isinstance(raw_flags, str):
+        try:
+            raw_flags = json.loads(raw_flags)
+        except json.JSONDecodeError:
+            raw_flags = [raw_flags] if raw_flags.strip() else []
+    if not isinstance(raw_flags, list):
+        raw_flags = []
+    normalized["ulf_quality_flags"] = [str(item) for item in raw_flags if item is not None]
+    normalized.update(build_ulf_payload(normalized, include_empty=True))
 
     normalized["source"] = normalized.get("source") or source_hint or "snapshot"
 
@@ -1177,6 +1266,7 @@ async def _freshen_features(
     sleep = components.get("sleep") or {}
     daily_wx = components.get("daily_wx") or {}
     current_wx = components.get("current_wx") or {}
+    ulf = components.get("ulf") or {}
     sch = components.get("sch") or {}
     post = components.get("post") or {}
 
@@ -1211,6 +1301,7 @@ async def _freshen_features(
     }
     payload.update(_compose_sleep_payload(summary, sleep))
     payload.update(_compose_space_weather_payload(summary, daily_wx, current_wx))
+    payload.update(_compose_geomagnetic_context_payload(summary, ulf))
     payload.update(sch)
     payload.update(post)
     context: Dict[str, Any] = dict(components)
@@ -1487,6 +1578,7 @@ async def _collect_features(
                             "sleep": context.get("sleep") or {},
                             "daily_wx": context.get("daily_wx") or {},
                             "current_wx": context.get("current_wx") or {},
+                            "ulf": context.get("ulf") or {},
                             "sch": context.get("sch") or {},
                             "post": context.get("post") or {},
                         }
@@ -1502,6 +1594,7 @@ async def _collect_features(
                     sleep = enrich_components.get("sleep") or {}
                     daily_wx = enrich_components.get("daily_wx") or {}
                     current_wx = enrich_components.get("current_wx") or {}
+                    ulf = enrich_components.get("ulf") or {}
                     sch = enrich_components.get("sch") or {}
                     post = enrich_components.get("post") or {}
 
@@ -1511,6 +1604,11 @@ async def _collect_features(
                     response_payload.update(
                         _compose_space_weather_payload(
                             response_payload, daily_wx, current_wx
+                        )
+                    )
+                    response_payload.update(
+                        _compose_geomagnetic_context_payload(
+                            response_payload, ulf
                         )
                     )
                     response_payload.update(sch)

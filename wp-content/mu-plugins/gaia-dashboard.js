@@ -273,6 +273,85 @@
     `;
   };
 
+  const normalizeGeomagneticContext = (raw) => {
+    if (!raw || typeof raw !== "object") return null;
+    const label = String(raw.label || raw.ulf_context_label || "").trim();
+    const classRaw = String(raw.class_raw || raw.classRaw || raw.ulf_context_class_raw || "").trim();
+    const confidenceLabel = String(raw.confidence_label || raw.confidenceLabel || raw.ulf_confidence_label || "").trim();
+    const confidenceScore = Number(raw.confidence_score ?? raw.confidenceScore ?? raw.ulf_confidence_score);
+    const qualityFlags = Array.isArray(raw.quality_flags)
+      ? raw.quality_flags.filter(Boolean).map(String)
+      : Array.isArray(raw.qualityFlags)
+        ? raw.qualityFlags.filter(Boolean).map(String)
+        : [];
+    const isProvisional = raw.is_provisional === true || raw.isProvisional === true || raw.ulf_is_provisional === true;
+    const isUsable =
+      raw.is_usable === true ||
+      raw.isUsable === true ||
+      raw.ulf_is_usable === true ||
+      (Number.isFinite(confidenceScore) && confidenceScore >= 0.2);
+    const stationCount = Number(raw.station_count ?? raw.stationCount ?? raw.ulf_station_count);
+    const value = Number(raw.regional_intensity ?? raw.regionalIntensity ?? raw.ulf_regional_intensity);
+
+    if (!label && !classRaw && !qualityFlags.length && !Number.isFinite(value)) return null;
+
+    return {
+      label: label || classRaw || "Quiet",
+      classRaw,
+      confidenceLabel,
+      qualityFlags,
+      isProvisional,
+      isUsable,
+      stationCount: Number.isFinite(stationCount) ? stationCount : null,
+      intensity: Number.isFinite(value) ? value : null,
+    };
+  };
+
+  const geomagneticToneKey = (context) => {
+    const label = String(context && context.label ? context.label : "").trim().toLowerCase();
+    if (label === "strong") return "high";
+    if (label === "elevated") return "elevated";
+    if (label === "active") return "mild";
+    return "low";
+  };
+
+  const geomagneticSummary = (context) => {
+    const label = String(context && context.label ? context.label : "Quiet").trim().toLowerCase();
+    if (label === "strong" || label === "elevated") return `Ground-level geomagnetic context is ${label} right now.`;
+    if (label === "active") return "Ground-level variability is active right now.";
+    return "Ground-level geomagnetic context is quiet right now.";
+  };
+
+  const geomagneticSupport = (context) => {
+    if (!context) return "";
+    if (context.isProvisional) return "Baseline still building.";
+    if (String(context.classRaw || "").toLowerCase().includes("coherent")) return "Coherent ground variability detected.";
+    if (context.confidenceLabel) return `Confidence: ${context.confidenceLabel}`;
+    return "";
+  };
+
+  const renderGeomagneticContext = (context) => {
+    if (!context || !context.isUsable) return "";
+    const zoneKey = geomagneticToneKey(context);
+    const support = geomagneticSupport(context);
+    return `
+      <div class="gaia-dashboard__geomag">
+        <div class="gaia-dashboard__geomag-head">
+          <div>
+            <h4>Geomagnetic Context</h4>
+            <p class="gaia-dashboard__geomag-summary">${esc(geomagneticSummary(context))}</p>
+          </div>
+          <span class="${pillClass(zoneKey === "high" ? "high" : zoneKey === "elevated" || zoneKey === "mild" ? "watch" : "low")}">${esc(context.label)}</span>
+        </div>
+        <div class="gaia-dashboard__geomag-meta">
+          ${context.confidenceLabel ? `<span class="gaia-dashboard__geomag-chip">Confidence: ${esc(context.confidenceLabel)}</span>` : ""}
+          ${support ? `<span class="gaia-dashboard__geomag-chip">${esc(support)}</span>` : ""}
+          ${context.stationCount != null ? `<span class="gaia-dashboard__geomag-chip">${esc(`${context.stationCount} station${context.stationCount === 1 ? "" : "s"}`)}</span>` : ""}
+        </div>
+      </div>
+    `;
+  };
+
   const hasGaugeData = (gauges) => {
     if (!gauges || typeof gauges !== "object") return false;
     return Object.values(gauges).some((value) => Number.isFinite(Number(value)));
@@ -796,6 +875,7 @@
     const displayRows = isPaid ? gaugeRows : gaugeRows.slice(0, 4);
     const earthscope = isPaid ? payload.memberPost || payload.publicPost || null : payload.publicPost || payload.memberPost || null;
     const earthscopeSummary = resolveEarthscopeSummary(payload.earthscopeSummary, earthscope, driversCompact);
+    const geomagneticContext = normalizeGeomagneticContext(payload.geomagneticContext || payload);
     const hasData = hasGaugeData(gaugesRaw) || !!earthscope;
 
     const email = authCtx && authCtx.email ? authCtx.email : "";
@@ -842,6 +922,7 @@
           : '<div class="gaia-dashboard__muted">No active alerts.</div>'
       }
       ${renderDriversSection(drivers, modalModels)}
+      ${renderGeomagneticContext(geomagneticContext)}
       <div class="gaia-dashboard__earthscope">
         <h4>${esc(cleanEarthscopeTitle(earthscope && earthscope.title))}</h4>
         <p class="gaia-dashboard__earthscope-summary">${esc(earthscopeSummary)}</p>
@@ -1073,6 +1154,8 @@
           (dashboard && (dashboard.modal_models || dashboard.modalModels)) || {},
         earthscopeSummary:
           (dashboard && (dashboard.earthscope_summary || dashboard.earthscopeSummary)) || "",
+        geomagneticContext:
+          (dashboard && (dashboard.geomagnetic_context || dashboard.geomagneticContext)) || null,
         alerts: dashboard && Array.isArray(dashboard.alerts) ? dashboard.alerts : [],
         entitled: dashboard ? dashboard.entitled : null,
         memberPost:
