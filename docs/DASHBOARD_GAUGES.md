@@ -73,6 +73,7 @@ Scoring rules:
     (0–3h `100%`, >3–8h `70%`, >8–24h `40%`)
   - dashboard payloads also expose `gauge_recent_log_boosts` and `last_symptom_update_at` so clients can
     avoid contradictory calm labels right after a fresh log
+    and show recent-log context directly inside gauge modals
 
 ## Gauge Zones + Labels (v1.3)
 - Definition source of truth:

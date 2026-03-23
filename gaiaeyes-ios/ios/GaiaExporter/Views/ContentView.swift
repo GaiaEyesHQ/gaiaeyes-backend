@@ -4104,6 +4104,16 @@ struct ContentView: View {
         private struct ModalPresentation: Identifiable {
             let id: String
             let entry: DashboardModalEntry
+
+            var contextType: String {
+                id.split(separator: ":", maxSplits: 1).first.map(String.init) ?? ""
+            }
+
+            var contextKey: String {
+                let parts = id.split(separator: ":", maxSplits: 1)
+                guard parts.count == 2 else { return "" }
+                return String(parts[1])
+            }
         }
 
         private struct GaugeRow: Identifiable {
@@ -4397,7 +4407,11 @@ struct ContentView: View {
         }
 
         private struct ContextModalSheetView: View {
+            let contextType: String
+            let contextKey: String
             let entry: DashboardModalEntry
+            let gaugeRecentLogBoosts: [String: Double]
+            let lastSymptomUpdateAt: String?
             let onQuickLog: (MissionControlQuickLogRequest) -> Void
             let onOpenCustomLog: (SymptomQueuedEvent) -> Void
             @Environment(\.dismiss) private var dismiss
@@ -4424,6 +4438,63 @@ struct ContentView: View {
                     defaultSeverity: 5,
                     baseTags: nil
                 )
+            }
+
+            private var recentSymptomBoost: Double? {
+                guard contextType == "gauge" else { return nil }
+                guard let boost = gaugeRecentLogBoosts[contextKey], boost > 0 else { return nil }
+                return boost
+            }
+
+            private var recentSymptomSummary: String? {
+                guard let boost = recentSymptomBoost else { return nil }
+                if boost >= 9 {
+                    return "A recent symptom log is already keeping this gauge in a more watchful state."
+                }
+                return "A recent symptom log is already being reflected in this gauge."
+            }
+
+            private func formattedSymptomUpdate(_ raw: String?) -> String? {
+                guard let raw, let date = ISO8601DateFormatter().date(from: raw) else { return nil }
+                let formatter = DateFormatter()
+                formatter.dateStyle = .none
+                formatter.timeStyle = .short
+                return formatter.string(from: date)
+            }
+
+            private var displayTitle: String? {
+                guard let title = entry.title, !title.isEmpty else { return entry.title }
+                guard let boost = recentSymptomBoost else { return title }
+                let parts = title.components(separatedBy: " — ")
+                guard parts.count >= 2 else { return title }
+                let prefix = parts.first ?? title
+                let suffix = boost >= 9 ? "Watchful" : "Recent symptom noted"
+                return "\(prefix) — \(suffix)"
+            }
+
+            @ViewBuilder
+            private var recentSymptomSection: some View {
+                if let summary = recentSymptomSummary {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Recent Symptom")
+                            .font(.headline)
+                        Text(summary)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        if let updateText = formattedSymptomUpdate(lastSymptomUpdateAt) {
+                            Text("Updated after your recent symptom log at \(updateText).")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(12)
+                    .background(Color.black.opacity(0.20))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                    )
+                }
             }
 
             private func quickLogSection(_ quickLog: DashboardQuickLog) -> some View {
@@ -4511,10 +4582,11 @@ struct ContentView: View {
                 NavigationStack {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
-                            if let title = entry.title, !title.isEmpty {
+                            if let title = displayTitle, !title.isEmpty {
                                 Text(title)
                                     .font(.title3.weight(.bold))
                             }
+                            recentSymptomSection
                             if modalType == "short" {
                                 if let body = entry.body, !body.isEmpty {
                                     Text(body)
@@ -4998,7 +5070,11 @@ struct ContentView: View {
             }
             .sheet(item: $selectedModal) { modal in
                 ContextModalSheetView(
+                    contextType: modal.contextType,
+                    contextKey: modal.contextKey,
                     entry: modal.entry,
+                    gaugeRecentLogBoosts: gaugeRecentLogBoosts,
+                    lastSymptomUpdateAt: lastSymptomUpdateAt,
                     onQuickLog: onQuickLog,
                     onOpenCustomLog: { event in
                         selectedModal = nil
