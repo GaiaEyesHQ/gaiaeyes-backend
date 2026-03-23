@@ -3964,15 +3964,17 @@ struct ContentView: View {
         let failedCount = events.count - submittedCount - queuedCount
 
         if submittedCount > 0 {
-            async let symptomsTask: Void = fetchSymptoms(api: api)
-            async let featuresTask: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
-            async let dashboardTask: Void = fetchDashboardPayload(force: true)
-            _ = await (symptomsTask, featuresTask, dashboardTask)
             await MainActor.run {
                 if queuedCount == 0 {
                     self.isSymptomServiceOffline = false
                 }
                 self.didLogSymptomTimeout = false
+            }
+            Task {
+                async let symptomsTask: Void = fetchSymptoms(api: api)
+                async let featuresTask: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
+                async let dashboardTask: Void = fetchDashboardPayload(force: true)
+                _ = await (symptomsTask, featuresTask, dashboardTask)
             }
         }
 
@@ -4007,6 +4009,16 @@ struct ContentView: View {
 
         showSymptomToast(events.count == 1 ? "Couldn’t log symptom" : "Couldn’t log all symptoms")
         return false
+    }
+
+    private func submitSymptomSheetEvents(_ events: [SymptomQueuedEvent]) {
+        guard !events.isEmpty else { return }
+        showSymptomSheet = false
+        symptomSheetPrefill = nil
+
+        Task {
+            _ = await logSymptomEvents(events)
+        }
     }
 
     private func logSymptomEvent(
@@ -8919,17 +8931,7 @@ struct ContentView: View {
                     suggestionContext: currentSymptomSuggestionContext(prefill: symptomSheetPrefill),
                     showsCloseButton: true,
                     onSubmit: { events in
-                        isSubmittingSymptom = true
-                        Task {
-                            let shouldDismiss = await logSymptomEvents(events)
-                            await MainActor.run {
-                                isSubmittingSymptom = false
-                                if shouldDismiss {
-                                    showSymptomSheet = false
-                                    symptomSheetPrefill = nil
-                                }
-                            }
-                        }
+                        submitSymptomSheetEvents(events)
                     }
                 )
             }

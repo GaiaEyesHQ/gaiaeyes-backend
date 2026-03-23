@@ -5,7 +5,22 @@
 
 create schema if not exists raw;
 
-drop trigger if exists trg_normalize_symptom_code on raw.user_symptom_events;
+do $$
+declare
+  trigger_name text;
+begin
+  for trigger_name in
+    select tgname
+    from pg_trigger
+    where tgrelid = 'raw.user_symptom_events'::regclass
+      and not tgisinternal
+  loop
+    execute format('drop trigger if exists %I on raw.user_symptom_events', trigger_name);
+  end loop;
+end
+$$;
+
+drop function if exists raw.upcase_symptom_code();
 
 create or replace function raw.tg_normalize_symptom_code()
 returns trigger

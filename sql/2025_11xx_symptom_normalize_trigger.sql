@@ -18,7 +18,22 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_normalize_symptom_code on raw.user_symptom_events;
+do $$
+declare
+    trigger_name text;
+begin
+    for trigger_name in
+        select tgname
+        from pg_trigger
+        where tgrelid = 'raw.user_symptom_events'::regclass
+          and not tgisinternal
+    loop
+        execute format('drop trigger if exists %I on raw.user_symptom_events', trigger_name);
+    end loop;
+end;
+$$;
+
+drop function if exists raw.upcase_symptom_code();
 
 -- To enable the trigger, run the statement below in Supabase Studio after
 -- reviewing:
