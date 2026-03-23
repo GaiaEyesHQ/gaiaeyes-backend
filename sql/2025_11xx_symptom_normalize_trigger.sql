@@ -1,6 +1,8 @@
 -- Optional safeguard to keep raw.user_symptom_events normalized.
 -- This script only creates the trigger function. Enable the trigger manually in
 -- Supabase Studio (SQL editor) once you are ready.
+-- Canonical dim.symptom_codes keys are lowercase snake_case, so the trigger must
+-- preserve that casing to avoid foreign-key failures.
 
 begin;
 
@@ -11,7 +13,7 @@ returns trigger
 language plpgsql
 as $$
 begin
-    new.symptom_code := upper(replace(replace(new.symptom_code, '-', '_'), ' ', '_'));
+    new.symptom_code := lower(replace(replace(new.symptom_code, '-', '_'), ' ', '_'));
     return new;
 end;
 $$;
