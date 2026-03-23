@@ -61,6 +61,136 @@ _GAUGE_LABELS = {
 }
 
 
+def _candidate_sort_key(candidate: NotificationCandidate) -> tuple[int, int, str, str]:
+    severity_rank = 0 if candidate.severity == "high" else 1
+    if candidate.family in _GAUGE_FAMILIES:
+        family_rank = 0
+    elif candidate.family in _LOCAL_FAMILIES:
+        family_rank = 1
+    else:
+        family_rank = 2
+    return (severity_rank, family_rank, candidate.family, candidate.event_key)
+
+
+def _candidate_label(candidate: NotificationCandidate) -> str:
+    if candidate.family == "geomagnetic":
+        return "magnetic weather"
+    if candidate.family == "solar_wind":
+        return "solar wind"
+    if candidate.family == "flare_cme_sep":
+        if candidate.target_key == "cme":
+            return "CME watch"
+        if candidate.target_key == "sep":
+            return "solar radiation"
+        if candidate.target_key == "drap":
+            return "radio absorption"
+        return "flare activity"
+    if candidate.family == "schumann":
+        return "Schumann"
+    if candidate.family == "pressure":
+        return "pressure"
+    if candidate.family == "aqi":
+        return "air quality"
+    if candidate.family == "temp":
+        return "temperature"
+    if candidate.family in _GAUGE_FAMILIES:
+        return f"{_GAUGE_LABELS.get(candidate.family, candidate.family).lower()} gauge"
+    return candidate.family.replace("_", " ")
+
+
+def _human_join_labels(labels: List[str]) -> str:
+    if not labels:
+        return "a few signals"
+    if len(labels) == 1:
+        return labels[0]
+    if len(labels) == 2:
+        return f"{labels[0]} and {labels[1]}"
+    if len(labels) == 3:
+        return f"{labels[0]}, {labels[1]}, and {labels[2]}"
+    return f"{labels[0]}, {labels[1]}, and {len(labels) - 2} more"
+
+
+def _sentence_lead(text: str) -> str:
+    if not text:
+        return text
+    return text[0].upper() + text[1:]
+
+
+def _build_bundle_copy(candidates: List[NotificationCandidate]) -> tuple[str, str]:
+    ordered = sorted(candidates, key=_candidate_sort_key)
+    labels = [_candidate_label(candidate) for candidate in ordered]
+    lead = _human_join_labels(labels[:3] if len(labels) <= 3 else labels[:2] + [f"{len(labels) - 2} more"])
+    has_gauge = any(candidate.family in _GAUGE_FAMILIES for candidate in ordered)
+    has_local = any(candidate.family in _LOCAL_FAMILIES for candidate in ordered)
+    has_signal = any(candidate.family in _SIGNAL_FAMILIES for candidate in ordered)
+
+    if has_gauge and (has_local or has_signal):
+        return (
+            "A few things just shifted",
+            f"{_sentence_lead(lead)} moved at once. Check your gauges and see what changed.",
+        )
+    if has_gauge:
+        return (
+            "Your read just changed",
+            f"{_sentence_lead(lead)} moved together. Check your gauges and log what changed.",
+        )
+    if has_local and has_signal:
+        return (
+            "Conditions just changed",
+            f"{_sentence_lead(lead)} all shifted together. Open Gaia Eyes for the full read.",
+        )
+    if has_local:
+        return (
+            "Local conditions just changed",
+            f"{_sentence_lead(lead)} all shifted together. Open Gaia Eyes for the local read.",
+        )
+    return (
+        "Space weather just shifted",
+        f"{_sentence_lead(lead)} lit up together. Open Gaia Eyes for the full read.",
+    )
+
+
+def _build_bundle_candidate(candidates: List[NotificationCandidate]) -> NotificationCandidate:
+    ordered = sorted(candidates, key=_candidate_sort_key)
+    primary = ordered[0]
+    severity = "high" if any(candidate.severity == "high" for candidate in ordered) else "watch"
+    title, body = _build_bundle_copy(ordered)
+    family_slug = "_".join(sorted({candidate.family for candidate in ordered}))
+    return NotificationCandidate(
+        family="digest",
+        event_key=f"multi_{family_slug}_{severity}",
+        severity=severity,
+        title=title,
+        body=body,
+        target_type=primary.target_type,
+        target_key=primary.target_key,
+        asof=primary.asof,
+        payload={
+            "bundle_count": len(ordered),
+            "bundle_families": [candidate.family for candidate in ordered],
+            "child_events": [candidate.event_payload() for candidate in ordered],
+        },
+    )
+
+
+def _remember_latest_event(
+    latest_events: Dict[str, Dict[str, Any]],
+    *,
+    family: str,
+    severity: str,
+    status: str,
+    created_at: datetime,
+    event_key: str,
+) -> None:
+    latest_events[family] = {
+        "family": family,
+        "severity": severity,
+        "status": status,
+        "created_at": created_at,
+        "event_key": event_key,
+    }
+
+
 def _today_utc() -> str:
     return utc_now().date().isoformat()
 
@@ -369,8 +499,8 @@ def _build_signal_candidates(
                     family="geomagnetic",
                     event_key="kp_g2_plus",
                     severity="high",
-                    title="Geomagnetic storm elevated",
-                    body="Kp has moved into a stronger storm range. Open Gaia Eyes for context.",
+                    title="Magnetic weather is up",
+                    body="The field is getting rowdy. Open Gaia Eyes and see what shifted.",
                     target_type="driver",
                     target_key="kp",
                     asof=asof,
@@ -383,8 +513,8 @@ def _build_signal_candidates(
                     family="geomagnetic",
                     event_key="kp_g1_plus",
                     severity="watch",
-                    title="Geomagnetic storm watch",
-                    body="Kp has reached G1-level activity. Open Gaia Eyes for context.",
+                    title="Magnetic weather is waking up",
+                    body="Things may feel a little noisier than usual. Open Gaia Eyes for the read.",
                     target_type="driver",
                     target_key="kp",
                     asof=asof,
@@ -407,8 +537,8 @@ def _build_signal_candidates(
                     family="solar_wind",
                     event_key="solar_wind_speed_high",
                     severity="high",
-                    title="Solar wind speed high",
-                    body="Solar wind speed is running in a stronger range. Open Gaia Eyes for details.",
+                    title="Solar wind is surging",
+                    body="Focus or sleep may feel a little off. Open Gaia Eyes for the full picture.",
                     target_type="driver",
                     target_key="solar_wind",
                     asof=asof,
@@ -421,8 +551,8 @@ def _build_signal_candidates(
                     family="solar_wind",
                     event_key="solar_wind_speed_watch",
                     severity="watch",
-                    title="Solar wind speed watch",
-                    body="Solar wind speed is elevated enough to watch. Open Gaia Eyes for details.",
+                    title="Solar wind is picking up",
+                    body="Things may feel slightly more variable. Check Gaia Eyes for the read.",
                     target_type="driver",
                     target_key="solar_wind",
                     asof=asof,
@@ -436,8 +566,8 @@ def _build_signal_candidates(
                     family="solar_wind",
                     event_key="bz_coupling_high",
                     severity="high",
-                    title="Solar wind coupling high",
-                    body="Southward Bz and solar wind are strongly coupled right now. Open Gaia Eyes for details.",
+                    title="Solar wind is locked in",
+                    body="Strong coupling can make the background feel buzzy. Open Gaia Eyes for details.",
                     target_type="driver",
                     target_key="solar_wind",
                     asof=asof,
@@ -450,8 +580,8 @@ def _build_signal_candidates(
                     family="solar_wind",
                     event_key="bz_coupling_elevated",
                     severity="watch",
-                    title="Solar wind elevated",
-                    body="Solar wind and Bz coupling have moved into a more active range. Open Gaia Eyes for details.",
+                    title="Solar wind is stirring",
+                    body="Focus may be a little slippery right now. Check Gaia Eyes for context.",
                     target_type="driver",
                     target_key="solar_wind",
                     asof=asof,
@@ -467,8 +597,8 @@ def _build_signal_candidates(
                 family="flare_cme_sep",
                 event_key="flare_x_class",
                 severity="high",
-                title="Major flare event",
-                body="An X-class flare was observed in the last day. Open Gaia Eyes for context.",
+                title="Whoa, solar flare",
+                body="A bigger flare just hit the map. Open Gaia Eyes and take a look.",
                 target_type="driver",
                 target_key="flares",
                 asof=asof,
@@ -481,8 +611,8 @@ def _build_signal_candidates(
                 family="flare_cme_sep",
                 event_key="flare_m5_plus",
                 severity="watch",
-                title="Flare activity elevated",
-                body="An M5+ flare was observed in the last day. Open Gaia Eyes for context.",
+                title="Flare activity is up",
+                body="The sun just threw a little extra heat. Open Gaia Eyes for context.",
                 target_type="driver",
                 target_key="flares",
                 asof=asof,
@@ -501,8 +631,8 @@ def _build_signal_candidates(
                     family="flare_cme_sep",
                     event_key="cme_watch_high",
                     severity="high",
-                    title="CME watch elevated",
-                    body="A stronger CME arrival is being tracked. Open Gaia Eyes for context.",
+                    title="CME on watch",
+                    body="A stronger arrival is in play. Check Gaia Eyes before it lands.",
                     target_type="driver",
                     target_key="cme",
                     asof=cme_asof,
@@ -515,8 +645,8 @@ def _build_signal_candidates(
                     family="flare_cme_sep",
                     event_key="cme_watch",
                     severity="watch",
-                    title="CME watch",
-                    body="A CME arrival is being tracked in the next few days. Open Gaia Eyes for context.",
+                    title="CME in the forecast",
+                    body="A solar arrival is lining up. Open Gaia Eyes for the timing.",
                     target_type="driver",
                     target_key="cme",
                     asof=cme_asof,
@@ -537,8 +667,8 @@ def _build_signal_candidates(
                     family="flare_cme_sep",
                     event_key="sep_s2_plus",
                     severity="high",
-                    title="Solar radiation elevated",
-                    body="Proton activity has moved into a stronger range. Open Gaia Eyes for context.",
+                    title="Radiation levels are up",
+                    body="Proton activity is running hot. Open Gaia Eyes for the full read.",
                     target_type="driver",
                     target_key="sep",
                     asof=sep_asof or asof,
@@ -551,8 +681,8 @@ def _build_signal_candidates(
                     family="flare_cme_sep",
                     event_key="sep_s1_plus",
                     severity="watch",
-                    title="Solar radiation watch",
-                    body="Proton activity has moved into an elevated range. Open Gaia Eyes for context.",
+                    title="Solar radiation is rising",
+                    body="Proton activity is elevated. Check Gaia Eyes for context.",
                     target_type="driver",
                     target_key="sep",
                     asof=sep_asof or asof,
@@ -568,8 +698,8 @@ def _build_signal_candidates(
                 family="flare_cme_sep",
                 event_key="drap_absorption_high",
                 severity="high",
-                title="Radio absorption elevated",
-                body="D-RAP absorption has moved into a stronger range. Open Gaia Eyes for context.",
+                title="Radio absorption is up",
+                body="The upper atmosphere is getting noisy. Open Gaia Eyes for context.",
                 target_type="driver",
                 target_key="drap",
                 asof=asof,
@@ -582,8 +712,8 @@ def _build_signal_candidates(
                 family="flare_cme_sep",
                 event_key="drap_absorption_elevated",
                 severity="watch",
-                title="Radio absorption watch",
-                body="D-RAP absorption has become more noticeable. Open Gaia Eyes for context.",
+                title="Radio absorption is noticeable",
+                body="The airwaves are acting a little strange. Check Gaia Eyes for the read.",
                 target_type="driver",
                 target_key="drap",
                 asof=asof,
@@ -600,8 +730,12 @@ def _build_signal_candidates(
         zscore = _safe_float(evidence.get("zscore_30d"))
         severity = "high" if (zscore or 0) >= 3.0 else "watch"
         event_key = "schumann_variability_high" if severity == "high" else "schumann_variability_elevated"
-        title = "Schumann elevated" if severity == "watch" else "Schumann variability high"
-        body = "Resonance variability is running above baseline. Open Gaia Eyes for context."
+        title = "Schumann is lively" if severity == "watch" else "Schumann spike detected"
+        body = (
+            "The background hum is running higher than usual. Open Gaia Eyes for context."
+            if severity == "watch"
+            else "Resonance variability just jumped. Open Gaia Eyes and see what shifted."
+        )
         out.append(
             NotificationCandidate(
                 family="schumann",
@@ -636,8 +770,8 @@ def _build_local_candidates(local_payload: Dict[str, Any]) -> List[NotificationC
                 family="pressure",
                 event_key="pressure_swing_high",
                 severity="high",
-                title="Pressure swing — High",
-                body="Head pressure and pain sensitivity may rise for some people. Open Gaia Eyes for context.",
+                title="Pressure is swinging",
+                body="Headache weather may be in play. Check your gauges and log what you feel.",
                 target_type="driver",
                 target_key="pressure",
                 asof=asof,
@@ -650,8 +784,8 @@ def _build_local_candidates(local_payload: Dict[str, Any]) -> List[NotificationC
                 family="pressure",
                 event_key="pressure_swing_watch",
                 severity="watch",
-                title="Pressure swing — Watch",
-                body="Pressure is shifting enough to be worth a closer look. Open Gaia Eyes for context.",
+                title="Pressure just shifted",
+                body="Worth a quick body check. Open Gaia Eyes for context.",
                 target_type="driver",
                 target_key="pressure",
                 asof=asof,
@@ -667,8 +801,8 @@ def _build_local_candidates(local_payload: Dict[str, Any]) -> List[NotificationC
                     family="aqi",
                     event_key="aqi_unhealthy",
                     severity="high",
-                    title="AQI elevated",
-                    body="Air quality is trending less friendly right now. Open Gaia Eyes for local guidance.",
+                    title="Air quality took a hit",
+                    body="The air is getting rude. Check local conditions before it starts bugging you.",
                     target_type="driver",
                     target_key="aqi",
                     asof=asof,
@@ -681,8 +815,8 @@ def _build_local_candidates(local_payload: Dict[str, Any]) -> List[NotificationC
                     family="aqi",
                     event_key="aqi_moderate",
                     severity="watch",
-                    title="AQI moderate",
-                    body="Air quality is trending less friendly. Open Gaia Eyes for local guidance.",
+                    title="Air feels a little off",
+                    body="AQI just slipped. Open Gaia Eyes for the local read.",
                     target_type="driver",
                     target_key="aqi",
                     asof=asof,
@@ -698,8 +832,8 @@ def _build_local_candidates(local_payload: Dict[str, Any]) -> List[NotificationC
                 family="temp",
                 event_key="temp_swing_high",
                 severity="high",
-                title="Temperature swing — High",
-                body="A larger temperature swing is in play. Open Gaia Eyes for local guidance.",
+                title="Temperature is on the move",
+                body="Body comfort may get weird today. Check Gaia Eyes before it sneaks up on you.",
                 target_type="driver",
                 target_key="temp",
                 asof=asof,
@@ -712,8 +846,8 @@ def _build_local_candidates(local_payload: Dict[str, Any]) -> List[NotificationC
                 family="temp",
                 event_key="temp_swing_watch",
                 severity="watch",
-                title="Temperature swing — Watch",
-                body="Temperature is moving enough to be worth a closer look. Open Gaia Eyes for local guidance.",
+                title="Temperature just swung",
+                body="A quick check-in might be smart. Open Gaia Eyes for local context.",
                 target_type="driver",
                 target_key="temp",
                 asof=asof,
@@ -760,27 +894,27 @@ def _gauge_context_matches(gauge_key: str, profile) -> bool:
 def _gauge_message(gauge_key: str) -> tuple[str, str]:
     if gauge_key == "pain":
         return (
-            "Pain load increased",
-            "Pressure and temperature shifts may be contributing. Tap to review and log symptoms.",
+            "Pain gauge climbed",
+            "Pressure or temperature may be poking at you. Check your gauges and log symptoms.",
         )
     if gauge_key == "energy":
         return (
-            "Energy load increased",
-            "Environmental changes may be contributing to a heavier body load. Open Gaia Eyes for context.",
+            "Energy just shifted",
+            "Feelings may have shifted. Check your gauges and log what changed.",
         )
     if gauge_key == "sleep":
         return (
-            "Sleep load increased",
-            "Space weather or resonance changes may be adding variability. Open Gaia Eyes for context.",
+            "Sleep may feel lighter",
+            "The background is lively enough to mess with rest. Open Gaia Eyes for context.",
         )
     if gauge_key == "heart":
         return (
-            "Heart load increased",
-            "Solar wind conditions may be affecting rhythm sensitivity. Open Gaia Eyes for context.",
+            "Heart gauge jumped",
+            "If you feel a little buzzy, check Gaia Eyes and note it.",
         )
     return (
-        "Health status shifted upward",
-        "Environmental conditions may be adding to your current load. Open Gaia Eyes for context.",
+        "Body load is up",
+        "A few things may be stacking right now. Open Gaia Eyes for the full read.",
     )
 
 
@@ -914,6 +1048,7 @@ def evaluate_user_notifications(user_id: str, day: date, preferences: Dict[str, 
     now_utc = utc_now()
     candidates = _build_candidates_for_user(user_id, day, preferences)
     latest_events = _latest_events_by_family(user_id)
+    deliverable_candidates: List[NotificationCandidate] = []
     queued = 0
     skipped = 0
 
@@ -946,15 +1081,57 @@ def evaluate_user_notifications(user_id: str, day: date, preferences: Dict[str, 
                 error_text="quiet_hours",
             ):
                 skipped += 1
-                latest_events[candidate.family] = {
-                    "family": candidate.family,
-                    "severity": candidate.severity,
-                    "status": "skipped",
-                    "created_at": now_utc,
-                    "event_key": candidate.event_key,
-                }
+                _remember_latest_event(
+                    latest_events,
+                    family=candidate.family,
+                    severity=candidate.severity,
+                    status="skipped",
+                    created_at=now_utc,
+                    event_key=candidate.event_key,
+                )
             continue
 
+        deliverable_candidates.append(candidate)
+
+    if len(deliverable_candidates) > 1:
+        bundle_candidate = _build_bundle_candidate(deliverable_candidates)
+        if _queue_candidate(
+            user_id=user_id,
+            candidate=bundle_candidate,
+            now_utc=now_utc,
+            status="queued",
+            error_text=None,
+        ):
+            queued += 1
+            _remember_latest_event(
+                latest_events,
+                family=bundle_candidate.family,
+                severity=bundle_candidate.severity,
+                status="queued",
+                created_at=now_utc,
+                event_key=bundle_candidate.event_key,
+            )
+
+        for candidate in deliverable_candidates:
+            if _queue_candidate(
+                user_id=user_id,
+                candidate=candidate,
+                now_utc=now_utc,
+                status="skipped",
+                error_text="bundled",
+            ):
+                skipped += 1
+            _remember_latest_event(
+                latest_events,
+                family=candidate.family,
+                severity=candidate.severity,
+                status="skipped",
+                created_at=now_utc,
+                event_key=candidate.event_key,
+            )
+        return {"queued": queued, "skipped": skipped, "candidates": len(candidates)}
+
+    for candidate in deliverable_candidates:
         if _queue_candidate(
             user_id=user_id,
             candidate=candidate,
@@ -963,13 +1140,14 @@ def evaluate_user_notifications(user_id: str, day: date, preferences: Dict[str, 
             error_text=None,
         ):
             queued += 1
-            latest_events[candidate.family] = {
-                "family": candidate.family,
-                "severity": candidate.severity,
-                "status": "queued",
-                "created_at": now_utc,
-                "event_key": candidate.event_key,
-            }
+            _remember_latest_event(
+                latest_events,
+                family=candidate.family,
+                severity=candidate.severity,
+                status="queued",
+                created_at=now_utc,
+                event_key=candidate.event_key,
+            )
 
     return {"queued": queued, "skipped": skipped, "candidates": len(candidates)}
 
