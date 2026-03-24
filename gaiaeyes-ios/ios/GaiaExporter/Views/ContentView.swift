@@ -1745,6 +1745,8 @@ struct ContentView: View {
     @State private var backfillMessage: String?
     @State private var backfillInFlight: Bool = false
     @State private var backfillTask: Task<Void, Never>? = nil
+    @State private var onboardingResetInFlight: Bool = false
+    @State private var onboardingResetMessage: String?
 #if canImport(CoreLocation)
     @State private var locationProvider = OneShotLocationProvider()
 #endif
@@ -2858,6 +2860,53 @@ struct ContentView: View {
             }
         } catch {
             appLog("[UI] save profile preferences error: \(error.localizedDescription)")
+        }
+    }
+
+    private func resetOnboardingForDebug() async {
+        await MainActor.run {
+            onboardingResetInFlight = true
+            onboardingResetMessage = nil
+            backfillTask?.cancel()
+            backfillTask = nil
+            backfillInFlight = false
+            backfillMessage = nil
+            healthPermissionsMessage = nil
+            notificationSettingsMessage = nil
+            profileLocationMessage = nil
+            onboardingCompleted = false
+            onboardingStepRaw = OnboardingStep.welcome.rawValue
+            didLocationOnboarding = false
+            experienceProfile.onboardingStep = .welcome
+            experienceProfile.onboardingCompleted = false
+            experienceProfile.healthkitRequestedAt = nil
+            experienceProfile.lastBackfillAt = nil
+            state.healthkitRequestedAtISO = ""
+            state.lastHealthBackfillAtISO = ""
+        }
+
+        do {
+            let saved = try await putProfilePreferences(
+                UserExperienceProfileUpdate(
+                    onboardingStep: .welcome,
+                    onboardingCompleted: false
+                )
+            )
+            await MainActor.run {
+                applyExperienceProfile(saved)
+                onboardingResetMessage = "Onboarding reset for the current test user."
+                onboardingResetInFlight = false
+                showMissionSettingsSheet = false
+                showOnboardingFlow = true
+            }
+        } catch {
+            appLog("[UI] debug onboarding reset error: \(error.localizedDescription)")
+            await MainActor.run {
+                onboardingResetMessage = "Server reset failed. Reopened onboarding locally only."
+                onboardingResetInFlight = false
+                showMissionSettingsSheet = false
+                showOnboardingFlow = true
+            }
         }
     }
 
@@ -9668,6 +9717,18 @@ struct ContentView: View {
                                 Divider()
 
                                 VStack(alignment: .leading, spacing: 8) {
+                                    Text("Symptom Follow-up Prompts")
+                                        .font(.subheadline.weight(.semibold))
+                                    Toggle("Symptom follow-up prompts", isOn: $notificationPreferences.symptomFollowupsEnabled)
+                                    Text("Receive check-in prompts after you log a symptom so Gaia can learn how it changes over time.")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                .disabled(!notificationPreferences.enabled)
+
+                                Divider()
+
+                                VStack(alignment: .leading, spacing: 8) {
                                     Text("Quiet Hours")
                                         .font(.subheadline.weight(.semibold))
                                     Toggle("Enable quiet hours", isOn: $notificationPreferences.quietHoursEnabled)
@@ -9827,6 +9888,37 @@ struct ContentView: View {
                                     } label: {
                                         Label("Camera Check", systemImage: "ladybug")
                                     }
+                                }
+
+                                GroupBox {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Button {
+                                            Task { await resetOnboardingForDebug() }
+                                        } label: {
+                                            HStack {
+                                                if onboardingResetInFlight {
+                                                    ProgressView().scaleEffect(0.8)
+                                                }
+                                                Text(onboardingResetInFlight ? "Resetting..." : "Reset Onboarding (Debug)")
+                                            }
+                                            .frame(maxWidth: .infinity)
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .tint(.orange)
+                                        .disabled(onboardingResetInFlight)
+
+                                        Text("Clears onboarding completion for the current developer-scoped test user and reopens first-run flow.")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+
+                                        if let onboardingResetMessage {
+                                            Text(onboardingResetMessage)
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                } label: {
+                                    Label("Onboarding Test", systemImage: "arrow.counterclockwise")
                                 }
                             }
                             .padding(.top, 8)

@@ -787,19 +787,24 @@ final class HealthKitBackgroundSync {
 
     private func performInteractiveBackfillMetric(
         _ metric: InteractiveBackfillMetric,
-        start: Date
+        start: Date,
+        onProgress: (@Sendable (String) async -> Void)? = nil
     ) async -> HealthBackfillMetricResult {
         let pred = HKQuery.predicateForSamples(withStart: start, end: Date(), options: [])
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
         switch metric {
         case .heartRate:
-            return await backfillOne(
+            return await backfillOneWindowed(
                 type: hrType,
                 anchorKey: metric.key,
-                pred: pred,
+                start: start,
+                end: Date(),
                 sort: sort,
+                windowDays: 2,
+                pageLimit: 200,
                 chunkSize: interactiveChunkSize(for: metric),
-                maxRetries: interactiveRetryLimit
+                maxRetries: interactiveRetryLimit,
+                onProgress: onProgress
             )
         case .spo2:
             return await backfillOne(
@@ -900,7 +905,7 @@ final class HealthKitBackgroundSync {
                 onProgress: onProgress
             )
 
-            let result = await self.performInteractiveBackfillMetric(metric, start: start)
+            let result = await self.performInteractiveBackfillMetric(metric, start: start, onProgress: onProgress)
             summary.completedMetrics = ordinal
             if let failure = result.failureDescription {
                 summary.failedMetrics.append(metric.label)
@@ -1132,7 +1137,10 @@ final class HealthKitBackgroundSync {
         pred: NSPredicate,
         sort: NSSortDescriptor,
         chunkSize: Int = 200,
-        maxRetries: Int = 3
+        maxRetries: Int = 3,
+        pageLimit: Int = 500,
+        persistAnchor: Bool = true,
+        requestRefresh: Bool = true
     ) async -> HealthBackfillMetricResult {
         var anchor: HKQueryAnchor? = nil
         var collected: [HKSample] = []
@@ -1142,7 +1150,7 @@ final class HealthKitBackgroundSync {
         while more {
             do {
                 page += 1
-                let (newAnchor, batch, hasMore) = try await anchoredQuery(type: type, predicate: pred, anchor: anchor, limit: 500, sort: sort)
+                let (newAnchor, batch, hasMore) = try await anchoredQuery(type: type, predicate: pred, anchor: anchor, limit: pageLimit, sort: sort)
                 anchor = newAnchor
                 if !batch.isEmpty { collected.append(contentsOf: batch) }
                 more = hasMore
@@ -1191,10 +1199,12 @@ final class HealthKitBackgroundSync {
         do {
             let api = buildAPI()
             let uploaded = try await api.postSamplesChunked(samples, chunkSize: chunkSize, maxRetries: maxRetries)
-            anchorStore.setAnchor(anchor, forKey: anchorKey) // store last anchor so observers resume from here
+            if persistAnchor {
+                anchorStore.setAnchor(anchor, forKey: anchorKey) // store last anchor so observers resume from here
+            }
             StatusStore.shared.setUpload(for: anchorKey)
             appLog("[Backfill] uploaded \(samples.count) \(anchorKey) samples")
-            if uploaded {
+            if uploaded && requestRefresh {
                 await requestFeaturesRefreshAfterUpload(rows: samples.count, source: "hk:backfill_\(anchorKey)")
             }
             return HealthBackfillMetricResult(
@@ -1206,6 +1216,98 @@ final class HealthKitBackgroundSync {
             appLog("[Backfill] upload error \(anchorKey): \(error.localizedDescription)")
             return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: error.localizedDescription)
         }
+    }
+
+    private func backfillOneWindowed(
+        type: HKSampleType,
+        anchorKey: String,
+        start: Date,
+        end: Date,
+        sort: NSSortDescriptor,
+        windowDays: Int,
+        pageLimit: Int = 500,
+        chunkSize: Int = 200,
+        maxRetries: Int = 3,
+        onProgress: (@Sendable (String) async -> Void)? = nil
+    ) async -> HealthBackfillMetricResult {
+        let windows = recentBackfillWindows(start: start, end: end, windowDays: windowDays)
+        guard !windows.isEmpty else {
+            return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)
+        }
+
+        var totalCollected = 0
+        var totalUploaded = 0
+
+        for (index, window) in windows.enumerated() {
+            let windowLabel = "\(index + 1)/\(windows.count)"
+            await reportBackfillProgress(
+                "Collecting \(anchorKey.replacingOccurrences(of: "_", with: " ")) window \(windowLabel)…",
+                onProgress: onProgress
+            )
+            let pred = HKQuery.predicateForSamples(
+                withStart: window.start,
+                end: window.end,
+                options: [.strictStartDate]
+            )
+            let result = await backfillOne(
+                type: type,
+                anchorKey: anchorKey,
+                pred: pred,
+                sort: sort,
+                chunkSize: chunkSize,
+                maxRetries: maxRetries,
+                pageLimit: pageLimit,
+                persistAnchor: index == 0,
+                requestRefresh: false
+            )
+            totalCollected += result.collectedCount
+            totalUploaded += result.uploadedRows
+            if let failure = result.failureDescription {
+                return HealthBackfillMetricResult(
+                    collectedCount: totalCollected,
+                    uploadedRows: totalUploaded,
+                    failureDescription: failure
+                )
+            }
+            if result.didUploadAnyData {
+                await reportBackfillProgress(
+                    "Imported \(result.uploadedRows) \(anchorKey.replacingOccurrences(of: "_", with: " ")) rows from window \(windowLabel).",
+                    onProgress: onProgress
+                )
+            } else {
+                await reportBackfillProgress(
+                    "No \(anchorKey.replacingOccurrences(of: "_", with: " ")) samples found in window \(windowLabel).",
+                    onProgress: onProgress
+                )
+            }
+        }
+
+        if totalUploaded > 0 {
+            await requestFeaturesRefreshAfterUpload(rows: totalUploaded, source: "hk:backfill_\(anchorKey)")
+        }
+
+        return HealthBackfillMetricResult(
+            collectedCount: totalCollected,
+            uploadedRows: totalUploaded,
+            failureDescription: nil
+        )
+    }
+
+    private func recentBackfillWindows(start: Date, end: Date, windowDays: Int) -> [DateInterval] {
+        guard start < end else { return [] }
+        let calendar = Calendar.current
+        let safeWindowDays = max(1, windowDays)
+        var windows: [DateInterval] = []
+        var windowEnd = end
+
+        while windowEnd > start {
+            let candidateStart = calendar.date(byAdding: .day, value: -safeWindowDays, to: windowEnd) ?? start
+            let windowStart = candidateStart > start ? candidateStart : start
+            windows.append(DateInterval(start: windowStart, end: windowEnd))
+            windowEnd = windowStart
+        }
+
+        return windows
     }
 
     /// Mirrors the mapping in processDeltas so backfill writes identical rows.

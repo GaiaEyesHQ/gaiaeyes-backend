@@ -569,6 +569,16 @@ struct OnboardingFlowView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
+                    Text("Symptom Follow-up Prompts")
+                        .font(.subheadline.weight(.semibold))
+                    Toggle("Symptom follow-up prompts", isOn: $notificationPreferences.symptomFollowupsEnabled)
+                    Text("Gaia can send a check-in after you log a symptom so it can learn the arc, not just the spike.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .disabled(!notificationPreferences.enabled)
+
+                VStack(alignment: .leading, spacing: 12) {
                     Toggle("Quiet Hours", isOn: $notificationPreferences.quietHoursEnabled)
                     if notificationPreferences.quietHoursEnabled {
                         HStack {
