@@ -679,12 +679,6 @@ private struct ProfileLocation: Codable {
     let lon: Double?
     let useGps: Bool?
     let localInsightsEnabled: Bool?
-
-    private enum CodingKeys: String, CodingKey {
-        case zip, lat, lon
-        case useGps
-        case localInsightsEnabled
-    }
 }
 
 private struct ProfileLocationEnvelope: Codable {
@@ -1734,15 +1728,22 @@ struct ContentView: View {
 
     @AppStorage("local_health_zip") private var localHealthZip: String = "78209"
     @AppStorage("did_location_onboarding") private var didLocationOnboarding: Bool = false
+    @AppStorage("gaia.onboarding.completed") private var onboardingCompleted: Bool = false
+    @AppStorage("gaia.onboarding.step") private var onboardingStepRaw: String = OnboardingStep.welcome.rawValue
     @State private var localHealth: LocalCheckResponse? = nil
     @State private var localHealthLoading: Bool = false
     @State private var localHealthError: String?
     @State private var localZipRefreshTask: Task<Void, Never>? = nil
     @State private var showLocationOnboarding: Bool = false
+    @State private var showOnboardingFlow: Bool = false
     @State private var profileUseGPS: Bool = false
     @State private var profileLocalInsightsEnabled: Bool = true
     @State private var profileLocationMessage: String?
     @State private var profileLocationSaving: Bool = false
+    @State private var experienceProfile: UserExperienceProfile = .default
+    @State private var healthPermissionsMessage: String?
+    @State private var backfillMessage: String?
+    @State private var backfillInFlight: Bool = false
 #if canImport(CoreLocation)
     @State private var locationProvider = OneShotLocationProvider()
 #endif
@@ -1778,6 +1779,16 @@ struct ContentView: View {
         Binding(
             get: { Self.cameraHealthCheckVisible && showCameraHealthCheckSheet },
             set: { showCameraHealthCheckSheet = $0 }
+        )
+    }
+
+    private var onboardingStepBinding: Binding<OnboardingStep> {
+        Binding(
+            get: { OnboardingStep(rawValue: onboardingStepRaw) ?? experienceProfile.onboardingStep },
+            set: { newValue in
+                onboardingStepRaw = newValue.rawValue
+                experienceProfile.onboardingStep = newValue
+            }
         )
     }
 
@@ -2694,6 +2705,66 @@ struct ContentView: View {
         }
     }
 
+    private func applyExperienceProfile(_ incoming: UserExperienceProfile) {
+        var resolved = incoming
+        let remoteStep = incoming.onboardingStep
+        let localStep = OnboardingStep(rawValue: onboardingStepRaw) ?? remoteStep
+        let localIndex = OnboardingStep.ordered.firstIndex(of: localStep) ?? 0
+        let remoteIndex = OnboardingStep.ordered.firstIndex(of: remoteStep) ?? 0
+        if !incoming.onboardingCompleted && localIndex > remoteIndex {
+            resolved.onboardingStep = localStep
+        }
+        if onboardingCompleted && !incoming.onboardingCompleted {
+            resolved.onboardingCompleted = true
+        }
+
+        experienceProfile = resolved
+        onboardingStepRaw = resolved.onboardingStep.rawValue
+        onboardingCompleted = resolved.onboardingCompleted
+        if resolved.onboardingCompleted {
+            didLocationOnboarding = true
+            showOnboardingFlow = false
+        } else {
+            showOnboardingFlow = true
+        }
+        if let backfillAt = resolved.lastBackfillAt, let stamp = formatUpdated(backfillAt) {
+            backfillMessage = "Last import \(stamp)"
+        }
+    }
+
+    private func putProfilePreferences(_ body: UserExperienceProfileUpdate) async throws -> UserExperienceProfile {
+        guard var url = URL(string: state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            throw URLError(.badURL)
+        }
+        url.appendPathComponent("v1/profile/preferences")
+        var req = URLRequest(url: url)
+        req.httpMethod = "PUT"
+        req.timeoutInterval = 30
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        if !state.bearer.isEmpty {
+            req.setValue("Bearer \(state.bearer)", forHTTPHeaderField: "Authorization")
+        }
+        let devUser = state.userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !devUser.isEmpty {
+            req.setValue(devUser, forHTTPHeaderField: "X-Dev-UserId")
+        }
+        let encoder = JSONEncoder()
+        req.httpBody = try encoder.encode(body)
+        let (data, response) = try await URLSession.shared.data(for: req)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200...299).contains(code) else {
+            throw DecodingPreviewError(endpoint: "v1/profile/preferences", preview: String(data: data, encoding: .utf8) ?? "", underlying: URLError(.badServerResponse))
+        }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let envelope = try decoder.decode(UserExperienceProfileEnvelope.self, from: data)
+        guard envelope.ok != false else {
+            throw URLError(.badServerResponse)
+        }
+        return envelope.preferences ?? .default
+    }
+
     private func fetchProfileLocation() async {
         let api = state.apiWithAuth()
         do {
@@ -2713,7 +2784,7 @@ struct ContentView: View {
         }
     }
 
-    private func saveProfileLocation(markOnboardingComplete: Bool = false) async {
+    private func saveProfileLocation(markOnboardingComplete: Bool = false) async -> Bool {
         await MainActor.run {
             profileLocationSaving = true
             profileLocationMessage = nil
@@ -2731,25 +2802,61 @@ struct ContentView: View {
                 profileLocationMessage = "GPS did not return a ZIP. Enter ZIP to continue."
                 profileLocationSaving = false
             }
-            return
+            return false
         }
         do {
             let _: ProfileLocationEnvelope = try await putJSON("v1/profile/location", body: payload, as: ProfileLocationEnvelope.self)
             await MainActor.run {
                 profileLocationMessage = "Location saved"
                 profileLocationSaving = false
+                didLocationOnboarding = true
                 if markOnboardingComplete {
-                    didLocationOnboarding = true
                     showLocationOnboarding = false
                 }
             }
             await fetchLocalHealth()
+            return true
         } catch {
             await MainActor.run {
                 profileLocationMessage = "Could not save location"
                 profileLocationSaving = false
             }
             appLog("[UI] save profile location error: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func fetchProfilePreferences() async {
+        let api = state.apiWithAuth()
+        do {
+            let payload: UserExperienceProfileEnvelope = try await api.getJSON("v1/profile/preferences", as: UserExperienceProfileEnvelope.self, perRequestTimeout: 20)
+            if let preferences = payload.preferences {
+                await MainActor.run {
+                    applyExperienceProfile(preferences)
+                }
+            } else {
+                await MainActor.run {
+                    showOnboardingFlow = !onboardingCompleted
+                }
+            }
+        } catch {
+            appLog("[UI] profile preferences fetch error: \(error.localizedDescription)")
+            await MainActor.run {
+                experienceProfile.onboardingStep = OnboardingStep(rawValue: onboardingStepRaw) ?? .welcome
+                experienceProfile.onboardingCompleted = onboardingCompleted
+                showOnboardingFlow = !onboardingCompleted
+            }
+        }
+    }
+
+    private func saveProfilePreferences(_ update: UserExperienceProfileUpdate) async {
+        do {
+            let saved = try await putProfilePreferences(update)
+            await MainActor.run {
+                applyExperienceProfile(saved)
+            }
+        } catch {
+            appLog("[UI] save profile preferences error: \(error.localizedDescription)")
         }
     }
 
@@ -2799,10 +2906,11 @@ struct ContentView: View {
     }
 
     private func fetchProfileSettings(includeNotifications: Bool = false) async {
+        await fetchProfilePreferences()
         await fetchProfileLocation()
         await fetchTagCatalog()
         await fetchSelectedTags()
-        if includeNotifications {
+        if includeNotifications || !onboardingCompleted {
             await fetchNotificationPreferences()
         }
     }
@@ -2853,6 +2961,7 @@ struct ContentView: View {
                 pushPermissionGranted = granted
             }
             if !granted {
+                AppAnalytics.track("notifications_denied")
                 await MainActor.run {
                     notificationSettingsSaving = false
                     notificationSettingsMessage = "Allow notifications in iOS Settings to finish enabling pushes."
@@ -2880,6 +2989,7 @@ struct ContentView: View {
                     notificationSettingsMessage = "Notification settings saved"
                 }
             }
+            AppAnalytics.track(saved.enabled ? "notifications_enabled" : "notifications_disabled")
         } catch {
             await MainActor.run {
                 notificationSettingsSaving = false
@@ -2890,12 +3000,189 @@ struct ContentView: View {
         }
     }
 
+    private func requestHealthPermissionsForOnboarding() async -> Bool {
+        await MainActor.run {
+            healthPermissionsMessage = nil
+        }
+        AppAnalytics.track("healthkit_permission_started")
+        let granted = await state.requestHealthPermissions()
+        let requestedAt = await MainActor.run { state.healthkitRequestedAtISO }
+        await saveProfilePreferences(UserExperienceProfileUpdate(healthkitRequested: true))
+        await MainActor.run {
+            if !requestedAt.isEmpty {
+                experienceProfile.healthkitRequestedAt = requestedAt
+            }
+            healthPermissionsMessage = granted
+                ? "Health access updated. Gaia will use whatever HealthKit data you allowed."
+                : "Gaia could not update Health access right now. You can keep going and retry later in Settings."
+        }
+        AppAnalytics.track(granted ? "healthkit_permission_completed" : "healthkit_permission_failed")
+        return granted
+    }
+
+    private func runUnifiedHealthBackfill() async -> Bool {
+        await MainActor.run {
+            backfillInFlight = true
+            backfillMessage = nil
+        }
+        AppAnalytics.track("health_backfill_started", properties: ["window": "30d"])
+        let succeeded = await state.syncHealthBackfillLast30Days()
+        let syncStamp = await MainActor.run { state.lastHealthBackfillAtISO }
+        if succeeded, !syncStamp.isEmpty {
+            await saveProfilePreferences(UserExperienceProfileUpdate(lastBackfillAt: syncStamp))
+            await fetchDashboardPayload(force: true)
+            await fetchLocalHealth()
+        }
+        await MainActor.run {
+            backfillInFlight = false
+            if succeeded {
+                experienceProfile.lastBackfillAt = syncStamp.isEmpty ? experienceProfile.lastBackfillAt : syncStamp
+                if let updated = formatUpdated(syncStamp) {
+                    backfillMessage = "Imported recent Health data. Last sync \(updated)."
+                } else {
+                    backfillMessage = "Imported recent Health data."
+                }
+            } else {
+                backfillMessage = "Import did not complete. You can continue now and retry later in Settings."
+            }
+        }
+        AppAnalytics.track(succeeded ? "health_backfill_completed" : "health_backfill_failed", properties: ["window": "30d"])
+        return succeeded
+    }
+
     private func handleIncomingPushRoute(_ route: GaiaPushRoute) {
         pendingPushRoute = route
         showMissionInsightsSheet = false
         showLocalConditionsSheet = false
         showSchumannDashboardSheet = false
         showMissionSettingsSheet = false
+    }
+
+    private func onboardingOptions(forHealthContext healthContextOnly: Bool) -> [OnboardingTagOption] {
+        let preferredKeys = healthContextOnly
+            ? [
+                "allergies_sinus",
+                "migraine_history",
+                "chronic_pain",
+                "fibromyalgia",
+                "nervous_system_dysregulation",
+                "pots_dysautonomia",
+                "insomnia_sleep_disruption",
+            ]
+            : [
+                "pressure_sensitive",
+                "pain_sensitive",
+                "sleep_sensitive",
+                "anxiety_sensitive",
+                "geomagnetic_sensitive",
+                "air_quality_sensitive",
+                "temperature_sensitive",
+            ]
+        let fallback: [String: OnboardingTagOption] = [
+            "pressure_sensitive": OnboardingTagOption(id: "pressure_sensitive", title: "Pressure Sensitive", subtitle: "Barometric swings can hit harder."),
+            "pain_sensitive": OnboardingTagOption(id: "pain_sensitive", title: "Pain Sensitive", subtitle: "Pain or body flares can surface faster."),
+            "sleep_sensitive": OnboardingTagOption(id: "sleep_sensitive", title: "Sleep Sensitive", subtitle: "Sleep disruption affects recovery quickly."),
+            "anxiety_sensitive": OnboardingTagOption(id: "anxiety_sensitive", title: "Anxiety Sensitive", subtitle: "Stress-reactive periods can hit harder."),
+            "geomagnetic_sensitive": OnboardingTagOption(id: "geomagnetic_sensitive", title: "Geomagnetic Sensitive", subtitle: "Space-weather shifts may feel more noticeable."),
+            "air_quality_sensitive": OnboardingTagOption(id: "air_quality_sensitive", title: "Air Quality Sensitive", subtitle: "Air irritation can affect energy or focus."),
+            "temperature_sensitive": OnboardingTagOption(id: "temperature_sensitive", title: "Temperature Sensitive", subtitle: "Rapid temperature changes can throw you off."),
+            "allergies_sinus": OnboardingTagOption(id: "allergies_sinus", title: "Allergies / Sinus", subtitle: "Air and seasonal triggers affect you."),
+            "migraine_history": OnboardingTagOption(id: "migraine_history", title: "Migraine History", subtitle: "Head-pressure or migraine patterns matter here."),
+            "chronic_pain": OnboardingTagOption(id: "chronic_pain", title: "Chronic Pain", subtitle: "Pain flare patterns matter here."),
+            "fibromyalgia": OnboardingTagOption(id: "fibromyalgia", title: "Fibromyalgia", subtitle: "Pain and fatigue flares matter here."),
+            "nervous_system_dysregulation": OnboardingTagOption(id: "nervous_system_dysregulation", title: "Nervous System Dysregulation", subtitle: "Overload and regulation shifts matter here."),
+            "pots_dysautonomia": OnboardingTagOption(id: "pots_dysautonomia", title: "POTS / Dysautonomia", subtitle: "Circulation and autonomic changes matter here."),
+            "insomnia_sleep_disruption": OnboardingTagOption(id: "insomnia_sleep_disruption", title: "Insomnia / Sleep Disruption", subtitle: "Sleep instability matters here."),
+        ]
+
+        let filtered = tagCatalog.filter { item in
+            let canonicalKey = canonicalProfileTagKey(item.tagKey)
+            let isHealth = healthContextTagKeys.contains(canonicalKey) || (item.section ?? "").lowercased().contains("health")
+                || (item.section ?? "").lowercased().contains("context")
+            return isHealth == healthContextOnly
+        }
+        let mapped = Dictionary(uniqueKeysWithValues: filtered.map { item in
+            let canonicalKey = canonicalProfileTagKey(item.tagKey)
+            return (
+                canonicalKey,
+                OnboardingTagOption(
+                    id: canonicalKey,
+                    title: item.label ?? fallback[canonicalKey]?.title ?? canonicalKey.replacingOccurrences(of: "_", with: " ").capitalized,
+                    subtitle: item.description ?? fallback[canonicalKey]?.subtitle
+                )
+            )
+        })
+
+        var ordered: [OnboardingTagOption] = []
+        for key in preferredKeys {
+            if let option = mapped[key] ?? fallback[key] {
+                ordered.append(option)
+            }
+        }
+        let existing = Set(ordered.map(\.id))
+        let extras = mapped.values
+            .filter { !existing.contains($0.id) }
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        return ordered + extras
+    }
+
+    private var onboardingSensitivityOptions: [OnboardingTagOption] {
+        onboardingOptions(forHealthContext: false)
+    }
+
+    private var onboardingHealthContextOptions: [OnboardingTagOption] {
+        onboardingOptions(forHealthContext: true)
+    }
+
+    private var onboardingActivationData: OnboardingActivationData {
+        let liveDrivers = Array((dashboardPayload?.drivers ?? []).prefix(3)).map { driver in
+            OnboardingActivationDriver(
+                id: driver.id,
+                title: driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized,
+                detail: driver.personalReason ?? driver.display ?? driver.roleLabel ?? "Active in your current signal mix."
+            )
+        }
+        let fallbackDrivers = [
+            OnboardingActivationDriver(
+                id: "mission_control",
+                title: "Mission Control is live",
+                detail: "Gaia is already tracking space weather, Earth signals, and your local conditions."
+            ),
+            OnboardingActivationDriver(
+                id: "patterns",
+                title: "Your profile is in place",
+                detail: "The sensitivities and context you chose will now shape driver ranking and pattern emphasis."
+            ),
+            OnboardingActivationDriver(
+                id: "next_action",
+                title: "Next step",
+                detail: "Open Mission Control, view your signals, or log how you feel to make the system more personal."
+            ),
+        ]
+        let headline = dashboardPayload?.todayRelevanceExplanations?.dailyBrief
+            ?? dashboardPayload?.healthStatusExplainer?.summary
+            ?? dashboardPayload?.earthscopeSummary
+            ?? "Your live signal stack is ready."
+        let explanation: String
+        if let syncStamp = experienceProfile.lastBackfillAt, !syncStamp.isEmpty {
+            explanation = "Gaia already has recent Health data layered into your first view, so pattern readiness starts higher from day one."
+        } else {
+            explanation = "Even without Health data, Gaia can already surface the strongest live conditions shaping today."
+        }
+        let footer: String?
+        if notificationPreferences.enabled {
+            footer = "Alerts are ready to follow the same signal families you chose here."
+        } else {
+            footer = "You can adjust alerts, health imports, and personalization later in Settings."
+        }
+        return OnboardingActivationData(
+            headline: headline,
+            explanation: explanation,
+            drivers: liveDrivers.isEmpty ? fallbackDrivers : liveDrivers,
+            nextActionTitle: "Open Mission Control",
+            secondaryActionTitle: "Finish",
+            footer: footer
+        )
     }
 
     private func resolveLocationInput(zip: String, useGPS: Bool) async -> (zip: String?, lat: Double?, lon: Double?, usedGPS: Bool) {
@@ -8218,6 +8505,7 @@ struct ContentView: View {
         let tagSaveMessage: String?
         let tagsSaving: Bool
         let onSaveTags: () -> Void
+        let showDebug: Bool
         @Binding var showTools: Bool
         @Binding var showConnections: Bool
         @Binding var showActions: Bool
@@ -8443,28 +8731,30 @@ struct ContentView: View {
                 }
                 .padding(.horizontal)
 
-                DisclosureGroup(isExpanded: $showTools) {
-                    VStack(spacing: 12) {
-                        ConnectionSettingsSection(state: state, isExpanded: $showConnections)
-                        NavigationLink(destination: SubscribeView()) {
-                            Label("Subscribe", systemImage: "creditcard")
-                                .frame(maxWidth: .infinity)
+                if showDebug {
+                    DisclosureGroup(isExpanded: $showTools) {
+                        VStack(spacing: 12) {
+                            ConnectionSettingsSection(state: state, isExpanded: $showConnections)
+                            NavigationLink(destination: SubscribeView()) {
+                                Label("Account & Membership", systemImage: "creditcard")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            DisclosureGroup(isExpanded: $showActions) {
+                                ActionsSection(state: state, onFetchVisuals: onFetchVisuals)
+                            } label: { HStack { Image(systemName: "wrench.and.screwdriver"); Text("Developer Actions"); Spacer() } }
+                            DisclosureGroup(isExpanded: $showBle) {
+                                BleStatusSection(state: state)
+                            } label: { HStack { Image(systemName: "antenna.radiowaves.left.and.right"); Text("Bluetooth / BLE"); Spacer() } }
+                            DisclosureGroup(isExpanded: $showPolar) {
+                                PolarStatusSection(state: state)
+                            } label: { HStack { Image(systemName: "waveform.path.ecg"); Text("Polar ECG"); Spacer() } }
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        DisclosureGroup(isExpanded: $showActions) {
-                            ActionsSection(state: state, onFetchVisuals: onFetchVisuals)
-                        } label: { HStack { Image(systemName: "arrow.triangle.2.circlepath"); Text("HealthKit Sync & Actions"); Spacer() } }
-                        DisclosureGroup(isExpanded: $showBle) {
-                            BleStatusSection(state: state)
-                        } label: { HStack { Image(systemName: "antenna.radiowaves.left.and.right"); Text("Bluetooth / BLE"); Spacer() } }
-                        DisclosureGroup(isExpanded: $showPolar) {
-                            PolarStatusSection(state: state)
-                        } label: { HStack { Image(systemName: "waveform.path.ecg"); Text("Polar ECG"); Spacer() } }
-                    }
-                    .padding(.top, 8)
-                } label: { HStack { Image(systemName: "gearshape"); Text("Tools & Settings"); Spacer() } }
-                    .padding(.horizontal)
+                        .padding(.top, 8)
+                    } label: { HStack { Image(systemName: "slider.horizontal.3"); Text("Advanced"); Spacer() } }
+                        .padding(.horizontal)
+                }
             }
         }
     }
@@ -8478,22 +8768,24 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         } label: { Text("Status") }
             .padding(.horizontal)
-        DisclosureGroup(isExpanded: $showTools) {
-            VStack(spacing: 12) {
-                ConnectionSettingsSection(state: state, isExpanded: $showConnections)
-                NavigationLink(destination: SubscribeView()) {
-                    Label("Subscribe", systemImage: "creditcard")
-                        .frame(maxWidth: .infinity)
+        if showDebug {
+            DisclosureGroup(isExpanded: $showTools) {
+                VStack(spacing: 12) {
+                    ConnectionSettingsSection(state: state, isExpanded: $showConnections)
+                    NavigationLink(destination: SubscribeView()) {
+                        Label("Account & Membership", systemImage: "creditcard")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    DisclosureGroup(isExpanded: $showActions) { ActionsSection(state: state, onFetchVisuals: { Task { await fetchSpaceVisuals() } }) } label: { HStack { Image(systemName: "wrench.and.screwdriver"); Text("Developer Actions"); Spacer() } }
+                    DisclosureGroup(isExpanded: $showBle) { BleStatusSection(state: state) } label: { HStack { Image(systemName: "antenna.radiowaves.left.and.right"); Text("Bluetooth / BLE"); Spacer() } }
+                    DisclosureGroup(isExpanded: $showPolar) { PolarStatusSection(state: state) } label: { HStack { Image(systemName: "waveform.path.ecg"); Text("Polar ECG"); Spacer() } }
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                DisclosureGroup(isExpanded: $showActions) { ActionsSection(state: state, onFetchVisuals: { Task { await fetchSpaceVisuals() } }) } label: { HStack { Image(systemName: "arrow.triangle.2.circlepath"); Text("HealthKit Sync & Actions"); Spacer() } }
-                DisclosureGroup(isExpanded: $showBle) { BleStatusSection(state: state) } label: { HStack { Image(systemName: "antenna.radiowaves.left.and.right"); Text("Bluetooth / BLE"); Spacer() } }
-                DisclosureGroup(isExpanded: $showPolar) { PolarStatusSection(state: state) } label: { HStack { Image(systemName: "waveform.path.ecg"); Text("Polar ECG"); Spacer() } }
-            }
-            .padding(.top, 8)
-        } label: { HStack { Image(systemName: "gearshape"); Text("Tools & Settings"); Spacer() } }
-            .padding(.horizontal)
+                .padding(.top, 8)
+            } label: { HStack { Image(systemName: "slider.horizontal.3"); Text("Advanced"); Spacer() } }
+                .padding(.horizontal)
+        }
     }
 
     private var contentViewBody: some View {
@@ -8632,9 +8924,7 @@ struct ContentView: View {
                     dashboardLastUpdatedText = "cached"
                     appLog("[UI] preloaded dashboard payload from persisted snapshot")
                 }
-                if !didLocationOnboarding {
-                    showLocationOnboarding = true
-                }
+                showOnboardingFlow = !onboardingCompleted
                 hydrateSymptomPresetsFromCache()
             }
             .onChange(of: scenePhase, initial: false) { _, newPhase in
@@ -8742,6 +9032,11 @@ struct ContentView: View {
             .onChange(of: showCameraHealthCheckSheet, initial: false) { _, newValue in
                 if !newValue {
                     Task { await fetchLatestCameraCheck() }
+                }
+            }
+            .onChange(of: showOnboardingFlow, initial: false) { _, newValue in
+                if newValue {
+                    AppAnalytics.track("onboarding_started", properties: ["step": onboardingStepRaw])
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .featuresShouldRefresh).receive(on: RunLoop.main)) { _ in
@@ -9037,35 +9332,101 @@ struct ContentView: View {
             NavigationStack {
                 ScrollView {
                     VStack(spacing: 16) {
-                        LocalConditionsSummaryCard(
-                            zip: $localHealthZip,
-                            snapshot: localHealth,
-                            isLoading: localHealthLoading,
-                            error: localHealthError,
-                            useGPS: profileUseGPS,
-                            localInsightsEnabled: profileLocalInsightsEnabled
-                        ) {
-                            LocalConditionsView(
-                                zip: localHealthZip,
-                                snapshot: localHealth,
-                                drivers: dashboardPayload?.drivers ?? [],
-                                isLoading: localHealthLoading,
-                                error: localHealthError,
-                                useGPS: profileUseGPS,
-                                onRefresh: { Task { await fetchLocalHealth() } }
-                            )
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text("Changes save automatically.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Mode")
+                                        .font(.subheadline.weight(.semibold))
+                                    Picker("Mode", selection: $experienceProfile.mode) {
+                                        ForEach(ExperienceMode.allCases) { mode in
+                                            Text(mode.title).tag(mode)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    Text(experienceProfile.mode.subtitle)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Guide")
+                                        .font(.subheadline.weight(.semibold))
+                                    Picker("Guide", selection: $experienceProfile.guide) {
+                                        ForEach(GuideType.allCases) { guide in
+                                            Text(guide.title).tag(guide)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    Text(experienceProfile.guide.subtitle)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Tone")
+                                        .font(.subheadline.weight(.semibold))
+                                    Picker("Tone", selection: $experienceProfile.tone) {
+                                        ForEach(ToneStyle.allCases) { tone in
+                                            Text(tone.title).tag(tone)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    Text(experienceProfile.tone.subtitle)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        } label: {
+                            Label("Experience", systemImage: "sparkles")
                         }
                         .padding(.horizontal)
+                        .onChange(of: experienceProfile.mode, initial: false) { _, newValue in
+                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(mode: newValue)) }
+                        }
+                        .onChange(of: experienceProfile.guide, initial: false) { _, newValue in
+                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(guide: newValue)) }
+                        }
+                        .onChange(of: experienceProfile.tone, initial: false) { _, newValue in
+                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(tone: newValue)) }
+                        }
 
                         GroupBox {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("Enable local insights")
-                                    .font(.subheadline)
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(alignment: .top) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(profileLocalInsightsEnabled ? "Local insights on" : "Local insights off")
+                                            .font(.headline)
+                                        Text(
+                                            profileUseGPS
+                                            ? ((localHealth?.whereInfo?.zip ?? localHealthZip).isEmpty ? "GPS preferred" : "GPS preferred • ZIP \(localHealth?.whereInfo?.zip ?? localHealthZip)")
+                                            : ((localHealth?.whereInfo?.zip ?? localHealthZip).isEmpty ? "ZIP not set" : "ZIP \(localHealth?.whereInfo?.zip ?? localHealthZip)")
+                                        )
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                        if let updated = LocalConditionsFormatting.asofText(localHealth?.asof) {
+                                            Text("Last updated \(updated)")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    Button("Open Local Conditions") {
+                                        showLocalConditionsSheet = true
+                                    }
+                                    .buttonStyle(.bordered)
+                                }
+
                                 TextField("ZIP code", text: $localHealthZip)
                                     .textFieldStyle(.roundedBorder)
                                     .keyboardType(.numberPad)
-                                Toggle("Use GPS (optional)", isOn: $profileUseGPS)
+
+                                Toggle("Use GPS", isOn: $profileUseGPS)
                                 Toggle("Enable local insights", isOn: $profileLocalInsightsEnabled)
+
                                 Button(action: { Task { await saveProfileLocation() } }) {
                                     HStack {
                                         if profileLocationSaving {
@@ -9077,6 +9438,7 @@ struct ContentView: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .disabled(profileLocationSaving)
+
                                 if let msg = profileLocationMessage {
                                     Text(msg)
                                         .font(.caption)
@@ -9084,7 +9446,54 @@ struct ContentView: View {
                                 }
                             }
                         } label: {
-                            Label("Location Settings", systemImage: "location.fill")
+                            Label("Your Signals", systemImage: "location.fill")
+                        }
+                        .padding(.horizontal)
+
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Use Health data to improve sleep, heart-rate, recovery, and pattern context. Gaia only reads the domains it can actually use.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+
+                                Button {
+                                    Task { _ = await requestHealthPermissionsForOnboarding() }
+                                } label: {
+                                    HStack {
+                                        Text("Request / Update Health Permissions")
+                                        Spacer()
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.borderedProminent)
+
+                                Button {
+                                    Task { _ = await runUnifiedHealthBackfill() }
+                                } label: {
+                                    HStack {
+                                        if backfillInFlight {
+                                            ProgressView().scaleEffect(0.8)
+                                        }
+                                        Text(backfillInFlight ? "Syncing..." : "Sync Last 30 Days")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(backfillInFlight)
+
+                                if let requested = experienceProfile.healthkitRequestedAt, let updated = formatUpdated(requested) {
+                                    Text("Health permissions last requested \(updated).")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                if let msg = backfillMessage ?? healthPermissionsMessage {
+                                    Text(msg)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        } label: {
+                            Label("Health & Data", systemImage: "heart.text.square")
                         }
                         .padding(.horizontal)
 
@@ -9130,7 +9539,7 @@ struct ContentView: View {
                                     }
                                     if !healthTags.isEmpty {
                                         Divider()
-                                        Text("Health Context (Optional)")
+                                        Text("Optional health context")
                                             .font(.subheadline.weight(.semibold))
                                         ForEach(healthTags) { item in
                                             let canonicalKey = canonicalProfileTagKey(item.tagKey)
@@ -9159,17 +9568,19 @@ struct ContentView: View {
                                             .foregroundColor(.secondary)
                                     }
                                 }
+
                                 Button(action: { Task { await saveSelectedTags() } }) {
                                     HStack {
                                         if tagsSaving {
                                             ProgressView().scaleEffect(0.8)
                                         }
-                                        Text(tagsSaving ? "Saving..." : "Save Personalization")
+                                        Text(tagsSaving ? "Saving..." : "Save Personal Context")
                                     }
                                     .frame(maxWidth: .infinity)
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .disabled(tagsSaving)
+
                                 if let msg = tagSaveMessage {
                                     Text(msg)
                                         .font(.caption)
@@ -9177,13 +9588,13 @@ struct ContentView: View {
                                 }
                             }
                         } label: {
-                            Label("Personalization", systemImage: "slider.horizontal.3")
+                            Label("Personal Context", systemImage: "slider.horizontal.3")
                         }
                         .padding(.horizontal)
 
                         GroupBox {
                             VStack(alignment: .leading, spacing: 12) {
-                                Toggle("Enable push notifications", isOn: $notificationPreferences.enabled)
+                                Toggle("Enable Notifications", isOn: $notificationPreferences.enabled)
 
                                 HStack(alignment: .center, spacing: 8) {
                                     Text(pushPermissionGranted ? "iOS permission granted" : "iOS permission not granted yet")
@@ -9196,7 +9607,7 @@ struct ContentView: View {
                                 }
 
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Signal alerts")
+                                    Text("Signal Alerts")
                                         .font(.subheadline.weight(.semibold))
                                     Toggle("Signal alerts", isOn: $notificationPreferences.signalAlertsEnabled)
                                     if notificationPreferences.signalAlertsEnabled {
@@ -9211,7 +9622,7 @@ struct ContentView: View {
                                 Divider()
 
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Local condition alerts")
+                                    Text("Local Condition Alerts")
                                         .font(.subheadline.weight(.semibold))
                                     Toggle("Local condition alerts", isOn: $notificationPreferences.localConditionAlertsEnabled)
                                     if notificationPreferences.localConditionAlertsEnabled {
@@ -9225,11 +9636,11 @@ struct ContentView: View {
                                 Divider()
 
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Personalized gauge alerts")
+                                    Text("Personalized Alerts")
                                         .font(.subheadline.weight(.semibold))
                                     Toggle("Personalized gauge alerts", isOn: $notificationPreferences.personalizedGaugeAlertsEnabled)
                                     if notificationPreferences.personalizedGaugeAlertsEnabled {
-                                        Toggle("Gauge spikes (Pain / Energy / Sleep / Heart / Health Status)", isOn: $notificationPreferences.families.gaugeSpikes)
+                                        Toggle("Gauge spikes", isOn: $notificationPreferences.families.gaugeSpikes)
                                     }
                                 }
                                 .disabled(!notificationPreferences.enabled)
@@ -9237,26 +9648,8 @@ struct ContentView: View {
                                 Divider()
 
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Symptom follow-up prompts")
+                                    Text("Quiet Hours")
                                         .font(.subheadline.weight(.semibold))
-                                    Toggle("Symptom follow-up prompts", isOn: $notificationPreferences.symptomFollowupsEnabled)
-                                    if notificationPreferences.symptomFollowupsEnabled {
-                                        Picker("Follow-up cadence", selection: $notificationPreferences.symptomFollowupCadence) {
-                                            Text("Gentle").tag("gentle")
-                                            Text("Balanced").tag("balanced")
-                                            Text("Frequent").tag("frequent")
-                                        }
-                                        .pickerStyle(.segmented)
-                                        Text("These are notification check-ins for active symptoms. When enabled, Gaia can ask whether something is still active, improving, or resolved.")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                .disabled(!notificationPreferences.enabled)
-
-                                Divider()
-
-                                VStack(alignment: .leading, spacing: 8) {
                                     Toggle("Enable quiet hours", isOn: $notificationPreferences.quietHoursEnabled)
                                     if notificationPreferences.quietHoursEnabled {
                                         HStack(spacing: 10) {
@@ -9277,7 +9670,7 @@ struct ContentView: View {
                                 .disabled(!notificationPreferences.enabled)
 
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Alert sensitivity")
+                                    Text("Alert Sensitivity")
                                         .font(.subheadline.weight(.semibold))
                                     Picker("Alert sensitivity", selection: $notificationPreferences.sensitivity) {
                                         Text("Minimal").tag("minimal")
@@ -9315,101 +9708,116 @@ struct ContentView: View {
                         }
                         .padding(.horizontal)
 
-                        ConnectionSettingsSection(state: state, isExpanded: $showConnections)
-
-                        NavigationLink(destination: SubscribeView()) {
-                            Label("Subscribe", systemImage: "creditcard")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .padding(.horizontal)
-
-                        DisclosureGroup(isExpanded: $showActions) {
-                            ActionsSection(state: state, onFetchVisuals: { Task { await fetchSpaceVisuals() } })
-                                .padding(.top, 6)
-                        } label: {
-                            HStack {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                                Text("HealthKit Sync & Actions")
-                                Spacer()
-                            }
-                        }
-                        .padding(.horizontal)
-
-                        DisclosureGroup(isExpanded: $showBle) {
-                            BleStatusSection(state: state)
-                                .padding(.top, 6)
-                        } label: {
-                            HStack {
-                                Image(systemName: "antenna.radiowaves.left.and.right")
-                                Text("Bluetooth / BLE")
-                                Spacer()
-                            }
-                        }
-                        .padding(.horizontal)
-
-                        DisclosureGroup(isExpanded: $showPolar) {
-                            PolarStatusSection(state: state)
-                                .padding(.top, 6)
-                        } label: {
-                            HStack {
-                                Image(systemName: "waveform.path.ecg")
-                                Text("Polar ECG")
-                                Spacer()
-                            }
-                        }
-                        .padding(.horizontal)
-
                         GroupBox {
                             VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Label("Features Diagnostics", systemImage: "wrench.and.screwdriver")
-                                    Spacer()
-                                    if featuresDiagnosticsLoading {
-                                        ProgressView()
-                                            .scaleEffect(0.8)
-                                    }
-                                    Button("Refresh") {
-                                        Task { await fetchFeaturesDiagnostics() }
-                                    }
-                                    .disabled(featuresDiagnosticsLoading)
+                                Text("Signed-in state, current plan, billing, and upgrade options live here.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                NavigationLink(destination: SubscribeView()) {
+                                    Label("Open Account & Membership", systemImage: "creditcard")
+                                        .frame(maxWidth: .infinity)
                                 }
-                                if let error = featuresDiagnosticsError {
-                                    Text(error)
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
-                                }
-                                if let diagnostics = featuresDiagnostics {
-                                    FeaturesDiagnosticsPanel(
-                                        diag: diagnostics,
-                                        onCopyTrace: { copyTrace(diagnostics.trace ?? []) },
-                                        onShareTrace: { shareTrace(diagnostics.trace ?? []) },
-                                        onCopyToStatus: { appendTraceToStatus(diagnostics.trace ?? []) }
-                                    )
-                                } else if !featuresDiagnosticsLoading {
-                                    Text("No diagnostics yet. Tap Refresh.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
+                                .buttonStyle(.borderedProminent)
                             }
                         } label: {
-                            Text("Diagnostics")
+                            Label("Account & Membership", systemImage: "person.crop.circle")
                         }
                         .padding(.horizontal)
 
-                        if Self.cameraHealthCheckVisible {
-                            GroupBox {
-                                Toggle("Enable camera check JSON export", isOn: $cameraHealthDebugExportEnabled)
-                                    .font(.subheadline)
-                                Text("Developer-only: adds a Copy Debug JSON button after Quick Check.")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            } label: {
-                                Label("Camera Check", systemImage: "ladybug")
+                        DisclosureGroup(isExpanded: $showTools) {
+                            VStack(spacing: 12) {
+                                ConnectionSettingsSection(state: state, isExpanded: $showConnections)
+
+                                DisclosureGroup(isExpanded: $showActions) {
+                                    ActionsSection(state: state, onFetchVisuals: { Task { await fetchSpaceVisuals() } })
+                                        .padding(.top, 6)
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "wrench.and.screwdriver")
+                                        Text("Developer Actions")
+                                        Spacer()
+                                    }
+                                }
+
+                                DisclosureGroup(isExpanded: $showBle) {
+                                    BleStatusSection(state: state)
+                                        .padding(.top, 6)
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "antenna.radiowaves.left.and.right")
+                                        Text("Bluetooth / BLE")
+                                        Spacer()
+                                    }
+                                }
+
+                                DisclosureGroup(isExpanded: $showPolar) {
+                                    PolarStatusSection(state: state)
+                                        .padding(.top, 6)
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "waveform.path.ecg")
+                                        Text("Polar ECG")
+                                        Spacer()
+                                    }
+                                }
+
+                                GroupBox {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack {
+                                            Label("Features Diagnostics", systemImage: "wrench.and.screwdriver")
+                                            Spacer()
+                                            if featuresDiagnosticsLoading {
+                                                ProgressView()
+                                                    .scaleEffect(0.8)
+                                            }
+                                            Button("Refresh") {
+                                                Task { await fetchFeaturesDiagnostics() }
+                                            }
+                                            .disabled(featuresDiagnosticsLoading)
+                                        }
+                                        if let error = featuresDiagnosticsError {
+                                            Text(error)
+                                                .font(.caption)
+                                                .foregroundColor(.orange)
+                                        }
+                                        if let diagnostics = featuresDiagnostics {
+                                            FeaturesDiagnosticsPanel(
+                                                diag: diagnostics,
+                                                onCopyTrace: { copyTrace(diagnostics.trace ?? []) },
+                                                onShareTrace: { shareTrace(diagnostics.trace ?? []) },
+                                                onCopyToStatus: { appendTraceToStatus(diagnostics.trace ?? []) }
+                                            )
+                                        } else if !featuresDiagnosticsLoading {
+                                            Text("No diagnostics yet. Tap Refresh.")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                } label: {
+                                    Text("Diagnostics")
+                                }
+
+                                if Self.cameraHealthCheckVisible {
+                                    GroupBox {
+                                        Toggle("Enable camera check JSON export", isOn: $cameraHealthDebugExportEnabled)
+                                            .font(.subheadline)
+                                        Text("Developer-only: adds a Copy Debug JSON button after Quick Check.")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    } label: {
+                                        Label("Camera Check", systemImage: "ladybug")
+                                    }
+                                }
                             }
-                            .padding(.horizontal)
+                            .padding(.top, 8)
+                        } label: {
+                            HStack {
+                                Image(systemName: "slider.horizontal.3")
+                                Text("Advanced")
+                                Spacer()
+                            }
                         }
+                        .padding(.horizontal)
                     }
                     .padding(.vertical, 16)
                 }
@@ -9466,6 +9874,59 @@ struct ContentView: View {
             symptomSheetPrefill = nil
         }) {
             symptomLogSheet(isPresented: $showSymptomSheet)
+        }
+        .fullScreenCover(isPresented: $showOnboardingFlow) {
+            OnboardingFlowView(
+                isPresented: $showOnboardingFlow,
+                currentStep: onboardingStepBinding,
+                profile: $experienceProfile,
+                selectedTagKeys: $selectedTagKeys,
+                zip: $localHealthZip,
+                useGPS: $profileUseGPS,
+                localInsightsEnabled: $profileLocalInsightsEnabled,
+                notificationPreferences: $notificationPreferences,
+                sensitivityOptions: onboardingSensitivityOptions,
+                healthContextOptions: onboardingHealthContextOptions,
+                activationData: onboardingActivationData,
+                locationMessage: profileLocationMessage,
+                locationSaving: profileLocationSaving,
+                notificationSettingsSaving: notificationSettingsSaving,
+                notificationSettingsMessage: notificationSettingsMessage,
+                pushPermissionGranted: pushPermissionGranted,
+                pushDeviceTokenReady: pushDeviceToken != nil,
+                healthPermissionsMessage: healthPermissionsMessage,
+                backfillMessage: backfillMessage,
+                backfillInFlight: backfillInFlight,
+                onPersistExperience: { update in
+                    await saveProfilePreferences(update)
+                },
+                onPersistTags: {
+                    await saveSelectedTags()
+                },
+                onSaveLocation: {
+                    await saveProfileLocation()
+                },
+                onRequestHealthPermissions: {
+                    await requestHealthPermissionsForOnboarding()
+                },
+                onRunBackfill: {
+                    await runUnifiedHealthBackfill()
+                },
+                onSaveNotifications: {
+                    await saveNotificationPreferences(requestAuthorizationIfNeeded: notificationPreferences.enabled)
+                },
+                onFinish: {
+                    onboardingCompleted = true
+                    didLocationOnboarding = true
+                    AppAnalytics.track("onboarding_completed")
+                    await saveProfilePreferences(
+                        UserExperienceProfileUpdate(
+                            onboardingStep: .activation,
+                            onboardingCompleted: true
+                        )
+                    )
+                }
+            )
         }
         .sheet(isPresented: $showLocationOnboarding) {
             LocationOnboardingSheet(
@@ -10037,7 +10498,7 @@ struct ContentView: View {
             VStack(spacing: 12) {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Optional health context")
+                        Text("Developer sync notes")
                             .font(.subheadline.weight(.semibold))
                         Text("Cycle tracking stays optional. If you allow it, Gaia only reads menstrual-flow timing so it can add respectful body-state context.")
                             .font(.caption)
@@ -10056,6 +10517,13 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .padding(.horizontal)
+
+                Button {
+                    Task { await state.syncHealthBackfillLast30Days() }
+                } label: { Text("Sync Last 30 Days").frame(maxWidth: .infinity) }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .padding(.horizontal)
                 
                 Button {
                     Task { await state.pingAPI() }
@@ -10069,6 +10537,12 @@ struct ContentView: View {
                 } label: { Text("Fetch Visuals (Diag)").frame(maxWidth: .infinity) }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
+                    .padding(.horizontal)
+
+                Text("Legacy granular sync")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
                 
                 HStack {

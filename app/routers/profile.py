@@ -30,6 +30,22 @@ _NOTIFICATION_FAMILY_DEFAULTS: Dict[str, bool] = {
 _NOTIFICATION_SENSITIVITIES = {"minimal", "normal", "detailed"}
 _SYMPTOM_FOLLOWUP_CADENCES = {"gentle", "balanced", "frequent"}
 _SYMPTOM_FOLLOWUP_STATES = {"new", "ongoing", "improving"}
+_EXPERIENCE_MODES = {"scientific", "mystical"}
+_GUIDE_TYPES = {"cat", "robot", "dog"}
+_TONE_STYLES = {"straight", "balanced", "humorous"}
+_ONBOARDING_STEPS = {
+    "welcome",
+    "mode",
+    "guide",
+    "tone",
+    "sensitivities",
+    "health_context",
+    "location",
+    "healthkit",
+    "backfill",
+    "notifications",
+    "activation",
+}
 
 
 def _require_user_id(request: Request) -> str:
@@ -73,6 +89,16 @@ class ProfileLocationIn(BaseModel):
     local_insights_enabled: Optional[bool] = Field(default=None)
 
 
+class ProfilePreferencesIn(BaseModel):
+    mode: Optional[str] = Field(default=None)
+    guide: Optional[str] = Field(default=None)
+    tone: Optional[str] = Field(default=None)
+    onboarding_step: Optional[str] = Field(default=None)
+    onboarding_completed: Optional[bool] = Field(default=None)
+    healthkit_requested: Optional[bool] = Field(default=None)
+    last_backfill_at: Optional[datetime] = Field(default=None)
+
+
 def _normalize_zip(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
@@ -80,6 +106,34 @@ def _normalize_zip(value: Optional[str]) -> Optional[str]:
     if not cleaned:
         return None
     return cleaned[:10]
+
+
+def _normalize_experience_mode(value: Optional[str], *, fallback: str) -> str:
+    candidate = str(value or fallback).strip().lower() or fallback
+    if candidate not in _EXPERIENCE_MODES:
+        raise HTTPException(status_code=400, detail="invalid experience mode")
+    return candidate
+
+
+def _normalize_guide_type(value: Optional[str], *, fallback: str) -> str:
+    candidate = str(value or fallback).strip().lower() or fallback
+    if candidate not in _GUIDE_TYPES:
+        raise HTTPException(status_code=400, detail="invalid guide type")
+    return candidate
+
+
+def _normalize_tone_style(value: Optional[str], *, fallback: str) -> str:
+    candidate = str(value or fallback).strip().lower() or fallback
+    if candidate not in _TONE_STYLES:
+        raise HTTPException(status_code=400, detail="invalid tone style")
+    return candidate
+
+
+def _normalize_onboarding_step(value: Optional[str], *, fallback: str) -> str:
+    candidate = str(value or fallback).strip().lower() or fallback
+    if candidate not in _ONBOARDING_STEPS:
+        raise HTTPException(status_code=400, detail="invalid onboarding step")
+    return candidate
 
 
 def _normalize_clock_hhmm(value: Optional[str], *, fallback: str) -> str:
@@ -181,6 +235,19 @@ def _default_notification_preferences() -> Dict[str, Any]:
     }
 
 
+def _default_profile_preferences() -> Dict[str, Any]:
+    return {
+        "mode": "scientific",
+        "guide": "cat",
+        "tone": "balanced",
+        "onboarding_step": "welcome",
+        "onboarding_completed": False,
+        "onboarding_completed_at": None,
+        "healthkit_requested_at": None,
+        "last_backfill_at": None,
+    }
+
+
 def _notification_pref_select(column_names: List[str], column: str, fallback_sql: str) -> str:
     if column in column_names:
         return f"{column} as {column}"
@@ -256,6 +323,51 @@ async def _fetch_location_row(conn, user_id: str) -> Optional[Dict[str, Any]]:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, (user_id,), prepare=False)
         return await cur.fetchone()
+
+
+async def _fetch_profile_preferences(conn, user_id: str) -> Dict[str, Any]:
+    defaults = _default_profile_preferences()
+    columns = await _table_columns(conn, "app", "user_experience_profiles")
+    if not columns or "user_id" not in columns:
+        return defaults
+
+    select_parts = [
+        "mode",
+        "guide",
+        "tone",
+        "onboarding_step",
+        "onboarding_completed",
+        "onboarding_completed_at",
+        "healthkit_requested_at",
+        "last_backfill_at",
+    ]
+    select_sql = ", ".join(column for column in select_parts if column in columns)
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            (
+                f"select {select_sql} "
+                "from app.user_experience_profiles "
+                "where user_id = %s "
+                "limit 1"
+            ),
+            (user_id,),
+            prepare=False,
+        )
+        row = await cur.fetchone()
+
+    if not row:
+        return defaults
+
+    return {
+        "mode": _normalize_experience_mode(row.get("mode"), fallback=defaults["mode"]),
+        "guide": _normalize_guide_type(row.get("guide"), fallback=defaults["guide"]),
+        "tone": _normalize_tone_style(row.get("tone"), fallback=defaults["tone"]),
+        "onboarding_step": _normalize_onboarding_step(row.get("onboarding_step"), fallback=defaults["onboarding_step"]),
+        "onboarding_completed": bool(row.get("onboarding_completed")),
+        "onboarding_completed_at": row.get("onboarding_completed_at"),
+        "healthkit_requested_at": row.get("healthkit_requested_at"),
+        "last_backfill_at": row.get("last_backfill_at"),
+    }
 
 
 @router.get("/location", dependencies=[Depends(require_read_auth)])
@@ -339,6 +451,82 @@ async def profile_location_upsert(
 
     row = await _fetch_location_row(conn, user_id)
     return {"ok": True, "location": row}
+
+
+@router.get("/preferences", dependencies=[Depends(require_read_auth)])
+async def profile_preferences(request: Request, conn=Depends(get_db)):
+    user_id = _require_user_id(request)
+    return {"ok": True, "preferences": await _fetch_profile_preferences(conn, user_id)}
+
+
+@router.put("/preferences", dependencies=[Depends(require_write_auth)])
+async def profile_preferences_upsert(
+    payload: ProfilePreferencesIn,
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    defaults = _default_profile_preferences()
+    current = await _fetch_profile_preferences(conn, user_id)
+    columns = await _table_columns(conn, "app", "user_experience_profiles")
+    if not columns or "user_id" not in columns:
+        return {"ok": False, "error": "app.user_experience_profiles table unavailable"}
+
+    now = datetime.now(timezone.utc)
+    onboarding_completed = (
+        bool(payload.onboarding_completed)
+        if payload.onboarding_completed is not None
+        else bool(current.get("onboarding_completed"))
+    )
+    onboarding_completed_at = current.get("onboarding_completed_at")
+    if payload.onboarding_completed is False:
+        onboarding_completed_at = None
+    elif onboarding_completed:
+        onboarding_completed_at = onboarding_completed_at or now
+
+    healthkit_requested_at = current.get("healthkit_requested_at")
+    if payload.healthkit_requested:
+        healthkit_requested_at = now
+
+    values_by_column: Dict[str, Any] = {
+        "user_id": user_id,
+        "mode": _normalize_experience_mode(payload.mode, fallback=str(current.get("mode") or defaults["mode"])),
+        "guide": _normalize_guide_type(payload.guide, fallback=str(current.get("guide") or defaults["guide"])),
+        "tone": _normalize_tone_style(payload.tone, fallback=str(current.get("tone") or defaults["tone"])),
+        "onboarding_step": _normalize_onboarding_step(
+            payload.onboarding_step,
+            fallback=str(current.get("onboarding_step") or defaults["onboarding_step"]),
+        ),
+        "onboarding_completed": onboarding_completed,
+        "onboarding_completed_at": onboarding_completed_at,
+        "healthkit_requested_at": healthkit_requested_at,
+        "last_backfill_at": payload.last_backfill_at or current.get("last_backfill_at"),
+        "updated_at": now,
+    }
+    if "created_at" in columns:
+        values_by_column["created_at"] = now
+
+    insert_columns = [column for column in values_by_column.keys() if column in columns]
+    placeholders = ["%s"] * len(insert_columns)
+    update_columns = [column for column in insert_columns if column not in {"user_id", "created_at"}]
+    update_set_sql = ", ".join(f"{column} = excluded.{column}" for column in update_columns)
+    insert_values = [values_by_column[column] for column in insert_columns]
+
+    async with conn.cursor() as cur:
+        await cur.execute(
+            (
+                "insert into app.user_experience_profiles ("
+                f"{', '.join(insert_columns)}) "
+                "values ("
+                f"{', '.join(placeholders)}) "
+                "on conflict (user_id) do update set "
+                f"{update_set_sql}"
+            ),
+            insert_values,
+            prepare=False,
+        )
+
+    return {"ok": True, "preferences": await _fetch_profile_preferences(conn, user_id)}
 
 
 class ProfileTagsIn(BaseModel):

@@ -126,6 +126,8 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     @Published var isEcgStreaming: Bool = false
     @Published var ecgNote: String?
     private var hrPausedForECG: Bool = false
+    @AppStorage("gaia.healthkit.requested_at") var healthkitRequestedAtISO: String = ""
+    @AppStorage("gaia.healthkit.last_backfill_at") var lastHealthBackfillAtISO: String = ""
 
     // Periodic status refresh (e.g., surface BG timestamps)
     private var statusTimer: Timer?
@@ -420,12 +422,14 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     }
 
     // MARK: - Health permissions
-    @MainActor func requestHealthPermissions() async {
+    @MainActor func requestHealthPermissions() async -> Bool {
         append("Requesting Health permissions…")
         append("Cycle tracking stays optional. Expanded recovery metrics sync only when your device provides them.")
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        healthkitRequestedAtISO = stamp
         guard HKHealthStore.isHealthDataAvailable() else {
             append("❌ Health data not available on this device")
-            return
+            return false
         }
         let toRead = makeHealthReadTypes()
         do {
@@ -440,8 +444,10 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             }
             await HealthKitBackgroundSync.shared.ensurePhase2RecentBackfillIfNeeded()
             await HealthKitBackgroundSync.shared.kickOnce(reason: "permissions granted")
+            return true
         } catch {
             append("❌ Health permission error: \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -586,6 +592,20 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         } catch {
             append("❌ Sleep sync error: \(error.localizedDescription)")
         }
+    }
+
+    @MainActor func syncHealthBackfillLast30Days() async -> Bool {
+        append("Sync HealthKit last 30 days…")
+        guard HKHealthStore.isHealthDataAvailable() else {
+            append("❌ Health data not available on this device")
+            return false
+        }
+        let start = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date(timeIntervalSinceNow: -(30 * 24 * 60 * 60))
+        await HealthKitBackgroundSync.shared.forceBackfill(since: start)
+        lastHealthBackfillAtISO = ISO8601DateFormatter().string(from: Date())
+        append("✅ Last 30 days import finished")
+        refreshStatus()
+        return true
     }
 
     // MARK: - BLE controls

@@ -3,6 +3,9 @@ import SafariServices
 
 struct SubscribeView: View {
     @EnvironmentObject var auth: AuthManager
+    @AppStorage("gaia.membership.cached_plan") private var cachedPlanRaw: String = MembershipPlan.free.rawValue
+    @AppStorage("gaia.membership.last_sync_at") private var cachedPlanSyncedAt: String = ""
+
     @State private var checkoutURL: URL? = nil
     @State private var showSafari = false
     @State private var errorMessage: String? = nil
@@ -12,11 +15,47 @@ struct SubscribeView: View {
 
     private let billingPortalURL = Bundle.main.object(forInfoDictionaryKey: "GAIA_BILLING_PORTAL_URL") as? String
 
+    private var activeEntitlements: [Entitlement] {
+        entitlements.filter { $0.isActive == true }
+    }
+
+    private var currentPlan: MembershipPlan {
+        guard auth.supabaseAccessToken != nil else {
+            return .free
+        }
+        if activeEntitlements.contains(where: { $0.key.lowercased().contains("pro") }) {
+            return .pro
+        }
+        if activeEntitlements.contains(where: { $0.key.lowercased().contains("plus") }) {
+            return .plus
+        }
+        return MembershipPlan(rawValue: cachedPlanRaw) ?? .free
+    }
+
+    private var signedInLabel: String {
+        if let email = auth.supabaseEmail, !email.isEmpty {
+            return "Signed in as \(email)"
+        }
+        if let userId = auth.currentSupabaseUserId() {
+            return "Signed in as \(userId.prefix(8))..."
+        }
+        return "Signed in on this device"
+    }
+
+    private var canManageBilling: Bool {
+        currentPlan != .free && billingPortalResolvedURL != nil
+    }
+
+    private var billingPortalResolvedURL: URL? {
+        guard let billingPortalURL else { return nil }
+        return URL(string: billingPortalURL)
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Subscribe")
-                    .font(.title2)
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Account & Membership")
+                    .font(.title2.weight(.bold))
 
                 if !auth.isConfigured {
                     Text("Missing SUPABASE_URL or SUPABASE_ANON_KEY in Info.plist.")
@@ -24,76 +63,39 @@ struct SubscribeView: View {
                         .foregroundColor(.orange)
                 }
 
-                HStack(alignment: .firstTextBaseline) {
-                    Text(auth.supabaseAccessToken == nil ? "Status: Not signed in on this device" : "Status: Signed in")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Button("Refresh Status") {
-                        Task { await refreshSessionStatus() }
-                    }
-                    .font(.caption)
-                }
+                statusCard
 
                 if auth.supabaseAccessToken == nil {
                     LoginView()
-                    Text("After opening the magic link, this screen should switch to signed-in state.")
+                    Text("Sign in to manage plans, billing, and future purchases on this device.")
                         .font(.footnote)
                         .foregroundColor(.secondary)
+                    freePlanCards
                 } else {
-                    if let email = auth.supabaseEmail {
-                        Text("Signed in as \(email)")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    } else if let userId = auth.currentSupabaseUserId() {
-                        Text("Signed in (user \(userId.prefix(8))...)")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
+                    currentPlanCard
+                    planActions
+
+                    if !activeEntitlements.isEmpty {
+                        entitlementSummary
                     }
 
-                    VStack(spacing: 12) {
-                        Button("Get Plus (Monthly)") { Task { await startCheckout(plan: "plus_monthly") } }
-                            .buttonStyle(.borderedProminent)
-                        Button("Get Plus (Yearly)") { Task { await startCheckout(plan: "plus_yearly") } }
-                            .buttonStyle(.bordered)
-                        Button("Get Pro (Monthly)") { Task { await startCheckout(plan: "pro_monthly") } }
-                            .buttonStyle(.borderedProminent)
-                        Button("Get Pro (Yearly)") { Task { await startCheckout(plan: "pro_yearly") } }
-                            .buttonStyle(.bordered)
-                    }
-                    .disabled(isWorking)
-
-                    if let portal = billingPortalURL, let portalURL = URL(string: portal) {
+                    if canManageBilling, let portal = billingPortalResolvedURL {
                         Button("Manage Billing") {
-                            checkoutURL = portalURL
+                            checkoutURL = portal
                             showSafari = true
                         }
                         .buttonStyle(.bordered)
-                    }
-
-                    if entitlementsLoading {
-                        ProgressView()
-                    } else if !entitlements.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Current Entitlements")
-                                .font(.headline)
-                            ForEach(entitlements.indices, id: \.self) { idx in
-                                let ent = entitlements[idx]
-                                Text("\(ent.key) \(ent.term ?? "") - \(ent.isActive == true ? "active" : "inactive")")
-                                    .font(.footnote)
-                            }
-                        }
                     }
 
                     Button("Sign Out") { auth.signOutSupabase() }
                         .buttonStyle(.bordered)
                 }
 
-                if isWorking {
+                if isWorking || entitlementsLoading {
                     ProgressView()
                 }
 
-                if let errorMessage {
+                if let errorMessage, !errorMessage.isEmpty {
                     Text(errorMessage)
                         .foregroundColor(.orange)
                         .font(.footnote)
@@ -114,6 +116,171 @@ struct SubscribeView: View {
         .onChange(of: auth.supabaseAccessToken) { _, _ in
             Task { await refreshEntitlementsIfNeeded() }
         }
+    }
+
+    private var statusCard: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(auth.supabaseAccessToken == nil ? "Status: Not signed in on this device" : signedInLabel)
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("Refresh Status") {
+                        Task { await refreshSessionStatus() }
+                    }
+                    .font(.caption)
+                }
+                Text("Your Plan: \(currentPlan.title)")
+                    .font(.headline)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var currentPlanCard: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Your Plan")
+                    .font(.subheadline.weight(.semibold))
+                Text(currentPlan.title)
+                    .font(.title3.weight(.bold))
+                Text(planDescription(for: currentPlan))
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var planActions: some View {
+        switch currentPlan {
+        case .free:
+            freePlanCards
+        case .plus:
+            GroupBox {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Upgrade to Pro")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Keep your current Plus access and move up when you want deeper outlooks and premium intelligence layers.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                    Button("Upgrade to Pro (Monthly)") {
+                        Task { await startCheckout(plan: "pro_monthly") }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button("Upgrade to Pro (Yearly)") {
+                        Task { await startCheckout(plan: "pro_yearly") }
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .disabled(isWorking)
+        case .pro:
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Pro is active on this account.")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Billing and renewal changes stay available in Manage Billing.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var freePlanCards: some View {
+        VStack(spacing: 12) {
+            planCard(
+                title: "Plus",
+                description: "Unlock richer current-state personalization, better drivers, and more useful day-to-day signal context.",
+                primaryTitle: "Get Plus (Monthly)",
+                primaryPlan: "plus_monthly",
+                secondaryTitle: "Get Plus (Yearly)",
+                secondaryPlan: "plus_yearly"
+            )
+
+            planCard(
+                title: "Pro",
+                description: "Add deeper outlooks, advanced history, premium notifications, and a more complete intelligence layer.",
+                primaryTitle: "Get Pro (Monthly)",
+                primaryPlan: "pro_monthly",
+                secondaryTitle: "Get Pro (Yearly)",
+                secondaryPlan: "pro_yearly"
+            )
+        }
+    }
+
+    private func planCard(
+        title: String,
+        description: String,
+        primaryTitle: String,
+        primaryPlan: String,
+        secondaryTitle: String,
+        secondaryPlan: String
+    ) -> some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(title)
+                    .font(.headline)
+                Text(description)
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                if auth.supabaseAccessToken == nil {
+                    Text("Sign in to purchase this plan.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    Button(primaryTitle) {
+                        Task { await startCheckout(plan: primaryPlan) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button(secondaryTitle) {
+                        Task { await startCheckout(plan: secondaryPlan) }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isWorking)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var entitlementSummary: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Current Access")
+                    .font(.subheadline.weight(.semibold))
+                ForEach(activeEntitlements.indices, id: \.self) { idx in
+                    let ent = activeEntitlements[idx]
+                    Text(formattedEntitlement(ent))
+                        .font(.footnote)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func planDescription(for plan: MembershipPlan) -> String {
+        switch plan {
+        case .free:
+            return "Free keeps the core experience available while you decide how personal you want Gaia Eyes to become."
+        case .plus:
+            return "Plus focuses on current-state personalization and more useful daily context."
+        case .pro:
+            return "Pro unlocks the full premium intelligence layer."
+        }
+    }
+
+    private func formattedEntitlement(_ entitlement: Entitlement) -> String {
+        let label = entitlement.key.replacingOccurrences(of: "_", with: " ").capitalized
+        if let term = entitlement.term, !term.isEmpty {
+            return "\(label) • \(term.capitalized)"
+        }
+        return label
     }
 
     private func startCheckout(plan: String) async {
@@ -137,13 +304,19 @@ struct SubscribeView: View {
     }
 
     private func refreshEntitlementsIfNeeded() async {
-        guard let token = auth.supabaseAccessToken else { return }
+        guard let token = auth.supabaseAccessToken else {
+            entitlements = []
+            cachedPlanRaw = MembershipPlan.free.rawValue
+            return
+        }
         entitlementsLoading = true
         defer { entitlementsLoading = false }
         do {
             let service = try CheckoutService()
             let response = try await service.fetchEntitlements(accessToken: token)
             entitlements = response.entitlements
+            cachedPlanRaw = currentPlan.rawValue
+            cachedPlanSyncedAt = ISO8601DateFormatter().string(from: Date())
         } catch {
             errorMessage = error.localizedDescription
         }

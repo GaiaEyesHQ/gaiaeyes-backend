@@ -14,6 +14,7 @@ SENSITIVITY_KEYS = frozenset(
         "air_quality_sensitive",
         "anxiety_sensitive",
         "geomagnetic_sensitive",
+        "pain_sensitive",
         "pressure_sensitive",
         "sleep_sensitive",
         "temperature_sensitive",
@@ -46,6 +47,7 @@ PAIN_FLARE_KEYS = frozenset(
         "chronic_pain",
         "fibromyalgia",
         "hypermobility_eds",
+        "pain_sensitive",
     }
 )
 AUTONOMIC_KEYS = frozenset(

@@ -565,7 +565,6 @@ enum PushNotificationService {
 
         do {
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
             let envelope = try decoder.decode(NotificationPreferencesEnvelope.self, from: data)
             if envelope.ok == false {
                 let message = (envelope.error ?? envelope.detail ?? "Notification settings request failed")

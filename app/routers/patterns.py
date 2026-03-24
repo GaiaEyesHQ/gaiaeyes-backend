@@ -102,7 +102,7 @@ def _priority_boost(user_tags: set[str], row: Dict[str, Any]) -> int:
     if outcome_key == "headache_day" and "migraine_history" in user_tags:
         score += 40
     if outcome_key == "pain_flare_day" and user_tags.intersection(
-        {"arthritis", "autoimmune_condition", "chronic_pain", "fibromyalgia", "hypermobility_eds"}
+        {"arthritis", "autoimmune_condition", "chronic_pain", "fibromyalgia", "hypermobility_eds", "pain_sensitive"}
     ):
         score += 35
     if outcome_key in {"poor_sleep_day", "fatigue_day", "hrv_dip_day", "high_hr_day"} and user_tags.intersection(

@@ -227,7 +227,8 @@ class GaugeScorerTests(unittest.TestCase):
         self.assertIn("pain", summary["gauge_boosts"])
         self.assertIn("energy", summary["gauge_boosts"])
         self.assertLess(summary["gauge_boosts"]["energy"], 18.0)
-        self.assertNotIn("stamina", summary["gauge_boosts"])
+        self.assertGreater(summary["gauge_boosts"].get("stamina", 0.0), 0.0)
+        self.assertLess(summary["gauge_boosts"]["stamina"], 9.8)
 
 
 if __name__ == "__main__":
