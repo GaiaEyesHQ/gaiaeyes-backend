@@ -47,17 +47,6 @@ private struct HealthBackfillMetricResult: Sendable {
     var didUploadAnyData: Bool { uploadedRows > 0 }
 }
 
-private enum HealthBackfillTimeoutError: LocalizedError, Sendable {
-    case metric(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .metric(let label):
-            return "\(label) timed out"
-        }
-    }
-}
-
 private typealias AnchoredQueryContinuation = CheckedContinuation<(HKQueryAnchor?, [HKSample], Bool), Error>
 
 private final class HealthKitAnchoredQueryBox: @unchecked Sendable {
@@ -241,18 +230,6 @@ final class HealthKitBackgroundSync {
             }
         }
 
-        var timeout: TimeInterval {
-            switch self {
-            case .heartRate:
-                return 35
-            case .sleep:
-                return 30
-            case .bloodPressure:
-                return 20
-            default:
-                return 15
-            }
-        }
     }
 
     // Register observers
@@ -795,24 +772,6 @@ final class HealthKitBackgroundSync {
         }
     }
 
-    private func runWithTimeout<T: Sendable>(
-        seconds: TimeInterval,
-        operation: @escaping @Sendable () async -> T
-    ) async throws -> T {
-        try await withThrowingTaskGroup(of: T.self) { group in
-            group.addTask {
-                await operation()
-            }
-            group.addTask {
-                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-                throw HealthBackfillTimeoutError.metric("Backfill metric")
-            }
-            let value = try await group.next()!
-            group.cancelAll()
-            return value
-        }
-    }
-
     private func interactiveChunkSize(for metric: InteractiveBackfillMetric) -> Int {
         switch metric {
         case .heartRate:
@@ -930,59 +889,35 @@ final class HealthKitBackgroundSync {
     ) async -> HealthBackfillSummary {
         let metrics = InteractiveBackfillMetric.allCases
         anchorStore.clear(keys: metrics.map(\.key))
-
-        let deadline = Date().addingTimeInterval(90)
         var summary = HealthBackfillSummary(totalMetrics: metrics.count)
 
         await reportBackfillProgress("Preparing 30-day import…", onProgress: onProgress)
 
         for (index, metric) in metrics.enumerated() {
             let ordinal = index + 1
-            let remaining = deadline.timeIntervalSinceNow
-            if remaining <= 5 {
-                summary.timedOutMetrics.append(metric.label)
-                await reportBackfillProgress(
-                    "Stopping early because the import is taking longer than expected.",
-                    onProgress: onProgress
-                )
-                break
-            }
-
             await reportBackfillProgress(
                 "Collecting \(metric.label) (\(ordinal)/\(metrics.count))…",
                 onProgress: onProgress
             )
 
-            do {
-                let timeout = min(metric.timeout, max(5, remaining - 2))
-                let result = try await runWithTimeout(seconds: timeout) {
-                    await self.performInteractiveBackfillMetric(metric, start: start)
-                }
-
-                summary.completedMetrics = ordinal
-                if let failure = result.failureDescription {
-                    summary.failedMetrics.append(metric.label)
-                    await reportBackfillProgress(
-                        "Could not import \(metric.label). \(failure)",
-                        onProgress: onProgress
-                    )
-                } else if result.didUploadAnyData {
-                    summary.uploadedMetrics += 1
-                    summary.uploadedRows += result.uploadedRows
-                    await reportBackfillProgress(
-                        "Imported \(result.uploadedRows) \(metric.label) rows.",
-                        onProgress: onProgress
-                    )
-                } else {
-                    await reportBackfillProgress(
-                        "No \(metric.label) samples found in the last 30 days.",
-                        onProgress: onProgress
-                    )
-                }
-            } catch {
-                summary.timedOutMetrics.append(metric.label)
+            let result = await self.performInteractiveBackfillMetric(metric, start: start)
+            summary.completedMetrics = ordinal
+            if let failure = result.failureDescription {
+                summary.failedMetrics.append(metric.label)
                 await reportBackfillProgress(
-                    "Timed out while importing \(metric.label).",
+                    "Could not import \(metric.label). \(failure)",
+                    onProgress: onProgress
+                )
+            } else if result.didUploadAnyData {
+                summary.uploadedMetrics += 1
+                summary.uploadedRows += result.uploadedRows
+                await reportBackfillProgress(
+                    "Imported \(result.uploadedRows) \(metric.label) rows.",
+                    onProgress: onProgress
+                )
+            } else {
+                await reportBackfillProgress(
+                    "No \(metric.label) samples found in the last 30 days.",
                     onProgress: onProgress
                 )
             }

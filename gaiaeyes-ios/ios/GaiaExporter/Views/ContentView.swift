@@ -1744,6 +1744,7 @@ struct ContentView: View {
     @State private var healthPermissionsMessage: String?
     @State private var backfillMessage: String?
     @State private var backfillInFlight: Bool = false
+    @State private var backfillTask: Task<Void, Never>? = nil
 #if canImport(CoreLocation)
     @State private var locationProvider = OneShotLocationProvider()
 #endif
@@ -3021,22 +3022,29 @@ struct ContentView: View {
     }
 
     private func runUnifiedHealthBackfill() async -> Bool {
-        await MainActor.run {
+        let alreadyRunning = await MainActor.run {
+            if backfillInFlight {
+                return true
+            }
             backfillInFlight = true
             backfillMessage = "Preparing your 30-day Health import…"
+            return false
+        }
+        if alreadyRunning {
+            return true
         }
         AppAnalytics.track("health_backfill_started", properties: ["window": "30d"])
-        let summary = await state.syncHealthBackfillLast30Days { message in
-            backfillMessage = message
-        }
-        let syncStamp = await MainActor.run { state.lastHealthBackfillAtISO }
-        let finishedCleanly = summary.didUploadAnyData || summary.isSuccessful
-        if finishedCleanly, !syncStamp.isEmpty {
-            await saveProfilePreferences(UserExperienceProfileUpdate(lastBackfillAt: syncStamp))
-            await fetchDashboardPayload(force: true)
-            await fetchLocalHealth()
-        }
-        await MainActor.run {
+        let task = Task { @MainActor in
+            let summary = await state.syncHealthBackfillLast30Days { message in
+                backfillMessage = message
+            }
+            let syncStamp = state.lastHealthBackfillAtISO
+            let finishedCleanly = summary.didUploadAnyData || summary.isSuccessful
+            if finishedCleanly, !syncStamp.isEmpty {
+                await saveProfilePreferences(UserExperienceProfileUpdate(lastBackfillAt: syncStamp))
+                await fetchDashboardPayload(force: true)
+                await fetchLocalHealth()
+            }
             backfillInFlight = false
             if summary.didUploadAnyData {
                 experienceProfile.lastBackfillAt = syncStamp.isEmpty ? experienceProfile.lastBackfillAt : syncStamp
@@ -3050,12 +3058,16 @@ struct ContentView: View {
             } else {
                 backfillMessage = summary.userFacingMessage
             }
+            AppAnalytics.track(
+                finishedCleanly ? "health_backfill_completed" : "health_backfill_failed",
+                properties: ["window": "30d"]
+            )
+            backfillTask = nil
         }
-        AppAnalytics.track(
-            finishedCleanly ? "health_backfill_completed" : "health_backfill_failed",
-            properties: ["window": "30d"]
-        )
-        return finishedCleanly
+        await MainActor.run {
+            backfillTask = task
+        }
+        return true
     }
 
     private func handleIncomingPushRoute(_ route: GaiaPushRoute) {
