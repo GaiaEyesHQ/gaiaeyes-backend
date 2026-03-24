@@ -110,6 +110,10 @@ quietly biasing toward mild severity.
 }
 ```
 
+When the current-symptoms schema is present, creating a symptom event also opens or
+reuses a live symptom episode so the event can evolve over time without mutating the
+original onset record.
+
 ## GET `/v1/symptoms/codes`
 
 Returns the catalog of symptom codes from `dim.symptom_codes` ordered by label.
@@ -233,6 +237,109 @@ HTTP status at 200:
   "friendly_error": "Failed to load daily symptom summary"
 }
 ```
+
+## GET `/v1/symptoms/current?window_hours=12`
+
+Return the user’s currently active symptom layer for a recent window. The default
+window is 12 hours and the endpoint excludes symptoms already marked `resolved`.
+
+Each item preserves the original onset (`logged_at`, `original_severity`) while also
+returning the latest live state (`new`, `ongoing`, `improving`, `resolved`), current
+severity, note preview, likely drivers, and compact pattern context.
+
+**Response**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "generated_at": "2026-03-23T12:00:00Z",
+    "window_hours": 12,
+    "summary": {
+      "active_count": 1,
+      "new_count": 0,
+      "ongoing_count": 1,
+      "improving_count": 0,
+      "last_updated_at": "2026-03-23T11:45:00Z",
+      "follow_up_available": true
+    },
+    "items": [
+      {
+        "id": "episode-uuid",
+        "symptom_code": "HEADACHE",
+        "label": "Headache",
+        "severity": 7,
+        "original_severity": 8,
+        "logged_at": "2026-03-23T09:00:00Z",
+        "last_interaction_at": "2026-03-23T11:45:00Z",
+        "current_state": "ongoing",
+        "note_preview": "Worse this afternoon",
+        "note_count": 1,
+        "likely_drivers": [],
+        "pattern_hint": null,
+        "gauge_keys": ["pain", "focus"],
+        "current_context_badge": "Pattern match"
+      }
+    ],
+    "contributing_drivers": [],
+    "pattern_context": [],
+    "follow_up_settings": {
+      "notifications_enabled": true,
+      "enabled": true,
+      "notification_family_enabled": true,
+      "cadence": "balanced",
+      "states": ["new", "ongoing", "improving"],
+      "symptom_codes": []
+    }
+  }
+}
+```
+
+## GET `/v1/symptoms/current/timeline?days=14`
+
+Return symptom evolution events for the recent timeline, including original logs,
+state changes, severity adjustments, and note entries.
+
+**Response**
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "id": "update-uuid",
+      "episode_id": "episode-uuid",
+      "symptom_code": "HEADACHE",
+      "label": "Headache",
+      "update_kind": "state_change",
+      "state": "improving",
+      "severity": 5,
+      "note_text": "Improved after resting",
+      "occurred_at": "2026-03-23T14:30:00Z"
+    }
+  ]
+}
+```
+
+## POST `/v1/symptoms/current/{episode_id}/updates`
+
+Persist a real update for a current symptom episode. This route never rewrites the
+original symptom event; instead it appends a follow-up record that can change state,
+adjust severity, add a note, or do all three at once.
+
+**Request body**
+
+```json
+{
+  "state": "resolved",
+  "severity": 2,
+  "note_text": "Passed after hydration",
+  "ts_utc": "2026-03-23T15:10:00Z"
+}
+```
+
+Successful updates also trigger the same-day gauge refresh path so improving and
+resolved symptoms can reduce current symptom load.
 
 ## GET `/v1/symptoms/diag?days=30`
 

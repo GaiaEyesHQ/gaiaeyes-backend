@@ -388,3 +388,130 @@ async def test_symptom_endpoints_return_ok_for_empty(monkeypatch, client: AsyncC
     diag_payload = diag_resp.json()
     assert diag_payload["ok"] is True
     assert diag_payload["data"] == []
+
+
+@pytest.mark.anyio
+async def test_current_symptoms_snapshot_builds_live_context(monkeypatch, client: AsyncClient):
+    user_id = str(uuid4())
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Dev-UserId": user_id,
+    }
+
+    async def _current_items(conn, user, *, window_hours, limit=20):  # noqa: ARG001
+        return [
+            {
+                "id": "ep-1",
+                "symptom_code": "headache",
+                "label": "Headache",
+                "original_severity": 8,
+                "current_severity": 7,
+                "started_at": "2024-04-02T08:00:00+00:00",
+                "current_state": "ongoing",
+                "state_updated_at": "2024-04-02T09:00:00+00:00",
+                "last_interaction_at": "2024-04-02T09:30:00+00:00",
+                "latest_note_text": "Worse this afternoon",
+                "note_count": 1,
+            }
+        ]
+
+    async def _follow_up(conn, user):  # noqa: ARG001
+        return {
+            "notifications_enabled": True,
+            "enabled": True,
+            "notification_family_enabled": True,
+            "cadence": "balanced",
+            "states": ["new", "ongoing", "improving"],
+            "symptom_codes": [],
+        }
+
+    async def _patterns(conn, user):  # noqa: ARG001
+        return []
+
+    async def _recent(conn, user, day, *, days=7):  # noqa: ARG001
+        return {"counts": {}, "latest": {}, "days": days}
+
+    async def _drivers(**kwargs):  # noqa: ARG001
+        return (
+            [{"key": "pressure", "label": "Pressure swings", "severity": "watch", "state": "watch", "display": "6.8 hPa swing"}],
+            [],
+            {},
+        )
+
+    def _relevance(**kwargs):  # noqa: ARG001
+        return {
+            "ranked_drivers": [
+                {
+                    "key": "pressure",
+                    "label": "Pressure swings",
+                    "severity": "watch",
+                    "state": "watch",
+                    "display": "6.8 hPa swing",
+                    "active_pattern_refs": [
+                        {
+                            "id": "pressure_swing_exposed|headache_day|0",
+                            "signal_key": "pressure_swing_exposed",
+                            "signal": "Pressure swings",
+                            "outcome_key": "headache_day",
+                            "outcome": "Headaches",
+                            "confidence": "Moderate",
+                            "relevance_score": 3.2,
+                            "explanation": "Pressure swings are a known repeating pattern in your headache history.",
+                        }
+                    ],
+                }
+            ]
+        }
+
+    monkeypatch.setattr(symptoms_db, "fetch_current_symptom_items", _current_items)
+    monkeypatch.setattr(symptoms_db, "fetch_symptom_follow_up_settings", _follow_up)
+    monkeypatch.setattr(symptoms_router, "fetch_best_pattern_rows", _patterns)
+    monkeypatch.setattr(symptoms_router, "fetch_recent_outcome_summary", _recent)
+    monkeypatch.setattr(symptoms_router, "resolve_current_drivers", _drivers)
+    monkeypatch.setattr(symptoms_router, "compute_personal_relevance", _relevance)
+
+    response = await client.get("/v1/symptoms/current?window_hours=12", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["data"]["summary"]["active_count"] == 1
+    assert payload["data"]["items"][0]["current_state"] == "ongoing"
+    assert payload["data"]["items"][0]["likely_drivers"][0]["key"] == "pressure"
+    assert payload["data"]["pattern_context"][0]["signal_key"] == "pressure_swing_exposed"
+    assert payload["data"]["follow_up_settings"]["enabled"] is True
+
+
+@pytest.mark.anyio
+async def test_current_symptom_update_returns_updated_item(monkeypatch, client: AsyncClient):
+    user_id = str(uuid4())
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Dev-UserId": user_id,
+    }
+
+    async def _update(conn, user, episode_id, **kwargs):  # noqa: ARG001
+        assert episode_id == "ep-1"
+        return {
+            "id": "ep-1",
+            "symptom_code": "headache",
+            "current_state": "resolved",
+            "original_severity": 8,
+            "current_severity": 2,
+            "started_at": "2024-04-02T08:00:00+00:00",
+            "state_updated_at": "2024-04-02T10:00:00+00:00",
+            "last_interaction_at": "2024-04-02T10:00:00+00:00",
+            "latest_note_text": "Cleared after rest",
+        }
+
+    monkeypatch.setattr(symptoms_db, "record_symptom_episode_update", _update)
+
+    response = await client.post(
+        "/v1/symptoms/current/ep-1/updates",
+        json={"state": "resolved", "note_text": "Cleared after rest", "severity": 2},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["data"]["current_state"] == "resolved"
+    assert payload["data"]["note_preview"] == "Cleared after rest"

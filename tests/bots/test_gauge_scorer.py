@@ -214,6 +214,21 @@ class GaugeScorerTests(unittest.TestCase):
         self.assertIn("pain", summary["recent_matching_gauges"])
         self.assertGreater(summary["health_status_symptom_boost"], 12.0)
 
+    def test_symptom_signal_summary_respects_current_state_multipliers(self) -> None:
+        now = datetime.now(timezone.utc)
+        summary = _build_symptom_signal_summary(
+            [
+                {"symptom_code": "HEADACHE", "severity": 8, "last_interaction_at": now - timedelta(hours=1), "current_state": "ongoing"},
+                {"symptom_code": "FATIGUE", "severity": 8, "last_interaction_at": now - timedelta(hours=1), "current_state": "improving"},
+                {"symptom_code": "PAIN", "severity": 9, "last_interaction_at": now - timedelta(hours=1), "current_state": "resolved"},
+            ]
+        )
+
+        self.assertIn("pain", summary["gauge_boosts"])
+        self.assertIn("energy", summary["gauge_boosts"])
+        self.assertLess(summary["gauge_boosts"]["energy"], 18.0)
+        self.assertNotIn("stamina", summary["gauge_boosts"])
+
 
 if __name__ == "__main__":
     unittest.main()

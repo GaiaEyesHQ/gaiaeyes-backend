@@ -130,6 +130,13 @@ _SYMPTOM_GAUGE_CAPS: Dict[str, float] = {
     "health_status": 26.0,
 }
 
+_CURRENT_SYMPTOM_STATE_MULTIPLIERS: Dict[str, float] = {
+    "new": 1.0,
+    "ongoing": 1.0,
+    "improving": 0.55,
+    "resolved": 0.0,
+}
+
 
 def _coerce_day(value: str | date | None) -> date:
     if isinstance(value, date):
@@ -217,6 +224,34 @@ def fetch_user_tags(user_id: str) -> List[Dict[str, Any]]:
 
 def fetch_symptom_summary(user_id: str, day: date) -> Dict[str, Any]:
     start, end = _local_day_bounds(day)
+    episode_rows: List[Dict[str, Any]] = []
+    episode_cols = table_columns("raw", "user_symptom_episodes")
+    if episode_cols:
+        try:
+            episode_rows = pg.fetch(
+                """
+                select symptom_code,
+                       coalesce(current_severity, original_severity) as severity,
+                       last_interaction_at as ts_utc,
+                       latest_note_text as free_text,
+                       current_state
+                  from raw.user_symptom_episodes
+                 where user_id = %s
+                   and last_interaction_at >= %s
+                   and last_interaction_at < %s
+                   and current_state in ('new', 'ongoing', 'improving')
+                 order by last_interaction_at desc
+                """,
+                user_id,
+                start,
+                end,
+            ) or []
+        except Exception:
+            episode_rows = []
+
+    if episode_rows:
+        return _build_symptom_signal_summary(episode_rows)
+
     try:
         rows = pg.fetch(
             """
@@ -274,6 +309,11 @@ def _is_recent_symptom(ts_utc: Optional[datetime], *, asof: Optional[datetime] =
     return age_hours <= _RECENT_MATCH_WINDOW_HOURS
 
 
+def _state_multiplier(value: Any) -> float:
+    token = str(value or "new").strip().lower()
+    return _CURRENT_SYMPTOM_STATE_MULTIPLIERS.get(token, 1.0)
+
+
 def _build_symptom_signal_summary(events: List[Dict[str, Any]]) -> Dict[str, Any]:
     now_utc = datetime.now(timezone.utc)
     gauge_boosts: Dict[str, float] = {key: 0.0 for key in _SYMPTOM_EFFECT_KEYS}
@@ -286,7 +326,7 @@ def _build_symptom_signal_summary(events: List[Dict[str, Any]]) -> Dict[str, Any
     for raw in events:
         code = _normalize_symptom_code(raw.get("symptom_code"))
         severity = _safe_float(raw.get("severity"))
-        ts_utc = raw.get("ts_utc")
+        ts_utc = raw.get("last_interaction_at") or raw.get("state_updated_at") or raw.get("ts_utc")
         if isinstance(ts_utc, str):
             try:
                 ts_utc = datetime.fromisoformat(ts_utc.replace("Z", "+00:00"))
@@ -295,6 +335,10 @@ def _build_symptom_signal_summary(events: List[Dict[str, Any]]) -> Dict[str, Any
         if isinstance(ts_utc, datetime) and ts_utc.tzinfo is None:
             ts_utc = ts_utc.replace(tzinfo=timezone.utc)
 
+        state_mult = _state_multiplier(raw.get("current_state") or raw.get("state"))
+        if state_mult <= 0:
+            continue
+
         grouped[code].append(
             {
                 "symptom_code": code,
@@ -302,6 +346,7 @@ def _build_symptom_signal_summary(events: List[Dict[str, Any]]) -> Dict[str, Any
                 "ts_utc": ts_utc,
                 "free_text": raw.get("free_text"),
                 "tags": raw.get("tags"),
+                "current_state": raw.get("current_state") or raw.get("state"),
             }
         )
         if severity is not None:
@@ -320,10 +365,12 @@ def _build_symptom_signal_summary(events: List[Dict[str, Any]]) -> Dict[str, Any
         if cluster_key:
             cluster_keys.add(cluster_key)
         for gauge_key, weight in effects.items():
-            contribution = severity_points * float(weight) * recency_mult
+            contribution = severity_points * float(weight) * recency_mult * state_mult
             gauge_boosts[gauge_key] = gauge_boosts.get(gauge_key, 0.0) + contribution
             if _is_recent_symptom(ts_utc, asof=now_utc):
-                recent_gauge_boosts[gauge_key] = recent_gauge_boosts.get(gauge_key, 0.0) + (severity_points * float(weight))
+                recent_gauge_boosts[gauge_key] = recent_gauge_boosts.get(gauge_key, 0.0) + (
+                    severity_points * float(weight) * state_mult
+                )
 
     cluster_bonus = 0.0
     if len(cluster_keys) >= 2:
@@ -346,6 +393,7 @@ def _build_symptom_signal_summary(events: List[Dict[str, Any]]) -> Dict[str, Any
                 "max_severity": max(severities) if severities else None,
                 "mean_severity": (sum(severities) / len(severities)) if severities else None,
                 "last_ts": _serialize_iso_utc(last_ts),
+                "current_state": str(rows[0].get("current_state") or "new"),
             }
         )
     top_symptoms.sort(

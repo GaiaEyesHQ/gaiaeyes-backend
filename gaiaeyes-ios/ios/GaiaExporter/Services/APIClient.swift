@@ -442,6 +442,20 @@ final class APIClient {
         let valid: [String]?
     }
 
+    private struct CurrentSymptomUpdatePayload: Encodable {
+        let state: String?
+        let severity: Int?
+        let noteText: String?
+        let tsUtc: String?
+
+        enum CodingKeys: String, CodingKey {
+            case state
+            case severity
+            case noteText = "note_text"
+            case tsUtc = "ts_utc"
+        }
+    }
+
     func postSymptomEvent(from event: SymptomQueuedEvent) async throws -> SymptomPostResponse {
         let isoFmt = ISO8601DateFormatter()
         isoFmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -486,6 +500,36 @@ final class APIClient {
 
     func fetchSymptomCodes() async throws -> Envelope<[SymptomCodeDefinition]> {
         try await getJSON("v1/symptoms/codes", as: Envelope<[SymptomCodeDefinition]>.self)
+    }
+
+    func fetchCurrentSymptoms(windowHours: Int = 12) async throws -> Envelope<CurrentSymptomsSnapshot> {
+        try await getJSON("v1/symptoms/current?window_hours=\(windowHours)", as: Envelope<CurrentSymptomsSnapshot>.self)
+    }
+
+    func fetchCurrentSymptomTimeline(days: Int = 7) async throws -> Envelope<[CurrentSymptomTimelineEntry]> {
+        try await getJSON("v1/symptoms/current/timeline?days=\(days)", as: Envelope<[CurrentSymptomTimelineEntry]>.self)
+    }
+
+    func updateCurrentSymptom(
+        episodeId: String,
+        state: CurrentSymptomState? = nil,
+        severity: Int? = nil,
+        noteText: String? = nil,
+        tsUtc: Date? = nil
+    ) async throws -> Envelope<CurrentSymptomItem> {
+        let isoFmt = ISO8601DateFormatter()
+        isoFmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let payload = CurrentSymptomUpdatePayload(
+            state: state?.rawValue,
+            severity: severity,
+            noteText: noteText,
+            tsUtc: tsUtc.map { isoFmt.string(from: $0) }
+        )
+        return try await postJSON(
+            "v1/symptoms/current/\(episodeId)/updates",
+            body: payload,
+            as: Envelope<CurrentSymptomItem>.self
+        )
     }
 
     /// Optional convenience wrappers if your models exist in the app.

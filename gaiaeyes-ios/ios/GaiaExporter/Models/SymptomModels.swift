@@ -53,6 +53,94 @@ struct SymptomCodeDefinition: Decodable {
     let tags: [String]?
 }
 
+enum CurrentSymptomState: String, Codable, CaseIterable, Hashable {
+    case new
+    case ongoing
+    case improving
+    case resolved
+}
+
+struct CurrentSymptomDriver: Decodable, Identifiable, Hashable {
+    let key: String
+    let label: String
+    let severity: String?
+    let state: String?
+    let display: String?
+    let relation: String?
+    let relatedSymptoms: [String]
+    let confidence: String?
+    let patternHint: String?
+
+    var id: String { key }
+}
+
+struct CurrentSymptomPatternHint: Decodable, Identifiable, Hashable {
+    let id: String
+    let signalKey: String
+    let signal: String
+    let outcomeKey: String
+    let outcome: String
+    let confidence: String?
+    let text: String?
+}
+
+struct CurrentSymptomItem: Decodable, Identifiable, Hashable {
+    let id: String
+    let symptomCode: String
+    let label: String
+    let severity: Int?
+    let originalSeverity: Int?
+    let loggedAt: String
+    let lastInteractionAt: String?
+    let currentState: CurrentSymptomState
+    let notePreview: String?
+    let noteCount: Int
+    let likelyDrivers: [CurrentSymptomDriver]
+    let patternHint: CurrentSymptomPatternHint?
+    let gaugeKeys: [String]
+    let currentContextBadge: String?
+}
+
+struct CurrentSymptomsSummary: Decodable, Hashable {
+    let activeCount: Int
+    let newCount: Int
+    let ongoingCount: Int
+    let improvingCount: Int
+    let lastUpdatedAt: String?
+    let followUpAvailable: Bool
+}
+
+struct CurrentSymptomsFollowUpSettings: Decodable, Hashable {
+    let notificationsEnabled: Bool
+    let enabled: Bool
+    let notificationFamilyEnabled: Bool
+    let cadence: String
+    let states: [String]
+    let symptomCodes: [String]
+}
+
+struct CurrentSymptomsSnapshot: Decodable, Hashable {
+    let generatedAt: String
+    let windowHours: Int
+    let summary: CurrentSymptomsSummary
+    let items: [CurrentSymptomItem]
+    let contributingDrivers: [CurrentSymptomDriver]
+    let patternContext: [CurrentSymptomPatternHint]
+    let followUpSettings: CurrentSymptomsFollowUpSettings
+}
+
+struct CurrentSymptomTimelineEntry: Decodable, Identifiable, Hashable {
+    let id: String
+    let episodeId: String
+    let symptomCode: String
+    let label: String
+    let updateKind: String
+    let state: CurrentSymptomState?
+    let severity: Int?
+    let noteText: String?
+    let occurredAt: String
+}
+
 struct SymptomQueuedEvent: Codable, Identifiable {
     let id: UUID
     let symptomCode: String

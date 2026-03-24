@@ -1797,8 +1797,12 @@ struct ContentView: View {
     @State private var symptomsToday: [SymptomEventToday] = []
     @State private var symptomDaily: [SymptomDailySummary] = []
     @State private var symptomDiagnostics: [SymptomDiagSummary] = []
+    @State private var currentSymptomsSnapshot: CurrentSymptomsSnapshot? = nil
+    @State private var currentSymptomsLoading: Bool = false
+    @State private var currentSymptomsError: String? = nil
     @State private var showSymptomSheet: Bool = false
     @State private var showInsightsSymptomSheet: Bool = false
+    @State private var showCurrentSymptomsSheet: Bool = false
     @State private var isSubmittingSymptom: Bool = false
     @State private var symptomToast: SymptomToastState? = nil
     @State private var symptomSheetPrefill: SymptomQueuedEvent? = nil
@@ -1817,11 +1821,16 @@ struct ContentView: View {
     @State private var showAuroraForecast: Bool = false
     @State private var showMagnetosphere: Bool = false
 
+    private enum SymptomToastAction {
+        case openCurrentSymptoms
+        case edit(SymptomQueuedEvent)
+    }
+
     private struct SymptomToastState: Identifiable {
         let id = UUID()
         let message: String
         let actionTitle: String?
-        let prefill: SymptomQueuedEvent?
+        let action: SymptomToastAction?
     }
 
     private struct MissionControlQuickLogRequest {
@@ -1837,6 +1846,7 @@ struct ContentView: View {
         case magnetosphere
         case schumann
         case healthSymptoms
+        case currentSymptoms
         case earthquakes
         case hazards
 
@@ -2063,9 +2073,9 @@ struct ContentView: View {
     private func showSymptomToast(
         _ message: String,
         actionTitle: String? = nil,
-        prefill: SymptomQueuedEvent? = nil
+        action: SymptomToastAction? = nil
     ) {
-        let toast = SymptomToastState(message: message, actionTitle: actionTitle, prefill: prefill)
+        let toast = SymptomToastState(message: message, actionTitle: actionTitle, action: action)
         withAnimation {
             symptomToast = toast
         }
@@ -3796,6 +3806,44 @@ struct ContentView: View {
         }
     }
 
+    private func fetchCurrentSymptomsSummary(api override: APIClient? = nil) async {
+        let api = override ?? state.apiWithAuth()
+        await MainActor.run {
+            currentSymptomsLoading = true
+            currentSymptomsError = nil
+        }
+        do {
+            let envelope = try await api.fetchCurrentSymptoms()
+            if envelope.ok == false, envelope.data == nil {
+                await MainActor.run {
+                    currentSymptomsError = envelope.error ?? "Current symptoms unavailable"
+                    currentSymptomsLoading = false
+                }
+                return
+            }
+            if let payload = envelope.payload {
+                await MainActor.run {
+                    currentSymptomsSnapshot = payload
+                    currentSymptomsLoading = false
+                }
+                appLog("[UI] current symptoms ok: active=\(payload.summary.activeCount)")
+            } else {
+                await MainActor.run {
+                    currentSymptomsSnapshot = nil
+                    currentSymptomsLoading = false
+                }
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            await MainActor.run {
+                currentSymptomsError = error.localizedDescription
+                currentSymptomsLoading = false
+            }
+            appLog("[UI] current symptoms error: \(error.localizedDescription)")
+        }
+    }
+
     private func fetchInsightsHubData(trigger: FeaturesFetchTrigger = .initial) async {
         let api = state.apiWithAuth()
         async let featuresTask: Void = fetchFeaturesToday(trigger: trigger, bypassGuard: trigger == .refresh)
@@ -3803,9 +3851,10 @@ struct ContentView: View {
         async let outlookTask: Void = fetchSpaceOutlook()
         async let userOutlookTask: Void = fetchUserOutlook()
         async let symptomsTask: Void = fetchSymptoms(api: api)
+        async let currentSymptomsTask: Void = fetchCurrentSymptomsSummary(api: api)
         async let localTask: Void = fetchLocalHealth()
         async let magnetosphereTask: Void = fetchMagnetosphere()
-        _ = await (featuresTask, forecastTask, outlookTask, userOutlookTask, symptomsTask, localTask, magnetosphereTask)
+        _ = await (featuresTask, forecastTask, outlookTask, userOutlookTask, symptomsTask, currentSymptomsTask, localTask, magnetosphereTask)
 
         if hazardsBrief == nil {
             await fetchHazardsBrief()
@@ -3993,7 +4042,8 @@ struct ContentView: View {
                 async let symptomsTask: Void = fetchSymptoms(api: api)
                 async let featuresTask: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
                 async let dashboardTask: Void = fetchDashboardPayload(force: true)
-                _ = await (symptomsTask, featuresTask, dashboardTask)
+                async let currentSymptomsTask: Void = fetchCurrentSymptomsSummary(api: api)
+                _ = await (symptomsTask, featuresTask, dashboardTask, currentSymptomsTask)
             }
         }
 
@@ -4002,8 +4052,8 @@ struct ContentView: View {
         if submittedCount > 0 && queuedCount == 0 && failedCount == 0 {
             showSymptomToast(
                 successMessage,
-                actionTitle: successPrefill == nil ? nil : "Edit",
-                prefill: successPrefill
+                actionTitle: "Current Symptoms",
+                action: .openCurrentSymptoms
             )
             return true
         }
@@ -4174,12 +4224,14 @@ struct ContentView: View {
                 latestCameraCheck: latestCameraCheck,
                 cameraCheckLoading: latestCameraCheckLoading,
                 cameraCheckError: latestCameraCheckError,
+                currentSymptomsSnapshot: currentSymptomsSnapshot,
                 pushRoute: $pendingPushRoute,
                 fallbackTitle: fallbackFeatures?.postTitle,
                 fallbackBody: fallbackFeatures?.postBody,
                 isLoading: dashboardLoading,
                 errorMessage: ContentView.scrubError(dashboardError),
                 lastUpdatedText: dashboardLastUpdatedText,
+                onOpenCurrentSymptoms: { showCurrentSymptomsSheet = true },
                 onQuickLog: { request in
                     Task {
                         await quickLogMissionControl(request)
@@ -4193,6 +4245,7 @@ struct ContentView: View {
             .padding(.horizontal)
 
             MissionMenuSectionView(
+                onCurrentSymptoms: { showCurrentSymptomsSheet = true },
                 onSymptoms: { showSymptomSheet = true },
                 onInsights: { showMissionInsightsSheet = true },
                 onLocalConditions: { showLocalConditionsSheet = true },
@@ -4216,6 +4269,7 @@ struct ContentView: View {
     }
 
     private struct MissionMenuSectionView: View {
+        let onCurrentSymptoms: () -> Void
         let onSymptoms: () -> Void
         let onInsights: () -> Void
         let onLocalConditions: () -> Void
@@ -4231,6 +4285,7 @@ struct ContentView: View {
                         if ContentView.cameraHealthCheckVisible {
                             Button(action: onQuickCheck) { Label("Quick Check", systemImage: "camera.fill") }
                         }
+                        Button(action: onCurrentSymptoms) { Label("Current Symptoms", systemImage: "waveform.path.ecg.rectangle") }
                         Button(action: onSymptoms) { Label("Symptoms", systemImage: "plus.circle") }
                         Button(action: onInsights) { Label("Insights", systemImage: "chart.xyaxis.line") }
                         Button(action: onLocalConditions) { Label("Local", systemImage: "location.fill") }
@@ -4239,7 +4294,7 @@ struct ContentView: View {
                         Button(action: onResearch) { Label("Research", systemImage: "book.closed") }
                     }
                 }
-                Text("Quick links open dedicated views for insights, local conditions, and Schumann.")
+                Text("Quick links open dedicated views for current symptoms, insights, local conditions, and Schumann.")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -4266,12 +4321,14 @@ struct ContentView: View {
         let latestCameraCheck: CameraHealthDailySummary?
         let cameraCheckLoading: Bool
         let cameraCheckError: String?
+        let currentSymptomsSnapshot: CurrentSymptomsSnapshot?
         @Binding var pushRoute: GaiaPushRoute?
         let fallbackTitle: String?
         let fallbackBody: String?
         let isLoading: Bool
         let errorMessage: String?
         let lastUpdatedText: String?
+        let onOpenCurrentSymptoms: () -> Void
         let onQuickLog: (MissionControlQuickLogRequest) -> Void
         let onOpenCustomLog: (SymptomQueuedEvent) -> Void
         @State private var selectedModal: ModalPresentation? = nil
@@ -5087,6 +5144,54 @@ struct ContentView: View {
             return token == "watch" || token == "elevated" || token == "high"
         }
 
+        private var currentSymptomsSummaryLine: String {
+            guard let snapshot = currentSymptomsSnapshot else {
+                return "Open the live symptom view."
+            }
+            let count = snapshot.summary.activeCount
+            if count <= 0 {
+                return "Nothing active right now."
+            }
+            let labels = snapshot.items.prefix(2).map(\.label)
+            if labels.isEmpty {
+                return "\(count) active right now."
+            }
+            return "\(count) active: \(labels.joined(separator: ", "))"
+        }
+
+        @ViewBuilder
+        private var currentSymptomsButton: some View {
+            Button(action: onOpenCurrentSymptoms) {
+                HStack(alignment: .center, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Current Symptoms")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white)
+                        Text(currentSymptomsSummaryLine)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    if let count = currentSymptomsSnapshot?.summary.activeCount, count > 0 {
+                        StatusPill("\(count) Active", severity: count >= 3 ? .warn : .ok)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white.opacity(0.45))
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
         private func presentGaugeModal(_ key: String) {
             guard let entry = modalModels?.gauges?[key] else { return }
             selectedModal = ModalPresentation(id: "gauge:\(key)", entry: entry)
@@ -5109,6 +5214,8 @@ struct ContentView: View {
                 selectedModal = ModalPresentation(id: "gauge:\(targetKey)", entry: entry)
             } else if targetType == "driver", let entry = modalModels?.drivers?[targetKey] {
                 selectedModal = ModalPresentation(id: "driver:\(targetKey)", entry: entry)
+            } else if targetType == "current_symptoms" || targetType == "symptoms" {
+                onOpenCurrentSymptoms()
             }
             pushRoute = nil
         }
@@ -5202,6 +5309,7 @@ struct ContentView: View {
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
+                            currentSymptomsButton
                         }
                         .padding(10)
                         .background(Color.black.opacity(0.20))
@@ -5231,6 +5339,20 @@ struct ContentView: View {
                                     progress: driverProgress(driver.severity),
                                     onTap: tappable ? { presentDriverModal(driver.key) } : nil
                                 )
+                            }
+                            if (currentSymptomsSnapshot?.summary.activeCount ?? 0) > 0 {
+                                Button(action: onOpenCurrentSymptoms) {
+                                    HStack {
+                                        Text("Current Symptoms")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                        Text(currentSymptomsSummaryLine)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -5894,6 +6016,7 @@ struct ContentView: View {
         let symptomsTodayCount: Int
         let queuedSymptomsCount: Int
         let topSymptomSummary: String?
+        let currentSymptomsSnapshot: CurrentSymptomsSnapshot?
         let latestCameraCheck: CameraHealthDailySummary?
         let latestCameraCheckLoading: Bool
         let latestCameraCheckError: String?
@@ -6320,8 +6443,11 @@ struct ContentView: View {
                 return "\(total / 60)h \(total % 60)m"
             }()
             let stepsText = current.map { "\(Int(($0.stepsTotal?.value ?? 0).rounded()))" } ?? "—"
+            let currentActiveCount = currentSymptomsSnapshot?.summary.activeCount ?? 0
             let status: String
-            if symptomsTodayCount > 0 {
+            if currentActiveCount > 0 {
+                status = "\(currentActiveCount) symptoms active right now. Open Current Symptoms or deeper health context."
+            } else if symptomsTodayCount > 0 {
                 status = "\(symptomsTodayCount) symptoms logged today. Open for sleep, vitals, and comparisons."
             } else if let topSymptomSummary, !topSymptomSummary.isEmpty {
                 status = topSymptomSummary
@@ -6330,12 +6456,15 @@ struct ContentView: View {
             } else {
                 status = "Symptoms are quiet right now. Open for deeper health context."
             }
-            let severity: StatusPill.Severity = symptomsTodayCount >= 4 ? .alert : queuedSymptomsCount > 0 ? .warn : .ok
-            let pillText = symptomsTodayCount > 0 ? "Active" : (queuedSymptomsCount > 0 ? "Syncing" : "Quiet")
+            let severity: StatusPill.Severity = currentActiveCount >= 3 ? .alert : (currentActiveCount > 0 || queuedSymptomsCount > 0 ? .warn : .ok)
+            let pillText = currentActiveCount > 0 ? "Current" : (queuedSymptomsCount > 0 ? "Syncing" : "Quiet")
             var metrics: [HubMetric] = [
                 HubMetric(label: "Sleep", value: sleepText, tint: GaugePalette.low),
                 HubMetric(label: "Steps", value: stepsText, tint: GaugePalette.mild)
             ]
+            if currentActiveCount > 0 {
+                metrics.append(HubMetric(label: "Active", value: "\(currentActiveCount)", tint: GaugePalette.elevated))
+            }
             if ContentView.cameraHealthCheckVisible {
                 let cameraText = latestCameraCheck?.bpm.map { "\(Int($0.rounded())) bpm" } ?? "—"
                 metrics.append(HubMetric(label: "Quick Check", value: cameraText, tint: GaugePalette.elevated))
@@ -7753,6 +7882,7 @@ struct ContentView: View {
         let sparklinePoints: [SymptomSparkPoint]
         let topSummary: String?
         let diagnostics: [SymptomDiagSummary]
+        let currentSymptomsSnapshot: CurrentSymptomsSnapshot?
         let series: SpaceSeries?
         let highlights: [SymptomHighlight]
         let latestCameraCheck: CameraHealthDailySummary?
@@ -7794,6 +7924,28 @@ struct ContentView: View {
                             topSummary: topSummary,
                             onLogTap: { showSymptomSheet = true }
                         )
+
+                        NavigationLink(value: InsightsRoute.currentSymptoms) {
+                            LocalConditionsSurfaceCard(title: "Current Symptoms", icon: "waveform.path.ecg.rectangle") {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    if let snapshot = currentSymptomsSnapshot, snapshot.summary.activeCount > 0 {
+                                        Text("\(snapshot.summary.activeCount) symptoms are active in your current window.")
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundColor(.primary)
+                                        Text(snapshot.items.prefix(2).map(\.label).joined(separator: " • "))
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    } else {
+                                        Text("Nothing active right now.")
+                                            .font(.subheadline.weight(.semibold))
+                                        Text("Open the live symptom state view for recent updates, notes, and the timeline.")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
 
                         if let current {
                             SleepCard(
@@ -8372,10 +8524,16 @@ struct ContentView: View {
                     SymptomToastView(
                         toast: toast,
                         onAction: {
-                            guard let prefill = toast.prefill else { return }
                             symptomToast = nil
-                            symptomSheetPrefill = prefill
-                            showSymptomSheet = true
+                            switch toast.action {
+                            case .openCurrentSymptoms:
+                                showCurrentSymptomsSheet = true
+                            case .edit(let prefill):
+                                symptomSheetPrefill = prefill
+                                showSymptomSheet = true
+                            case nil:
+                                break
+                            }
                         }
                     )
                     .padding(.top, 12)
@@ -8390,7 +8548,8 @@ struct ContentView: View {
                 async let a: Void = fetchDashboardPayload(force: true)
                 async let b: Void = fetchProfileSettings()
                 async let e: Void = fetchLatestCameraCheck()
-                _ = await (a, b, e)
+                async let f: Void = fetchCurrentSymptomsSummary(api: api)
+                _ = await (a, b, e, f)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
                 async let d: Void = refreshSymptomPresets(api: api)
                 _ = await (c, d)
@@ -8401,7 +8560,8 @@ struct ContentView: View {
                 async let a: Void = fetchDashboardPayload(force: true)
                 async let b: Void = fetchProfileSettings()
                 async let e: Void = fetchLatestCameraCheck()
-                _ = await (a, b, e)
+                async let f: Void = fetchCurrentSymptomsSummary(api: api)
+                _ = await (a, b, e, f)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
                 async let d: Void = refreshSymptomPresets(api: api)
                 _ = await (c, d)
@@ -8526,6 +8686,12 @@ struct ContentView: View {
                 guard newValue else { return }
                 Task {
                     await fetchInsightsHubData(trigger: .refresh)
+                }
+            }
+            .onChange(of: showCurrentSymptomsSheet, initial: false) { _, newValue in
+                guard newValue else { return }
+                Task {
+                    await fetchCurrentSymptomsSummary(api: state.apiWithAuth())
                 }
             }
             .onChange(of: showMissionSettingsSheet, initial: false) { _, newValue in
@@ -8680,6 +8846,7 @@ struct ContentView: View {
                     symptomsTodayCount: symptomsToday.count,
                     queuedSymptomsCount: state.symptomQueueCount,
                     topSymptomSummary: symptomSummary,
+                    currentSymptomsSnapshot: currentSymptomsSnapshot,
                     latestCameraCheck: latestCameraCheck,
                     latestCameraCheckLoading: latestCameraCheckLoading,
                     latestCameraCheckError: latestCameraCheckError,
@@ -8768,6 +8935,7 @@ struct ContentView: View {
                             sparklinePoints: symptomPoints,
                             topSummary: symptomSummary,
                             diagnostics: symptomDiagnostics,
+                            currentSymptomsSnapshot: currentSymptomsSnapshot,
                             series: seriesDetail,
                             highlights: symptomHighlightList,
                             latestCameraCheck: latestCameraCheck,
@@ -8782,6 +8950,14 @@ struct ContentView: View {
                                 await fetchSymptoms(api: state.apiWithAuth())
                             }
                         }
+                    case .currentSymptoms:
+                        CurrentSymptomsView(
+                            api: state.apiWithAuth(),
+                            onLogMore: { showInsightsSymptomSheet = true },
+                            onSnapshotChanged: { snapshot in
+                                currentSymptomsSnapshot = snapshot
+                            }
+                        )
                     case .earthquakes:
                         EarthquakesDetailView(
                             latest: quakeLatest,
@@ -9031,6 +9207,27 @@ struct ContentView: View {
                                 Divider()
 
                                 VStack(alignment: .leading, spacing: 8) {
+                                    Text("Symptom follow-up prompts")
+                                        .font(.subheadline.weight(.semibold))
+                                    Toggle("Symptom follow-up prompts", isOn: $notificationPreferences.symptomFollowupsEnabled)
+                                    if notificationPreferences.symptomFollowupsEnabled {
+                                        Toggle("Symptom follow-up family", isOn: $notificationPreferences.families.symptomFollowups)
+                                        Picker("Follow-up cadence", selection: $notificationPreferences.symptomFollowupCadence) {
+                                            Text("Gentle").tag("gentle")
+                                            Text("Balanced").tag("balanced")
+                                            Text("Frequent").tag("frequent")
+                                        }
+                                        .pickerStyle(.segmented)
+                                        Text("Current scaffold follows new, ongoing, and improving symptoms. Type-specific follow-ups will attach to Current Symptoms next.")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .disabled(!notificationPreferences.enabled)
+
+                                Divider()
+
+                                VStack(alignment: .leading, spacing: 8) {
                                     Toggle("Enable quiet hours", isOn: $notificationPreferences.quietHoursEnabled)
                                     if notificationPreferences.quietHoursEnabled {
                                         HStack(spacing: 10) {
@@ -9218,6 +9415,23 @@ struct ContentView: View {
             CameraHealthCheckView(onSaved: {
                 Task { await fetchLatestCameraCheck() }
             })
+        }
+        .sheet(isPresented: $showCurrentSymptomsSheet) {
+            NavigationStack {
+                CurrentSymptomsView(
+                    api: state.apiWithAuth(),
+                    showsCloseButton: true,
+                    onLogMore: {
+                        showCurrentSymptomsSheet = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            showSymptomSheet = true
+                        }
+                    },
+                    onSnapshotChanged: { snapshot in
+                        currentSymptomsSnapshot = snapshot
+                    }
+                )
+            }
         }
         .sheet(isPresented: $showSymptomSheet, onDismiss: {
             symptomSheetPrefill = nil

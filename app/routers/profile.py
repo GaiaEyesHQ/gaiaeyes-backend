@@ -25,8 +25,11 @@ _NOTIFICATION_FAMILY_DEFAULTS: Dict[str, bool] = {
     "aqi": True,
     "temp": True,
     "gauge_spikes": True,
+    "symptom_followups": False,
 }
 _NOTIFICATION_SENSITIVITIES = {"minimal", "normal", "detailed"}
+_SYMPTOM_FOLLOWUP_CADENCES = {"gentle", "balanced", "frequent"}
+_SYMPTOM_FOLLOWUP_STATES = {"new", "ongoing", "improving"}
 
 
 def _require_user_id(request: Request) -> str:
@@ -104,6 +107,47 @@ def _normalize_time_zone(value: Optional[str]) -> str:
     return candidate
 
 
+def _normalize_followup_cadence(value: Optional[str]) -> str:
+    normalized = str(value or "balanced").strip().lower() or "balanced"
+    if normalized not in _SYMPTOM_FOLLOWUP_CADENCES:
+        raise HTTPException(status_code=400, detail="invalid symptom follow-up cadence")
+    return normalized
+
+
+def _normalize_followup_states(value: Any) -> List[str]:
+    if value is None:
+        return ["new", "ongoing", "improving"]
+    if isinstance(value, str):
+        value = [part.strip() for part in value.split(",")]
+    if not isinstance(value, list):
+        raise HTTPException(status_code=400, detail="invalid symptom follow-up states")
+    normalized: List[str] = []
+    for item in value:
+        token = str(item or "").strip().lower()
+        if not token:
+            continue
+        if token not in _SYMPTOM_FOLLOWUP_STATES:
+            raise HTTPException(status_code=400, detail="invalid symptom follow-up states")
+        if token not in normalized:
+            normalized.append(token)
+    return normalized or ["new", "ongoing", "improving"]
+
+
+def _normalize_followup_codes(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [part.strip() for part in value.split(",")]
+    if not isinstance(value, list):
+        raise HTTPException(status_code=400, detail="invalid symptom follow-up symptom codes")
+    normalized: List[str] = []
+    for item in value:
+        token = str(item or "").strip().lower().replace("-", "_").replace(" ", "_")
+        if token and token not in normalized:
+            normalized.append(token)
+    return normalized
+
+
 def _normalize_notification_families(value: Any) -> Dict[str, bool]:
     merged = dict(_NOTIFICATION_FAMILY_DEFAULTS)
     if isinstance(value, str):
@@ -124,6 +168,10 @@ def _default_notification_preferences() -> Dict[str, Any]:
         "signal_alerts_enabled": True,
         "local_condition_alerts_enabled": True,
         "personalized_gauge_alerts_enabled": True,
+        "symptom_followups_enabled": False,
+        "symptom_followup_cadence": "balanced",
+        "symptom_followup_states": ["new", "ongoing", "improving"],
+        "symptom_followup_symptom_codes": [],
         "quiet_hours_enabled": False,
         "quiet_start": "22:00",
         "quiet_end": "08:00",
@@ -131,6 +179,22 @@ def _default_notification_preferences() -> Dict[str, Any]:
         "sensitivity": "normal",
         "families": dict(_NOTIFICATION_FAMILY_DEFAULTS),
     }
+
+
+def _notification_pref_select(column_names: List[str], column: str, fallback_sql: str) -> str:
+    if column in column_names:
+        return f"{column} as {column}"
+    return f"{fallback_sql} as {column}"
+
+
+def _notification_pref_placeholder(column: str) -> str:
+    if column in {"quiet_start", "quiet_end"}:
+        return "%s::time"
+    if column in {"symptom_followup_states", "symptom_followup_symptom_codes"}:
+        return "%s::text[]"
+    if column == "families":
+        return "%s::jsonb"
+    return "%s"
 
 
 def _normalize_device_token(value: str) -> str:
@@ -286,6 +350,10 @@ class NotificationPreferencesIn(BaseModel):
     signal_alerts_enabled: bool = True
     local_condition_alerts_enabled: bool = True
     personalized_gauge_alerts_enabled: bool = True
+    symptom_followups_enabled: bool = False
+    symptom_followup_cadence: str = "balanced"
+    symptom_followup_states: List[str] = Field(default_factory=lambda: ["new", "ongoing", "improving"])
+    symptom_followup_symptom_codes: List[str] = Field(default_factory=list)
     quiet_hours_enabled: bool = False
     quiet_start: str = "22:00"
     quiet_end: str = "08:00"
@@ -428,23 +496,35 @@ async def profile_tags_upsert(
 
 async def _fetch_notification_preferences(conn, user_id: str) -> Dict[str, Any]:
     defaults = _default_notification_preferences()
+    columns = await _table_columns(conn, "app", "user_notification_preferences")
+    if not columns:
+        return defaults
+
+    select_parts = [
+        _notification_pref_select(columns, "enabled", "false"),
+        _notification_pref_select(columns, "signal_alerts_enabled", "true"),
+        _notification_pref_select(columns, "local_condition_alerts_enabled", "true"),
+        _notification_pref_select(columns, "personalized_gauge_alerts_enabled", "true"),
+        _notification_pref_select(columns, "symptom_followups_enabled", "false"),
+        _notification_pref_select(columns, "symptom_followup_cadence", "'balanced'::text"),
+        _notification_pref_select(columns, "symptom_followup_states", "array['new','ongoing','improving']::text[]"),
+        _notification_pref_select(columns, "symptom_followup_symptom_codes", "array[]::text[]"),
+        _notification_pref_select(columns, "quiet_hours_enabled", "false"),
+        "to_char(quiet_start, 'HH24:MI') as quiet_start" if "quiet_start" in columns else f"'{defaults['quiet_start']}'::text as quiet_start",
+        "to_char(quiet_end, 'HH24:MI') as quiet_end" if "quiet_end" in columns else f"'{defaults['quiet_end']}'::text as quiet_end",
+        _notification_pref_select(columns, "time_zone", "'UTC'::text"),
+        _notification_pref_select(columns, "sensitivity", "'normal'::text"),
+        _notification_pref_select(columns, "families", "'{}'::jsonb"),
+    ]
+
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
-            """
-            select enabled,
-                   signal_alerts_enabled,
-                   local_condition_alerts_enabled,
-                   personalized_gauge_alerts_enabled,
-                   quiet_hours_enabled,
-                   to_char(quiet_start, 'HH24:MI') as quiet_start,
-                   to_char(quiet_end, 'HH24:MI') as quiet_end,
-                   time_zone,
-                   sensitivity,
-                   families
-              from app.user_notification_preferences
-             where user_id = %s
-             limit 1
-            """,
+            (
+                f"select {', '.join(select_parts)} "
+                "from app.user_notification_preferences "
+                "where user_id = %s "
+                "limit 1"
+            ),
             (user_id,),
             prepare=False,
         )
@@ -458,6 +538,10 @@ async def _fetch_notification_preferences(conn, user_id: str) -> Dict[str, Any]:
         "signal_alerts_enabled": bool(row.get("signal_alerts_enabled")),
         "local_condition_alerts_enabled": bool(row.get("local_condition_alerts_enabled")),
         "personalized_gauge_alerts_enabled": bool(row.get("personalized_gauge_alerts_enabled")),
+        "symptom_followups_enabled": bool(row.get("symptom_followups_enabled")),
+        "symptom_followup_cadence": _normalize_followup_cadence(row.get("symptom_followup_cadence")),
+        "symptom_followup_states": _normalize_followup_states(row.get("symptom_followup_states")),
+        "symptom_followup_symptom_codes": _normalize_followup_codes(row.get("symptom_followup_symptom_codes")),
         "quiet_hours_enabled": bool(row.get("quiet_hours_enabled")),
         "quiet_start": _normalize_clock_hhmm(row.get("quiet_start"), fallback=defaults["quiet_start"]),
         "quiet_end": _normalize_clock_hhmm(row.get("quiet_end"), fallback=defaults["quiet_end"]),
@@ -486,68 +570,56 @@ async def profile_notifications_upsert(
     time_zone_name = _normalize_time_zone(payload.time_zone)
     sensitivity = _normalize_notification_sensitivity(payload.sensitivity)
     families = _normalize_notification_families(payload.families)
+    followup_cadence = _normalize_followup_cadence(payload.symptom_followup_cadence)
+    followup_states = _normalize_followup_states(payload.symptom_followup_states)
+    followup_codes = _normalize_followup_codes(payload.symptom_followup_symptom_codes)
+    columns = await _table_columns(conn, "app", "user_notification_preferences")
+    if not columns or "user_id" not in columns:
+        return {"ok": False, "error": "app.user_notification_preferences table unavailable"}
+
+    values_by_column: Dict[str, Any] = {
+        "user_id": user_id,
+        "enabled": bool(payload.enabled),
+        "signal_alerts_enabled": bool(payload.signal_alerts_enabled),
+        "local_condition_alerts_enabled": bool(payload.local_condition_alerts_enabled),
+        "personalized_gauge_alerts_enabled": bool(payload.personalized_gauge_alerts_enabled),
+        "quiet_hours_enabled": bool(payload.quiet_hours_enabled),
+        "quiet_start": quiet_start,
+        "quiet_end": quiet_end,
+        "time_zone": time_zone_name,
+        "sensitivity": sensitivity,
+        "families": json.dumps(families, separators=(",", ":"), sort_keys=True),
+    }
+    if "symptom_followups_enabled" in columns:
+        values_by_column["symptom_followups_enabled"] = bool(payload.symptom_followups_enabled)
+    if "symptom_followup_cadence" in columns:
+        values_by_column["symptom_followup_cadence"] = followup_cadence
+    if "symptom_followup_states" in columns:
+        values_by_column["symptom_followup_states"] = followup_states
+    if "symptom_followup_symptom_codes" in columns:
+        values_by_column["symptom_followup_symptom_codes"] = followup_codes
+    if "created_at" in columns:
+        values_by_column["created_at"] = now
+    if "updated_at" in columns:
+        values_by_column["updated_at"] = now
+
+    insert_columns = [column for column in values_by_column.keys() if column in columns]
+    placeholders = [_notification_pref_placeholder(column) for column in insert_columns]
+    update_columns = [column for column in insert_columns if column not in {"user_id", "created_at"}]
+    update_set_sql = ", ".join(f"{column} = excluded.{column}" for column in update_columns)
+    insert_values = [values_by_column[column] for column in insert_columns]
 
     async with conn.cursor() as cur:
         await cur.execute(
-            """
-            insert into app.user_notification_preferences (
-                user_id,
-                enabled,
-                signal_alerts_enabled,
-                local_condition_alerts_enabled,
-                personalized_gauge_alerts_enabled,
-                quiet_hours_enabled,
-                quiet_start,
-                quiet_end,
-                time_zone,
-                sensitivity,
-                families,
-                created_at,
-                updated_at
-            )
-            values (
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s,
-                %s::time,
-                %s::time,
-                %s,
-                %s,
-                %s::jsonb,
-                %s,
-                %s
-            )
-            on conflict (user_id) do update
-               set enabled = excluded.enabled,
-                   signal_alerts_enabled = excluded.signal_alerts_enabled,
-                   local_condition_alerts_enabled = excluded.local_condition_alerts_enabled,
-                   personalized_gauge_alerts_enabled = excluded.personalized_gauge_alerts_enabled,
-                   quiet_hours_enabled = excluded.quiet_hours_enabled,
-                   quiet_start = excluded.quiet_start,
-                   quiet_end = excluded.quiet_end,
-                   time_zone = excluded.time_zone,
-                   sensitivity = excluded.sensitivity,
-                   families = excluded.families,
-                   updated_at = excluded.updated_at
-            """,
             (
-                user_id,
-                bool(payload.enabled),
-                bool(payload.signal_alerts_enabled),
-                bool(payload.local_condition_alerts_enabled),
-                bool(payload.personalized_gauge_alerts_enabled),
-                bool(payload.quiet_hours_enabled),
-                quiet_start,
-                quiet_end,
-                time_zone_name,
-                sensitivity,
-                json.dumps(families, separators=(",", ":"), sort_keys=True),
-                now,
-                now,
+                "insert into app.user_notification_preferences ("
+                f"{', '.join(insert_columns)}) "
+                "values ("
+                f"{', '.join(placeholders)}) "
+                "on conflict (user_id) do update set "
+                f"{update_set_sql}"
             ),
+            insert_values,
             prepare=False,
         )
 

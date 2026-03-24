@@ -71,6 +71,12 @@ Scoring rules:
   - the same rescore path also refreshes `marts.user_gauges_delta_day` for that user/day
   - same-day symptom weighting now uses explicit symptom-to-gauge mappings, severity tiers, and recency decay
     (0–3h `100%`, >3–8h `70%`, >8–24h `40%`)
+  - current symptom episodes now apply state-aware weighting on top of that same-day model:
+    - `new` and `ongoing` keep full weight
+    - `improving` reduces the symptom contribution
+    - `resolved` removes the live symptom contribution from the active-day summary
+  - both `POST /v1/symptoms` and `POST /v1/symptoms/current/{episode_id}/updates` trigger the same
+    gauge refresh path, so live symptom state changes can move gauges without waiting for the next batch run
   - dashboard payloads also expose `gauge_recent_log_boosts` and `last_symptom_update_at` so clients can
     avoid contradictory calm labels right after a fresh log
     and show recent-log context directly inside gauge modals

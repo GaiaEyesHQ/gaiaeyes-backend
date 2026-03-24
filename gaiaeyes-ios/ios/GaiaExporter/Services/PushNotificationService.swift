@@ -19,6 +19,7 @@ struct AppNotificationFamilies: Codable, Equatable {
     var aqi: Bool = true
     var temp: Bool = true
     var gaugeSpikes: Bool = true
+    var symptomFollowups: Bool = false
 
     private enum CodingKeys: String, CodingKey {
         case geomagnetic
@@ -29,6 +30,7 @@ struct AppNotificationFamilies: Codable, Equatable {
         case aqi
         case temp
         case gaugeSpikes = "gauge_spikes"
+        case symptomFollowups = "symptom_followups"
     }
 
     init() {}
@@ -43,6 +45,7 @@ struct AppNotificationFamilies: Codable, Equatable {
         aqi = try container.decodeIfPresent(Bool.self, forKey: .aqi) ?? true
         temp = try container.decodeIfPresent(Bool.self, forKey: .temp) ?? true
         gaugeSpikes = try container.decodeIfPresent(Bool.self, forKey: .gaugeSpikes) ?? true
+        symptomFollowups = try container.decodeIfPresent(Bool.self, forKey: .symptomFollowups) ?? false
     }
 }
 
@@ -51,6 +54,10 @@ struct AppNotificationPreferences: Codable, Equatable {
     var signalAlertsEnabled: Bool = true
     var localConditionAlertsEnabled: Bool = true
     var personalizedGaugeAlertsEnabled: Bool = true
+    var symptomFollowupsEnabled: Bool = false
+    var symptomFollowupCadence: String = "balanced"
+    var symptomFollowupStates: [String] = ["new", "ongoing", "improving"]
+    var symptomFollowupSymptomCodes: [String] = []
     var quietHoursEnabled: Bool = false
     var quietStart: String = "22:00"
     var quietEnd: String = "08:00"
@@ -65,6 +72,10 @@ struct AppNotificationPreferences: Codable, Equatable {
         case signalAlertsEnabled = "signal_alerts_enabled"
         case localConditionAlertsEnabled = "local_condition_alerts_enabled"
         case personalizedGaugeAlertsEnabled = "personalized_gauge_alerts_enabled"
+        case symptomFollowupsEnabled = "symptom_followups_enabled"
+        case symptomFollowupCadence = "symptom_followup_cadence"
+        case symptomFollowupStates = "symptom_followup_states"
+        case symptomFollowupSymptomCodes = "symptom_followup_symptom_codes"
         case quietHoursEnabled = "quiet_hours_enabled"
         case quietStart = "quiet_start"
         case quietEnd = "quiet_end"
@@ -81,6 +92,10 @@ struct AppNotificationPreferences: Codable, Equatable {
         signalAlertsEnabled = try container.decodeIfPresent(Bool.self, forKey: .signalAlertsEnabled) ?? true
         localConditionAlertsEnabled = try container.decodeIfPresent(Bool.self, forKey: .localConditionAlertsEnabled) ?? true
         personalizedGaugeAlertsEnabled = try container.decodeIfPresent(Bool.self, forKey: .personalizedGaugeAlertsEnabled) ?? true
+        symptomFollowupsEnabled = try container.decodeIfPresent(Bool.self, forKey: .symptomFollowupsEnabled) ?? false
+        symptomFollowupCadence = try container.decodeIfPresent(String.self, forKey: .symptomFollowupCadence) ?? "balanced"
+        symptomFollowupStates = try container.decodeIfPresent([String].self, forKey: .symptomFollowupStates) ?? ["new", "ongoing", "improving"]
+        symptomFollowupSymptomCodes = try container.decodeIfPresent([String].self, forKey: .symptomFollowupSymptomCodes) ?? []
         quietHoursEnabled = try container.decodeIfPresent(Bool.self, forKey: .quietHoursEnabled) ?? false
         quietStart = try container.decodeIfPresent(String.self, forKey: .quietStart) ?? "22:00"
         quietEnd = try container.decodeIfPresent(String.self, forKey: .quietEnd) ?? "08:00"
@@ -415,6 +430,10 @@ enum PushNotificationService {
         if payload.sensitivity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             payload.sensitivity = "normal"
         }
+        if payload.symptomFollowupCadence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload.symptomFollowupCadence = "balanced"
+        }
+        payload.symptomFollowupStates = payload.symptomFollowupStates.isEmpty ? ["new", "ongoing", "improving"] : payload.symptomFollowupStates
         return payload
     }
 
