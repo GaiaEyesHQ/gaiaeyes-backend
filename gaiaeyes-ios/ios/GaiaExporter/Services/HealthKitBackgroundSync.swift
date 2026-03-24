@@ -48,6 +48,13 @@ private struct HealthBackfillMetricResult: Sendable {
 }
 
 private typealias AnchoredQueryContinuation = CheckedContinuation<(HKQueryAnchor?, [HKSample], Bool), Error>
+private typealias SampleQueryContinuation = CheckedContinuation<[HKSample], Error>
+
+private struct HealthKitQueryTimeoutError: LocalizedError, Sendable {
+    var errorDescription: String? {
+        "The HealthKit query took longer than expected."
+    }
+}
 
 private final class HealthKitAnchoredQueryBox: @unchecked Sendable {
     private let lock = NSLock()
@@ -99,6 +106,59 @@ private final class HealthKitAnchoredQueryBox: @unchecked Sendable {
             store.stop(query)
         }
         continuation?.resume(throwing: CancellationError())
+    }
+}
+
+private final class HealthKitSampleQueryBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var query: HKQuery?
+    private var continuation: SampleQueryContinuation?
+    private var isResolved = false
+
+    func prepare(_ query: HKQuery, continuation: SampleQueryContinuation) {
+        lock.lock()
+        self.query = query
+        self.continuation = continuation
+        lock.unlock()
+    }
+
+    func complete(samples: [HKSample]?, error: Error?) {
+        lock.lock()
+        guard !isResolved else {
+            lock.unlock()
+            return
+        }
+        isResolved = true
+        let continuation = self.continuation
+        self.continuation = nil
+        query = nil
+        lock.unlock()
+
+        guard let continuation else { return }
+        if let error {
+            continuation.resume(throwing: error)
+            return
+        }
+        let sorted = (samples ?? []).sorted { $0.startDate < $1.startDate }
+        continuation.resume(returning: sorted)
+    }
+
+    func cancel(using store: HKHealthStore, error: Error = CancellationError()) {
+        lock.lock()
+        guard !isResolved else {
+            lock.unlock()
+            return
+        }
+        isResolved = true
+        let query = self.query
+        let continuation = self.continuation
+        self.query = nil
+        self.continuation = nil
+        lock.unlock()
+        if let query {
+            store.stop(query)
+        }
+        continuation?.resume(throwing: error)
     }
 }
 
@@ -307,7 +367,11 @@ final class HealthKitBackgroundSync {
     // Process new samples
     private func processDeltas(for type: HKSampleType, anchorKey: String) async throws {
         var anchor = anchorStore.anchor(forKey: anchorKey)
-        let pred = HKQuery.predicateForSamples(withStart: Date.distantPast, end: Date(), options: [])
+        let seedStart = anchor == nil ? anchorStore.seedStart(forKey: anchorKey) : nil
+        if let seedStart {
+            appLog("[HK] resuming \(anchorKey) deltas from seed \(iso.string(from: seedStart))")
+        }
+        let pred = HKQuery.predicateForSamples(withStart: seedStart ?? Date.distantPast, end: Date(), options: [])
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
         var collected: [HKSample] = []
@@ -528,6 +592,37 @@ final class HealthKitBackgroundSync {
                     return
                 }
                 self.healthStore.execute(q)
+            }
+        }, onCancel: {
+            queryBox.cancel(using: self.healthStore)
+        })
+    }
+
+    private func sampleQuery(
+        type: HKSampleType,
+        predicate: NSPredicate?,
+        sort: NSSortDescriptor,
+        timeout: TimeInterval? = nil,
+        limit: Int = HKObjectQueryNoLimit
+    ) async throws -> [HKSample] {
+        let queryBox = HealthKitSampleQueryBox()
+        return try await withTaskCancellationHandler(operation: {
+            try await withCheckedThrowingContinuation { (cont: SampleQueryContinuation) in
+                let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: limit, sortDescriptors: [sort]) { _, samples, error in
+                    queryBox.complete(samples: samples, error: error)
+                }
+                queryBox.prepare(q, continuation: cont)
+                let store = self.healthStore
+                if let timeout, timeout > 0 {
+                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) {
+                        queryBox.cancel(using: store, error: HealthKitQueryTimeoutError())
+                    }
+                }
+                if Task.isCancelled {
+                    queryBox.cancel(using: store)
+                    return
+                }
+                store.execute(q)
             }
         }, onCancel: {
             queryBox.cancel(using: self.healthStore)
@@ -794,14 +889,13 @@ final class HealthKitBackgroundSync {
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
         switch metric {
         case .heartRate:
-            return await backfillOneWindowed(
+            return await backfillOneWindowedSampleQuery(
                 type: hrType,
                 anchorKey: metric.key,
                 start: start,
                 end: Date(),
                 sort: sort,
                 windowDays: 2,
-                pageLimit: 200,
                 chunkSize: interactiveChunkSize(for: metric),
                 maxRetries: interactiveRetryLimit,
                 onProgress: onProgress
@@ -1162,9 +1256,31 @@ final class HealthKitBackgroundSync {
                 return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: error.localizedDescription)
             }
         }
+        return await uploadBackfillSamples(
+            collected,
+            anchorKey: anchorKey,
+            anchor: anchor,
+            chunkSize: chunkSize,
+            maxRetries: maxRetries,
+            persistAnchor: persistAnchor,
+            requestRefresh: requestRefresh
+        )
+    }
 
+    private func uploadBackfillSamples(
+        _ collected: [HKSample],
+        anchorKey: String,
+        anchor: HKQueryAnchor? = nil,
+        chunkSize: Int = 200,
+        maxRetries: Int = 3,
+        persistAnchor: Bool = true,
+        requestRefresh: Bool = true
+    ) async -> HealthBackfillMetricResult {
         guard !collected.isEmpty else {
             appLog("[Backfill] no samples for \(anchorKey) in range")
+            if persistAnchor {
+                anchorStore.setAnchor(anchor, forKey: anchorKey)
+            }
             return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)
         }
 
@@ -1193,6 +1309,9 @@ final class HealthKitBackgroundSync {
         appLog("[Backfill] \(anchorKey) mapped \(samples.count) upload rows from \(collected.count) raw samples")
 
         guard !samples.isEmpty else {
+            if persistAnchor {
+                anchorStore.setAnchor(anchor, forKey: anchorKey)
+            }
             return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: nil)
         }
 
@@ -1200,7 +1319,7 @@ final class HealthKitBackgroundSync {
             let api = buildAPI()
             let uploaded = try await api.postSamplesChunked(samples, chunkSize: chunkSize, maxRetries: maxRetries)
             if persistAnchor {
-                anchorStore.setAnchor(anchor, forKey: anchorKey) // store last anchor so observers resume from here
+                anchorStore.setAnchor(anchor, forKey: anchorKey)
             }
             StatusStore.shared.setUpload(for: anchorKey)
             appLog("[Backfill] uploaded \(samples.count) \(anchorKey) samples")
@@ -1293,6 +1412,169 @@ final class HealthKitBackgroundSync {
         )
     }
 
+    private func backfillAdaptiveSampleWindow(
+        type: HKSampleType,
+        anchorKey: String,
+        window: DateInterval,
+        sort: NSSortDescriptor,
+        chunkSize: Int,
+        maxRetries: Int,
+        windowLabel: String,
+        minimumWindowMinutes: Int = 60,
+        queryTimeout: TimeInterval = 12,
+        onProgress: (@Sendable (String) async -> Void)? = nil
+    ) async -> HealthBackfillMetricResult {
+        let pred = HKQuery.predicateForSamples(
+            withStart: window.start,
+            end: window.end,
+            options: [.strictStartDate, .strictEndDate]
+        )
+        let windowRange = "\(iso.string(from: window.start))..\((iso.string(from: window.end)))"
+
+        do {
+            let batch = try await sampleQuery(
+                type: type,
+                predicate: pred,
+                sort: sort,
+                timeout: queryTimeout
+            )
+            appLog("[Backfill] \(anchorKey) sample query collected \(batch.count) raw samples in window \(windowLabel) \(windowRange)")
+            return await uploadBackfillSamples(
+                batch,
+                anchorKey: anchorKey,
+                chunkSize: chunkSize,
+                maxRetries: maxRetries,
+                persistAnchor: false,
+                requestRefresh: false
+            )
+        } catch is HealthKitQueryTimeoutError {
+            let minimumWindowDuration = TimeInterval(max(30, minimumWindowMinutes) * 60)
+            guard window.duration > minimumWindowDuration else {
+                appLog("[Backfill] \(anchorKey) sample query timed out at minimum window \(windowLabel) \(windowRange)")
+                return HealthBackfillMetricResult(
+                    collectedCount: 0,
+                    uploadedRows: 0,
+                    failureDescription: "The \(anchorKey.replacingOccurrences(of: "_", with: " ")) import is still taking too long."
+                )
+            }
+
+            let midpoint = window.start.addingTimeInterval(window.duration / 2)
+            let recentWindow = DateInterval(start: midpoint, end: window.end)
+            let olderWindow = DateInterval(start: window.start, end: midpoint)
+            appLog("[Backfill] \(anchorKey) window \(windowLabel) is slow; splitting \(windowRange)")
+            await reportBackfillProgress(
+                "Collecting \(anchorKey.replacingOccurrences(of: "_", with: " ")) window \(windowLabel) in smaller ranges…",
+                onProgress: onProgress
+            )
+
+            let recentResult = await backfillAdaptiveSampleWindow(
+                type: type,
+                anchorKey: anchorKey,
+                window: recentWindow,
+                sort: sort,
+                chunkSize: chunkSize,
+                maxRetries: maxRetries,
+                windowLabel: "\(windowLabel)a",
+                minimumWindowMinutes: minimumWindowMinutes,
+                queryTimeout: queryTimeout,
+                onProgress: onProgress
+            )
+            let olderResult = await backfillAdaptiveSampleWindow(
+                type: type,
+                anchorKey: anchorKey,
+                window: olderWindow,
+                sort: sort,
+                chunkSize: chunkSize,
+                maxRetries: maxRetries,
+                windowLabel: "\(windowLabel)b",
+                minimumWindowMinutes: minimumWindowMinutes,
+                queryTimeout: queryTimeout,
+                onProgress: onProgress
+            )
+            return HealthBackfillMetricResult(
+                collectedCount: recentResult.collectedCount + olderResult.collectedCount,
+                uploadedRows: recentResult.uploadedRows + olderResult.uploadedRows,
+                failureDescription: recentResult.failureDescription ?? olderResult.failureDescription
+            )
+        } catch {
+            appLog("[Backfill] sampleQuery error \(anchorKey) window \(windowLabel): \(error.localizedDescription)")
+            return HealthBackfillMetricResult(
+                collectedCount: 0,
+                uploadedRows: 0,
+                failureDescription: error.localizedDescription
+            )
+        }
+    }
+
+    private func backfillOneWindowedSampleQuery(
+        type: HKSampleType,
+        anchorKey: String,
+        start: Date,
+        end: Date,
+        sort: NSSortDescriptor,
+        windowDays: Int,
+        chunkSize: Int = 200,
+        maxRetries: Int = 3,
+        onProgress: (@Sendable (String) async -> Void)? = nil
+    ) async -> HealthBackfillMetricResult {
+        let windows = recentBackfillWindows(start: start, end: end, windowDays: windowDays)
+        guard !windows.isEmpty else {
+            return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)
+        }
+
+        var totalCollected = 0
+        var totalUploaded = 0
+
+        for (index, window) in windows.enumerated() {
+            let windowLabel = "\(index + 1)/\(windows.count)"
+            await reportBackfillProgress(
+                "Collecting \(anchorKey.replacingOccurrences(of: "_", with: " ")) window \(windowLabel)…",
+                onProgress: onProgress
+            )
+            let result = await backfillAdaptiveSampleWindow(
+                type: type,
+                anchorKey: anchorKey,
+                window: window,
+                sort: sort,
+                chunkSize: chunkSize,
+                maxRetries: maxRetries,
+                windowLabel: windowLabel,
+                onProgress: onProgress
+            )
+            totalCollected += result.collectedCount
+            totalUploaded += result.uploadedRows
+            if let failure = result.failureDescription {
+                return HealthBackfillMetricResult(
+                    collectedCount: totalCollected,
+                    uploadedRows: totalUploaded,
+                    failureDescription: failure
+                )
+            }
+            if result.didUploadAnyData {
+                await reportBackfillProgress(
+                    "Imported \(result.uploadedRows) \(anchorKey.replacingOccurrences(of: "_", with: " ")) rows from window \(windowLabel).",
+                    onProgress: onProgress
+                )
+            } else {
+                await reportBackfillProgress(
+                    "No \(anchorKey.replacingOccurrences(of: "_", with: " ")) samples found in window \(windowLabel).",
+                    onProgress: onProgress
+                )
+            }
+        }
+
+        anchorStore.setSeedStart(end, forKey: anchorKey)
+        if totalUploaded > 0 {
+            await requestFeaturesRefreshAfterUpload(rows: totalUploaded, source: "hk:backfill_\(anchorKey)")
+        }
+
+        return HealthBackfillMetricResult(
+            collectedCount: totalCollected,
+            uploadedRows: totalUploaded,
+            failureDescription: nil
+        )
+    }
+
     private func recentBackfillWindows(start: Date, end: Date, windowDays: Int) -> [DateInterval] {
         guard start < end else { return [] }
         let calendar = Calendar.current
@@ -1360,25 +1642,52 @@ final class HealthKitBackgroundSync {
 }
 
 private final class AnchorStore {
+    private let anchorPrefix = "hk_anchor_"
+    private let seedPrefix = "hk_seed_start_"
+
     func anchor(forKey key: String) -> HKQueryAnchor? {
-        guard let data = UserDefaults.standard.data(forKey: "hk_anchor_\(key)") else { return nil }
+        guard let data = UserDefaults.standard.data(forKey: "\(anchorPrefix)\(key)") else { return nil }
         return try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
     }
 
     /// If `anchor` is nil, the stored anchor is removed (used to recover from stuck anchors).
     func setAnchor(_ anchor: HKQueryAnchor?, forKey key: String) {
-        let k = "hk_anchor_\(key)"
+        let k = "\(anchorPrefix)\(key)"
         guard let anchor = anchor else {
             UserDefaults.standard.removeObject(forKey: k)
             return
         }
         if let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true) {
             UserDefaults.standard.set(data, forKey: k)
+            UserDefaults.standard.removeObject(forKey: "\(seedPrefix)\(key)")
         }
+    }
+
+    func seedStart(forKey key: String) -> Date? {
+        guard let raw = UserDefaults.standard.string(forKey: "\(seedPrefix)\(key)"), !raw.isEmpty else {
+            return nil
+        }
+        let precise = ISO8601DateFormatter()
+        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return precise.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+    }
+
+    func setSeedStart(_ date: Date?, forKey key: String) {
+        let storageKey = "\(seedPrefix)\(key)"
+        guard let date else {
+            UserDefaults.standard.removeObject(forKey: storageKey)
+            return
+        }
+        let precise = ISO8601DateFormatter()
+        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        UserDefaults.standard.set(precise.string(from: date), forKey: storageKey)
     }
 
     /// Clear multiple anchors by their keys (e.g., ["heart_rate","spo2","step_count","hrv_sdnn"]).
     func clear(keys: [String]) {
-        for key in keys { UserDefaults.standard.removeObject(forKey: "hk_anchor_\(key)") }
+        for key in keys {
+            UserDefaults.standard.removeObject(forKey: "\(anchorPrefix)\(key)")
+            UserDefaults.standard.removeObject(forKey: "\(seedPrefix)\(key)")
+        }
     }
 }
