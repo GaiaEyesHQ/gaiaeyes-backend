@@ -594,18 +594,36 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         }
     }
 
-    @MainActor func syncHealthBackfillLast30Days() async -> Bool {
+    @MainActor
+    func syncHealthBackfillLast30Days(
+        onProgress: (@MainActor (String) -> Void)? = nil
+    ) async -> HealthBackfillSummary {
         append("Sync HealthKit last 30 days…")
         guard HKHealthStore.isHealthDataAvailable() else {
             append("❌ Health data not available on this device")
-            return false
+            return HealthBackfillSummary(totalMetrics: 0, failedMetrics: ["health_data_unavailable"])
         }
         let start = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date(timeIntervalSinceNow: -(30 * 24 * 60 * 60))
-        await HealthKitBackgroundSync.shared.forceBackfill(since: start)
-        lastHealthBackfillAtISO = ISO8601DateFormatter().string(from: Date())
-        append("✅ Last 30 days import finished")
+        let summary = await HealthKitBackgroundSync.shared.forceBackfill(
+            since: start,
+            onProgress: { message in
+                await MainActor.run {
+                    onProgress?(message)
+                }
+            }
+        )
+        if summary.didUploadAnyData || summary.isSuccessful {
+            lastHealthBackfillAtISO = ISO8601DateFormatter().string(from: Date())
+        }
+        if summary.didUploadAnyData {
+            append("✅ Last 30 days import finished")
+        } else if summary.isSuccessful {
+            append("✅ Last 30 days import finished (no importable data found)")
+        } else {
+            append("⚠️ Last 30 days import finished with issues")
+        }
         refreshStatus()
-        return true
+        return summary
     }
 
     // MARK: - BLE controls

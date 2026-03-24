@@ -594,7 +594,7 @@ final class APIClient {
         var offset = 0
         var didUpload = false
         if samples.count > effectiveChunk {
-            let warm = min(100, samples.count)
+            let warm = min(effectiveChunk, min(100, samples.count))
             let first = Array(samples[0..<warm])
             let warmUploaded = try await sendChunkWithRescue(first, label: "chunk 1(warm)/?", attemptLimit: maxRetries + 2)
             didUpload = didUpload || warmUploaded
@@ -728,6 +728,9 @@ final class APIClient {
         } catch let uerr as URLError {
             // Swallow benign lifecycle events
             if uerr.code == .cancelled || uerr.code == .timedOut {
+                if uerr.code == .timedOut {
+                    logger?("[PF] /health timed out; continuing with upload attempts")
+                }
                 return
             }
             logger?("[PF] /health warn: \(uerr.code.rawValue) \(uerr.localizedDescription)")

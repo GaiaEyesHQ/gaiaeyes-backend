@@ -3023,31 +3023,39 @@ struct ContentView: View {
     private func runUnifiedHealthBackfill() async -> Bool {
         await MainActor.run {
             backfillInFlight = true
-            backfillMessage = nil
+            backfillMessage = "Preparing your 30-day Health import…"
         }
         AppAnalytics.track("health_backfill_started", properties: ["window": "30d"])
-        let succeeded = await state.syncHealthBackfillLast30Days()
+        let summary = await state.syncHealthBackfillLast30Days { message in
+            backfillMessage = message
+        }
         let syncStamp = await MainActor.run { state.lastHealthBackfillAtISO }
-        if succeeded, !syncStamp.isEmpty {
+        let finishedCleanly = summary.didUploadAnyData || summary.isSuccessful
+        if finishedCleanly, !syncStamp.isEmpty {
             await saveProfilePreferences(UserExperienceProfileUpdate(lastBackfillAt: syncStamp))
             await fetchDashboardPayload(force: true)
             await fetchLocalHealth()
         }
         await MainActor.run {
             backfillInFlight = false
-            if succeeded {
+            if summary.didUploadAnyData {
                 experienceProfile.lastBackfillAt = syncStamp.isEmpty ? experienceProfile.lastBackfillAt : syncStamp
                 if let updated = formatUpdated(syncStamp) {
-                    backfillMessage = "Imported recent Health data. Last sync \(updated)."
+                    backfillMessage = "\(summary.userFacingMessage) Last sync \(updated)."
                 } else {
-                    backfillMessage = "Imported recent Health data."
+                    backfillMessage = summary.userFacingMessage
                 }
+            } else if summary.isSuccessful {
+                backfillMessage = summary.userFacingMessage
             } else {
-                backfillMessage = "Import did not complete. You can continue now and retry later in Settings."
+                backfillMessage = summary.userFacingMessage
             }
         }
-        AppAnalytics.track(succeeded ? "health_backfill_completed" : "health_backfill_failed", properties: ["window": "30d"])
-        return succeeded
+        AppAnalytics.track(
+            finishedCleanly ? "health_backfill_completed" : "health_backfill_failed",
+            properties: ["window": "30d"]
+        )
+        return finishedCleanly
     }
 
     private func handleIncomingPushRoute(_ route: GaiaPushRoute) {

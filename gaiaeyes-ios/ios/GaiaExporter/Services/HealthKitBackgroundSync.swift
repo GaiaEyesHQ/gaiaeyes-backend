@@ -13,6 +13,78 @@ extension Notification.Name {
     static let featuresShouldRefresh = Notification.Name("FeaturesShouldRefresh")
 }
 
+struct HealthBackfillSummary: Sendable {
+    let totalMetrics: Int
+    var completedMetrics: Int = 0
+    var uploadedMetrics: Int = 0
+    var uploadedRows: Int = 0
+    var failedMetrics: [String] = []
+    var timedOutMetrics: [String] = []
+
+    var didUploadAnyData: Bool { uploadedRows > 0 }
+    var isSuccessful: Bool { failedMetrics.isEmpty && timedOutMetrics.isEmpty }
+
+    var userFacingMessage: String {
+        if didUploadAnyData {
+            return "Imported \(uploadedRows) HealthKit rows across \(uploadedMetrics) signals."
+        }
+        if isSuccessful {
+            return "Gaia checked the last 30 days, but there was no importable Health data yet."
+        }
+        if !timedOutMetrics.isEmpty {
+            let labels = timedOutMetrics.joined(separator: ", ")
+            return "Import took longer than expected on \(labels). You can continue and retry from Settings."
+        }
+        return "Some Health data could not be imported. You can continue and retry from Settings."
+    }
+}
+
+private struct HealthBackfillMetricResult: Sendable {
+    let collectedCount: Int
+    let uploadedRows: Int
+    let failureDescription: String?
+
+    var didUploadAnyData: Bool { uploadedRows > 0 }
+}
+
+private enum HealthBackfillTimeoutError: LocalizedError, Sendable {
+    case metric(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .metric(let label):
+            return "\(label) timed out"
+        }
+    }
+}
+
+private final class HealthKitQueryCancellationBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var query: HKQuery?
+
+    func set(_ query: HKQuery) {
+        lock.lock()
+        self.query = query
+        lock.unlock()
+    }
+
+    func clear() {
+        lock.lock()
+        query = nil
+        lock.unlock()
+    }
+
+    func cancel(using store: HKHealthStore) {
+        lock.lock()
+        let query = self.query
+        self.query = nil
+        lock.unlock()
+        if let query {
+            store.stop(query)
+        }
+    }
+}
+
 private actor FeaturesRefreshDebouncer {
     private var isRunning = false
     private var pending = false
@@ -100,6 +172,59 @@ final class HealthKitBackgroundSync {
             return HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature)
         }
         return nil
+    }
+
+    private enum InteractiveBackfillMetric: CaseIterable {
+        case heartRate
+        case spo2
+        case hrv
+        case respiratoryRate
+        case restingHeartRate
+        case temperatureDeviation
+        case bloodPressure
+        case sleep
+        case menstrualFlow
+
+        var key: String {
+            switch self {
+            case .heartRate: return "heart_rate"
+            case .spo2: return "spo2"
+            case .hrv: return "hrv_sdnn"
+            case .respiratoryRate: return "respiratory_rate"
+            case .restingHeartRate: return "resting_heart_rate"
+            case .temperatureDeviation: return "temperature_deviation"
+            case .bloodPressure: return "blood_pressure"
+            case .sleep: return "sleep_stage"
+            case .menstrualFlow: return "menstrual_flow"
+            }
+        }
+
+        var label: String {
+            switch self {
+            case .heartRate: return "heart rate"
+            case .spo2: return "SpO2"
+            case .hrv: return "HRV"
+            case .respiratoryRate: return "respiratory rate"
+            case .restingHeartRate: return "resting heart rate"
+            case .temperatureDeviation: return "temperature deviation"
+            case .bloodPressure: return "blood pressure"
+            case .sleep: return "sleep"
+            case .menstrualFlow: return "cycle history"
+            }
+        }
+
+        var timeout: TimeInterval {
+            switch self {
+            case .heartRate:
+                return 35
+            case .sleep:
+                return 30
+            case .bloodPressure:
+                return 20
+            default:
+                return 15
+            }
+        }
     }
 
     // Register observers
@@ -386,14 +511,24 @@ final class HealthKitBackgroundSync {
     }
 
     private func anchoredQuery(type: HKSampleType, predicate: NSPredicate?, anchor: HKQueryAnchor?, limit: Int, sort: NSSortDescriptor) async throws -> (HKQueryAnchor?, [HKSample], Bool) {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<(HKQueryAnchor?, [HKSample], Bool), Error>) in
-            let q = HKAnchoredObjectQuery(type: type, predicate: predicate, anchor: anchor, limit: limit) { _, samples, _, newAnchor, error in
-                if let error = error { cont.resume(throwing: error); return }
-                let sorted = (samples ?? []).sorted { $0.startDate < $1.startDate }
-                cont.resume(returning: (newAnchor, sorted, (samples?.count ?? 0) == limit))
+        let cancellationBox = HealthKitQueryCancellationBox()
+        return try await withTaskCancellationHandler(operation: {
+            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<(HKQueryAnchor?, [HKSample], Bool), Error>) in
+                let q = HKAnchoredObjectQuery(type: type, predicate: predicate, anchor: anchor, limit: limit) { _, samples, _, newAnchor, error in
+                    cancellationBox.clear()
+                    if let error {
+                        cont.resume(throwing: error)
+                        return
+                    }
+                    let sorted = (samples ?? []).sorted { $0.startDate < $1.startDate }
+                    cont.resume(returning: (newAnchor, sorted, (samples?.count ?? 0) == limit))
+                }
+                cancellationBox.set(q)
+                self.healthStore.execute(q)
             }
-            self.healthStore.execute(q)
-        }
+        }, onCancel: {
+            cancellationBox.cancel(using: self.healthStore)
+        })
     }
 
     private func matchesQuantityType(_ sample: HKQuantitySample, type: HKQuantityType?) -> Bool {
@@ -611,74 +746,253 @@ final class HealthKitBackgroundSync {
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
         if let respiratoryRateType {
-            await backfillOne(type: respiratoryRateType, anchorKey: "respiratory_rate", pred: pred, sort: sort)
+            _ = await backfillOne(type: respiratoryRateType, anchorKey: "respiratory_rate", pred: pred, sort: sort)
         }
         if let restingHeartRateType {
-            await backfillOne(type: restingHeartRateType, anchorKey: "resting_heart_rate", pred: pred, sort: sort)
+            _ = await backfillOne(type: restingHeartRateType, anchorKey: "resting_heart_rate", pred: pred, sort: sort)
         }
         if let temperatureDeviationType {
-            await backfillOne(type: temperatureDeviationType, anchorKey: "temperature_deviation", pred: pred, sort: sort)
+            _ = await backfillOne(type: temperatureDeviationType, anchorKey: "temperature_deviation", pred: pred, sort: sort)
         }
-        await backfillCycle(pred: pred, sort: sort)
+        _ = await backfillCycle(pred: pred, sort: sort)
         defaults.set(Self.phase2BackfillVersion, forKey: Self.phase2BackfillMarkerKey)
         await phase2BackfillState.end()
     }
 
-    /// Clear anchors and backfill all supported quantity types from `start` until now.
-    /// This is safe to run manually (e.g., from a Debug button) to recover from gaps.
-    func forceBackfill(since start: Date) async {
-        let keys = [
-            "heart_rate",
-            "spo2",
-            "step_count",
-            "hrv_sdnn",
-            "respiratory_rate",
-            "resting_heart_rate",
-            "temperature_deviation",
-            "blood_pressure",
-            "sleep_stage",
-            "menstrual_flow",
-        ]
-        anchorStore.clear(keys: keys)
+    private func reportBackfillProgress(
+        _ message: String,
+        onProgress: (@Sendable (String) async -> Void)?
+    ) async {
+        appLog("[Backfill] \(message)")
+        if let onProgress {
+            await onProgress(message)
+        }
+    }
 
+    private func runWithTimeout<T: Sendable>(
+        seconds: TimeInterval,
+        operation: @escaping @Sendable () async -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                await operation()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw HealthBackfillTimeoutError.metric("Backfill metric")
+            }
+            let value = try await group.next()!
+            group.cancelAll()
+            return value
+        }
+    }
+
+    private func interactiveChunkSize(for metric: InteractiveBackfillMetric) -> Int {
+        switch metric {
+        case .heartRate:
+            return 40
+        case .bloodPressure:
+            return 60
+        default:
+            return 80
+        }
+    }
+
+    private var interactiveRetryLimit: Int { 1 }
+
+    private func performInteractiveBackfillMetric(
+        _ metric: InteractiveBackfillMetric,
+        start: Date
+    ) async -> HealthBackfillMetricResult {
         let pred = HKQuery.predicateForSamples(withStart: start, end: Date(), options: [])
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
-
-        await backfillOne(type: hrType,   anchorKey: "heart_rate", pred: pred, sort: sort)
-        await backfillOne(type: spo2Type, anchorKey: "spo2",       pred: pred, sort: sort)
-        await backfillOne(type: stepsType,anchorKey: "step_count",  pred: pred, sort: sort)
-        await backfillOne(type: hrvType,  anchorKey: "hrv_sdnn",    pred: pred, sort: sort)
-        if let respiratoryRateType {
-            await backfillOne(type: respiratoryRateType, anchorKey: "respiratory_rate", pred: pred, sort: sort)
+        switch metric {
+        case .heartRate:
+            return await backfillOne(
+                type: hrType,
+                anchorKey: metric.key,
+                pred: pred,
+                sort: sort,
+                chunkSize: interactiveChunkSize(for: metric),
+                maxRetries: interactiveRetryLimit
+            )
+        case .spo2:
+            return await backfillOne(
+                type: spo2Type,
+                anchorKey: metric.key,
+                pred: pred,
+                sort: sort,
+                chunkSize: interactiveChunkSize(for: metric),
+                maxRetries: interactiveRetryLimit
+            )
+        case .hrv:
+            return await backfillOne(
+                type: hrvType,
+                anchorKey: metric.key,
+                pred: pred,
+                sort: sort,
+                chunkSize: interactiveChunkSize(for: metric),
+                maxRetries: interactiveRetryLimit
+            )
+        case .respiratoryRate:
+            guard let respiratoryRateType else {
+                return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)
+            }
+            return await backfillOne(
+                type: respiratoryRateType,
+                anchorKey: metric.key,
+                pred: pred,
+                sort: sort,
+                chunkSize: interactiveChunkSize(for: metric),
+                maxRetries: interactiveRetryLimit
+            )
+        case .restingHeartRate:
+            guard let restingHeartRateType else {
+                return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)
+            }
+            return await backfillOne(
+                type: restingHeartRateType,
+                anchorKey: metric.key,
+                pred: pred,
+                sort: sort,
+                chunkSize: interactiveChunkSize(for: metric),
+                maxRetries: interactiveRetryLimit
+            )
+        case .temperatureDeviation:
+            guard let temperatureDeviationType else {
+                return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)
+            }
+            return await backfillOne(
+                type: temperatureDeviationType,
+                anchorKey: metric.key,
+                pred: pred,
+                sort: sort,
+                chunkSize: interactiveChunkSize(for: metric),
+                maxRetries: interactiveRetryLimit
+            )
+        case .bloodPressure:
+            return await backfillOne(
+                type: bpType,
+                anchorKey: metric.key,
+                pred: pred,
+                sort: sort,
+                chunkSize: interactiveChunkSize(for: metric),
+                maxRetries: interactiveRetryLimit
+            )
+        case .sleep:
+            return await backfillSleep(
+                pred: pred,
+                sort: sort,
+                chunkSize: interactiveChunkSize(for: metric),
+                maxRetries: interactiveRetryLimit
+            )
+        case .menstrualFlow:
+            return await backfillCycle(
+                pred: pred,
+                sort: sort,
+                chunkSize: interactiveChunkSize(for: metric),
+                maxRetries: interactiveRetryLimit
+            )
         }
-        if let restingHeartRateType {
-            await backfillOne(type: restingHeartRateType, anchorKey: "resting_heart_rate", pred: pred, sort: sort)
-        }
-        if let temperatureDeviationType {
-            await backfillOne(type: temperatureDeviationType, anchorKey: "temperature_deviation", pred: pred, sort: sort)
-        }
-        await backfillOne(type: bpType,  anchorKey: "blood_pressure", pred: pred, sort: sort)
-        await backfillSleep(pred: pred, sort: sort)
-        await backfillCycle(pred: pred, sort: sort)
     }
-    private func backfillSleep(pred: NSPredicate, sort: NSSortDescriptor) async {
+
+    /// Clear anchors and backfill the onboarding-relevant HealthKit signals from `start` until now.
+    /// This keeps the first-run import focused on the signals Gaia actually interprets immediately.
+    func forceBackfill(
+        since start: Date,
+        onProgress: (@Sendable (String) async -> Void)? = nil
+    ) async -> HealthBackfillSummary {
+        let metrics = InteractiveBackfillMetric.allCases
+        anchorStore.clear(keys: metrics.map(\.key))
+
+        let deadline = Date().addingTimeInterval(90)
+        var summary = HealthBackfillSummary(totalMetrics: metrics.count)
+
+        await reportBackfillProgress("Preparing 30-day import…", onProgress: onProgress)
+
+        for (index, metric) in metrics.enumerated() {
+            let ordinal = index + 1
+            let remaining = deadline.timeIntervalSinceNow
+            if remaining <= 5 {
+                summary.timedOutMetrics.append(metric.label)
+                await reportBackfillProgress(
+                    "Stopping early because the import is taking longer than expected.",
+                    onProgress: onProgress
+                )
+                break
+            }
+
+            await reportBackfillProgress(
+                "Collecting \(metric.label) (\(ordinal)/\(metrics.count))…",
+                onProgress: onProgress
+            )
+
+            do {
+                let timeout = min(metric.timeout, max(5, remaining - 2))
+                let result = try await runWithTimeout(seconds: timeout) {
+                    await self.performInteractiveBackfillMetric(metric, start: start)
+                }
+
+                summary.completedMetrics = ordinal
+                if let failure = result.failureDescription {
+                    summary.failedMetrics.append(metric.label)
+                    await reportBackfillProgress(
+                        "Could not import \(metric.label). \(failure)",
+                        onProgress: onProgress
+                    )
+                } else if result.didUploadAnyData {
+                    summary.uploadedMetrics += 1
+                    summary.uploadedRows += result.uploadedRows
+                    await reportBackfillProgress(
+                        "Imported \(result.uploadedRows) \(metric.label) rows.",
+                        onProgress: onProgress
+                    )
+                } else {
+                    await reportBackfillProgress(
+                        "No \(metric.label) samples found in the last 30 days.",
+                        onProgress: onProgress
+                    )
+                }
+            } catch {
+                summary.timedOutMetrics.append(metric.label)
+                await reportBackfillProgress(
+                    "Timed out while importing \(metric.label).",
+                    onProgress: onProgress
+                )
+            }
+        }
+
+        await reportBackfillProgress(summary.userFacingMessage, onProgress: onProgress)
+        return summary
+    }
+    private func backfillSleep(
+        pred: NSPredicate,
+        sort: NSSortDescriptor,
+        chunkSize: Int = 200,
+        maxRetries: Int = 3
+    ) async -> HealthBackfillMetricResult {
         var anchor: HKQueryAnchor? = nil
         var collected: [HKSample] = []
         var more = true
+        var page = 0
         while more {
             do {
+                page += 1
                 let (newAnchor, batch, hasMore) = try await anchoredQuery(type: sleepType, predicate: pred, anchor: anchor, limit: 500, sort: sort)
                 anchor = newAnchor
                 if !batch.isEmpty { collected.append(contentsOf: batch) }
                 more = hasMore
+                if page == 1 || page % 5 == 0 {
+                    appLog("[Backfill] sleep_stage collected \(collected.count) raw samples after page \(page)")
+                }
             } catch {
                 appLog("[Backfill] anchoredQuery error sleep_stage: \(error.localizedDescription)")
-                return
+                return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: error.localizedDescription)
             }
         }
         guard !collected.isEmpty else {
             appLog("[Backfill] no samples for sleep_stage in range")
-            return
+            return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)
         }
         var samples: [Sample] = []
         for s in collected {
@@ -700,37 +1014,59 @@ final class HealthKitBackgroundSync {
                 value: nil, unit: nil, value_text: stage
             ))
         }
+        appLog("[Backfill] sleep_stage mapped \(samples.count) upload rows from \(collected.count) raw samples")
+        guard !samples.isEmpty else {
+            return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: nil)
+        }
         do {
             let api = buildAPI()
-            let uploaded = try await api.postSamplesChunked(samples, chunkSize: 200)
+            let uploaded = try await api.postSamplesChunked(samples, chunkSize: chunkSize, maxRetries: maxRetries)
             appLog("[Backfill] uploaded \(samples.count) sleep_stage samples")
             if uploaded {
                 await requestFeaturesRefreshAfterUpload(rows: samples.count, source: "hk:backfill_sleep")
             }
+            return HealthBackfillMetricResult(
+                collectedCount: collected.count,
+                uploadedRows: uploaded ? samples.count : 0,
+                failureDescription: uploaded ? nil : "The server did not accept any sleep rows."
+            )
         } catch {
             appLog("[Backfill] upload error sleep_stage: \(error.localizedDescription)")
+            return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: error.localizedDescription)
         }
     }
 
-    private func backfillCycle(pred: NSPredicate, sort: NSSortDescriptor) async {
-        guard let menstrualFlowType else { return }
+    private func backfillCycle(
+        pred: NSPredicate,
+        sort: NSSortDescriptor,
+        chunkSize: Int = 200,
+        maxRetries: Int = 3
+    ) async -> HealthBackfillMetricResult {
+        guard let menstrualFlowType else {
+            return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)
+        }
         var anchor: HKQueryAnchor? = nil
         var collected: [HKSample] = []
         var more = true
+        var page = 0
         while more {
             do {
+                page += 1
                 let (newAnchor, batch, hasMore) = try await anchoredQuery(type: menstrualFlowType, predicate: pred, anchor: anchor, limit: 500, sort: sort)
                 anchor = newAnchor
                 if !batch.isEmpty { collected.append(contentsOf: batch) }
                 more = hasMore
+                if page == 1 || page % 5 == 0 {
+                    appLog("[Backfill] menstrual_flow collected \(collected.count) raw samples after page \(page)")
+                }
             } catch {
                 appLog("[Backfill] anchoredQuery error menstrual_flow: \(error.localizedDescription)")
-                return
+                return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: error.localizedDescription)
             }
         }
         guard !collected.isEmpty else {
             appLog("[Backfill] no samples for menstrual_flow in range")
-            return
+            return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)
         }
         let samples: [Sample] = collected.compactMap { sample in
             guard let cat = sample as? HKCategorySample else { return nil }
@@ -746,17 +1082,27 @@ final class HealthKitBackgroundSync {
                 value_text: "active"
             )
         }
+        appLog("[Backfill] menstrual_flow mapped \(samples.count) upload rows from \(collected.count) raw samples")
+        guard !samples.isEmpty else {
+            return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: nil)
+        }
         do {
             let api = buildAPI()
-            let uploaded = try await api.postSamplesChunked(samples, chunkSize: 200)
+            let uploaded = try await api.postSamplesChunked(samples, chunkSize: chunkSize, maxRetries: maxRetries)
             anchorStore.setAnchor(anchor, forKey: "menstrual_flow")
             StatusStore.shared.setUpload(for: "menstrual_flow")
             appLog("[Backfill] uploaded \(samples.count) menstrual_flow samples")
             if uploaded {
                 await requestFeaturesRefreshAfterUpload(rows: samples.count, source: "hk:backfill_menstrual_flow")
             }
+            return HealthBackfillMetricResult(
+                collectedCount: collected.count,
+                uploadedRows: uploaded ? samples.count : 0,
+                failureDescription: uploaded ? nil : "The server did not accept any cycle rows."
+            )
         } catch {
             appLog("[Backfill] upload error menstrual_flow: \(error.localizedDescription)")
+            return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: error.localizedDescription)
         }
     }
 
@@ -819,26 +1165,38 @@ final class HealthKitBackgroundSync {
         StatusStore.shared.setBackgroundRun()
     }
 
-    private func backfillOne(type: HKSampleType, anchorKey: String, pred: NSPredicate, sort: NSSortDescriptor) async {
+    private func backfillOne(
+        type: HKSampleType,
+        anchorKey: String,
+        pred: NSPredicate,
+        sort: NSSortDescriptor,
+        chunkSize: Int = 200,
+        maxRetries: Int = 3
+    ) async -> HealthBackfillMetricResult {
         var anchor: HKQueryAnchor? = nil
         var collected: [HKSample] = []
         var more = true
+        var page = 0
 
         while more {
             do {
+                page += 1
                 let (newAnchor, batch, hasMore) = try await anchoredQuery(type: type, predicate: pred, anchor: anchor, limit: 500, sort: sort)
                 anchor = newAnchor
                 if !batch.isEmpty { collected.append(contentsOf: batch) }
                 more = hasMore
+                if page == 1 || page % 5 == 0 {
+                    appLog("[Backfill] \(anchorKey) collected \(collected.count) raw samples after page \(page)")
+                }
             } catch {
                 appLog("[Backfill] anchoredQuery error \(anchorKey): \(error.localizedDescription)")
-                return
+                return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: error.localizedDescription)
             }
         }
 
         guard !collected.isEmpty else {
             appLog("[Backfill] no samples for \(anchorKey) in range")
-            return
+            return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)
         }
 
         var samples: [Sample] = []
@@ -863,19 +1221,29 @@ final class HealthKitBackgroundSync {
         }
         logQuantityMapping(anchorKey: anchorKey, collected: collected, mappedCount: samples.count)
         prioritizeRecentUploads(anchorKey: anchorKey, samples: &samples)
+        appLog("[Backfill] \(anchorKey) mapped \(samples.count) upload rows from \(collected.count) raw samples")
+
+        guard !samples.isEmpty else {
+            return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: nil)
+        }
 
         do {
-            let chunkSize = (anchorKey == "heart_rate" ? 100 : 200)
             let api = buildAPI()
-            let uploaded = try await api.postSamplesChunked(samples, chunkSize: chunkSize)
+            let uploaded = try await api.postSamplesChunked(samples, chunkSize: chunkSize, maxRetries: maxRetries)
             anchorStore.setAnchor(anchor, forKey: anchorKey) // store last anchor so observers resume from here
             StatusStore.shared.setUpload(for: anchorKey)
             appLog("[Backfill] uploaded \(samples.count) \(anchorKey) samples")
             if uploaded {
                 await requestFeaturesRefreshAfterUpload(rows: samples.count, source: "hk:backfill_\(anchorKey)")
             }
+            return HealthBackfillMetricResult(
+                collectedCount: collected.count,
+                uploadedRows: uploaded ? samples.count : 0,
+                failureDescription: uploaded ? nil : "The server did not accept any \(anchorKey) rows."
+            )
         } catch {
             appLog("[Backfill] upload error \(anchorKey): \(error.localizedDescription)")
+            return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: error.localizedDescription)
         }
     }
 
