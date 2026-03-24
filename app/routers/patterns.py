@@ -234,7 +234,7 @@ async def user_patterns(request: Request, conn=Depends(get_db)):
         if str(item.get("id") or "")
     }
 
-    body_rows = _sort_rows([row for row in rows if str(row.get("outcome_kind") or "") == "biometric"], user_tags)[:3]
+    body_rows = _sort_rows([row for row in rows if str(row.get("outcome_kind") or "") == "biometric"], user_tags)
     strongest_rows = _sort_rows(
         [
             row
@@ -243,7 +243,7 @@ async def user_patterns(request: Request, conn=Depends(get_db)):
             and str(row.get("confidence") or "") in {"Strong", "Moderate"}
         ],
         user_tags,
-    )[:3]
+    )
     emerging_rows = _sort_rows(
         [
             row
@@ -252,7 +252,7 @@ async def user_patterns(request: Request, conn=Depends(get_db)):
             and str(row.get("confidence") or "") == "Emerging"
         ],
         user_tags,
-    )[:3]
+    )
 
     return {
         "ok": True,

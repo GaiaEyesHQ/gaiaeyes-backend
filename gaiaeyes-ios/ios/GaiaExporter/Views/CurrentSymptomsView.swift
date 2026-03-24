@@ -56,6 +56,14 @@ private extension String {
     }
 }
 
+private func isCurrentSymptomsCancellation(_ error: Error) -> Bool {
+    if error is CancellationError {
+        return true
+    }
+    let nsError = error as NSError
+    return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
+}
+
 struct CurrentSymptomsView: View {
     let api: APIClient
     var mode: CurrentSymptomsPresentationMode = .scientific
@@ -74,6 +82,7 @@ struct CurrentSymptomsView: View {
     @State private var updatingEpisodeId: String?
     @State private var journalStatus: String?
     @State private var editingItem: CurrentSymptomItem?
+    @State private var showsAllPatternContext: Bool = false
 
     private var copy: CurrentSymptomsCopy {
         CurrentSymptomsCopy.resolve(mode: mode, tone: tone)
@@ -81,6 +90,14 @@ struct CurrentSymptomsView: View {
 
     private var activeItems: [CurrentSymptomItem] {
         snapshot?.items ?? []
+    }
+
+    private var visiblePatternContext: [CurrentSymptomPatternHint] {
+        let allPatterns = snapshot?.patternContext ?? []
+        if showsAllPatternContext {
+            return allPatterns
+        }
+        return Array(allPatterns.prefix(3))
     }
 
     private var selectedItem: CurrentSymptomItem? {
@@ -185,6 +202,12 @@ struct CurrentSymptomsView: View {
             }
             appLog("[CurrentSymptoms] snapshot ok active=\(payload.summary.activeCount)")
         } catch {
+            if isCurrentSymptomsCancellation(error) {
+                await MainActor.run {
+                    isLoading = false
+                }
+                return
+            }
             await MainActor.run {
                 errorMessage = error.localizedDescription
                 isLoading = false
@@ -468,7 +491,7 @@ struct CurrentSymptomsView: View {
             Button {
                 openEditor(for: item)
             } label: {
-                Text("Add note or adjust severity")
+                Text("Edit symptom details")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.white.opacity(0.78))
             }
@@ -558,7 +581,7 @@ struct CurrentSymptomsView: View {
                     .foregroundColor(.white)
 
                 if let patternContext = snapshot?.patternContext, !patternContext.isEmpty {
-                    ForEach(patternContext.prefix(3)) { pattern in
+                    ForEach(visiblePatternContext) { pattern in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(pattern.text ?? "\(pattern.signal) matches your \(pattern.outcome.lowercased()) pattern.")
                                 .font(.subheadline.weight(.semibold))
@@ -570,6 +593,15 @@ struct CurrentSymptomsView: View {
                                     .foregroundColor(.white.opacity(0.56))
                             }
                         }
+                    }
+
+                    if patternContext.count > 3 {
+                        Button(showsAllPatternContext ? "Show fewer pattern hints" : "Show all pattern hints") {
+                            showsAllPatternContext.toggle()
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(Color(red: 0.46, green: 0.7, blue: 1.0))
+                        .buttonStyle(.plain)
                     }
                 } else {
                     Text("We're still learning what tends to line up with this.")
@@ -1054,6 +1086,12 @@ struct CurrentSymptomsTimelineView: View {
                 isLoading = false
             }
         } catch {
+            if isCurrentSymptomsCancellation(error) {
+                await MainActor.run {
+                    isLoading = false
+                }
+                return
+            }
             await MainActor.run {
                 errorMessage = error.localizedDescription
                 isLoading = false

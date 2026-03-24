@@ -6850,6 +6850,9 @@ struct ContentView: View {
         @State private var payload: UserPatternsPayload? = nil
         @State private var isLoading: Bool = false
         @State private var errorMessage: String? = nil
+        @State private var showsAllStrongestPatterns: Bool = false
+        @State private var showsAllEmergingPatterns: Bool = false
+        @State private var showsAllBodySignalPatterns: Bool = false
 
         private func confidenceSeverity(_ confidence: String?) -> StatusPill.Severity {
             switch (confidence ?? "").lowercased() {
@@ -6905,6 +6908,13 @@ struct ContentView: View {
             default:
                 return "chart.line.uptrend.xyaxis"
             }
+        }
+
+        private func visibleCards(_ cards: [UserPatternCard], expanded: Bool) -> [UserPatternCard] {
+            if expanded {
+                return cards
+            }
+            return Array(cards.prefix(3))
         }
 
         private func loadPatterns(force: Bool = false) async {
@@ -6994,7 +7004,15 @@ struct ContentView: View {
         }
 
         @ViewBuilder
-        private func sectionView(title: String, subtitle: String, cards: [UserPatternCard], emptyMessage: String) -> some View {
+        private func sectionView(
+            title: String,
+            subtitle: String,
+            cards: [UserPatternCard],
+            emptyMessage: String,
+            expanded: Binding<Bool>
+        ) -> some View {
+            let displayedCards = visibleCards(cards, expanded: expanded.wrappedValue)
+
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -7013,7 +7031,7 @@ struct ContentView: View {
                         .background(Color.white.opacity(0.04))
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 } else {
-                    ForEach(cards) { card in
+                    ForEach(displayedCards) { card in
                         PatternCardView(
                             card: card,
                             iconName: iconName(for: card.signalKey),
@@ -7021,6 +7039,15 @@ struct ContentView: View {
                             liftLine: liftLine(card),
                             rateLine: rateLine(card)
                         )
+                    }
+
+                    if cards.count > 3 {
+                        Button(expanded.wrappedValue ? "Show fewer patterns" : "Show all patterns (\(cards.count))") {
+                            expanded.wrappedValue.toggle()
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(Color(red: 0.46, green: 0.7, blue: 1.0))
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -7071,21 +7098,24 @@ struct ContentView: View {
                             title: "Clearest Patterns",
                             subtitle: "The most reliable repeats in your history so far.",
                             cards: strongest,
-                            emptyMessage: "No higher-confidence patterns are ready yet. Keep logging symptoms and daily history will sharpen this section."
+                            emptyMessage: "No higher-confidence patterns are ready yet. Keep logging symptoms and daily history will sharpen this section.",
+                            expanded: $showsAllStrongestPatterns
                         )
 
                         sectionView(
                             title: "Still Taking Shape",
                             subtitle: "Signals that may be repeating, but still need more overlap.",
                             cards: emerging,
-                            emptyMessage: "Nothing is emerging yet. This section fills in after repeated signal and symptom overlap."
+                            emptyMessage: "Nothing is emerging yet. This section fills in after repeated signal and symptom overlap.",
+                            expanded: $showsAllEmergingPatterns
                         )
 
                         sectionView(
                             title: "Body Signals",
                             subtitle: "Wearable-based patterns only show when the overlap is strong enough to meet the current evidence rules.",
                             cards: bodySignals,
-                            emptyMessage: "No clear body-signal patterns are standing out yet."
+                            emptyMessage: "No clear body-signal patterns are standing out yet.",
+                            expanded: $showsAllBodySignalPatterns
                         )
                     }
                     .padding(16)

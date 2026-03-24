@@ -403,9 +403,16 @@ async def _build_current_symptoms_payload(
                 break
 
         pattern_hint = _serialize_pattern_ref(matches[0][2]) if matches else None
-        if pattern_hint and pattern_hint.id and pattern_hint.id not in seen_pattern_ids:
-            pattern_context.append(pattern_hint)
-            seen_pattern_ids.add(pattern_hint.id)
+        symptom_pattern_ids: set[str] = set()
+        for _, _, ref in matches:
+            serialized_ref = _serialize_pattern_ref(ref)
+            if not serialized_ref.id or serialized_ref.id in seen_pattern_ids or serialized_ref.id in symptom_pattern_ids:
+                continue
+            pattern_context.append(serialized_ref)
+            seen_pattern_ids.add(serialized_ref.id)
+            symptom_pattern_ids.add(serialized_ref.id)
+            if len(symptom_pattern_ids) >= 2:
+                break
 
         state = _normalize_current_state(row.get("current_state"))
         item = CurrentSymptomItemOut(
@@ -470,7 +477,7 @@ async def _build_current_symptoms_payload(
         summary=summary,
         items=items,
         contributing_drivers=contributing_drivers,
-        pattern_context=pattern_context[:3],
+        pattern_context=pattern_context,
         follow_up_settings=CurrentSymptomFollowUpOut(
             notifications_enabled=bool(follow_up.get("notifications_enabled")),
             enabled=bool(follow_up.get("enabled")),

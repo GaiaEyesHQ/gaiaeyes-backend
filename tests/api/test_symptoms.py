@@ -457,6 +457,16 @@ async def test_current_symptoms_snapshot_builds_live_context(monkeypatch, client
                             "confidence": "Moderate",
                             "relevance_score": 3.2,
                             "explanation": "Pressure swings are a known repeating pattern in your headache history.",
+                        },
+                        {
+                            "id": "aqi_moderate_plus_exposed|headache_day|0",
+                            "signal_key": "aqi_moderate_plus_exposed",
+                            "signal": "Air quality",
+                            "outcome_key": "headache_day",
+                            "outcome": "Headaches",
+                            "confidence": "Emerging",
+                            "relevance_score": 2.7,
+                            "explanation": "AQI has started to show up around your headache days.",
                         }
                     ],
                 }
@@ -478,6 +488,10 @@ async def test_current_symptoms_snapshot_builds_live_context(monkeypatch, client
     assert payload["data"]["items"][0]["current_state"] == "ongoing"
     assert payload["data"]["items"][0]["likely_drivers"][0]["key"] == "pressure"
     assert payload["data"]["pattern_context"][0]["signal_key"] == "pressure_swing_exposed"
+    assert [item["signal_key"] for item in payload["data"]["pattern_context"]] == [
+        "pressure_swing_exposed",
+        "aqi_moderate_plus_exposed",
+    ]
     assert payload["data"]["follow_up_settings"]["enabled"] is True
 
 

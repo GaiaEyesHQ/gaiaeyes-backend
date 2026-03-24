@@ -312,8 +312,8 @@ async def record_symptom_episode_update(
                        when %s::text is not null then null
                        else resolution_ts
                    end,
-                   latest_note_text = coalesce(%s, latest_note_text),
-                   latest_note_at = case when %s is null then latest_note_at else %s end,
+                   latest_note_text = coalesce(%s::text, latest_note_text),
+                   latest_note_at = case when %s::text is null then latest_note_at else %s end,
                    updated_at = now()
              where id = %s
                and user_id = %s
