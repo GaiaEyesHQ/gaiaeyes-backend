@@ -58,30 +58,58 @@ private enum HealthBackfillTimeoutError: LocalizedError, Sendable {
     }
 }
 
-private final class HealthKitQueryCancellationBox: @unchecked Sendable {
+private typealias AnchoredQueryContinuation = CheckedContinuation<(HKQueryAnchor?, [HKSample], Bool), Error>
+
+private final class HealthKitAnchoredQueryBox: @unchecked Sendable {
     private let lock = NSLock()
     private var query: HKQuery?
+    private var continuation: AnchoredQueryContinuation?
+    private var isResolved = false
 
-    func set(_ query: HKQuery) {
+    func prepare(_ query: HKQuery, continuation: AnchoredQueryContinuation) {
         lock.lock()
         self.query = query
+        self.continuation = continuation
         lock.unlock()
     }
 
-    func clear() {
+    func complete(samples: [HKSample]?, newAnchor: HKQueryAnchor?, limit: Int, error: Error?) {
         lock.lock()
+        guard !isResolved else {
+            lock.unlock()
+            return
+        }
+        isResolved = true
+        let continuation = self.continuation
+        self.continuation = nil
         query = nil
         lock.unlock()
+
+        guard let continuation else { return }
+        if let error {
+            continuation.resume(throwing: error)
+            return
+        }
+        let sorted = (samples ?? []).sorted { $0.startDate < $1.startDate }
+        continuation.resume(returning: (newAnchor, sorted, (samples?.count ?? 0) == limit))
     }
 
     func cancel(using store: HKHealthStore) {
         lock.lock()
+        guard !isResolved else {
+            lock.unlock()
+            return
+        }
+        isResolved = true
         let query = self.query
+        let continuation = self.continuation
         self.query = nil
+        self.continuation = nil
         lock.unlock()
         if let query {
             store.stop(query)
         }
+        continuation?.resume(throwing: CancellationError())
     }
 }
 
@@ -511,23 +539,21 @@ final class HealthKitBackgroundSync {
     }
 
     private func anchoredQuery(type: HKSampleType, predicate: NSPredicate?, anchor: HKQueryAnchor?, limit: Int, sort: NSSortDescriptor) async throws -> (HKQueryAnchor?, [HKSample], Bool) {
-        let cancellationBox = HealthKitQueryCancellationBox()
+        let queryBox = HealthKitAnchoredQueryBox()
         return try await withTaskCancellationHandler(operation: {
-            try await withCheckedThrowingContinuation { (cont: CheckedContinuation<(HKQueryAnchor?, [HKSample], Bool), Error>) in
+            try await withCheckedThrowingContinuation { (cont: AnchoredQueryContinuation) in
                 let q = HKAnchoredObjectQuery(type: type, predicate: predicate, anchor: anchor, limit: limit) { _, samples, _, newAnchor, error in
-                    cancellationBox.clear()
-                    if let error {
-                        cont.resume(throwing: error)
-                        return
-                    }
-                    let sorted = (samples ?? []).sorted { $0.startDate < $1.startDate }
-                    cont.resume(returning: (newAnchor, sorted, (samples?.count ?? 0) == limit))
+                    queryBox.complete(samples: samples, newAnchor: newAnchor, limit: limit, error: error)
                 }
-                cancellationBox.set(q)
+                queryBox.prepare(q, continuation: cont)
+                if Task.isCancelled {
+                    queryBox.cancel(using: self.healthStore)
+                    return
+                }
                 self.healthStore.execute(q)
             }
         }, onCancel: {
-            cancellationBox.cancel(using: self.healthStore)
+            queryBox.cancel(using: self.healthStore)
         })
     }
 
