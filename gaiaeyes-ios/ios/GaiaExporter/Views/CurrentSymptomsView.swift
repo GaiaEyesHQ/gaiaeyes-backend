@@ -73,6 +73,7 @@ struct CurrentSymptomsView: View {
     @State private var severityDraft: Int = 5
     @State private var updatingEpisodeId: String?
     @State private var journalStatus: String?
+    @State private var editingItem: CurrentSymptomItem?
 
     private var copy: CurrentSymptomsCopy {
         CurrentSymptomsCopy.resolve(mode: mode, tone: tone)
@@ -130,6 +131,18 @@ struct CurrentSymptomsView: View {
         }
         .refreshable {
             await loadSnapshot()
+        }
+        .sheet(item: $editingItem) { item in
+            CurrentSymptomEditorSheet(
+                item: item,
+                isBusy: updatingEpisodeId == item.id,
+                onSave: { severity, noteText in
+                    await saveEditorChanges(for: item, severity: severity, noteText: noteText)
+                },
+                onDelete: {
+                    await deleteSymptom(item)
+                }
+            )
         }
     }
 
@@ -225,6 +238,13 @@ struct CurrentSymptomsView: View {
         }
     }
 
+    private func openEditor(for item: CurrentSymptomItem) {
+        selectedEpisodeId = item.id
+        noteDraft = item.notePreview ?? ""
+        severityDraft = item.severity ?? item.originalSeverity ?? 5
+        editingItem = item
+    }
+
     private func saveJournalEntry() {
         guard let selectedItem else { return }
         guard updatingEpisodeId == nil else { return }
@@ -254,6 +274,70 @@ struct CurrentSymptomsView: View {
                 }
                 appLog("[CurrentSymptoms] note_save error: \(error.localizedDescription)")
             }
+        }
+    }
+
+    private func saveEditorChanges(for item: CurrentSymptomItem, severity: Int, noteText: String?) async -> Bool {
+        guard updatingEpisodeId == nil else { return false }
+        await MainActor.run {
+            updatingEpisodeId = item.id
+            journalStatus = nil
+        }
+        appLog("[CurrentSymptoms] editor_save episode=\(item.id)")
+        defer {
+            Task { @MainActor in updatingEpisodeId = nil }
+        }
+        do {
+            let response = try await api.updateCurrentSymptom(
+                episodeId: item.id,
+                severity: severity,
+                noteText: noteText
+            )
+            if response.ok == false {
+                throw NSError(domain: "CurrentSymptoms", code: 4, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Could not save symptom changes"])
+            }
+            await MainActor.run {
+                journalStatus = noteText == nil ? "\(item.label) severity updated." : "\(item.label) updated."
+                editingItem = nil
+            }
+            await loadSnapshot()
+            return true
+        } catch {
+            await MainActor.run {
+                journalStatus = error.localizedDescription
+            }
+            appLog("[CurrentSymptoms] editor_save error: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func deleteSymptom(_ item: CurrentSymptomItem) async -> Bool {
+        guard updatingEpisodeId == nil else { return false }
+        await MainActor.run {
+            updatingEpisodeId = item.id
+            journalStatus = nil
+        }
+        appLog("[CurrentSymptoms] delete episode=\(item.id)")
+        defer {
+            Task { @MainActor in updatingEpisodeId = nil }
+        }
+        do {
+            let response = try await api.deleteCurrentSymptom(episodeId: item.id)
+            if response.ok == false {
+                throw NSError(domain: "CurrentSymptoms", code: 5, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Could not delete symptom"])
+            }
+            await MainActor.run {
+                journalStatus = "\(item.label) removed."
+                editingItem = nil
+            }
+            await loadSnapshot()
+            return true
+        } catch {
+            await MainActor.run {
+                journalStatus = error.localizedDescription
+            }
+            appLog("[CurrentSymptoms] delete error: \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -382,9 +466,7 @@ struct CurrentSymptomsView: View {
             }
 
             Button {
-                selectedEpisodeId = item.id
-                noteDraft = item.notePreview ?? ""
-                severityDraft = item.severity ?? item.originalSeverity ?? 5
+                openEditor(for: item)
             } label: {
                 Text("Add note or adjust severity")
                     .font(.caption.weight(.semibold))
@@ -589,7 +671,7 @@ struct CurrentSymptomsView: View {
 
                 if let settings = snapshot?.followUpSettings {
                     let enabled = settings.enabled || settings.notificationFamilyEnabled
-                    Text(enabled ? "Current symptoms can support future follow-up check-ins on a \(settings.cadence) cadence." : "Follow-up prompts are off right now, but this state history is ready for future check-ins.")
+                    Text(followUpDescription(for: settings, enabled: enabled))
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
 
@@ -658,6 +740,16 @@ struct CurrentSymptomsView: View {
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 
+    private func followUpDescription(for settings: CurrentSymptomsFollowUpSettings, enabled: Bool) -> String {
+        if enabled && settings.notificationsEnabled {
+            return "Notification check-ins are on. Gaia can ask whether an active symptom is still active, improving, or resolved."
+        }
+        if enabled {
+            return "Symptom follow-ups are enabled here, but notifications are still off. Turn notifications on to receive check-ins."
+        }
+        return "These are optional notification check-ins for active symptoms. Turn them on in Settings when you want reminders."
+    }
+
     private func stateColor(_ state: CurrentSymptomState) -> Color {
         switch state {
         case .new:
@@ -711,6 +803,158 @@ struct CurrentSymptomsView: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
+    }
+}
+
+private struct CurrentSymptomEditorSheet: View {
+    let item: CurrentSymptomItem
+    let isBusy: Bool
+    let onSave: (Int, String?) async -> Bool
+    let onDelete: () async -> Bool
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var noteDraft: String
+    @State private var severityDraft: Int
+    @State private var confirmDelete: Bool = false
+
+    init(
+        item: CurrentSymptomItem,
+        isBusy: Bool,
+        onSave: @escaping (Int, String?) async -> Bool,
+        onDelete: @escaping () async -> Bool
+    ) {
+        self.item = item
+        self.isBusy = isBusy
+        self.onSave = onSave
+        self.onDelete = onDelete
+        _noteDraft = State(initialValue: item.notePreview ?? "")
+        _severityDraft = State(initialValue: item.severity ?? item.originalSeverity ?? 5)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(item.label)
+                            .font(.title3.weight(.bold))
+                            .foregroundColor(.white)
+                        Text("Update severity, add context, or remove an accidental log.")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.68))
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Severity")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        HStack {
+                            Text("\(severityDraft)/10")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.88))
+                            Spacer()
+                            Stepper(value: $severityDraft, in: 0...10) {
+                                EmptyView()
+                            }
+                            .labelsHidden()
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Note")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        ZStack(alignment: .topLeading) {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.white.opacity(0.05))
+                            if noteDraft.isEmpty {
+                                Text("Worse this afternoon, improved after resting, felt better after allergy meds…")
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.35))
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 12)
+                            }
+                            TextEditor(text: $noteDraft)
+                                .scrollContentBackground(.hidden)
+                                .foregroundColor(.white)
+                                .frame(minHeight: 120)
+                                .padding(6)
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Button {
+                            Task {
+                                let saved = await onSave(severityDraft, noteDraft.nilIfBlank)
+                                if saved {
+                                    dismiss()
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                if isBusy {
+                                    ProgressView().scaleEffect(0.8)
+                                }
+                                Text("Save changes")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isBusy)
+
+                        Button(role: .destructive) {
+                            confirmDelete = true
+                        } label: {
+                            Text("Delete symptom")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isBusy)
+                    }
+                }
+                .padding(16)
+            }
+            .background(
+                LinearGradient(
+                    colors: [Color.black, Color(red: 0.05, green: 0.07, blue: 0.12)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            )
+            .navigationTitle("Edit Symptom")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+            .confirmationDialog(
+                "Delete \(item.label)?",
+                isPresented: $confirmDelete,
+                titleVisibility: .visible
+            ) {
+                Button("Delete symptom", role: .destructive) {
+                    Task {
+                        let deleted = await onDelete()
+                        if deleted {
+                            dismiss()
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Use this for accidental logs. It removes the symptom from the current state and the original source event.")
+            }
+        }
     }
 }
 

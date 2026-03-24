@@ -9211,14 +9211,13 @@ struct ContentView: View {
                                         .font(.subheadline.weight(.semibold))
                                     Toggle("Symptom follow-up prompts", isOn: $notificationPreferences.symptomFollowupsEnabled)
                                     if notificationPreferences.symptomFollowupsEnabled {
-                                        Toggle("Symptom follow-up family", isOn: $notificationPreferences.families.symptomFollowups)
                                         Picker("Follow-up cadence", selection: $notificationPreferences.symptomFollowupCadence) {
                                             Text("Gentle").tag("gentle")
                                             Text("Balanced").tag("balanced")
                                             Text("Frequent").tag("frequent")
                                         }
                                         .pickerStyle(.segmented)
-                                        Text("Current scaffold follows new, ongoing, and improving symptoms. Type-specific follow-ups will attach to Current Symptoms next.")
+                                        Text("These are notification check-ins for active symptoms. When enabled, Gaia can ask whether something is still active, improving, or resolved.")
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
                                     }

@@ -309,7 +309,7 @@ async def record_symptom_episode_update(
                    end,
                    resolution_ts = case
                        when %s = 'resolved' then %s
-                       when %s is not null then null
+                       when %s::text is not null then null
                        else resolution_ts
                    end,
                    latest_note_text = coalesce(%s, latest_note_text),
@@ -391,6 +391,41 @@ async def record_symptom_episode_update(
         "last_interaction_at": _serialize_ts(updated.get("last_interaction_at")),
         "latest_note_text": updated.get("latest_note_text"),
         "latest_note_at": _serialize_ts(updated.get("latest_note_at")),
+    }
+
+
+async def delete_symptom_episode(conn, user_id: str, episode_id: str) -> dict:
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            delete from raw.user_symptom_events e
+                  using raw.user_symptom_episodes ep
+             where ep.id = %s
+               and ep.user_id = %s
+               and e.id = ep.symptom_event_id
+               and e.user_id = %s
+         returning ep.id as episode_id,
+                   ep.symptom_code,
+                   ep.started_at,
+                   ep.last_interaction_at,
+                   e.id as symptom_event_id,
+                   e.ts_utc
+            """,
+            (episode_id, user_id, user_id),
+            prepare=False,
+        )
+        deleted = await cur.fetchone()
+
+    if not deleted:
+        raise RuntimeError("Symptom episode not found")
+
+    return {
+        "episode_id": _serialize_uuid(deleted.get("episode_id")),
+        "symptom_event_id": _serialize_uuid(deleted.get("symptom_event_id")),
+        "symptom_code": deleted.get("symptom_code"),
+        "started_at": _serialize_ts(deleted.get("started_at")),
+        "last_interaction_at": _serialize_ts(deleted.get("last_interaction_at")),
+        "ts_utc": _serialize_ts(deleted.get("ts_utc")),
     }
 
 

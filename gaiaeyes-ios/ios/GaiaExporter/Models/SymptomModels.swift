@@ -141,6 +141,12 @@ struct CurrentSymptomTimelineEntry: Decodable, Identifiable, Hashable {
     let occurredAt: String
 }
 
+struct CurrentSymptomDeleteResult: Decodable, Hashable {
+    let episodeId: String
+    let symptomCode: String
+    let deletedAt: String?
+}
+
 struct SymptomQueuedEvent: Codable, Identifiable {
     let id: UUID
     let symptomCode: String

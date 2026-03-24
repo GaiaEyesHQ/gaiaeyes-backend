@@ -515,3 +515,29 @@ async def test_current_symptom_update_returns_updated_item(monkeypatch, client: 
     assert payload["ok"] is True
     assert payload["data"]["current_state"] == "resolved"
     assert payload["data"]["note_preview"] == "Cleared after rest"
+
+
+@pytest.mark.anyio
+async def test_current_symptom_delete_returns_deleted_episode(monkeypatch, client: AsyncClient):
+    user_id = str(uuid4())
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Dev-UserId": user_id,
+    }
+
+    async def _delete(conn, user, episode_id):  # noqa: ARG001
+        assert episode_id == "ep-1"
+        return {
+            "episode_id": "ep-1",
+            "symptom_code": "palpitations",
+            "ts_utc": "2024-04-02T10:00:00+00:00",
+        }
+
+    monkeypatch.setattr(symptoms_db, "delete_symptom_episode", _delete)
+
+    response = await client.delete("/v1/symptoms/current/ep-1", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["data"]["episode_id"] == "ep-1"
+    assert payload["data"]["symptom_code"] == "PALPITATIONS"

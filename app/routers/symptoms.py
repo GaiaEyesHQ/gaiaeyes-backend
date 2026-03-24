@@ -44,6 +44,7 @@ _ERR_LOAD_DIAG = "Failed to load diagnostic summary"
 _ERR_LOAD_CURRENT = "Failed to load current symptoms"
 _ERR_LOAD_TIMELINE = "Failed to load current symptom timeline"
 _ERR_RECORD_CURRENT_UPDATE = "Failed to update current symptom state"
+_ERR_DELETE_CURRENT = "Failed to delete current symptom"
 
 DEFAULT_CURRENT_WINDOW_HOURS = 12
 MAX_CURRENT_WINDOW_HOURS = 48
@@ -206,6 +207,16 @@ class CurrentSymptomsResponse(SymptomEnvelope):
 
 class CurrentSymptomItemResponse(SymptomEnvelope):
     data: Optional[CurrentSymptomItemOut] = None
+
+
+class CurrentSymptomDeleteOut(BaseModel):
+    episode_id: str
+    symptom_code: str
+    deleted_at: Optional[str] = None
+
+
+class CurrentSymptomDeleteResponse(SymptomEnvelope):
+    data: Optional[CurrentSymptomDeleteOut] = None
 
 
 class CurrentSymptomTimelineEntryOut(BaseModel):
@@ -877,3 +888,38 @@ async def update_current_symptom(
     if refresh_ts:
         await _refresh_gauges_for_symptom(user_id, refresh_ts)
     return _success(CurrentSymptomItemResponse(data=_build_current_symptom_item_out(row)))
+
+
+@router.delete("/current/{episode_id}", response_model=CurrentSymptomDeleteResponse)
+async def delete_current_symptom(
+    episode_id: str,
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    try:
+        deleted = await symptoms_db.delete_symptom_episode(conn, user_id, episode_id)
+    except Exception as exc:  # pragma: no cover - exercised via tests
+        logger.exception("failed to delete current symptom", extra={"user_id": user_id, "episode_id": episode_id})
+        return _failure(
+            CurrentSymptomDeleteResponse(
+                ok=False,
+                data=None,
+                error=_error_text(exc),
+                friendly_error=_ERR_DELETE_CURRENT,
+            )
+        )
+
+    await _commit_if_supported(conn)
+    refresh_ts = str(deleted.get("last_interaction_at") or deleted.get("ts_utc") or deleted.get("started_at") or "")
+    if refresh_ts:
+        await _refresh_gauges_for_symptom(user_id, refresh_ts)
+    return _success(
+        CurrentSymptomDeleteResponse(
+            data=CurrentSymptomDeleteOut(
+                episode_id=str(deleted.get("episode_id") or episode_id),
+                symptom_code=_normalize_symptom_code(str(deleted.get("symptom_code") or "")),
+                deleted_at=datetime.now(timezone.utc).isoformat(),
+            )
+        )
+    )

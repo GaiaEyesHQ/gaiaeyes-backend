@@ -570,6 +570,7 @@ async def profile_notifications_upsert(
     time_zone_name = _normalize_time_zone(payload.time_zone)
     sensitivity = _normalize_notification_sensitivity(payload.sensitivity)
     families = _normalize_notification_families(payload.families)
+    families["symptom_followups"] = bool(payload.symptom_followups_enabled)
     followup_cadence = _normalize_followup_cadence(payload.symptom_followup_cadence)
     followup_states = _normalize_followup_states(payload.symptom_followup_states)
     followup_codes = _normalize_followup_codes(payload.symptom_followup_symptom_codes)

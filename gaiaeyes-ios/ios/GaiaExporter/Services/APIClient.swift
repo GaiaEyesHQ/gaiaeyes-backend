@@ -437,6 +437,28 @@ final class APIClient {
         return try decoder.decode(Resp.self, from: data)
     }
 
+    @discardableResult
+    func deleteJSON<Resp: Decodable>(_ path: String,
+                                     as responseType: Resp.Type) async throws -> Resp {
+        var req = makeRequest(path: path)
+        req.httpMethod = "DELETE"
+
+        await preflightHealth()
+
+        logger?("DELETE \(req.url?.absoluteString ?? path)")
+        let (data, resp) = try await session.data(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+        let bodyString = String(data: data, encoding: .utf8) ?? ""
+        guard (200...299).contains(code) else {
+            logger?("↩︎ \(code) \(HTTPURLResponse.localizedString(forStatusCode: code)) \(bodyString)")
+            throw APIError.server(code: code, body: bodyString)
+        }
+        logger?("↩︎ \(code) \(bodyString)")
+
+        let decoder = APIClient.tolerantJSONDecoder()
+        return try decoder.decode(Resp.self, from: data)
+    }
+
     private struct SymptomPostErrorPayload: Decodable {
         let error: String
         let valid: [String]?
@@ -529,6 +551,13 @@ final class APIClient {
             "v1/symptoms/current/\(episodeId)/updates",
             body: payload,
             as: Envelope<CurrentSymptomItem>.self
+        )
+    }
+
+    func deleteCurrentSymptom(episodeId: String) async throws -> Envelope<CurrentSymptomDeleteResult> {
+        try await deleteJSON(
+            "v1/symptoms/current/\(episodeId)",
+            as: Envelope<CurrentSymptomDeleteResult>.self
         )
     }
 

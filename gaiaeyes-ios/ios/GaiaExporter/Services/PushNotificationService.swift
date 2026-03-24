@@ -421,6 +421,7 @@ enum PushNotificationService {
     private static func normalized(_ preferences: AppNotificationPreferences) -> AppNotificationPreferences {
         var payload = preferences
         payload.timeZone = TimeZone.current.identifier
+        payload.families.symptomFollowups = payload.symptomFollowupsEnabled
         if payload.quietStart.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             payload.quietStart = "22:00"
         }
