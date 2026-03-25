@@ -3203,46 +3203,70 @@ struct ContentView: View {
         onboardingOptions(forHealthContext: true)
     }
 
+    private func onboardingActivationDriverDetail(_ driver: DashboardDriverItem) -> String {
+        let label = (driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let display = (driver.display ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !display.isEmpty {
+            let prefix = "\(label): "
+            if display.hasPrefix(prefix) {
+                let trimmed = String(display.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.split(separator: " ").count >= 4 {
+                    return trimmed
+                }
+            }
+            return display
+        }
+        if let state = driver.state, !state.isEmpty {
+            return "\(label) is \(state.lowercased()) right now."
+        }
+        return "Gaia is tracking this live condition right now."
+    }
+
     private var onboardingActivationData: OnboardingActivationData {
         let liveDrivers = Array((dashboardPayload?.drivers ?? []).prefix(3)).map { driver in
             OnboardingActivationDriver(
                 id: driver.id,
                 title: driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized,
-                detail: driver.personalReason ?? driver.display ?? driver.roleLabel ?? "Active in your current signal mix."
+                detail: onboardingActivationDriverDetail(driver)
             )
         }
         let fallbackDrivers = [
             OnboardingActivationDriver(
                 id: "mission_control",
                 title: "Mission Control is live",
-                detail: "Gaia is already tracking space weather, Earth signals, and your local conditions."
+                detail: "Gaia is already tracking live space, Earth, and local conditions when they are available."
             ),
             OnboardingActivationDriver(
-                id: "patterns",
-                title: "Your profile is in place",
-                detail: "The sensitivities and context you chose will now shape driver ranking and pattern emphasis."
+                id: "personalization",
+                title: "Personalization is building",
+                detail: "Your sensitivities and context already shape what Gaia ranks higher for you."
             ),
             OnboardingActivationDriver(
                 id: "next_action",
-                title: "Next step",
-                detail: "Open Mission Control, view your signals, or log how you feel to make the system more personal."
+                title: "Start building patterns",
+                detail: "Log how you feel after onboarding and Gaia will start connecting these live signals to your own history."
             ),
         ]
-        let headline = dashboardPayload?.todayRelevanceExplanations?.dailyBrief
-            ?? dashboardPayload?.healthStatusExplainer?.summary
-            ?? dashboardPayload?.earthscopeSummary
-            ?? "Your live signal stack is ready."
+        let headline: String
+        if let topDriver = liveDrivers.first?.title, !topDriver.isEmpty {
+            headline = "\(topDriver) is one of the clearest live signals right now."
+        } else if let summary = dashboardPayload?.earthscopeSummary, !summary.isEmpty {
+            headline = summary
+        } else {
+            headline = "Your live signal stack is ready."
+        }
         let explanation: String
         if let syncStamp = experienceProfile.lastBackfillAt, !syncStamp.isEmpty {
-            explanation = "Gaia already has recent Health data layered into your first view, so pattern readiness starts higher from day one."
+            explanation = "Gaia already has recent Health data layered into your live view. Personal patterns will sharpen as you log how you feel."
         } else {
-            explanation = "Even without Health data, Gaia can already surface the strongest live conditions shaping today."
+            explanation = "Gaia can already surface the strongest live conditions shaping today. Personal patterns will build as you log symptoms and add more history."
         }
         let footer: String?
         if notificationPreferences.enabled {
-            footer = "Alerts are ready to follow the same signal families you chose here."
+            footer = "Alerts are ready to follow the same signal families you chose here. Log how you feel in Mission Control to start building personal patterns."
         } else {
-            footer = "You can adjust alerts, health imports, and personalization later in Settings."
+            footer = "Log how you feel in Mission Control to start building personal patterns. You can adjust alerts and imports later in Settings."
         }
         return OnboardingActivationData(
             headline: headline,
