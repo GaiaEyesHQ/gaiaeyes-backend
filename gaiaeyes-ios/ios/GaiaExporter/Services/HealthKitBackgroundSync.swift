@@ -889,13 +889,12 @@ final class HealthKitBackgroundSync {
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
         switch metric {
         case .heartRate:
-            return await backfillOneWindowedSampleQuery(
-                type: hrType,
+            return await backfillHeartRateStatistics(
                 anchorKey: metric.key,
                 start: start,
                 end: Date(),
-                sort: sort,
-                windowDays: 2,
+                windowDays: 5,
+                intervalMinutes: 15,
                 chunkSize: interactiveChunkSize(for: metric),
                 maxRetries: interactiveRetryLimit,
                 onProgress: onProgress
@@ -1504,6 +1503,137 @@ final class HealthKitBackgroundSync {
                 failureDescription: error.localizedDescription
             )
         }
+    }
+
+    private func fetchHeartRateStatisticsSamples(
+        start: Date,
+        end: Date,
+        intervalMinutes: Int
+    ) async throws -> [Sample] {
+        let predicate = HKQuery.predicateForSamples(
+            withStart: start,
+            end: end,
+            options: [.strictStartDate, .strictEndDate]
+        )
+        let interval = DateComponents(minute: max(5, intervalMinutes))
+        let anchorDate = Calendar.current.startOfDay(for: start)
+        let unit = HKUnit.count().unitDivided(by: HKUnit.minute())
+
+        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<[Sample], Error>) in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: hrType,
+                quantitySamplePredicate: predicate,
+                options: [.discreteAverage],
+                anchorDate: anchorDate,
+                intervalComponents: interval
+            )
+            query.initialResultsHandler = { _, collection, error in
+                if let error {
+                    cont.resume(throwing: error)
+                    return
+                }
+                var samples: [Sample] = []
+                collection?.enumerateStatistics(from: start, to: end) { stats, _ in
+                    guard let avg = stats.averageQuantity()?.doubleValue(for: unit) else { return }
+                    guard avg.isFinite, avg >= 20, avg <= 250 else { return }
+                    let intervalEnd = min(stats.endDate, end)
+                    samples.append(
+                        Sample(
+                            user_id: self.currentUserId(),
+                            device_os: "ios",
+                            source: "healthkit",
+                            type: "heart_rate",
+                            start_time: self.iso.string(from: stats.startDate),
+                            end_time: self.iso.string(from: intervalEnd),
+                            value: avg,
+                            unit: "bpm",
+                            value_text: "discrete_average_15m"
+                        )
+                    )
+                }
+                cont.resume(returning: samples)
+            }
+            self.healthStore.execute(query)
+        }
+    }
+
+    private func backfillHeartRateStatistics(
+        anchorKey: String,
+        start: Date,
+        end: Date,
+        windowDays: Int,
+        intervalMinutes: Int,
+        chunkSize: Int = 200,
+        maxRetries: Int = 3,
+        onProgress: (@Sendable (String) async -> Void)? = nil
+    ) async -> HealthBackfillMetricResult {
+        let windows = recentBackfillWindows(start: start, end: end, windowDays: windowDays)
+        guard !windows.isEmpty else {
+            return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)
+        }
+
+        var totalCollected = 0
+        var totalUploaded = 0
+
+        for (index, window) in windows.enumerated() {
+            let windowLabel = "\(index + 1)/\(windows.count)"
+            await reportBackfillProgress(
+                "Collecting \(anchorKey.replacingOccurrences(of: "_", with: " ")) window \(windowLabel)…",
+                onProgress: onProgress
+            )
+            do {
+                let rows = try await fetchHeartRateStatisticsSamples(
+                    start: window.start,
+                    end: window.end,
+                    intervalMinutes: intervalMinutes
+                )
+                totalCollected += rows.count
+                appLog("[Backfill] \(anchorKey) statistics collected \(rows.count) aggregate rows in window \(windowLabel)")
+
+                guard !rows.isEmpty else {
+                    await reportBackfillProgress(
+                        "No \(anchorKey.replacingOccurrences(of: "_", with: " ")) samples found in window \(windowLabel).",
+                        onProgress: onProgress
+                    )
+                    continue
+                }
+
+                let api = buildAPI()
+                let uploaded = try await api.postSamplesChunked(rows, chunkSize: max(200, chunkSize), maxRetries: maxRetries)
+                StatusStore.shared.setUpload(for: anchorKey)
+                if !uploaded {
+                    return HealthBackfillMetricResult(
+                        collectedCount: totalCollected,
+                        uploadedRows: totalUploaded,
+                        failureDescription: "The server did not accept any \(anchorKey) rows."
+                    )
+                }
+
+                totalUploaded += rows.count
+                await reportBackfillProgress(
+                    "Imported \(rows.count) \(anchorKey.replacingOccurrences(of: "_", with: " ")) rows from window \(windowLabel).",
+                    onProgress: onProgress
+                )
+            } catch {
+                appLog("[Backfill] statistics query error \(anchorKey) window \(windowLabel): \(error.localizedDescription)")
+                return HealthBackfillMetricResult(
+                    collectedCount: totalCollected,
+                    uploadedRows: totalUploaded,
+                    failureDescription: error.localizedDescription
+                )
+            }
+        }
+
+        anchorStore.setSeedStart(end, forKey: anchorKey)
+        if totalUploaded > 0 {
+            await requestFeaturesRefreshAfterUpload(rows: totalUploaded, source: "hk:backfill_\(anchorKey)")
+        }
+
+        return HealthBackfillMetricResult(
+            collectedCount: totalCollected,
+            uploadedRows: totalUploaded,
+            failureDescription: nil
+        )
     }
 
     private func backfillOneWindowedSampleQuery(
