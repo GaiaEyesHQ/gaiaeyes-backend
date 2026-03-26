@@ -359,22 +359,54 @@ async def _build_current_symptoms_payload(
     except Exception:
         rows = await symptoms_db.fetch_current_symptom_items_fallback(conn, user_id, window_hours=window_hours)
 
+    follow_up = await symptoms_db.fetch_symptom_follow_up_settings(conn, user_id)
     now_day = datetime.now(timezone.utc).date()
+
+    if not rows:
+        return CurrentSymptomsSnapshotOut(
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            window_hours=window_hours,
+            summary=CurrentSymptomSummaryOut(
+                active_count=0,
+                new_count=0,
+                ongoing_count=0,
+                improving_count=0,
+                last_updated_at=None,
+                follow_up_available=False,
+            ),
+            items=[],
+            contributing_drivers=[],
+            pattern_context=[],
+            follow_up_settings=CurrentSymptomFollowUpOut(
+                notifications_enabled=bool(follow_up.get("notifications_enabled")),
+                enabled=bool(follow_up.get("enabled")),
+                notification_family_enabled=bool(follow_up.get("notification_family_enabled")),
+                cadence=str(follow_up.get("cadence") or "balanced"),
+                states=[_normalize_current_state(value) for value in (follow_up.get("states") or [])],
+                symptom_codes=[_normalize_symptom_code(value) for value in (follow_up.get("symptom_codes") or []) if value],
+            ),
+        )
 
     try:
         definition, _ = load_definition_base()
     except Exception:
         definition = {}
 
+    raw_tags_task = asyncio.create_task(asyncio.to_thread(fetch_user_tags, user_id))
+    current_drivers_task = asyncio.create_task(resolve_current_drivers(user_id=user_id, day=now_day, definition=definition))
+
     try:
-        raw_tags = await asyncio.to_thread(fetch_user_tags, user_id)
+        raw_tags = await raw_tags_task
         user_tags = set(canonicalize_tag_keys(raw_tags))
     except Exception:
         user_tags = set()
 
     pattern_rows = await fetch_best_pattern_rows(conn, user_id)
     recent_outcomes = await fetch_recent_outcome_summary(conn, user_id, now_day)
-    current_drivers, _, _ = await resolve_current_drivers(user_id=user_id, day=now_day, definition=definition)
+    try:
+        current_drivers, _, _ = await current_drivers_task
+    except Exception:
+        current_drivers = []
     personal_relevance = compute_personal_relevance(
         day=now_day,
         drivers=current_drivers,
@@ -383,7 +415,6 @@ async def _build_current_symptoms_payload(
         recent_outcomes=recent_outcomes,
     )
     ranked_drivers = [dict(item) for item in personal_relevance.get("ranked_drivers") or [] if isinstance(item, dict)]
-    follow_up = await symptoms_db.fetch_symptom_follow_up_settings(conn, user_id)
 
     items: List[CurrentSymptomItemOut] = []
     pattern_context: List[CurrentSymptomPatternOut] = []

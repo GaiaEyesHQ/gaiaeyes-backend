@@ -69,6 +69,7 @@ struct CurrentSymptomsView: View {
     var mode: CurrentSymptomsPresentationMode = .scientific
     var tone: CurrentSymptomsTone = .balanced
     var showsCloseButton: Bool = false
+    let initialSnapshot: CurrentSymptomsSnapshot?
     let onLogMore: () -> Void
     let onSnapshotChanged: (CurrentSymptomsSnapshot) -> Void
 
@@ -83,6 +84,30 @@ struct CurrentSymptomsView: View {
     @State private var journalStatus: String?
     @State private var editingItem: CurrentSymptomItem?
     @State private var showsAllPatternContext: Bool = false
+
+    init(
+        api: APIClient,
+        mode: CurrentSymptomsPresentationMode = .scientific,
+        tone: CurrentSymptomsTone = .balanced,
+        showsCloseButton: Bool = false,
+        initialSnapshot: CurrentSymptomsSnapshot? = nil,
+        onLogMore: @escaping () -> Void,
+        onSnapshotChanged: @escaping (CurrentSymptomsSnapshot) -> Void
+    ) {
+        self.api = api
+        self.mode = mode
+        self.tone = tone
+        self.showsCloseButton = showsCloseButton
+        self.initialSnapshot = initialSnapshot
+        self.onLogMore = onLogMore
+        self.onSnapshotChanged = onSnapshotChanged
+
+        let firstItem = initialSnapshot?.items.first
+        _snapshot = State(initialValue: initialSnapshot)
+        _selectedEpisodeId = State(initialValue: firstItem?.id)
+        _noteDraft = State(initialValue: firstItem?.notePreview ?? "")
+        _severityDraft = State(initialValue: firstItem?.severity ?? firstItem?.originalSeverity ?? 5)
+    }
 
     private var copy: CurrentSymptomsCopy {
         CurrentSymptomsCopy.resolve(mode: mode, tone: tone)
@@ -116,6 +141,12 @@ struct CurrentSymptomsView: View {
         return formatter.string(from: date)
     }
 
+    private var shouldRefreshOnAppear: Bool {
+        guard let raw = snapshot?.generatedAt,
+              let date = ISO8601DateFormatter().date(from: raw) else { return true }
+        return Date().timeIntervalSince(date) > 90
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -125,8 +156,6 @@ struct CurrentSymptomsView: View {
                 patternCard
                 journalCard
                 followUpCard
-                logMoreCard
-                timelineCard
             }
             .padding(16)
         }
@@ -141,8 +170,8 @@ struct CurrentSymptomsView: View {
             }
         }
         .task {
-            if snapshot == nil {
-                appLog("[CurrentSymptoms] page_open")
+            appLog("[CurrentSymptoms] page_open")
+            if shouldRefreshOnAppear {
                 await loadSnapshot()
             }
         }
@@ -396,7 +425,7 @@ struct CurrentSymptomsView: View {
 
                 HStack(spacing: 10) {
                     Button(action: onLogMore) {
-                        Label("+ Log", systemImage: "plus.circle.fill")
+                        Label("Log symptom", systemImage: "plus.circle.fill")
                     }
                     .buttonStyle(.borderedProminent)
 
@@ -716,42 +745,6 @@ struct CurrentSymptomsView: View {
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
                 }
-            }
-        }
-    }
-
-    private var logMoreCard: some View {
-        card {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Log More Symptoms")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                Text("Each symptom keeps its own timeline, even when you log several at once.")
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.7))
-                Button(action: onLogMore) {
-                    Label("Log symptoms", systemImage: "plus.circle.fill")
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
-    }
-
-    private var timelineCard: some View {
-        card {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Timeline / Recent Events")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                Text("Review onset, updates, notes, and resolution in one place.")
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.7))
-                NavigationLink {
-                    CurrentSymptomsTimelineView(api: api)
-                } label: {
-                    Label("Open timeline", systemImage: "clock.arrow.circlepath")
-                }
-                .buttonStyle(.bordered)
             }
         }
     }

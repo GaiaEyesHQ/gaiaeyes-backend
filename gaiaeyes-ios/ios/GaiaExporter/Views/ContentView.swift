@@ -7723,6 +7723,7 @@ struct ContentView: View {
         let series: SpaceSeries?
         let magnetosphere: MagnetosphereData?
         let onRefresh: () async -> Void
+        @State private var showAllForecastDays: Bool = false
 
         private func progress(_ value: Double?, max: Double) -> Double {
             guard let value, max > 0 else { return 0.12 }
@@ -9567,6 +9568,7 @@ struct ContentView: View {
                     case .currentSymptoms:
                         CurrentSymptomsView(
                             api: state.apiWithAuth(),
+                            initialSnapshot: currentSymptomsSnapshot,
                             onLogMore: { showInsightsSymptomSheet = true },
                             onSnapshotChanged: { snapshot in
                                 currentSymptomsSnapshot = snapshot
@@ -10190,6 +10192,7 @@ struct ContentView: View {
                 CurrentSymptomsView(
                     api: state.apiWithAuth(),
                     showsCloseButton: true,
+                    initialSnapshot: currentSymptomsSnapshot,
                     onLogMore: {
                         showCurrentSymptomsSheet = false
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
