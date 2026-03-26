@@ -9,6 +9,7 @@ from .routers import (
     badges,
     billing,
     dashboard,
+    drivers,
     earth,
     health as health_router,
     hazards,
@@ -138,6 +139,7 @@ app.include_router(space.router, dependencies=[Depends(require_read_auth)])
 app.include_router(summary.router, dependencies=[Depends(require_read_auth)])
 app.include_router(space_forecasts.router, dependencies=[Depends(require_read_auth)])
 app.include_router(outlook.router)
+app.include_router(drivers.router)
 app.include_router(dashboard.router)
 app.include_router(patterns.router)
 app.include_router(profile.router)

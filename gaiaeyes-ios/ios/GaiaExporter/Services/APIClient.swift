@@ -528,6 +528,10 @@ final class APIClient {
         try await getJSON("v1/symptoms/current?window_hours=\(windowHours)", as: Envelope<CurrentSymptomsSnapshot>.self)
     }
 
+    func fetchAllDrivers() async throws -> AllDriversSnapshot {
+        try await getJSON("v1/users/me/drivers", as: AllDriversSnapshot.self)
+    }
+
     func fetchCurrentSymptomTimeline(days: Int = 7) async throws -> Envelope<[CurrentSymptomTimelineEntry]> {
         try await getJSON("v1/symptoms/current/timeline?days=\(days)", as: Envelope<[CurrentSymptomTimelineEntry]>.self)
     }

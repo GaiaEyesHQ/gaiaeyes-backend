@@ -1772,6 +1772,7 @@ struct ContentView: View {
     @State private var dashboardLastUpdatedText: String? = nil
     @State private var showMissionSettingsSheet: Bool = false
     @State private var showMissionInsightsSheet: Bool = false
+    @State private var missionInsightsPath: [InsightsRoute] = []
     @State private var showLocalConditionsSheet: Bool = false
     @State private var showSchumannDashboardSheet: Bool = false
     @State private var showCameraHealthCheckSheet: Bool = false
@@ -1819,6 +1820,8 @@ struct ContentView: View {
     @State private var showSymptomSheet: Bool = false
     @State private var showInsightsSymptomSheet: Bool = false
     @State private var showCurrentSymptomsSheet: Bool = false
+    @State private var showAllDriversSheet: Bool = false
+    @State private var allDriversFocusKey: String? = nil
     @State private var isSubmittingSymptom: Bool = false
     @State private var symptomToast: SymptomToastState? = nil
     @State private var symptomSheetPrefill: SymptomQueuedEvent? = nil
@@ -1911,6 +1914,98 @@ struct ContentView: View {
 
     private func chicagoTodayString() -> String {
         chicagoDayString(offsetDays: 0)
+    }
+
+    private func normalizeDriverFocusKey(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let normalized = raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "-", with: "_")
+            .lowercased()
+        guard !normalized.isEmpty else { return nil }
+        switch normalized {
+        case "sw":
+            return "solar_wind"
+        case "flares":
+            return "flare"
+        case "radio":
+            return "drap"
+        case "radiation":
+            return "sep"
+        default:
+            return normalized
+        }
+    }
+
+    private func currentSymptomsMode() -> CurrentSymptomsPresentationMode {
+        experienceProfile.mode == .mystical ? .mystical : .scientific
+    }
+
+    private func currentSymptomsTone() -> CurrentSymptomsTone {
+        switch experienceProfile.tone {
+        case .straight:
+            return .straight
+        case .balanced:
+            return .balanced
+        case .humorous:
+            return .humorous
+        }
+    }
+
+    private func openMissionInsights(route: InsightsRoute? = nil) {
+        missionInsightsPath = route.map { [$0] } ?? []
+        showMissionInsightsSheet = true
+    }
+
+    private func openAllDrivers(focus key: String? = nil) {
+        allDriversFocusKey = normalizeDriverFocusKey(key)
+        showAllDriversSheet = true
+    }
+
+    private func openAllDriversAfterClosingCurrentSymptoms(focus key: String? = nil) {
+        let normalized = normalizeDriverFocusKey(key)
+        showCurrentSymptomsSheet = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            allDriversFocusKey = normalized
+            showAllDriversSheet = true
+        }
+    }
+
+    private func openAllDriversAfterClosingInsights(focus key: String? = nil) {
+        let normalized = normalizeDriverFocusKey(key)
+        showMissionInsightsSheet = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            allDriversFocusKey = normalized
+            showAllDriversSheet = true
+        }
+    }
+
+    private func openCurrentSymptomsFromAllDrivers() {
+        showAllDriversSheet = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            showCurrentSymptomsSheet = true
+        }
+    }
+
+    private func openSymptomLogFromAllDrivers() {
+        showAllDriversSheet = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            showSymptomSheet = true
+        }
+    }
+
+    private func openInsightsFromAllDrivers(route: InsightsRoute) {
+        showAllDriversSheet = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            openMissionInsights(route: route)
+        }
+    }
+
+    private func openSettingsFromAllDrivers() {
+        showAllDriversSheet = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            showMissionSettingsSheet = true
+        }
     }
 
     private func isCancellationError(_ error: Error) -> Bool {
@@ -4635,6 +4730,9 @@ struct ContentView: View {
                 errorMessage: ContentView.scrubError(dashboardError),
                 lastUpdatedText: dashboardLastUpdatedText,
                 onOpenCurrentSymptoms: { showCurrentSymptomsSheet = true },
+                onOpenAllDrivers: { focusKey in
+                    openAllDrivers(focus: focusKey)
+                },
                 onQuickLog: { request in
                     Task {
                         await quickLogMissionControl(request)
@@ -4648,9 +4746,10 @@ struct ContentView: View {
             .padding(.horizontal)
 
             MissionMenuSectionView(
+                onAllDrivers: { openAllDrivers() },
                 onCurrentSymptoms: { showCurrentSymptomsSheet = true },
                 onSymptoms: { showSymptomSheet = true },
-                onInsights: { showMissionInsightsSheet = true },
+                onInsights: { openMissionInsights() },
                 onLocalConditions: { showLocalConditionsSheet = true },
                 onSettings: { showMissionSettingsSheet = true },
                 onQuickCheck: {
@@ -4672,6 +4771,7 @@ struct ContentView: View {
     }
 
     private struct MissionMenuSectionView: View {
+        let onAllDrivers: () -> Void
         let onCurrentSymptoms: () -> Void
         let onSymptoms: () -> Void
         let onInsights: () -> Void
@@ -4688,6 +4788,7 @@ struct ContentView: View {
                         if ContentView.cameraHealthCheckVisible {
                             Button(action: onQuickCheck) { Label("Quick Check", systemImage: "camera.fill") }
                         }
+                        Button(action: onAllDrivers) { Label("All Drivers", systemImage: "list.bullet.rectangle.portrait") }
                         Button(action: onCurrentSymptoms) { Label("Current Symptoms", systemImage: "waveform.path.ecg.rectangle") }
                         Button(action: onSymptoms) { Label("Symptoms", systemImage: "plus.circle") }
                         Button(action: onInsights) { Label("Insights", systemImage: "chart.xyaxis.line") }
@@ -4697,7 +4798,7 @@ struct ContentView: View {
                         Button(action: onResearch) { Label("Research", systemImage: "book.closed") }
                     }
                 }
-                Text("Quick links open dedicated views for current symptoms, insights, local conditions, and Schumann.")
+                Text("Quick links open dedicated views for all drivers, current symptoms, insights, local conditions, and Schumann.")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -4734,6 +4835,7 @@ struct ContentView: View {
         let errorMessage: String?
         let lastUpdatedText: String?
         let onOpenCurrentSymptoms: () -> Void
+        let onOpenAllDrivers: (String?) -> Void
         let onQuickLog: (MissionControlQuickLogRequest) -> Void
         let onOpenCustomLog: (SymptomQueuedEvent) -> Void
         @State private var selectedModal: ModalPresentation? = nil
@@ -5151,6 +5253,7 @@ struct ContentView: View {
             let lastSymptomUpdateAt: String?
             let onQuickLog: (MissionControlQuickLogRequest) -> Void
             let onOpenCustomLog: (SymptomQueuedEvent) -> Void
+            let onOpenAllDrivers: (String?) -> Void
             @Environment(\.dismiss) private var dismiss
             @State private var selectedQuickLogs: Set<DashboardQuickLogOption> = []
 
@@ -5385,6 +5488,14 @@ struct ContentView: View {
                             if let quickLog {
                                 quickLogSection(quickLog)
                             }
+                            Button(contextType == "driver" ? "Open All Drivers" : "View All Drivers") {
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    onOpenAllDrivers(contextType == "driver" ? contextKey : nil)
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
@@ -5782,8 +5893,8 @@ struct ContentView: View {
             let targetType = route.targetType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             if targetType == "gauge", let entry = modalModels?.gauges?[targetKey] {
                 selectedModal = ModalPresentation(id: "gauge:\(targetKey)", entry: entry)
-            } else if targetType == "driver", let entry = modalModels?.drivers?[targetKey] {
-                selectedModal = ModalPresentation(id: "driver:\(targetKey)", entry: entry)
+            } else if targetType == "driver" {
+                onOpenAllDrivers(targetKey)
             } else if targetType == "current_symptoms" || targetType == "symptoms" {
                 onOpenCurrentSymptoms()
             }
@@ -5899,6 +6010,11 @@ struct ContentView: View {
                             Text("Nothing is standing out strongly right now.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
+                            Button("View All Drivers") {
+                                onOpenAllDrivers(nil)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                         } else {
                             ForEach(groupedDriverSections) { section in
                                 VStack(alignment: .leading, spacing: 8) {
@@ -5921,6 +6037,11 @@ struct ContentView: View {
                                     }
                                 }
                             }
+                            Button("View All Drivers") {
+                                onOpenAllDrivers(nil)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                             if activeSymptomCount > 0 {
                                 Button(action: onOpenCurrentSymptoms) {
                                     HStack {
@@ -5976,7 +6097,8 @@ struct ContentView: View {
                         DispatchQueue.main.async {
                             onOpenCustomLog(event)
                         }
-                    }
+                    },
+                    onOpenAllDrivers: onOpenAllDrivers
                 )
             }
             .onAppear {
@@ -7184,6 +7306,7 @@ struct ContentView: View {
         let isLoading: Bool
         let error: String?
         let onRefresh: () -> Void
+        let onOpenAllDrivers: () -> Void
 
         private let columns = [
             GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 10, alignment: .topLeading)
@@ -7379,9 +7502,14 @@ struct ContentView: View {
                                 }
                                 Spacer()
                                 if isLoading { ProgressView().scaleEffect(0.85) }
-                                Button("Refresh") { onRefresh() }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.small)
+                                VStack(alignment: .trailing, spacing: 8) {
+                                    Button("Refresh") { onRefresh() }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                    Button("See all current drivers") { onOpenAllDrivers() }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                }
                             }
 
                             if let cleanError, !cleanError.isEmpty {
@@ -9312,7 +9440,10 @@ struct ContentView: View {
                 }
             }
             .onChange(of: showMissionInsightsSheet, initial: false) { _, newValue in
-                guard newValue else { return }
+                guard newValue else {
+                    missionInsightsPath = []
+                    return
+                }
                 Task {
                     await fetchInsightsHubData(trigger: .refresh)
                 }
@@ -9460,7 +9591,7 @@ struct ContentView: View {
             let symptomSummary = topSymptomSummary()
             let symptomHighlightList = symptomHighlights()
 
-            NavigationStack {
+            NavigationStack(path: $missionInsightsPath) {
                 InsightsHubView(
                     current: current,
                     outlook: resolvedOutlook,
@@ -9502,7 +9633,8 @@ struct ContentView: View {
                             payload: resolvedUserOutlook,
                             isLoading: userOutlookLoading,
                             error: userOutlookError,
-                            onRefresh: { Task { await fetchUserOutlook() } }
+                            onRefresh: { Task { await fetchUserOutlook() } },
+                            onOpenAllDrivers: { openAllDriversAfterClosingInsights() }
                         )
                         .task {
                             if userOutlook == nil && !userOutlookLoading {
@@ -9591,8 +9723,13 @@ struct ContentView: View {
                     case .currentSymptoms:
                         CurrentSymptomsView(
                             api: state.apiWithAuth(),
+                            mode: currentSymptomsMode(),
+                            tone: currentSymptomsTone(),
                             initialSnapshot: currentSymptomsSnapshot,
                             onLogMore: { showInsightsSymptomSheet = true },
+                            onOpenAllDrivers: { focusKey in
+                                openAllDriversAfterClosingInsights(focus: focusKey)
+                            },
                             onSnapshotChanged: { snapshot in
                                 currentSymptomsSnapshot = snapshot
                             }
@@ -10214,6 +10351,8 @@ struct ContentView: View {
             NavigationStack {
                 CurrentSymptomsView(
                     api: state.apiWithAuth(),
+                    mode: currentSymptomsMode(),
+                    tone: currentSymptomsTone(),
                     showsCloseButton: true,
                     initialSnapshot: currentSymptomsSnapshot,
                     onLogMore: {
@@ -10222,9 +10361,30 @@ struct ContentView: View {
                             showSymptomSheet = true
                         }
                     },
+                    onOpenAllDrivers: { focusKey in
+                        openAllDriversAfterClosingCurrentSymptoms(focus: focusKey)
+                    },
                     onSnapshotChanged: { snapshot in
                         currentSymptomsSnapshot = snapshot
                     }
+                )
+            }
+        }
+        .sheet(isPresented: $showAllDriversSheet, onDismiss: {
+            allDriversFocusKey = nil
+        }) {
+            NavigationStack {
+                AllDriversView(
+                    api: state.apiWithAuth(),
+                    mode: experienceProfile.mode,
+                    tone: experienceProfile.tone,
+                    showsCloseButton: true,
+                    initialFocusKey: allDriversFocusKey,
+                    onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },
+                    onLogSymptoms: { openSymptomLogFromAllDrivers() },
+                    onOpenPatterns: { openInsightsFromAllDrivers(route: .yourPatterns) },
+                    onOpenOutlook: { openInsightsFromAllDrivers(route: .yourOutlook) },
+                    onOpenSetup: { openSettingsFromAllDrivers() }
                 )
             }
         }

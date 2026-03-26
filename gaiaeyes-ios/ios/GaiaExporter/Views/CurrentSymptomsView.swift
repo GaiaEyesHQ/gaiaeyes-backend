@@ -71,6 +71,7 @@ struct CurrentSymptomsView: View {
     var showsCloseButton: Bool = false
     let initialSnapshot: CurrentSymptomsSnapshot?
     let onLogMore: () -> Void
+    let onOpenAllDrivers: ((String?) -> Void)?
     let onSnapshotChanged: (CurrentSymptomsSnapshot) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -92,6 +93,7 @@ struct CurrentSymptomsView: View {
         showsCloseButton: Bool = false,
         initialSnapshot: CurrentSymptomsSnapshot? = nil,
         onLogMore: @escaping () -> Void,
+        onOpenAllDrivers: ((String?) -> Void)? = nil,
         onSnapshotChanged: @escaping (CurrentSymptomsSnapshot) -> Void
     ) {
         self.api = api
@@ -100,6 +102,7 @@ struct CurrentSymptomsView: View {
         self.showsCloseButton = showsCloseButton
         self.initialSnapshot = initialSnapshot
         self.onLogMore = onLogMore
+        self.onOpenAllDrivers = onOpenAllDrivers
         self.onSnapshotChanged = onSnapshotChanged
 
         let firstItem = initialSnapshot?.items.first
@@ -593,10 +596,24 @@ struct CurrentSymptomsView: View {
                         }
                         .padding(.vertical, 2)
                     }
+                    if let onOpenAllDrivers {
+                        Button("View All Drivers") {
+                            onOpenAllDrivers(snapshot?.contributingDrivers.first?.key)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
                 } else {
                     Text("When symptoms are active, the signals most likely to affect them will show up here.")
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
+                    if let onOpenAllDrivers {
+                        Button("Open All Drivers") {
+                            onOpenAllDrivers(nil)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
                 }
             }
         }

@@ -154,4 +154,97 @@ struct SymptomEnvelopeTests {
         #expect(snapshot.items.first?.likelyDrivers.first?.key == "pressure")
         #expect(snapshot.followUpSettings.enabled == true)
     }
+
+    @Test
+    func decodesAllDriversSnapshot() throws {
+        let payload = """
+        {
+            "ok": true,
+            "data": {
+                "generated_at": "2026-03-26T12:00:00Z",
+                "asof": "2026-03-26T11:55:00Z",
+                "day": "2026-03-26",
+                "summary": {
+                    "active_driver_count": 2,
+                    "total_count": 3,
+                    "strongest_category": "Space",
+                    "primary_state": "Strong",
+                    "note": "Solar Wind is leading right now.",
+                    "has_personal_patterns": true
+                },
+                "has_personal_patterns": true,
+                "filters": [
+                    {
+                        "key": "all",
+                        "label": "All"
+                    },
+                    {
+                        "key": "space",
+                        "label": "Space"
+                    }
+                ],
+                "drivers": [
+                    {
+                        "id": "solar_wind",
+                        "key": "solar_wind",
+                        "source_key": "sw",
+                        "aliases": ["solar_wind", "sw"],
+                        "label": "Solar Wind",
+                        "category": "space",
+                        "category_label": "Space",
+                        "role": "leading",
+                        "role_label": "Leading now",
+                        "state": "strong",
+                        "state_label": "Strong",
+                        "severity": "high",
+                        "reading": "720 km/s",
+                        "reading_value": 720,
+                        "reading_unit": "km/s",
+                        "short_reason": "Solar wind speed is elevated right now.",
+                        "personal_reason": "Solar wind often matches fatigue for you.",
+                        "current_symptoms": ["Fatigue"],
+                        "historical_symptoms": ["Fatigue", "Low Energy"],
+                        "pattern_status": "strong",
+                        "pattern_status_label": "Strong pattern",
+                        "pattern_summary": "Elevated solar wind often matches fatigue for you.",
+                        "pattern_evidence_count": 1,
+                        "pattern_lag_hours": 12,
+                        "pattern_refs": [],
+                        "outlook_relevance": "24h",
+                        "outlook_summary": "Still worth watching over the next 24 hours.",
+                        "updated_at": "2026-03-26T11:55:00Z",
+                        "asof": "2026-03-26T11:55:00Z",
+                        "what_it_is": "The speed and pressure of charged particles flowing from the Sun.",
+                        "active_now_text": "Solar wind speed is running near 720 km/s right now.",
+                        "science_note": "Higher solar-wind speed can support more noticeable geomagnetic coupling when conditions line up.",
+                        "source_hint": "Current environmental signal",
+                        "signal_strength": 0.96,
+                        "personal_relevance_score": 1.0,
+                        "display_score": 1.0,
+                        "is_objectively_active": true
+                    }
+                ],
+                "setup_hints": [
+                    {
+                        "key": "health_data",
+                        "label": "Connect health data",
+                        "reason": "Body context gets better when your baseline data is available."
+                    }
+                ]
+            }
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let snapshot = try decoder.decode(AllDriversSnapshot.self, from: payload)
+
+        #expect(snapshot.summary.activeDriverCount == 2)
+        #expect(snapshot.drivers.first?.key == "solar_wind")
+        #expect(snapshot.drivers.first?.role == .leading)
+        #expect(snapshot.drivers.first?.category == .space)
+        #expect(snapshot.drivers.first?.matches(focusKey: "sw") == true)
+        #expect(snapshot.setupHints.first?.key == "health_data")
+    }
 }
