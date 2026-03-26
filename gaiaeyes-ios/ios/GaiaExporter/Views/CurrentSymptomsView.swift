@@ -26,24 +26,24 @@ private struct CurrentSymptomsCopy {
         case .scientific:
             return CurrentSymptomsCopy(
                 pageTitle: "Current Symptoms",
-                subtitle: "Based on your recent logs and current conditions",
-                contributingTitle: "Likely contributing drivers",
-                patternTitle: "Observed pattern context",
+                subtitle: "Updated from your recent logs and current conditions",
+                contributingTitle: "Signals shaping this right now",
+                patternTitle: "What often matches your history",
                 notesTitle: "Notes / Journal",
-                emptyTitle: "No symptoms currently being tracked",
-                emptyBody: tone == .humorous ? "Nothing is waving a red flag right now. Log if something changes." : "Nothing active right now. Log if something changes.",
-                followUpTitle: "Follow-up prompts"
+                emptyTitle: "Nothing active right now",
+                emptyBody: tone == .humorous ? "Nothing is waving a red flag right now. Log it if something changes." : "Nothing active right now. Log it if something changes.",
+                followUpTitle: "Follow-up check-ins"
             )
         case .mystical:
             return CurrentSymptomsCopy(
                 pageTitle: "How You're Feeling Right Now",
-                subtitle: "Based on your recent logs and the conditions moving through today",
+                subtitle: "Your recent logs and today’s conditions are shaping this view",
                 contributingTitle: "What may be shaping this",
-                patternTitle: "Patterns we've seen before",
+                patternTitle: "What often matches your history",
                 notesTitle: "Notes / Reflections",
                 emptyTitle: "Nothing active right now",
                 emptyBody: tone == .humorous ? "Your system looks quieter right now. If the plot thickens, log it." : "Your system looks quieter right now. If something shifts, log it here.",
-                followUpTitle: "Check-in prompts"
+                followUpTitle: "Check-in reminders"
             )
         }
     }
@@ -565,7 +565,7 @@ struct CurrentSymptomsView: View {
                         .padding(.vertical, 2)
                     }
                 } else {
-                    Text("Current drivers will show up here once there are active symptoms to compare against live conditions.")
+                    Text("When symptoms are active, the signals most likely to affect them will show up here.")
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
                 }
@@ -620,7 +620,7 @@ struct CurrentSymptomsView: View {
                     .foregroundColor(.white)
 
                 if activeItems.isEmpty {
-                    Text("Nothing active to attach a note to right now.")
+                    Text("Nothing active to update right now.")
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
                 } else {
@@ -726,7 +726,7 @@ struct CurrentSymptomsView: View {
                 Text("Log More Symptoms")
                     .font(.headline)
                     .foregroundColor(.white)
-                Text("Each symptom stays trackable on its own, even when you log several at once.")
+                Text("Each symptom keeps its own timeline, even when you log several at once.")
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.7))
                 Button(action: onLogMore) {
@@ -774,12 +774,12 @@ struct CurrentSymptomsView: View {
 
     private func followUpDescription(for settings: CurrentSymptomsFollowUpSettings, enabled: Bool) -> String {
         if enabled && settings.notificationsEnabled {
-            return "Notification check-ins are on. Gaia can ask whether an active symptom is still active, improving, or resolved."
+            return "Follow-up notifications are on. Gaia can check whether a symptom is still active, improving, or resolved."
         }
         if enabled {
-            return "Symptom follow-ups are enabled here, but notifications are still off. Turn notifications on to receive check-ins."
+            return "Follow-up check-ins are enabled here, but notifications are still off. Turn notifications on when you want reminders."
         }
-        return "These are optional notification check-ins for active symptoms. Turn them on in Settings when you want reminders."
+        return "These are optional check-ins for active symptoms. Turn them on in Settings when reminders would help."
     }
 
     private func stateColor(_ state: CurrentSymptomState) -> Color {

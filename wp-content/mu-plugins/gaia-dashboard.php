@@ -76,12 +76,22 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__pill--high{background:#3b1e23;color:#ffadb8}
         .gaia-dashboard__drivers{margin-top:12px;padding:12px;border-radius:12px;background:#131b28}
         .gaia-dashboard__drivers h4{margin:0 0 10px;font-size:17px}
+        .gaia-dashboard__driver-group{display:flex;flex-direction:column;gap:8px}
+        .gaia-dashboard__driver-group + .gaia-dashboard__driver-group{margin-top:12px}
+        .gaia-dashboard__driver-section-head h5{margin:0;font-size:12px;text-transform:none;color:#eef4ff}
+        .gaia-dashboard__driver-section-head p{margin:3px 0 0;font-size:11px;color:#9da9c1;line-height:1.4}
         .gaia-dashboard__drivers-list{display:flex;flex-direction:column;gap:9px}
         .gaia-dashboard__driver-row{padding:10px;border-radius:12px;background:#172130;border:1px solid rgba(255,255,255,.08)}
+        .gaia-dashboard__driver-row--leading{background:rgba(51,68,92,.78);border-color:rgba(211,167,108,.56);box-shadow:0 0 18px rgba(211,167,108,.18)}
+        .gaia-dashboard__driver-row--supporting{border-color:rgba(255,255,255,.12)}
+        .gaia-dashboard__driver-row--background{background:#141c28;border-color:rgba(255,255,255,.05);opacity:.9}
         .gaia-dashboard__driver-row--clickable{cursor:pointer;transition:box-shadow .15s ease,border-color .15s ease}
         .gaia-dashboard__driver-row--clickable:hover{box-shadow:0 0 14px rgba(163,188,225,.18);border-color:rgba(163,188,225,.36)}
-        .gaia-dashboard__driver-head{display:flex;align-items:baseline;gap:8px;justify-content:space-between}
+        .gaia-dashboard__driver-head{display:flex;align-items:flex-start;gap:10px;justify-content:space-between}
+        .gaia-dashboard__driver-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
+        .gaia-dashboard__driver-meta{display:flex;align-items:baseline;gap:8px;justify-content:flex-end;flex-wrap:wrap}
         .gaia-dashboard__driver-label{font-size:14px;font-weight:650}
+        .gaia-dashboard__driver-reason{font-size:12px;color:#9da9c1;line-height:1.45}
         .gaia-dashboard__driver-state{font-size:12px}
         .gaia-dashboard__driver-value{font-size:12px;color:#9da9c1}
         .gaia-dashboard__driver-bar-track{margin-top:8px;height:9px;border-radius:999px;background:rgba(255,255,255,.09);overflow:hidden}
@@ -94,6 +104,10 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__geomag-chip{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;background:#1c2636;color:#c6d3ea;font-size:12px}
         .gaia-dashboard__earthscope{margin-top:12px;padding:12px;border-radius:12px;background:#151c28}
         .gaia-dashboard__earthscope h4{margin:0 0 8px;font-size:18px}
+        .gaia-dashboard__earthscope-preview{display:flex;flex-direction:column;gap:8px}
+        .gaia-dashboard__earthscope-row{padding:10px;border-radius:10px;background:rgba(0,0,0,.18)}
+        .gaia-dashboard__earthscope-label{font-size:11px;font-weight:700;color:#9da9c1;margin-bottom:3px}
+        .gaia-dashboard__earthscope-copy{font-size:14px;line-height:1.5;color:#e8edf7}
         .gaia-dashboard__earthscope-summary{font-size:14px;line-height:1.5;margin:0 0 10px;color:#e8edf7}
         .gaia-dashboard__earthscope-link{display:inline-flex;align-items:center;font-size:13px;color:#9cc0ff;text-decoration:underline;background:none;border:0;padding:0;cursor:pointer}
         .gaia-dashboard__es-grid{display:grid;grid-template-columns:1fr;gap:10px}

@@ -141,8 +141,9 @@ def _apply_recent_symptom_meta_overrides(
         label = str(meta.get("label") or "").strip().lower()
         if zone != "low" and label not in {"quiet", "low strain"}:
             continue
-        meta["label"] = "Watchful" if boost >= 9.0 else "Recent symptom noted"
-        out[gauge_key] = meta
+        if boost >= 9.0:
+            meta["label"] = "Watchful"
+            out[gauge_key] = meta
     return out
 
 

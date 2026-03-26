@@ -11,8 +11,10 @@ public struct StatusPill: View {
     }
     
     public var body: some View {
-        Text(text.uppercased())
-            .font(.system(size: 12, weight: .heavy, design: .rounded))
+        Text(text)
+            .font(.system(size: 12, weight: .bold, design: .rounded))
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
             .padding(.horizontal, 10).padding(.vertical, 4)
             .background(backgroundColor)
             .foregroundColor(foregroundColor)

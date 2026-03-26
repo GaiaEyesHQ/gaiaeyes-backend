@@ -1478,7 +1478,7 @@ def derive_forecast_drivers(
             value=overall_index,
             unit="index",
             day_key=day_key if isinstance(day_key, date) else None,
-            detail=f"{detail_subject} may run {level_label.lower()} in this forecast window.",
+            detail=f"{detail_subject} looks {level_label.lower()} over this period.",
             signal_key=DRIVER_TO_SIGNAL["allergens"],
         )
 
@@ -1503,7 +1503,7 @@ def derive_forecast_drivers(
             value=kp_value,
             unit="Kp",
             day_key=day_key if isinstance(day_key, date) else None,
-            detail=f"SWPC is carrying {g_scale or 'elevated'} geomagnetic conditions.",
+            detail=f"SWPC expects {g_scale or 'elevated'} geomagnetic conditions in this window.",
             signal_key=DRIVER_TO_SIGNAL["kp"],
         )
 
@@ -1515,7 +1515,7 @@ def derive_forecast_drivers(
             value=None,
             unit=None,
             day_key=solar_wind_row.get("day") if isinstance(solar_wind_row.get("day"), date) else None,
-            detail="The SWPC rationale is carrying a solar-wind watch.",
+            detail="SWPC is flagging a solar-wind watch.",
         )
 
     radio_row = next(
@@ -1535,7 +1535,7 @@ def derive_forecast_drivers(
             value=max(r1_pct or 0.0, r3_pct or 0.0),
             unit="%",
             day_key=radio_row.get("day") if isinstance(radio_row.get("day"), date) else None,
-            detail="SWPC is carrying a radio-blackout chance in the bulletin.",
+            detail="SWPC is carrying a radio-blackout chance in this window.",
         )
 
     radiation_row = next((row for row in rows if (_safe_float(row.get("s1_or_greater_pct")) or 0.0) > 0), None)
@@ -1547,7 +1547,7 @@ def derive_forecast_drivers(
             value=s1_pct,
             unit="%",
             day_key=radiation_row.get("day") if isinstance(radiation_row.get("day"), date) else None,
-            detail="SWPC is carrying a solar-radiation chance in the bulletin.",
+            detail="SWPC is carrying a solar-radiation chance in this window.",
         )
 
     cme_row = next((row for row in rows if row.get("cme_watch")), None)
@@ -1558,7 +1558,7 @@ def derive_forecast_drivers(
             value=None,
             unit=None,
             day_key=cme_row.get("day") if isinstance(cme_row.get("day"), date) else None,
-            detail="The geomagnetic rationale mentions CME-driven activity.",
+            detail="SWPC is watching for CME-driven activity.",
         )
 
     flare_row = next((row for row in rows if row.get("flare_watch")), None)
@@ -1569,7 +1569,7 @@ def derive_forecast_drivers(
             value=None,
             unit=None,
             day_key=flare_row.get("day") if isinstance(flare_row.get("day"), date) else None,
-            detail="The bulletin is carrying an elevated flare or radio-blackout watch.",
+            detail="SWPC is flagging an elevated flare watch.",
         )
 
     drivers.sort(
@@ -1693,7 +1693,7 @@ def build_window_outlook(
         )
         current_gauge = payload.get("current_gauge")
         if current_gauge is not None and current_gauge >= 65:
-            explanation += f" {DOMAIN_LABELS[domain_key]} is already running a bit elevated today, so it is worth watching."
+            explanation += f" {DOMAIN_LABELS[domain_key]} already looks a little elevated today, so it is worth watching."
         likely_domains.append(
             {
                 "key": domain_key,
@@ -1726,11 +1726,11 @@ def build_window_outlook(
     top_domain = likely_domains[0] if likely_domains else None
     if top_domain and top_drivers:
         summary = (
-            f"{top_drivers[0]['detail']} {top_domain['label']} may be a bit more likely in this window based on your recent pattern history."
+            f"{top_drivers[0]['detail']} {top_domain['label']} may stand out more over this window based on your recent pattern history."
         )
         support_line = _support_line(str(top_drivers[0].get("key")))
     elif top_drivers:
-        summary = f"{top_drivers[0]['detail']} No stronger personal forecast pattern stands out yet, but it is worth watching."
+        summary = f"{top_drivers[0]['detail']} No stronger personal pattern stands out yet, but this signal is still worth watching."
         support_line = _support_line(str(top_drivers[0].get("key")))
     else:
         summary = "No clearer short-range forecast driver stands out from the data available right now."

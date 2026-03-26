@@ -591,7 +591,10 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         $all_known = [
           'Gaia Eyes — Daily EarthScope',
           'Gaia Eyes - Daily EarthScope',
+          'Now',
           'Space weather snapshot',
+          "What's shaping things now",
+          'What may stand out',
           'How This Affects You',
           'How this affects you',
           'How This Might Affect You',
@@ -599,6 +602,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
           'How it may feel',
           'Drivers',
           'Care notes',
+          'What may help right now',
           'Self-Care Playbook',
           'Self‑Care Playbook',
           'Self–Care Playbook',
@@ -679,6 +683,8 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         $title = $post_title;
         $caption = $post_caption;
         $affects = $extract_section($post_body, [
+          "What's shaping things now",
+          'What may stand out',
           'How This Affects You',
           'How this affects you',
           'How This Might Affect You',
@@ -687,6 +693,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
           'Drivers',
         ]);
         $playbook = $extract_section($post_body, [
+          'What may help right now',
           'Self-Care Playbook',
           'Self‑Care Playbook',
           'Self–Care Playbook',
@@ -697,6 +704,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         ]);
         if ( $caption === '' && $post_body !== '' ) {
           $caption = $extract_section($post_body, [
+            'Now',
             "Today's Check-in",
             'Today’s Check-in',
             'Summary',
@@ -708,7 +716,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
           $body_norm = str_replace("\r\n", "\n", $post_body);
           if ( $affects === '' ) {
             if ( preg_match(
-              '/(?:^|\n)\s*(?:how this affects you|how this might affect you|how it may feel|drivers)\s*(?:[:—-])?\s*\n(.*?)(?=\n\s*(?:care notes|self[\x{2011}\x{2013}\x{2014}\- ]*care playbook|supportive actions|disclaimer)\b|\z)/isu',
+              '/(?:^|\n)\s*(?:what\'s shaping things now|what may stand out|how this affects you|how this might affect you|how it may feel|drivers)\s*(?:[:—-])?\s*\n(.*?)(?=\n\s*(?:what may help right now|care notes|self[\x{2011}\x{2013}\x{2014}\- ]*care playbook|supportive actions|disclaimer)\b|\z)/isu',
               $body_norm,
               $m_aff
             ) ) {
@@ -717,7 +725,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
           }
           if ( $playbook === '' ) {
             if ( preg_match(
-              '/(?:^|\n)\s*(?:care notes|self[\x{2011}\x{2013}\x{2014}\- ]*care playbook|supportive actions)\s*(?:[:—-])?\s*\n(.*?)(?=\n\s*(?:disclaimer)\b|\z)/isu',
+              '/(?:^|\n)\s*(?:what may help right now|care notes|self[\x{2011}\x{2013}\x{2014}\- ]*care playbook|supportive actions)\s*(?:[:—-])?\s*\n(.*?)(?=\n\s*(?:disclaimer)\b|\z)/isu',
               $body_norm,
               $m_play
             ) ) {
@@ -758,10 +766,10 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
       $is_daily = is_array($d) && ( isset($d['caption']) || isset($d['sections']) );
       if ( ! $is_daily ) {
         $d = $fetch_json( $atts['url'], 'legacy' );
-        if ( ! is_array($d) ) return '<section class="gaia-es">EarthScope: unavailable</section>';
+        if ( ! is_array($d) ) return '<section class="gaia-es">EarthScope is unavailable right now.</section>';
       }
     } elseif ( ! $has_api_payload ) {
-      return '<section class="gaia-es">EarthScope: unavailable (API payload missing).</section>';
+      return '<section class="gaia-es">EarthScope is unavailable right now (API payload missing).</section>';
     }
 
     if ( ! $has_api_payload && $is_daily ) {
@@ -835,22 +843,22 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
       </div>
 
       <div class="gaia-es__grid">
-        <!-- Card 1: How it may feel (caption) -->
+        <!-- Card 1: Now -->
         <div class="gaia-es__card">
-          <div class="gaia-es__label">Summary</div>
+          <div class="gaia-es__label">Now</div>
           <div class="gaia-es__caption"><?php echo nl2br( esc_html( $caption ) ); ?></div>
         </div>
 
-        <!-- Card 2: Care notes -->
+        <!-- Card 2: What may stand out -->
         <div class="gaia-es__card">
-          <div class="gaia-es__label">How to cope</div>
-          <div class="gaia-es__body"><?php echo nl2br( esc_html( $playbook ) ); ?></div>
+          <div class="gaia-es__label">What may stand out</div>
+          <div class="gaia-es__body"><?php echo nl2br( esc_html( $affects ) ); ?></div>
         </div>
 
-        <!-- Card 3: Health notes (previously Schumann card) -->
+        <!-- Card 3: What may help right now -->
         <div class="gaia-es__card">
-          <div class="gaia-es__label">Health notes</div>
-          <div class="gaia-es__body"><?php echo nl2br( esc_html( $affects ) ); ?></div>
+          <div class="gaia-es__label">What may help right now</div>
+          <div class="gaia-es__body"><?php echo nl2br( esc_html( $playbook ) ); ?></div>
         </div>
       </div>
 

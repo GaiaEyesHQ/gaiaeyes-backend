@@ -228,47 +228,109 @@
     `;
   };
 
+  const DRIVER_ROLE_META = {
+    leading: {
+      title: "Leading now",
+      subtitle: "The clearest active signal in your mix right now.",
+    },
+    supporting: {
+      title: "Also in play",
+      subtitle: "Still active, but secondary to the lead signal.",
+    },
+    background: {
+      title: "In the background",
+      subtitle: "Present, but not leading the picture.",
+    },
+  };
+
+  const driverRoleKey = (driver, index) => {
+    const explicitRole = String(driver && driver.role ? driver.role : "").trim().toLowerCase();
+    if (explicitRole === "primary") return "leading";
+    if (explicitRole === "supporting") return "supporting";
+    if (explicitRole === "background") return "background";
+
+    const roleLabel = String(
+      driver && (driver.roleLabel || driver.role_label) ? (driver.roleLabel || driver.role_label) : ""
+    ).trim().toLowerCase();
+    if (roleLabel === "leading now") return "leading";
+    if (roleLabel === "also in play") return "supporting";
+    if (roleLabel === "in the background") return "background";
+
+    if (index === 0) return "leading";
+    if (index < 3) return "supporting";
+    return "background";
+  };
+
   const renderDriversSection = (drivers, modalModels) => {
     if (!Array.isArray(drivers) || !drivers.length) {
       return `
         <div class="gaia-dashboard__drivers">
-          <h4>Environmental Drivers</h4>
-          <div class="gaia-dashboard__muted">No major environmental drivers are elevated right now.</div>
+          <h4>What Matters Now</h4>
+          <div class="gaia-dashboard__muted">Nothing is standing out strongly right now.</div>
         </div>
       `;
     }
     const modalDrivers = modalModels && modalModels.drivers && typeof modalModels.drivers === "object"
       ? modalModels.drivers
       : {};
+    const buckets = { leading: [], supporting: [], background: [] };
 
-    const rows = drivers.slice(0, 6).map((driver) => {
+    drivers.slice(0, 6).forEach((driver, index) => {
       const severity = normalizeDriverSeverity(driver && driver.severity);
       const zoneKey = driverZoneFromSeverity(severity);
       const color = (GAUGE_PALETTE[zoneKey] || GAUGE_PALETTE.mild).hex;
       const width = Math.max(10, Math.round(driverProgress(severity) * 100));
       const canOpen = !!modalDrivers[String(driver.key || "")];
       const emphasized = driverHasAffordance(severity);
-      const rowClass = canOpen ? "gaia-dashboard__driver-row gaia-dashboard__driver-row--clickable" : "gaia-dashboard__driver-row";
+      const roleKey = driverRoleKey(driver, index);
+      const rowClass = [
+        "gaia-dashboard__driver-row",
+        `gaia-dashboard__driver-row--${roleKey}`,
+        canOpen ? "gaia-dashboard__driver-row--clickable" : "",
+      ].filter(Boolean).join(" ");
+      const personalReason = String(
+        driver && (driver.personalReason || driver.personal_reason)
+          ? (driver.personalReason || driver.personal_reason)
+          : ""
+      ).trim();
 
-      return `
+      buckets[roleKey].push(`
         <div class="${rowClass}" ${canOpen ? `data-driver-key="${esc(driver.key)}"` : ""}>
           <div class="gaia-dashboard__driver-head">
-            <span class="gaia-dashboard__driver-label">${esc(driver.label || driver.key || "Driver")}</span>
-            <span class="gaia-dashboard__driver-state" style="color:${color}">${esc(driver.state || "Low")}</span>
-            <span class="gaia-dashboard__driver-value">${esc(formatDriverValue(driver))}</span>
-            ${emphasized ? '<span class="gaia-dashboard__driver-value">✦</span>' : ""}
+            <div class="gaia-dashboard__driver-copy">
+              <span class="gaia-dashboard__driver-label">${esc(driver.label || driver.key || "Driver")}</span>
+              ${personalReason ? `<div class="gaia-dashboard__driver-reason">${esc(personalReason)}</div>` : ""}
+            </div>
+            <div class="gaia-dashboard__driver-meta">
+              <span class="gaia-dashboard__driver-state" style="color:${color}">${esc(driver.state || "Low")}</span>
+              <span class="gaia-dashboard__driver-value">${esc(formatDriverValue(driver))}</span>
+              ${emphasized ? '<span class="gaia-dashboard__driver-value">✦</span>' : ""}
+            </div>
           </div>
           <div class="gaia-dashboard__driver-bar-track">
             <div class="gaia-dashboard__driver-bar-fill" style="width:${width}%;background:${color}"></div>
           </div>
         </div>
-      `;
-    }).join("");
+      `);
+    });
+
+    const groups = ["leading", "supporting", "background"]
+      .filter((roleKey) => buckets[roleKey].length)
+      .map((roleKey) => `
+        <section class="gaia-dashboard__driver-group gaia-dashboard__driver-group--${roleKey}">
+          <div class="gaia-dashboard__driver-section-head">
+            <h5>${esc(DRIVER_ROLE_META[roleKey].title)}</h5>
+            <p>${esc(DRIVER_ROLE_META[roleKey].subtitle)}</p>
+          </div>
+          <div class="gaia-dashboard__drivers-list">${buckets[roleKey].join("")}</div>
+        </section>
+      `)
+      .join("");
 
     return `
       <div class="gaia-dashboard__drivers">
-        <h4>Environmental Drivers</h4>
-        <div class="gaia-dashboard__drivers-list">${rows}</div>
+        <h4>What Matters Now</h4>
+        ${groups}
       </div>
     `;
   };
@@ -365,15 +427,15 @@
   const sectionOrder = ["checkin", "drivers", "summary", "actions"];
   const sectionTitles = {
     checkin: "Now",
-    drivers: "Current Drivers",
-    summary: "What You May Feel",
-    actions: "Supportive Actions",
+    drivers: "What's shaping things now",
+    summary: "What may stand out",
+    actions: "What may help right now",
   };
 
   const sectionDefaults = {
-    checkin: "The current EarthScope update is still being prepared.",
-    drivers: "No primary driver is highlighted right now.",
-    summary: "Most gauges look fairly steady right now. Check highlighted gauges for fresher context.",
+    checkin: "EarthScope is still taking shape right now.",
+    drivers: "Nothing is clearly leading right now.",
+    summary: "Most signals look fairly steady right now. Check the highlighted cards for fresher context.",
     actions: "• Hydrate\n• Keep your sleep window steady\n• Use gentle movement",
   };
   const legacyEarthscopePrefixRegex = /^\s*Gaia Eyes\s+[—-]\s+Daily EarthScope\s*/i;
@@ -634,6 +696,36 @@
       .join("");
   };
 
+  const compactEarthscopeLine = (text) => {
+    const lines = String(text || "")
+      .replace(/•\s*/g, "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    return lines[0] || "";
+  };
+
+  const renderEarthscopePreview = (earthscope, driversCompact, summaryText) => {
+    const sections = parseEarthscopeSections(
+      earthscope && earthscope.body_markdown,
+      driversCompact
+    );
+    const rows = ["checkin", "drivers", "actions"]
+      .map((key) => {
+        const body = compactEarthscopeLine(sections[key] || (key === "checkin" ? summaryText : ""));
+        if (!body) return "";
+        return `
+          <div class="gaia-dashboard__earthscope-row">
+            <div class="gaia-dashboard__earthscope-label">${esc(sectionTitles[key] || key)}</div>
+            <div class="gaia-dashboard__earthscope-copy">${esc(body)}</div>
+          </div>
+        `;
+      })
+      .filter(Boolean)
+      .join("");
+    return rows || `<p class="gaia-dashboard__earthscope-summary">${esc(summaryText || sectionDefaults.summary)}</p>`;
+  };
+
   const resolveEarthscopeSummary = (summaryText, earthscope, driversCompact) => {
     const direct = String(summaryText || "").trim();
     if (direct) return direct;
@@ -691,9 +783,9 @@
 
     return `
       <h3 class="gaia-dashboard__modal-title">${esc(entry.title || "Mission Context")}</h3>
-      ${renderModalList("Why", entry.why)}
-      ${renderModalList("What You May Notice", entry.what_you_may_notice || entry.whatYouMayNotice)}
-      ${renderModalList("Supportive Actions", entry.suggested_actions || entry.suggestedActions)}
+      ${renderModalList("What's shaping things now", entry.why)}
+      ${renderModalList("What may stand out", entry.what_you_may_notice || entry.whatYouMayNotice)}
+      ${renderModalList("What may help right now", entry.suggested_actions || entry.suggestedActions)}
       <div class="gaia-dashboard__muted" data-modal-status></div>
       <div class="gaia-dashboard__modal-actions">
         ${
@@ -925,8 +1017,10 @@
       ${renderGeomagneticContext(geomagneticContext)}
       <div class="gaia-dashboard__earthscope">
         <h4>${esc(cleanEarthscopeTitle(earthscope && earthscope.title))}</h4>
-        <p class="gaia-dashboard__earthscope-summary">${esc(earthscopeSummary)}</p>
-        <button class="gaia-dashboard__earthscope-link" type="button" data-earthscope-full="1">Read full EarthScope</button>
+        <div class="gaia-dashboard__earthscope-preview">
+          ${renderEarthscopePreview(earthscope, driversCompact, earthscopeSummary)}
+        </div>
+        <button class="gaia-dashboard__earthscope-link" type="button" data-earthscope-full="1">Open full EarthScope</button>
       </div>
       <div class="gaia-dashboard__modal" data-gaia-modal>
         <div class="gaia-dashboard__modal-backdrop" data-gaia-modal-backdrop="1"></div>

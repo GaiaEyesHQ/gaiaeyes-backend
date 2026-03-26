@@ -773,11 +773,11 @@ def _sorted_related_drivers(related: List[Dict[str, Any]]) -> List[Dict[str, Any
 def _driver_role_context(driver: Dict[str, Any]) -> str:
     role = str(driver.get("role") or "").strip().lower()
     if role == "primary":
-        return "Right now, this is the clearest external factor in your mix."
+        return "This is the clearest active signal for you right now."
     if role == "supporting":
-        return "Right now, this is also in play, but it is not the lead."
+        return "This is active too, but it stays secondary to the lead signal."
     if role == "background":
-        return "Right now, this stays in the background rather than leading the mix."
+        return "This is still present, but it stays in the background right now."
     return ""
 
 
