@@ -23,7 +23,7 @@ enum PatternStatus: String, Codable, Hashable {
     case noClearPatternYet = "no_clear_pattern_yet"
 }
 
-struct DriverPatternReference: Decodable, Hashable, Identifiable {
+struct DriverPatternReference: Codable, Hashable, Identifiable {
     let id: String
     let driverKey: String?
     let signalKey: String?
@@ -38,14 +38,14 @@ struct DriverPatternReference: Decodable, Hashable, Identifiable {
     let explanation: String?
 }
 
-struct DriverFilterOption: Decodable, Hashable, Identifiable {
+struct DriverFilterOption: Codable, Hashable, Identifiable {
     let key: DriverCategory
     let label: String
 
     var id: String { key.rawValue }
 }
 
-struct DriverSetupHint: Decodable, Hashable, Identifiable {
+struct DriverSetupHint: Codable, Hashable, Identifiable {
     let key: String
     let label: String
     let reason: String
@@ -53,7 +53,7 @@ struct DriverSetupHint: Decodable, Hashable, Identifiable {
     var id: String { key }
 }
 
-struct DriverPageSummary: Decodable, Hashable {
+struct DriverPageSummary: Codable, Hashable {
     let activeDriverCount: Int
     let totalCount: Int
     let strongestCategory: String?
@@ -62,7 +62,7 @@ struct DriverPageSummary: Decodable, Hashable {
     let hasPersonalPatterns: Bool?
 }
 
-struct DriverDetailItem: Decodable, Identifiable, Hashable {
+struct DriverDetailItem: Codable, Identifiable, Hashable {
     let id: String
     let key: String
     let sourceKey: String?
@@ -115,7 +115,7 @@ struct DriverDetailItem: Decodable, Identifiable, Hashable {
     }
 }
 
-struct AllDriversSnapshot: Decodable, Hashable {
+struct AllDriversSnapshot: Codable, Hashable {
     let generatedAt: String?
     let asof: String?
     let day: String?

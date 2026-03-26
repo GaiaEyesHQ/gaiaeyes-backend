@@ -12,6 +12,7 @@ struct AllDriversView: View {
     var onOpenOutlook: (() -> Void)? = nil
     var onOpenSetup: (() -> Void)? = nil
 
+    @AppStorage("all_drivers_cache_json") private var allDriversCacheJSON: String = ""
     @Environment(\.dismiss) private var dismiss
     @State private var snapshot: AllDriversSnapshot?
     @State private var isLoading: Bool = false
@@ -19,6 +20,7 @@ struct AllDriversView: View {
     @State private var selectedFilter: DriverCategory = .all
     @State private var expandedDriverID: String?
     @State private var focusedDriverID: String?
+    @State private var hasTrackedOpen: Bool = false
 
     private var titleText: String {
         mode == .mystical ? "All Influences" : "All Drivers"
@@ -225,6 +227,45 @@ struct AllDriversView: View {
         focusedDriverID = match.id
     }
 
+    @MainActor
+    private func decodeCachedSnapshot() -> AllDriversSnapshot? {
+        guard !allDriversCacheJSON.isEmpty,
+              let data = allDriversCacheJSON.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(AllDriversSnapshot.self, from: data)
+    }
+
+    @MainActor
+    private func hydrateCachedSnapshotIfNeeded() {
+        guard snapshot == nil, let cached = decodeCachedSnapshot() else { return }
+        snapshot = cached
+        errorMessage = nil
+    }
+
+    @MainActor
+    private func persistSnapshot(_ value: AllDriversSnapshot) {
+        guard let data = try? JSONEncoder().encode(value),
+              let json = String(data: data, encoding: .utf8) else { return }
+        allDriversCacheJSON = json
+    }
+
+    private var shouldRefreshOnAppear: Bool {
+        guard let raw = snapshot?.asof ?? snapshot?.generatedAt,
+              let date = ISO8601DateFormatter().date(from: raw) else { return true }
+        return Date().timeIntervalSince(date) > 90
+    }
+
+    private func trackOpened(with payload: AllDriversSnapshot) {
+        guard !hasTrackedOpen else { return }
+        hasTrackedOpen = true
+        AppAnalytics.track(
+            "all_drivers_opened",
+            properties: [
+                "count": "\(payload.summary.totalCount)",
+                "active_count": "\(payload.summary.activeDriverCount)",
+            ]
+        )
+    }
+
     private func load(force: Bool = false) async {
         if isLoading && !force {
             return
@@ -234,18 +275,17 @@ struct AllDriversView: View {
 
         do {
             let payload = try await api.fetchAllDrivers()
-            snapshot = payload
-            errorMessage = nil
-            applyInitialFocus(from: payload)
-            AppAnalytics.track(
-                "all_drivers_opened",
-                properties: [
-                    "count": "\(payload.summary.totalCount)",
-                    "active_count": "\(payload.summary.activeDriverCount)",
-                ]
-            )
+            await MainActor.run {
+                snapshot = payload
+                persistSnapshot(payload)
+                errorMessage = nil
+                applyInitialFocus(from: payload)
+                trackOpened(with: payload)
+            }
         } catch {
-            errorMessage = error.localizedDescription
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -495,9 +535,19 @@ struct AllDriversView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .task {
-                    if snapshot == nil {
+                    await MainActor.run {
+                        hydrateCachedSnapshotIfNeeded()
+                        if let snapshot {
+                            applyInitialFocus(from: snapshot)
+                            trackOpened(with: snapshot)
+                        }
+                    }
+                    if snapshot == nil || shouldRefreshOnAppear {
                         await load()
                     }
+                }
+                .refreshable {
+                    await load(force: true)
                 }
                 .onChange(of: selectedFilter, initial: false) { _, newValue in
                     AppAnalytics.track("all_drivers_filter_changed", properties: ["filter": newValue.rawValue])
