@@ -9440,6 +9440,7 @@ struct ContentView: View {
                 }
             }
             .onChange(of: showMissionInsightsSheet, initial: false) { _, newValue in
+                state.suspendNonessentialNetworkRefresh = newValue
                 guard newValue else {
                     missionInsightsPath = []
                     return

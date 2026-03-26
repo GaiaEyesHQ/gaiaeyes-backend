@@ -775,12 +775,21 @@ final class HealthKitBackgroundSync {
             appLog("[BG] skip refresh; no rows to refresh")
             return
         }
-        let backendAvailable = await MainActor.run { [weak self] in
-            self?.appState?.backendDBAvailable ?? true
+        let refreshState = await MainActor.run { [weak self] in
+            (
+                self?.appState?.backendDBAvailable ?? true,
+                self?.appState?.suspendNonessentialNetworkRefresh ?? false
+            )
         }
+        let backendAvailable = refreshState.0
+        let suspendRefresh = refreshState.1
         guard backendAvailable else {
             appLog("[BG] skip refresh; backend DB=false")
             await logRefreshBlocked()
+            return
+        }
+        guard !suspendRefresh else {
+            appLog("[BG] skip refresh; nonessential network refresh suspended")
             return
         }
         await featuresRefresher.schedule { [weak self] in

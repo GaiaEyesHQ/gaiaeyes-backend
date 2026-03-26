@@ -75,6 +75,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     @Published var lastLogAppendAt: Date = .distantPast
     @Published var symptomQueueCount: Int = 0
     @Published var backendDBAvailable: Bool = true
+    @Published var suspendNonessentialNetworkRefresh: Bool = false
 
     private var cachedAPIClient: APIClient?
     private var cachedAPIClientSignature: String?
