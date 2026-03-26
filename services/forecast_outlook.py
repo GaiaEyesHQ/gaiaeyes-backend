@@ -1154,6 +1154,10 @@ async def _upsert_space_forecast_rows(conn, rows: Sequence[Mapping[str, Any]]) -
 async def ensure_space_forecast_daily(conn) -> list[dict[str, Any]]:
     today = datetime.now(UTC).date() - timedelta(days=1)
     existing = await _fetch_space_forecast_rows(conn, today, days=SPACE_FORECAST_DAYS)
+    if existing:
+        newest = max((_parse_iso_datetime(row.get("updated_at")) for row in existing), default=None)
+        if len(existing) >= SPACE_FORECAST_DAYS and newest and newest >= datetime.now(UTC) - timedelta(hours=LOCAL_REFRESH_HOURS):
+            return existing
     async with conn.cursor(**_cursor_kwargs()) as cur:
         await cur.execute(
             """

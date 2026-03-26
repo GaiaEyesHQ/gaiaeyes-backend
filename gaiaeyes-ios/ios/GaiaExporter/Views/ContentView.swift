@@ -8003,9 +8003,10 @@ struct ContentView: View {
                         }
 
                         if let forecastDays = outlook?.forecastDaily, !forecastDays.isEmpty {
+                            let displayedForecastDays = showAllForecastDays ? forecastDays : Array(forecastDays.prefix(3))
                             LocalConditionsSurfaceCard(title: "7-Day Space Forecast", icon: "calendar") {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    ForEach(forecastDays) { day in
+                                    ForEach(displayedForecastDays) { day in
                                         VStack(alignment: .leading, spacing: 8) {
                                             HStack(alignment: .top, spacing: 12) {
                                                 VStack(alignment: .leading, spacing: 3) {
@@ -8065,11 +8066,20 @@ struct ContentView: View {
                                                     .foregroundColor(.secondary)
                                             }
                                         }
-                                        .padding(.bottom, day.id == forecastDays.last?.id ? 0 : 8)
+                                        .padding(.bottom, day.id == displayedForecastDays.last?.id ? 0 : 8)
 
-                                        if day.id != forecastDays.last?.id {
+                                        if day.id != displayedForecastDays.last?.id {
                                             Divider().overlay(Color.white.opacity(0.08))
                                         }
+                                    }
+
+                                    if forecastDays.count > 3 {
+                                        Button(showAllForecastDays ? "Show fewer days" : "Show full 7-day forecast") {
+                                            showAllForecastDays.toggle()
+                                        }
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundColor(Color(red: 0.46, green: 0.7, blue: 1.0))
+                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
@@ -11138,6 +11148,7 @@ struct ContentView: View {
         @State private var sourceFilter: String = "all"
         @State private var showCredits: Bool = false
         @State private var detailMedia: MediaViewerPayload? = nil
+        @State private var showAllForecastDays: Bool = false
 
         private var overlayImages: [SpaceVisualImage] {
             let imgs = visuals?.images ?? []
@@ -12458,6 +12469,7 @@ struct ContentView: View {
         let error: String?
         let useGPS: Bool
         let onRefresh: () -> Void
+        @State private var showAllForecastDays: Bool = false
 
         private func driver(for key: String) -> DashboardDriverItem? {
             drivers.first { $0.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == key.lowercased() }
@@ -12857,9 +12869,10 @@ struct ContentView: View {
                         }
 
                         if let forecastDays = snapshot?.forecastDaily, !forecastDays.isEmpty {
+                            let displayedForecastDays = showAllForecastDays ? forecastDays : Array(forecastDays.prefix(3))
                             LocalConditionsSurfaceCard(title: "7-Day Forecast", icon: "calendar") {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    ForEach(forecastDays) { day in
+                                    ForEach(displayedForecastDays) { day in
                                         VStack(alignment: .leading, spacing: 8) {
                                             HStack(alignment: .top, spacing: 12) {
                                                 VStack(alignment: .leading, spacing: 3) {
@@ -12922,11 +12935,20 @@ struct ContentView: View {
                                                 }
                                             }
                                         }
-                                        .padding(.bottom, day.id == forecastDays.last?.id ? 0 : 8)
+                                        .padding(.bottom, day.id == displayedForecastDays.last?.id ? 0 : 8)
 
-                                        if day.id != forecastDays.last?.id {
+                                        if day.id != displayedForecastDays.last?.id {
                                             Divider().overlay(Color.white.opacity(0.08))
                                         }
+                                    }
+
+                                    if forecastDays.count > 3 {
+                                        Button(showAllForecastDays ? "Show fewer days" : "Show full 7-day forecast") {
+                                            showAllForecastDays.toggle()
+                                        }
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundColor(Color(red: 0.46, green: 0.7, blue: 1.0))
+                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
