@@ -110,8 +110,7 @@ struct SubscribeView: View {
             }
         }
         .task {
-            await refreshSessionStatus()
-            await refreshEntitlementsIfNeeded()
+            await refreshMembershipStatus()
         }
         .onChange(of: auth.supabaseAccessToken) { _, _ in
             Task { await refreshEntitlementsIfNeeded() }
@@ -127,7 +126,7 @@ struct SubscribeView: View {
                         .foregroundColor(.secondary)
                     Spacer()
                     Button("Refresh Status") {
-                        Task { await refreshSessionStatus() }
+                        Task { await refreshMembershipStatus() }
                     }
                     .font(.caption)
                 }
@@ -304,6 +303,7 @@ struct SubscribeView: View {
     }
 
     private func refreshEntitlementsIfNeeded() async {
+        errorMessage = nil
         guard let token = auth.supabaseAccessToken else {
             entitlements = []
             cachedPlanRaw = MembershipPlan.free.rawValue
@@ -320,6 +320,11 @@ struct SubscribeView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func refreshMembershipStatus() async {
+        await refreshSessionStatus()
+        await refreshEntitlementsIfNeeded()
     }
 
     private func refreshSessionStatus() async {

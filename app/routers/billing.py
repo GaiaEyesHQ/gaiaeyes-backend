@@ -42,6 +42,48 @@ def _get_user_email(user_id: str) -> Optional[str]:
     return row[0] if row else None
 
 
+def _get_entitlement_rows(user_id: str, email: Optional[str]):
+    with _db_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            select entitlement_key, term, is_active, started_at, expires_at, updated_at
+            from public.app_user_entitlements
+            where user_id = %s
+            order by entitlement_key
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+        if rows or not email:
+            return rows, user_id, "direct"
+
+        cur.execute(
+            """
+            select distinct
+                   ue.entitlement_key,
+                   ue.term,
+                   ue.is_active,
+                   ue.started_at,
+                   ue.expires_at,
+                   ue.updated_at,
+                   ue.user_id
+              from public.app_stripe_customers sc
+              join public.app_user_entitlements ue on ue.user_id = sc.user_id
+             where lower(sc.email) = lower(%s)
+             order by ue.entitlement_key, ue.updated_at desc nulls last, ue.started_at desc nulls last
+            """,
+            (email,),
+        )
+        fallback_rows = cur.fetchall()
+
+    if not fallback_rows:
+        return [], user_id, "direct"
+
+    resolved_user_id = fallback_rows[0][6]
+    rows = [row[:6] for row in fallback_rows]
+    return rows, resolved_user_id, "email_map"
+
+
 def _get_or_create_customer(email: Optional[str], user_id: str) -> str:
     with _db_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -158,19 +200,17 @@ def get_entitlements(request: Request, _: None = Depends(require_supabase_jwt)):
     if not user_id:
         raise HTTPException(status_code=401, detail="Missing user_id")
 
-    with _db_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            select entitlement_key, term, is_active, started_at, expires_at, updated_at
-            from public.app_user_entitlements
-            where user_id = %s
-            order by entitlement_key
-            """,
-            (user_id,),
-        )
-        rows = cur.fetchall()
-
     email = _get_user_email(user_id)
+    rows, entitlements_user_id, matched_via = _get_entitlement_rows(user_id, email)
+    if matched_via != "direct":
+        logger.info(
+            "billing entitlements resolved via email mapping",
+            extra={
+                "request_user_id": user_id,
+                "entitlements_user_id": entitlements_user_id,
+                "email": email,
+            },
+        )
     entitlements = [
         {
             "key": row[0],
@@ -183,4 +223,11 @@ def get_entitlements(request: Request, _: None = Depends(require_supabase_jwt)):
         for row in rows
     ]
 
-    return {"ok": True, "user_id": user_id, "email": email, "entitlements": entitlements}
+    return {
+        "ok": True,
+        "user_id": user_id,
+        "email": email,
+        "entitlements": entitlements,
+        "matched_via": matched_via,
+        "entitlements_user_id": entitlements_user_id,
+    }
