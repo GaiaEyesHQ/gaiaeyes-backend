@@ -618,7 +618,7 @@ private struct DashboardPayload: Codable {
     }
 }
 
-private struct UserPatternCard: Decodable, Hashable, Identifiable {
+private struct UserPatternCard: Codable, Hashable, Identifiable {
     let signalKey: String
     let signal: String
     let outcomeKey: String
@@ -646,8 +646,9 @@ private struct UserPatternCard: Decodable, Hashable, Identifiable {
     }
 }
 
-private struct UserPatternsPayload: Decodable {
+private struct UserPatternsPayload: Codable {
     let ok: Bool?
+    let partial: Bool?
     let generatedAt: String?
     let disclaimer: String?
     let strongestPatterns: [UserPatternCard]?
@@ -7560,6 +7561,7 @@ struct ContentView: View {
 
     private struct YourPatternsView: View {
         @EnvironmentObject private var state: AppState
+        @AppStorage("user_patterns_cache_json") private var userPatternsCacheJSON: String = ""
         @State private var payload: UserPatternsPayload? = nil
         @State private var isLoading: Bool = false
         @State private var errorMessage: String? = nil
@@ -7630,22 +7632,94 @@ struct ContentView: View {
             return Array(cards.prefix(3))
         }
 
+        @MainActor
+        private func decodeCachedPatternsPayload() -> UserPatternsPayload? {
+            guard !userPatternsCacheJSON.isEmpty,
+                  let data = userPatternsCacheJSON.data(using: .utf8) else { return nil }
+            return try? JSONDecoder().decode(UserPatternsPayload.self, from: data)
+        }
+
+        @MainActor
+        private func hydrateCachedPatternsIfNeeded() {
+            guard payload == nil, let cached = decodeCachedPatternsPayload() else { return }
+            payload = cached
+        }
+
+        @MainActor
+        private func persistPatternsPayload(_ value: UserPatternsPayload) {
+            guard let data = try? JSONEncoder().encode(value),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            userPatternsCacheJSON = json
+        }
+
+        private func mergeSummaryPayload(_ summary: UserPatternsPayload, into current: UserPatternsPayload?) -> UserPatternsPayload {
+            let preservesFullSections = current?.partial == false
+            return UserPatternsPayload(
+                ok: summary.ok ?? current?.ok,
+                partial: preservesFullSections ? false : (summary.partial ?? current?.partial),
+                generatedAt: summary.generatedAt ?? current?.generatedAt,
+                disclaimer: summary.disclaimer ?? current?.disclaimer,
+                strongestPatterns: summary.strongestPatterns ?? current?.strongestPatterns,
+                emergingPatterns: current?.emergingPatterns,
+                bodySignalsPatterns: current?.bodySignalsPatterns
+            )
+        }
+
         private func loadPatterns(force: Bool = false) async {
-            if isLoading && !force {
+            let alreadyLoading = await MainActor.run { isLoading }
+            if alreadyLoading && !force {
                 return
             }
-            isLoading = true
-            defer { isLoading = false }
+            await MainActor.run {
+                hydrateCachedPatternsIfNeeded()
+                isLoading = true
+            }
+
+            let api = state.apiWithAuth()
 
             do {
-                let api = state.apiWithAuth()
-                let decoded: UserPatternsPayload = try await api.getJSON("v1/patterns", as: UserPatternsPayload.self, perRequestTimeout: 20)
-                payload = decoded
-                errorMessage = nil
-            } catch {
-                if payload == nil {
-                    errorMessage = ContentView.scrubError(error.localizedDescription)
+                let summary: UserPatternsPayload = try await api.getJSON(
+                    "v1/patterns/summary",
+                    as: UserPatternsPayload.self,
+                    perRequestTimeout: 8
+                )
+                await MainActor.run {
+                    let merged = mergeSummaryPayload(summary, into: payload)
+                    payload = merged
+                    persistPatternsPayload(merged)
+                    errorMessage = nil
                 }
+            } catch {
+                let hasVisiblePayload = await MainActor.run { payload != nil }
+                if !hasVisiblePayload {
+                    await MainActor.run {
+                        errorMessage = ContentView.scrubError(error.localizedDescription)
+                    }
+                }
+            }
+
+            do {
+                let decoded: UserPatternsPayload = try await api.getJSON(
+                    "v1/patterns",
+                    as: UserPatternsPayload.self,
+                    perRequestTimeout: 20
+                )
+                await MainActor.run {
+                    payload = decoded
+                    persistPatternsPayload(decoded)
+                    errorMessage = nil
+                }
+            } catch {
+                let hasVisiblePayload = await MainActor.run { payload != nil }
+                if !hasVisiblePayload {
+                    await MainActor.run {
+                        errorMessage = ContentView.scrubError(error.localizedDescription)
+                    }
+                }
+            }
+
+            await MainActor.run {
+                isLoading = false
             }
         }
 
@@ -7722,6 +7796,8 @@ struct ContentView: View {
             subtitle: String,
             cards: [UserPatternCard],
             emptyMessage: String,
+            pendingMessage: String? = nil,
+            isPending: Bool = false,
             expanded: Binding<Bool>
         ) -> some View {
             let displayedCards = visibleCards(cards, expanded: expanded.wrappedValue)
@@ -7736,9 +7812,20 @@ struct ContentView: View {
                 }
 
                 if cards.isEmpty {
-                    Text(emptyMessage)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                    Group {
+                        if isPending {
+                            HStack(spacing: 10) {
+                                ProgressView()
+                                Text(pendingMessage ?? "Loading more pattern history.")
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        } else {
+                            Text(emptyMessage)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                         .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.white.opacity(0.04))
@@ -7770,6 +7857,8 @@ struct ContentView: View {
             let strongest = payload?.strongestPatterns ?? []
             let emerging = payload?.emergingPatterns ?? []
             let bodySignals = payload?.bodySignalsPatterns ?? []
+            let isPartialPayload = payload?.partial == true
+            let isLoadingSupplementalSections = isLoading && isPartialPayload
 
             ZStack {
                 Color.black.opacity(0.97).ignoresSafeArea()
@@ -7820,6 +7909,8 @@ struct ContentView: View {
                             subtitle: "Signals that may be repeating, but still need more overlap before they feel reliable.",
                             cards: emerging,
                             emptyMessage: "Nothing is clearly emerging yet. This section fills in after more repeated overlap.",
+                            pendingMessage: "Loading the rest of your pattern history.",
+                            isPending: isLoadingSupplementalSections,
                             expanded: $showsAllEmergingPatterns
                         )
 
@@ -7828,6 +7919,8 @@ struct ContentView: View {
                             subtitle: "Wearable-based patterns only show when the overlap is strong enough to meet the current evidence rules.",
                             cards: bodySignals,
                             emptyMessage: "No clear body-signal patterns are standing out yet.",
+                            pendingMessage: "Checking wearable patterns now.",
+                            isPending: isLoadingSupplementalSections,
                             expanded: $showsAllBodySignalPatterns
                         )
                     }
@@ -7853,10 +7946,11 @@ struct ContentView: View {
                     }
                 }
             }
+            .onAppear {
+                hydrateCachedPatternsIfNeeded()
+            }
             .task {
-                if payload == nil {
-                    await loadPatterns()
-                }
+                await loadPatterns()
             }
         }
     }

@@ -176,11 +176,7 @@ async def _fetch_best_rows(conn, user_id: str) -> List[Dict[str, Any]]:
         return [dict(row) for row in await cur.fetchall()]
 
 
-@router.get("", dependencies=[Depends(require_read_auth)])
-async def user_patterns(request: Request, conn=Depends(get_db)):
-    user_id = _require_user_id(request)
-    today = datetime.now(timezone.utc).date()
-
+async def _load_pattern_rows(conn, user_id: str) -> List[Dict[str, Any]]:
     rows = await fetch_best_pattern_rows(conn, user_id)
 
     # Defensive fallback when older databases do not yet have the best-lag view.
@@ -208,6 +204,67 @@ async def user_patterns(request: Request, conn=Depends(get_db)):
             except Exception:
                 pass
             rows = []
+    return rows
+
+
+def _base_payload(*, partial: bool) -> Dict[str, Any]:
+    return {
+        "ok": True,
+        "partial": partial,
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "disclaimer": (
+            "Patterns are based on your self-reported logs and recent sensor history. "
+            "They do not diagnose, prove causes, or replace medical care."
+        ),
+    }
+
+
+def _categorize_rows(rows: List[Dict[str, Any]], user_tags: set[str]) -> Dict[str, List[Dict[str, Any]]]:
+    body_rows = _sort_rows([row for row in rows if str(row.get("outcome_kind") or "") == "biometric"], user_tags)
+    strongest_rows = _sort_rows(
+        [
+            row
+            for row in rows
+            if str(row.get("outcome_kind") or "") != "biometric"
+            and str(row.get("confidence") or "") in {"Strong", "Moderate"}
+        ],
+        user_tags,
+    )
+    emerging_rows = _sort_rows(
+        [
+            row
+            for row in rows
+            if str(row.get("outcome_kind") or "") != "biometric"
+            and str(row.get("confidence") or "") == "Emerging"
+        ],
+        user_tags,
+    )
+    return {
+        "strongest": strongest_rows,
+        "emerging": emerging_rows,
+        "body": body_rows,
+    }
+
+
+@router.get("/summary", dependencies=[Depends(require_read_auth)])
+async def user_patterns_summary(request: Request, conn=Depends(get_db)):
+    user_id = _require_user_id(request)
+    rows = await _load_pattern_rows(conn, user_id)
+    raw_tags = await asyncio.to_thread(fetch_user_tags, user_id)
+    user_tags = set(canonicalize_tag_keys(raw_tags))
+    categorized = _categorize_rows(rows, user_tags)
+
+    payload = _base_payload(partial=True)
+    payload["strongestPatterns"] = [_serialize_card(row) for row in categorized["strongest"]]
+    return payload
+
+
+@router.get("", dependencies=[Depends(require_read_auth)])
+async def user_patterns(request: Request, conn=Depends(get_db)):
+    user_id = _require_user_id(request)
+    today = datetime.now(timezone.utc).date()
+
+    rows = await _load_pattern_rows(conn, user_id)
 
     raw_tags = await asyncio.to_thread(fetch_user_tags, user_id)
     user_tags = set(canonicalize_tag_keys(raw_tags))
@@ -233,35 +290,16 @@ async def user_patterns(request: Request, conn=Depends(get_db)):
         for item in personal_relevance.get("active_pattern_refs") or []
         if str(item.get("id") or "")
     }
+    categorized = _categorize_rows(rows, user_tags)
 
-    body_rows = _sort_rows([row for row in rows if str(row.get("outcome_kind") or "") == "biometric"], user_tags)
-    strongest_rows = _sort_rows(
-        [
-            row
-            for row in rows
-            if str(row.get("outcome_kind") or "") != "biometric"
-            and str(row.get("confidence") or "") in {"Strong", "Moderate"}
-        ],
-        user_tags,
-    )
-    emerging_rows = _sort_rows(
-        [
-            row
-            for row in rows
-            if str(row.get("outcome_kind") or "") != "biometric"
-            and str(row.get("confidence") or "") == "Emerging"
-        ],
-        user_tags,
-    )
-
-    return {
-        "ok": True,
-        "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "disclaimer": (
-            "Patterns are based on your self-reported logs and recent sensor history. "
-            "They do not diagnose, prove causes, or replace medical care."
-        ),
-        "strongestPatterns": [_serialize_card(row, used_today_ids=used_today_ids) for row in strongest_rows],
-        "emergingPatterns": [_serialize_card(row, used_today_ids=used_today_ids) for row in emerging_rows],
-        "bodySignalsPatterns": [_serialize_card(row, used_today_ids=used_today_ids) for row in body_rows],
-    }
+    payload = _base_payload(partial=False)
+    payload["strongestPatterns"] = [
+        _serialize_card(row, used_today_ids=used_today_ids) for row in categorized["strongest"]
+    ]
+    payload["emergingPatterns"] = [
+        _serialize_card(row, used_today_ids=used_today_ids) for row in categorized["emerging"]
+    ]
+    payload["bodySignalsPatterns"] = [
+        _serialize_card(row, used_today_ids=used_today_ids) for row in categorized["body"]
+    ]
+    return payload
