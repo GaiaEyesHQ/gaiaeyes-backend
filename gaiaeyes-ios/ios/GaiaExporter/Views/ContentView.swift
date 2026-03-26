@@ -4269,8 +4269,7 @@ struct ContentView: View {
         async let forecastTask: Void = fetchForecastSummary()
         async let outlookTask: Void = fetchSpaceOutlook()
         async let magnetosphereTask: Void = fetchMagnetosphere()
-        async let seriesTask: Void = fetchSpaceSeries(days: 30)
-        _ = await (featuresTask, forecastTask, outlookTask, magnetosphereTask, seriesTask)
+        _ = await (featuresTask, forecastTask, outlookTask, magnetosphereTask)
     }
 
     private enum SymptomLogAttemptStatus {
@@ -9350,6 +9349,7 @@ struct ContentView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .featuresShouldRefresh).receive(on: RunLoop.main)) { _ in
+                guard !showMissionInsightsSheet else { return }
                 pendingRefreshTask?.cancel()
                 pendingRefreshToken &+= 1
                 let token = pendingRefreshToken
@@ -9381,6 +9381,7 @@ struct ContentView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .dashboardShouldRefresh).receive(on: RunLoop.main)) { _ in
+                guard !showMissionInsightsSheet else { return }
                 pendingDashboardRefreshTask?.cancel()
                 pendingDashboardRefreshTask = Task {
                     do {
@@ -9522,7 +9523,7 @@ struct ContentView: View {
                         .task {
                             if !spaceWeatherDetailFetchInFlight &&
                                 Date().timeIntervalSince(spaceWeatherDetailLastFetchAt) >= 45 &&
-                                (series == nil || spaceOutlook == nil || magnetosphere == nil) {
+                                (spaceOutlook == nil || magnetosphere == nil) {
                                 await fetchSpaceWeatherDetailData()
                             }
                         }
