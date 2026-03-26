@@ -1717,6 +1717,8 @@ struct ContentView: View {
     @State private var forecast: ForecastSummary? = nil
     @State private var series: SpaceSeries? = nil
     @State private var lastKnownSeries: SpaceSeries? = nil
+    @State private var spaceWeatherDetailFetchInFlight: Bool = false
+    @State private var spaceWeatherDetailLastFetchAt: Date = .distantPast
     @State private var spaceVisuals: SpaceVisualsPayload? = nil
     @State private var lastKnownSpaceVisuals: SpaceVisualsPayload? = nil
     @State private var spaceOutlook: SpaceForecastOutlook? = nil
@@ -4244,7 +4246,25 @@ struct ContentView: View {
         }
     }
 
-    private func fetchSpaceWeatherDetailData() async {
+    private func fetchSpaceWeatherDetailData(force: Bool = false) async {
+        let shouldStart = await MainActor.run { () -> Bool in
+            if spaceWeatherDetailFetchInFlight {
+                return false
+            }
+            if !force && Date().timeIntervalSince(spaceWeatherDetailLastFetchAt) < 45 {
+                return false
+            }
+            spaceWeatherDetailFetchInFlight = true
+            return true
+        }
+        guard shouldStart else { return }
+        defer {
+            Task { @MainActor in
+                spaceWeatherDetailFetchInFlight = false
+                spaceWeatherDetailLastFetchAt = Date()
+            }
+        }
+
         async let featuresTask: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
         async let forecastTask: Void = fetchForecastSummary()
         async let outlookTask: Void = fetchSpaceOutlook()
@@ -9497,10 +9517,12 @@ struct ContentView: View {
                             outlook: resolvedOutlook,
                             series: seriesDetail,
                             magnetosphere: magnetosphere,
-                            onRefresh: { await fetchSpaceWeatherDetailData() }
+                            onRefresh: { await fetchSpaceWeatherDetailData(force: true) }
                         )
                         .task {
-                            if series == nil || spaceOutlook == nil || magnetosphere == nil {
+                            if !spaceWeatherDetailFetchInFlight &&
+                                Date().timeIntervalSince(spaceWeatherDetailLastFetchAt) >= 45 &&
+                                (series == nil || spaceOutlook == nil || magnetosphere == nil) {
                                 await fetchSpaceWeatherDetailData()
                             }
                         }
