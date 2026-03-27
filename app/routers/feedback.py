@@ -12,7 +12,7 @@ from app.db import feedback as feedback_db
 from app.security.auth import require_read_auth, require_write_auth
 
 
-router = APIRouter(prefix="/feedback", tags=["feedback"])
+router = APIRouter(prefix="/v1/feedback", tags=["feedback"])
 
 _ERR_LOAD_DAILY_CHECKIN = "Failed to load daily check-in"
 _ERR_SAVE_DAILY_CHECKIN = "Failed to save daily check-in"

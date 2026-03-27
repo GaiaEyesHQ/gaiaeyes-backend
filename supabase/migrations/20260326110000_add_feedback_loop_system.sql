@@ -2,21 +2,6 @@ begin;
 
 do $$
 begin
-  update app.user_notification_preferences
-     set symptom_followup_cadence = case symptom_followup_cadence
-       when 'gentle' then 'minimal'
-       when 'frequent' then 'detailed'
-       else symptom_followup_cadence
-     end
-   where symptom_followup_cadence in ('gentle', 'frequent');
-exception
-  when undefined_table then
-    null;
-end
-$$;
-
-do $$
-begin
   if exists (
     select 1
       from pg_constraint
@@ -76,6 +61,21 @@ begin
     alter table app.user_notification_preferences
       drop constraint user_notification_preferences_symptom_followup_cadence_check;
   end if;
+exception
+  when undefined_table then
+    null;
+end
+$$;
+
+do $$
+begin
+  update app.user_notification_preferences
+     set symptom_followup_cadence = case symptom_followup_cadence
+       when 'gentle' then 'minimal'
+       when 'frequent' then 'detailed'
+       else symptom_followup_cadence
+     end
+   where symptom_followup_cadence in ('gentle', 'frequent');
 exception
   when undefined_table then
     null;
