@@ -1948,21 +1948,6 @@ struct ContentView: View {
         }
     }
 
-    private func currentSymptomsMode() -> CurrentSymptomsPresentationMode {
-        experienceProfile.mode == .mystical ? .mystical : .scientific
-    }
-
-    private func currentSymptomsTone() -> CurrentSymptomsTone {
-        switch experienceProfile.tone {
-        case .straight:
-            return .straight
-        case .balanced:
-            return .balanced
-        case .humorous:
-            return .humorous
-        }
-    }
-
     private func openMissionInsights(route: InsightsRoute? = nil) {
         missionInsightsPath = route.map { [$0] } ?? []
         showMissionInsightsSheet = true
@@ -3381,9 +3366,14 @@ struct ContentView: View {
     }
 
     private func onboardingActivationDriverDetail(_ driver: DashboardDriverItem) -> String {
-        let label = (driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized)
+        let vocabulary = experienceProfile.mode.copyVocabulary
+        let label = vocabulary.driverLabel(
+            for: driver.key,
+            fallback: driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized
+        )
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let display = (driver.display ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let display = (vocabulary.translating(driver.display) ?? driver.display ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         if !display.isEmpty {
             let prefix = "\(label): "
             if display.hasPrefix(prefix) {
@@ -3401,17 +3391,21 @@ struct ContentView: View {
     }
 
     private var onboardingActivationData: OnboardingActivationData {
+        let vocabulary = experienceProfile.mode.copyVocabulary
         let liveDrivers = Array((dashboardPayload?.drivers ?? []).prefix(3)).map { driver in
             OnboardingActivationDriver(
                 id: driver.id,
-                title: driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized,
+                title: vocabulary.driverLabel(
+                    for: driver.key,
+                    fallback: driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized
+                ),
                 detail: onboardingActivationDriverDetail(driver)
             )
         }
         let fallbackDrivers = [
             OnboardingActivationDriver(
                 id: "mission_control",
-                title: "Mission Control is live",
+                title: "\(vocabulary.missionControlLabel) is live",
                 detail: "Gaia is already tracking live space, Earth, and local conditions when they are available."
             ),
             OnboardingActivationDriver(
@@ -3428,7 +3422,7 @@ struct ContentView: View {
         let headline: String
         if let topDriver = liveDrivers.first?.title, !topDriver.isEmpty {
             headline = "\(topDriver) is one of the clearest live signals right now."
-        } else if let summary = dashboardPayload?.earthscopeSummary, !summary.isEmpty {
+        } else if let summary = vocabulary.translating(dashboardPayload?.earthscopeSummary), !summary.isEmpty {
             headline = summary
         } else {
             headline = "Your live signal stack is ready."
@@ -3441,15 +3435,15 @@ struct ContentView: View {
         }
         let footer: String?
         if notificationPreferences.enabled {
-            footer = "Alerts are ready to follow the same signal families you chose here. Log how you feel in Mission Control to start building personal patterns."
+            footer = "Alerts are ready to follow the same signal families you chose here. Log how you feel in \(vocabulary.missionControlLabel) to start building personal patterns."
         } else {
-            footer = "Log how you feel in Mission Control to start building personal patterns. You can adjust alerts and imports later in Settings."
+            footer = "Log how you feel in \(vocabulary.missionControlLabel) to start building personal patterns. You can adjust alerts and imports later in Settings."
         }
         return OnboardingActivationData(
             headline: headline,
             explanation: explanation,
             drivers: liveDrivers.isEmpty ? fallbackDrivers : liveDrivers,
-            nextActionTitle: "Open Mission Control",
+            nextActionTitle: "Open \(vocabulary.missionControlLabel)",
             secondaryActionTitle: "Finish",
             footer: footer
         )
@@ -10014,8 +10008,8 @@ struct ContentView: View {
                     case .currentSymptoms:
                         CurrentSymptomsView(
                             api: state.apiWithAuth(),
-                            mode: currentSymptomsMode(),
-                            tone: currentSymptomsTone(),
+                            mode: experienceProfile.mode,
+                            tone: experienceProfile.tone,
                             initialSnapshot: currentSymptomsSnapshot,
                             onLogMore: { showInsightsSymptomSheet = true },
                             onOpenAllDrivers: { focusKey in
@@ -10667,8 +10661,8 @@ struct ContentView: View {
             NavigationStack {
                 CurrentSymptomsView(
                     api: state.apiWithAuth(),
-                    mode: currentSymptomsMode(),
-                    tone: currentSymptomsTone(),
+                    mode: experienceProfile.mode,
+                    tone: experienceProfile.tone,
                     showsCloseButton: true,
                     initialSnapshot: currentSymptomsSnapshot,
                     onLogMore: {

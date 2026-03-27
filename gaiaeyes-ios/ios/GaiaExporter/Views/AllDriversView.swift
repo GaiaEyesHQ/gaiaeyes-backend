@@ -1,5 +1,66 @@
 import SwiftUI
 
+private struct AllDriversCopy {
+    let pageTitle: String
+    let subtitle: String
+    let activeMetricTitle: String
+    let categoryMetricTitle: String
+    let stateMetricTitle: String
+    let setupHintsTitle: String
+    let loadingText: String
+    let calmTitle: String
+    let calmBody: String
+    let learningBody: String
+
+    static func resolve(mode: ExperienceMode, tone: ToneStyle) -> AllDriversCopy {
+        let vocabulary = mode.copyVocabulary
+        switch mode {
+        case .scientific:
+            return AllDriversCopy(
+                pageTitle: vocabulary.allDriversLabel,
+                subtitle: "What’s active right now, in priority order",
+                activeMetricTitle: "Active",
+                categoryMetricTitle: "Category",
+                stateMetricTitle: "State",
+                setupHintsTitle: "Ways to sharpen this view",
+                loadingText: "Loading current drivers…",
+                calmTitle: tone == .humorous ? "Nothing especially loud right now" : "Nothing especially strong right now",
+                calmBody: tone.resolveCopy(
+                    straight: "Conditions look relatively calm. You can still explore what Gaia Eyes watches for you.",
+                    balanced: "Conditions look relatively calm. You can still explore the full driver stack Gaia Eyes is watching.",
+                    humorous: "Conditions look relatively calm. The signal pile-up is taking a breather, but the full stack is still here if you want context."
+                ),
+                learningBody: tone.resolveCopy(
+                    straight: "We’re still learning how this tends to affect you.",
+                    balanced: "We’re still learning how these patterns tend to land for you.",
+                    humorous: "We’re still learning your pattern language, so some drivers will stay more observational for now."
+                )
+            )
+        case .mystical:
+            return AllDriversCopy(
+                pageTitle: vocabulary.allDriversLabel,
+                subtitle: "What’s moving through your field right now, in priority order",
+                activeMetricTitle: "Active",
+                categoryMetricTitle: "Category",
+                stateMetricTitle: "State",
+                setupHintsTitle: "Ways to make this view more personal",
+                loadingText: "Loading what’s active right now…",
+                calmTitle: tone == .humorous ? "Nothing especially loud right now" : "Nothing especially intense right now",
+                calmBody: tone.resolveCopy(
+                    straight: "Conditions look relatively calm. You can still explore what Gaia Eyes is tracking.",
+                    balanced: "Conditions look relatively calm. You can still explore the full set of influences Gaia Eyes is tracking.",
+                    humorous: "Conditions look relatively calm. The field is behaving itself, but the full signal stack is still here if you want context."
+                ),
+                learningBody: tone.resolveCopy(
+                    straight: "We’re still learning how these patterns tend to move with you.",
+                    balanced: "We’re still learning how these patterns tend to move with you.",
+                    humorous: "We’re still learning your pattern language, so some influences will stay more observational for now."
+                )
+            )
+        }
+    }
+}
+
 struct AllDriversView: View {
     let api: APIClient
     var mode: ExperienceMode = .scientific
@@ -23,17 +84,12 @@ struct AllDriversView: View {
     @State private var focusedDriverID: String?
     @State private var hasTrackedOpen: Bool = false
 
-    private var titleText: String {
-        mode == .mystical ? "All Influences" : "All Drivers"
+    private var vocabulary: CopyVocabulary {
+        mode.copyVocabulary
     }
 
-    private var subtitleText: String {
-        switch mode {
-        case .scientific:
-            return "What’s active right now, in priority order"
-        case .mystical:
-            return "What’s moving through your field right now"
-        }
+    private var copy: AllDriversCopy {
+        AllDriversCopy.resolve(mode: mode, tone: tone)
     }
 
     private var filteredDrivers: [DriverDetailItem] {
@@ -44,81 +100,12 @@ struct AllDriversView: View {
         return drivers.filter { $0.category == selectedFilter }
     }
 
-    private var calmTitle: String {
-        if tone == .humorous {
-            return "Nothing especially loud right now"
-        }
-        return "Nothing especially strong right now"
-    }
-
-    private var calmBody: String {
-        switch tone {
-        case .straight:
-            return "Conditions look relatively calm. You can still explore what Gaia Eyes watches for you."
-        case .balanced:
-            return "Conditions look relatively calm. You can still explore the full driver stack Gaia Eyes is watching."
-        case .humorous:
-            return "Conditions look relatively calm. The signal pile-up is taking a breather, but the full stack is still here if you want context."
-        }
-    }
-
-    private var learningBody: String {
-        switch tone {
-        case .straight:
-            return "We’re still learning how this tends to affect you."
-        case .balanced:
-            return "We’re still learning how these patterns tend to land for you."
-        case .humorous:
-            return "We’re still learning your pattern language, so some drivers will stay more observational for now."
-        }
-    }
-
     private func translatedLabel(for driver: DriverDetailItem) -> String {
-        guard mode == .mystical else { return driver.label }
-        switch driver.key {
-        case "solar_wind":
-            return "Cosmic Pressure"
-        case "schumann":
-            return "Earth’s Resonance"
-        case "ulf":
-            return "Field Motion"
-        case "kp":
-            return "Magnetic Weather"
-        case "bz":
-            return "Field Alignment"
-        case "pressure":
-            return "Weather Pressure"
-        case "temp":
-            return "Temperature Shift"
-        case "aqi":
-            return "Air Clarity"
-        case "allergens":
-            return "Seasonal Irritants"
-        case "flare":
-            return "Solar Flares"
-        case "cme":
-            return "Incoming Solar Wave"
-        case "sep":
-            return "Particle Weather"
-        case "drap":
-            return "Radio Haze"
-        default:
-            return driver.label
-        }
+        vocabulary.driverLabel(for: driver.key, fallback: driver.label)
     }
 
     private func translatedText(_ raw: String?) -> String? {
-        guard let raw, !raw.isEmpty else { return nil }
-        guard mode == .mystical else { return raw }
-        return raw
-            .replacingOccurrences(of: "Solar wind", with: "Cosmic pressure")
-            .replacingOccurrences(of: "solar wind", with: "cosmic pressure")
-            .replacingOccurrences(of: "Schumann", with: "Earth’s resonance")
-            .replacingOccurrences(of: "schumann", with: "earth’s resonance")
-            .replacingOccurrences(of: "ULF", with: "field motion")
-            .replacingOccurrences(of: "Geomagnetic", with: "Field-weather")
-            .replacingOccurrences(of: "geomagnetic", with: "field-weather")
-            .replacingOccurrences(of: "CME", with: "solar wave")
+        vocabulary.translating(raw)
     }
 
     private func severity(for driver: DriverDetailItem) -> StatusPill.Severity {
@@ -314,10 +301,10 @@ struct AllDriversView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(titleText)
+                    Text(copy.pageTitle)
                         .font(.system(size: 30, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
-                    Text(subtitleText)
+                    Text(copy.subtitle)
                         .font(.subheadline)
                         .foregroundColor(.white.opacity(0.68))
                     if let updated = formattedUpdate(snapshot?.asof ?? snapshot?.generatedAt) {
@@ -337,9 +324,9 @@ struct AllDriversView: View {
             if let summary = snapshot?.summary {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 10) {
-                        SummaryMetric(title: "Active", value: "\(summary.activeDriverCount)")
-                        SummaryMetric(title: "Category", value: summary.strongestCategory ?? "—")
-                        SummaryMetric(title: "State", value: summary.primaryState ?? "—")
+                        SummaryMetric(title: copy.activeMetricTitle, value: "\(summary.activeDriverCount)")
+                        SummaryMetric(title: copy.categoryMetricTitle, value: summary.strongestCategory ?? "—")
+                        SummaryMetric(title: copy.stateMetricTitle, value: summary.primaryState ?? "—")
                     }
                     if let note = translatedText(summary.note), !note.isEmpty {
                         Text(note)
@@ -371,7 +358,7 @@ struct AllDriversView: View {
 
     private var setupHintsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Ways to sharpen this view")
+            Text(copy.setupHintsTitle)
                 .font(.headline)
                 .foregroundColor(.white)
             ForEach(snapshot?.setupHints ?? []) { hint in
@@ -380,10 +367,10 @@ struct AllDriversView: View {
                 } label: {
                     HStack(alignment: .top, spacing: 10) {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(hint.label)
+                            Text(translatedText(hint.label) ?? hint.label)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundColor(.white)
-                            Text(hint.reason)
+                            Text(translatedText(hint.reason) ?? hint.reason)
                                 .font(.caption)
                                 .foregroundColor(.white.opacity(0.68))
                                 .fixedSize(horizontal: false, vertical: true)
@@ -411,14 +398,14 @@ struct AllDriversView: View {
 
     private var emptyStateCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(calmTitle)
+            Text(copy.calmTitle)
                 .font(.title3.weight(.bold))
                 .foregroundColor(.white)
-            Text(calmBody)
+            Text(copy.calmBody)
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.68))
             if snapshot?.hasPersonalPatterns != true {
-                Text(learningBody)
+                Text(copy.learningBody)
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.52))
             }
@@ -462,7 +449,7 @@ struct AllDriversView: View {
                         )
 
                         if isLoading && snapshot == nil {
-                            ProgressView("Loading current drivers…")
+                            ProgressView(copy.loadingText)
                                 .tint(.white)
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .padding(.vertical, 28)
@@ -572,7 +559,7 @@ struct AllDriversView: View {
                 }
             }
         }
-        .navigationTitle(titleText)
+        .navigationTitle(copy.pageTitle)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .top) {
             SignalBarView(signals: signalBar, onTap: focusDriver(for:))

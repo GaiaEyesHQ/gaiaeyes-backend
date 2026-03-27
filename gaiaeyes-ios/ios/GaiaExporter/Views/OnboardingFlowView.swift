@@ -21,6 +21,191 @@ struct OnboardingActivationData: Equatable {
     let footer: String?
 }
 
+private struct OnboardingFlowCopy {
+    let headerSubtitle: String
+    let welcomeTitle: String
+    let welcomeSubtitle: String
+    let modeTitle: String
+    let modeSubtitle: String
+    let guideTitle: String
+    let guideSubtitle: String
+    let toneTitle: String
+    let toneSubtitle: String
+    let sensitivitiesTitle: String
+    let sensitivitiesSubtitle: String
+    let healthContextTitle: String
+    let healthContextSubtitle: String
+    let locationTitle: String
+    let locationSubtitle: String
+    let useGPSOptionTitle: String
+    let useGPSOptionSubtitle: String
+    let enterZIPOptionTitle: String
+    let enterZIPOptionSubtitle: String
+    let localInsightsToggleTitle: String
+    let healthDataTitle: String
+    let healthDataSubtitle: String
+    let healthDataHint: String
+    let healthEmptySelectionBody: String
+    let backfillTitle: String
+    let backfillSubtitle: String
+    let notificationsTitle: String
+    let notificationsSubtitle: String
+    let enableNotificationsTitle: String
+    let signalAlertsTitle: String
+    let localConditionAlertsTitle: String
+    let personalizedAlertsTitle: String
+    let geomagneticAlertTitle: String
+    let solarWindAlertTitle: String
+    let flareAlertTitle: String
+    let schumannAlertTitle: String
+    let pressureAlertTitle: String
+    let aqiAlertTitle: String
+    let temperatureAlertTitle: String
+    let symptomFollowUpTitle: String
+    let symptomFollowUpBody: String
+    let quietHoursTitle: String
+    let alertSensitivityTitle: String
+    let activationTitle: String
+
+    static func resolve(mode: ExperienceMode, tone: ToneStyle) -> OnboardingFlowCopy {
+        let vocabulary = mode.copyVocabulary
+        switch mode {
+        case .scientific:
+            return OnboardingFlowCopy(
+                headerSubtitle: tone.resolveCopy(
+                    straight: "Gaia Eyes is learning your language.",
+                    balanced: "Gaia Eyes is learning how to speak to you.",
+                    humorous: "Gaia Eyes is learning your settings before it starts trying to be helpful."
+                ),
+                welcomeTitle: "Understand how the world around you may connect to how you feel.",
+                welcomeSubtitle: tone.resolveCopy(
+                    straight: "We’ll set up just enough to make your first session useful.",
+                    balanced: "We’ll set up just enough to make your first session useful, personal, and calm.",
+                    humorous: "We’ll set up just enough to make your first session useful without turning setup into a side quest."
+                ),
+                modeTitle: "How do you want to experience Gaia Eyes?",
+                modeSubtitle: "The underlying signal model stays the same. Only the presentation changes.",
+                guideTitle: "Choose your guide",
+                guideSubtitle: "A little personality, without changing the truth layer.",
+                toneTitle: "How should Gaia Eyes speak to you?",
+                toneSubtitle: "Tone changes the presentation, not the underlying truth.",
+                sensitivitiesTitle: "What tends to affect you most?",
+                sensitivitiesSubtitle: "Pick the signals Gaia should emphasize first. You can adjust these later.",
+                healthContextTitle: "Optional health context",
+                healthContextSubtitle: "Self-reported context only. This helps Gaia weigh patterns more personally without making diagnoses.",
+                locationTitle: "Where should Gaia Eyes track local conditions?",
+                locationSubtitle: "Choose live GPS or a ZIP code. This powers local weather, pressure, air quality, and temperature context.",
+                useGPSOptionTitle: "Use GPS",
+                useGPSOptionSubtitle: "Best for live local conditions and travel days.",
+                enterZIPOptionTitle: "Enter ZIP",
+                enterZIPOptionSubtitle: "Best when you want a fixed local baseline.",
+                localInsightsToggleTitle: "Use local insights",
+                healthDataTitle: "Connect your health data",
+                healthDataSubtitle: "Optional, but useful for sleep, heart rate, recovery trends, and faster pattern detection.",
+                healthDataHint: tone.resolveCopy(
+                    straight: "Choose what Gaia can read. Leave anything sensitive unchecked.",
+                    balanced: "Choose what Gaia can read. You can leave something sensitive like cycle tracking unchecked and keep the rest.",
+                    humorous: "Choose what Gaia can read. You can leave anything sensitive unchecked and keep the useful stuff."
+                ),
+                healthEmptySelectionBody: "Nothing is selected. Tap Not Now, or check at least one metric to request Health access.",
+                backfillTitle: "Sync your last 30 days",
+                backfillSubtitle: "Import recent data so Gaia Eyes can recognize patterns sooner.",
+                notificationsTitle: "Would you like helpful alerts?",
+                notificationsSubtitle: tone.resolveCopy(
+                    straight: "Choose the alert families you care about.",
+                    balanced: "Choose the alert families you care about. Gaia can stay quiet until something meaningfully changes.",
+                    humorous: "Choose the alert families you care about. Gaia can keep the drama low until something actually changes."
+                ),
+                enableNotificationsTitle: "Enable Notifications",
+                signalAlertsTitle: "Signal Alerts",
+                localConditionAlertsTitle: "Local Condition Alerts",
+                personalizedAlertsTitle: "Personalized Alerts",
+                geomagneticAlertTitle: "Geomagnetic Activity / Kp",
+                solarWindAlertTitle: "Solar Wind / Bz coupling",
+                flareAlertTitle: "Flares / CME / SEP / DRAP",
+                schumannAlertTitle: "Schumann spike / elevated",
+                pressureAlertTitle: vocabulary.pressureSwingLabel,
+                aqiAlertTitle: vocabulary.aqiLabel,
+                temperatureAlertTitle: vocabulary.temperatureSwingLabel,
+                symptomFollowUpTitle: "Symptom Follow-up Prompts",
+                symptomFollowUpBody: tone.resolveCopy(
+                    balanced: "Gaia can send a check-in after you log a symptom so it can learn the arc, not just the spike.",
+                    humorous: "Gaia can send a check-in after you log a symptom so it learns the arc, not just the plot twist."
+                ),
+                quietHoursTitle: "Quiet Hours",
+                alertSensitivityTitle: "Alert Sensitivity",
+                activationTitle: vocabulary.whatMattersNowLabel
+            )
+        case .mystical:
+            return OnboardingFlowCopy(
+                headerSubtitle: tone.resolveCopy(
+                    straight: "Gaia Eyes is learning your language.",
+                    balanced: "Gaia Eyes is learning how to speak to you.",
+                    humorous: "Gaia Eyes is learning your settings before it starts trying to be helpful."
+                ),
+                welcomeTitle: "Understand how the world around you may connect to how you feel.",
+                welcomeSubtitle: tone.resolveCopy(
+                    straight: "We’ll set up just enough to make your first session useful.",
+                    balanced: "We’ll set up just enough to make your first session useful, personal, and calm.",
+                    humorous: "We’ll set up just enough to make your first session useful without turning setup into a side quest."
+                ),
+                modeTitle: "How do you want to experience Gaia Eyes?",
+                modeSubtitle: "The underlying signal model stays the same. Only the presentation changes.",
+                guideTitle: "Choose your guide",
+                guideSubtitle: "A little personality, without changing the truth layer.",
+                toneTitle: "How should Gaia Eyes speak to you?",
+                toneSubtitle: "Tone changes the presentation, not the underlying truth.",
+                sensitivitiesTitle: "What tends to affect you most?",
+                sensitivitiesSubtitle: "Pick the signals Gaia should emphasize first. You can adjust these later.",
+                healthContextTitle: "Optional health context",
+                healthContextSubtitle: "Self-reported context only. This helps Gaia weigh patterns more personally without making diagnoses.",
+                locationTitle: "Where should Gaia Eyes track local conditions?",
+                locationSubtitle: "Choose live GPS or a ZIP code. This powers local weather, \(vocabulary.pressureSwingLabel.lowercased()), \(vocabulary.aqiLabel.lowercased()), and temperature context.",
+                useGPSOptionTitle: "Use GPS",
+                useGPSOptionSubtitle: "Best for live local conditions and travel days.",
+                enterZIPOptionTitle: "Enter ZIP",
+                enterZIPOptionSubtitle: "Best when you want a fixed local baseline.",
+                localInsightsToggleTitle: "Use local insights",
+                healthDataTitle: "Connect your health data",
+                healthDataSubtitle: "Optional, but useful for sleep, heart rate, recovery trends, and faster pattern detection.",
+                healthDataHint: tone.resolveCopy(
+                    straight: "Choose what Gaia can read. Leave anything sensitive unchecked.",
+                    balanced: "Choose what Gaia can read. You can leave something sensitive like cycle tracking unchecked and keep the rest.",
+                    humorous: "Choose what Gaia can read. You can leave anything sensitive unchecked and keep the useful stuff."
+                ),
+                healthEmptySelectionBody: "Nothing is selected. Tap Not Now, or check at least one metric to request Health access.",
+                backfillTitle: "Sync your last 30 days",
+                backfillSubtitle: "Import recent data so Gaia Eyes can recognize patterns sooner.",
+                notificationsTitle: "Would you like helpful alerts?",
+                notificationsSubtitle: tone.resolveCopy(
+                    straight: "Choose the alert families you care about.",
+                    balanced: "Choose the alert families you care about. Gaia can stay quiet until something meaningfully changes.",
+                    humorous: "Choose the alert families you care about. Gaia can keep the drama low until something actually changes."
+                ),
+                enableNotificationsTitle: "Enable Notifications",
+                signalAlertsTitle: "Field Alerts",
+                localConditionAlertsTitle: "Local Condition Alerts",
+                personalizedAlertsTitle: "Personalized Alerts",
+                geomagneticAlertTitle: "\(vocabulary.geomagneticLabel) / \(vocabulary.kpLabel)",
+                solarWindAlertTitle: "\(vocabulary.solarWindLabel) / \(vocabulary.bzLabel)",
+                flareAlertTitle: "Flares / \(vocabulary.cmeLabel) / \(vocabulary.sepLabel) / \(vocabulary.drapLabel)",
+                schumannAlertTitle: "\(vocabulary.schumannLabel) spike / elevated",
+                pressureAlertTitle: vocabulary.pressureSwingLabel,
+                aqiAlertTitle: vocabulary.aqiLabel,
+                temperatureAlertTitle: vocabulary.temperatureSwingLabel,
+                symptomFollowUpTitle: "Symptom Follow-up Prompts",
+                symptomFollowUpBody: tone.resolveCopy(
+                    balanced: "Gaia can send a check-in after you log a symptom so it can learn the arc, not just the spike.",
+                    humorous: "Gaia can send a check-in after you log a symptom so it learns the arc, not just the plot twist."
+                ),
+                quietHoursTitle: "Quiet Hours",
+                alertSensitivityTitle: "Alert Sensitivity",
+                activationTitle: vocabulary.whatMattersNowLabel
+            )
+        }
+    }
+}
+
 struct OnboardingFlowView: View {
     @Binding var isPresented: Bool
     @Binding var currentStep: OnboardingStep
@@ -53,6 +238,10 @@ struct OnboardingFlowView: View {
     let onFinish: () async -> Void
 
     @State private var healthPermissionGrantedThisSession = false
+
+    private var copy: OnboardingFlowCopy {
+        OnboardingFlowCopy.resolve(mode: profile.mode, tone: profile.tone)
+    }
 
     private var progressLabel: String {
         let index = OnboardingStep.ordered.firstIndex(of: currentStep).map { $0 + 1 } ?? 1
@@ -151,7 +340,7 @@ struct OnboardingFlowView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Gaia Eyes")
                         .font(.system(size: 30, weight: .bold, design: .rounded))
-                    Text("Gaia Eyes is learning how to speak to you.")
+                    Text(copy.headerSubtitle)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -193,14 +382,14 @@ struct OnboardingFlowView: View {
             toneStep
         case .sensitivities:
             tagStep(
-                title: "What tends to affect you most?",
-                subtitle: "Pick the signals Gaia should emphasize first. You can adjust these later.",
+                title: copy.sensitivitiesTitle,
+                subtitle: copy.sensitivitiesSubtitle,
                 options: sensitivityOptions
             )
         case .healthContext:
             tagStep(
-                title: "Optional health context",
-                subtitle: "Self-reported context only. This helps Gaia weigh patterns more personally without making diagnoses.",
+                title: copy.healthContextTitle,
+                subtitle: copy.healthContextSubtitle,
                 options: healthContextOptions
             )
         case .location:
@@ -219,9 +408,9 @@ struct OnboardingFlowView: View {
     private var welcomeStep: some View {
         onboardingCard {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Understand how the world around you may connect to how you feel.")
+                Text(copy.welcomeTitle)
                     .font(.system(size: 32, weight: .bold, design: .rounded))
-                Text("We’ll set up just enough to make your first session useful, personal, and calm.")
+                Text(copy.welcomeSubtitle)
                     .font(.title3)
                     .foregroundStyle(.secondary)
                 Button("Get Started") {
@@ -236,8 +425,8 @@ struct OnboardingFlowView: View {
 
     private var modeStep: some View {
         selectionStep(
-            title: "How do you want to experience Gaia Eyes?",
-            subtitle: "The underlying signal model stays the same. Only the presentation changes.",
+            title: copy.modeTitle,
+            subtitle: copy.modeSubtitle,
             options: ExperienceMode.allCases,
             selected: profile.mode,
             titleFor: \.title,
@@ -251,8 +440,8 @@ struct OnboardingFlowView: View {
 
     private var guideStep: some View {
         selectionStep(
-            title: "Choose your guide",
-            subtitle: "A little personality, without changing the truth layer.",
+            title: copy.guideTitle,
+            subtitle: copy.guideSubtitle,
             options: GuideType.allCases,
             selected: profile.guide,
             titleFor: \.title,
@@ -266,8 +455,8 @@ struct OnboardingFlowView: View {
 
     private var toneStep: some View {
         selectionStep(
-            title: "How should Gaia Eyes speak to you?",
-            subtitle: "Tone changes the presentation, not the underlying truth.",
+            title: copy.toneTitle,
+            subtitle: copy.toneSubtitle,
             options: ToneStyle.allCases,
             selected: profile.tone,
             titleFor: \.title,
@@ -352,24 +541,24 @@ struct OnboardingFlowView: View {
     private var locationStep: some View {
         onboardingCard {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Where should Gaia Eyes track local conditions?")
+                Text(copy.locationTitle)
                     .font(.system(size: 30, weight: .bold, design: .rounded))
-                Text("Choose live GPS or a ZIP code. This powers local weather, pressure, air quality, and temperature context.")
+                Text(copy.locationSubtitle)
                     .font(.headline)
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 12) {
                     locationChoiceCard(
-                        title: "Use GPS",
-                        subtitle: "Best for live local conditions and travel days.",
+                        title: copy.useGPSOptionTitle,
+                        subtitle: copy.useGPSOptionSubtitle,
                         isSelected: useGPS
                     ) {
                         useGPS = true
                     }
 
                     locationChoiceCard(
-                        title: "Enter ZIP",
-                        subtitle: "Best when you want a fixed local baseline.",
+                        title: copy.enterZIPOptionTitle,
+                        subtitle: copy.enterZIPOptionSubtitle,
                         isSelected: !useGPS
                     ) {
                         useGPS = false
@@ -385,7 +574,7 @@ struct OnboardingFlowView: View {
                     .disabled(useGPS)
                     .opacity(useGPS ? 0.55 : 1.0)
 
-                Toggle("Use local insights", isOn: $localInsightsEnabled)
+                Toggle(copy.localInsightsToggleTitle, isOn: $localInsightsEnabled)
                     .toggleStyle(.switch)
 
                 Text(locationSummary)
@@ -433,13 +622,13 @@ struct OnboardingFlowView: View {
     private var healthKitStep: some View {
         onboardingCard {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Connect your health data")
+                Text(copy.healthDataTitle)
                     .font(.system(size: 30, weight: .bold, design: .rounded))
-                Text("Optional, but useful for sleep, heart rate, recovery trends, and faster pattern detection.")
+                Text(copy.healthDataSubtitle)
                     .font(.headline)
                     .foregroundStyle(.secondary)
 
-                Text("Choose what Gaia can read. You can leave something sensitive like cycle tracking unchecked and keep the rest.")
+                Text(copy.healthDataHint)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -479,7 +668,7 @@ struct OnboardingFlowView: View {
                 }
 
                 if selectedHealthPermissionKeys.isEmpty {
-                    Text("Nothing is selected. Tap Not Now, or check at least one metric to request Health access.")
+                    Text(copy.healthEmptySelectionBody)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -525,9 +714,9 @@ struct OnboardingFlowView: View {
     private var backfillStep: some View {
         onboardingCard {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Sync your last 30 days")
+                Text(copy.backfillTitle)
                     .font(.system(size: 30, weight: .bold, design: .rounded))
-                Text("Import recent data so Gaia Eyes can recognize patterns sooner.")
+                Text(copy.backfillSubtitle)
                     .font(.headline)
                     .foregroundStyle(.secondary)
 
@@ -582,38 +771,38 @@ struct OnboardingFlowView: View {
     private var notificationsStep: some View {
         onboardingCard {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Would you like helpful alerts?")
+                Text(copy.notificationsTitle)
                     .font(.system(size: 30, weight: .bold, design: .rounded))
-                Text("Choose the alert families you care about. Gaia can stay quiet until something meaningfully changes.")
+                Text(copy.notificationsSubtitle)
                     .font(.headline)
                     .foregroundStyle(.secondary)
 
-                Toggle("Enable Notifications", isOn: $notificationPreferences.enabled)
+                Toggle(copy.enableNotificationsTitle, isOn: $notificationPreferences.enabled)
                     .toggleStyle(.switch)
 
                 groupedNotificationSection(
-                    title: "Signal Alerts",
+                    title: copy.signalAlertsTitle,
                     enabled: $notificationPreferences.signalAlertsEnabled,
                     parentEnabled: notificationPreferences.enabled
                 ) {
-                    Toggle("Geomagnetic / Kp", isOn: $notificationPreferences.families.geomagnetic)
-                    Toggle("Solar wind / Bz coupling", isOn: $notificationPreferences.families.solarWind)
-                    Toggle("Flares / CME / SEP / DRAP", isOn: $notificationPreferences.families.flareCmeSep)
-                    Toggle("Schumann spike / elevated", isOn: $notificationPreferences.families.schumann)
+                    Toggle(copy.geomagneticAlertTitle, isOn: $notificationPreferences.families.geomagnetic)
+                    Toggle(copy.solarWindAlertTitle, isOn: $notificationPreferences.families.solarWind)
+                    Toggle(copy.flareAlertTitle, isOn: $notificationPreferences.families.flareCmeSep)
+                    Toggle(copy.schumannAlertTitle, isOn: $notificationPreferences.families.schumann)
                 }
 
                 groupedNotificationSection(
-                    title: "Local Condition Alerts",
+                    title: copy.localConditionAlertsTitle,
                     enabled: $notificationPreferences.localConditionAlertsEnabled,
                     parentEnabled: notificationPreferences.enabled
                 ) {
-                    Toggle("Pressure swing", isOn: $notificationPreferences.families.pressure)
-                    Toggle("AQI", isOn: $notificationPreferences.families.aqi)
-                    Toggle("Temperature swing", isOn: $notificationPreferences.families.temp)
+                    Toggle(copy.pressureAlertTitle, isOn: $notificationPreferences.families.pressure)
+                    Toggle(copy.aqiAlertTitle, isOn: $notificationPreferences.families.aqi)
+                    Toggle(copy.temperatureAlertTitle, isOn: $notificationPreferences.families.temp)
                 }
 
                 groupedNotificationSection(
-                    title: "Personalized Alerts",
+                    title: copy.personalizedAlertsTitle,
                     enabled: $notificationPreferences.personalizedGaugeAlertsEnabled,
                     parentEnabled: notificationPreferences.enabled
                 ) {
@@ -621,17 +810,17 @@ struct OnboardingFlowView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Symptom Follow-up Prompts")
+                    Text(copy.symptomFollowUpTitle)
                         .font(.subheadline.weight(.semibold))
                     Toggle("Symptom follow-up prompts", isOn: $notificationPreferences.symptomFollowupsEnabled)
-                    Text("Gaia can send a check-in after you log a symptom so it can learn the arc, not just the spike.")
+                    Text(copy.symptomFollowUpBody)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .disabled(!notificationPreferences.enabled)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Toggle("Quiet Hours", isOn: $notificationPreferences.quietHoursEnabled)
+                    Toggle(copy.quietHoursTitle, isOn: $notificationPreferences.quietHoursEnabled)
                     if notificationPreferences.quietHoursEnabled {
                         HStack {
                             TextField("Start 22:00", text: $notificationPreferences.quietStart)
@@ -644,7 +833,7 @@ struct OnboardingFlowView: View {
                 .disabled(!notificationPreferences.enabled)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Alert Sensitivity")
+                    Text(copy.alertSensitivityTitle)
                         .font(.subheadline.weight(.semibold))
                     Picker("Alert Sensitivity", selection: $notificationPreferences.sensitivity) {
                         Text("Minimal").tag("minimal")
@@ -703,7 +892,7 @@ struct OnboardingFlowView: View {
     private var activationStep: some View {
         onboardingCard {
             VStack(alignment: .leading, spacing: 18) {
-                Text("What matters now")
+                Text(copy.activationTitle)
                     .font(.system(size: 30, weight: .bold, design: .rounded))
                 Text(activationData.headline)
                     .font(.title2.weight(.semibold))

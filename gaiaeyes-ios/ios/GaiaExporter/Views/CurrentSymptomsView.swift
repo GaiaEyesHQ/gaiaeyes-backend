@@ -1,49 +1,81 @@
 import SwiftUI
 
-enum CurrentSymptomsPresentationMode {
-    case scientific
-    case mystical
-}
-
-enum CurrentSymptomsTone {
-    case straight
-    case balanced
-    case humorous
-}
-
 private struct CurrentSymptomsCopy {
     let pageTitle: String
     let subtitle: String
+    let activeNowTitle: String
+    let logSymptomTitle: String
+    let logSymptomsTitle: String
+    let timelineTitle: String
     let contributingTitle: String
+    let contributingEmptyBody: String
     let patternTitle: String
+    let patternEmptyBody: String
     let notesTitle: String
+    let notesEmptyBody: String
+    let notesPlaceholder: String
     let emptyTitle: String
     let emptyBody: String
     let followUpTitle: String
+    let followUpSyncingBody: String
+    let viewAllDriversTitle: String
+    let openAllDriversTitle: String
+    let editDetailsTitle: String
 
-    static func resolve(mode: CurrentSymptomsPresentationMode, tone: CurrentSymptomsTone) -> CurrentSymptomsCopy {
+    static func resolve(mode: ExperienceMode, tone: ToneStyle) -> CurrentSymptomsCopy {
+        let vocabulary = mode.copyVocabulary
         switch mode {
         case .scientific:
             return CurrentSymptomsCopy(
-                pageTitle: "Current Symptoms",
+                pageTitle: vocabulary.currentSymptomsLabel,
                 subtitle: "Updated from your recent logs and current conditions",
+                activeNowTitle: "Active Now",
+                logSymptomTitle: "Log symptom",
+                logSymptomsTitle: "Log symptoms",
+                timelineTitle: "Timeline",
                 contributingTitle: "Signals shaping this right now",
+                contributingEmptyBody: "When symptoms are active, the signals most likely to affect them will show up here.",
                 patternTitle: "What often matches your history",
+                patternEmptyBody: "We’re still learning what tends to line up with this.",
                 notesTitle: "Notes / Journal",
+                notesEmptyBody: "Nothing active to update right now.",
+                notesPlaceholder: "Worse this afternoon, improved after resting, felt better after allergy meds…",
                 emptyTitle: "Nothing active right now",
-                emptyBody: tone == .humorous ? "Nothing is waving a red flag right now. Log it if something changes." : "Nothing active right now. Log it if something changes.",
-                followUpTitle: "Follow-up check-ins"
+                emptyBody: tone.resolveCopy(
+                    balanced: "Nothing active right now. Log it if something changes.",
+                    humorous: "Nothing is waving a red flag right now. Log it if something changes."
+                ),
+                followUpTitle: "Follow-up check-ins",
+                followUpSyncingBody: "Follow-up settings are still syncing.",
+                viewAllDriversTitle: "View \(vocabulary.allDriversLabel)",
+                openAllDriversTitle: "Open \(vocabulary.allDriversLabel)",
+                editDetailsTitle: "Edit symptom details"
             )
         case .mystical:
             return CurrentSymptomsCopy(
-                pageTitle: "How You're Feeling Right Now",
+                pageTitle: vocabulary.currentSymptomsLabel,
                 subtitle: "Your recent logs and today’s conditions are shaping this view",
+                activeNowTitle: "Active Right Now",
+                logSymptomTitle: "Log symptom",
+                logSymptomsTitle: "Log symptoms",
+                timelineTitle: "Timeline",
                 contributingTitle: "What may be shaping this",
-                patternTitle: "What often matches your history",
+                contributingEmptyBody: "When symptoms are active, the conditions most likely to be shaping them will show up here.",
+                patternTitle: "What often echoes through your history",
+                patternEmptyBody: "We’re still learning what tends to move with this.",
                 notesTitle: "Notes / Reflections",
+                notesEmptyBody: "Nothing active to update right now.",
+                notesPlaceholder: "Worse this afternoon, improved after resting, felt better after allergy meds…",
                 emptyTitle: "Nothing active right now",
-                emptyBody: tone == .humorous ? "Your system looks quieter right now. If the plot thickens, log it." : "Your system looks quieter right now. If something shifts, log it here.",
-                followUpTitle: "Check-in reminders"
+                emptyBody: tone.resolveCopy(
+                    balanced: "Your system looks quieter right now. If something shifts, log it here.",
+                    humorous: "Your system looks quieter right now. If the plot thickens, log it."
+                ),
+                followUpTitle: "Check-in reminders",
+                followUpSyncingBody: "Check-in settings are still syncing.",
+                viewAllDriversTitle: "View \(vocabulary.allDriversLabel)",
+                openAllDriversTitle: "Open \(vocabulary.allDriversLabel)",
+                editDetailsTitle: "Edit symptom details"
             )
         }
     }
@@ -66,8 +98,8 @@ private func isCurrentSymptomsCancellation(_ error: Error) -> Bool {
 
 struct CurrentSymptomsView: View {
     let api: APIClient
-    var mode: CurrentSymptomsPresentationMode = .scientific
-    var tone: CurrentSymptomsTone = .balanced
+    var mode: ExperienceMode = .scientific
+    var tone: ToneStyle = .balanced
     var showsCloseButton: Bool = false
     let initialSnapshot: CurrentSymptomsSnapshot?
     let onLogMore: () -> Void
@@ -88,8 +120,8 @@ struct CurrentSymptomsView: View {
 
     init(
         api: APIClient,
-        mode: CurrentSymptomsPresentationMode = .scientific,
-        tone: CurrentSymptomsTone = .balanced,
+        mode: ExperienceMode = .scientific,
+        tone: ToneStyle = .balanced,
         showsCloseButton: Bool = false,
         initialSnapshot: CurrentSymptomsSnapshot? = nil,
         onLogMore: @escaping () -> Void,
@@ -112,8 +144,20 @@ struct CurrentSymptomsView: View {
         _severityDraft = State(initialValue: firstItem?.severity ?? firstItem?.originalSeverity ?? 5)
     }
 
+    private var vocabulary: CopyVocabulary {
+        mode.copyVocabulary
+    }
+
     private var copy: CurrentSymptomsCopy {
         CurrentSymptomsCopy.resolve(mode: mode, tone: tone)
+    }
+
+    private func translatedDriverLabel(for driver: CurrentSymptomDriver) -> String {
+        vocabulary.driverLabel(for: driver.key, fallback: driver.label)
+    }
+
+    private func translatedText(_ raw: String?) -> String? {
+        vocabulary.translating(raw)
     }
 
     private var activeItems: [CurrentSymptomItem] {
@@ -428,14 +472,14 @@ struct CurrentSymptomsView: View {
 
                 HStack(spacing: 10) {
                     Button(action: onLogMore) {
-                        Label("Log symptom", systemImage: "plus.circle.fill")
+                        Label(copy.logSymptomTitle, systemImage: "plus.circle.fill")
                     }
                     .buttonStyle(.borderedProminent)
 
                     NavigationLink {
                         CurrentSymptomsTimelineView(api: api)
                     } label: {
-                        Label("Timeline", systemImage: "clock.arrow.circlepath")
+                        Label(copy.timelineTitle, systemImage: "clock.arrow.circlepath")
                     }
                     .buttonStyle(.bordered)
                 }
@@ -447,7 +491,7 @@ struct CurrentSymptomsView: View {
         card {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Active Now")
+                    Text(copy.activeNowTitle)
                         .font(.headline)
                         .foregroundColor(.white)
                     Spacer()
@@ -466,7 +510,7 @@ struct CurrentSymptomsView: View {
                         Text(copy.emptyBody)
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.7))
-                        Button("Log symptoms") {
+                        Button(copy.logSymptomsTitle) {
                             onLogMore()
                         }
                         .buttonStyle(.bordered)
@@ -523,7 +567,7 @@ struct CurrentSymptomsView: View {
             Button {
                 openEditor(for: item)
             } label: {
-                Text("Edit symptom details")
+                Text(copy.editDetailsTitle)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.white.opacity(0.78))
             }
@@ -572,7 +616,7 @@ struct CurrentSymptomsView: View {
                     ForEach(drivers.prefix(4)) { driver in
                         VStack(alignment: .leading, spacing: 5) {
                             HStack {
-                                Text(driver.label)
+                                Text(translatedDriverLabel(for: driver))
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundColor(.white)
                                 Spacer()
@@ -583,7 +627,7 @@ struct CurrentSymptomsView: View {
                                 }
                             }
                             if let relation = driver.relation, !relation.isEmpty {
-                                Text(relation)
+                                Text(translatedText(relation) ?? relation)
                                     .font(.caption)
                                     .foregroundColor(.white.opacity(0.7))
                                     .fixedSize(horizontal: false, vertical: true)
@@ -597,18 +641,18 @@ struct CurrentSymptomsView: View {
                         .padding(.vertical, 2)
                     }
                     if let onOpenAllDrivers {
-                        Button("View All Drivers") {
+                        Button(copy.viewAllDriversTitle) {
                             onOpenAllDrivers(snapshot?.contributingDrivers.first?.key)
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                     }
                 } else {
-                    Text("When symptoms are active, the signals most likely to affect them will show up here.")
+                    Text(copy.contributingEmptyBody)
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
                     if let onOpenAllDrivers {
-                        Button("Open All Drivers") {
+                        Button(copy.openAllDriversTitle) {
                             onOpenAllDrivers(nil)
                         }
                         .buttonStyle(.bordered)
@@ -629,7 +673,10 @@ struct CurrentSymptomsView: View {
                 if let patternContext = snapshot?.patternContext, !patternContext.isEmpty {
                     ForEach(visiblePatternContext) { pattern in
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(pattern.text ?? "\(pattern.signal) matches your \(pattern.outcome.lowercased()) pattern.")
+                            Text(
+                                translatedText(pattern.text)
+                                ?? "\(vocabulary.driverLabel(for: pattern.signalKey, fallback: pattern.signal)) matches your \(pattern.outcome.lowercased()) pattern."
+                            )
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundColor(.white)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -650,7 +697,7 @@ struct CurrentSymptomsView: View {
                         .buttonStyle(.plain)
                     }
                 } else {
-                    Text("We're still learning what tends to line up with this.")
+                    Text(copy.patternEmptyBody)
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
                 }
@@ -666,7 +713,7 @@ struct CurrentSymptomsView: View {
                     .foregroundColor(.white)
 
                 if activeItems.isEmpty {
-                    Text("Nothing active to update right now.")
+                    Text(copy.notesEmptyBody)
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
                 } else {
@@ -703,7 +750,7 @@ struct CurrentSymptomsView: View {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(Color.white.opacity(0.05))
                         if noteDraft.isEmpty {
-                            Text("Worse this afternoon, improved after resting, felt better after allergy meds…")
+                            Text(copy.notesPlaceholder)
                                 .font(.caption)
                                 .foregroundColor(.white.opacity(0.35))
                                 .padding(.horizontal, 14)
@@ -758,7 +805,7 @@ struct CurrentSymptomsView: View {
                         indicatorChip(settings.cadence.capitalized, tint: Color(red: 0.35, green: 0.58, blue: 0.92))
                     }
                 } else {
-                    Text("Follow-up settings are still syncing.")
+                    Text(copy.followUpSyncingBody)
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
                 }
