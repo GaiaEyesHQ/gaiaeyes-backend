@@ -2398,10 +2398,11 @@ struct ContentView: View {
         }
     }
 
-    private func fetchSpaceOutlook() async {
+    private func fetchSpaceOutlook(days: Int = 3) async {
         let api = state.apiWithAuth()
+        let endpoint = "v1/space/forecast/outlook?days=\(max(1, min(7, days)))"
         do {
-            let payload: SpaceForecastOutlook = try await api.getJSON("v1/space/forecast/outlook", as: SpaceForecastOutlook.self, perRequestTimeout: 30)
+            let payload: SpaceForecastOutlook = try await api.getJSON(endpoint, as: SpaceForecastOutlook.self, perRequestTimeout: 30)
             await MainActor.run { applySpaceOutlook(payload) }
             return
         } catch is CancellationError {
@@ -2415,7 +2416,7 @@ struct ContentView: View {
                 return
             }
             do {
-                let env: Envelope<SpaceForecastOutlook> = try await api.getJSON("v1/space/forecast/outlook", as: Envelope<SpaceForecastOutlook>.self, perRequestTimeout: 30)
+                let env: Envelope<SpaceForecastOutlook> = try await api.getJSON(endpoint, as: Envelope<SpaceForecastOutlook>.self, perRequestTimeout: 30)
                 if let payload = env.payload {
                     await MainActor.run { applySpaceOutlook(payload) }
                 } else {
@@ -4326,7 +4327,7 @@ struct ContentView: View {
         let api = state.apiWithAuth()
         async let featuresTask: Void = fetchFeaturesToday(trigger: trigger, bypassGuard: trigger == .refresh)
         async let forecastTask: Void = fetchForecastSummary()
-        async let outlookTask: Void = fetchSpaceOutlook()
+        async let outlookTask: Void = fetchSpaceOutlook(days: 3)
         async let userOutlookTask: Void = fetchUserOutlook()
         async let symptomsTask: Void = fetchSymptoms(api: api)
         async let currentSymptomsTask: Void = fetchCurrentSymptomsSummary(api: api)
@@ -4363,7 +4364,7 @@ struct ContentView: View {
 
         async let featuresTask: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
         async let forecastTask: Void = fetchForecastSummary()
-        async let outlookTask: Void = fetchSpaceOutlook()
+        async let outlookTask: Void = fetchSpaceOutlook(days: 3)
         async let magnetosphereTask: Void = fetchMagnetosphere()
         _ = await (featuresTask, forecastTask, outlookTask, magnetosphereTask)
     }
@@ -7964,7 +7965,9 @@ struct ContentView: View {
         let series: SpaceSeries?
         let magnetosphere: MagnetosphereData?
         let onRefresh: () async -> Void
+        let onLoadFullForecast: () async -> Void
         @State private var showAllForecastDays: Bool = false
+        @State private var fullForecastLoading: Bool = false
 
         private func progress(_ value: Double?, max: Double) -> Double {
             guard let value, max > 0 else { return 0.12 }
@@ -8315,13 +8318,36 @@ struct ContentView: View {
                                         }
                                     }
 
-                                    if forecastDays.count > 3 {
-                                        Button(showAllForecastDays ? "Show fewer days" : "Show full 7-day forecast") {
-                                            showAllForecastDays.toggle()
+                                    if !showAllForecastDays || forecastDays.count > 3 {
+                                        let hasFullForecastLoaded = forecastDays.count > 3
+                                        Button(showAllForecastDays && hasFullForecastLoaded ? "Show fewer days" : "Show full 7-day forecast") {
+                                            if showAllForecastDays && hasFullForecastLoaded {
+                                                showAllForecastDays = false
+                                                return
+                                            }
+                                            Task {
+                                                if !hasFullForecastLoaded {
+                                                    await MainActor.run { fullForecastLoading = true }
+                                                    await onLoadFullForecast()
+                                                    await MainActor.run { fullForecastLoading = false }
+                                                }
+                                                await MainActor.run { showAllForecastDays = true }
+                                            }
                                         }
                                         .font(.caption.weight(.semibold))
                                         .foregroundColor(Color(red: 0.46, green: 0.7, blue: 1.0))
                                         .buttonStyle(.plain)
+                                        .disabled(fullForecastLoading)
+                                    }
+
+                                    if fullForecastLoading {
+                                        HStack(spacing: 8) {
+                                            ProgressView()
+                                                .scaleEffect(0.82)
+                                            Text("Loading the full 7-day forecast")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
                                     }
                                 }
                             }
@@ -9745,7 +9771,8 @@ struct ContentView: View {
                             outlook: resolvedOutlook,
                             series: seriesDetail,
                             magnetosphere: magnetosphere,
-                            onRefresh: { await fetchSpaceWeatherDetailData(force: true) }
+                            onRefresh: { await fetchSpaceWeatherDetailData(force: true) },
+                            onLoadFullForecast: { await fetchSpaceOutlook(days: 7) }
                         )
                         .task {
                             if !spaceWeatherDetailFetchInFlight &&

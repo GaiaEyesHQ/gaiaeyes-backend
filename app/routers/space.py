@@ -34,7 +34,7 @@ def _dbdt_tag_from_proxy(val: Optional[float]) -> str:
     return "high"
 # app/routers/space.py
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from psycopg.rows import dict_row
 
 from app.db import get_db
@@ -705,7 +705,7 @@ async def space_alerts(conn = Depends(get_db)):
 
 # --- Outlook (daily snapshot + "now") ---
 @router.get("/forecast/outlook")
-async def space_forecast_outlook(conn = Depends(get_db)) -> Dict[str, Any]:
+async def space_forecast_outlook(days: int = Query(7, ge=1, le=7), conn = Depends(get_db)) -> Dict[str, Any]:
     """
     Unified daily outlook used by website/app writers.
     Pulls the *daily snapshot* from marts.space_weather_daily (for today, UTC),
@@ -881,6 +881,8 @@ async def space_forecast_outlook(conn = Depends(get_db)) -> Dict[str, Any]:
         forecast_daily = serialize_space_forecast_rows(await ensure_space_forecast_daily(conn))
     except Exception:
         forecast_daily = []
+    if days and len(forecast_daily) > days:
+        forecast_daily = forecast_daily[:days]
 
     # ---- Build KP block ----
     kp_now = daily.get("kp_now")
@@ -1068,7 +1070,7 @@ async def space_forecast_summary(conn = Depends(get_db)) -> Dict[str, Any]:
     but trims the payload to: ok, updated, headline, confidence, kp, alerts, impacts.
     """
     # Reuse the outlook generator with the same DB cursor (FastAPI will inject `conn`)
-    resp = await space_forecast_outlook(conn)  # type: ignore
+    resp = await space_forecast_outlook(days=3, conn=conn)  # type: ignore
 
     # If outlook failed, bubble through the error
     if not isinstance(resp, dict) or not resp.get("ok"):
