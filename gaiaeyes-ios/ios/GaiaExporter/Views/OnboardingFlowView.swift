@@ -816,6 +816,36 @@ struct OnboardingFlowView: View {
                     Text(copy.symptomFollowUpBody)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if notificationPreferences.symptomFollowupsEnabled {
+                        Toggle("Allow push reminders", isOn: $notificationPreferences.symptomFollowupPushEnabled)
+                        Picker("Follow-up cadence", selection: $notificationPreferences.symptomFollowupCadence) {
+                            Text("Minimal").tag("minimal")
+                            Text("Balanced").tag("balanced")
+                            Text("Detailed").tag("detailed")
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                }
+                .disabled(!notificationPreferences.enabled)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Daily Check-In")
+                        .font(.subheadline.weight(.semibold))
+                    Toggle("Daily check-ins", isOn: $notificationPreferences.dailyCheckinsEnabled)
+                    Text("Keep a fast end-of-day or next-morning feedback loop so Gaia can compare the read with how the day actually felt.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if notificationPreferences.dailyCheckinsEnabled {
+                        Toggle("Allow push reminders", isOn: $notificationPreferences.dailyCheckinPushEnabled)
+                        Picker("Daily check-in cadence", selection: $notificationPreferences.dailyCheckinCadence) {
+                            Text("Minimal").tag("minimal")
+                            Text("Balanced").tag("balanced")
+                            Text("Detailed").tag("detailed")
+                        }
+                        .pickerStyle(.segmented)
+                        TextField("Reminder 20:00", text: $notificationPreferences.dailyCheckinReminderTime)
+                            .textFieldStyle(.roundedBorder)
+                    }
                 }
                 .disabled(!notificationPreferences.enabled)
 

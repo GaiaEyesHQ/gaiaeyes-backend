@@ -16,6 +16,8 @@ DEFAULT_NOTIFICATION_FAMILIES: Dict[str, bool] = {
     "aqi": True,
     "temp": True,
     "gauge_spikes": True,
+    "symptom_followups": False,
+    "daily_checkins": False,
 }
 
 DEFAULT_NOTIFICATION_PREFERENCES: Dict[str, Any] = {
@@ -28,6 +30,10 @@ DEFAULT_NOTIFICATION_PREFERENCES: Dict[str, Any] = {
     "quiet_end": "08:00",
     "time_zone": "UTC",
     "sensitivity": "normal",
+    "symptom_followups_enabled": False,
+    "symptom_followup_push_enabled": False,
+    "daily_checkins_enabled": False,
+    "daily_checkin_push_enabled": False,
     "families": dict(DEFAULT_NOTIFICATION_FAMILIES),
 }
 
@@ -44,6 +50,9 @@ FAMILY_COOLDOWN_HOURS: Dict[str, int] = {
     "sleep": 6,
     "heart": 6,
     "health_status": 6,
+    "symptom_followups": 6,
+    "daily_checkins": 24,
+    "digest": 6,
 }
 
 SEVERITY_RANK = {"info": 0, "watch": 1, "high": 2}
@@ -96,6 +105,10 @@ def normalize_preferences(raw: Dict[str, Any] | None) -> Dict[str, Any]:
     merged["time_zone"] = str(raw.get("time_zone") or merged["time_zone"])
     sensitivity = str(raw.get("sensitivity") or merged["sensitivity"]).strip().lower() or "normal"
     merged["sensitivity"] = sensitivity if sensitivity in {"minimal", "normal", "detailed"} else "normal"
+    merged["symptom_followups_enabled"] = bool(raw.get("symptom_followups_enabled", merged["symptom_followups_enabled"]))
+    merged["symptom_followup_push_enabled"] = bool(raw.get("symptom_followup_push_enabled", merged["symptom_followup_push_enabled"]))
+    merged["daily_checkins_enabled"] = bool(raw.get("daily_checkins_enabled", merged["daily_checkins_enabled"]))
+    merged["daily_checkin_push_enabled"] = bool(raw.get("daily_checkin_push_enabled", merged["daily_checkin_push_enabled"]))
     merged["families"] = normalize_families(raw.get("families"))
     return merged
 

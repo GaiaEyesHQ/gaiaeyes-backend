@@ -57,7 +57,22 @@ enum CurrentSymptomState: String, Codable, CaseIterable, Hashable {
     case new
     case ongoing
     case improving
+    case worse
     case resolved
+}
+
+struct CurrentSymptomFollowUpPrompt: Decodable, Identifiable, Hashable {
+    let id: String
+    let episodeId: String
+    let symptomCode: String
+    let symptomLabel: String
+    let questionText: String
+    let detailFocus: String?
+    let trigger: String?
+    let scheduledFor: String?
+    let deliveredAt: String?
+    let status: String?
+    let pushDeliveryEnabled: Bool
 }
 
 struct CurrentSymptomDriver: Decodable, Identifiable, Hashable {
@@ -99,6 +114,7 @@ struct CurrentSymptomItem: Decodable, Identifiable, Hashable {
     let patternHint: CurrentSymptomPatternHint?
     let gaugeKeys: [String]
     let currentContextBadge: String?
+    let pendingFollowUp: CurrentSymptomFollowUpPrompt?
 }
 
 struct CurrentSymptomsSummary: Decodable, Hashable {
@@ -106,6 +122,7 @@ struct CurrentSymptomsSummary: Decodable, Hashable {
     let newCount: Int
     let ongoingCount: Int
     let improvingCount: Int
+    let worseCount: Int
     let lastUpdatedAt: String?
     let followUpAvailable: Bool
 }
@@ -114,6 +131,7 @@ struct CurrentSymptomsFollowUpSettings: Decodable, Hashable {
     let notificationsEnabled: Bool
     let enabled: Bool
     let notificationFamilyEnabled: Bool
+    let pushEnabled: Bool
     let cadence: String
     let states: [String]
     let symptomCodes: [String]

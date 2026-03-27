@@ -88,6 +88,7 @@ struct SymptomEnvelopeTests {
                     "new_count": 0,
                     "ongoing_count": 1,
                     "improving_count": 0,
+                    "worse_count": 0,
                     "last_updated_at": "2026-03-23T11:45:00Z",
                     "follow_up_available": true
                 },
@@ -126,7 +127,20 @@ struct SymptomEnvelopeTests {
                             "text": "Pressure often matches your headache pattern."
                         },
                         "gauge_keys": ["pain", "focus"],
-                        "current_context_badge": "Pattern match"
+                        "current_context_badge": "Pattern match",
+                        "pending_follow_up": {
+                            "id": "prompt-1",
+                            "episode_id": "ep-1",
+                            "symptom_code": "HEADACHE",
+                            "symptom_label": "Headache",
+                            "question_text": "Still feeling that headache?",
+                            "detail_focus": "pain",
+                            "trigger": "logged",
+                            "scheduled_for": "2026-03-23T12:00:00Z",
+                            "delivered_at": "2026-03-23T12:05:00Z",
+                            "status": "pending",
+                            "push_delivery_enabled": true
+                        }
                     }
                 ],
                 "contributing_drivers": [],
@@ -135,8 +149,9 @@ struct SymptomEnvelopeTests {
                     "notifications_enabled": true,
                     "enabled": true,
                     "notification_family_enabled": true,
+                    "push_enabled": true,
                     "cadence": "balanced",
-                    "states": ["new", "ongoing", "improving"],
+                    "states": ["new", "ongoing", "improving", "worse"],
                     "symptom_codes": []
                 }
             }
@@ -150,9 +165,89 @@ struct SymptomEnvelopeTests {
         let snapshot = try #require(envelope.payload)
 
         #expect(snapshot.summary.activeCount == 1)
+        #expect(snapshot.summary.worseCount == 0)
         #expect(snapshot.items.first?.currentState == .ongoing)
+        #expect(snapshot.items.first?.pendingFollowUp?.questionText == "Still feeling that headache?")
         #expect(snapshot.items.first?.likelyDrivers.first?.key == "pressure")
         #expect(snapshot.followUpSettings.enabled == true)
+        #expect(snapshot.followUpSettings.pushEnabled == true)
+    }
+
+    @Test
+    func decodesDailyCheckInStatus() throws {
+        let payload = """
+        {
+            "ok": true,
+            "data": {
+                "prompt": {
+                    "id": "daily-1",
+                    "day": "2026-03-25",
+                    "phase": "next_morning",
+                    "question_text": "How did yesterday feel?",
+                    "scheduled_for": "2026-03-26T14:00:00Z",
+                    "delivered_at": "2026-03-26T14:01:00Z",
+                    "active_symptom_labels": ["Headache", "Fatigue"],
+                    "recent_symptom_codes": ["HEADACHE", "FATIGUE"],
+                    "pain_logged_recently": true,
+                    "energy_logged_recently": true,
+                    "mood_logged_recently": false,
+                    "sleep_logged_recently": true,
+                    "suggested_pain_types": ["sinus_pressure", "head_pressure"],
+                    "suggested_energy_details": ["drained", "brain_fog"],
+                    "suggested_mood_types": ["anxious"],
+                    "suggested_sleep_impacts": ["yes_strongly", "not_much"],
+                    "push_delivery_enabled": true,
+                    "status": "pending"
+                },
+                "latest_entry": {
+                    "day": "2026-03-24",
+                    "prompt_id": "daily-0",
+                    "compared_to_yesterday": "worse",
+                    "energy_level": "low",
+                    "usable_energy": "limited",
+                    "system_load": "heavy",
+                    "pain_level": "noticeable",
+                    "pain_type": "head_pressure",
+                    "energy_detail": "brain_fog",
+                    "mood_level": "slightly_off",
+                    "mood_type": "anxious",
+                    "sleep_impact": "yes_somewhat",
+                    "prediction_match": "partly_right",
+                    "note_text": "Rough morning, steadier later.",
+                    "completed_at": "2026-03-25T02:00:00Z"
+                },
+                "calibration_summary": {
+                    "window_days": 21,
+                    "total_checkins": 5,
+                    "mostly_right": 2,
+                    "partly_right": 2,
+                    "not_really": 1,
+                    "match_rate": 0.4,
+                    "resolved_count": 3,
+                    "improving_count": 4,
+                    "worse_count": 1
+                },
+                "settings": {
+                    "enabled": true,
+                    "push_enabled": true,
+                    "cadence": "balanced",
+                    "reminder_time": "20:00"
+                }
+            }
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let envelope = try decoder.decode(Envelope<DailyCheckInStatus>.self, from: payload)
+        let status = try #require(envelope.payload)
+
+        #expect(status.prompt?.phase == "next_morning")
+        #expect(status.prompt?.suggestedPainTypes == ["sinus_pressure", "head_pressure"])
+        #expect(status.latestEntry?.usableEnergy == "limited")
+        #expect(status.calibrationSummary.totalCheckins == 5)
+        #expect(status.settings.pushEnabled == true)
     }
 
     @Test

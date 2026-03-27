@@ -1831,6 +1831,10 @@ struct ContentView: View {
     @State private var showSymptomSheet: Bool = false
     @State private var showInsightsSymptomSheet: Bool = false
     @State private var showCurrentSymptomsSheet: Bool = false
+    @State private var dailyCheckInStatus: DailyCheckInStatus? = nil
+    @State private var dailyCheckInLoading: Bool = false
+    @State private var dailyCheckInError: String? = nil
+    @State private var showDailyCheckInSheet: Bool = false
     @State private var showAllDriversSheet: Bool = false
     @State private var allDriversFocusKey: String? = nil
     @State private var isSubmittingSymptom: Bool = false
@@ -3212,6 +3216,28 @@ struct ContentView: View {
         }
     }
 
+    private var followUpFilterPresets: [SymptomPreset] {
+        Array(symptomPresets.filter { $0.code != SymptomCodeHelper.fallbackCode }.prefix(8))
+    }
+
+    private func followUpSymptomCodeBinding(_ code: String) -> Binding<Bool> {
+        let normalized = normalize(code)
+        return Binding(
+            get: {
+                notificationPreferences.symptomFollowupSymptomCodes.contains(normalized)
+            },
+            set: { enabled in
+                if enabled {
+                    if !notificationPreferences.symptomFollowupSymptomCodes.contains(normalized) {
+                        notificationPreferences.symptomFollowupSymptomCodes.append(normalized)
+                    }
+                } else {
+                    notificationPreferences.symptomFollowupSymptomCodes.removeAll { $0 == normalized }
+                }
+            }
+        )
+    }
+
     private func requestHealthPermissionsForOnboarding() async -> Bool {
         await MainActor.run {
             healthPermissionsMessage = nil
@@ -3282,11 +3308,24 @@ struct ContentView: View {
     }
 
     private func handleIncomingPushRoute(_ route: GaiaPushRoute) {
-        pendingPushRoute = route
+        let targetType = route.targetType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         showMissionInsightsSheet = false
         showLocalConditionsSheet = false
         showSchumannDashboardSheet = false
         showMissionSettingsSheet = false
+        if targetType == "daily_checkin" {
+            pendingPushRoute = nil
+            showDailyCheckInSheet = true
+            Task { await fetchDailyCheckInStatus(api: state.apiWithAuth()) }
+            return
+        }
+        if targetType == "current_symptoms" || targetType == "symptoms" {
+            pendingPushRoute = nil
+            showCurrentSymptomsSheet = true
+            Task { await fetchCurrentSymptomsSummary(api: state.apiWithAuth()) }
+            return
+        }
+        pendingPushRoute = route
     }
 
     private func onboardingOptions(forHealthContext healthContextOnly: Bool) -> [OnboardingTagOption] {
@@ -4429,6 +4468,36 @@ struct ContentView: View {
         }
     }
 
+    private func fetchDailyCheckInStatus(api override: APIClient? = nil) async {
+        let api = override ?? state.apiWithAuth()
+        await MainActor.run {
+            dailyCheckInLoading = true
+            dailyCheckInError = nil
+        }
+        do {
+            let envelope = try await api.fetchDailyCheckInStatus()
+            if envelope.ok == false, envelope.data == nil {
+                await MainActor.run {
+                    dailyCheckInError = envelope.error ?? "Daily check-in unavailable"
+                    dailyCheckInLoading = false
+                }
+                return
+            }
+            await MainActor.run {
+                dailyCheckInStatus = envelope.payload
+                dailyCheckInLoading = false
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            await MainActor.run {
+                dailyCheckInError = error.localizedDescription
+                dailyCheckInLoading = false
+            }
+            appLog("[UI] daily check-in error: \(error.localizedDescription)")
+        }
+    }
+
     private func fetchInsightsHubData(trigger: FeaturesFetchTrigger = .initial) async {
         let api = state.apiWithAuth()
         async let featuresTask: Void = fetchFeaturesToday(trigger: trigger, bypassGuard: trigger == .refresh)
@@ -4829,6 +4898,7 @@ struct ContentView: View {
                 cameraCheckLoading: latestCameraCheckLoading,
                 cameraCheckError: latestCameraCheckError,
                 currentSymptomsSnapshot: currentSymptomsSnapshot,
+                dailyCheckInStatus: dailyCheckInStatus,
                 pushRoute: $pendingPushRoute,
                 fallbackTitle: fallbackFeatures?.postTitle,
                 fallbackBody: fallbackFeatures?.postBody,
@@ -4836,6 +4906,7 @@ struct ContentView: View {
                 errorMessage: ContentView.scrubError(dashboardError),
                 lastUpdatedText: dashboardLastUpdatedText,
                 onOpenCurrentSymptoms: { showCurrentSymptomsSheet = true },
+                onOpenDailyCheckIn: { showDailyCheckInSheet = true },
                 onOpenAllDrivers: { focusKey in
                     openAllDrivers(focus: focusKey)
                 },
@@ -4854,6 +4925,7 @@ struct ContentView: View {
             MissionMenuSectionView(
                 onAllDrivers: { openAllDrivers() },
                 onCurrentSymptoms: { showCurrentSymptomsSheet = true },
+                onDailyCheckIn: { showDailyCheckInSheet = true },
                 onSymptoms: { showSymptomSheet = true },
                 onInsights: { openMissionInsights() },
                 onLocalConditions: { showLocalConditionsSheet = true },
@@ -4879,6 +4951,7 @@ struct ContentView: View {
     private struct MissionMenuSectionView: View {
         let onAllDrivers: () -> Void
         let onCurrentSymptoms: () -> Void
+        let onDailyCheckIn: () -> Void
         let onSymptoms: () -> Void
         let onInsights: () -> Void
         let onLocalConditions: () -> Void
@@ -4896,6 +4969,7 @@ struct ContentView: View {
                         }
                         Button(action: onAllDrivers) { Label("All Drivers", systemImage: "list.bullet.rectangle.portrait") }
                         Button(action: onCurrentSymptoms) { Label("Current Symptoms", systemImage: "waveform.path.ecg.rectangle") }
+                        Button(action: onDailyCheckIn) { Label("Daily Check-In", systemImage: "checklist") }
                         Button(action: onSymptoms) { Label("Symptoms", systemImage: "plus.circle") }
                         Button(action: onInsights) { Label("Insights", systemImage: "chart.xyaxis.line") }
                         Button(action: onLocalConditions) { Label("Local", systemImage: "location.fill") }
@@ -4904,7 +4978,7 @@ struct ContentView: View {
                         Button(action: onResearch) { Label("Research", systemImage: "book.closed") }
                     }
                 }
-                Text("Quick links open dedicated views for all drivers, current symptoms, insights, local conditions, and Schumann.")
+                Text("Quick links open dedicated views for all drivers, current symptoms, daily check-ins, insights, local conditions, and Schumann.")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -4934,6 +5008,7 @@ struct ContentView: View {
         let cameraCheckLoading: Bool
         let cameraCheckError: String?
         let currentSymptomsSnapshot: CurrentSymptomsSnapshot?
+        let dailyCheckInStatus: DailyCheckInStatus?
         @Binding var pushRoute: GaiaPushRoute?
         let fallbackTitle: String?
         let fallbackBody: String?
@@ -4941,6 +5016,7 @@ struct ContentView: View {
         let errorMessage: String?
         let lastUpdatedText: String?
         let onOpenCurrentSymptoms: () -> Void
+        let onOpenDailyCheckIn: () -> Void
         let onOpenAllDrivers: (String?) -> Void
         let onQuickLog: (MissionControlQuickLogRequest) -> Void
         let onOpenCustomLog: (SymptomQueuedEvent) -> Void
@@ -6008,6 +6084,25 @@ struct ContentView: View {
             return "\(count) active right now: \(labels.joined(separator: ", "))"
         }
 
+        private var dailyCheckInSummaryLine: String {
+            guard let status = dailyCheckInStatus else {
+                return "Quick daily feedback helps Gaia compare the read with how the day actually felt."
+            }
+            if let prompt = status.prompt, prompt.status != "answered" {
+                if prompt.phase == "next_morning" {
+                    return "Yesterday’s quick check-in is ready."
+                }
+                return "Today’s quick check-in is ready."
+            }
+            if let latest = status.latestEntry, let completedAt = latest.completedAt, !completedAt.isEmpty {
+                return "Latest check-in saved for \(latest.day)."
+            }
+            if status.settings.enabled {
+                return "Daily check-ins are on and stay lightweight."
+            }
+            return "Turn on daily check-ins when a quick end-of-day feedback loop would help."
+        }
+
         @ViewBuilder
         private var currentSymptomsButton: some View {
             Button(action: onOpenCurrentSymptoms) {
@@ -6024,6 +6119,39 @@ struct ContentView: View {
                     Spacer()
                     if let count = currentSymptomsSnapshot?.summary.activeCount, count > 0 {
                         StatusPill("\(count) Active", severity: count >= 3 ? .warn : .ok)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white.opacity(0.45))
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
+        @ViewBuilder
+        private var dailyCheckInButton: some View {
+            Button(action: onOpenDailyCheckIn) {
+                HStack(alignment: .center, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Daily Check-In")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white)
+                        Text(dailyCheckInSummaryLine)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    if let prompt = dailyCheckInStatus?.prompt, prompt.status != "answered" {
+                        StatusPill("Ready", severity: .warn)
                     }
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
@@ -6159,6 +6287,7 @@ struct ContentView: View {
                                     .foregroundColor(.secondary)
                             }
                             currentSymptomsButton
+                            dailyCheckInButton
                         }
                         .padding(10)
                         .background(Color.black.opacity(0.20))
@@ -9591,7 +9720,8 @@ struct ContentView: View {
                 async let b: Void = fetchProfileSettings()
                 async let e: Void = fetchLatestCameraCheck()
                 async let f: Void = fetchCurrentSymptomsSummary(api: api)
-                _ = await (a, b, e, f)
+                async let g: Void = fetchDailyCheckInStatus(api: api)
+                _ = await (a, b, e, f, g)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
                 async let d: Void = refreshSymptomPresets(api: api)
                 _ = await (c, d)
@@ -9603,7 +9733,8 @@ struct ContentView: View {
                 async let b: Void = fetchProfileSettings()
                 async let e: Void = fetchLatestCameraCheck()
                 async let f: Void = fetchCurrentSymptomsSummary(api: api)
-                _ = await (a, b, e, f)
+                async let g: Void = fetchDailyCheckInStatus(api: api)
+                _ = await (a, b, e, f, g)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
                 async let d: Void = refreshSymptomPresets(api: api)
                 _ = await (c, d)
@@ -9736,6 +9867,12 @@ struct ContentView: View {
                 guard newValue else { return }
                 Task {
                     await fetchCurrentSymptomsSummary(api: state.apiWithAuth())
+                }
+            }
+            .onChange(of: showDailyCheckInSheet, initial: false) { _, newValue in
+                guard newValue else { return }
+                Task {
+                    await fetchDailyCheckInStatus(api: state.apiWithAuth())
                 }
             }
             .onChange(of: showMissionSettingsSheet, initial: false) { _, newValue in
@@ -10405,6 +10542,52 @@ struct ContentView: View {
                                         Text("Receive check-in prompts after you log a symptom so Gaia can learn how it changes over time.")
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
+                                        if notificationPreferences.symptomFollowupsEnabled {
+                                            Toggle("Allow push reminders", isOn: $notificationPreferences.symptomFollowupPushEnabled)
+                                            Picker("Follow-up cadence", selection: $notificationPreferences.symptomFollowupCadence) {
+                                                Text("Minimal").tag("minimal")
+                                                Text("Balanced").tag("balanced")
+                                                Text("Detailed").tag("detailed")
+                                            }
+                                            .pickerStyle(.segmented)
+
+                                            Text("Follow up on:")
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundColor(.secondary)
+                                            ForEach(followUpFilterPresets, id: \.id) { preset in
+                                                Toggle(preset.label, isOn: followUpSymptomCodeBinding(preset.code))
+                                            }
+                                            if !followUpFilterPresets.isEmpty {
+                                                Text("Leave them all off to follow up on any symptom you log.")
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                    }
+                                    .disabled(!notificationPreferences.enabled)
+
+                                    Divider()
+
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Daily Check-In")
+                                            .font(.subheadline.weight(.semibold))
+                                        Toggle("Daily check-ins", isOn: $notificationPreferences.dailyCheckinsEnabled)
+                                        Text("Keep end-of-day or next-morning feedback lightweight so Gaia can compare the read with how the day actually felt.")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        if notificationPreferences.dailyCheckinsEnabled {
+                                            Toggle("Allow push reminders", isOn: $notificationPreferences.dailyCheckinPushEnabled)
+                                            Picker("Daily check-in cadence", selection: $notificationPreferences.dailyCheckinCadence) {
+                                                Text("Minimal").tag("minimal")
+                                                Text("Balanced").tag("balanced")
+                                                Text("Detailed").tag("detailed")
+                                            }
+                                            .pickerStyle(.segmented)
+                                            TextField("Reminder time (20:00)", text: $notificationPreferences.dailyCheckinReminderTime)
+                                                .textFieldStyle(.roundedBorder)
+                                                .textInputAutocapitalization(.never)
+                                                .autocorrectionDisabled()
+                                        }
                                     }
                                     .disabled(!notificationPreferences.enabled)
 
@@ -10676,6 +10859,20 @@ struct ContentView: View {
                     },
                     onSnapshotChanged: { snapshot in
                         currentSymptomsSnapshot = snapshot
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: $showDailyCheckInSheet) {
+            NavigationStack {
+                DailyCheckInView(
+                    api: state.apiWithAuth(),
+                    mode: experienceProfile.mode,
+                    tone: experienceProfile.tone,
+                    showsCloseButton: true,
+                    initialStatus: dailyCheckInStatus,
+                    onStatusChanged: { status in
+                        dailyCheckInStatus = status
                     }
                 )
             }

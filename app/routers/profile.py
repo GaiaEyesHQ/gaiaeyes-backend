@@ -26,10 +26,11 @@ _NOTIFICATION_FAMILY_DEFAULTS: Dict[str, bool] = {
     "temp": True,
     "gauge_spikes": True,
     "symptom_followups": False,
+    "daily_checkins": False,
 }
 _NOTIFICATION_SENSITIVITIES = {"minimal", "normal", "detailed"}
-_SYMPTOM_FOLLOWUP_CADENCES = {"gentle", "balanced", "frequent"}
-_SYMPTOM_FOLLOWUP_STATES = {"new", "ongoing", "improving"}
+_FEEDBACK_CADENCES = {"minimal", "balanced", "detailed", "gentle", "frequent"}
+_SYMPTOM_FOLLOWUP_STATES = {"new", "ongoing", "improving", "worse"}
 _EXPERIENCE_MODES = {"scientific", "mystical"}
 _GUIDE_TYPES = {"cat", "robot", "dog"}
 _TONE_STYLES = {"straight", "balanced", "humorous"}
@@ -161,16 +162,34 @@ def _normalize_time_zone(value: Optional[str]) -> str:
     return candidate
 
 
-def _normalize_followup_cadence(value: Optional[str]) -> str:
+def _normalize_feedback_cadence(value: Optional[str], *, detail: str) -> str:
     normalized = str(value or "balanced").strip().lower() or "balanced"
-    if normalized not in _SYMPTOM_FOLLOWUP_CADENCES:
-        raise HTTPException(status_code=400, detail="invalid symptom follow-up cadence")
+    if normalized not in _FEEDBACK_CADENCES:
+        raise HTTPException(status_code=400, detail=detail)
+    if normalized == "gentle":
+        return "minimal"
+    if normalized == "frequent":
+        return "detailed"
     return normalized
+
+
+def _normalize_followup_cadence(value: Optional[str]) -> str:
+    try:
+        return _normalize_feedback_cadence(value, detail="invalid symptom follow-up cadence")
+    except HTTPException:
+        raise HTTPException(status_code=400, detail="invalid symptom follow-up cadence")
+
+
+def _normalize_daily_checkin_cadence(value: Optional[str]) -> str:
+    try:
+        return _normalize_feedback_cadence(value, detail="invalid daily check-in cadence")
+    except HTTPException:
+        raise HTTPException(status_code=400, detail="invalid daily check-in cadence")
 
 
 def _normalize_followup_states(value: Any) -> List[str]:
     if value is None:
-        return ["new", "ongoing", "improving"]
+        return ["new", "ongoing", "improving", "worse"]
     if isinstance(value, str):
         value = [part.strip() for part in value.split(",")]
     if not isinstance(value, list):
@@ -184,7 +203,7 @@ def _normalize_followup_states(value: Any) -> List[str]:
             raise HTTPException(status_code=400, detail="invalid symptom follow-up states")
         if token not in normalized:
             normalized.append(token)
-    return normalized or ["new", "ongoing", "improving"]
+    return normalized or ["new", "ongoing", "improving", "worse"]
 
 
 def _normalize_followup_codes(value: Any) -> List[str]:
@@ -223,9 +242,14 @@ def _default_notification_preferences() -> Dict[str, Any]:
         "local_condition_alerts_enabled": True,
         "personalized_gauge_alerts_enabled": True,
         "symptom_followups_enabled": False,
+        "symptom_followup_push_enabled": False,
         "symptom_followup_cadence": "balanced",
-        "symptom_followup_states": ["new", "ongoing", "improving"],
+        "symptom_followup_states": ["new", "ongoing", "improving", "worse"],
         "symptom_followup_symptom_codes": [],
+        "daily_checkins_enabled": False,
+        "daily_checkin_push_enabled": False,
+        "daily_checkin_cadence": "balanced",
+        "daily_checkin_reminder_time": "20:00",
         "quiet_hours_enabled": False,
         "quiet_start": "22:00",
         "quiet_end": "08:00",
@@ -255,7 +279,7 @@ def _notification_pref_select(column_names: List[str], column: str, fallback_sql
 
 
 def _notification_pref_placeholder(column: str) -> str:
-    if column in {"quiet_start", "quiet_end"}:
+    if column in {"quiet_start", "quiet_end", "daily_checkin_reminder_time"}:
         return "%s::time"
     if column in {"symptom_followup_states", "symptom_followup_symptom_codes"}:
         return "%s::text[]"
@@ -539,9 +563,14 @@ class NotificationPreferencesIn(BaseModel):
     local_condition_alerts_enabled: bool = True
     personalized_gauge_alerts_enabled: bool = True
     symptom_followups_enabled: bool = False
+    symptom_followup_push_enabled: bool = False
     symptom_followup_cadence: str = "balanced"
-    symptom_followup_states: List[str] = Field(default_factory=lambda: ["new", "ongoing", "improving"])
+    symptom_followup_states: List[str] = Field(default_factory=lambda: ["new", "ongoing", "improving", "worse"])
     symptom_followup_symptom_codes: List[str] = Field(default_factory=list)
+    daily_checkins_enabled: bool = False
+    daily_checkin_push_enabled: bool = False
+    daily_checkin_cadence: str = "balanced"
+    daily_checkin_reminder_time: str = "20:00"
     quiet_hours_enabled: bool = False
     quiet_start: str = "22:00"
     quiet_end: str = "08:00"
@@ -694,9 +723,14 @@ async def _fetch_notification_preferences(conn, user_id: str) -> Dict[str, Any]:
         _notification_pref_select(columns, "local_condition_alerts_enabled", "true"),
         _notification_pref_select(columns, "personalized_gauge_alerts_enabled", "true"),
         _notification_pref_select(columns, "symptom_followups_enabled", "false"),
+        _notification_pref_select(columns, "symptom_followup_push_enabled", "false"),
         _notification_pref_select(columns, "symptom_followup_cadence", "'balanced'::text"),
-        _notification_pref_select(columns, "symptom_followup_states", "array['new','ongoing','improving']::text[]"),
+        _notification_pref_select(columns, "symptom_followup_states", "array['new','ongoing','improving','worse']::text[]"),
         _notification_pref_select(columns, "symptom_followup_symptom_codes", "array[]::text[]"),
+        _notification_pref_select(columns, "daily_checkins_enabled", "false"),
+        _notification_pref_select(columns, "daily_checkin_push_enabled", "false"),
+        _notification_pref_select(columns, "daily_checkin_cadence", "'balanced'::text"),
+        "to_char(daily_checkin_reminder_time, 'HH24:MI') as daily_checkin_reminder_time" if "daily_checkin_reminder_time" in columns else f"'{defaults['daily_checkin_reminder_time']}'::text as daily_checkin_reminder_time",
         _notification_pref_select(columns, "quiet_hours_enabled", "false"),
         "to_char(quiet_start, 'HH24:MI') as quiet_start" if "quiet_start" in columns else f"'{defaults['quiet_start']}'::text as quiet_start",
         "to_char(quiet_end, 'HH24:MI') as quiet_end" if "quiet_end" in columns else f"'{defaults['quiet_end']}'::text as quiet_end",
@@ -727,9 +761,14 @@ async def _fetch_notification_preferences(conn, user_id: str) -> Dict[str, Any]:
         "local_condition_alerts_enabled": bool(row.get("local_condition_alerts_enabled")),
         "personalized_gauge_alerts_enabled": bool(row.get("personalized_gauge_alerts_enabled")),
         "symptom_followups_enabled": bool(row.get("symptom_followups_enabled")),
+        "symptom_followup_push_enabled": bool(row.get("symptom_followup_push_enabled")),
         "symptom_followup_cadence": _normalize_followup_cadence(row.get("symptom_followup_cadence")),
         "symptom_followup_states": _normalize_followup_states(row.get("symptom_followup_states")),
         "symptom_followup_symptom_codes": _normalize_followup_codes(row.get("symptom_followup_symptom_codes")),
+        "daily_checkins_enabled": bool(row.get("daily_checkins_enabled")),
+        "daily_checkin_push_enabled": bool(row.get("daily_checkin_push_enabled")),
+        "daily_checkin_cadence": _normalize_daily_checkin_cadence(row.get("daily_checkin_cadence")),
+        "daily_checkin_reminder_time": _normalize_clock_hhmm(row.get("daily_checkin_reminder_time"), fallback=defaults["daily_checkin_reminder_time"]),
         "quiet_hours_enabled": bool(row.get("quiet_hours_enabled")),
         "quiet_start": _normalize_clock_hhmm(row.get("quiet_start"), fallback=defaults["quiet_start"]),
         "quiet_end": _normalize_clock_hhmm(row.get("quiet_end"), fallback=defaults["quiet_end"]),
@@ -755,13 +794,16 @@ async def profile_notifications_upsert(
     now = datetime.now(timezone.utc)
     quiet_start = _normalize_clock_hhmm(payload.quiet_start, fallback="22:00")
     quiet_end = _normalize_clock_hhmm(payload.quiet_end, fallback="08:00")
+    daily_checkin_reminder_time = _normalize_clock_hhmm(payload.daily_checkin_reminder_time, fallback="20:00")
     time_zone_name = _normalize_time_zone(payload.time_zone)
     sensitivity = _normalize_notification_sensitivity(payload.sensitivity)
     families = _normalize_notification_families(payload.families)
     families["symptom_followups"] = bool(payload.symptom_followups_enabled)
+    families["daily_checkins"] = bool(payload.daily_checkins_enabled)
     followup_cadence = _normalize_followup_cadence(payload.symptom_followup_cadence)
     followup_states = _normalize_followup_states(payload.symptom_followup_states)
     followup_codes = _normalize_followup_codes(payload.symptom_followup_symptom_codes)
+    daily_checkin_cadence = _normalize_daily_checkin_cadence(payload.daily_checkin_cadence)
     columns = await _table_columns(conn, "app", "user_notification_preferences")
     if not columns or "user_id" not in columns:
         return {"ok": False, "error": "app.user_notification_preferences table unavailable"}
@@ -775,18 +817,27 @@ async def profile_notifications_upsert(
         "quiet_hours_enabled": bool(payload.quiet_hours_enabled),
         "quiet_start": quiet_start,
         "quiet_end": quiet_end,
+        "daily_checkin_reminder_time": daily_checkin_reminder_time,
         "time_zone": time_zone_name,
         "sensitivity": sensitivity,
         "families": json.dumps(families, separators=(",", ":"), sort_keys=True),
     }
     if "symptom_followups_enabled" in columns:
         values_by_column["symptom_followups_enabled"] = bool(payload.symptom_followups_enabled)
+    if "symptom_followup_push_enabled" in columns:
+        values_by_column["symptom_followup_push_enabled"] = bool(payload.symptom_followup_push_enabled)
     if "symptom_followup_cadence" in columns:
         values_by_column["symptom_followup_cadence"] = followup_cadence
     if "symptom_followup_states" in columns:
         values_by_column["symptom_followup_states"] = followup_states
     if "symptom_followup_symptom_codes" in columns:
         values_by_column["symptom_followup_symptom_codes"] = followup_codes
+    if "daily_checkins_enabled" in columns:
+        values_by_column["daily_checkins_enabled"] = bool(payload.daily_checkins_enabled)
+    if "daily_checkin_push_enabled" in columns:
+        values_by_column["daily_checkin_push_enabled"] = bool(payload.daily_checkin_push_enabled)
+    if "daily_checkin_cadence" in columns:
+        values_by_column["daily_checkin_cadence"] = daily_checkin_cadence
     if "created_at" in columns:
         values_by_column["created_at"] = now
     if "updated_at" in columns:

@@ -9,7 +9,7 @@ from uuid import UUID
 from psycopg.rows import dict_row
 
 UTC = timezone.utc
-CURRENT_SYMPTOM_STATES = ("new", "ongoing", "improving", "resolved")
+CURRENT_SYMPTOM_STATES = ("new", "ongoing", "improving", "worse", "resolved")
 
 
 def _normalize_ts(ts: Optional[datetime]) -> Optional[datetime]:
@@ -264,10 +264,13 @@ async def record_symptom_episode_update(
     note_text: Optional[str] = None,
     occurred_at: Optional[datetime] = None,
     source: str = "ios",
+    update_kind: Optional[str] = None,
+    metadata: Optional[dict] = None,
 ) -> dict:
     normalized_state = _normalize_state(state) if state is not None else None
     normalized_note = _normalize_note(note_text)
     effective_ts = _normalize_ts(occurred_at) or datetime.now(UTC)
+    normalized_metadata = metadata or {}
 
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
@@ -293,7 +296,27 @@ async def record_symptom_episode_update(
 
         next_state = normalized_state or _normalize_state(existing.get("current_state"))
         next_severity = severity if severity is not None else existing.get("current_severity") or existing.get("original_severity")
-        update_kind = "state_change" if normalized_state is not None else ("note" if normalized_note else "severity_update")
+        resolved_update_kind = update_kind or ("state_change" if normalized_state is not None else ("note" if normalized_note else "severity_update"))
+        follow_up_state_payload = None
+        if resolved_update_kind == "follow_up":
+            follow_up_state_payload = {
+                "status": "answered",
+                "answered_at": _serialize_ts(effective_ts),
+                "last_response_state": next_state,
+            }
+            if normalized_metadata:
+                prompt_id = normalized_metadata.get("prompt_id")
+                if prompt_id:
+                    follow_up_state_payload["latest_prompt_id"] = str(prompt_id)
+                detail_choice = normalized_metadata.get("detail_choice")
+                if detail_choice:
+                    follow_up_state_payload["detail_choice"] = str(detail_choice)
+                detail_text = normalized_metadata.get("detail_text")
+                if detail_text:
+                    follow_up_state_payload["detail_text"] = str(detail_text)
+                time_bucket = normalized_metadata.get("time_bucket")
+                if time_bucket:
+                    follow_up_state_payload["time_bucket"] = str(time_bucket)
 
         await cur.execute(
             """
@@ -311,6 +334,10 @@ async def record_symptom_episode_update(
                        when %s = 'resolved' then %s
                        when %s::text is not null then null
                        else resolution_ts
+                   end,
+                   follow_up_state = case
+                       when %s::jsonb is null then follow_up_state
+                       else %s::jsonb
                    end,
                    latest_note_text = coalesce(%s::text, latest_note_text),
                    latest_note_at = case when %s::text is null then latest_note_at else %s end,
@@ -341,6 +368,8 @@ async def record_symptom_episode_update(
                 next_state,
                 effective_ts,
                 normalized_state,
+                json.dumps(follow_up_state_payload, separators=(",", ":"), sort_keys=True) if follow_up_state_payload else None,
+                json.dumps(follow_up_state_payload, separators=(",", ":"), sort_keys=True) if follow_up_state_payload else None,
                 normalized_note,
                 normalized_note,
                 effective_ts,
@@ -361,17 +390,19 @@ async def record_symptom_episode_update(
                 severity,
                 note_text,
                 occurred_at,
+                metadata,
                 source
-            ) values (%s, %s, %s, %s, %s, %s, %s, %s)
+            ) values (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
             """,
             (
                 episode_id,
                 user_id,
-                update_kind,
+                resolved_update_kind,
                 normalized_state,
                 next_severity,
                 normalized_note,
                 effective_ts,
+                json.dumps(normalized_metadata, separators=(",", ":"), sort_keys=True),
                 source,
             ),
             prepare=False,
@@ -784,8 +815,9 @@ async def fetch_symptom_follow_up_settings(conn, user_id: str) -> dict:
         "notifications_enabled": False,
         "enabled": False,
         "notification_family_enabled": False,
+        "push_enabled": False,
         "cadence": "balanced",
-        "states": ["new", "ongoing", "improving"],
+        "states": ["new", "ongoing", "improving", "worse"],
         "symptom_codes": [],
     }
 
@@ -807,9 +839,14 @@ async def fetch_symptom_follow_up_settings(conn, user_id: str) -> dict:
             else "'balanced'::text as symptom_followup_cadence"
         ),
         (
+            "symptom_followup_push_enabled"
+            if "symptom_followup_push_enabled" in columns
+            else "false as symptom_followup_push_enabled"
+        ),
+        (
             "symptom_followup_states"
             if "symptom_followup_states" in columns
-            else "array['new','ongoing','improving']::text[] as symptom_followup_states"
+            else "array['new','ongoing','improving','worse']::text[] as symptom_followup_states"
         ),
         (
             "symptom_followup_symptom_codes"
@@ -839,6 +876,12 @@ async def fetch_symptom_follow_up_settings(conn, user_id: str) -> dict:
     if isinstance(families, dict):
         family_enabled = bool(families.get("symptom_followups"))
 
+    cadence = str(row.get("symptom_followup_cadence") or "balanced").strip().lower() or "balanced"
+    if cadence == "gentle":
+        cadence = "minimal"
+    elif cadence == "frequent":
+        cadence = "detailed"
+
     states = [state for state in (row.get("symptom_followup_states") or []) if state]
     symptom_codes = [code for code in (row.get("symptom_followup_symptom_codes") or []) if code]
 
@@ -846,7 +889,8 @@ async def fetch_symptom_follow_up_settings(conn, user_id: str) -> dict:
         "notifications_enabled": bool(row.get("enabled")),
         "enabled": bool(row.get("symptom_followups_enabled")),
         "notification_family_enabled": family_enabled,
-        "cadence": str(row.get("symptom_followup_cadence") or "balanced"),
+        "push_enabled": bool(row.get("symptom_followup_push_enabled")) or family_enabled,
+        "cadence": cadence,
         "states": states or defaults["states"],
         "symptom_codes": symptom_codes,
     }

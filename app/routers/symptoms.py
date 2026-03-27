@@ -23,6 +23,7 @@ from services.patterns.personal_relevance import (
     resolve_current_drivers,
 )
 from ..db import get_db
+from ..db import feedback as feedback_db
 from ..db import symptoms as symptoms_db
 
 router = APIRouter(prefix="/symptoms", tags=["symptoms"])
@@ -156,6 +157,20 @@ class CurrentSymptomPatternOut(BaseModel):
     text: Optional[str] = None
 
 
+class CurrentSymptomPromptOut(BaseModel):
+    id: str
+    episode_id: str
+    symptom_code: str
+    symptom_label: str
+    question_text: str
+    detail_focus: Optional[str] = None
+    trigger: Optional[str] = None
+    scheduled_for: Optional[str] = None
+    delivered_at: Optional[str] = None
+    status: Optional[str] = None
+    push_delivery_enabled: bool = False
+
+
 class CurrentSymptomItemOut(BaseModel):
     id: str
     symptom_code: str
@@ -171,6 +186,7 @@ class CurrentSymptomItemOut(BaseModel):
     pattern_hint: Optional[CurrentSymptomPatternOut] = None
     gauge_keys: List[str] = Field(default_factory=list)
     current_context_badge: Optional[str] = None
+    pending_follow_up: Optional[CurrentSymptomPromptOut] = None
 
 
 class CurrentSymptomSummaryOut(BaseModel):
@@ -178,6 +194,7 @@ class CurrentSymptomSummaryOut(BaseModel):
     new_count: int = 0
     ongoing_count: int = 0
     improving_count: int = 0
+    worse_count: int = 0
     last_updated_at: Optional[str] = None
     follow_up_available: bool = False
 
@@ -186,6 +203,7 @@ class CurrentSymptomFollowUpOut(BaseModel):
     notifications_enabled: bool = False
     enabled: bool = False
     notification_family_enabled: bool = False
+    push_enabled: bool = False
     cadence: str = "balanced"
     states: List[str] = Field(default_factory=list)
     symptom_codes: List[str] = Field(default_factory=list)
@@ -235,6 +253,33 @@ class CurrentSymptomTimelineResponse(SymptomEnvelope):
     data: List[CurrentSymptomTimelineEntryOut] = Field(default_factory=list)
 
 
+class SymptomFollowUpResponseIn(BaseModel):
+    state: str = Field(..., min_length=1)
+    detail_choice: Optional[str] = None
+    detail_text: Optional[str] = None
+    note_text: Optional[str] = None
+    time_bucket: Optional[str] = None
+    ts_utc: Optional[datetime] = None
+
+
+class SymptomPromptActionIn(BaseModel):
+    action: str = "snooze"
+    snooze_hours: Optional[int] = Field(default=None, ge=1, le=48)
+
+
+class SymptomFollowUpPromptResponse(BaseModel):
+    prompt: CurrentSymptomPromptOut
+    episode: CurrentSymptomItemOut
+
+
+class SymptomFollowUpPromptEnvelope(SymptomEnvelope):
+    data: Optional[SymptomFollowUpPromptResponse] = None
+
+
+class SymptomFollowUpPromptActionEnvelope(SymptomEnvelope):
+    data: Optional[CurrentSymptomPromptOut] = None
+
+
 def _normalize_symptom_code(value: str) -> str:
     return value.strip().replace(" ", "_").replace("-", "_").upper()
 
@@ -245,7 +290,7 @@ def _storage_symptom_code(value: str) -> str:
 
 def _normalize_current_state(value: Optional[str]) -> str:
     token = str(value or "new").strip().lower()
-    return token if token in {"new", "ongoing", "improving", "resolved"} else "new"
+    return token if token in {"new", "ongoing", "improving", "worse", "resolved"} else "new"
 
 
 def _trimmed_text(value: Optional[str]) -> Optional[str]:
@@ -339,6 +384,8 @@ def _current_context_badge(
 ) -> Optional[str]:
     if state == "new":
         return "Recently logged"
+    if state == "worse":
+        return "Needs another look"
     if pattern_hint is not None:
         return "Pattern match"
     if likely_driver_count > 0:
@@ -346,6 +393,22 @@ def _current_context_badge(
     if state == "improving":
         return "Trending better"
     return None
+
+
+def _build_prompt_out(row: Dict[str, Any]) -> CurrentSymptomPromptOut:
+    return CurrentSymptomPromptOut(
+        id=str(row.get("id") or ""),
+        episode_id=str(row.get("episode_id") or ""),
+        symptom_code=_normalize_symptom_code(str(row.get("symptom_code") or "")),
+        symptom_label=str(row.get("symptom_label") or _label_from_code(str(row.get("symptom_code") or ""))),
+        question_text=str(row.get("question_text") or ""),
+        detail_focus=_trimmed_text(row.get("detail_focus")),
+        trigger=_trimmed_text(row.get("trigger")),
+        scheduled_for=row.get("scheduled_for"),
+        delivered_at=row.get("delivered_at"),
+        status=_trimmed_text(row.get("status")),
+        push_delivery_enabled=bool(row.get("push_delivery_enabled")),
+    )
 
 
 async def _build_current_symptoms_payload(
@@ -371,6 +434,7 @@ async def _build_current_symptoms_payload(
                 new_count=0,
                 ongoing_count=0,
                 improving_count=0,
+                worse_count=0,
                 last_updated_at=None,
                 follow_up_available=False,
             ),
@@ -381,6 +445,7 @@ async def _build_current_symptoms_payload(
                 notifications_enabled=bool(follow_up.get("notifications_enabled")),
                 enabled=bool(follow_up.get("enabled")),
                 notification_family_enabled=bool(follow_up.get("notification_family_enabled")),
+                push_enabled=bool(follow_up.get("push_enabled")),
                 cadence=str(follow_up.get("cadence") or "balanced"),
                 states=[_normalize_current_state(value) for value in (follow_up.get("states") or [])],
                 symptom_codes=[_normalize_symptom_code(value) for value in (follow_up.get("symptom_codes") or []) if value],
@@ -468,6 +533,28 @@ async def _build_current_symptoms_payload(
         )
         items.append(item)
 
+    pending_follow_ups: Dict[str, CurrentSymptomPromptOut] = {}
+    if items:
+        try:
+            prompt_rows = await feedback_db.fetch_due_symptom_follow_up_prompts(
+                conn,
+                user_id,
+                episode_ids=[item.id for item in items if item.id],
+            )
+            pending_follow_ups = {
+                str(prompt.get("episode_id") or ""): _build_prompt_out(prompt)
+                for prompt in prompt_rows or []
+                if prompt.get("episode_id")
+            }
+        except Exception:
+            pending_follow_ups = {}
+
+    if pending_follow_ups:
+        items = [
+            item.model_copy(update={"pending_follow_up": pending_follow_ups.get(item.id)})
+            for item in items
+        ]
+
     contributing_drivers: List[CurrentSymptomDriverOut] = []
     if items:
         for driver in ranked_drivers[:4]:
@@ -498,8 +585,9 @@ async def _build_current_symptoms_payload(
         new_count=sum(1 for item in items if item.current_state == "new"),
         ongoing_count=sum(1 for item in items if item.current_state == "ongoing"),
         improving_count=sum(1 for item in items if item.current_state == "improving"),
+        worse_count=sum(1 for item in items if item.current_state == "worse"),
         last_updated_at=last_updated_at,
-        follow_up_available=bool(items) and bool(follow_up.get("enabled") or follow_up.get("notification_family_enabled")),
+        follow_up_available=bool(pending_follow_ups) or (bool(items) and bool(follow_up.get("enabled") or follow_up.get("notification_family_enabled"))),
     )
 
     return CurrentSymptomsSnapshotOut(
@@ -513,6 +601,7 @@ async def _build_current_symptoms_payload(
             notifications_enabled=bool(follow_up.get("notifications_enabled")),
             enabled=bool(follow_up.get("enabled")),
             notification_family_enabled=bool(follow_up.get("notification_family_enabled")),
+            push_enabled=bool(follow_up.get("push_enabled")),
             cadence=str(follow_up.get("cadence") or "balanced"),
             states=[_normalize_current_state(value) for value in (follow_up.get("states") or [])],
             symptom_codes=[_normalize_symptom_code(value) for value in (follow_up.get("symptom_codes") or []) if value],
@@ -538,6 +627,7 @@ def _build_current_symptom_item_out(row: Dict[str, Any]) -> CurrentSymptomItemOu
         pattern_hint=pattern_hint,
         gauge_keys=_gauge_keys_for_symptom(str(row.get("symptom_code") or "")),
         current_context_badge="Resolved" if state == "resolved" else _current_context_badge(state=state, likely_driver_count=0, pattern_hint=pattern_hint),
+        pending_follow_up=None,
     )
 
 
@@ -664,8 +754,9 @@ async def create_symptom_event(
         )
     if not result.get("id") or not result.get("ts_utc"):
         raise HTTPException(status_code=500, detail="Failed to persist symptom event")
+    episode = None
     try:
-        await symptoms_db.ensure_symptom_episode_for_event(
+        episode = await symptoms_db.ensure_symptom_episode_for_event(
             conn,
             user_id,
             symptom_event_id=str(result["id"]),
@@ -681,6 +772,22 @@ async def create_symptom_event(
             result.get("id"),
             exc,
         )
+    if episode and episode.get("id"):
+        try:
+            await feedback_db.maybe_schedule_symptom_follow_up(
+                conn,
+                user_id,
+                episode_id=str(episode["id"]),
+                trigger="logged",
+                reference_ts=payload.ts_utc,
+            )
+        except Exception as exc:  # pragma: no cover - defensive rollout fallback
+            logger.warning(
+                "symptom follow-up schedule failed user=%s episode=%s err=%s",
+                user_id,
+                episode.get("id"),
+                exc,
+            )
     await _commit_if_supported(conn)
     await _refresh_gauges_for_symptom(user_id, result["ts_utc"])
     data = SymptomEventData(id=result["id"], ts_utc=result["ts_utc"])
@@ -922,10 +1029,101 @@ async def update_current_symptom(
         )
 
     await _commit_if_supported(conn)
+    try:
+        if _normalize_current_state(row.get("current_state")) == "resolved":
+            await feedback_db._expire_episode_prompts(conn, user_id, episode_id)
+        else:
+            await feedback_db.maybe_schedule_symptom_follow_up(
+                conn,
+                user_id,
+                episode_id=episode_id,
+                trigger="manual_update",
+                reference_ts=payload.ts_utc,
+            )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.warning("symptom follow-up resync failed user=%s episode=%s err=%s", user_id, episode_id, exc)
+    await _commit_if_supported(conn)
     refresh_ts = str(row.get("last_interaction_at") or row.get("state_updated_at") or row.get("started_at") or "")
     if refresh_ts:
         await _refresh_gauges_for_symptom(user_id, refresh_ts)
     return _success(CurrentSymptomItemResponse(data=_build_current_symptom_item_out(row)))
+
+
+@router.post("/follow-ups/{prompt_id}/respond", response_model=SymptomFollowUpPromptEnvelope)
+async def respond_symptom_follow_up(
+    prompt_id: str,
+    payload: SymptomFollowUpResponseIn,
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    try:
+        result = await feedback_db.respond_symptom_follow_up(
+            conn,
+            user_id,
+            prompt_id,
+            state=_normalize_current_state(payload.state),
+            detail_choice=_trimmed_text(payload.detail_choice),
+            detail_text=_trimmed_text(payload.detail_text),
+            note_text=_trimmed_text(payload.note_text),
+            time_bucket=_trimmed_text(payload.time_bucket),
+            responded_at=payload.ts_utc,
+        )
+    except Exception as exc:  # pragma: no cover - exercised via tests
+        logger.exception("failed to respond to symptom follow-up", extra={"user_id": user_id, "prompt_id": prompt_id})
+        return _failure(
+            SymptomFollowUpPromptEnvelope(
+                ok=False,
+                data=None,
+                error=_error_text(exc),
+                friendly_error=_ERR_RECORD_CURRENT_UPDATE,
+            )
+        )
+
+    await _commit_if_supported(conn)
+    episode = result.get("episode") or {}
+    refresh_ts = str(episode.get("last_interaction_at") or episode.get("state_updated_at") or episode.get("started_at") or "")
+    if refresh_ts:
+        await _refresh_gauges_for_symptom(user_id, refresh_ts)
+    return _success(
+        SymptomFollowUpPromptEnvelope(
+            data=SymptomFollowUpPromptResponse(
+                prompt=_build_prompt_out(result.get("prompt") or {}),
+                episode=_build_current_symptom_item_out(episode),
+            )
+        )
+    )
+
+
+@router.post("/follow-ups/{prompt_id}/dismiss", response_model=SymptomFollowUpPromptActionEnvelope)
+async def dismiss_symptom_follow_up(
+    prompt_id: str,
+    payload: SymptomPromptActionIn,
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    try:
+        prompt = await feedback_db.dismiss_symptom_follow_up(
+            conn,
+            user_id,
+            prompt_id,
+            action=payload.action,
+            snooze_hours=payload.snooze_hours,
+        )
+    except Exception as exc:  # pragma: no cover - exercised via tests
+        logger.exception("failed to dismiss symptom follow-up", extra={"user_id": user_id, "prompt_id": prompt_id})
+        return _failure(
+            SymptomFollowUpPromptActionEnvelope(
+                ok=False,
+                data=None,
+                error=_error_text(exc),
+                friendly_error=_ERR_RECORD_CURRENT_UPDATE,
+            )
+        )
+
+    await _commit_if_supported(conn)
+    return _success(SymptomFollowUpPromptActionEnvelope(data=_build_prompt_out(prompt)))
 
 
 @router.delete("/current/{episode_id}", response_model=CurrentSymptomDeleteResponse)

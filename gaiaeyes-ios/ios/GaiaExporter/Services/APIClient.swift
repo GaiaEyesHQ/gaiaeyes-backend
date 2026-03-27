@@ -478,6 +478,77 @@ final class APIClient {
         }
     }
 
+    private struct SymptomFollowUpResponsePayload: Encodable {
+        let state: String
+        let detailChoice: String?
+        let detailText: String?
+        let noteText: String?
+        let timeBucket: String?
+        let tsUtc: String?
+
+        enum CodingKeys: String, CodingKey {
+            case state
+            case detailChoice = "detail_choice"
+            case detailText = "detail_text"
+            case noteText = "note_text"
+            case timeBucket = "time_bucket"
+            case tsUtc = "ts_utc"
+        }
+    }
+
+    private struct PromptActionPayload: Encodable {
+        let action: String
+        let snoozeHours: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case action
+            case snoozeHours = "snooze_hours"
+        }
+    }
+
+    private struct DailyCheckInEntryPayload: Encodable {
+        let promptId: String?
+        let day: String
+        let comparedToYesterday: String
+        let energyLevel: String
+        let usableEnergy: String
+        let systemLoad: String
+        let painLevel: String
+        let painType: String?
+        let energyDetail: String?
+        let moodLevel: String
+        let moodType: String?
+        let sleepImpact: String?
+        let predictionMatch: String?
+        let noteText: String?
+        let completedAt: String?
+
+        enum CodingKeys: String, CodingKey {
+            case promptId = "prompt_id"
+            case day
+            case comparedToYesterday = "compared_to_yesterday"
+            case energyLevel = "energy_level"
+            case usableEnergy = "usable_energy"
+            case systemLoad = "system_load"
+            case painLevel = "pain_level"
+            case painType = "pain_type"
+            case energyDetail = "energy_detail"
+            case moodLevel = "mood_level"
+            case moodType = "mood_type"
+            case sleepImpact = "sleep_impact"
+            case predictionMatch = "prediction_match"
+            case noteText = "note_text"
+            case completedAt = "completed_at"
+        }
+    }
+
+    private func iso8601String(_ date: Date?) -> String? {
+        guard let date else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+
     func postSymptomEvent(from event: SymptomQueuedEvent) async throws -> SymptomPostResponse {
         let isoFmt = ISO8601DateFormatter()
         isoFmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -543,13 +614,11 @@ final class APIClient {
         noteText: String? = nil,
         tsUtc: Date? = nil
     ) async throws -> Envelope<CurrentSymptomItem> {
-        let isoFmt = ISO8601DateFormatter()
-        isoFmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let payload = CurrentSymptomUpdatePayload(
             state: state?.rawValue,
             severity: severity,
             noteText: noteText,
-            tsUtc: tsUtc.map { isoFmt.string(from: $0) }
+            tsUtc: iso8601String(tsUtc)
         )
         return try await postJSON(
             "v1/symptoms/current/\(episodeId)/updates",
@@ -562,6 +631,101 @@ final class APIClient {
         try await deleteJSON(
             "v1/symptoms/current/\(episodeId)",
             as: Envelope<CurrentSymptomDeleteResult>.self
+        )
+    }
+
+    func respondSymptomFollowUp(
+        promptId: String,
+        state: CurrentSymptomState,
+        detailChoice: String? = nil,
+        detailText: String? = nil,
+        noteText: String? = nil,
+        timeBucket: String? = nil,
+        tsUtc: Date? = nil
+    ) async throws -> Envelope<SymptomFollowUpResult> {
+        let payload = SymptomFollowUpResponsePayload(
+            state: state.rawValue,
+            detailChoice: detailChoice,
+            detailText: detailText,
+            noteText: noteText,
+            timeBucket: timeBucket,
+            tsUtc: iso8601String(tsUtc)
+        )
+        return try await postJSON(
+            "v1/symptoms/follow-ups/\(promptId)/respond",
+            body: payload,
+            as: Envelope<SymptomFollowUpResult>.self
+        )
+    }
+
+    func dismissSymptomFollowUp(
+        promptId: String,
+        action: String = "snooze",
+        snoozeHours: Int? = nil
+    ) async throws -> Envelope<CurrentSymptomFollowUpPrompt> {
+        let payload = PromptActionPayload(action: action, snoozeHours: snoozeHours)
+        return try await postJSON(
+            "v1/symptoms/follow-ups/\(promptId)/dismiss",
+            body: payload,
+            as: Envelope<CurrentSymptomFollowUpPrompt>.self
+        )
+    }
+
+    func fetchDailyCheckInStatus() async throws -> Envelope<DailyCheckInStatus> {
+        try await getJSON("v1/feedback/daily-checkin", as: Envelope<DailyCheckInStatus>.self)
+    }
+
+    func submitDailyCheckIn(
+        promptId: String? = nil,
+        day: String,
+        comparedToYesterday: String,
+        energyLevel: String,
+        usableEnergy: String,
+        systemLoad: String,
+        painLevel: String,
+        painType: String? = nil,
+        energyDetail: String? = nil,
+        moodLevel: String,
+        moodType: String? = nil,
+        sleepImpact: String? = nil,
+        predictionMatch: String? = nil,
+        noteText: String? = nil,
+        completedAt: Date? = nil
+    ) async throws -> Envelope<DailyCheckInEntry> {
+        let payload = DailyCheckInEntryPayload(
+            promptId: promptId,
+            day: day,
+            comparedToYesterday: comparedToYesterday,
+            energyLevel: energyLevel,
+            usableEnergy: usableEnergy,
+            systemLoad: systemLoad,
+            painLevel: painLevel,
+            painType: painType,
+            energyDetail: energyDetail,
+            moodLevel: moodLevel,
+            moodType: moodType,
+            sleepImpact: sleepImpact,
+            predictionMatch: predictionMatch,
+            noteText: noteText,
+            completedAt: iso8601String(completedAt)
+        )
+        return try await postJSON(
+            "v1/feedback/daily-checkin",
+            body: payload,
+            as: Envelope<DailyCheckInEntry>.self
+        )
+    }
+
+    func dismissDailyCheckIn(
+        promptId: String,
+        action: String = "dismiss",
+        snoozeHours: Int? = nil
+    ) async throws -> Envelope<DailyCheckInPrompt> {
+        let payload = PromptActionPayload(action: action, snoozeHours: snoozeHours)
+        return try await postJSON(
+            "v1/feedback/daily-checkin/\(promptId)/dismiss",
+            body: payload,
+            as: Envelope<DailyCheckInPrompt>.self
         )
     }
 

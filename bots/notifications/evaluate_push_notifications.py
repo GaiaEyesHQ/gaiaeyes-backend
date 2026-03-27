@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 _SIGNAL_FAMILIES = {"geomagnetic", "solar_wind", "flare_cme_sep", "schumann"}
 _LOCAL_FAMILIES = {"pressure", "aqi", "temp"}
 _GAUGE_FAMILIES = {"pain", "energy", "sleep", "heart", "health_status"}
+_PROMPT_FAMILIES = {"symptom_followups", "daily_checkins"}
 
 _PRESSURE_SIGNAL_KEYS = {
     "earthweather.pressure_swing_12h",
@@ -214,6 +215,12 @@ def _safe_float(value: Any) -> float | None:
         return None
 
 
+def _serialize_dt(value: Any) -> str | None:
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc).isoformat()
+    return None
+
+
 def _normalize_json_map(raw: Any) -> Dict[str, Any]:
     if raw is None:
         return {}
@@ -255,6 +262,10 @@ def _fetch_notification_users(limit: int | None = None, user_id: str | None = No
                signal_alerts_enabled,
                local_condition_alerts_enabled,
                personalized_gauge_alerts_enabled,
+               symptom_followups_enabled,
+               symptom_followup_push_enabled,
+               daily_checkins_enabled,
+               daily_checkin_push_enabled,
                quiet_hours_enabled,
                to_char(quiet_start, 'HH24:MI') as quiet_start,
                to_char(quiet_end, 'HH24:MI') as quiet_end,
@@ -382,6 +393,10 @@ def _family_allowed(preferences: Dict[str, Any], family: str, severity: str) -> 
         return bool(preferences.get("local_condition_alerts_enabled")) and bool(family_flags.get(family, True))
     if family in _GAUGE_FAMILIES:
         return bool(preferences.get("personalized_gauge_alerts_enabled")) and bool(family_flags.get("gauge_spikes", True))
+    if family == "symptom_followups":
+        return bool(preferences.get("symptom_followups_enabled")) and bool(preferences.get("symptom_followup_push_enabled")) and bool(family_flags.get("symptom_followups", False))
+    if family == "daily_checkins":
+        return bool(preferences.get("daily_checkins_enabled")) and bool(preferences.get("daily_checkin_push_enabled")) and bool(family_flags.get("daily_checkins", False))
     return False
 
 
@@ -426,6 +441,20 @@ def _queue_candidate(
         now_utc,
         error_text,
     )
+    if row and candidate.payload:
+        prompt_id = (candidate.payload or {}).get("prompt_id")
+        if prompt_id:
+            pg.fetchrow(
+                """
+                update raw.user_feedback_prompts
+                   set delivered_at = coalesce(delivered_at, %s),
+                       updated_at = now()
+                 where id = %s::uuid
+                returning id
+                """,
+                now_utc,
+                prompt_id,
+            )
     return row is not None
 
 
@@ -858,6 +887,96 @@ def _build_local_candidates(local_payload: Dict[str, Any]) -> List[NotificationC
     return out
 
 
+def _feedback_prompt_rows(user_id: str, prompt_type: str) -> List[Dict[str, Any]]:
+    return pg.fetch(
+        """
+        select id,
+               episode_id,
+               symptom_code,
+               prompt_day,
+               question_text,
+               prompt_payload,
+               status,
+               scheduled_for,
+               delivered_at,
+               push_delivery_enabled
+          from raw.user_feedback_prompts
+         where user_id = %s
+           and prompt_type = %s
+           and status in ('pending', 'snoozed')
+           and push_delivery_enabled = true
+           and coalesce(snoozed_until, scheduled_for) <= now()
+         order by coalesce(snoozed_until, scheduled_for) asc, created_at asc
+         limit 4
+        """,
+        user_id,
+        prompt_type,
+    )
+
+
+def _feedback_payload_value(row: Dict[str, Any], key: str, fallback: Any = None) -> Any:
+    payload = _normalize_json_map(row.get("prompt_payload"))
+    if key in payload:
+        return payload.get(key)
+    return fallback
+
+
+def _build_prompt_candidates(user_id: str) -> List[NotificationCandidate]:
+    candidates: List[NotificationCandidate] = []
+
+    for row in _feedback_prompt_rows(user_id, "symptom_follow_up"):
+        prompt_id = str(row.get("id") or "")
+        episode_id = str(row.get("episode_id") or "")
+        symptom_code = str(row.get("symptom_code") or "").strip().lower()
+        symptom_label = str(_feedback_payload_value(row, "symptom_label", symptom_code.replace("_", " ").title()) or "")
+        episode_state = str(_feedback_payload_value(row, "episode_state", "") or "").strip().lower()
+        severity = "high" if episode_state == "worse" else "watch"
+        title = f"Still feeling that {symptom_label.lower()}?"
+        body = "Still active, improving, worse, or resolved? Open Gaia Eyes for a quick follow-up."
+        candidates.append(
+            NotificationCandidate(
+                family="symptom_followups",
+                event_key=f"symptom_followup_{prompt_id}",
+                severity=severity,
+                title=title,
+                body=body,
+                target_type="current_symptoms",
+                target_key=episode_id or symptom_code or "symptoms",
+                asof=_serialize_dt(row.get("scheduled_for")),
+                payload={
+                    "prompt_id": prompt_id,
+                    "episode_id": episode_id,
+                    "symptom_code": symptom_code,
+                },
+            )
+        )
+
+    for row in _feedback_prompt_rows(user_id, "daily_check_in"):
+        prompt_id = str(row.get("id") or "")
+        prompt_day = str(row.get("prompt_day") or "")
+        phase = str(_feedback_payload_value(row, "phase", "") or "")
+        title = "Quick daily check-in"
+        if phase == "next_morning":
+            body = "How did yesterday actually feel? Open Gaia Eyes and log the quick version."
+        else:
+            body = "How did today actually feel? Open Gaia Eyes for a fast check-in."
+        candidates.append(
+            NotificationCandidate(
+                family="daily_checkins",
+                event_key=f"daily_checkin_{prompt_day or prompt_id}",
+                severity="watch",
+                title=title,
+                body=body,
+                target_type="daily_checkin",
+                target_key=prompt_day or prompt_id,
+                asof=_serialize_dt(row.get("scheduled_for")),
+                payload={"prompt_id": prompt_id, "prompt_day": prompt_day},
+            )
+        )
+
+    return candidates
+
+
 def _gauge_related_driver_active(gauge_key: str, context: Dict[str, bool]) -> bool:
     if gauge_key == "pain":
         return context["pressure_active"] or context["temp_active"]
@@ -1041,6 +1160,7 @@ def _build_candidates_for_user(user_id: str, day: date, preferences: Dict[str, A
             asof=local_asof or gauge_asof,
         )
     )
+    candidates.extend(_build_prompt_candidates(user_id))
     return _collapse_candidates_by_family(candidates)
 
 
@@ -1093,8 +1213,11 @@ def evaluate_user_notifications(user_id: str, day: date, preferences: Dict[str, 
 
         deliverable_candidates.append(candidate)
 
-    if len(deliverable_candidates) > 1:
-        bundle_candidate = _build_bundle_candidate(deliverable_candidates)
+    prompt_candidates = [candidate for candidate in deliverable_candidates if candidate.family in _PROMPT_FAMILIES]
+    bundle_candidates = [candidate for candidate in deliverable_candidates if candidate.family not in _PROMPT_FAMILIES]
+
+    if len(bundle_candidates) > 1:
+        bundle_candidate = _build_bundle_candidate(bundle_candidates)
         if _queue_candidate(
             user_id=user_id,
             candidate=bundle_candidate,
@@ -1112,7 +1235,7 @@ def evaluate_user_notifications(user_id: str, day: date, preferences: Dict[str, 
                 event_key=bundle_candidate.event_key,
             )
 
-        for candidate in deliverable_candidates:
+        for candidate in bundle_candidates:
             if _queue_candidate(
                 user_id=user_id,
                 candidate=candidate,
@@ -1129,6 +1252,23 @@ def evaluate_user_notifications(user_id: str, day: date, preferences: Dict[str, 
                 created_at=now_utc,
                 event_key=candidate.event_key,
             )
+        for candidate in prompt_candidates:
+            if _queue_candidate(
+                user_id=user_id,
+                candidate=candidate,
+                now_utc=now_utc,
+                status="queued",
+                error_text=None,
+            ):
+                queued += 1
+                _remember_latest_event(
+                    latest_events,
+                    family=candidate.family,
+                    severity=candidate.severity,
+                    status="queued",
+                    created_at=now_utc,
+                    event_key=candidate.event_key,
+                )
         return {"queued": queued, "skipped": skipped, "candidates": len(candidates)}
 
     for candidate in deliverable_candidates:

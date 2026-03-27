@@ -88,6 +88,16 @@ private extension String {
     }
 }
 
+private struct SymptomFollowUpComposerState: Identifiable {
+    let item: CurrentSymptomItem
+    let prompt: CurrentSymptomFollowUpPrompt
+    let responseState: CurrentSymptomState
+
+    var id: String {
+        "\(prompt.id):\(responseState.rawValue)"
+    }
+}
+
 private func isCurrentSymptomsCancellation(_ error: Error) -> Bool {
     if error is CancellationError {
         return true
@@ -116,6 +126,7 @@ struct CurrentSymptomsView: View {
     @State private var updatingEpisodeId: String?
     @State private var journalStatus: String?
     @State private var editingItem: CurrentSymptomItem?
+    @State private var followUpComposer: SymptomFollowUpComposerState?
     @State private var showsAllPatternContext: Bool = false
 
     init(
@@ -237,6 +248,24 @@ struct CurrentSymptomsView: View {
                 }
             )
         }
+        .sheet(item: $followUpComposer) { composer in
+            CurrentSymptomFollowUpSheet(
+                item: composer.item,
+                prompt: composer.prompt,
+                responseState: composer.responseState,
+                isBusy: updatingEpisodeId == composer.item.id,
+                onSubmit: { detailChoice, noteText, timeBucket in
+                    await submitFollowUpResponse(
+                        prompt: composer.prompt,
+                        item: composer.item,
+                        state: composer.responseState,
+                        detailChoice: detailChoice,
+                        noteText: noteText,
+                        timeBucket: timeBucket
+                    )
+                }
+            )
+        }
     }
 
     private var backgroundGradient: some View {
@@ -264,11 +293,11 @@ struct CurrentSymptomsView: View {
             let payload = envelope.payload ?? CurrentSymptomsSnapshot(
                 generatedAt: "",
                 windowHours: 12,
-                summary: CurrentSymptomsSummary(activeCount: 0, newCount: 0, ongoingCount: 0, improvingCount: 0, lastUpdatedAt: nil, followUpAvailable: false),
+                summary: CurrentSymptomsSummary(activeCount: 0, newCount: 0, ongoingCount: 0, improvingCount: 0, worseCount: 0, lastUpdatedAt: nil, followUpAvailable: false),
                 items: [],
                 contributingDrivers: [],
                 patternContext: [],
-                followUpSettings: CurrentSymptomsFollowUpSettings(notificationsEnabled: false, enabled: false, notificationFamilyEnabled: false, cadence: "balanced", states: ["new", "ongoing", "improving"], symptomCodes: [])
+                followUpSettings: CurrentSymptomsFollowUpSettings(notificationsEnabled: false, enabled: false, notificationFamilyEnabled: false, pushEnabled: false, cadence: "balanced", states: ["new", "ongoing", "improving", "worse"], symptomCodes: [])
             )
             await MainActor.run {
                 snapshot = payload
@@ -334,6 +363,143 @@ struct CurrentSymptomsView: View {
                 }
                 appLog("[CurrentSymptoms] state_change error: \(error.localizedDescription)")
             }
+        }
+    }
+
+    private func handlePrimaryStateAction(_ item: CurrentSymptomItem, state: CurrentSymptomState) {
+        if let prompt = item.pendingFollowUp {
+            startFollowUpResponse(for: item, prompt: prompt, state: state)
+            return
+        }
+        updateState(item, to: state)
+    }
+
+    private func startFollowUpResponse(for item: CurrentSymptomItem, prompt: CurrentSymptomFollowUpPrompt, state: CurrentSymptomState) {
+        guard updatingEpisodeId == nil else { return }
+        selectedEpisodeId = item.id
+        if state == .improving {
+            Task {
+                _ = await submitFollowUpResponse(prompt: prompt, item: item, state: state, detailChoice: nil, noteText: nil, timeBucket: nil)
+            }
+            return
+        }
+        followUpComposer = SymptomFollowUpComposerState(item: item, prompt: prompt, responseState: state)
+    }
+
+    private func followUpSnoozeHours() -> Int {
+        switch snapshot?.followUpSettings.cadence {
+        case "minimal":
+            return 18
+        case "detailed":
+            return 6
+        default:
+            return 12
+        }
+    }
+
+    private func snoozeFollowUp(_ prompt: CurrentSymptomFollowUpPrompt, for item: CurrentSymptomItem) {
+        guard updatingEpisodeId == nil else { return }
+        updatingEpisodeId = item.id
+        journalStatus = nil
+        Task {
+            defer {
+                Task { @MainActor in updatingEpisodeId = nil }
+            }
+            do {
+                let response = try await api.dismissSymptomFollowUp(
+                    promptId: prompt.id,
+                    action: "snooze",
+                    snoozeHours: followUpSnoozeHours()
+                )
+                if response.ok == false {
+                    throw NSError(domain: "CurrentSymptoms", code: 6, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Could not move the follow-up"])
+                }
+                AppAnalytics.track("symptom_followup_dismissed", properties: ["action": "snooze", "symptom_code": item.symptomCode])
+                await MainActor.run {
+                    journalStatus = "Follow-up moved later."
+                }
+                await loadSnapshot()
+            } catch {
+                await MainActor.run {
+                    journalStatus = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func dismissFollowUp(_ prompt: CurrentSymptomFollowUpPrompt, for item: CurrentSymptomItem) {
+        guard updatingEpisodeId == nil else { return }
+        updatingEpisodeId = item.id
+        journalStatus = nil
+        Task {
+            defer {
+                Task { @MainActor in updatingEpisodeId = nil }
+            }
+            do {
+                let response = try await api.dismissSymptomFollowUp(promptId: prompt.id, action: "dismiss", snoozeHours: nil)
+                if response.ok == false {
+                    throw NSError(domain: "CurrentSymptoms", code: 7, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Could not dismiss the follow-up"])
+                }
+                AppAnalytics.track("symptom_followup_dismissed", properties: ["action": "dismiss", "symptom_code": item.symptomCode])
+                await MainActor.run {
+                    journalStatus = "Follow-up dismissed."
+                }
+                await loadSnapshot()
+            } catch {
+                await MainActor.run {
+                    journalStatus = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func submitFollowUpResponse(
+        prompt: CurrentSymptomFollowUpPrompt,
+        item: CurrentSymptomItem,
+        state: CurrentSymptomState,
+        detailChoice: String?,
+        noteText: String?,
+        timeBucket: String?
+    ) async -> Bool {
+        guard updatingEpisodeId == nil else { return false }
+        await MainActor.run {
+            updatingEpisodeId = item.id
+            journalStatus = nil
+        }
+        defer {
+            Task { @MainActor in updatingEpisodeId = nil }
+        }
+        do {
+            let response = try await api.respondSymptomFollowUp(
+                promptId: prompt.id,
+                state: state,
+                detailChoice: detailChoice,
+                noteText: noteText,
+                timeBucket: timeBucket,
+                tsUtc: Date()
+            )
+            if response.ok == false {
+                throw NSError(domain: "CurrentSymptoms", code: 8, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Could not save the follow-up"])
+            }
+            AppAnalytics.track(
+                "symptom_followup_answered",
+                properties: [
+                    "state": state.rawValue,
+                    "symptom_code": item.symptomCode,
+                    "detail_choice": detailChoice ?? "none",
+                ]
+            )
+            await MainActor.run {
+                followUpComposer = nil
+                journalStatus = state == .resolved ? "\(item.label) marked resolved." : "\(item.label) updated from follow-up."
+            }
+            await loadSnapshot()
+            return true
+        } catch {
+            await MainActor.run {
+                journalStatus = error.localizedDescription
+            }
+            return false
         }
     }
 
@@ -558,9 +724,14 @@ struct CurrentSymptomsView: View {
                 }
             }
 
-            HStack(spacing: 8) {
+            if let prompt = item.pendingFollowUp {
+                followUpPromptCard(prompt, for: item)
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                 actionButton(title: "Still active", state: .ongoing, item: item)
                 actionButton(title: "Improving", state: .improving, item: item)
+                actionButton(title: "Worse", state: .worse, item: item)
                 actionButton(title: "Resolved", state: .resolved, item: item)
             }
 
@@ -582,10 +753,40 @@ struct CurrentSymptomsView: View {
         )
     }
 
+    private func followUpPromptCard(_ prompt: CurrentSymptomFollowUpPrompt, for item: CurrentSymptomItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(prompt.questionText)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.white)
+
+            HStack(spacing: 10) {
+                Button("Later") {
+                    snoozeFollowUp(prompt, for: item)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                Button("Dismiss") {
+                    dismissFollowUp(prompt, for: item)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(red: 0.11, green: 0.16, blue: 0.24))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
     private func actionButton(title: String, state: CurrentSymptomState, item: CurrentSymptomItem) -> some View {
         let isSelected = item.currentState == state
         return Button(title) {
-            updateState(item, to: state)
+            handlePrimaryStateAction(item, state: state)
         }
         .buttonStyle(.plain)
         .font(.caption.weight(.semibold))
@@ -830,11 +1031,14 @@ struct CurrentSymptomsView: View {
     }
 
     private func followUpDescription(for settings: CurrentSymptomsFollowUpSettings, enabled: Bool) -> String {
+        if enabled && settings.pushEnabled {
+            return "Follow-up reminders are on. Gaia can check whether a symptom is still active, improving, worse, or resolved."
+        }
         if enabled && settings.notificationsEnabled {
-            return "Follow-up notifications are on. Gaia can check whether a symptom is still active, improving, or resolved."
+            return "In-app follow-ups are on. Turn on push for reminder nudges outside the current symptoms view."
         }
         if enabled {
-            return "Follow-up check-ins are enabled here, but notifications are still off. Turn notifications on when you want reminders."
+            return "Follow-up check-ins are enabled here, but push reminders are off. Gaia will keep these lightweight and in-app."
         }
         return "These are optional check-ins for active symptoms. Turn them on in Settings when reminders would help."
     }
@@ -847,6 +1051,8 @@ struct CurrentSymptomsView: View {
             return Color(red: 0.87, green: 0.63, blue: 0.27)
         case .improving:
             return Color(red: 0.43, green: 0.76, blue: 0.63)
+        case .worse:
+            return Color(red: 0.90, green: 0.35, blue: 0.33)
         case .resolved:
             return Color.white.opacity(0.5)
         }
@@ -1044,6 +1250,236 @@ private struct CurrentSymptomEditorSheet: View {
                 Text("Use this for accidental logs. It removes the symptom from the current state and the original source event.")
             }
         }
+    }
+}
+
+private struct CurrentSymptomFollowUpSheet: View {
+    let item: CurrentSymptomItem
+    let prompt: CurrentSymptomFollowUpPrompt
+    let responseState: CurrentSymptomState
+    let isBusy: Bool
+    let onSubmit: (String?, String?, String?) async -> Bool
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var detailChoice: String = ""
+    @State private var timeBucket: String = ""
+    @State private var noteDraft: String = ""
+
+    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+
+    private var category: String {
+        let focus = (prompt.detailFocus ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !focus.isEmpty {
+            return focus
+        }
+        let code = item.symptomCode.lowercased()
+        if ["headache", "migraine", "sinus_pressure", "pain", "joint_pain", "nerve_pain", "muscle_pain", "stiffness", "zaps"].contains(code) {
+            return "pain"
+        }
+        if ["fatigue", "drained", "low_energy", "wired_tired", "wired", "brain_fog"].contains(code) {
+            return "energy"
+        }
+        if ["anxious", "panic", "restless", "wired", "irritable", "low_mood"].contains(code) {
+            return "mood"
+        }
+        if ["insomnia", "restless_sleep", "poor_sleep", "waking_unrefreshed"].contains(code) {
+            return "sleep"
+        }
+        return "general"
+    }
+
+    private var titleText: String {
+        switch responseState {
+        case .ongoing:
+            return "What’s most noticeable now?"
+        case .worse:
+            return "What stood out most?"
+        case .resolved:
+            return "About when did it ease up?"
+        case .improving:
+            return "What feels most improved?"
+        case .new:
+            return "Anything else to add?"
+        }
+    }
+
+    private var introText: String {
+        switch responseState {
+        case .ongoing:
+            return "You can keep this quick. Pick the closest fit or skip the extra detail."
+        case .worse:
+            return "This helps Gaia understand what changed without turning this into a full log."
+        case .resolved:
+            return "Rough timing is enough."
+        case .improving:
+            return "Optional detail only."
+        case .new:
+            return "Optional detail only."
+        }
+    }
+
+    private var detailOptions: [String] {
+        switch category {
+        case "pain":
+            return ["sinus_pressure", "joint_pain", "nerve_pain", "muscle_pain", "head_pressure", "other"]
+        case "energy":
+            return ["drained", "low_but_steady", "improved", "crashed_later"]
+        case "mood":
+            return ["anxious", "wired", "low_mood", "irritable", "emotionally_flat"]
+        case "sleep":
+            return ["falling_asleep", "staying_asleep", "waking_unrested", "restless_sleep"]
+        default:
+            return ["more_intense", "lingering", "on_and_off", "spread_out", "other"]
+        }
+    }
+
+    private var timeBucketOptions: [String] {
+        ["within_1_hour", "later_same_day", "overnight", "not_sure"]
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(prompt.questionText)
+                            .font(.title3.weight(.bold))
+                            .foregroundColor(.white)
+                        Text(introText)
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.68))
+                    }
+
+                    if responseState == .resolved {
+                        optionCard(
+                            title: titleText,
+                            selection: $timeBucket,
+                            choices: timeBucketOptions
+                        )
+                    } else {
+                        optionCard(
+                            title: titleText,
+                            selection: $detailChoice,
+                            choices: detailOptions
+                        )
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Optional note")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        ZStack(alignment: .topLeading) {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.white.opacity(0.05))
+                            if noteDraft.isEmpty {
+                                Text("Anything short that would make this more useful later?")
+                                    .font(.caption)
+                                    .foregroundColor(.white.opacity(0.35))
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 12)
+                            }
+                            TextEditor(text: $noteDraft)
+                                .scrollContentBackground(.hidden)
+                                .foregroundColor(.white)
+                                .frame(minHeight: 100)
+                                .padding(6)
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.white.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+                    Button {
+                        Task {
+                            let saved = await onSubmit(
+                                detailChoice.nilIfBlank,
+                                noteDraft.nilIfBlank,
+                                timeBucket.nilIfBlank
+                            )
+                            if saved {
+                                dismiss()
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            if isBusy {
+                                ProgressView().scaleEffect(0.8)
+                            }
+                            Text("Save response")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isBusy)
+                }
+                .padding(16)
+            }
+            .background(
+                LinearGradient(
+                    colors: [Color.black, Color(red: 0.05, green: 0.07, blue: 0.12)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            )
+            .navigationTitle(item.label)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func optionCard(title: String, selection: Binding<String>, choices: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.headline)
+                .foregroundColor(.white)
+
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(choices, id: \.self) { choice in
+                    Button {
+                        selection.wrappedValue = choice
+                    } label: {
+                        Text(label(for: choice))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(selection.wrappedValue == choice ? Color(red: 0.35, green: 0.58, blue: 0.92).opacity(0.28) : Color.white.opacity(0.05))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(selection.wrappedValue == choice ? Color(red: 0.35, green: 0.58, blue: 0.92) : Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func label(for value: String) -> String {
+        value
+            .replacingOccurrences(of: "_", with: " ")
+            .capitalized
+            .replacingOccurrences(of: "Later Same Day", with: "Later the same day")
+            .replacingOccurrences(of: "Within 1 Hour", with: "Within 1 hour")
+            .replacingOccurrences(of: "Low But Steady", with: "Low but steady")
+            .replacingOccurrences(of: "On And Off", with: "On and off")
+            .replacingOccurrences(of: "Spread Out", with: "Spread out")
     }
 }
 
