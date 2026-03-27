@@ -1720,10 +1720,15 @@ struct ContentView: View {
     @State private var lastKnownSeries: SpaceSeries? = nil
     @State private var spaceWeatherDetailFetchInFlight: Bool = false
     @State private var spaceWeatherDetailLastFetchAt: Date = .distantPast
+    @State private var forecastSummaryFetchInFlight: Bool = false
+    @State private var forecastSummaryLastFetchAt: Date = .distantPast
     @State private var spaceVisuals: SpaceVisualsPayload? = nil
     @State private var lastKnownSpaceVisuals: SpaceVisualsPayload? = nil
     @State private var spaceOutlook: SpaceForecastOutlook? = nil
     @State private var lastKnownSpaceOutlook: SpaceForecastOutlook? = nil
+    @State private var spaceOutlookFetchInFlight: Bool = false
+    @State private var spaceOutlookLastFetchAt: Date = .distantPast
+    @State private var spaceOutlookLastFetchedDays: Int = 0
     @State private var userOutlook: UserForecastOutlook? = nil
     @State private var lastKnownUserOutlook: UserForecastOutlook? = nil
     @State private var userOutlookLoading: Bool = false
@@ -1737,6 +1742,8 @@ struct ContentView: View {
     @State private var localHealthLoading: Bool = false
     @State private var localHealthError: String?
     @State private var localZipRefreshTask: Task<Void, Never>? = nil
+    @State private var magnetosphereFetchInFlight: Bool = false
+    @State private var magnetosphereLastFetchAt: Date = .distantPast
     @State private var showLocationOnboarding: Bool = false
     @State private var showOnboardingFlow: Bool = false
     @State private var profileUseGPS: Bool = false
@@ -2398,12 +2405,40 @@ struct ContentView: View {
         }
     }
 
-    private func fetchSpaceOutlook(days: Int = 3) async {
+    private func fetchSpaceOutlook(days: Int = 3, force: Bool = false) async {
+        let normalizedDays = max(1, min(7, days))
+        let shouldStart = await MainActor.run { () -> Bool in
+            let availableDays = max(
+                spaceOutlook?.forecastDaily?.count ?? 0,
+                lastKnownSpaceOutlook?.forecastDaily?.count ?? 0
+            )
+            if spaceOutlookFetchInFlight {
+                return false
+            }
+            if !force &&
+                availableDays >= normalizedDays &&
+                spaceOutlookLastFetchedDays >= normalizedDays &&
+                Date().timeIntervalSince(spaceOutlookLastFetchAt) < 90 {
+                return false
+            }
+            spaceOutlookFetchInFlight = true
+            return true
+        }
+        guard shouldStart else { return }
+        defer {
+            Task { @MainActor in
+                spaceOutlookFetchInFlight = false
+                spaceOutlookLastFetchAt = Date()
+            }
+        }
         let api = state.apiWithAuth()
-        let endpoint = "v1/space/forecast/outlook?days=\(max(1, min(7, days)))"
+        let endpoint = "v1/space/forecast/outlook?days=\(normalizedDays)"
         do {
             let payload: SpaceForecastOutlook = try await api.getJSON(endpoint, as: SpaceForecastOutlook.self, perRequestTimeout: 30)
-            await MainActor.run { applySpaceOutlook(payload) }
+            await MainActor.run {
+                applySpaceOutlook(payload)
+                spaceOutlookLastFetchedDays = max(spaceOutlookLastFetchedDays, payload.forecastDaily?.count ?? 0)
+            }
             return
         } catch is CancellationError {
             return
@@ -2418,7 +2453,10 @@ struct ContentView: View {
             do {
                 let env: Envelope<SpaceForecastOutlook> = try await api.getJSON(endpoint, as: Envelope<SpaceForecastOutlook>.self, perRequestTimeout: 30)
                 if let payload = env.payload {
-                    await MainActor.run { applySpaceOutlook(payload) }
+                    await MainActor.run {
+                        applySpaceOutlook(payload)
+                        spaceOutlookLastFetchedDays = max(spaceOutlookLastFetchedDays, payload.forecastDaily?.count ?? 0)
+                    }
                 } else {
                     appLog("[UI] space outlook payload missing; keeping last snapshot")
                 }
@@ -3480,7 +3518,24 @@ struct ContentView: View {
         }
     }
 
-    private func fetchMagnetosphere() async {
+    private func fetchMagnetosphere(force: Bool = false) async {
+        let shouldStart = await MainActor.run { () -> Bool in
+            if magnetosphereFetchInFlight {
+                return false
+            }
+            if !force && magnetosphere != nil && Date().timeIntervalSince(magnetosphereLastFetchAt) < 90 {
+                return false
+            }
+            magnetosphereFetchInFlight = true
+            return true
+        }
+        guard shouldStart else { return }
+        defer {
+            Task { @MainActor in
+                magnetosphereFetchInFlight = false
+                magnetosphereLastFetchAt = Date()
+            }
+        }
         await MainActor.run {
             magnetosphereLoading = true
             magnetosphereError = nil
@@ -4076,7 +4131,24 @@ struct ContentView: View {
         appLog("[UI] featuresToday: no data and no cache; keeping previous snapshot")
     }
     
-    private func fetchForecastSummary() async {
+    private func fetchForecastSummary(force: Bool = false) async {
+        let shouldStart = await MainActor.run { () -> Bool in
+            if forecastSummaryFetchInFlight {
+                return false
+            }
+            if !force && forecast != nil && Date().timeIntervalSince(forecastSummaryLastFetchAt) < 90 {
+                return false
+            }
+            forecastSummaryFetchInFlight = true
+            return true
+        }
+        guard shouldStart else { return }
+        defer {
+            Task { @MainActor in
+                forecastSummaryFetchInFlight = false
+                forecastSummaryLastFetchAt = Date()
+            }
+        }
         let backendAvailable = await MainActor.run { state.backendDBAvailable }
         guard backendAvailable else {
             appLog("[UI] forecast: backend DB=false; keeping previous snapshot")
@@ -4326,13 +4398,13 @@ struct ContentView: View {
     private func fetchInsightsHubData(trigger: FeaturesFetchTrigger = .initial) async {
         let api = state.apiWithAuth()
         async let featuresTask: Void = fetchFeaturesToday(trigger: trigger, bypassGuard: trigger == .refresh)
-        async let forecastTask: Void = fetchForecastSummary()
-        async let outlookTask: Void = fetchSpaceOutlook(days: 3)
+        async let forecastTask: Void = fetchForecastSummary(force: trigger == .refresh)
+        async let outlookTask: Void = fetchSpaceOutlook(days: 3, force: trigger == .refresh)
         async let userOutlookTask: Void = fetchUserOutlook()
         async let symptomsTask: Void = fetchSymptoms(api: api)
         async let currentSymptomsTask: Void = fetchCurrentSymptomsSummary(api: api)
         async let localTask: Void = fetchLocalHealth()
-        async let magnetosphereTask: Void = fetchMagnetosphere()
+        async let magnetosphereTask: Void = fetchMagnetosphere(force: trigger == .refresh)
         _ = await (featuresTask, forecastTask, outlookTask, userOutlookTask, symptomsTask, currentSymptomsTask, localTask, magnetosphereTask)
 
         if hazardsBrief == nil {
@@ -4362,11 +4434,9 @@ struct ContentView: View {
             }
         }
 
-        async let featuresTask: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
-        async let forecastTask: Void = fetchForecastSummary()
-        async let outlookTask: Void = fetchSpaceOutlook(days: 3)
-        async let magnetosphereTask: Void = fetchMagnetosphere()
-        _ = await (featuresTask, forecastTask, outlookTask, magnetosphereTask)
+        async let outlookTask: Void = fetchSpaceOutlook(days: 3, force: force)
+        async let magnetosphereTask: Void = fetchMagnetosphere(force: force)
+        _ = await (outlookTask, magnetosphereTask)
     }
 
     private enum SymptomLogAttemptStatus {
@@ -7968,6 +8038,7 @@ struct ContentView: View {
         let onLoadFullForecast: () async -> Void
         @State private var showAllForecastDays: Bool = false
         @State private var fullForecastLoading: Bool = false
+        @State private var manualRefreshLoading: Bool = false
 
         private func progress(_ value: Double?, max: Double) -> Double {
             guard let value, max > 0 else { return 0.12 }
@@ -8356,12 +8427,26 @@ struct ContentView: View {
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .refreshable {
-                    await onRefresh()
-                }
             }
             .navigationTitle("Space Weather")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task {
+                            await MainActor.run { manualRefreshLoading = true }
+                            await onRefresh()
+                            await MainActor.run { manualRefreshLoading = false }
+                        }
+                    } label: {
+                        if manualRefreshLoading {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -9556,7 +9641,7 @@ struct ContentView: View {
             .onChange(of: showMagnetosphere, initial: false) { _, newValue in
                 guard newValue, !magnetosphereLoading else { return }
                 if magnetosphere == nil {
-                    Task { await fetchMagnetosphere() }
+                    Task { await fetchMagnetosphere(force: true) }
                 }
             }
             .onChange(of: showMissionInsightsSheet, initial: false) { _, newValue in
@@ -9566,7 +9651,7 @@ struct ContentView: View {
                     return
                 }
                 Task {
-                    await fetchInsightsHubData(trigger: .refresh)
+                    await fetchInsightsHubData(trigger: .initial)
                 }
             }
             .onChange(of: showCurrentSymptomsSheet, initial: false) { _, newValue in
@@ -9806,7 +9891,7 @@ struct ContentView: View {
                             data: magnetosphere,
                             isLoading: magnetosphereLoading,
                             error: magnetosphereError,
-                            onRefresh: { await fetchMagnetosphere() }
+                            onRefresh: { await fetchMagnetosphere(force: true) }
                         )
                         .task {
                             if magnetosphere == nil && !magnetosphereLoading {

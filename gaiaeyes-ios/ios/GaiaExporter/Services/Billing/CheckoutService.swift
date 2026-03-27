@@ -50,6 +50,9 @@ struct CheckoutService {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         if let decoded = try? decoder.decode(EntitlementsResponse.self, from: data) {
+            if decoded.ok == false {
+                throw CheckoutError.remote(decoded.error ?? decoded.detail ?? "Failed to load entitlements")
+            }
             return decoded
         }
 
@@ -57,6 +60,8 @@ struct CheckoutService {
             let ok = fallback["ok"] as? Bool
             let userId = fallback["user_id"] as? String
             let email = fallback["email"] as? String
+            let error = fallback["error"] as? String
+            let detail = fallback["detail"] as? String
             let entitlementRows = fallback["entitlements"] as? [[String: Any]] ?? []
             let entitlements = entitlementRows.map { row in
                 Entitlement(
@@ -68,7 +73,17 @@ struct CheckoutService {
                     updatedAt: row["updated_at"] as? String
                 )
             }
-            return EntitlementsResponse(ok: ok, userId: userId, email: email, entitlements: entitlements)
+            if ok == false {
+                throw CheckoutError.remote(error ?? detail ?? "Failed to load entitlements")
+            }
+            return EntitlementsResponse(
+                ok: ok,
+                userId: userId,
+                email: email,
+                entitlements: entitlements,
+                error: error,
+                detail: detail
+            )
         }
 
         let body = String(data: data, encoding: .utf8) ?? "<non-utf8>"

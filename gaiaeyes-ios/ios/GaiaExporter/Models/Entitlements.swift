@@ -23,11 +23,15 @@ struct EntitlementsResponse: Decodable {
     let userId: String?
     let email: String?
     let entitlements: [Entitlement]
+    let error: String?
+    let detail: String?
 
     enum CodingKeys: String, CodingKey {
         case ok
         case userId = "user_id"
         case email
         case entitlements
+        case error
+        case detail
     }
 }
