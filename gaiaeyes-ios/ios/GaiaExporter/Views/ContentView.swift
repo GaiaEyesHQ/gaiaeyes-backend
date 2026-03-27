@@ -2570,6 +2570,18 @@ struct ContentView: View {
         return post
     }
 
+    private func preferredEarthscopePost(_ post: DashboardEarthscopePost?, requestedDay: String) -> DashboardEarthscopePost? {
+        if let current = currentEarthscopePost(post, requestedDay: requestedDay) {
+            return current
+        }
+        guard let post else { return nil }
+        let hasVisibleContent =
+            !(post.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            !(post.caption ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+            !(post.bodyMarkdown ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return hasVisibleContent ? post : nil
+    }
+
     private func fetchDashboardPayload(force: Bool = false) async {
         let shouldStart = await MainActor.run { () -> Bool in
             if dashboardFetchInFlight { return false }
@@ -2641,9 +2653,9 @@ struct ContentView: View {
                             earthscopeSummary: payload.earthscopeSummary,
                             alerts: (payload.alerts?.isEmpty == false) ? payload.alerts : older.alerts,
                             entitled: payload.entitled ?? older.entitled,
-                            memberPost: payload.memberPost ?? payload.personalPost,
-                            publicPost: payload.publicPost,
-                            personalPost: payload.personalPost
+                            memberPost: payload.memberPost ?? payload.personalPost ?? older.memberPost ?? older.personalPost,
+                            publicPost: payload.publicPost ?? older.publicPost,
+                            personalPost: payload.personalPost ?? older.personalPost
                         )
                         fallbackUsed = true
                         fallbackSourceDay = fallbackDay
@@ -2704,8 +2716,11 @@ struct ContentView: View {
                 let resolvedCurrentMemberPost = currentEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay)
                 let resolvedCurrentPersonalPost = currentEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
                 let resolvedCurrentPublicPost = currentEarthscopePost(resolvedPayload.publicPost, requestedDay: dashboardDay)
+                let preferredMemberPost = preferredEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay)
+                let preferredPersonalPost = preferredEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
+                let preferredPublicPost = preferredEarthscopePost(resolvedPayload.publicPost, requestedDay: dashboardDay)
 
-                if resolvedCurrentMemberPost == nil && resolvedCurrentPersonalPost == nil && resolvedCurrentPublicPost == nil {
+                if preferredMemberPost == nil && preferredPersonalPost == nil && preferredPublicPost == nil {
                     if let features: FeaturesToday = try? await api.getJSON("v1/features/today", as: FeaturesToday.self, perRequestTimeout: 15),
                        (features.postTitle != nil || features.postCaption != nil || features.postBody != nil) {
                         let fallbackPublic = DashboardEarthscopePost(
@@ -2738,9 +2753,9 @@ struct ContentView: View {
                             earthscopeSummary: resolvedPayload.earthscopeSummary,
                             alerts: resolvedPayload.alerts,
                             entitled: resolvedPayload.entitled,
-                            memberPost: resolvedCurrentMemberPost,
-                            publicPost: currentEarthscopePost(fallbackPublic, requestedDay: dashboardDay),
-                            personalPost: resolvedCurrentPersonalPost
+                            memberPost: preferredMemberPost,
+                            publicPost: preferredEarthscopePost(fallbackPublic, requestedDay: dashboardDay),
+                            personalPost: preferredPersonalPost
                         )
                     }
                 }
@@ -2776,9 +2791,9 @@ struct ContentView: View {
                         earthscopeSummary: resolvedPayload.earthscopeSummary,
                         alerts: resolvedPayload.alerts,
                         entitled: resolvedPayload.entitled,
-                        memberPost: currentEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay),
-                        publicPost: currentEarthscopePost(resolvedPayload.publicPost, requestedDay: dashboardDay),
-                        personalPost: currentEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
+                        memberPost: preferredEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay),
+                        publicPost: preferredEarthscopePost(resolvedPayload.publicPost, requestedDay: dashboardDay),
+                        personalPost: preferredEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
                     )
                     dashboardPayload = effectivePayload
                     if let json {
@@ -2792,7 +2807,7 @@ struct ContentView: View {
                     dashboardLastUpdatedText = out.string(from: dashboardLastFetchAt)
                 }
                 appLog(
-                    "[UI] dashboard ok: day=\(dashboardDay) ms=\(durationMs) gauges=\(resolvedPayload.gauges != nil) alerts=\(resolvedPayload.alerts?.count ?? 0) member=\(resolvedPayload.memberPost != nil || resolvedPayload.personalPost != nil) public=\(resolvedPayload.publicPost != nil) entitled=\(String(describing: resolvedPayload.entitled)) fallback=\(fallbackUsed) fallback_day=\(fallbackSourceDay ?? "-")"
+                    "[UI] dashboard ok: day=\(dashboardDay) ms=\(durationMs) gauges=\(resolvedPayload.gauges != nil) alerts=\(resolvedPayload.alerts?.count ?? 0) member_current=\(resolvedCurrentMemberPost != nil || resolvedCurrentPersonalPost != nil) member_available=\(preferredMemberPost != nil || preferredPersonalPost != nil) public_available=\(preferredPublicPost != nil) entitled=\(String(describing: resolvedPayload.entitled)) fallback=\(fallbackUsed) fallback_day=\(fallbackSourceDay ?? "-")"
                 )
                 return
             } catch {
@@ -4871,9 +4886,9 @@ struct ContentView: View {
         let dashboardAlerts = dashboardPayload?.alerts ?? []
         let requestedEarthscopeDay = chicagoTodayString()
         let resolvedEarthscope: DashboardEarthscopePost? = {
-            return currentEarthscopePost(dashboardPayload?.memberPost, requestedDay: requestedEarthscopeDay)
-                ?? currentEarthscopePost(dashboardPayload?.personalPost, requestedDay: requestedEarthscopeDay)
-                ?? currentEarthscopePost(dashboardPayload?.publicPost, requestedDay: requestedEarthscopeDay)
+            return preferredEarthscopePost(dashboardPayload?.memberPost, requestedDay: requestedEarthscopeDay)
+                ?? preferredEarthscopePost(dashboardPayload?.personalPost, requestedDay: requestedEarthscopeDay)
+                ?? preferredEarthscopePost(dashboardPayload?.publicPost, requestedDay: requestedEarthscopeDay)
         }()
 
         return VStack(spacing: 16) {
