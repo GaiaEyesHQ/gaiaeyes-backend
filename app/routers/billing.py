@@ -42,38 +42,100 @@ def _get_user_email(user_id: str) -> Optional[str]:
     return row[0] if row else None
 
 
-def _get_entitlement_rows(user_id: str, email: Optional[str]):
+def _table_columns(schema: str, table: str) -> list[str]:
     with _db_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            select entitlement_key, term, is_active, started_at, expires_at, updated_at
-            from public.app_user_entitlements
-            where user_id = %s
-            order by entitlement_key
+            select column_name
+            from information_schema.columns
+            where table_schema = %s
+              and table_name = %s
+            order by ordinal_position
             """,
+            (schema, table),
+        )
+        rows = cur.fetchall()
+    return [str(row[0]) for row in rows or [] if row and row[0]]
+
+
+def _pick(cols: list[str], candidates: list[str]) -> Optional[str]:
+    lowered = {str(col).lower(): str(col) for col in cols}
+    for candidate in candidates:
+        match = lowered.get(candidate.lower())
+        if match:
+            return match
+    return None
+
+
+def _get_entitlement_rows(user_id: str, email: Optional[str]):
+    cols = _table_columns("public", "app_user_entitlements")
+    if not cols:
+        return [], user_id, "direct"
+
+    user_col = _pick(cols, ["user_id"])
+    key_col = _pick(cols, ["entitlement_key", "key"])
+    term_col = _pick(cols, ["term"])
+    active_col = _pick(cols, ["is_active", "active", "enabled"])
+    started_col = _pick(cols, ["started_at", "created_at"])
+    expires_col = _pick(cols, ["expires_at"])
+    updated_col = _pick(cols, ["updated_at", "created_at"])
+
+    if not user_col or not key_col:
+        return [], user_id, "direct"
+
+    select_specs = [
+        (key_col, f"ue.{key_col}", "entitlement_key"),
+        (term_col, f"ue.{term_col}" if term_col else None, "term"),
+        (
+            f"coalesce({active_col}, true)" if active_col else None,
+            f"coalesce(ue.{active_col}, true)" if active_col else None,
+            "is_active",
+        ),
+        (started_col, f"ue.{started_col}" if started_col else None, "started_at"),
+        (expires_col, f"ue.{expires_col}" if expires_col else None, "expires_at"),
+        (updated_col, f"ue.{updated_col}" if updated_col else None, "updated_at"),
+    ]
+    select_parts = [
+        f"{direct_expr} as {alias}" if direct_expr else (
+            "true as is_active" if alias == "is_active" else
+            "null::text as term" if alias == "term" else
+            f"null::timestamptz as {alias}"
+        )
+        for direct_expr, _, alias in select_specs
+    ]
+    fallback_parts = [
+        f"{fallback_expr} as {alias}" if fallback_expr else (
+            "true as is_active" if alias == "is_active" else
+            "null::text as term" if alias == "term" else
+            f"null::timestamptz as {alias}"
+        )
+        for _, fallback_expr, alias in select_specs
+    ]
+    direct_sql = (
+        f"select {', '.join(select_parts)} "
+        f"from public.app_user_entitlements "
+        f"where {user_col} = %s "
+        f"order by {key_col}"
+    )
+    fallback_sql = (
+        f"select distinct {', '.join(fallback_parts)}, "
+        f"ue.{user_col} as resolved_user_id "
+        f"from public.app_stripe_customers sc "
+        f"join public.app_user_entitlements ue on ue.{user_col} = sc.user_id "
+        f"where lower(sc.email) = lower(%s) "
+        f"order by entitlement_key, updated_at desc nulls last, started_at desc nulls last"
+    )
+
+    with _db_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            direct_sql,
             (user_id,),
         )
         rows = cur.fetchall()
         if rows or not email:
             return rows, user_id, "direct"
 
-        cur.execute(
-            """
-            select distinct
-                   ue.entitlement_key,
-                   ue.term,
-                   ue.is_active,
-                   ue.started_at,
-                   ue.expires_at,
-                   ue.updated_at,
-                   ue.user_id
-              from public.app_stripe_customers sc
-              join public.app_user_entitlements ue on ue.user_id = sc.user_id
-             where lower(sc.email) = lower(%s)
-             order by ue.entitlement_key, ue.updated_at desc nulls last, ue.started_at desc nulls last
-            """,
-            (email,),
-        )
+        cur.execute(fallback_sql, (email,))
         fallback_rows = cur.fetchall()
 
     if not fallback_rows:
