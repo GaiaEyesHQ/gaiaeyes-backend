@@ -33,6 +33,7 @@ from services.patterns.personal_relevance import (
     fetch_best_pattern_rows,
     fetch_recent_outcome_summary,
 )
+from services.signal_bar import build_signal_bar
 
 
 router = APIRouter(prefix="/v1", tags=["dashboard"])
@@ -497,6 +498,11 @@ async def dashboard(
     )
     ranked_drivers = personal_relevance.get("ranked_drivers") or drivers
     out["drivers"] = ranked_drivers
+    out["signal_bar"] = build_signal_bar(
+        day=day,
+        active_states=active_states,
+        local_payload=local_payload,
+    )
     out["drivers_compact"] = personal_relevance.get("compact_driver_lines") or [
         str(item.get("display") or "").strip()
         for item in ranked_drivers

@@ -592,6 +592,7 @@ private struct DashboardPayload: Codable {
     let gaugeLabels: [String: String]?
     let gaugesDelta: [String: Int]?
     let drivers: [DashboardDriverItem]?
+    let signalBar: SignalBarSnapshot?
     let driversCompact: [String]?
     let primaryDriver: DashboardDriverItem?
     let supportingDrivers: [DashboardDriverItem]?
@@ -611,7 +612,7 @@ private struct DashboardPayload: Codable {
     let personalPost: DashboardEarthscopePost?
 
     private enum CodingKeys: String, CodingKey {
-        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, gaugesDelta, drivers, driversCompact, primaryDriver, supportingDrivers, patternRelevantGauges, activePatternRefs, todayPersonalThemes, todayRelevanceExplanations, healthStatusExplainer, gaugeRecentLogBoosts, lastSymptomUpdateAt, modalModels, earthscopeSummary, alerts, entitled
+        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, gaugesDelta, drivers, signalBar, driversCompact, primaryDriver, supportingDrivers, patternRelevantGauges, activePatternRefs, todayPersonalThemes, todayRelevanceExplanations, healthStatusExplainer, gaugeRecentLogBoosts, lastSymptomUpdateAt, modalModels, earthscopeSummary, alerts, entitled
         case memberPost
         case publicPost
         case personalPost
@@ -2018,6 +2019,39 @@ struct ContentView: View {
         }
     }
 
+    private var persistentSignalBarItems: [SignalPill] {
+        dashboardPayload?.signalBar?.items ?? SignalPill.placeholders
+    }
+
+    @ViewBuilder
+    private func persistentSignalBar(onTap: @escaping (SignalPill) -> Void) -> some View {
+        SignalBarView(signals: persistentSignalBarItems, onTap: onTap)
+    }
+
+    private func handleMissionControlSignalTap(_ signal: SignalPill) {
+        AppAnalytics.track("signal_bar_tapped", properties: ["surface": "mission_control", "signal_key": signal.key])
+        switch signal.detailTarget {
+        case "local_conditions":
+            showLocalConditionsSheet = true
+        case "schumann":
+            showSchumannDashboardSheet = true
+        default:
+            openAllDrivers(focus: signal.driverKey ?? signal.key)
+        }
+    }
+
+    private func handleInsightsSignalTap(_ signal: SignalPill) {
+        AppAnalytics.track("signal_bar_tapped", properties: ["surface": "insights", "signal_key": signal.key])
+        switch signal.detailTarget {
+        case "local_conditions":
+            missionInsightsPath = [.localConditions]
+        case "schumann":
+            missionInsightsPath = [.schumann]
+        default:
+            openAllDriversAfterClosingInsights(focus: signal.driverKey ?? signal.key)
+        }
+    }
+
     private func isCancellationError(_ error: Error) -> Bool {
         if error is CancellationError { return true }
         if let uerr = error as? URLError, uerr.code == .cancelled { return true }
@@ -2603,6 +2637,7 @@ struct ContentView: View {
                             gaugeLabels: payload.gaugeLabels ?? older.gaugeLabels,
                             gaugesDelta: payload.gaugesDelta ?? older.gaugesDelta,
                             drivers: payload.drivers ?? older.drivers,
+                            signalBar: payload.signalBar ?? older.signalBar,
                             driversCompact: payload.driversCompact ?? older.driversCompact,
                             primaryDriver: payload.primaryDriver ?? older.primaryDriver,
                             supportingDrivers: payload.supportingDrivers ?? older.supportingDrivers,
@@ -2655,6 +2690,7 @@ struct ContentView: View {
                             gaugeLabels: resolvedPayload.gaugeLabels,
                             gaugesDelta: resolvedPayload.gaugesDelta,
                             drivers: resolvedPayload.drivers,
+                            signalBar: resolvedPayload.signalBar,
                             driversCompact: resolvedPayload.driversCompact,
                             primaryDriver: resolvedPayload.primaryDriver,
                             supportingDrivers: resolvedPayload.supportingDrivers,
@@ -2698,6 +2734,7 @@ struct ContentView: View {
                             gaugeLabels: resolvedPayload.gaugeLabels,
                             gaugesDelta: resolvedPayload.gaugesDelta,
                             drivers: resolvedPayload.drivers,
+                            signalBar: resolvedPayload.signalBar,
                             driversCompact: resolvedPayload.driversCompact,
                             primaryDriver: resolvedPayload.primaryDriver,
                             supportingDrivers: resolvedPayload.supportingDrivers,
@@ -2735,6 +2772,7 @@ struct ContentView: View {
                         gaugeLabels: resolvedPayload.gaugeLabels,
                         gaugesDelta: resolvedPayload.gaugesDelta,
                         drivers: resolvedPayload.drivers,
+                        signalBar: resolvedPayload.signalBar,
                         driversCompact: resolvedPayload.driversCompact,
                         primaryDriver: resolvedPayload.primaryDriver,
                         supportingDrivers: resolvedPayload.supportingDrivers,
@@ -9526,6 +9564,9 @@ struct ContentView: View {
                 .padding(.bottom, 12)
             }
             .transaction { $0.disablesAnimations = true }
+            .safeAreaInset(edge: .top) {
+                persistentSignalBar(onTap: handleMissionControlSignalTap)
+            }
             .overlay(alignment: .top) {
                 if let toast = symptomToast {
                     SymptomToastView(
@@ -10013,6 +10054,9 @@ struct ContentView: View {
                 }) {
                     symptomLogSheet(isPresented: $showInsightsSymptomSheet)
                 }
+            }
+            .safeAreaInset(edge: .top) {
+                persistentSignalBar(onTap: handleInsightsSignalTap)
             }
         }
         .sheet(isPresented: $showMissionSettingsSheet) {
@@ -10652,6 +10696,7 @@ struct ContentView: View {
                     tone: experienceProfile.tone,
                     showsCloseButton: true,
                     initialFocusKey: allDriversFocusKey,
+                    signalBar: persistentSignalBarItems,
                     onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },
                     onLogSymptoms: { openSymptomLogFromAllDrivers() },
                     onOpenPatterns: { openInsightsFromAllDrivers(route: .yourPatterns) },

@@ -6,6 +6,7 @@ struct AllDriversView: View {
     var tone: ToneStyle = .balanced
     var showsCloseButton: Bool = true
     var initialFocusKey: String? = nil
+    var signalBar: [SignalPill] = []
     var onOpenCurrentSymptoms: (() -> Void)? = nil
     var onLogSymptoms: (() -> Void)? = nil
     var onOpenPatterns: (() -> Void)? = nil
@@ -298,6 +299,17 @@ struct AllDriversView: View {
         onOpenSetup?()
     }
 
+    private func focusDriver(for signal: SignalPill) {
+        let focusKey = signal.driverKey ?? signal.key
+        guard let match = snapshot?.drivers.first(where: { $0.matches(focusKey: focusKey) }) else { return }
+        AppAnalytics.track("signal_bar_tapped", properties: ["surface": "all_drivers", "signal_key": signal.key])
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+            selectedFilter = match.category
+            expandedDriverID = match.id
+            focusedDriverID = match.id
+        }
+    }
+
     private var topSummaryCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
@@ -562,6 +574,9 @@ struct AllDriversView: View {
         }
         .navigationTitle(titleText)
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .top) {
+            SignalBarView(signals: signalBar, onTap: focusDriver(for:))
+        }
         .toolbar {
             if showsCloseButton {
                 ToolbarItem(placement: .cancellationAction) {

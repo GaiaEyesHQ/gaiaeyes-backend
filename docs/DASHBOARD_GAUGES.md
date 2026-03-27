@@ -172,6 +172,22 @@ When trigger events are detected for paid users, the engine appends a “Trigger
     - `alerts`: de-duped by family (`pressure`, `solar_wind`, `aqi`, `geomagnetic`) with highest severity retained
     - `gauges_delta`: integer day-over-day deltas keyed by gauge
     - `drivers`: normalized environmental drivers with `{key,label,severity,state,value,unit,display}` (max 6)
+    - `signal_bar`: fixed top-bar payload for shared iOS/web chrome with:
+      - `updated_at`: most recent source timestamp available for the bar payload
+      - `items`: ordered pills for `KP`, `SW`, `SR`, and `hPa`
+      - each item includes `key`, `label`, `value`, `state`, `driver_key`, `detail_target`, and `updated_at`
+    - Signal-bar rules stay objective:
+      - the bar always renders the same four core signals, even when they are quiet
+      - personalization does not suppress or soften a stronger objective state
+      - thresholds align with the live resolver inputs:
+        - `KP`: `Elevated` at `>= 4`, `Strong` at `>= 6`
+        - `SW`: `Watch` at `>= 550 km/s`, `Elevated` at `>= 650 km/s`, `Strong` at `>= 700 km/s`
+        - `SR`: `Elevated` when the Schumann variability trigger is active, otherwise `Quiet`
+        - `hPa`: `Watch` on 12h swings `>= 6 hPa`, `Elevated` on 24h swings `>= 8 hPa` or rapid-drop watch conditions, `Strong` on 12h swings `>= 10 hPa`, 24h swings `>= 12 hPa`, or rapid-drop high conditions
+      - `detail_target` is intended for shared client routing:
+        - `driver` for KP and solar wind
+        - `schumann` for resonance detail
+        - `local_conditions` for pressure detail
     - `drivers_compact`: compact display strings derived from `drivers`
     - `primary_driver`: top current driver after deterministic personal-relevance weighting
     - `supporting_drivers`: up to 2 secondary drivers after personal-relevance weighting
