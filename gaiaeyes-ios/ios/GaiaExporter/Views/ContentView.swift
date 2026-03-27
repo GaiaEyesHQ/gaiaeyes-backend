@@ -10497,6 +10497,7 @@ struct ContentView: View {
                 zip: $localHealthZip,
                 useGPS: $profileUseGPS,
                 localInsightsEnabled: $profileLocalInsightsEnabled,
+                selectedHealthPermissionKeys: $state.selectedHealthPermissionKeys,
                 notificationPreferences: $notificationPreferences,
                 sensitivityOptions: onboardingSensitivityOptions,
                 healthContextOptions: onboardingHealthContextOptions,

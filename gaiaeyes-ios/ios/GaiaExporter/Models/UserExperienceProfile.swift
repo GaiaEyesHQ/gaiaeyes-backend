@@ -116,6 +116,74 @@ enum OnboardingStep: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum HealthPermissionOption: String, CaseIterable, Codable, Identifiable {
+    case heartRate = "heart_rate"
+    case heartRateVariability = "heart_rate_variability"
+    case sleep
+    case spo2
+    case respiratoryRate = "respiratory_rate"
+    case restingHeartRate = "resting_heart_rate"
+    case bloodPressure = "blood_pressure"
+    case wristTemperature = "wrist_temperature"
+    case cycleTracking = "cycle_tracking"
+    case stepCount = "step_count"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .heartRate:
+            return "Heart rate"
+        case .heartRateVariability:
+            return "HRV"
+        case .sleep:
+            return "Sleep"
+        case .spo2:
+            return "SpO2"
+        case .respiratoryRate:
+            return "Respiratory rate"
+        case .restingHeartRate:
+            return "Resting heart rate"
+        case .bloodPressure:
+            return "Blood pressure"
+        case .wristTemperature:
+            return "Wrist temperature"
+        case .cycleTracking:
+            return "Cycle tracking"
+        case .stepCount:
+            return "Steps"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .heartRate:
+            return "Daily body load and current-state context."
+        case .heartRateVariability:
+            return "Recovery and nervous-system resilience trends."
+        case .sleep:
+            return "Sleep timing and disruption context."
+        case .spo2:
+            return "Oxygen trend context when available."
+        case .respiratoryRate:
+            return "Breathing-rate shifts during sleep and recovery."
+        case .restingHeartRate:
+            return "Baseline recovery and strain context."
+        case .bloodPressure:
+            return "Blood-pressure changes when your device supports it."
+        case .wristTemperature:
+            return "Wrist temperature deviation when supported."
+        case .cycleTracking:
+            return "Menstrual-flow timing only if you want Gaia to use it."
+        case .stepCount:
+            return "Activity volume context for daily recovery patterns."
+        }
+    }
+
+    static let defaultSelection: Set<String> = Set(allCases.map(\.rawValue))
+    static let defaultStorageValue: String = allCases.map(\.rawValue).sorted().joined(separator: ",")
+}
+
 struct UserExperienceProfile: Codable, Equatable {
     var mode: ExperienceMode = .scientific
     var guide: GuideType = .cat

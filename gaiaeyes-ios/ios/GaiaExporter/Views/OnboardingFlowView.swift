@@ -29,6 +29,7 @@ struct OnboardingFlowView: View {
     @Binding var zip: String
     @Binding var useGPS: Bool
     @Binding var localInsightsEnabled: Bool
+    @Binding var selectedHealthPermissionKeys: Set<String>
     @Binding var notificationPreferences: AppNotificationPreferences
 
     let sensitivityOptions: [OnboardingTagOption]
@@ -101,6 +102,18 @@ struct OnboardingFlowView: View {
     private func goBack() {
         guard let previous = currentStep.previous() else { return }
         currentStep = previous
+    }
+
+    private func isHealthPermissionSelected(_ option: HealthPermissionOption) -> Bool {
+        selectedHealthPermissionKeys.contains(option.rawValue)
+    }
+
+    private func toggleHealthPermission(_ option: HealthPermissionOption) {
+        if isHealthPermissionSelected(option) {
+            selectedHealthPermissionKeys.remove(option.rawValue)
+        } else {
+            selectedHealthPermissionKeys.insert(option.rawValue)
+        }
     }
 
     var body: some View {
@@ -426,11 +439,49 @@ struct OnboardingFlowView: View {
                     .font(.headline)
                     .foregroundStyle(.secondary)
 
-                VStack(alignment: .leading, spacing: 10) {
-                    featureRow("Heart rate, HRV, resting heart rate")
-                    featureRow("Sleep, SpO2, respiratory rate")
-                    featureRow("Blood pressure and wrist temperature when supported")
-                    featureRow("Menstrual-flow timing only if you allow it")
+                Text("Choose what Gaia can read. You can leave something sensitive like cycle tracking unchecked and keep the rest.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                VStack(spacing: 12) {
+                    ForEach(HealthPermissionOption.allCases) { option in
+                        Button {
+                            toggleHealthPermission(option)
+                        } label: {
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: isHealthPermissionSelected(option) ? "checkmark.square.fill" : "square")
+                                    .font(.title3)
+                                    .foregroundStyle(
+                                        isHealthPermissionSelected(option)
+                                        ? Color(red: 0.51, green: 0.82, blue: 0.97)
+                                        : .secondary
+                                    )
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(option.title)
+                                        .font(.headline)
+                                    Text(option.subtitle)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                isHealthPermissionSelected(option)
+                                ? Color.white.opacity(0.10)
+                                : Color.white.opacity(0.04)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                if selectedHealthPermissionKeys.isEmpty {
+                    Text("Nothing is selected. Tap Not Now, or check at least one metric to request Health access.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
 
                 if let healthPermissionsMessage, !healthPermissionsMessage.isEmpty {
@@ -464,6 +515,7 @@ struct OnboardingFlowView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
+                    .disabled(selectedHealthPermissionKeys.isEmpty)
                     .tint(Color(red: 0.51, green: 0.82, blue: 0.97))
                 }
             }
@@ -795,17 +847,6 @@ struct OnboardingFlowView: View {
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
-    }
-
-    private func featureRow(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "checkmark.seal.fill")
-                .foregroundStyle(Color(red: 0.51, green: 0.82, blue: 0.97))
-            Text(text)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
     }
 
     private func groupedNotificationSection<Content: View>(

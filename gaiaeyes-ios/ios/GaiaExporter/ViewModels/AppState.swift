@@ -83,24 +83,67 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     // MARK: - BLE (CoreBluetooth HR)
     // MARK: - HealthKit
     private let healthStore = HKHealthStore()
+    @Published var selectedHealthPermissionKeys: Set<String> = HealthPermissionOption.defaultSelection {
+        didSet {
+            let normalized = Self.normalizeHealthPermissionKeys(selectedHealthPermissionKeys)
+            if normalized != selectedHealthPermissionKeys {
+                selectedHealthPermissionKeys = normalized
+                return
+            }
+            selectedHealthPermissionKeysRaw = Self.serializeHealthPermissionKeys(normalized)
+        }
+    }
+    @AppStorage("gaia.healthkit.selected_permission_keys") private var selectedHealthPermissionKeysRaw: String = HealthPermissionOption.defaultStorageValue
+
+    private static func normalizeHealthPermissionKeys(_ keys: Set<String>) -> Set<String> {
+        let valid = Set(HealthPermissionOption.allCases.map(\.rawValue))
+        return keys.intersection(valid)
+    }
+
+    private static func serializeHealthPermissionKeys(_ keys: Set<String>) -> String {
+        keys.sorted().joined(separator: ",")
+    }
+
+    private static func deserializeHealthPermissionKeys(_ raw: String) -> Set<String> {
+        let keys = Set(
+            raw.split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+        return normalizeHealthPermissionKeys(Set(keys))
+    }
+
     private func makeHealthReadTypes() -> Set<HKObjectType> {
         var types = Set<HKObjectType>()
-        // Quantities
-        if let hr = HKObjectType.quantityType(forIdentifier: .heartRate) { types.insert(hr) }
-        if let spo2 = HKObjectType.quantityType(forIdentifier: .oxygenSaturation) { types.insert(spo2) }
-        if let steps = HKObjectType.quantityType(forIdentifier: .stepCount) { types.insert(steps) }
-        if let hrv = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN) { types.insert(hrv) }
-        if let respiratory = HKObjectType.quantityType(forIdentifier: .respiratoryRate) { types.insert(respiratory) }
-        if let restingHR = HKObjectType.quantityType(forIdentifier: .restingHeartRate) { types.insert(restingHR) }
-        if let sys = HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic) { types.insert(sys) }
-        if let dia = HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic) { types.insert(dia) }
-        if #available(iOS 16.0, *),
-           let wristTemp = HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature) {
-            types.insert(wristTemp)
+        let selectedOptions = selectedHealthPermissionKeys.compactMap(HealthPermissionOption.init(rawValue:))
+        for option in selectedOptions {
+            switch option {
+            case .heartRate:
+                if let hr = HKObjectType.quantityType(forIdentifier: .heartRate) { types.insert(hr) }
+            case .heartRateVariability:
+                if let hrv = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN) { types.insert(hrv) }
+            case .sleep:
+                if let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) { types.insert(sleep) }
+            case .spo2:
+                if let spo2 = HKObjectType.quantityType(forIdentifier: .oxygenSaturation) { types.insert(spo2) }
+            case .respiratoryRate:
+                if let respiratory = HKObjectType.quantityType(forIdentifier: .respiratoryRate) { types.insert(respiratory) }
+            case .restingHeartRate:
+                if let restingHR = HKObjectType.quantityType(forIdentifier: .restingHeartRate) { types.insert(restingHR) }
+            case .bloodPressure:
+                if let sys = HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic) { types.insert(sys) }
+                if let dia = HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic) { types.insert(dia) }
+            case .wristTemperature:
+                if #available(iOS 16.0, *),
+                   let wristTemp = HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature) {
+                    types.insert(wristTemp)
+                }
+            case .cycleTracking:
+                if let menstrualFlow = HKObjectType.categoryType(forIdentifier: .menstrualFlow) { types.insert(menstrualFlow) }
+            case .stepCount:
+                if let steps = HKObjectType.quantityType(forIdentifier: .stepCount) { types.insert(steps) }
+            }
         }
-        // Categories
-        if let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) { types.insert(sleep) }
-        if let menstrualFlow = HKObjectType.categoryType(forIdentifier: .menstrualFlow) { types.insert(menstrualFlow) }
         return types
     }
     private let ble = BleManager()
@@ -165,6 +208,8 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
                 self.append("[NET] Replaced anonymous user id with developer default (\(DeveloperAuthDefaults.userId))")
             }
         }
+
+        selectedHealthPermissionKeys = Self.deserializeHealthPermissionKeys(selectedHealthPermissionKeysRaw)
 
         ble.delegate = self
         polar.delegate = self
@@ -433,6 +478,10 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             return false
         }
         let toRead = makeHealthReadTypes()
+        if toRead.isEmpty {
+            append("❌ No Health metrics selected. Choose at least one item or skip for now.")
+            return false
+        }
         do {
             try await healthStore.requestAuthorization(toShare: [], read: toRead)
             append("✅ Health permissions granted")
