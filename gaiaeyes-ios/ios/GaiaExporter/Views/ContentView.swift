@@ -2582,6 +2582,24 @@ struct ContentView: View {
         return hasVisibleContent ? post : nil
     }
 
+    private func bestEffortDashboardJSON<T: Decodable>(
+        api: APIClient,
+        path: String,
+        as type: T.Type,
+        timeout: TimeInterval,
+        label: String
+    ) async -> T? {
+        do {
+            return try await api.getJSON(path, as: type, retries: 0, perRequestTimeout: timeout)
+        } catch let error as URLError where error.code == .timedOut {
+            appLog("[UI] \(label) timed out: \(path)")
+            return nil
+        } catch {
+            appLog("[UI] \(label) skipped: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     private func fetchDashboardPayload(force: Bool = false) async {
         let shouldStart = await MainActor.run { () -> Bool in
             if dashboardFetchInFlight { return false }
@@ -2611,57 +2629,15 @@ struct ContentView: View {
 
         for attempt in 0..<3 {
             do {
-                let payload: DashboardPayload = try await api.getJSON(endpoint, as: DashboardPayload.self, perRequestTimeout: 15)
+                let payload: DashboardPayload = try await api.getJSON(
+                    endpoint,
+                    as: DashboardPayload.self,
+                    retries: 0,
+                    perRequestTimeout: 15
+                )
                 var resolvedPayload = payload
                 var fallbackUsed = false
                 var fallbackSourceDay: String? = nil
-
-                if payload.gauges == nil || (payload.memberPost == nil && payload.personalPost == nil) {
-                    for offset in [-1, -2, -3, -4, -5, -6, -7] {
-                        let fallbackDay = chicagoDayString(offsetDays: offset)
-                        let fallbackEndpoint = "v1/dashboard?day=\(fallbackDay)"
-                        guard let older: DashboardPayload = try? await api.getJSON(fallbackEndpoint, as: DashboardPayload.self, perRequestTimeout: 15) else {
-                            continue
-                        }
-                        let hasUsefulFallback =
-                            older.gauges != nil ||
-                            older.memberPost != nil ||
-                            older.personalPost != nil ||
-                            older.publicPost != nil
-                        guard hasUsefulFallback else { continue }
-
-                        resolvedPayload = DashboardPayload(
-                            day: payload.day ?? older.day,
-                            gauges: payload.gauges ?? older.gauges,
-                            gaugesMeta: payload.gaugesMeta ?? older.gaugesMeta,
-                            gaugeZones: payload.gaugeZones ?? older.gaugeZones,
-                            gaugeLabels: payload.gaugeLabels ?? older.gaugeLabels,
-                            gaugesDelta: payload.gaugesDelta ?? older.gaugesDelta,
-                            drivers: payload.drivers ?? older.drivers,
-                            signalBar: payload.signalBar ?? older.signalBar,
-                            driversCompact: payload.driversCompact ?? older.driversCompact,
-                            primaryDriver: payload.primaryDriver ?? older.primaryDriver,
-                            supportingDrivers: payload.supportingDrivers ?? older.supportingDrivers,
-                            patternRelevantGauges: payload.patternRelevantGauges ?? older.patternRelevantGauges,
-                            activePatternRefs: payload.activePatternRefs ?? older.activePatternRefs,
-                            todayPersonalThemes: payload.todayPersonalThemes ?? older.todayPersonalThemes,
-                            todayRelevanceExplanations: payload.todayRelevanceExplanations ?? older.todayRelevanceExplanations,
-                            healthStatusExplainer: payload.healthStatusExplainer ?? older.healthStatusExplainer,
-                            gaugeRecentLogBoosts: payload.gaugeRecentLogBoosts ?? older.gaugeRecentLogBoosts,
-                            lastSymptomUpdateAt: payload.lastSymptomUpdateAt ?? older.lastSymptomUpdateAt,
-                            modalModels: payload.modalModels ?? older.modalModels,
-                            earthscopeSummary: payload.earthscopeSummary,
-                            alerts: (payload.alerts?.isEmpty == false) ? payload.alerts : older.alerts,
-                            entitled: payload.entitled ?? older.entitled,
-                            memberPost: payload.memberPost ?? payload.personalPost ?? older.memberPost ?? older.personalPost,
-                            publicPost: payload.publicPost ?? older.publicPost,
-                            personalPost: payload.personalPost ?? older.personalPost
-                        )
-                        fallbackUsed = true
-                        fallbackSourceDay = fallbackDay
-                        break
-                    }
-                }
 
                 let currentMemberPost = currentEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay)
                 let currentPersonalPost = currentEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
@@ -2669,10 +2645,12 @@ struct ContentView: View {
                 let hasCurrentMemberEarthscope = (currentMemberPost != nil || currentPersonalPost != nil)
 
                 if resolvedPayload.gauges == nil || !hasCurrentMemberEarthscope {
-                    if let memberEnv: MemberEarthscopeEnvelope = try? await api.getJSON(
-                        "v1/earthscope/member?day=\(dashboardDay)",
+                    if let memberEnv: MemberEarthscopeEnvelope = await bestEffortDashboardJSON(
+                        api: api,
+                        path: "v1/earthscope/member?day=\(dashboardDay)",
                         as: MemberEarthscopeEnvelope.self,
-                        perRequestTimeout: 15
+                        timeout: 8,
+                        label: "dashboard member earthscope"
                     ),
                     memberEnv.ok == true,
                     let memberPost = memberEnv.post {
@@ -2713,6 +2691,61 @@ struct ContentView: View {
                     }
                 }
 
+                let needsGaugeFallback = resolvedPayload.gauges == nil
+                let needsPaidFallback = (resolvedPayload.entitled == true) && resolvedPayload.memberPost == nil && resolvedPayload.personalPost == nil
+                if needsGaugeFallback || needsPaidFallback {
+                    for offset in [-1, -2, -3] {
+                        let fallbackDay = chicagoDayString(offsetDays: offset)
+                        let fallbackEndpoint = "v1/dashboard?day=\(fallbackDay)"
+                        guard let older: DashboardPayload = await bestEffortDashboardJSON(
+                            api: api,
+                            path: fallbackEndpoint,
+                            as: DashboardPayload.self,
+                            timeout: 5,
+                            label: "dashboard fallback day \(fallbackDay)"
+                        ) else {
+                            continue
+                        }
+                        let hasUsefulFallback =
+                            older.gauges != nil ||
+                            older.memberPost != nil ||
+                            older.personalPost != nil ||
+                            older.publicPost != nil
+                        guard hasUsefulFallback else { continue }
+
+                        resolvedPayload = DashboardPayload(
+                            day: payload.day ?? older.day,
+                            gauges: resolvedPayload.gauges ?? older.gauges,
+                            gaugesMeta: resolvedPayload.gaugesMeta ?? older.gaugesMeta,
+                            gaugeZones: resolvedPayload.gaugeZones ?? older.gaugeZones,
+                            gaugeLabels: resolvedPayload.gaugeLabels ?? older.gaugeLabels,
+                            gaugesDelta: resolvedPayload.gaugesDelta ?? older.gaugesDelta,
+                            drivers: resolvedPayload.drivers ?? older.drivers,
+                            signalBar: resolvedPayload.signalBar ?? older.signalBar,
+                            driversCompact: resolvedPayload.driversCompact ?? older.driversCompact,
+                            primaryDriver: resolvedPayload.primaryDriver ?? older.primaryDriver,
+                            supportingDrivers: resolvedPayload.supportingDrivers ?? older.supportingDrivers,
+                            patternRelevantGauges: resolvedPayload.patternRelevantGauges ?? older.patternRelevantGauges,
+                            activePatternRefs: resolvedPayload.activePatternRefs ?? older.activePatternRefs,
+                            todayPersonalThemes: resolvedPayload.todayPersonalThemes ?? older.todayPersonalThemes,
+                            todayRelevanceExplanations: resolvedPayload.todayRelevanceExplanations ?? older.todayRelevanceExplanations,
+                            healthStatusExplainer: resolvedPayload.healthStatusExplainer ?? older.healthStatusExplainer,
+                            gaugeRecentLogBoosts: resolvedPayload.gaugeRecentLogBoosts ?? older.gaugeRecentLogBoosts,
+                            lastSymptomUpdateAt: resolvedPayload.lastSymptomUpdateAt ?? older.lastSymptomUpdateAt,
+                            modalModels: resolvedPayload.modalModels ?? older.modalModels,
+                            earthscopeSummary: resolvedPayload.earthscopeSummary,
+                            alerts: (resolvedPayload.alerts?.isEmpty == false) ? resolvedPayload.alerts : older.alerts,
+                            entitled: resolvedPayload.entitled ?? older.entitled,
+                            memberPost: resolvedPayload.memberPost ?? resolvedPayload.personalPost ?? older.memberPost ?? older.personalPost,
+                            publicPost: resolvedPayload.publicPost ?? older.publicPost,
+                            personalPost: resolvedPayload.personalPost ?? older.personalPost
+                        )
+                        fallbackUsed = true
+                        fallbackSourceDay = fallbackDay
+                        break
+                    }
+                }
+
                 let resolvedCurrentMemberPost = currentEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay)
                 let resolvedCurrentPersonalPost = currentEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
                 let preferredMemberPost = preferredEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay)
@@ -2720,7 +2753,13 @@ struct ContentView: View {
                 let preferredPublicPost = preferredEarthscopePost(resolvedPayload.publicPost, requestedDay: dashboardDay)
 
                 if preferredMemberPost == nil && preferredPersonalPost == nil && preferredPublicPost == nil {
-                    if let features: FeaturesToday = try? await api.getJSON("v1/features/today", as: FeaturesToday.self, perRequestTimeout: 15),
+                    if let features: FeaturesToday = await bestEffortDashboardJSON(
+                        api: api,
+                        path: "v1/features/today",
+                        as: FeaturesToday.self,
+                        timeout: 5,
+                        label: "dashboard features fallback"
+                    ),
                        (features.postTitle != nil || features.postCaption != nil || features.postBody != nil) {
                         let fallbackPublic = DashboardEarthscopePost(
                             day: features.day,
