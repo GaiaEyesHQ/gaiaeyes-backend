@@ -5218,10 +5218,8 @@ struct ContentView: View {
         private struct DriverStatusRow: View {
             let driver: DashboardDriverItem
             let role: WhatMattersRole
-            let tappable: Bool
-            let showAffordance: Bool
             let zoneKey: String
-            let progress: Double
+            let pillSeverity: StatusPill.Severity
             let onTap: (() -> Void)?
 
             private func formattedValue() -> String {
@@ -5245,63 +5243,98 @@ struct ContentView: View {
                 return "\(text) \(unit)"
             }
 
+            private var iconName: String {
+                switch driver.key.lowercased() {
+                case "pressure":
+                    return "gauge.with.dots.needle.bottom.50percent"
+                case "temp":
+                    return "thermometer.medium"
+                case "aqi":
+                    return "aqi.low"
+                case "allergens":
+                    return "leaf.fill"
+                case "kp":
+                    return "sun.max.fill"
+                case "bz":
+                    return "arrow.down.circle.fill"
+                case "sw":
+                    return "wind"
+                case "schumann":
+                    return "waveform.path.ecg.rectangle"
+                default:
+                    return "circle.hexagongrid.fill"
+                }
+            }
+
+            private var summaryText: String {
+                let personal = (driver.personalReason ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !personal.isEmpty {
+                    return personal
+                }
+                let display = (driver.display ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !display.isEmpty {
+                    return display
+                }
+                return "\(driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized) is \(driver.state ?? "Quiet")."
+            }
+
             private var content: some View {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .top, spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.white.opacity(0.06))
+                        Image(systemName: iconName)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(GaugePalette.zoneColor(zoneKey))
+                    }
+                    .frame(width: 44, height: 44)
+
+                    VStack(alignment: .leading, spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized)
-                                .font(role.titleFont)
-                            if let roleLabel = driver.roleLabel, !roleLabel.isEmpty {
-                                Text(roleLabel)
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundColor(role == .background ? .secondary : GaugePalette.zoneColor(zoneKey))
-                            }
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            Text(role.title)
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(role == .background ? .white.opacity(0.54) : GaugePalette.zoneColor(zoneKey))
                         }
-                        Spacer(minLength: 6)
-                        Text(driver.state ?? "Low")
+
+                        Text(summaryText)
                             .font(.caption)
-                            .foregroundColor(role == .background ? .white.opacity(0.66) : GaugePalette.zoneColor(zoneKey))
+                            .foregroundColor(.white.opacity(role == .background ? 0.58 : 0.72))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    VStack(alignment: .trailing, spacing: 8) {
+                        StatusPill(driver.state ?? "Quiet", severity: pillSeverity)
+
                         let value = formattedValue()
                         if !value.isEmpty {
                             Text(value)
-                                .font(.caption)
+                                .font(.caption.weight(.semibold))
                                 .foregroundColor(.secondary)
+                                .multilineTextAlignment(.trailing)
                         }
-                        if showAffordance {
-                            Image(systemName: "sparkles")
-                                .font(.caption2)
-                                .foregroundColor(GaugePalette.zoneColor(zoneKey))
+
+                        if onTap != nil {
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.42))
                         }
-                    }
-                    GeometryReader { geo in
-                        let width = max(18, geo.size.width * progress)
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(GaugePalette.zoneColor(zoneKey).opacity(0.18))
-                                .frame(height: 10)
-                            Capsule()
-                                .fill(GaugePalette.zoneColor(zoneKey).opacity(0.50))
-                                .frame(width: width, height: 10)
-                        }
-                    }
-                    .frame(height: 10)
-                    if let personalReason = driver.personalReason, !personalReason.isEmpty {
-                        Text(personalReason)
-                            .font(.caption2)
-                            .foregroundColor(role == .background ? .white.opacity(0.54) : .secondary)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .padding(role == .leading ? 12 : 10)
-                .background(role.background(for: zoneKey))
+                .padding(14)
+                .background(Color.white.opacity(role == .leading ? 0.055 : 0.04))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(role.border(for: zoneKey), lineWidth: role == .leading ? 1.3 : 1)
+                        .stroke(role.border(for: zoneKey), lineWidth: role == .leading ? 1.2 : 1)
                 )
                 .shadow(
-                    color: showAffordance ? role.shadow(for: zoneKey) : .clear,
-                    radius: role == .leading ? 10 : 6,
+                    color: role.shadow(for: zoneKey),
+                    radius: role == .leading ? 12 : 6,
                     x: 0,
                     y: 0
                 )
@@ -5899,6 +5932,35 @@ struct ContentView: View {
             }
         }
 
+        private struct WhatMattersCardItem: Identifiable {
+            let driver: DashboardDriverItem
+            let role: WhatMattersRole
+
+            var id: String { driver.id }
+        }
+
+        private func topWhatMattersDrivers() -> [WhatMattersCardItem] {
+            let ordered = dedupedDrivers(([primaryDriver].compactMap { $0 }) + supportingDrivers + drivers)
+            let fallbackLeadingKey = drivers.first.map { normalizedDriverKey($0.key) }
+            let leadingKey = normalizedDriverKey(primaryDriver?.key).isEmpty ? fallbackLeadingKey : normalizedDriverKey(primaryDriver?.key)
+            let supportingKeys = Set(supportingDrivers.map { normalizedDriverKey($0.key) }.filter { !$0.isEmpty })
+
+            return Array(
+                ordered.enumerated().map { index, driver in
+                    WhatMattersCardItem(
+                        driver: driver,
+                        role: whatMattersRole(
+                            for: driver,
+                            index: index,
+                            leadingKey: leadingKey,
+                            supportingKeys: supportingKeys
+                        )
+                    )
+                }
+                .prefix(2)
+            )
+        }
+
         private var currentSymptomsSummaryLine: String {
             guard let snapshot = currentSymptomsSnapshot else {
                 return "Open the live view for updates, notes, and the timeline."
@@ -6076,11 +6138,13 @@ struct ContentView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        let groupedDriverSections = groupedDrivers()
-                        let activeSymptomCount = currentSymptomsSnapshot?.summary.activeCount ?? 0
+                        let visibleDrivers = topWhatMattersDrivers()
                         Text("What Matters Now")
                             .font(.headline)
-                        if groupedDriverSections.isEmpty {
+                        Text("The top current drivers in your mix right now.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        if visibleDrivers.isEmpty {
                             Text("Nothing is standing out strongly right now.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
@@ -6090,46 +6154,23 @@ struct ContentView: View {
                             .buttonStyle(.bordered)
                             .controlSize(.small)
                         } else {
-                            ForEach(groupedDriverSections) { section in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    WhatMattersSectionHeader(
-                                        title: section.role.title,
-                                        subtitle: section.role.subtitle
-                                    )
-                                    ForEach(section.items) { driver in
-                                        let zoneKey = driverSeverityKey(driver.severity)
-                                        let tappable = modalModels?.drivers?[driver.key] != nil
-                                        DriverStatusRow(
-                                            driver: driver,
-                                            role: section.role,
-                                            tappable: tappable,
-                                            showAffordance: driverHasAffordance(driver.severity),
-                                            zoneKey: zoneKey,
-                                            progress: driverProgress(driver.severity),
-                                            onTap: tappable ? { presentDriverModal(driver.key) } : nil
-                                        )
+                            ForEach(visibleDrivers) { item in
+                                let zoneKey = driverSeverityKey(item.driver.severity)
+                                DriverStatusRow(
+                                    driver: item.driver,
+                                    role: item.role,
+                                    zoneKey: zoneKey,
+                                    pillSeverity: pillSeverity(item.driver.severity),
+                                    onTap: {
+                                        onOpenAllDrivers(item.driver.key)
                                     }
-                                }
+                                )
                             }
                             Button("View All Drivers") {
                                 onOpenAllDrivers(nil)
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
-                            if activeSymptomCount > 0 {
-                                Button(action: onOpenCurrentSymptoms) {
-                                    HStack {
-                                        Text("Current Symptoms")
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundColor(.white)
-                                        Spacer()
-                                        Text(currentSymptomsSummaryLine)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
                         }
                     }
 

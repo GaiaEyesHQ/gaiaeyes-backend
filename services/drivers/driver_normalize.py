@@ -318,6 +318,9 @@ def _candidate(
     state_title = _state_title(state) if state else _severity_title(severity)
     strength = _clamp_signal_strength(signal_strength if signal_strength is not None else _signal_strength_from_driver(key, rounded_value, severity))
     hard_visible = force_visible or (severity == "high" and strength >= _HARD_SIGNAL_THRESHOLD)
+    visible = bool(show_driver) and severity != "low"
+    if hard_visible:
+        visible = True
     return {
         "key": key,
         "label": label,
@@ -330,7 +333,7 @@ def _candidate(
         "_value_abs": abs(rounded_value) if rounded_value is not None else -1.0,
         "_signal_strength": strength,
         "_force_visible": hard_visible,
-        "_show_driver": bool(show_driver or hard_visible),
+        "_show_driver": visible,
     }
 
 
@@ -433,7 +436,8 @@ def normalize_environmental_drivers(
     )
 
     out: List[Dict[str, Any]] = []
-    for item in rows[: max(1, int(limit or 6))]:
+    visible_rows = [item for item in rows if bool(item.get("_show_driver"))]
+    for item in visible_rows[: max(1, int(limit or 6))]:
         out.append(
             {
                 "key": item.get("key"),

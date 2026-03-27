@@ -351,26 +351,47 @@ def _base_short_reason(key: str, value: float | None, local_payload: Mapping[str
         pressure_12h = _safe_float(weather.get("baro_delta_12h_hpa") or weather.get("pressure_delta_12h"))
         pressure_24h = _safe_float(weather.get("baro_delta_24h_hpa") or weather.get("pressure_delta_24h_hpa"))
         if pressure_12h is not None:
+            abs_delta = abs(pressure_12h)
             reading = f"{pressure_12h:+.1f} hPa / 12h"
             return (
-                "Pressure moved sharply over the last 12 hours." if abs(pressure_12h) >= 8 else "Pressure is moving more than usual.",
-                f"Pressure is running at a {pressure_12h:+.1f} hPa 12-hour change right now.",
+                "Pressure moved sharply over the last 12 hours."
+                if abs_delta >= 8
+                else "Pressure is moving more than usual."
+                if abs_delta >= 6
+                else "Pressure looks relatively steady right now.",
+                f"Pressure is running at a {pressure_12h:+.1f} hPa 12-hour change right now."
+                if abs_delta >= 6
+                else f"Pressure changes are limited right now at about {pressure_12h:+.1f} hPa over 12 hours.",
                 reading,
             )
         if pressure_24h is not None:
+            abs_delta = abs(pressure_24h)
             reading = f"{pressure_24h:+.1f} hPa / 24h"
             return (
-                "Pressure moved noticeably over the last day.",
-                f"Pressure is running at a {pressure_24h:+.1f} hPa day-over-day change.",
+                "Pressure moved sharply over the last day."
+                if abs_delta >= 8
+                else "Pressure moved noticeably over the last day."
+                if abs_delta >= 6
+                else "Pressure looks relatively steady right now.",
+                f"Pressure is running at a {pressure_24h:+.1f} hPa day-over-day change."
+                if abs_delta >= 6
+                else f"Pressure changes are limited right now at about {pressure_24h:+.1f} hPa over the last day.",
                 reading,
             )
     if canonical == "temp":
         temp_delta = _safe_float(weather.get("temp_delta_24h_c") or weather.get("temp_delta_24h"))
         if temp_delta is not None:
+            abs_delta = abs(temp_delta)
             reading = f"{temp_delta:+.1f} C / 24h"
             return (
-                "Temperature is swinging more than usual today.",
-                f"Temperature is tracking at a {temp_delta:+.1f} C day-over-day swing.",
+                "Temperature is swinging more than usual today."
+                if abs_delta >= 8
+                else "Temperature has shifted noticeably over the last day."
+                if abs_delta >= 6
+                else "Temperature looks relatively steady today.",
+                f"Temperature is tracking at a {temp_delta:+.1f} C day-over-day swing."
+                if abs_delta >= 6
+                else f"Temperature change is limited right now at about {temp_delta:+.1f} C over the last day.",
                 reading,
             )
     if canonical == "aqi":

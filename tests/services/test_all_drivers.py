@@ -9,6 +9,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from services.drivers.all_drivers import compose_all_drivers_payload
+from services.drivers.driver_normalize import normalize_environmental_drivers
 
 
 def test_compose_all_drivers_payload_keeps_high_signal_and_links_patterns() -> None:
@@ -105,3 +106,22 @@ def test_compose_all_drivers_payload_keeps_high_signal_and_links_patterns() -> N
     assert pressure["pattern_status"] == "moderate"
     assert pressure["current_symptoms"] == ["Headache"]
     assert pressure["state"] == "watch"
+
+
+def test_normalize_environmental_drivers_skips_quiet_local_baselines() -> None:
+    drivers = normalize_environmental_drivers(
+        active_states=[],
+        local_payload={
+            "weather": {
+                "baro_delta_24h_hpa": -2.0,
+                "temp_delta_24h_c": -0.6,
+            },
+            "air": {
+                "aqi": 47,
+            },
+        },
+        alerts_json=[],
+        limit=6,
+    )
+
+    assert drivers == []
