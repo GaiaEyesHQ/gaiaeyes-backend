@@ -2715,7 +2715,6 @@ struct ContentView: View {
 
                 let resolvedCurrentMemberPost = currentEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay)
                 let resolvedCurrentPersonalPost = currentEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
-                let resolvedCurrentPublicPost = currentEarthscopePost(resolvedPayload.publicPost, requestedDay: dashboardDay)
                 let preferredMemberPost = preferredEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay)
                 let preferredPersonalPost = preferredEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
                 let preferredPublicPost = preferredEarthscopePost(resolvedPayload.publicPost, requestedDay: dashboardDay)

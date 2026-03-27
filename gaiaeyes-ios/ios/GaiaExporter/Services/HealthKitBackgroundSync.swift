@@ -220,6 +220,12 @@ final class HealthKitBackgroundSync {
     private static let phase2BackfillVersion = 1
     private static let phase2BackfillMarkerKey = "gaia.hk.phase2BackfillVersion"
 
+    private static func isoString(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
+    }
+
     private let healthStore = HKHealthStore()
     private let anchorStore = AnchorStore()
     private let featuresRefresher = FeaturesRefreshDebouncer()
@@ -1519,6 +1525,9 @@ final class HealthKitBackgroundSync {
         end: Date,
         intervalMinutes: Int
     ) async throws -> [Sample] {
+        let userId = currentUserId()
+        let quantityType = hrType
+        let store = healthStore
         let predicate = HKQuery.predicateForSamples(
             withStart: start,
             end: end,
@@ -1530,7 +1539,7 @@ final class HealthKitBackgroundSync {
 
         return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<[Sample], Error>) in
             let query = HKStatisticsCollectionQuery(
-                quantityType: hrType,
+                quantityType: quantityType,
                 quantitySamplePredicate: predicate,
                 options: [.discreteAverage],
                 anchorDate: anchorDate,
@@ -1548,12 +1557,12 @@ final class HealthKitBackgroundSync {
                     let intervalEnd = min(stats.endDate, end)
                     samples.append(
                         Sample(
-                            user_id: self.currentUserId(),
+                            user_id: userId,
                             device_os: "ios",
                             source: "healthkit",
                             type: "heart_rate",
-                            start_time: self.iso.string(from: stats.startDate),
-                            end_time: self.iso.string(from: intervalEnd),
+                            start_time: Self.isoString(stats.startDate),
+                            end_time: Self.isoString(intervalEnd),
                             value: avg,
                             unit: "bpm",
                             value_text: "discrete_average_15m"
@@ -1562,7 +1571,7 @@ final class HealthKitBackgroundSync {
                 }
                 cont.resume(returning: samples)
             }
-            self.healthStore.execute(query)
+            store.execute(query)
         }
     }
 
