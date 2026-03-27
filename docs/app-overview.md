@@ -24,6 +24,7 @@
 1. Features Today Card
 	•	Displays Sleep, HRV, HR, SpO₂, BP, Schumann, Kp, Bz, Solar Wind.
 	•	Data source: /v1/features/today.
+	•	Also carries day-level lunar context (phase, illumination, days from full/new moon) keyed by UTC day for lightweight overlays and observational insight cards.
 	•	Fallbacks:
 	•	Retries twice on failure (1s apart).
 	•	Falls back to last-known and persisted cache.
@@ -33,10 +34,20 @@
 2. Weekly Trends
 	•	Visualizes 30 days of space and HRV data (sparklines for Kp, Bz, Schumann f0, HR).
 	•	Data source: /v1/space/series.
+	•	The same payload now includes `lunar_overlay.windows` so existing Swift Charts views can draw full/new moon markers without a separate chart backend.
 	•	Added series cache (@AppStorage("series_cache_json")) and fallback logic.
 	•	Empty responses no longer overwrite existing charts.
 
-3. Earthscope Daily Card
+3. Lunar Pattern Detection
+	•	Observational only. No causal or medical claims.
+	•	Uses the existing daily mart plus symptom-day aggregation to compare HRV, sleep efficiency, and symptom activity inside full/new moon windows versus baseline days.
+	•	Data sources:
+	•	/v1/lunar/current → current UTC-day lunar context
+	•	/v1/insights/lunar → authenticated per-user summary with scientific and mystical copy variants
+	•	/v1/series/lunar-overlay → reusable overlay markers for charts outside the main series payload
+	•	User preference is stored in the current experience profile as `lunar_sensitivity_declared`, which only changes prioritization/presentation.
+
+4. Earthscope Daily Card
 	•	Uses daily earthscope_daily.json for title, summary, and image quartet:
 	•	daily_caption.jpg
 	•	daily_stats.jpg
@@ -46,17 +57,17 @@
 	•	Fixed layout alignment, dark overlay, and margin bleeding.
 	•	Card supports deep tap → opens full Earthscope view.
 
-4. Space Alerts Card
+5. Space Alerts Card
 	•	Uses flare_alert, kp_alert flags.
 	•	Fixed missing SF Symbol by replacing "bolt.triangle.fill" → "bolt.triangle" (universal symbol).
 
-5. Sleep / Health Stats / Space Weather Cards
+6. Sleep / Health Stats / Space Weather Cards
 	•	Now resilient to null feature payloads:
 	•	features ?? lastKnownFeatures ensures continuity.
 	•	Cards never drop out on refresh.
 	•	Sleep data aggregated by day; HRV and HR synced via HealthKitBackgroundSync.
 
-6. Background Ingestion
+7. Background Ingestion
 	•	Implemented in HealthKitBackgroundSync.swift.
 	•	Uses:
 	•	HKObserverQuery for HR, HRV, SpO₂, BP, Sleep, Steps.

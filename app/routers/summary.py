@@ -29,6 +29,7 @@ from app.db import ulf as ulf_db
 from app.db.health import get_health_monitor
 from services.forecast_outlook import ensure_space_forecast_daily, serialize_space_forecast_rows
 from services.geomagnetic_context import build_ulf_payload
+from services.time.moon import lunar_overlay_windows, moon_context_for_day
 from app.utils.auth import require_admin
 
 DEFAULT_TIMEZONE = "America/Chicago"
@@ -293,6 +294,11 @@ _MART_COLUMNS = [
     "df.kp_max as kp_max",
     "df.bz_min as bz_min",
     "df.sw_speed_avg as sw_speed_avg",
+    "df.moon_phase_fraction as moon_phase_fraction",
+    "df.moon_illumination_pct as moon_illumination_pct",
+    "df.moon_phase_label as moon_phase_label",
+    "df.days_from_full_moon as days_from_full_moon",
+    "df.days_from_new_moon as days_from_new_moon",
     "df.aurora_hp_north_gw as aurora_hp_north_gw",
     "df.aurora_hp_south_gw as aurora_hp_south_gw",
     "df.xray_max_class as xray_max_class",
@@ -890,6 +896,31 @@ def _compose_geomagnetic_context_payload(
         return build_ulf_payload(latest_context)
     return build_ulf_payload(base, include_empty=True)
 
+
+def _compose_lunar_context_payload(base: Dict[str, Any], day_local: Optional[date]) -> Dict[str, Any]:
+    if not day_local:
+        return {"lunar_context": None}
+
+    context = moon_context_for_day(day_local)
+    moon_phase_fraction = base.get("moon_phase_fraction")
+    moon_illumination_pct = base.get("moon_illumination_pct")
+    moon_phase_label = base.get("moon_phase_label")
+    days_from_full_moon = base.get("days_from_full_moon")
+    days_from_new_moon = base.get("days_from_new_moon")
+
+    payload = {
+        "moon_phase_fraction": moon_phase_fraction if moon_phase_fraction is not None else context.get("moon_phase_fraction"),
+        "moon_illumination_pct": moon_illumination_pct if moon_illumination_pct is not None else context.get("moon_illumination_pct"),
+        "moon_phase_label": moon_phase_label if moon_phase_label is not None else context.get("moon_phase_label"),
+        "days_from_full_moon": days_from_full_moon if days_from_full_moon is not None else context.get("days_from_full_moon"),
+        "days_from_new_moon": days_from_new_moon if days_from_new_moon is not None else context.get("days_from_new_moon"),
+    }
+    payload["lunar_context"] = {
+        "utc_date": day_local.isoformat(),
+        **payload,
+    }
+    return payload
+
 _FEATURE_DEFAULTS: Dict[str, Any] = {
     "user_id": None,
     "day": None,
@@ -927,6 +958,11 @@ _FEATURE_DEFAULTS: Dict[str, Any] = {
     "kp_max": None,
     "bz_min": None,
     "sw_speed_avg": None,
+    "moon_phase_fraction": None,
+    "moon_illumination_pct": None,
+    "moon_phase_label": None,
+    "days_from_full_moon": None,
+    "days_from_new_moon": None,
     "flares_count": 0,
     "cmes_count": 0,
     "kp_alert": False,
@@ -971,6 +1007,7 @@ _FEATURE_DEFAULTS: Dict[str, Any] = {
     "ulf_missing_samples": False,
     "ulf_low_history": False,
     "geomagnetic_context": None,
+    "lunar_context": None,
 }
 
 _INT_FIELDS = {
@@ -986,6 +1023,8 @@ _INT_FIELDS = {
     "cmes_count",
     "sep_s_max",
     "ulf_station_count",
+    "days_from_full_moon",
+    "days_from_new_moon",
 }
 
 _FLOAT_FIELDS = {
@@ -1009,6 +1048,8 @@ _FLOAT_FIELDS = {
     "kp_max",
     "bz_min",
     "sw_speed_avg",
+    "moon_phase_fraction",
+    "moon_illumination_pct",
     "kp_current",
     "bz_current",
     "sw_speed_current",
@@ -1112,6 +1153,16 @@ def _summarize_feature_payload(payload: Optional[Dict[str, Any]]) -> Dict[str, A
                 summary_payload,
                 ("kp_current", "bz_current", "sw_speed_current"),
             ),
+            "lunar": _any_present(
+                summary_payload,
+                (
+                    "moon_phase_fraction",
+                    "moon_illumination_pct",
+                    "moon_phase_label",
+                    "days_from_full_moon",
+                    "days_from_new_moon",
+                ),
+            ),
             "schumann": _any_present(
                 summary_payload,
                 ("sch_f0_hz", "sch_f1_hz", "sch_f2_hz", "sch_f3_hz", "sch_f4_hz"),
@@ -1139,6 +1190,7 @@ def _summarize_feature_payload(payload: Optional[Dict[str, Any]]) -> Dict[str, A
             "kp_max": _coerce_float_value(summary_payload.get("kp_max")),
             "bz_min": _coerce_float_value(summary_payload.get("bz_min")),
             "sw_speed_avg": _coerce_float_value(summary_payload.get("sw_speed_avg")),
+            "moon_illumination_pct": _coerce_float_value(summary_payload.get("moon_illumination_pct")),
             "ulf_confidence_score": _coerce_float_value(summary_payload.get("ulf_confidence_score")),
             "ulf_regional_intensity": _coerce_float_value(summary_payload.get("ulf_regional_intensity")),
             # Expose SpO2 in diagnostics
@@ -1243,6 +1295,7 @@ def _normalize_features_payload(
     normalized.update(build_ulf_payload(normalized, include_empty=True))
 
     normalized["source"] = normalized.get("source") or source_hint or "snapshot"
+    normalized.update(_compose_lunar_context_payload(normalized, parsed_day))
 
     return normalized
 
@@ -1301,6 +1354,7 @@ async def _freshen_features(
     }
     payload.update(_compose_sleep_payload(summary, sleep))
     payload.update(_compose_space_weather_payload(summary, daily_wx, current_wx))
+    payload.update(_compose_lunar_context_payload(payload, day_local))
     payload.update(_compose_geomagnetic_context_payload(summary, ulf))
     payload.update(sch)
     payload.update(post)
@@ -1572,6 +1626,7 @@ async def _collect_features(
                 if user_id:
                     response_payload.setdefault("user_id", user_id)
                 response_payload.setdefault("day", target_day)
+                response_payload.update(_compose_lunar_context_payload(response_payload, target_day))
                 if should_enrich:
                     if diag_info.get("freshened"):
                         enrich_components = {
@@ -2857,6 +2912,8 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
         "hr_daily_rows": len(hr_daily_rows or []),
         "hr_ts_rows": len(hr_ts_rows or []),
     }
+    utc_today = datetime.now(timezone.utc).date()
+    start_day = utc_today - timedelta(days=days - 1)
 
     return {
         "ok": True,
@@ -2879,7 +2936,10 @@ async def space_series(request: Request, days: int = 30, conn = Depends(get_db))
             "hr_timeseries": [
                 {"ts": iso(r.get("ts_utc")), "hr": fnum(r.get("hr"))}
                 for r in (hr_ts_rows or []) if r.get("hr") is not None
-            ]
+            ],
+            "lunar_overlay": {
+                "windows": lunar_overlay_windows(start_day, utc_today)
+            },
         },
         "diag": diag
     }

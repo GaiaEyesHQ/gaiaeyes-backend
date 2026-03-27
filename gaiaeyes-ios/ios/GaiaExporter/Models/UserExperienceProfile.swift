@@ -188,11 +188,39 @@ struct UserExperienceProfile: Codable, Equatable {
     var mode: ExperienceMode = .scientific
     var guide: GuideType = .cat
     var tone: ToneStyle = .balanced
+    var lunarSensitivityDeclared: Bool = false
     var onboardingStep: OnboardingStep = .welcome
     var onboardingCompleted: Bool = false
     var onboardingCompletedAt: String?
     var healthkitRequestedAt: String?
     var lastBackfillAt: String?
+
+    init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case mode
+        case guide
+        case tone
+        case lunarSensitivityDeclared = "lunar_sensitivity_declared"
+        case onboardingStep = "onboarding_step"
+        case onboardingCompleted = "onboarding_completed"
+        case onboardingCompletedAt = "onboarding_completed_at"
+        case healthkitRequestedAt = "healthkit_requested_at"
+        case lastBackfillAt = "last_backfill_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        mode = try container.decodeIfPresent(ExperienceMode.self, forKey: .mode) ?? .scientific
+        guide = try container.decodeIfPresent(GuideType.self, forKey: .guide) ?? .cat
+        tone = try container.decodeIfPresent(ToneStyle.self, forKey: .tone) ?? .balanced
+        lunarSensitivityDeclared = try container.decodeIfPresent(Bool.self, forKey: .lunarSensitivityDeclared) ?? false
+        onboardingStep = try container.decodeIfPresent(OnboardingStep.self, forKey: .onboardingStep) ?? .welcome
+        onboardingCompleted = try container.decodeIfPresent(Bool.self, forKey: .onboardingCompleted) ?? false
+        onboardingCompletedAt = try container.decodeIfPresent(String.self, forKey: .onboardingCompletedAt)
+        healthkitRequestedAt = try container.decodeIfPresent(String.self, forKey: .healthkitRequestedAt)
+        lastBackfillAt = try container.decodeIfPresent(String.self, forKey: .lastBackfillAt)
+    }
 
     static let `default` = UserExperienceProfile()
 }
@@ -208,6 +236,7 @@ struct UserExperienceProfileUpdate: Encodable {
     var mode: ExperienceMode? = nil
     var guide: GuideType? = nil
     var tone: ToneStyle? = nil
+    var lunarSensitivityDeclared: Bool? = nil
     var onboardingStep: OnboardingStep? = nil
     var onboardingCompleted: Bool? = nil
     var healthkitRequested: Bool? = nil
@@ -217,6 +246,7 @@ struct UserExperienceProfileUpdate: Encodable {
         case mode
         case guide
         case tone
+        case lunarSensitivityDeclared = "lunar_sensitivity_declared"
         case onboardingStep = "onboarding_step"
         case onboardingCompleted = "onboarding_completed"
         case healthkitRequested = "healthkit_requested"

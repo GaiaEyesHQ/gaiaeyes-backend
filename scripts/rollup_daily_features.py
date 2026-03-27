@@ -98,6 +98,9 @@ insert into marts.daily_features (
   -- Space weather (+ DONKI)
   kp_max, bz_min, sw_speed_avg, flares_count, cmes_count,
 
+  -- Lunar context
+  moon_phase_fraction, moon_illumination_pct, moon_phase_label, days_from_full_moon, days_from_new_moon,
+
   -- Schumann (Tomsk, existing columns)
   schumann_station, sch_fundamental_avg_hz, sch_f1_avg_hz, sch_f2_avg_hz, sch_f3_avg_hz, sch_f4_avg_hz, sch_f5_avg_hz,
 
@@ -127,6 +130,13 @@ select
   -- Space weather
   w.kp_max, w.bz_min, w.sw_speed_avg, w.flares_count, w.cmes_count,
 
+  -- Lunar context
+  lunar.moon_phase_fraction,
+  lunar.moon_illumination_pct,
+  lunar.moon_phase_label,
+  lunar.days_from_full_moon,
+  lunar.days_from_new_moon,
+
   -- Tomsk
   case when t.t_f0 is not null then 'tomsk' else null end as schumann_station,
   t.t_f0, t.t_f1, t.t_f2, t.t_f3, t.t_f4, t.t_f5,
@@ -143,10 +153,11 @@ select
   coalesce(t.t_f4, c.c_f4) as sch_any_f4_avg_hz,
   coalesce(t.t_f5, c.c_f5) as sch_any_f5_avg_hz,
 
-  'rollup-v4', now()
+  'rollup-v6', now()
 
 from s
 left join wx   w  on w.day  = s.day
+left join lateral marts.lunar_context_for_day(s.day) lunar on true
 left join sch_t t on t.day  = s.day
 left join sch_c c on c.day  = s.day
 
@@ -190,6 +201,13 @@ set
   flares_count        = excluded.flares_count,
   cmes_count          = excluded.cmes_count,
 
+  -- Lunar context
+  moon_phase_fraction = excluded.moon_phase_fraction,
+  moon_illumination_pct = excluded.moon_illumination_pct,
+  moon_phase_label = excluded.moon_phase_label,
+  days_from_full_moon = excluded.days_from_full_moon,
+  days_from_new_moon = excluded.days_from_new_moon,
+
   -- Tomsk
   schumann_station          = excluded.schumann_station,
   sch_fundamental_avg_hz    = excluded.sch_fundamental_avg_hz,
@@ -225,7 +243,7 @@ async def main():
     conn = await asyncpg.connect(dsn=DB, statement_cache_size=0)
     try:
         await conn.execute(SQL)
-        print(f"✅ Rolled up last {DAYS_BACK} days into marts.daily_features (health context + Tomsk+Cumiana)")
+        print(f"✅ Rolled up last {DAYS_BACK} days into marts.daily_features (health context + lunar + Tomsk+Cumiana)")
     finally:
         await conn.close()
 

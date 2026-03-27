@@ -144,6 +144,39 @@ provisional via `ulf_is_provisional` / `geomagnetic_context.is_provisional`. Cli
 should use softer language such as “Baseline still building” instead of hiding the
 module outright.
 
+## Lunar context
+
+`data` also carries additive lunar context sourced from the same `marts.daily_features`
+row when available, with an automatic route-level fallback so older rows still decode
+cleanly:
+
+- Flat compatibility fields:
+  - `moon_phase_fraction`
+  - `moon_illumination_pct`
+  - `moon_phase_label`
+  - `days_from_full_moon`
+  - `days_from_new_moon`
+- Preferred client object:
+
+```
+"lunar_context": {
+  "utc_date": "2026-03-27",
+  "moon_phase_fraction": 0.579401,
+  "moon_illumination_pct": 93.165,
+  "moon_phase_label": "Waning Gibbous",
+  "days_from_full_moon": 2,
+  "days_from_new_moon": 13
+}
+```
+
+Day-level lunar context is keyed by the route’s resolved UTC day and is calculated at
+midday UTC for stable daily alignment. This keeps overlays and per-user comparisons on a
+single canonical date even when local check-ins happen near midnight.
+
+The related trends endpoint `/v1/space/series` now also includes
+`data.lunar_overlay.windows`, a lightweight array of `{"date","type","label"}` markers
+for full/new moon chart annotations over the requested range.
+
 ## Source selection
 
 1. **Today’s mart row** – if `marts.daily_features` already contains `(user_id, today_local)` the handler hydrates it with live sleep and space weather context.

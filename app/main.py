@@ -16,6 +16,7 @@ from .routers import (
     hazards,
     ingest,
     local,
+    lunar,
     outlook,
     patterns,
     profile,
@@ -138,6 +139,7 @@ app.include_router(earth.router, dependencies=[Depends(require_read_auth)])
 app.include_router(schumann_tomsk_params.router, dependencies=[Depends(require_read_auth)])
 app.include_router(space.router, dependencies=[Depends(require_read_auth)])
 app.include_router(summary.router, dependencies=[Depends(require_read_auth)])
+app.include_router(lunar.router, dependencies=[Depends(require_read_auth)])
 app.include_router(space_forecasts.router, dependencies=[Depends(require_read_auth)])
 app.include_router(outlook.router)
 app.include_router(drivers.router)

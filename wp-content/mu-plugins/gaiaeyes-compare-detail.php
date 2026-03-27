@@ -8,7 +8,19 @@ if (!defined('ABSPATH')) exit;
 
 require_once __DIR__ . '/gaiaeyes-api-helpers.php';
 
-  $base = defined('GAIA_MEDIA_BASE') ? rtrim(GAIA_MEDIA_BASE, '/') : '';
+$base = defined('GAIA_MEDIA_BASE') ? rtrim(GAIA_MEDIA_BASE, '/') : '';
+if (!defined('GAIAEYES_API_BASE')) {
+  $api_base = getenv('GAIAEYES_API_BASE');
+  define('GAIAEYES_API_BASE', $api_base ? rtrim(esc_url_raw($api_base), '/') : '');
+}
+if (!defined('GAIAEYES_API_BEARER')) {
+  $api_bearer = getenv('GAIAEYES_API_BEARER');
+  define('GAIAEYES_API_BEARER', $api_bearer ? trim($api_bearer) : '');
+}
+if (!defined('GAIAEYES_API_DEV_USERID')) {
+  $api_dev = getenv('GAIAEYES_API_DEV_USERID');
+  define('GAIAEYES_API_DEV_USERID', $api_dev ? trim($api_dev) : '');
+}
 if (!defined('GAIAEYES_COMPARE_URL')) {
   define('GAIAEYES_COMPARE_URL', $base ? ($base . '/data/compare_series.json') : '');
 }
@@ -95,6 +107,48 @@ function gaiaeyes_compare_detail_shortcode($atts){
       'm5p_monthly'=>'Quakes M5+ (monthly)', 'm6p_monthly'=>'Quakes M6+ (monthly)',
       'kp_daily_max'=>'Kp (daily max)', 'bz_daily_min'=>'Bz (daily min, nT)', 'sw_daily_avg'=>'Solar wind (daily avg, km/s)'
     ];
+  }
+
+  $lunar_windows = [];
+  if (GAIAEYES_API_BASE) {
+    $all_dates = [];
+    foreach ($ser as $points) {
+      if (!is_array($points)) {
+        continue;
+      }
+      foreach ($points as $point) {
+        if (!is_array($point) || empty($point[0])) {
+          continue;
+        }
+        $day = (string) $point[0];
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $day)) {
+          $all_dates[] = $day;
+        }
+      }
+    }
+    if (!empty($all_dates)) {
+      sort($all_dates);
+      $start_day = reset($all_dates);
+      $end_day = end($all_dates);
+      $overlay_url = add_query_arg(
+        [
+          'start' => $start_day,
+          'end' => $end_day,
+        ],
+        rtrim(GAIAEYES_API_BASE, '/') . '/v1/series/lunar-overlay'
+      );
+      $overlay_cache_key = 'gaia_lunar_overlay_' . md5($overlay_url);
+      $overlay_payload = gaiaeyes_http_get_json_api_cached(
+        $overlay_url,
+        $overlay_cache_key,
+        $ttl,
+        GAIAEYES_API_BEARER,
+        GAIAEYES_API_DEV_USERID
+      );
+      if (is_array($overlay_payload) && !empty($overlay_payload['windows']) && is_array($overlay_payload['windows'])) {
+        $lunar_windows = array_values($overlay_payload['windows']);
+      }
+    }
   }
 
   // Build metric options from keys present
@@ -190,6 +244,7 @@ function gaiaeyes_compare_detail_shortcode($atts){
       (function(){
         const data = <?php echo wp_json_encode($ser); ?>;
         const LABELS = <?php echo wp_json_encode($labels ?: []); ?>;
+        const lunarWindows = <?php echo wp_json_encode($lunar_windows); ?>;
         function parseSeries(k){ return Array.isArray(data[k]) ? data[k].slice() : []; }
 
         function rolling(arr, win){
@@ -242,6 +297,35 @@ function gaiaeyes_compare_detail_shortcode($atts){
         }
 
         let chart;
+        const lunarMarkerPlugin = {
+          id: 'lunarMarkers',
+          afterDatasetsDraw(chartInstance) {
+            if (!Array.isArray(lunarWindows) || !lunarWindows.length) return;
+            const labels = Array.isArray(chartInstance.data.labels) ? chartInstance.data.labels : [];
+            if (!labels.length) return;
+            const xScale = chartInstance.scales && chartInstance.scales.x;
+            const chartArea = chartInstance.chartArea;
+            if (!xScale || !chartArea) return;
+            const labelIndex = new Map(labels.map((label, index) => [String(label), index]));
+            const ctx = chartInstance.ctx;
+            ctx.save();
+            lunarWindows.forEach((window) => {
+              const idx = labelIndex.get(String(window && window.date ? window.date : ''));
+              if (typeof idx !== 'number') return;
+              const x = xScale.getPixelForValue(idx);
+              ctx.beginPath();
+              ctx.moveTo(x, chartArea.top);
+              ctx.lineTo(x, chartArea.bottom);
+              ctx.lineWidth = 1;
+              ctx.strokeStyle = window && window.type === 'new'
+                ? 'rgba(226,232,240,0.55)'
+                : 'rgba(251,191,36,0.75)';
+              ctx.stroke();
+            });
+            ctx.restore();
+          }
+        };
+
         function draw(){
           const Akey = document.getElementById('cmpA').value;
           const Bkey = document.getElementById('cmpB').value;
@@ -265,6 +349,7 @@ function gaiaeyes_compare_detail_shortcode($atts){
           const ctx = document.getElementById('cmpChart').getContext('2d');
           chart = new Chart(ctx, {
             type: 'line',
+            plugins: [lunarMarkerPlugin],
             data: {
               labels: dates.slice(-range),
               datasets: [
@@ -285,7 +370,10 @@ function gaiaeyes_compare_detail_shortcode($atts){
           });
           const legend = document.getElementById('cmpLegend');
           if (legend){
-            legend.textContent = `A = ${nmA}   |   B = ${nmB}`;
+            const lunarLegend = Array.isArray(lunarWindows) && lunarWindows.length
+              ? '   |   Full moon   |   New moon'
+              : '';
+            legend.textContent = `A = ${nmA}   |   B = ${nmB}${lunarLegend}`;
           }
         }
 

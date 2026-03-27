@@ -94,6 +94,7 @@ class ProfilePreferencesIn(BaseModel):
     mode: Optional[str] = Field(default=None)
     guide: Optional[str] = Field(default=None)
     tone: Optional[str] = Field(default=None)
+    lunar_sensitivity_declared: Optional[bool] = Field(default=None)
     onboarding_step: Optional[str] = Field(default=None)
     onboarding_completed: Optional[bool] = Field(default=None)
     healthkit_requested: Optional[bool] = Field(default=None)
@@ -264,6 +265,7 @@ def _default_profile_preferences() -> Dict[str, Any]:
         "mode": "scientific",
         "guide": "cat",
         "tone": "balanced",
+        "lunar_sensitivity_declared": False,
         "onboarding_step": "welcome",
         "onboarding_completed": False,
         "onboarding_completed_at": None,
@@ -359,6 +361,7 @@ async def _fetch_profile_preferences(conn, user_id: str) -> Dict[str, Any]:
         "mode",
         "guide",
         "tone",
+        "lunar_sensitivity_declared",
         "onboarding_step",
         "onboarding_completed",
         "onboarding_completed_at",
@@ -386,6 +389,7 @@ async def _fetch_profile_preferences(conn, user_id: str) -> Dict[str, Any]:
         "mode": _normalize_experience_mode(row.get("mode"), fallback=defaults["mode"]),
         "guide": _normalize_guide_type(row.get("guide"), fallback=defaults["guide"]),
         "tone": _normalize_tone_style(row.get("tone"), fallback=defaults["tone"]),
+        "lunar_sensitivity_declared": bool(row.get("lunar_sensitivity_declared")),
         "onboarding_step": _normalize_onboarding_step(row.get("onboarding_step"), fallback=defaults["onboarding_step"]),
         "onboarding_completed": bool(row.get("onboarding_completed")),
         "onboarding_completed_at": row.get("onboarding_completed_at"),
@@ -517,6 +521,11 @@ async def profile_preferences_upsert(
         "mode": _normalize_experience_mode(payload.mode, fallback=str(current.get("mode") or defaults["mode"])),
         "guide": _normalize_guide_type(payload.guide, fallback=str(current.get("guide") or defaults["guide"])),
         "tone": _normalize_tone_style(payload.tone, fallback=str(current.get("tone") or defaults["tone"])),
+        "lunar_sensitivity_declared": (
+            bool(payload.lunar_sensitivity_declared)
+            if payload.lunar_sensitivity_declared is not None
+            else bool(current.get("lunar_sensitivity_declared"))
+        ),
         "onboarding_step": _normalize_onboarding_step(
             payload.onboarding_step,
             fallback=str(current.get("onboarding_step") or defaults["onboarding_step"]),

@@ -26,12 +26,61 @@ private struct SpaceSeries: Codable {
     let schumannDaily: [SchumannDay]?
     let hrDaily: [HRDay]?
     let hrTimeseries: [HRPointTS]?
+    let lunarOverlay: LunarOverlayCollection?
 }
 // Empty factory for SpaceSeries
 private extension SpaceSeries {
     static var empty: SpaceSeries {
-        SpaceSeries(spaceWeather: [], schumannDaily: [], hrDaily: [], hrTimeseries: [])
+        SpaceSeries(spaceWeather: [], schumannDaily: [], hrDaily: [], hrTimeseries: [], lunarOverlay: LunarOverlayCollection(windows: []))
     }
+}
+private struct LunarOverlayCollection: Codable {
+    let windows: [LunarOverlayPoint]?
+}
+private struct LunarOverlayPoint: Codable, Identifiable {
+    let date: String?
+    let type: String?
+    let label: String?
+
+    var id: String {
+        "\(type ?? "lunar")-\(date ?? "unknown")"
+    }
+}
+private struct LunarInsightWindowSummary: Codable {
+    let days: Int?
+    let hrvAvg: Double?
+    let sleepEfficiencyAvg: Double?
+    let symptomEventsAvg: Double?
+    let symptomSeverityAvg: Double?
+}
+private struct LunarInsightMetricSample: Codable {
+    let observedDays: Int?
+    let fullWindowDays: Int?
+    let newWindowDays: Int?
+    let baselineDays: Int?
+}
+private struct LunarInsightSampleSizes: Codable {
+    let hrv: LunarInsightMetricSample?
+    let sleepEfficiency: LunarInsightMetricSample?
+    let symptomEvents: LunarInsightMetricSample?
+}
+private struct LunarInsightPayload: Codable {
+    let userId: String?
+    let declaredLunarSensitivity: Bool?
+    let currentLunarContext: LunarContextSummary?
+    let observedDays: Int?
+    let nNights: Int?
+    let fullWindow: LunarInsightWindowSummary?
+    let newWindow: LunarInsightWindowSummary?
+    let baseline: LunarInsightWindowSummary?
+    let sampleSizes: LunarInsightSampleSizes?
+    let deltas: [String: Double?]?
+    let patternStrength: String?
+    let highlightWindow: String?
+    let highlightMetric: String?
+    let messageScientific: String?
+    let messageMystical: String?
+    let insufficientData: Bool?
 }
 private struct HRPointTS: Codable {
     let ts: String?
@@ -1719,6 +1768,9 @@ struct ContentView: View {
     @State private var forecast: ForecastSummary? = nil
     @State private var series: SpaceSeries? = nil
     @State private var lastKnownSeries: SpaceSeries? = nil
+    @State private var lunarInsights: LunarInsightPayload? = nil
+    @State private var lunarInsightsLoading: Bool = false
+    @State private var lunarInsightsError: String? = nil
     @State private var spaceWeatherDetailFetchInFlight: Bool = false
     @State private var spaceWeatherDetailLastFetchAt: Date = .distantPast
     @State private var forecastSummaryFetchInFlight: Bool = false
@@ -4297,6 +4349,50 @@ struct ContentView: View {
             return
         } catch {
             appLog("[UI] forecast error: \(error.localizedDescription)")
+        }
+    }
+
+    private func fetchLunarInsights(force: Bool = false) async {
+        let shouldStart = await MainActor.run { () -> Bool in
+            if lunarInsightsLoading {
+                return false
+            }
+            if !force && lunarInsights != nil {
+                return false
+            }
+            lunarInsightsLoading = true
+            lunarInsightsError = nil
+            return true
+        }
+        guard shouldStart else { return }
+        defer {
+            Task { @MainActor in
+                lunarInsightsLoading = false
+            }
+        }
+
+        let backendAvailable = await MainActor.run { state.backendDBAvailable }
+        guard backendAvailable else {
+            appLog("[UI] lunar insights: backend DB=false; skipping")
+            return
+        }
+
+        let api = state.apiWithAuth()
+        do {
+            let payload: LunarInsightPayload = try await api.getJSON("v1/insights/lunar", as: LunarInsightPayload.self, perRequestTimeout: 20)
+            await MainActor.run {
+                lunarInsights = payload
+                lunarInsightsError = nil
+            }
+        } catch is CancellationError {
+            return
+        } catch let error as URLError where error.code == .cancelled {
+            return
+        } catch {
+            appLog("[UI] lunar insights error: \(error.localizedDescription)")
+            await MainActor.run {
+                lunarInsightsError = error.localizedDescription
+            }
         }
     }
 
@@ -9100,6 +9196,11 @@ struct ContentView: View {
         let diagnostics: [SymptomDiagSummary]
         let currentSymptomsSnapshot: CurrentSymptomsSnapshot?
         let series: SpaceSeries?
+        let lunarInsights: LunarInsightPayload?
+        let lunarInsightsLoading: Bool
+        let lunarInsightsError: String?
+        let experienceMode: ExperienceMode
+        let lunarSensitivityDeclared: Bool
         let highlights: [SymptomHighlight]
         let latestCameraCheck: CameraHealthDailySummary?
         let latestCameraCheckLoading: Bool
@@ -9116,7 +9217,8 @@ struct ContentView: View {
         }
 
         private func ensureComparisonLoad(immediate: Bool = false) {
-            guard series == nil, !hasStartedComparisonLoad else { return }
+            guard !hasStartedComparisonLoad else { return }
+            guard series == nil || lunarInsights == nil else { return }
             hasStartedComparisonLoad = true
             Task {
                 if !immediate {
@@ -9125,6 +9227,31 @@ struct ContentView: View {
                 if Task.isCancelled { return }
                 await onLoadComparison()
             }
+        }
+
+        private var lunarInsightMessage: String? {
+            switch experienceMode {
+            case .scientific:
+                return lunarInsights?.messageScientific
+            case .mystical:
+                return lunarInsights?.messageMystical
+            }
+        }
+
+        private var shouldShowLunarCard: Bool {
+            if lunarInsightsLoading {
+                return true
+            }
+            if lunarSensitivityDeclared {
+                return true
+            }
+            guard let lunarInsights else { return false }
+            if lunarInsights.insufficientData == false,
+               let strength = lunarInsights.patternStrength,
+               strength.lowercased() != "none" {
+                return true
+            }
+            return false
         }
 
         var body: some View {
@@ -9196,6 +9323,44 @@ struct ContentView: View {
                             current: current,
                             updatedText: updatedText
                         )
+
+                        if shouldShowLunarCard {
+                            LocalConditionsSurfaceCard(title: "Lunar Pattern Watch", icon: "moon.stars.fill") {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    if lunarInsightsLoading {
+                                        ProgressView("Checking lunar windows…")
+                                            .font(.caption)
+                                    } else {
+                                        if let message = lunarInsightMessage, !message.isEmpty {
+                                            Text(message)
+                                                .font(.subheadline)
+                                                .foregroundColor(.primary)
+                                        }
+
+                                        if let highlightWindow = lunarInsights?.highlightWindow,
+                                           let highlightMetric = lunarInsights?.highlightMetric,
+                                           let strength = lunarInsights?.patternStrength,
+                                           !highlightWindow.isEmpty,
+                                           !highlightMetric.isEmpty,
+                                           strength.lowercased() != "none" {
+                                            Text("\(highlightWindow.capitalized) moon • \(highlightMetric.replacingOccurrences(of: "_", with: " ")) • \(strength.capitalized)")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        } else if lunarInsights?.insufficientData == true {
+                                            Text("More nights are needed before Gaia compares lunar windows with your baseline.")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+
+                                        if let error = lunarInsightsError, lunarInsights == nil {
+                                            Text(error)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         if !topDiagnostics.isEmpty {
                             LocalConditionsSurfaceCard(title: "Top Symptoms", icon: "waveform.path.ecg") {
@@ -10182,13 +10347,21 @@ struct ContentView: View {
                             diagnostics: symptomDiagnostics,
                             currentSymptomsSnapshot: currentSymptomsSnapshot,
                             series: seriesDetail,
+                            lunarInsights: lunarInsights,
+                            lunarInsightsLoading: lunarInsightsLoading,
+                            lunarInsightsError: lunarInsightsError,
+                            experienceMode: experienceProfile.mode,
+                            lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared,
                             highlights: symptomHighlightList,
                             latestCameraCheck: latestCameraCheck,
                             latestCameraCheckLoading: latestCameraCheckLoading,
                             latestCameraCheckError: latestCameraCheckError,
                             showSymptomSheet: $showInsightsSymptomSheet,
                             onOpenQuickCheck: { showCameraHealthCheckSheet = true },
-                            onLoadComparison: { await fetchSpaceSeries(days: 30) }
+                            onLoadComparison: {
+                                await fetchSpaceSeries(days: 30)
+                                await fetchLunarInsights()
+                            }
                         )
                         .task {
                             if symptomDaily.isEmpty && symptomsToday.isEmpty {
@@ -10308,6 +10481,16 @@ struct ContentView: View {
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
+
+                                Toggle(isOn: $experienceProfile.lunarSensitivityDeclared) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Prioritize lunar overlays")
+                                            .font(.subheadline.weight(.semibold))
+                                        Text("Keeps lunar markers and pattern summaries more prominent. Observational only.")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
                             }
                         } label: {
                             Label("Experience", systemImage: "sparkles")
@@ -10321,6 +10504,9 @@ struct ContentView: View {
                         }
                         .onChange(of: experienceProfile.tone, initial: false) { _, newValue in
                             Task { await saveProfilePreferences(UserExperienceProfileUpdate(tone: newValue)) }
+                        }
+                        .onChange(of: experienceProfile.lunarSensitivityDeclared, initial: false) { _, newValue in
+                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(lunarSensitivityDeclared: newValue)) }
                         }
 
                         GroupBox {
@@ -14627,6 +14813,13 @@ struct ContentView: View {
             let hr: Double
         }
 
+        private struct LunarChartPoint: Identifiable {
+            let id: String
+            let date: Date
+            let type: String
+            let label: String
+        }
+
         private static let isoFmt: ISO8601DateFormatter = {
             let f = ISO8601DateFormatter()
             f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -14672,6 +14865,28 @@ struct ContentView: View {
             }
         }
 
+        private var lunarPoints: [LunarChartPoint] {
+            (series.lunarOverlay?.windows ?? []).compactMap { point in
+                guard
+                    let rawDay = point.date,
+                    let date = ContentView.symptomDayFormatter.date(from: rawDay),
+                    date >= cutoffDate
+                else {
+                    return nil
+                }
+                return LunarChartPoint(
+                    id: point.id,
+                    date: date,
+                    type: point.type ?? "full",
+                    label: point.label ?? ((point.type ?? "full") == "new" ? "New moon" : "Full moon")
+                )
+            }
+        }
+
+        private func lunarColor(_ type: String) -> Color {
+            type == "new" ? Color.white.opacity(0.18) : Color.orange.opacity(0.22)
+        }
+
         private func emptyText(_ label: String) -> String {
             "No \(label) samples in the last \(window.days) days"
         }
@@ -14691,12 +14906,24 @@ struct ContentView: View {
                         Label("HR", systemImage: "circle.fill").foregroundColor(.gray).font(.caption)
                     }
 
+                    if !lunarPoints.isEmpty {
+                        HStack(spacing: 12) {
+                            Label("Full moon", systemImage: "circle.fill").foregroundColor(.orange.opacity(0.85)).font(.caption)
+                            Label("New moon", systemImage: "circle.fill").foregroundColor(.white.opacity(0.75)).font(.caption)
+                        }
+                    }
+
                     if swPoints.compactMap(\.kp).isEmpty {
                         Text(emptyText("Kp"))
                             .font(.caption)
                             .foregroundColor(.secondary)
                     } else {
                         Chart {
+                            ForEach(lunarPoints) { lunar in
+                                RuleMark(x: .value("Lunar", lunar.date))
+                                    .foregroundStyle(lunarColor(lunar.type))
+                                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                            }
                             ForEach(filteredHighlights) { highlight in
                                 RuleMark(x: .value("Symptom", highlight.date))
                                     .foregroundStyle(.pink.opacity(0.20))
@@ -14725,6 +14952,11 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                     } else {
                         Chart {
+                            ForEach(lunarPoints) { lunar in
+                                RuleMark(x: .value("Lunar", lunar.date))
+                                    .foregroundStyle(lunarColor(lunar.type))
+                                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                            }
                             ForEach(filteredHighlights) { highlight in
                                 RuleMark(x: .value("Symptom", highlight.date))
                                     .foregroundStyle(.pink.opacity(0.18))
@@ -14747,13 +14979,20 @@ struct ContentView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         } else {
-                            Chart(schPoints) { point in
-                                if let schumannValue = point.schumannValue {
-                                    LineMark(x: .value("Day", point.date), y: .value("Schumann Hz", schumannValue))
-                                        .interpolationMethod(.catmullRom)
-                                        .foregroundStyle(.purple)
-                                    PointMark(x: .value("Day", point.date), y: .value("Schumann Hz", schumannValue))
-                                        .foregroundStyle(.purple)
+                            Chart {
+                                ForEach(lunarPoints) { lunar in
+                                    RuleMark(x: .value("Lunar", lunar.date))
+                                        .foregroundStyle(lunarColor(lunar.type))
+                                        .lineStyle(StrokeStyle(lineWidth: 1.5))
+                                }
+                                ForEach(schPoints) { point in
+                                    if let schumannValue = point.schumannValue {
+                                        LineMark(x: .value("Day", point.date), y: .value("Schumann Hz", schumannValue))
+                                            .interpolationMethod(.catmullRom)
+                                            .foregroundStyle(.purple)
+                                        PointMark(x: .value("Day", point.date), y: .value("Schumann Hz", schumannValue))
+                                            .foregroundStyle(.purple)
+                                    }
                                 }
                             }
                             .frame(height: 100)
@@ -14765,10 +15004,17 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     } else {
-                        Chart(hrPoints) { point in
-                            LineMark(x: .value("Time", point.date), y: .value("HR", point.hr))
-                                .interpolationMethod(.catmullRom)
-                                .foregroundStyle(.gray)
+                        Chart {
+                            ForEach(lunarPoints) { lunar in
+                                RuleMark(x: .value("Lunar", lunar.date))
+                                    .foregroundStyle(lunarColor(lunar.type))
+                                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                            }
+                            ForEach(hrPoints) { point in
+                                LineMark(x: .value("Time", point.date), y: .value("HR", point.hr))
+                                    .interpolationMethod(.catmullRom)
+                                    .foregroundStyle(.gray)
+                            }
                         }
                         .frame(height: 100)
                     }

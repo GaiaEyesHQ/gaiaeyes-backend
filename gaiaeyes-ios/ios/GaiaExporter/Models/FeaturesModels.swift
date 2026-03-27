@@ -49,6 +49,15 @@ struct GeomagneticContextSummary: Codable, Hashable {
     let tsUtc: String?
 }
 
+struct LunarContextSummary: Codable, Hashable {
+    let utcDate: String?
+    let moonPhaseFraction: Double?
+    let moonIlluminationPct: Double?
+    let moonPhaseLabel: String?
+    let daysFromFullMoon: Int?
+    let daysFromNewMoon: Int?
+}
+
 struct FeaturesToday: Codable {
     let day: String
     let stepsTotal: Num?
@@ -87,6 +96,11 @@ struct FeaturesToday: Codable {
     let kpMax: Num?
     let bzMin: Num?
     let swSpeedAvg: Num?
+    let moonPhaseFraction: Num?
+    let moonIlluminationPct: Num?
+    let moonPhaseLabel: String?
+    let daysFromFullMoon: Num?
+    let daysFromNewMoon: Num?
     let flaresCount: Num?
     let cmesCount: Num?
 
@@ -150,6 +164,7 @@ struct FeaturesToday: Codable {
     let ulfMissingSamples: Bool?
     let ulfLowHistory: Bool?
     let geomagneticContext: GeomagneticContextSummary?
+    let lunarContext: LunarContextSummary?
 
     // Earthscope images
     let earthscopeImages: EarthscopeImages?
@@ -206,6 +221,29 @@ extension FeaturesToday {
             missingSamples: ulfMissingSamples,
             lowHistory: ulfLowHistory,
             tsUtc: nil
+        )
+    }
+
+    var effectiveLunarContext: LunarContextSummary? {
+        if let lunarContext {
+            return lunarContext
+        }
+
+        let hasFlatContext =
+            moonPhaseFraction?.value != nil ||
+            moonIlluminationPct?.value != nil ||
+            moonPhaseLabel != nil ||
+            daysFromFullMoon?.value != nil ||
+            daysFromNewMoon?.value != nil
+        guard hasFlatContext else { return nil }
+
+        return LunarContextSummary(
+            utcDate: day,
+            moonPhaseFraction: moonPhaseFraction?.value,
+            moonIlluminationPct: moonIlluminationPct?.value,
+            moonPhaseLabel: moonPhaseLabel,
+            daysFromFullMoon: daysFromFullMoon?.value.map { Int($0.rounded()) },
+            daysFromNewMoon: daysFromNewMoon?.value.map { Int($0.rounded()) }
         )
     }
 }

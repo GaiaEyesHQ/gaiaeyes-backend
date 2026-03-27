@@ -35,7 +35,7 @@ def _set_dev_bearer():
 
 @pytest.fixture
 def client():
-    transport = ASGITransport(app=app)
+    transport = ASGITransport(app=app, lifespan="off")
     return AsyncClient(transport=transport, base_url="http://test")
 
 
@@ -230,6 +230,8 @@ async def test_features_fallback_to_yesterday(monkeypatch, client: AsyncClient):
     data = resp.json()
     assert data["ok"] is True
     assert data["data"]["day"] == yesterday.isoformat()
+    assert data["data"]["lunar_context"]["utc_date"] == yesterday.isoformat()
+    assert data["data"]["moon_phase_label"]
     assert data["diagnostics"]["source"] == "yesterday"
     assert data["diagnostics"]["day_used"] == yesterday.isoformat()
 
