@@ -1764,9 +1764,11 @@ struct ContentView: View {
     @State private var selectedTagKeys: Set<String> = []
     @State private var tagSaveMessage: String?
     @State private var tagsSaving: Bool = false
+    @State private var showPersonalContextSettings: Bool = false
     @State private var notificationPreferences: AppNotificationPreferences = PushNotificationService.currentPreferencesDefault()
     @State private var notificationSettingsSaving: Bool = false
     @State private var notificationSettingsMessage: String?
+    @State private var showNotificationSettingsSection: Bool = false
     @State private var pushPermissionGranted: Bool = PushNotificationService.storedPermissionGranted()
     @State private var pushDeviceToken: String? = PushNotificationService.storedDeviceToken()
     @State private var pendingPushRoute: GaiaPushRoute? = nil
@@ -10156,91 +10158,102 @@ struct ContentView: View {
                         .padding(.horizontal)
 
                         GroupBox {
-                            VStack(alignment: .leading, spacing: 10) {
-                                if environmentalTags.isEmpty && healthTags.isEmpty {
-                                    Text("Catalog not loaded.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    Button("Refresh catalog") {
-                                        Task {
-                                            await fetchTagCatalog()
-                                            await fetchSelectedTags()
+                            DisclosureGroup(isExpanded: $showPersonalContextSettings) {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    if environmentalTags.isEmpty && healthTags.isEmpty {
+                                        Text("Catalog not loaded.")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Button("Refresh catalog") {
+                                            Task {
+                                                await fetchTagCatalog()
+                                                await fetchSelectedTags()
+                                            }
                                         }
-                                    }
-                                    .buttonStyle(.bordered)
-                                } else {
-                                    if !environmentalTags.isEmpty {
-                                        Text("Sensitivities")
-                                            .font(.subheadline.weight(.semibold))
-                                        ForEach(environmentalTags) { item in
-                                            let canonicalKey = canonicalProfileTagKey(item.tagKey)
-                                            Toggle(isOn: Binding(
-                                                get: { selectedTagKeys.contains(canonicalKey) },
-                                                set: { isOn in
-                                                    if isOn {
-                                                        selectedTagKeys.insert(canonicalKey)
-                                                    } else {
-                                                        selectedTagKeys.remove(canonicalKey)
+                                        .buttonStyle(.bordered)
+                                    } else {
+                                        if !environmentalTags.isEmpty {
+                                            Text("Sensitivities")
+                                                .font(.subheadline.weight(.semibold))
+                                            ForEach(environmentalTags) { item in
+                                                let canonicalKey = canonicalProfileTagKey(item.tagKey)
+                                                Toggle(isOn: Binding(
+                                                    get: { selectedTagKeys.contains(canonicalKey) },
+                                                    set: { isOn in
+                                                        if isOn {
+                                                            selectedTagKeys.insert(canonicalKey)
+                                                        } else {
+                                                            selectedTagKeys.remove(canonicalKey)
+                                                        }
                                                     }
-                                                }
-                                            )) {
-                                                VStack(alignment: .leading, spacing: 2) {
-                                                    Text(item.label ?? canonicalKey)
-                                                    if let desc = item.description, !desc.isEmpty {
-                                                        Text(desc)
-                                                            .font(.caption2)
-                                                            .foregroundColor(.secondary)
+                                                )) {
+                                                    VStack(alignment: .leading, spacing: 2) {
+                                                        Text(item.label ?? canonicalKey)
+                                                        if let desc = item.description, !desc.isEmpty {
+                                                            Text(desc)
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
-                                    }
-                                    if !healthTags.isEmpty {
-                                        Divider()
-                                        Text("Optional health context")
-                                            .font(.subheadline.weight(.semibold))
-                                        ForEach(healthTags) { item in
-                                            let canonicalKey = canonicalProfileTagKey(item.tagKey)
-                                            Toggle(isOn: Binding(
-                                                get: { selectedTagKeys.contains(canonicalKey) },
-                                                set: { isOn in
-                                                    if isOn {
-                                                        selectedTagKeys.insert(canonicalKey)
-                                                    } else {
-                                                        selectedTagKeys.remove(canonicalKey)
+                                        if !healthTags.isEmpty {
+                                            Divider()
+                                            Text("Optional health context")
+                                                .font(.subheadline.weight(.semibold))
+                                            ForEach(healthTags) { item in
+                                                let canonicalKey = canonicalProfileTagKey(item.tagKey)
+                                                Toggle(isOn: Binding(
+                                                    get: { selectedTagKeys.contains(canonicalKey) },
+                                                    set: { isOn in
+                                                        if isOn {
+                                                            selectedTagKeys.insert(canonicalKey)
+                                                        } else {
+                                                            selectedTagKeys.remove(canonicalKey)
+                                                        }
                                                     }
-                                                }
-                                            )) {
-                                                VStack(alignment: .leading, spacing: 2) {
-                                                    Text(item.label ?? canonicalKey)
-                                                    if let desc = item.description, !desc.isEmpty {
-                                                        Text(desc)
-                                                            .font(.caption2)
-                                                            .foregroundColor(.secondary)
+                                                )) {
+                                                    VStack(alignment: .leading, spacing: 2) {
+                                                        Text(item.label ?? canonicalKey)
+                                                        if let desc = item.description, !desc.isEmpty {
+                                                            Text(desc)
+                                                                .font(.caption2)
+                                                                .foregroundColor(.secondary)
+                                                        }
                                                     }
                                                 }
                                             }
+                                            Text("Self-reported health context only. Not for diagnosis.")
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
                                         }
-                                        Text("Self-reported health context only. Not for diagnosis.")
-                                            .font(.caption2)
+                                    }
+
+                                    Button(action: { Task { await saveSelectedTags() } }) {
+                                        HStack {
+                                            if tagsSaving {
+                                                ProgressView().scaleEffect(0.8)
+                                            }
+                                            Text(tagsSaving ? "Saving..." : "Save Personal Context")
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(tagsSaving)
+
+                                    if let msg = tagSaveMessage {
+                                        Text(msg)
+                                            .font(.caption)
                                             .foregroundColor(.secondary)
                                     }
                                 }
-
-                                Button(action: { Task { await saveSelectedTags() } }) {
-                                    HStack {
-                                        if tagsSaving {
-                                            ProgressView().scaleEffect(0.8)
-                                        }
-                                        Text(tagsSaving ? "Saving..." : "Save Personal Context")
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(tagsSaving)
-
-                                if let msg = tagSaveMessage {
-                                    Text(msg)
+                                .padding(.top, 8)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Sensitivities and health context")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(selectedTagKeys.isEmpty ? "No personal context saved yet." : "\(selectedTagKeys.count) saved selections")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -10251,124 +10264,135 @@ struct ContentView: View {
                         .padding(.horizontal)
 
                         GroupBox {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Toggle("Enable Notifications", isOn: $notificationPreferences.enabled)
+                            DisclosureGroup(isExpanded: $showNotificationSettingsSection) {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Toggle("Enable Notifications", isOn: $notificationPreferences.enabled)
 
-                                HStack(alignment: .center, spacing: 8) {
-                                    Text(pushPermissionGranted ? "iOS permission granted" : "iOS permission not granted yet")
-                                        .font(.caption)
-                                        .foregroundColor(pushPermissionGranted ? .secondary : .orange)
-                                    Spacer()
-                                    Text(pushDeviceToken == nil ? "APNs pending" : "APNs ready")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundColor(pushDeviceToken == nil ? .secondary : .green)
-                                }
-
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Signal Alerts")
-                                        .font(.subheadline.weight(.semibold))
-                                    Toggle("Signal alerts", isOn: $notificationPreferences.signalAlertsEnabled)
-                                    if notificationPreferences.signalAlertsEnabled {
-                                        Toggle("Geomagnetic / Kp", isOn: $notificationPreferences.families.geomagnetic)
-                                        Toggle("Solar wind / Bz coupling", isOn: $notificationPreferences.families.solarWind)
-                                        Toggle("Flares / CME / SEP / DRAP", isOn: $notificationPreferences.families.flareCmeSep)
-                                        Toggle("Schumann spike / elevated", isOn: $notificationPreferences.families.schumann)
+                                    HStack(alignment: .center, spacing: 8) {
+                                        Text(pushPermissionGranted ? "iOS permission granted" : "iOS permission not granted yet")
+                                            .font(.caption)
+                                            .foregroundColor(pushPermissionGranted ? .secondary : .orange)
+                                        Spacer()
+                                        Text(pushDeviceToken == nil ? "APNs pending" : "APNs ready")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundColor(pushDeviceToken == nil ? .secondary : .green)
                                     }
-                                }
-                                .disabled(!notificationPreferences.enabled)
 
-                                Divider()
-
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Local Condition Alerts")
-                                        .font(.subheadline.weight(.semibold))
-                                    Toggle("Local condition alerts", isOn: $notificationPreferences.localConditionAlertsEnabled)
-                                    if notificationPreferences.localConditionAlertsEnabled {
-                                        Toggle("Pressure swing", isOn: $notificationPreferences.families.pressure)
-                                        Toggle("AQI", isOn: $notificationPreferences.families.aqi)
-                                        Toggle("Temperature swing", isOn: $notificationPreferences.families.temp)
-                                    }
-                                }
-                                .disabled(!notificationPreferences.enabled)
-
-                                Divider()
-
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Personalized Alerts")
-                                        .font(.subheadline.weight(.semibold))
-                                    Toggle("Personalized gauge alerts", isOn: $notificationPreferences.personalizedGaugeAlertsEnabled)
-                                    if notificationPreferences.personalizedGaugeAlertsEnabled {
-                                        Toggle("Gauge spikes", isOn: $notificationPreferences.families.gaugeSpikes)
-                                    }
-                                }
-                                .disabled(!notificationPreferences.enabled)
-
-                                Divider()
-
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Symptom Follow-up Prompts")
-                                        .font(.subheadline.weight(.semibold))
-                                    Toggle("Symptom follow-up prompts", isOn: $notificationPreferences.symptomFollowupsEnabled)
-                                    Text("Receive check-in prompts after you log a symptom so Gaia can learn how it changes over time.")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                                .disabled(!notificationPreferences.enabled)
-
-                                Divider()
-
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Quiet Hours")
-                                        .font(.subheadline.weight(.semibold))
-                                    Toggle("Enable quiet hours", isOn: $notificationPreferences.quietHoursEnabled)
-                                    if notificationPreferences.quietHoursEnabled {
-                                        HStack(spacing: 10) {
-                                            TextField("Start (22:00)", text: $notificationPreferences.quietStart)
-                                                .textFieldStyle(.roundedBorder)
-                                                .textInputAutocapitalization(.never)
-                                                .autocorrectionDisabled()
-                                            TextField("End (08:00)", text: $notificationPreferences.quietEnd)
-                                                .textFieldStyle(.roundedBorder)
-                                                .textInputAutocapitalization(.never)
-                                                .autocorrectionDisabled()
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Signal Alerts")
+                                            .font(.subheadline.weight(.semibold))
+                                        Toggle("Signal alerts", isOn: $notificationPreferences.signalAlertsEnabled)
+                                        if notificationPreferences.signalAlertsEnabled {
+                                            Toggle("Geomagnetic / Kp", isOn: $notificationPreferences.families.geomagnetic)
+                                            Toggle("Solar wind / Bz coupling", isOn: $notificationPreferences.families.solarWind)
+                                            Toggle("Flares / CME / SEP / DRAP", isOn: $notificationPreferences.families.flareCmeSep)
+                                            Toggle("Schumann spike / elevated", isOn: $notificationPreferences.families.schumann)
                                         }
-                                        Text("Quiet hours use your current time zone: \(TimeZone.current.identifier)")
+                                    }
+                                    .disabled(!notificationPreferences.enabled)
+
+                                    Divider()
+
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Local Condition Alerts")
+                                            .font(.subheadline.weight(.semibold))
+                                        Toggle("Local condition alerts", isOn: $notificationPreferences.localConditionAlertsEnabled)
+                                        if notificationPreferences.localConditionAlertsEnabled {
+                                            Toggle("Pressure swing", isOn: $notificationPreferences.families.pressure)
+                                            Toggle("AQI", isOn: $notificationPreferences.families.aqi)
+                                            Toggle("Temperature swing", isOn: $notificationPreferences.families.temp)
+                                        }
+                                    }
+                                    .disabled(!notificationPreferences.enabled)
+
+                                    Divider()
+
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Personalized Alerts")
+                                            .font(.subheadline.weight(.semibold))
+                                        Toggle("Personalized gauge alerts", isOn: $notificationPreferences.personalizedGaugeAlertsEnabled)
+                                        if notificationPreferences.personalizedGaugeAlertsEnabled {
+                                            Toggle("Gauge spikes", isOn: $notificationPreferences.families.gaugeSpikes)
+                                        }
+                                    }
+                                    .disabled(!notificationPreferences.enabled)
+
+                                    Divider()
+
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Symptom Follow-up Prompts")
+                                            .font(.subheadline.weight(.semibold))
+                                        Toggle("Symptom follow-up prompts", isOn: $notificationPreferences.symptomFollowupsEnabled)
+                                        Text("Receive check-in prompts after you log a symptom so Gaia can learn how it changes over time.")
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
                                     }
-                                }
-                                .disabled(!notificationPreferences.enabled)
-
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Alert Sensitivity")
-                                        .font(.subheadline.weight(.semibold))
-                                    Picker("Alert sensitivity", selection: $notificationPreferences.sensitivity) {
-                                        Text("Minimal").tag("minimal")
-                                        Text("Normal").tag("normal")
-                                        Text("Detailed").tag("detailed")
-                                    }
-                                    .pickerStyle(.segmented)
                                     .disabled(!notificationPreferences.enabled)
-                                }
 
-                                Button(action: {
-                                    Task {
-                                        await saveNotificationPreferences(requestAuthorizationIfNeeded: notificationPreferences.enabled)
-                                    }
-                                }) {
-                                    HStack {
-                                        if notificationSettingsSaving {
-                                            ProgressView().scaleEffect(0.8)
+                                    Divider()
+
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Quiet Hours")
+                                            .font(.subheadline.weight(.semibold))
+                                        Toggle("Enable quiet hours", isOn: $notificationPreferences.quietHoursEnabled)
+                                        if notificationPreferences.quietHoursEnabled {
+                                            HStack(spacing: 10) {
+                                                TextField("Start (22:00)", text: $notificationPreferences.quietStart)
+                                                    .textFieldStyle(.roundedBorder)
+                                                    .textInputAutocapitalization(.never)
+                                                    .autocorrectionDisabled()
+                                                TextField("End (08:00)", text: $notificationPreferences.quietEnd)
+                                                    .textFieldStyle(.roundedBorder)
+                                                    .textInputAutocapitalization(.never)
+                                                    .autocorrectionDisabled()
+                                            }
+                                            Text("Quiet hours use your current time zone: \(TimeZone.current.identifier)")
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
                                         }
-                                        Text(notificationSettingsSaving ? "Saving..." : "Save Notifications")
                                     }
-                                    .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(notificationSettingsSaving)
+                                    .disabled(!notificationPreferences.enabled)
 
-                                if let msg = notificationSettingsMessage {
-                                    Text(msg)
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Alert Sensitivity")
+                                            .font(.subheadline.weight(.semibold))
+                                        Picker("Alert sensitivity", selection: $notificationPreferences.sensitivity) {
+                                            Text("Minimal").tag("minimal")
+                                            Text("Normal").tag("normal")
+                                            Text("Detailed").tag("detailed")
+                                        }
+                                        .pickerStyle(.segmented)
+                                        .disabled(!notificationPreferences.enabled)
+                                    }
+
+                                    Button(action: {
+                                        Task {
+                                            await saveNotificationPreferences(requestAuthorizationIfNeeded: notificationPreferences.enabled)
+                                        }
+                                    }) {
+                                        HStack {
+                                            if notificationSettingsSaving {
+                                                ProgressView().scaleEffect(0.8)
+                                            }
+                                            Text(notificationSettingsSaving ? "Saving..." : "Save Notifications")
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(notificationSettingsSaving)
+
+                                    if let msg = notificationSettingsMessage {
+                                        Text(msg)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .padding(.top, 8)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Alert families, quiet hours, and follow-up prompts")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(notificationPreferences.enabled ? "Notifications on" : "Notifications off")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
