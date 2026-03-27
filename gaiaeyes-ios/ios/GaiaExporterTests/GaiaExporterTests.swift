@@ -251,6 +251,40 @@ struct SymptomEnvelopeTests {
     }
 
     @Test
+    func decodesUserExperienceProfileEnvelope() throws {
+        let payload = """
+        {
+            "ok": true,
+            "preferences": {
+                "mode": "scientific",
+                "guide": "cat",
+                "tone": "balanced",
+                "lunar_sensitivity_declared": true,
+                "onboarding_step": "notifications",
+                "onboarding_completed": true,
+                "onboarding_completed_at": "2026-03-27T20:00:00Z",
+                "healthkit_requested_at": "2026-03-27T19:00:00Z",
+                "last_backfill_at": "2026-03-27T18:00:00Z"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let envelope = try decoder.decode(UserExperienceProfileEnvelope.self, from: payload)
+        let preferences = try #require(envelope.preferences)
+
+        #expect(envelope.ok == true)
+        #expect(preferences.lunarSensitivityDeclared == true)
+        #expect(preferences.onboardingStep == .notifications)
+        #expect(preferences.onboardingCompleted == true)
+        #expect(preferences.onboardingCompletedAt == "2026-03-27T20:00:00Z")
+        #expect(preferences.healthkitRequestedAt == "2026-03-27T19:00:00Z")
+        #expect(preferences.lastBackfillAt == "2026-03-27T18:00:00Z")
+    }
+
+    @Test
     func decodesAllDriversSnapshot() throws {
         let payload = """
         {

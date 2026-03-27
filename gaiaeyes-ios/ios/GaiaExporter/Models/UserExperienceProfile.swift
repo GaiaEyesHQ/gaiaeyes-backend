@@ -201,12 +201,12 @@ struct UserExperienceProfile: Codable, Equatable {
         case mode
         case guide
         case tone
-        case lunarSensitivityDeclared = "lunar_sensitivity_declared"
-        case onboardingStep = "onboarding_step"
-        case onboardingCompleted = "onboarding_completed"
-        case onboardingCompletedAt = "onboarding_completed_at"
-        case healthkitRequestedAt = "healthkit_requested_at"
-        case lastBackfillAt = "last_backfill_at"
+        case lunarSensitivityDeclared
+        case onboardingStep
+        case onboardingCompleted
+        case onboardingCompletedAt
+        case healthkitRequestedAt
+        case lastBackfillAt
     }
 
     init(from decoder: Decoder) throws {

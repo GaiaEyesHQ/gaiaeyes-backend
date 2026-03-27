@@ -101,21 +101,33 @@ select
 from events;
 $$;
 
+with lunar_by_day as (
+  select distinct
+    df_source.day,
+    lunar.moon_phase_fraction,
+    lunar.moon_illumination_pct,
+    lunar.moon_phase_label,
+    lunar.days_from_full_moon,
+    lunar.days_from_new_moon
+  from marts.daily_features as df_source
+  cross join lateral marts.lunar_context_for_day(df_source.day) as lunar
+  where df_source.day is not null
+)
 update marts.daily_features as df
 set
-  moon_phase_fraction = lunar.moon_phase_fraction,
-  moon_illumination_pct = lunar.moon_illumination_pct,
-  moon_phase_label = lunar.moon_phase_label,
-  days_from_full_moon = lunar.days_from_full_moon,
-  days_from_new_moon = lunar.days_from_new_moon
-from lateral marts.lunar_context_for_day(df.day) as lunar
-where df.day is not null
+  moon_phase_fraction = lunar_by_day.moon_phase_fraction,
+  moon_illumination_pct = lunar_by_day.moon_illumination_pct,
+  moon_phase_label = lunar_by_day.moon_phase_label,
+  days_from_full_moon = lunar_by_day.days_from_full_moon,
+  days_from_new_moon = lunar_by_day.days_from_new_moon
+from lunar_by_day
+where lunar_by_day.day = df.day
   and (
-    df.moon_phase_fraction is distinct from lunar.moon_phase_fraction
-    or df.moon_illumination_pct is distinct from lunar.moon_illumination_pct
-    or df.moon_phase_label is distinct from lunar.moon_phase_label
-    or df.days_from_full_moon is distinct from lunar.days_from_full_moon
-    or df.days_from_new_moon is distinct from lunar.days_from_new_moon
+    df.moon_phase_fraction is distinct from lunar_by_day.moon_phase_fraction
+    or df.moon_illumination_pct is distinct from lunar_by_day.moon_illumination_pct
+    or df.moon_phase_label is distinct from lunar_by_day.moon_phase_label
+    or df.days_from_full_moon is distinct from lunar_by_day.days_from_full_moon
+    or df.days_from_new_moon is distinct from lunar_by_day.days_from_new_moon
   );
 
 create or replace function marts.refresh_daily_features_user(
