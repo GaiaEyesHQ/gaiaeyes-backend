@@ -46,6 +46,7 @@
 	•	/v1/insights/lunar → authenticated per-user summary with scientific and mystical copy variants
 	•	/v1/series/lunar-overlay → reusable overlay markers for charts outside the main series payload
 	•	User preference is stored in the current experience profile as `lunar_sensitivity_declared`, which only changes prioritization/presentation.
+	•	In iOS, the same summary now appears in both Health & Body Context and Your Patterns, so a meaningful lunar signal can surface alongside the rest of the user’s recurring patterns without adding a separate screen.
 
 4. Earthscope Daily Card
 	•	Uses daily earthscope_daily.json for title, summary, and image quartet:

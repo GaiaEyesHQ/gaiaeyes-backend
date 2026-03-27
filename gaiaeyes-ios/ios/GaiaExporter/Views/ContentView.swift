@@ -7985,10 +7985,15 @@ struct ContentView: View {
 
     private struct YourPatternsView: View {
         @EnvironmentObject private var state: AppState
+        let experienceMode: ExperienceMode
+        let lunarSensitivityDeclared: Bool
         @AppStorage("user_patterns_cache_json") private var userPatternsCacheJSON: String = ""
         @State private var payload: UserPatternsPayload? = nil
         @State private var isLoading: Bool = false
         @State private var errorMessage: String? = nil
+        @State private var lunarInsights: LunarInsightPayload? = nil
+        @State private var lunarInsightsLoading: Bool = false
+        @State private var lunarInsightsError: String? = nil
         @State private var showsAllStrongestPatterns: Bool = false
         @State private var showsAllEmergingPatterns: Bool = false
         @State private var showsAllBodySignalPatterns: Bool = false
@@ -8054,6 +8059,179 @@ struct ContentView: View {
                 return cards
             }
             return Array(cards.prefix(3))
+        }
+
+        private var lunarInsightMessage: String? {
+            switch experienceMode {
+            case .scientific:
+                return lunarInsights?.messageScientific
+            case .mystical:
+                return lunarInsights?.messageMystical
+            }
+        }
+
+        private var shouldShowLunarSection: Bool {
+            if lunarInsightsLoading {
+                return true
+            }
+            if lunarSensitivityDeclared {
+                return true
+            }
+            guard let lunarInsights else { return false }
+            return lunarInsights.insufficientData == false
+                && (lunarInsights.patternStrength?.lowercased() ?? "none") != "none"
+        }
+
+        private var lunarStrengthLabel: String {
+            let strength = (lunarInsights?.patternStrength ?? "tracking").lowercased()
+            switch strength {
+            case "moderate":
+                return "Moderate"
+            case "weak":
+                return "Weak"
+            case "none":
+                return lunarSensitivityDeclared ? "Tracking" : "Observed"
+            default:
+                return "Tracking"
+            }
+        }
+
+        private var lunarStrengthSeverity: StatusPill.Severity {
+            switch (lunarInsights?.patternStrength ?? "").lowercased() {
+            case "moderate":
+                return .warn
+            case "weak":
+                return .ok
+            default:
+                return .ok
+            }
+        }
+
+        private var lunarWindowLine: String? {
+            guard let lunarInsights else { return nil }
+            guard
+                let highlightWindow = lunarInsights.highlightWindow,
+                let highlightMetric = lunarInsights.highlightMetric,
+                let strength = lunarInsights.patternStrength,
+                strength.lowercased() != "none"
+            else {
+                return nil
+            }
+
+            return "\(highlightWindow.capitalized) moon • \(highlightMetric.replacingOccurrences(of: "_", with: " ")) • \(strength.capitalized)"
+        }
+
+        private var lunarObservedLine: String? {
+            let observedDays = lunarInsights?.observedDays ?? lunarInsights?.nNights ?? 0
+            guard observedDays > 0 else { return nil }
+
+            if let context = lunarInsights?.currentLunarContext,
+               let phase = context.moonPhaseLabel,
+               !phase.isEmpty {
+                let fullDays = context.daysFromFullMoon.map { "\($0)d from full" } ?? nil
+                let newDays = context.daysFromNewMoon.map { "\($0)d from new" } ?? nil
+                let distanceText = [fullDays, newDays].compactMap { $0 }.joined(separator: " • ")
+                if !distanceText.isEmpty {
+                    return "Observed across \(observedDays) days • Current phase: \(phase) • \(distanceText)"
+                }
+                return "Observed across \(observedDays) days • Current phase: \(phase)"
+            }
+
+            return "Observed across \(observedDays) days"
+        }
+
+        private var lunarSectionTitle: String {
+            if lunarInsightsLoading && lunarInsights == nil {
+                return "Lunar windows"
+            }
+            if let strength = lunarInsights?.patternStrength?.lowercased(),
+               strength == "moderate" || strength == "weak" {
+                return "Possible lunar sensitivity"
+            }
+            if lunarInsights?.insufficientData == true {
+                return "Lunar windows still taking shape"
+            }
+            return "No clear lunar signal yet"
+        }
+
+        @ViewBuilder
+        private var lunarSectionView: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Lunar Windows")
+                        .font(.title3.weight(.semibold))
+                    Text("Full and new moon comparisons using your own HRV, sleep, and symptom history.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Color.white.opacity(0.06))
+                            Image(systemName: "moon.stars.fill")
+                                .font(.headline)
+                                .foregroundColor(.white.opacity(0.88))
+                        }
+                        .frame(width: 44, height: 44)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(lunarSectionTitle)
+                                .font(.headline.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.95))
+                            if let lunarObservedLine, !lunarObservedLine.isEmpty {
+                                Text(lunarObservedLine)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        Spacer(minLength: 8)
+
+                        StatusPill(lunarStrengthLabel, severity: lunarStrengthSeverity)
+                    }
+
+                    if lunarInsightsLoading && lunarInsights == nil {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text("Checking lunar windows in your history.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    } else {
+                        if let lunarInsightMessage, !lunarInsightMessage.isEmpty {
+                            Text(lunarInsightMessage)
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.88))
+                        }
+
+                        if let lunarWindowLine, !lunarWindowLine.isEmpty {
+                            Text(lunarWindowLine)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else if lunarInsights?.insufficientData == true {
+                            Text("Gaia needs more overlap before lunar windows can stand as a pattern section here.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if let lunarInsightsError, lunarInsights == nil {
+                            Text(lunarInsightsError)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+            }
         }
 
         @MainActor
@@ -8144,6 +8322,54 @@ struct ContentView: View {
 
             await MainActor.run {
                 isLoading = false
+            }
+        }
+
+        private func loadLunarInsights(force: Bool = false) async {
+            let shouldStart = await MainActor.run { () -> Bool in
+                if lunarInsightsLoading {
+                    return false
+                }
+                if !force && lunarInsights != nil {
+                    return false
+                }
+                lunarInsightsLoading = true
+                lunarInsightsError = nil
+                return true
+            }
+            guard shouldStart else { return }
+
+            defer {
+                Task { @MainActor in
+                    lunarInsightsLoading = false
+                }
+            }
+
+            let backendAvailable = await MainActor.run { state.backendDBAvailable }
+            guard backendAvailable else {
+                await MainActor.run {
+                    lunarInsightsError = "Lunar patterns are unavailable while the backend database is offline."
+                }
+                return
+            }
+
+            let api = state.apiWithAuth()
+            do {
+                let decoded: LunarInsightPayload = try await api.getJSON(
+                    "v1/insights/lunar",
+                    as: LunarInsightPayload.self,
+                    perRequestTimeout: 20
+                )
+                await MainActor.run {
+                    lunarInsights = decoded
+                    lunarInsightsError = nil
+                }
+            } catch {
+                await MainActor.run {
+                    if lunarInsights == nil {
+                        lunarInsightsError = ContentView.scrubError(error.localizedDescription)
+                    }
+                }
             }
         }
 
@@ -8338,6 +8564,10 @@ struct ContentView: View {
                             expanded: $showsAllEmergingPatterns
                         )
 
+                        if shouldShowLunarSection {
+                            lunarSectionView
+                        }
+
                         sectionView(
                             title: "Body Signals",
                             subtitle: "Wearable-based patterns only show when the overlap is strong enough to meet the current evidence rules.",
@@ -8352,7 +8582,9 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .refreshable {
-                    await loadPatterns(force: true)
+                    async let patternsRefresh: Void = loadPatterns(force: true)
+                    async let lunarRefresh: Void = loadLunarInsights(force: true)
+                    _ = await (patternsRefresh, lunarRefresh)
                 }
             }
             .navigationTitle("Your Patterns")
@@ -8374,7 +8606,9 @@ struct ContentView: View {
                 hydrateCachedPatternsIfNeeded()
             }
             .task {
-                await loadPatterns()
+                async let patternsLoad: Void = loadPatterns()
+                async let lunarLoad: Void = loadLunarInsights()
+                _ = await (patternsLoad, lunarLoad)
             }
         }
     }
@@ -10318,7 +10552,10 @@ struct ContentView: View {
                             }
                         }
                     case .yourPatterns:
-                        YourPatternsView()
+                        YourPatternsView(
+                            experienceMode: experienceProfile.mode,
+                            lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared
+                        )
                     case .magnetosphere:
                         InsightsMagnetosphereView(
                             data: magnetosphere,
