@@ -18,6 +18,10 @@
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleDisplayName</key>
+	<string>Gaia Eyes</string>
+	<key>CFBundleName</key>
+	<string>GaiaEyes</string>
 	<key>GAIA_API_BASE</key>
 	<string>https://gaiaeyes-backend.onrender.com</string>
 	<key>GAIA_BILLING_PORTAL_URL</key>

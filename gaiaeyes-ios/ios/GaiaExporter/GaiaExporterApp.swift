@@ -2,7 +2,7 @@ import SwiftUI
 import BackgroundTasks
 
 @main
-struct GaiaExporterApp: App {
+struct GaiaEyesApp: App {
     @UIApplicationDelegateAdaptor(PushNotificationAppDelegate.self) private var pushDelegate
     @StateObject private var appState = AppState()
     @StateObject private var auth = AuthManager.shared

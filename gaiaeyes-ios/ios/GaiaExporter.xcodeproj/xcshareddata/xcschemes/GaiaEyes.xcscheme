@@ -16,8 +16,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "0CA35D522E5B8F960099297E"
-               BuildableName = "GaiaExporter.app"
-               BlueprintName = "GaiaExporter"
+               BuildableName = "GaiaEyes.app"
+               BlueprintName = "GaiaEyes"
                ReferencedContainer = "container:GaiaExporter.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -70,8 +70,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "0CA35D522E5B8F960099297E"
-            BuildableName = "GaiaExporter.app"
-            BlueprintName = "GaiaExporter"
+            BuildableName = "GaiaEyes.app"
+            BlueprintName = "GaiaEyes"
             ReferencedContainer = "container:GaiaExporter.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -94,8 +94,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "0CA35D522E5B8F960099297E"
-            BuildableName = "GaiaExporter.app"
-            BlueprintName = "GaiaExporter"
+            BuildableName = "GaiaEyes.app"
+            BlueprintName = "GaiaEyes"
             ReferencedContainer = "container:GaiaExporter.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

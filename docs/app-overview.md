@@ -1,7 +1,7 @@
 🌍 Gaia Eyes App Overview
 
 🧩 Architecture
-	•	Frontend: SwiftUI iOS app (GaiaExporter)
+	•	Frontend: SwiftUI iOS app (Gaia Eyes / GaiaEyes)
 	•	Uses modular Views (Sleep, Health, Space Weather, Weekly Trends, Earthscope, Tools).
 	•	Integrates with Apple HealthKit and the Polar H10 BLE sensor.
 	•	Fetches external geomagnetic and space-weather data via REST endpoints hosted on Render.
@@ -75,7 +75,7 @@
 	•	Anchored queries with persisted anchors for efficient deltas.
 	•	BGAppRefreshTask (every 30 min) and BGProcessingTask (every 2 hr).
 	•	Logging shows [HK] bg delivery <metric>: enabled for each type.
-	•	Added AppDelegate-equivalent setup in GaiaExporterApp.swift:
+	•	Added AppDelegate-equivalent setup in the GaiaEyes app entrypoint (`GaiaExporterApp.swift`):
 
 HealthKitBackgroundSync.shared.registerBGTask()
 HealthKitBackgroundSync.shared.registerProcessingTask()

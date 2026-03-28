@@ -2,8 +2,9 @@
 
 ## Create the project
 1) Open Xcode → **File > New > Project…** → iOS **App**
-2) Product Name: `GaiaEyesExporter` · Interface: **SwiftUI** · Language: **Swift**
-3) Select your Team (Apple Developer account) and a unique Bundle Identifier.
+2) Product Name: `GaiaEyes` · Interface: **SwiftUI** · Language: **Swift**
+3) If you are working in this repo, keep the existing bundle identifier `com.gaiaeyes.GaiaExporter` so the app identity stays intact.
+4) Select your Team (Apple Developer account) and a unique Bundle Identifier.
 
 ## Capabilities
 - In the project target → **Signing & Capabilities** → `+ Capability` → add **HealthKit**.
@@ -15,7 +16,7 @@ Add these keys with user-facing explanations:
 
 ## Add the files
 Replace the generated App/ContentView with the files in this folder:
-- `GaiaEyesExporterApp.swift`
+- `GaiaExporterApp.swift`
 - `ContentView.swift`
 - `APIClient.swift`
 - `HealthKitManager.swift`
@@ -33,4 +34,4 @@ Replace the generated App/ContentView with the files in this folder:
 ## Clean build checklist
 - **Product → Clean Build Folder** in Xcode before rerunning if the UI refuses to compile.
 - **File → Packages → Reset Package Caches** to clear stale SwiftPM artifacts.
-- Build the **GaiaExporter** app scheme directly (no tests) to confirm fixes locally.
+- Build the **GaiaEyes** app scheme directly (no tests) to confirm fixes locally.

@@ -1,7 +1,7 @@
 # Gaia Eyes iOS Frontend Technical Documentation
 
 ## Application entry point
-- `GaiaExporterApp` is the SwiftUI entry that instantiates a shared `AppState`, registers background refresh/processing tasks, and injects the state into the main window scene hosting `ContentView`. 【F:ios/GaiaExporter/GaiaExporterApp.swift†L1-L22】
+- `GaiaEyesApp` is the SwiftUI entry that instantiates a shared `AppState`, registers background refresh/processing tasks, and injects the state into the main window scene hosting `ContentView`. 【F:ios/GaiaExporter/GaiaExporterApp.swift†L1-L22】
 
 ## Core state and data orchestration
 - `ContentView` keeps its own `@StateObject` `AppState` plus cached JSON snapshots for features, time-series, and symptom code definitions using `@AppStorage`. It also tracks presentation flags, fetch throttling guards, and cached feature/symptom payloads to drive the UI. 【F:ios/GaiaExporter/Views/ContentView.swift†L55-L101】
@@ -30,7 +30,7 @@
 
 ## Background sync touchpoints
 - Toolbar actions trigger HealthKit permissions and manual exports through `AppState` methods (e.g., `syncSteps7d`, `syncSleep7d`), while `ContentView` listens for `.featuresShouldRefresh` notifications fired by background uploaders to rehydrate the dashboard. 【F:ios/GaiaExporter/Views/ContentView.swift†L938-L1053】【F:ios/GaiaExporter/Views/ContentView.swift†L1491-L1533】【F:ios/GaiaExporter/ViewModels/AppState.swift†L168-L200】
-- Background task registration in `GaiaExporterApp` ensures periodic syncs continue even when the UI is inactive, with lifecycle hooks (`scenePhase`, `.onDisappear`) cancelling pending refresh tasks to avoid runaway updates. 【F:ios/GaiaExporter/GaiaExporterApp.swift†L8-L22】【F:ios/GaiaExporter/Views/ContentView.swift†L1015-L1094】
+- Background task registration in `GaiaEyesApp` ensures periodic syncs continue even when the UI is inactive, with lifecycle hooks (`scenePhase`, `.onDisappear`) cancelling pending refresh tasks to avoid runaway updates. 【F:ios/GaiaExporter/GaiaExporterApp.swift†L8-L22】【F:ios/GaiaExporter/Views/ContentView.swift†L1015-L1094】
 
 ## Extending the dashboard
 - New cards should follow the existing pattern: bind to cached feature or series models, wrap layout inside `GroupBox`/`DisclosureGroup` for consistent styling, and update cached JSON keys to keep offline restores functional via the shared `@AppStorage` bindings. 【F:ios/GaiaExporter/Views/ContentView.swift†L821-L937】【F:ios/GaiaExporter/Views/ContentView.swift†L1007-L1023】

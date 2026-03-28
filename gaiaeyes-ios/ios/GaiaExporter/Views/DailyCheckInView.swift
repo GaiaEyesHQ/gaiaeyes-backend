@@ -12,6 +12,8 @@ private struct DailyCheckInChoice: Identifiable, Hashable {
     let label: String
 }
 
+private let validSleepImpactChoiceIds: Set<String> = ["yes_strongly", "yes_somewhat", "not_much", "unsure"]
+
 private struct DailyCheckInChoiceGrid: View {
     let title: String
     let subtitle: String?
@@ -158,7 +160,7 @@ struct DailyCheckInView: View {
     }
 
     private var fallbackCalibrationSummary: FeedbackCalibrationSummary {
-        status?.calibrationSummary ?? FeedbackCalibrationSummary(
+        (status ?? initialStatus)?.calibrationSummary ?? FeedbackCalibrationSummary(
             windowDays: 21,
             totalCheckins: 0,
             mostlyRight: 0,
@@ -172,7 +174,7 @@ struct DailyCheckInView: View {
     }
 
     private var fallbackSettings: DailyCheckInSettings {
-        status?.settings ?? DailyCheckInSettings(
+        (status ?? initialStatus)?.settings ?? DailyCheckInSettings(
             enabled: false,
             pushEnabled: false,
             cadence: "balanced",
@@ -272,7 +274,7 @@ struct DailyCheckInView: View {
     }
 
     private var sleepImpactChoices: [DailyCheckInChoice] {
-        let suggested = prompt?.suggestedSleepImpacts ?? []
+        let suggested = (prompt?.suggestedSleepImpacts ?? []).filter { validSleepImpactChoiceIds.contains($0) }
         let base = suggested.isEmpty ? ["yes_strongly", "yes_somewhat", "not_much", "unsure"] : suggested
         return base.map { DailyCheckInChoice(id: $0, label: dailyChoiceLabel($0)) }
     }
@@ -598,7 +600,7 @@ struct DailyCheckInView: View {
         energyDetail = entry.energyDetail ?? ""
         moodLevel = entry.moodLevel
         moodType = entry.moodType ?? ""
-        sleepImpact = entry.sleepImpact ?? ""
+        sleepImpact = validSleepImpactChoiceIds.contains(entry.sleepImpact ?? "") ? (entry.sleepImpact ?? "") : ""
         predictionMatch = entry.predictionMatch ?? ""
         noteText = entry.noteText ?? ""
     }

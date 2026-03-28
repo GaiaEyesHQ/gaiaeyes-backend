@@ -1,10 +1,12 @@
-# iOS App (GaiaExporter)
+# iOS App (Gaia Eyes)
 
 ## Location
 - Source lives in `gaiaeyes-ios/ios/GaiaExporter`.
+- The Xcode project path remains `gaiaeyes-ios/ios/GaiaExporter.xcodeproj` for stability, but the app display name is `Gaia Eyes`, the compact product name is `GaiaEyes`, and the bundle identifier remains `com.gaiaeyes.GaiaExporter`.
 
 ## Build/run
 - See `gaiaeyes-ios/ios/README_iOS.md` for step-by-step setup, HealthKit entitlements, and local run instructions.
+- Build with the shared `GaiaEyes` scheme in `gaiaeyes-ios/ios/GaiaExporter.xcodeproj`.
 
 ## Architecture
 - SwiftUI app with an `AppState` ObservableObject shared across views.

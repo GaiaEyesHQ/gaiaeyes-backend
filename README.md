@@ -32,7 +32,7 @@ flowchart LR
 - `api/`: webhook middleware + routes used by the backend when enabled.
 - `scripts/` + `bots/` + `workers/`: data ingest, batch processing, and cron-style jobs.
 - `supabase/`: local Supabase config + migrations defining schemas/tables/views.
-- `gaiaeyes-ios/`: Swift iOS app (GaiaExporter) and iOS docs.
+- `gaiaeyes-ios/`: Swift iOS app (Gaia Eyes / `GaiaEyes` product name) and iOS docs.
 - `wp-content/`: WordPress theme and mu-plugins that render the site.
 - `docs/`: project documentation (architecture, deployment, component guides).
 

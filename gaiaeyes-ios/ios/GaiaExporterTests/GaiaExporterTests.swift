@@ -7,7 +7,7 @@
 
 import Foundation
 import Testing
-@testable import GaiaExporter
+@testable import GaiaEyes
 
 struct SymptomEnvelopeTests {
 

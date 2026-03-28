@@ -58,7 +58,7 @@ DEFAULT_PAIN_OPTIONS = [
 ]
 DEFAULT_ENERGY_OPTIONS = ["tired", "drained", "heavy_body", "brain_fog", "crashed_later"]
 DEFAULT_MOOD_OPTIONS = ["anxious", "wired", "irritable", "low_mood", "emotionally_sensitive"]
-DEFAULT_SLEEP_OPTIONS = ["falling_asleep", "staying_asleep", "waking_unrested", "restless_sleep"]
+DEFAULT_SLEEP_OPTIONS = ["yes_strongly", "yes_somewhat", "not_much", "unsure"]
 
 
 def _normalize_ts(value: Optional[datetime]) -> Optional[datetime]:

@@ -16,32 +16,32 @@
 			containerPortal = 0CA35D4B2E5B8F960099297E /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 0CA35D522E5B8F960099297E;
-			remoteInfo = GaiaExporter;
+			remoteInfo = GaiaEyes;
 		};
 		0CA35D6C2E5B8F980099297E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 0CA35D4B2E5B8F960099297E /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 0CA35D522E5B8F960099297E;
-			remoteInfo = GaiaExporter;
+			remoteInfo = GaiaEyes;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		0CA35D532E5B8F960099297E /* GaiaExporter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GaiaExporter.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0CA35D532E5B8F960099297E /* GaiaEyes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GaiaEyes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0CA35D612E5B8F980099297E /* GaiaExporterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GaiaExporterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0CA35D6B2E5B8F980099297E /* GaiaExporterUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GaiaExporterUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A6D63BE2F74E34700D2A278 /* ios/GaiaExporter/Views/VisualsInteractiveViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ios/GaiaExporter/Views/VisualsInteractiveViewer.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		0C995E832E5BA57B007CA01D /* Exceptions for "GaiaExporter" folder in "GaiaExporter" target */ = {
+		0C995E832E5BA57B007CA01D /* Exceptions for "GaiaExporter" folder in "GaiaEyes" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 				Services/Polar/Untitled.swift,
 			);
-			target = 0CA35D522E5B8F960099297E /* GaiaExporter */;
+			target = 0CA35D522E5B8F960099297E /* GaiaEyes */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -49,7 +49,7 @@
 		0CA35D552E5B8F960099297E /* GaiaExporter */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				0C995E832E5BA57B007CA01D /* Exceptions for "GaiaExporter" folder in "GaiaExporter" target */,
+				0C995E832E5BA57B007CA01D /* Exceptions for "GaiaExporter" folder in "GaiaEyes" target */,
 			);
 			path = GaiaExporter;
 			sourceTree = "<group>";
@@ -115,7 +115,7 @@
 		0CA35D542E5B8F960099297E /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				0CA35D532E5B8F960099297E /* GaiaExporter.app */,
+				0CA35D532E5B8F960099297E /* GaiaEyes.app */,
 				0CA35D612E5B8F980099297E /* GaiaExporterTests.xctest */,
 				0CA35D6B2E5B8F980099297E /* GaiaExporterUITests.xctest */,
 			);
@@ -132,9 +132,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		0CA35D522E5B8F960099297E /* GaiaExporter */ = {
+		0CA35D522E5B8F960099297E /* GaiaEyes */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 0CA35D752E5B8F980099297E /* Build configuration list for PBXNativeTarget "GaiaExporter" */;
+			buildConfigurationList = 0CA35D752E5B8F980099297E /* Build configuration list for PBXNativeTarget "GaiaEyes" */;
 			buildPhases = (
 				0CA35D4F2E5B8F960099297E /* Sources */,
 				0CA35D502E5B8F960099297E /* Frameworks */,
@@ -147,12 +147,12 @@
 			fileSystemSynchronizedGroups = (
 				0CA35D552E5B8F960099297E /* GaiaExporter */,
 			);
-			name = GaiaExporter;
+			name = GaiaEyes;
 			packageProductDependencies = (
 				0CDCBB992E6D036200B3EDB0 /* PolarBleSdk */,
 			);
-			productName = GaiaExporter;
-			productReference = 0CA35D532E5B8F960099297E /* GaiaExporter.app */;
+			productName = GaiaEyes;
+			productReference = 0CA35D532E5B8F960099297E /* GaiaEyes.app */;
 			productType = "com.apple.product-type.application";
 		};
 		0CA35D602E5B8F980099297E /* GaiaExporterTests */ = {
@@ -241,7 +241,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				0CA35D522E5B8F960099297E /* GaiaExporter */,
+				0CA35D522E5B8F960099297E /* GaiaEyes */,
 				0CA35D602E5B8F980099297E /* GaiaExporterTests */,
 				0CA35D6A2E5B8F980099297E /* GaiaExporterUITests */,
 			);
@@ -299,12 +299,12 @@
 /* Begin PBXTargetDependency section */
 		0CA35D632E5B8F980099297E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 0CA35D522E5B8F960099297E /* GaiaExporter */;
+			target = 0CA35D522E5B8F960099297E /* GaiaEyes */;
 			targetProxy = 0CA35D622E5B8F980099297E /* PBXContainerItemProxy */;
 		};
 		0CA35D6D2E5B8F980099297E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 0CA35D522E5B8F960099297E /* GaiaExporter */;
+			target = 0CA35D522E5B8F960099297E /* GaiaEyes */;
 			targetProxy = 0CA35D6C2E5B8F980099297E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -457,12 +457,14 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = GaiaExporter/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Gaia Eyes";
+				INFOPLIST_KEY_CFBundleName = GaiaEyes;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "GaiaExporter uses Bluetooth to connect to heart rate and EEG sensors (e.g., Polar H10) even in the background.";
-				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "GaiaExporter uses Bluetooth to connect to heart rate and EEG sensors.";
-				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "GaiaExporter reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "GaiaExporter reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GaiaExporter writes health summaries you request to the Health app.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Gaia Eyes uses Bluetooth to connect to heart rate and EEG sensors (e.g., Polar H10) even in the background.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Gaia Eyes uses Bluetooth to connect to heart rate and EEG sensors.";
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "Gaia Eyes reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Gaia Eyes reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Gaia Eyes writes health summaries you request to the Health app.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Gaia Eyes uses your location to estimate local weather and air quality signals for personalized insights.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -481,7 +483,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporter;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = GaiaEyes;
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
@@ -519,12 +521,14 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = GaiaExporter/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Gaia Eyes";
+				INFOPLIST_KEY_CFBundleName = GaiaEyes;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "GaiaExporter uses Bluetooth to connect to heart rate and EEG sensors (e.g., Polar H10) even in the background.";
-				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "GaiaExporter uses Bluetooth to connect to heart rate and EEG sensors.";
-				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "GaiaExporter reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "GaiaExporter reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GaiaExporter writes health summaries you request to the Health app.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Gaia Eyes uses Bluetooth to connect to heart rate and EEG sensors (e.g., Polar H10) even in the background.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Gaia Eyes uses Bluetooth to connect to heart rate and EEG sensors.";
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "Gaia Eyes reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Gaia Eyes reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Gaia Eyes writes health summaries you request to the Health app.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Gaia Eyes uses your location to estimate local weather and air quality signals for personalized insights.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -543,7 +547,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.5;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gaiaeyes.GaiaExporter;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = GaiaEyes;
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
@@ -573,7 +577,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GaiaExporter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GaiaExporter";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GaiaEyes.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GaiaEyes";
 				XROS_DEPLOYMENT_TARGET = 2.5;
 			};
 			name = Debug;
@@ -597,7 +601,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GaiaExporter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GaiaExporter";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GaiaEyes.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GaiaEyes";
 				XROS_DEPLOYMENT_TARGET = 2.5;
 			};
 			name = Release;
@@ -620,7 +624,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_TARGET_NAME = GaiaExporter;
+				TEST_TARGET_NAME = GaiaEyes;
 				XROS_DEPLOYMENT_TARGET = 2.5;
 			};
 			name = Debug;
@@ -643,7 +647,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_TARGET_NAME = GaiaExporter;
+				TEST_TARGET_NAME = GaiaEyes;
 				XROS_DEPLOYMENT_TARGET = 2.5;
 			};
 			name = Release;
@@ -660,7 +664,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		0CA35D752E5B8F980099297E /* Build configuration list for PBXNativeTarget "GaiaExporter" */ = {
+		0CA35D752E5B8F980099297E /* Build configuration list for PBXNativeTarget "GaiaEyes" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				0CA35D762E5B8F980099297E /* Debug */,
