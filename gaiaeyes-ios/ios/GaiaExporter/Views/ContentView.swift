@@ -7911,7 +7911,7 @@ struct ContentView: View {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("Next 24 hours to 7 days")
                                         .font(.system(size: 30, weight: .bold, design: .rounded))
-                                    Text("Pattern-informed guidance from your recent history, current gauges, and live local plus SWPC forecast inputs.")
+                                    Text("Pattern-informed guidance from your recent history, current gauges, and live local weather plus SWPC forecast inputs.")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                     if let updated = formatUpdate(payload?.generatedAt) {
@@ -8513,7 +8513,7 @@ struct ContentView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("What keeps showing up for you.")
                                 .font(.system(size: 30, weight: .bold, design: .rounded))
-                            Text(payload?.disclaimer ?? "Patterns compare your own logged outcomes with repeating signals in your recent history.")
+                            Text(payload?.disclaimer ?? "Patterns compare your logged symptoms and health statistics with repeating signals in your recent history.")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -8531,7 +8531,7 @@ struct ContentView: View {
                         if isLoading && payload == nil {
                             HStack(spacing: 10) {
                                 ProgressView()
-                                Text("Refreshing your latest pattern read.")
+                                Text("Refreshing your latest pattern readings.")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
@@ -8543,7 +8543,7 @@ struct ContentView: View {
 
                         sectionView(
                             title: "Clearest Patterns",
-                            subtitle: "The repeats with the clearest evidence in your history so far.",
+                            subtitle: "The patterns that repeat with the clearest evidence in your history so far.",
                             cards: strongest,
                             emptyMessage: "We’re still learning what repeats most clearly here. More logs will sharpen this section.",
                             expanded: $showsAllStrongestPatterns
