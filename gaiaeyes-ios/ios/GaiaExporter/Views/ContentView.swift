@@ -8776,6 +8776,7 @@ struct ContentView: View {
         @State private var showAllForecastDays: Bool = false
         @State private var fullForecastLoading: Bool = false
         @State private var manualRefreshLoading: Bool = false
+        @State private var initialRefreshTriggered: Bool = false
 
         private func progress(_ value: Double?, max: Double) -> Double {
             guard let value, max > 0 else { return 0.12 }
@@ -8788,6 +8789,10 @@ struct ContentView: View {
 
         private var metrics: SpaceWeatherCardMetrics {
             SpaceWeatherCardMetrics(current: current, outlook: outlook, series: series, magnetosphere: magnetosphere)
+        }
+
+        private var needsInitialRefresh: Bool {
+            outlook == nil || magnetosphere == nil
         }
 
         private func cleanedOutlookLine(_ raw: String?) -> String? {
@@ -9183,6 +9188,12 @@ struct ContentView: View {
                         }
                     }
                 }
+            }
+            .task {
+                guard !initialRefreshTriggered else { return }
+                initialRefreshTriggered = true
+                guard needsInitialRefresh else { return }
+                await onRefresh()
             }
         }
     }
@@ -10686,13 +10697,6 @@ struct ContentView: View {
                             onRefresh: { await fetchSpaceWeatherDetailData(force: true) },
                             onLoadFullForecast: { await fetchSpaceOutlook(days: 7) }
                         )
-                        .task {
-                            if !spaceWeatherDetailFetchInFlight &&
-                                Date().timeIntervalSince(spaceWeatherDetailLastFetchAt) >= 45 &&
-                                (spaceOutlook == nil || magnetosphere == nil) {
-                                await fetchSpaceWeatherDetailData()
-                            }
-                        }
                     case .localConditions:
                         LocalConditionsView(
                             zip: localHealthZip,
