@@ -83,6 +83,7 @@ struct AllDriversView: View {
     @State private var expandedDriverID: String?
     @State private var focusedDriverID: String?
     @State private var hasTrackedOpen: Bool = false
+    @State private var shareDraft: ShareDraft?
 
     private var vocabulary: CopyVocabulary {
         mode.copyVocabulary
@@ -286,6 +287,143 @@ struct AllDriversView: View {
         onOpenSetup?()
     }
 
+    private func sharePrompt(for accent: ShareAccentLevel) -> String {
+        switch accent {
+        case .elevated, .storm:
+            return "This might be worth sharing"
+        case .calm, .watch:
+            return "Share this insight"
+        }
+    }
+
+    private func accentLevel(for severity: String?) -> ShareAccentLevel {
+        switch (severity ?? "").lowercased() {
+        case "storm", "strong", "high":
+            return .storm
+        case "elevated":
+            return .elevated
+        case "watch", "active", "mild":
+            return .watch
+        default:
+            return .calm
+        }
+    }
+
+    private func spaceVisualURL(_ relativePath: String) -> URL? {
+        URL(string: "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals/\(relativePath)")
+    }
+
+    private func background(for driver: DriverDetailItem) -> ShareCardBackground {
+        switch driver.key {
+        case "schumann":
+            return ShareCardBackground(
+                style: .schumann,
+                candidateURLs: [
+                    MediaPaths.sanitize("social/earthscope/latest/tomsk_latest.png"),
+                    MediaPaths.sanitize("social/earthscope/latest/cumiana_latest.png"),
+                ].compactMap { $0 }
+            )
+        case "cme":
+            return ShareCardBackground(
+                style: .cme,
+                candidateURLs: [
+                    spaceVisualURL("nasa/lasco_c2/latest.jpg"),
+                    spaceVisualURL("nasa/lasco_c3/latest.jpg"),
+                ].compactMap { $0 }
+            )
+        case "flare", "solar_wind", "kp", "bz", "sep", "drap":
+            return ShareCardBackground(
+                style: .solar,
+                candidateURLs: [
+                    spaceVisualURL("nasa/aia_304/latest.jpg"),
+                    spaceVisualURL("nasa/geospace_3h/latest.jpg"),
+                    spaceVisualURL("drap/latest.png"),
+                ].compactMap { $0 }
+            )
+        case "pressure", "temp", "aqi", "allergens":
+            return ShareCardBackground(
+                style: .atmospheric,
+                candidateURLs: [
+                    MediaPaths.sanitize("social/earthscope/backgrounds/checkin.png"),
+                    MediaPaths.sanitize("social/earthscope/backgrounds/current_drivers.png"),
+                ].compactMap { $0 }
+            )
+        default:
+            return ShareCardBackground(style: .abstract)
+        }
+    }
+
+    private func signalShareDraft(for driver: DriverDetailItem) -> ShareDraft {
+        let translatedReason = translatedText(driver.shortReason) ?? driver.shortReason
+        var bullets: [String] = []
+        if let personal = translatedText(driver.personalReason), !personal.isEmpty {
+            bullets.append(personal)
+        }
+        if let pattern = translatedText(driver.patternSummary), !pattern.isEmpty {
+            bullets.append(pattern)
+        }
+        if let outlook = translatedText(driver.outlookSummary), !outlook.isEmpty {
+            bullets.append(outlook)
+        }
+        if bullets.isEmpty {
+            bullets = driver.currentSymptoms.prefix(3).map { "Linked symptom: \($0)" }
+        }
+        if bullets.isEmpty {
+            bullets = ["Worth watching in the broader driver stack."]
+        }
+
+        let accent = accentLevel(for: driver.severity ?? driver.state)
+        return ShareDraftFactory.signalSnapshot(
+            surface: "all_drivers",
+            analyticsKey: driver.key,
+            mode: mode,
+            tone: tone,
+            title: translatedLabel(for: driver),
+            value: driver.reading,
+            state: driver.stateLabel ?? driver.state.capitalized,
+            interpretation: translatedReason,
+            bullets: bullets,
+            accent: accent,
+            background: background(for: driver),
+            sourceLine: driver.sourceHint,
+            updatedAt: formattedUpdate(driver.updatedAt ?? driver.asof),
+            promptText: sharePrompt(for: accent)
+        )
+    }
+
+    private func dailyStateShareDraft() -> ShareDraft? {
+        guard let snapshot else { return nil }
+        let leading = snapshot.drivers.first(where: { $0.role == .leading }) ?? snapshot.drivers.first
+        guard let leading else { return nil }
+        let supporting = snapshot.drivers
+            .filter { $0.id != leading.id }
+            .prefix(2)
+            .map { translatedLabel(for: $0) }
+        let interpretation = translatedText(snapshot.summary.note)
+            ?? translatedText(leading.shortReason)
+            ?? leading.shortReason
+        let accent = accentLevel(for: leading.severity ?? leading.state)
+        return ShareDraftFactory.dailyState(
+            surface: "all_drivers",
+            analyticsKey: leading.key,
+            mode: mode,
+            title: vocabulary.whatMattersNowLabel,
+            leading: translatedLabel(for: leading),
+            supporting: supporting,
+            interpretation: interpretation,
+            accent: accent,
+            background: ShareCardBackground(
+                style: .abstract,
+                candidateURLs: [
+                    MediaPaths.sanitize("social/earthscope/backgrounds/current_drivers.png"),
+                    MediaPaths.sanitize("social/earthscope/backgrounds/actions.png"),
+                ].compactMap { $0 }
+            ),
+            updatedAt: formattedUpdate(snapshot.asof ?? snapshot.generatedAt),
+            promptText: sharePrompt(for: accent)
+        )
+    }
+
     private func focusDriver(for signal: SignalPill) {
         let focusKey = signal.driverKey ?? signal.key
         guard let match = snapshot?.drivers.first(where: { $0.matches(focusKey: focusKey) }) else { return }
@@ -314,11 +452,23 @@ struct AllDriversView: View {
                     }
                 }
                 Spacer()
-                Button("Refresh") {
-                    Task { await load(force: true) }
+                VStack(alignment: .trailing, spacing: 8) {
+                    if let draft = dailyStateShareDraft() {
+                        Button {
+                            shareDraft = draft
+                        } label: {
+                            Label(sharePrompt(for: draft.card.accentLevel), systemImage: "square.and.arrow.up")
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.white.opacity(0.85))
+                    }
+
+                    Button("Refresh") {
+                        Task { await load(force: true) }
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.white.opacity(0.85))
                 }
-                .buttonStyle(.bordered)
-                .tint(.white.opacity(0.85))
             }
 
             if let summary = snapshot?.summary {
@@ -489,13 +639,17 @@ struct AllDriversView: View {
                                                 translatedWhatItIs: translatedText(driver.whatItIs),
                                                 translatedActiveNowText: translatedText(driver.activeNowText),
                                                 translatedPersonalReason: translatedText(driver.personalReason),
-                                                translatedPatternSummary: translatedText(driver.patternSummary),
-                                                translatedOutlookSummary: translatedText(driver.outlookSummary),
-                                                translatedScienceNote: translatedText(driver.scienceNote),
-                                                onOpenCurrentSymptoms: onOpenCurrentSymptoms == nil ? nil : {
-                                                    AppAnalytics.track("all_drivers_symptom_cta", properties: ["driver_key": driver.key])
-                                                    onOpenCurrentSymptoms?()
-                                                },
+                                            translatedPatternSummary: translatedText(driver.patternSummary),
+                                            translatedOutlookSummary: translatedText(driver.outlookSummary),
+                                            translatedScienceNote: translatedText(driver.scienceNote),
+                                            sharePrompt: sharePrompt(for: accentLevel(for: driver.severity ?? driver.state)),
+                                            onShare: {
+                                                shareDraft = signalShareDraft(for: driver)
+                                            },
+                                            onOpenCurrentSymptoms: onOpenCurrentSymptoms == nil ? nil : {
+                                                AppAnalytics.track("all_drivers_symptom_cta", properties: ["driver_key": driver.key])
+                                                onOpenCurrentSymptoms?()
+                                            },
                                                 onLogSymptoms: onLogSymptoms == nil ? nil : {
                                                     AppAnalytics.track("all_drivers_log_symptoms", properties: ["driver_key": driver.key])
                                                     onLogSymptoms?()
@@ -572,6 +726,9 @@ struct AllDriversView: View {
                     }
                 }
             }
+        }
+        .sheet(item: $shareDraft) { draft in
+            SharePreviewView(draft: draft)
         }
     }
 }
@@ -716,6 +873,8 @@ private struct DriverExpandedDetailView: View {
     let translatedPatternSummary: String?
     let translatedOutlookSummary: String?
     let translatedScienceNote: String?
+    let sharePrompt: String?
+    let onShare: (() -> Void)?
     let onOpenCurrentSymptoms: (() -> Void)?
     let onLogSymptoms: (() -> Void)?
     let onOpenPatterns: (() -> Void)?
@@ -734,6 +893,14 @@ private struct DriverExpandedDetailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            if let onShare {
+                Button(sharePrompt ?? "Share this insight") {
+                    onShare()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
             detailSection("What it is", text: translatedWhatItIs)
             detailSection("What’s active right now", text: translatedActiveNowText)
             detailSection("Why it may matter for you", text: translatedPersonalReason)

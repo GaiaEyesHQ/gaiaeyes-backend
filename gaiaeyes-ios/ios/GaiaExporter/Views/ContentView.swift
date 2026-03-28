@@ -7722,11 +7722,13 @@ struct ContentView: View {
     }
 
     private struct YourOutlookView: View {
+        let mode: ExperienceMode
         let payload: UserForecastOutlook?
         let isLoading: Bool
         let error: String?
         let onRefresh: () -> Void
         let onOpenAllDrivers: () -> Void
+        @State private var shareDraft: ShareDraft? = nil
 
         private let columns = [
             GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 10, alignment: .topLeading)
@@ -7783,6 +7785,71 @@ struct ContentView: View {
             default:
                 return "Outlook"
             }
+        }
+
+        private func sharePrompt(for accent: ShareAccentLevel) -> String {
+            switch accent {
+            case .elevated, .storm:
+                return "This might be worth sharing"
+            case .calm, .watch:
+                return "Share this outlook"
+            }
+        }
+
+        private func accent(for raw: String?) -> ShareAccentLevel {
+            switch (raw ?? "").lowercased() {
+            case "high", "strong", "storm":
+                return .storm
+            case "elevated":
+                return .elevated
+            case "watch", "active", "mild":
+                return .watch
+            default:
+                return .calm
+            }
+        }
+
+        private func outlookBackground(for driverKey: String?) -> ShareCardBackground {
+            let normalized = (driverKey ?? "").lowercased()
+            switch normalized {
+            case "kp", "solar_wind", "bz", "flare", "sep", "drap":
+                return ShareCardBackground(style: .solar)
+            case "cme":
+                return ShareCardBackground(style: .cme)
+            case "pressure", "temp", "aqi", "allergens":
+                return ShareCardBackground(style: .atmospheric)
+            case "schumann":
+                return ShareCardBackground(style: .schumann)
+            default:
+                return ShareCardBackground(style: .abstract)
+            }
+        }
+
+        private func shareDraft(for window: UserOutlookWindow?) -> ShareDraft? {
+            guard let window else { return nil }
+            guard let primary = window.topDrivers?.first else { return nil }
+            let supporting = Array((window.topDrivers ?? []).dropFirst().prefix(2)).map {
+                $0.label ?? $0.key.replacingOccurrences(of: "_", with: " ").capitalized
+            }
+            let domains = Array((window.likelyElevatedDomains ?? []).prefix(3)).map {
+                $0.label ?? $0.key.replacingOccurrences(of: "_", with: " ").capitalized
+            }
+            let actionLine = window.supportLine ?? window.summary ?? primary.detail ?? "This window may be worth watching."
+            let accentLevel = accent(for: primary.severity)
+            return ShareDraftFactory.outlook(
+                surface: "your_outlook",
+                analyticsKey: primary.key,
+                mode: mode,
+                windowTitle: windowTitle(window.windowHours),
+                primaryDriver: primary.label ?? primary.key.replacingOccurrences(of: "_", with: " ").capitalized,
+                supportingDrivers: supporting,
+                affectedDomains: domains,
+                actionLine: actionLine,
+                accent: accentLevel,
+                background: outlookBackground(for: primary.key),
+                updatedAt: formatUpdate(payload?.generatedAt),
+                promptText: sharePrompt(for: accentLevel)
+            )
         }
 
         @ViewBuilder
@@ -7893,6 +7960,16 @@ struct ContentView: View {
                             }
                             .padding(.top, 2)
                         }
+
+                        if let draft = shareDraft(for: window) {
+                            Button {
+                                shareDraft = draft
+                            } label: {
+                                Label(sharePrompt(for: draft.card.accentLevel), systemImage: "square.and.arrow.up")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
                     }
                 }
             }
@@ -7926,6 +8003,15 @@ struct ContentView: View {
                                     Button("Refresh") { onRefresh() }
                                         .buttonStyle(.bordered)
                                         .controlSize(.small)
+                                    if let draft = shareDraft(for: payload?.next24h ?? payload?.next72h ?? payload?.next7d) {
+                                        Button {
+                                            shareDraft = draft
+                                        } label: {
+                                            Label(sharePrompt(for: draft.card.accentLevel), systemImage: "square.and.arrow.up")
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .controlSize(.small)
+                                    }
                                     Button("See all current drivers") { onOpenAllDrivers() }
                                         .buttonStyle(.bordered)
                                         .controlSize(.small)
@@ -7975,6 +8061,9 @@ struct ContentView: View {
             }
             .navigationTitle("Your Outlook")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $shareDraft) { draft in
+                SharePreviewView(draft: draft)
+            }
         }
     }
 
@@ -7992,6 +8081,7 @@ struct ContentView: View {
         @State private var showsAllStrongestPatterns: Bool = false
         @State private var showsAllEmergingPatterns: Bool = false
         @State private var showsAllBodySignalPatterns: Bool = false
+        @State private var shareDraft: ShareDraft? = nil
 
         private func confidenceSeverity(_ confidence: String?) -> StatusPill.Severity {
             switch (confidence ?? "").lowercased() {
@@ -8054,6 +8144,56 @@ struct ContentView: View {
                 return cards
             }
             return Array(cards.prefix(3))
+        }
+
+        private func shareAccent(for card: UserPatternCard) -> ShareAccentLevel {
+            switch (card.confidence ?? "").lowercased() {
+            case "strong":
+                return .elevated
+            case "moderate":
+                return .watch
+            case "emerging":
+                return .watch
+            default:
+                return card.usedToday == true ? .elevated : .calm
+            }
+        }
+
+        private func sharePrompt(for card: UserPatternCard) -> String {
+            if card.usedToday == true {
+                return "This might be worth sharing"
+            }
+            return "Share this pattern"
+        }
+
+        private func shareBackground(for signalKey: String) -> ShareCardBackground {
+            switch signalKey {
+            case "schumann_exposed":
+                return ShareCardBackground(style: .schumann)
+            case "kp_g1_plus_exposed", "bz_south_exposed", "solar_wind_exposed":
+                return ShareCardBackground(style: .solar)
+            case "pressure_swing_exposed", "aqi_moderate_plus_exposed", "temp_swing_exposed":
+                return ShareCardBackground(style: .atmospheric)
+            default:
+                return ShareCardBackground(style: .abstract)
+            }
+        }
+
+        private func shareDraft(for card: UserPatternCard) -> ShareDraft {
+            ShareDraftFactory.personalPattern(
+                surface: "your_patterns",
+                analyticsKey: card.signalKey,
+                mode: experienceMode,
+                relationship: "\(card.signal) → \(card.outcome) (for you)",
+                explanation: card.explanation,
+                evidenceCount: card.sampleSize ?? card.exposedDays,
+                lagText: card.lagLabel ?? card.lagHours.map { "\($0)h" },
+                confidence: card.confidence,
+                accent: shareAccent(for: card),
+                background: shareBackground(for: card.signalKey),
+                updatedAt: displayDate(payload?.generatedAt),
+                promptText: sharePrompt(for: card)
+            )
         }
 
         private var lunarInsightMessage: String? {
@@ -8374,6 +8514,8 @@ struct ContentView: View {
             let confidenceSeverity: StatusPill.Severity
             let liftLine: String
             let rateLine: String
+            let shareLabel: String
+            let onShare: () -> Void
 
             var body: some View {
                 VStack(alignment: .leading, spacing: 12) {
@@ -8423,6 +8565,12 @@ struct ContentView: View {
                     Text(rateLine)
                         .font(.caption2)
                         .foregroundColor(.secondary)
+
+                    Button(shareLabel) {
+                        onShare()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -8482,7 +8630,11 @@ struct ContentView: View {
                             iconName: iconName(for: card.signalKey),
                             confidenceSeverity: confidenceSeverity(card.confidence),
                             liftLine: liftLine(card),
-                            rateLine: rateLine(card)
+                            rateLine: rateLine(card),
+                            shareLabel: sharePrompt(for: card),
+                            onShare: {
+                                shareDraft = shareDraft(for: card)
+                            }
                         )
                     }
 
@@ -8584,6 +8736,9 @@ struct ContentView: View {
             }
             .navigationTitle("Your Patterns")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $shareDraft) { draft in
+                SharePreviewView(draft: draft)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -10081,58 +10236,63 @@ struct ContentView: View {
         }
     }
 
-    private var contentViewBody: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    dashboardFeaturesView(features ?? lastKnownFeatures)
+    @ViewBuilder
+    private var mainDashboardScrollView: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                dashboardFeaturesView(features ?? lastKnownFeatures)
 
-                    if showDebug {
-                        let debugFeaturesState = self.featureFetchState
-                        DebugPanel(state: state, expandLog: $expandLog, featuresState: debugFeaturesState)
+                if showDebug {
+                    let debugFeaturesState = self.featureFetchState
+                    DebugPanel(state: state, expandLog: $expandLog, featuresState: debugFeaturesState)
 
-                        GroupBox {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Label("Features Diagnostics", systemImage: "wrench.and.screwdriver")
-                                    Spacer()
-                                    if featuresDiagnosticsLoading {
-                                        ProgressView()
-                                            .scaleEffect(0.8)
-                                    }
-                                    Button("Refresh") {
-                                        Task { await fetchFeaturesDiagnostics() }
-                                    }
-                                    .disabled(featuresDiagnosticsLoading)
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Label("Features Diagnostics", systemImage: "wrench.and.screwdriver")
+                                Spacer()
+                                if featuresDiagnosticsLoading {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
                                 }
-                                if let error = featuresDiagnosticsError {
-                                    Text(error)
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
+                                Button("Refresh") {
+                                    Task { await fetchFeaturesDiagnostics() }
                                 }
-                                if let diagnostics = featuresDiagnostics {
-                                    FeaturesDiagnosticsPanel(
-                                        diag: diagnostics,
-                                        onCopyTrace: { copyTrace(diagnostics.trace ?? []) },
-                                        onShareTrace: { shareTrace(diagnostics.trace ?? []) },
-                                        onCopyToStatus: { appendTraceToStatus(diagnostics.trace ?? []) }
-                                    )
-                                } else if !featuresDiagnosticsLoading {
-                                    Text("No diagnostics yet. Tap Refresh.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
+                                .disabled(featuresDiagnosticsLoading)
                             }
-                        } label: {
-                            Text("Diagnostics")
+                            if let error = featuresDiagnosticsError {
+                                Text(error)
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                            }
+                            if let diagnostics = featuresDiagnostics {
+                                FeaturesDiagnosticsPanel(
+                                    diag: diagnostics,
+                                    onCopyTrace: { copyTrace(diagnostics.trace ?? []) },
+                                    onShareTrace: { shareTrace(diagnostics.trace ?? []) },
+                                    onCopyToStatus: { appendTraceToStatus(diagnostics.trace ?? []) }
+                                )
+                            } else if !featuresDiagnosticsLoading {
+                                Text("No diagnostics yet. Tap Refresh.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
-                        .padding(.horizontal)
+                    } label: {
+                        Text("Diagnostics")
                     }
-
-                    Spacer(minLength: 10)
+                    .padding(.horizontal)
                 }
-                .padding(.bottom, 12)
+
+                Spacer(minLength: 10)
             }
+            .padding(.bottom, 12)
+        }
+    }
+
+    private var dashboardNavigationStack: some View {
+        NavigationStack {
+            mainDashboardScrollView
             .transaction { $0.disablesAnimations = true }
             .safeAreaInset(edge: .top) {
                 persistentSignalBar(onTap: handleMissionControlSignalTap)
@@ -10446,6 +10606,10 @@ struct ContentView: View {
                 pendingDashboardRefreshTask = nil
             }
         }
+    }
+
+    private var contentViewBody: some View {
+        dashboardNavigationStack
         .sheet(isPresented: $showMissionInsightsSheet) {
             let baseFeatures = features ?? lastKnownFeatures
             let selected: (FeaturesToday, Bool)? = baseFeatures.map { selectDisplayFeatures(for: $0) }
@@ -10498,6 +10662,7 @@ struct ContentView: View {
                     switch route {
                     case .yourOutlook:
                         YourOutlookView(
+                            mode: experienceProfile.mode,
                             payload: resolvedUserOutlook,
                             isLoading: userOutlookLoading,
                             error: userOutlookError,
@@ -10533,6 +10698,8 @@ struct ContentView: View {
                             zip: localHealthZip,
                             snapshot: localHealth,
                             drivers: dashboardPayload?.drivers ?? [],
+                            mode: experienceProfile.mode,
+                            tone: experienceProfile.tone,
                             isLoading: localHealthLoading,
                             error: localHealthError,
                             useGPS: profileUseGPS,
@@ -10564,7 +10731,11 @@ struct ContentView: View {
                             }
                         }
                     case .schumann:
-                        SchumannDashboardView(state: state)
+                        SchumannDashboardView(
+                            state: state,
+                            mode: experienceProfile.mode,
+                            tone: experienceProfile.tone
+                        )
                     case .healthSymptoms:
                         InsightsHealthSymptomsView(
                             current: current,
@@ -11289,6 +11460,8 @@ struct ContentView: View {
                     zip: localHealthZip,
                     snapshot: localHealth,
                     drivers: dashboardPayload?.drivers ?? [],
+                    mode: experienceProfile.mode,
+                    tone: experienceProfile.tone,
                     isLoading: localHealthLoading,
                     error: localHealthError,
                     useGPS: profileUseGPS,
@@ -11303,7 +11476,11 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showSchumannDashboardSheet) {
             NavigationStack {
-                SchumannDashboardView(state: state)
+                SchumannDashboardView(
+                    state: state,
+                    mode: experienceProfile.mode,
+                    tone: experienceProfile.tone
+                )
             }
         }
         .sheet(isPresented: cameraHealthCheckSheetBinding) {
@@ -12303,6 +12480,7 @@ struct ContentView: View {
     }
 
     private struct SpaceWeatherDetailView: View {
+        let mode: ExperienceMode = .scientific
         let features: FeaturesToday?
         let visuals: SpaceVisualsPayload?
         let outlook: SpaceForecastOutlook?
@@ -12315,6 +12493,7 @@ struct ContentView: View {
         @State private var showCredits: Bool = false
         @State private var detailMedia: MediaViewerPayload? = nil
         @State private var showAllForecastDays: Bool = false
+        @State private var shareDraft: ShareDraft? = nil
 
         private var overlayImages: [SpaceVisualImage] {
             let imgs = visuals?.images ?? []
@@ -12546,6 +12725,139 @@ struct ContentView: View {
             return nil
         }
 
+        private func sharePrompt(for accent: ShareAccentLevel) -> String {
+            switch accent {
+            case .elevated, .storm:
+                return "This might be worth sharing"
+            case .calm, .watch:
+                return "Share this update"
+            }
+        }
+
+        private func accent(for raw: String?) -> ShareAccentLevel {
+            switch (raw ?? "").lowercased() {
+            case "high", "strong", "storm", "g3", "g4", "g5":
+                return .storm
+            case "elevated", "moderate", "g2":
+                return .elevated
+            case "watch", "mild", "g1":
+                return .watch
+            default:
+                return .calm
+            }
+        }
+
+        private func visualCandidates(matching keywords: [String]) -> [URL] {
+            let lowered = keywords.map { $0.lowercased() }
+            return overlayImages.compactMap { image in
+                let haystack = [
+                    image.key?.lowercased(),
+                    image.caption?.lowercased(),
+                    image.url?.lowercased(),
+                    image.source?.lowercased()
+                ].compactMap { $0 }.joined(separator: " ")
+                guard lowered.contains(where: { haystack.contains($0) }) else { return nil }
+                return resolveMediaURL_Detail(image)
+            }
+        }
+
+        private func geomagneticDraft() -> ShareDraft? {
+            let kpText = kpNowValue.map { String(format: "%.1f", $0) }
+            let kpMaxText = kpMax24Value.map { String(format: "%.1f", $0) }
+            let severityText = kpMax24Value.map { $0 >= 5 ? "Elevated" : ($0 >= 4 ? "Watch" : "Calm") } ?? "Watch"
+            let accentLevel = accent(for: severityText)
+            let context = outlookEntries(containing: ["geomagnetic", "kp"]).first?.summary
+                ?? "Geomagnetic activity may be worth watching."
+            return ShareDraftFactory.event(
+                surface: "space_weather_detail",
+                analyticsKey: "geomagnetic",
+                mode: mode,
+                title: mode.copyVocabulary.geomagneticLabel,
+                severity: severityText,
+                context: context,
+                bullets: [
+                    kpText.map { "Kp now: \($0)" } ?? "Kp now unavailable",
+                    kpMaxText.map { "Kp 24h max: \($0)" } ?? "24h max unavailable",
+                    bzNowValue.map { String(format: "Bz now: %.1f nT", $0) } ?? "Bz now unavailable"
+                ],
+                earthDirectedNote: nil,
+                accent: accentLevel,
+                background: ShareCardBackground(
+                    style: .solar,
+                    candidateURLs: visualCandidates(matching: ["geospace", "aurora", "ovation"])
+                ),
+                updatedAt: formattedCapture(features?.updatedAt ?? outlook?.issuedAt),
+                promptText: sharePrompt(for: accentLevel)
+            )
+        }
+
+        private func flareDraft() -> ShareDraft? {
+            let entry = outlookEntries(containing: ["flare"]).first
+            let flareCount = outlook?.flares?.total24h ?? Int((features?.flaresCount?.value ?? 0).rounded())
+            guard flareCount > 0 || entry != nil else { return nil }
+            let severityText = entry?.severity ?? outlook?.flares?.max24h ?? (flareCount > 0 ? "\(flareCount) in 24h" : nil)
+            let accentLevel = accent(for: entry?.severity)
+            return ShareDraftFactory.event(
+                surface: "space_weather_detail",
+                analyticsKey: "flare",
+                mode: mode,
+                title: mode.copyVocabulary.flareLabel,
+                severity: severityText,
+                context: entry?.summary ?? "Solar flare activity may increase in this window.",
+                bullets: [
+                    "24h flare count: \(flareCount)",
+                    entry?.metric.map { "\($0): \(entry?.value.map { String(format: "%.1f", $0) } ?? "—") \(entry?.unit ?? "")" } ?? "Live solar visuals available",
+                    entry?.source ?? "SWPC / NASA"
+                ],
+                earthDirectedNote: nil,
+                accent: accentLevel,
+                background: ShareCardBackground(
+                    style: .solar,
+                    candidateURLs: visualCandidates(matching: ["aia", "suvi", "solar"])
+                ),
+                updatedAt: formattedCapture(features?.updatedAt ?? outlook?.issuedAt),
+                promptText: sharePrompt(for: accentLevel)
+            )
+        }
+
+        private func cmeDraft() -> ShareDraft? {
+            let entry = outlookEntries(containing: ["cme"]).first
+            guard entry != nil || outlook?.cmes != nil else { return nil }
+            let severityText = entry?.severity ?? outlook?.cmes?.stats?.maxSpeedKms.map { String(format: "%.0f km/s", $0) }
+            let derivedSeverity = entry?.severity ?? ((outlook?.cmes?.stats?.earthDirectedCount ?? 0) > 0 ? "elevated" : "watch")
+            let accentLevel = accent(for: derivedSeverity)
+            let earthDirectedText: String? = {
+                if (outlook?.cmes?.stats?.earthDirectedCount ?? 0) > 0 {
+                    return "Earth-directed context is in the forecast."
+                }
+                if let summary = entry?.summary?.lowercased(), summary.contains("earth") {
+                    return "Earth-directed context is in the forecast."
+                }
+                return nil
+            }()
+            return ShareDraftFactory.event(
+                surface: "space_weather_detail",
+                analyticsKey: "cme",
+                mode: mode,
+                title: mode.copyVocabulary.cmeLabel,
+                severity: severityText,
+                context: entry?.summary ?? "CME activity is being watched in the current forecast window.",
+                bullets: [
+                    outlook?.cmes?.stats?.earthDirectedCount.map { "Earth-directed CMEs: \($0)" } ?? "CME count unavailable",
+                    outlook?.cmes?.stats?.maxSpeedKms.map { String(format: "Fastest speed: %.0f km/s", $0) } ?? "Speed estimate unavailable",
+                    entry?.source ?? "DONKI / SWPC / ENLIL"
+                ],
+                earthDirectedNote: earthDirectedText,
+                accent: accentLevel,
+                background: ShareCardBackground(
+                    style: .cme,
+                    candidateURLs: visualCandidates(matching: ["enlil", "cme", "lasco"])
+                ),
+                updatedAt: formattedCapture(features?.updatedAt ?? outlook?.issuedAt),
+                promptText: sharePrompt(for: accentLevel)
+            )
+        }
+
         private static let detailIsoFmt: ISO8601DateFormatter = {
             let f = ISO8601DateFormatter()
             f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -12683,6 +12995,30 @@ struct ContentView: View {
                                 .foregroundColor(.secondary)
                         }
                         scrollChips(proxy: proxy)
+                        if geomagneticDraft() != nil || flareDraft() != nil || cmeDraft() != nil {
+                            HStack(spacing: 10) {
+                                if let draft = geomagneticDraft() {
+                                    Button {
+                                        shareDraft = draft
+                                    } label: {
+                                        Label(sharePrompt(for: draft.card.accentLevel), systemImage: "square.and.arrow.up")
+                                    }
+                                    .buttonStyle(.bordered)
+                                }
+                                if let draft = flareDraft() {
+                                    Button("Share flare") {
+                                        shareDraft = draft
+                                    }
+                                    .buttonStyle(.bordered)
+                                }
+                                if let draft = cmeDraft() {
+                                    Button("Share CME") {
+                                        shareDraft = draft
+                                    }
+                                    .buttonStyle(.bordered)
+                                }
+                            }
+                        }
                         visualsSection
                             .id(SpaceDetailSection.visuals)
                         schumannSection
@@ -12701,6 +13037,9 @@ struct ContentView: View {
                         }
                     }
                 }
+            }
+            .sheet(item: $shareDraft) { draft in
+                SharePreviewView(draft: draft)
             }
         }
 
@@ -13631,11 +13970,36 @@ struct ContentView: View {
         let zip: String
         let snapshot: LocalCheckResponse?
         let drivers: [DashboardDriverItem]
+        let mode: ExperienceMode
+        let tone: ToneStyle
         let isLoading: Bool
         let error: String?
         let useGPS: Bool
         let onRefresh: () -> Void
         @State private var showAllForecastDays: Bool = false
+        @State private var shareDraft: ShareDraft? = nil
+
+        init(
+            zip: String,
+            snapshot: LocalCheckResponse?,
+            drivers: [DashboardDriverItem],
+            mode: ExperienceMode = .scientific,
+            tone: ToneStyle = .balanced,
+            isLoading: Bool,
+            error: String?,
+            useGPS: Bool,
+            onRefresh: @escaping () -> Void
+        ) {
+            self.zip = zip
+            self.snapshot = snapshot
+            self.drivers = drivers
+            self.mode = mode
+            self.tone = tone
+            self.isLoading = isLoading
+            self.error = error
+            self.useGPS = useGPS
+            self.onRefresh = onRefresh
+        }
 
         private func driver(for key: String) -> DashboardDriverItem? {
             drivers.first { $0.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == key.lowercased() }
@@ -13851,6 +14215,87 @@ struct ContentView: View {
             return "\(high) / \(low)"
         }
 
+        private func sharePrompt(for accent: ShareAccentLevel) -> String {
+            switch accent {
+            case .elevated, .storm:
+                return "This might be worth sharing"
+            case .calm, .watch:
+                return "Share this insight"
+            }
+        }
+
+        private func accent(for severityKey: String) -> ShareAccentLevel {
+            switch severityKey.lowercased() {
+            case "high":
+                return .storm
+            case "elevated":
+                return .elevated
+            case "mild":
+                return .watch
+            default:
+                return .calm
+            }
+        }
+
+        private func signalDraft(
+            key: String,
+            status: LocalConditionsDriverStatus,
+            interpretation: String,
+            bullets: [String],
+            updatedText: String
+        ) -> ShareDraft {
+            let accentLevel = accent(for: status.severityKey)
+            return ShareDraftFactory.signalSnapshot(
+                surface: "local_conditions",
+                analyticsKey: key,
+                mode: mode,
+                tone: tone,
+                title: mode.copyVocabulary.driverLabel(for: key, fallback: status.label),
+                value: status.detail,
+                state: status.state,
+                interpretation: interpretation,
+                bullets: bullets,
+                accent: accentLevel,
+                background: ShareCardBackground(style: .atmospheric),
+                sourceLine: locationSummary,
+                updatedAt: updatedText,
+                promptText: sharePrompt(for: accentLevel)
+            )
+        }
+
+        private func localSnapshotDraft(
+            tempStatus: LocalConditionsDriverStatus,
+            baroStatus: LocalConditionsDriverStatus,
+            airStatus: LocalConditionsDriverStatus,
+            allergenStatus: LocalConditionsDriverStatus,
+            updatedText: String
+        ) -> ShareDraft {
+            let ranked = [tempStatus, baroStatus, airStatus, allergenStatus].sorted {
+                $0.progress > $1.progress
+            }
+            let leading = ranked.first ?? tempStatus
+            let supporting = Array(ranked.dropFirst().prefix(2)).map { "\($0.label) — \($0.state)" }
+            let accentLevel = accent(for: leading.severityKey)
+            let interpretation = tone.resolveCopy(
+                straight: "\(leading.label) looks most active in your area right now.",
+                balanced: "\(leading.label) may be the local factor standing out most right now.",
+                humorous: "\(leading.label) is currently doing the loudest local weather monologue."
+            )
+            return ShareDraftFactory.dailyState(
+                surface: "local_conditions",
+                analyticsKey: "local_snapshot",
+                mode: mode,
+                title: "Local Conditions",
+                leading: "\(leading.label) — \(leading.state)",
+                supporting: supporting,
+                interpretation: interpretation,
+                accent: accentLevel,
+                background: ShareCardBackground(style: .atmospheric),
+                updatedAt: updatedText,
+                promptText: sharePrompt(for: accentLevel)
+            )
+        }
+
         var body: some View {
             let weather = snapshot?.weather
             let air = snapshot?.air
@@ -13881,6 +14326,22 @@ struct ContentView: View {
                                 }
                                 Spacer()
                                 if isLoading { ProgressView().scaleEffect(0.85) }
+                                Button {
+                                    shareDraft = localSnapshotDraft(
+                                        tempStatus: tempStatus,
+                                        baroStatus: baroStatus,
+                                        airStatus: airStatus,
+                                        allergenStatus: allergenDriver,
+                                        updatedText: updatedText
+                                    )
+                                } label: {
+                                    Label(
+                                        sharePrompt(for: accent(for: [tempStatus, baroStatus, airStatus, allergenDriver].map(\.severityKey).contains("high") ? "high" : "mild")),
+                                        systemImage: "square.and.arrow.up"
+                                    )
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
                                 Button("Refresh") { onRefresh() }
                                     .buttonStyle(.bordered)
                                     .controlSize(.small)
@@ -13927,6 +14388,21 @@ struct ContentView: View {
                                     tint: GaugePalette.mild
                                 )
                             }
+                            Button(sharePrompt(for: accent(for: tempStatus.severityKey))) {
+                                shareDraft = signalDraft(
+                                    key: "temp",
+                                    status: tempStatus,
+                                    interpretation: "Temperature shifts may be part of the local mix today.",
+                                    bullets: [
+                                        "Current temp: \(LocalConditionsFormatting.formatTempMetric(weather?.tempC))",
+                                        "24h swing: \(LocalConditionsFormatting.formatTempDelta(weather?.tempDelta24hC))",
+                                        "Humidity: \(LocalConditionsFormatting.formatPercent(weather?.humidityPct))"
+                                    ],
+                                    updatedText: updatedText
+                                )
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                         }
 
                         LocalConditionsSurfaceCard(title: "Barometric", icon: "gauge.with.dots.needle.bottom.50percent") {
@@ -13958,6 +14434,21 @@ struct ContentView: View {
                                 }
                             }
                             LocalConditionsStatusStrip(status: baroStatus)
+                            Button(sharePrompt(for: accent(for: baroStatus.severityKey))) {
+                                shareDraft = signalDraft(
+                                    key: "pressure",
+                                    status: baroStatus,
+                                    interpretation: "Pressure movement may be the local factor worth watching right now.",
+                                    bullets: [
+                                        "Pressure: \(LocalConditionsFormatting.formatPressureShort(weather?.pressureHpa))",
+                                        "24h delta: \(LocalConditionsFormatting.formatPressureDelta(weather?.baroDelta24hHpa))",
+                                        "Trend: \(LocalConditionsFormatting.formatTrend(LocalConditionsFormatting.derivedPressureTrend(raw: weather?.pressureTrend ?? weather?.baroTrend, deltaHpa: weather?.baroDelta24hHpa)))"
+                                    ],
+                                    updatedText: updatedText
+                                )
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                         }
 
                         LocalConditionsSurfaceCard(title: "Air Quality", icon: "wind") {
@@ -13977,6 +14468,21 @@ struct ContentView: View {
                                 )
                             }
                             LocalConditionsStatusStrip(status: airStatus)
+                            Button(sharePrompt(for: accent(for: airStatus.severityKey))) {
+                                shareDraft = signalDraft(
+                                    key: "aqi",
+                                    status: airStatus,
+                                    interpretation: "Air quality may be adding extra friction today.",
+                                    bullets: [
+                                        "AQI: \(LocalConditionsFormatting.formatNumber(air?.aqi, decimals: 0))",
+                                        "Category: \(air?.category ?? airStatus.state)",
+                                        "Pollutant: \(air?.pollutant ?? "—")"
+                                    ],
+                                    updatedText: updatedText
+                                )
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                         }
 
                         if hasAllergenData(allergens) {
@@ -14031,6 +14537,21 @@ struct ContentView: View {
                                         }
                                     }
                                 }
+                                Button(sharePrompt(for: accent(for: allergenDriver.severityKey))) {
+                                    shareDraft = signalDraft(
+                                        key: "allergens",
+                                        status: allergenDriver,
+                                        interpretation: "Allergen load may be the local signal worth watching.",
+                                        bullets: [
+                                            "Primary: \(allergens?.primaryLabel ?? LocalConditionsFormatting.formatAllergenType(allergens?.primaryType))",
+                                            "Overall: \(LocalConditionsFormatting.formatAllergenState(allergens?.overallLevel ?? allergens?.state, fallbackLabel: allergens?.overallLabel ?? allergens?.stateLabel))",
+                                            allergens?.overallIndex.map { String(format: "Index: %.1f", $0) } ?? "Index unavailable"
+                                        ],
+                                        updatedText: updatedText
+                                    )
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
                             }
                         }
 
@@ -14139,6 +14660,9 @@ struct ContentView: View {
             }
             .navigationTitle("Local Conditions")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $shareDraft) { draft in
+                SharePreviewView(draft: draft)
+            }
         }
     }
 
@@ -14708,12 +15232,14 @@ struct ContentView: View {
     }
 
     private struct EarthscopeCardV2: View {
+        let mode: ExperienceMode = .scientific
         let title: String?
         let updatedAt: String?
         let bodyMarkdown: String?
         let summaryText: String?
         let driversCompact: [String]
         @State private var showFull: Bool = false
+        @State private var shareDraft: ShareDraft? = nil
 
         private struct PreviewRow: View {
             let label: String
@@ -14780,15 +15306,69 @@ struct ContentView: View {
             }
         }
 
+        private func sharePrompt(for accent: ShareAccentLevel) -> String {
+            switch accent {
+            case .elevated, .storm:
+                return "This might be worth sharing"
+            case .calm, .watch:
+                return "Share this update"
+            }
+        }
+
+        private func missionControlShareDraft() -> ShareDraft {
+            let parsed = sections()
+            let leading = driversCompact.first ?? compactBody(for: parsed.first ?? EarthscopeBriefingSection(id: "summary", key: "summary", title: "Summary", body: summaryText ?? "What matters now"))
+            let supporting = Array(driversCompact.dropFirst().prefix(2))
+            let interpretation = summaryText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? summaryText!.trimmingCharacters(in: .whitespacesAndNewlines)
+                : compactBody(for: parsed.first(where: { $0.key == EarthscopeBriefingKey.summary.rawValue }) ?? parsed.first ?? EarthscopeBriefingSection(id: "summary", key: "summary", title: "Summary", body: "Gaia Eyes is translating today’s signal stack."))
+            let accent: ShareAccentLevel = driversCompact.count >= 2 ? .elevated : (driversCompact.isEmpty ? .calm : .watch)
+            let candidates = [
+                "checkin",
+                "drivers",
+                "today_checkin",
+                "todays_checkin",
+            ].flatMap { name in
+                ["png", "jpg", "PNG", "JPG"].compactMap { ext in
+                    ContentView.resolvedMediaURL("social/earthscope/backgrounds/\(name).\(ext)")
+                }
+            }
+
+            return ShareDraftFactory.dailyState(
+                surface: "mission_control",
+                analyticsKey: "earthscope",
+                mode: mode,
+                title: mode.copyVocabulary.missionControlLabel,
+                leading: leading,
+                supporting: supporting,
+                interpretation: interpretation,
+                accent: accent,
+                background: ShareCardBackground(style: .abstract, candidateURLs: candidates),
+                updatedAt: displayUpdatedText()?.replacingOccurrences(of: "Updated ", with: ""),
+                promptText: sharePrompt(for: accent)
+            )
+        }
+
         var body: some View {
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(displayTitle())
-                        .font(.headline)
-                    if let updated = displayUpdatedText() {
-                        Text(updated)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(displayTitle())
+                                .font(.headline)
+                            if let updated = displayUpdatedText() {
+                                Text(updated)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        Spacer()
+                        Button {
+                            shareDraft = missionControlShareDraft()
+                        } label: {
+                            Label(sharePrompt(for: missionControlShareDraft().card.accentLevel), systemImage: "square.and.arrow.up")
+                        }
+                        .buttonStyle(.bordered)
                     }
 
                     ForEach(previewSections()) { section in
@@ -14808,6 +15388,9 @@ struct ContentView: View {
                     bodyText: bodyMarkdown,
                     driversCompact: driversCompact
                 )
+            }
+            .sheet(item: $shareDraft) { draft in
+                SharePreviewView(draft: draft)
             }
         }
     }

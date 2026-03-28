@@ -1047,12 +1047,15 @@ private final class SchumannDashboardViewModel: ObservableObject {
 
 struct SchumannDashboardView: View {
     @ObservedObject var state: AppState
+    var mode: ExperienceMode = .scientific
+    var tone: ToneStyle = .balanced
     @StateObject private var viewModel = SchumannDashboardViewModel()
     @State private var showHowToRead: Bool = false
     @State private var showBandsDetails: Bool = false
     @State private var showHeatmapDetails: Bool = false
     @State private var showPulseDetails: Bool = false
     @State private var showTomskDetails: Bool = false
+    @State private var shareDraft: ShareDraft?
 
     var body: some View {
         ScrollView {
@@ -1088,6 +1091,9 @@ struct SchumannDashboardView: View {
                 }
                 .accessibilityLabel("Refresh Schumann")
             }
+        }
+        .sheet(item: $shareDraft) { draft in
+            SharePreviewView(draft: draft)
         }
         .task {
             try? await Task.sleep(nanoseconds: 250_000_000)
@@ -1136,6 +1142,16 @@ struct SchumannDashboardView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.secondary.opacity(0.15), in: Capsule())
+
+                    if let draft = schumannShareDraft() {
+                        Button {
+                            shareDraft = draft
+                        } label: {
+                            Label(sharePromptLabel(for: draft.card.accentLevel), systemImage: "square.and.arrow.up")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -1464,6 +1480,81 @@ struct SchumannDashboardView: View {
         default:
             return .orange
         }
+    }
+
+    private func sharePromptLabel(for accent: ShareAccentLevel) -> String {
+        switch accent {
+        case .elevated, .storm:
+            return "This might be worth sharing"
+        case .calm, .watch:
+            return "Share this insight"
+        }
+    }
+
+    private func schumannShareDraft() -> ShareDraft? {
+        let vocabulary = mode.copyVocabulary
+        let amplitude = viewModel.latestAmplitude
+        let level = SchumannTuning.level(for: amplitude)
+        let accent: ShareAccentLevel
+        switch level.state.lowercased() {
+        case "strong", "storm":
+            accent = .storm
+        case "elevated":
+            accent = .elevated
+        case "watch", "active":
+            accent = .watch
+        default:
+            accent = .calm
+        }
+
+        let title = vocabulary.schumannLabel
+        let interpretation = tone.resolveCopy(
+            straight: "Current resonance activity is running \(level.state.lowercased()).",
+            balanced: "The background resonance may feel a little different right now.",
+            humorous: "The background hum is doing a bit more than whispering."
+        )
+        var bullets: [String] = []
+        let qualityText = SchumannTuning.qualityText(for: viewModel.latestQuality)
+        if !qualityText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            bullets.append("Quality: \(qualityText)")
+        }
+        if let coherence = viewModel.coherence?.label, !coherence.isEmpty {
+            bullets.append("Coherence: \(coherence.capitalized)")
+        }
+        if let secondary = viewModel.secondaryFundamentalHz {
+            bullets.append("Cumiana F0: \(String(format: "%.2f Hz", secondary))")
+        }
+        if bullets.isEmpty {
+            bullets = [
+                "15-minute cadence",
+                "48-hour heatmap available",
+            ]
+        }
+
+        let background = ShareCardBackground(
+            style: .schumann,
+            candidateURLs: [
+                MediaPaths.sanitize("social/earthscope/latest/tomsk_latest.png"),
+                MediaPaths.sanitize("social/earthscope/latest/cumiana_latest.png"),
+            ].compactMap { $0 }
+        )
+
+        return ShareDraftFactory.signalSnapshot(
+            surface: "schumann_dashboard",
+            analyticsKey: "schumann",
+            mode: mode,
+            tone: tone,
+            title: title,
+            value: formattedFundamental(viewModel.displayedFundamentalHz),
+            state: level.state,
+            interpretation: interpretation,
+            bullets: bullets,
+            accent: accent,
+            background: background,
+            sourceLine: "Source: \((viewModel.latestQuality?.primarySource ?? "cumiana").capitalized)",
+            updatedAt: formattedTimestamp(viewModel.latestTimestamp),
+            promptText: sharePromptLabel(for: accent)
+        )
     }
 }
 
