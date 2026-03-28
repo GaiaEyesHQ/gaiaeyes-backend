@@ -77,6 +77,7 @@ struct DailyCheckInView: View {
     @State private var isLoading: Bool = false
     @State private var isSaving: Bool = false
     @State private var statusMessage: String?
+    @State private var alertMessage: String?
     @State private var didSeedForm: Bool = false
     @State private var comparedToYesterday: String = ""
     @State private var energyLevel: String = ""
@@ -154,6 +155,29 @@ struct DailyCheckInView: View {
             return "How did today feel in your system?"
         }
         return prompt?.questionText ?? "How did today feel?"
+    }
+
+    private var fallbackCalibrationSummary: FeedbackCalibrationSummary {
+        status?.calibrationSummary ?? FeedbackCalibrationSummary(
+            windowDays: 21,
+            totalCheckins: 0,
+            mostlyRight: 0,
+            partlyRight: 0,
+            notReally: 0,
+            matchRate: nil,
+            resolvedCount: 0,
+            improvingCount: 0,
+            worseCount: 0
+        )
+    }
+
+    private var fallbackSettings: DailyCheckInSettings {
+        status?.settings ?? DailyCheckInSettings(
+            enabled: false,
+            pushEnabled: false,
+            cadence: "balanced",
+            reminderTime: "20:00"
+        )
     }
 
     private var energySubtitle: String {
@@ -388,6 +412,21 @@ struct DailyCheckInView: View {
         .refreshable {
             await loadStatus()
         }
+        .alert(
+            "Daily Check-In",
+            isPresented: Binding(
+                get: { alertMessage != nil },
+                set: { newValue in
+                    if !newValue {
+                        alertMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(alertMessage ?? "")
+        }
     }
 
     private var headerCard: some View {
@@ -564,6 +603,15 @@ struct DailyCheckInView: View {
         noteText = entry.noteText ?? ""
     }
 
+    private func mergedStatus(with entry: DailyCheckInEntry) -> DailyCheckInStatus {
+        DailyCheckInStatus(
+            prompt: nil,
+            latestEntry: entry,
+            calibrationSummary: fallbackCalibrationSummary,
+            settings: fallbackSettings
+        )
+    }
+
     private func submit() async {
         guard canSubmit else { return }
         await MainActor.run {
@@ -591,6 +639,24 @@ struct DailyCheckInView: View {
             if envelope.ok == false {
                 throw NSError(domain: "DailyCheckIn", code: 2, userInfo: [NSLocalizedDescriptionKey: envelope.error ?? "Could not save daily check-in"])
             }
+            let savedEntry = envelope.payload ?? DailyCheckInEntry(
+                day: targetDay,
+                promptId: prompt?.id,
+                comparedToYesterday: comparedToYesterday,
+                energyLevel: energyLevel,
+                usableEnergy: usableEnergy,
+                systemLoad: systemLoad,
+                painLevel: painLevel,
+                painType: painType.nilIfBlank,
+                energyDetail: energyDetail.nilIfBlank,
+                moodLevel: moodLevel,
+                moodType: moodType.nilIfBlank,
+                sleepImpact: sleepImpact.nilIfBlank,
+                predictionMatch: predictionMatch.nilIfBlank,
+                noteText: noteText.nilIfBlank,
+                completedAt: ISO8601DateFormatter().string(from: Date())
+            )
+            let nextStatus = mergedStatus(with: savedEntry)
             AppAnalytics.track(
                 "daily_checkin_completed",
                 properties: [
@@ -601,14 +667,21 @@ struct DailyCheckInView: View {
                 ]
             )
             await MainActor.run {
+                status = nextStatus
+                onStatusChanged(nextStatus)
                 statusMessage = "Daily check-in saved."
                 isSaving = false
             }
-            await loadStatus()
+            if showsCloseButton {
+                await MainActor.run {
+                    dismiss()
+                }
+            }
         } catch {
             await MainActor.run {
                 isSaving = false
                 statusMessage = error.localizedDescription
+                alertMessage = error.localizedDescription
             }
         }
     }
@@ -634,6 +707,7 @@ struct DailyCheckInView: View {
             await MainActor.run {
                 isSaving = false
                 statusMessage = error.localizedDescription
+                alertMessage = error.localizedDescription
             }
         }
     }

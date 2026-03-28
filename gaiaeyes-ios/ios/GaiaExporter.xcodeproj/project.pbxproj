@@ -435,6 +435,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = GaiaExporter/GaiaExporter.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -462,6 +463,7 @@
 				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "GaiaExporter reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "GaiaExporter reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GaiaExporter writes health summaries you request to the Health app.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Gaia Eyes uses your location to estimate local weather and air quality signals for personalized insights.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -495,6 +497,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = GaiaExporter/GaiaExporter.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -522,6 +525,7 @@
 				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "GaiaExporter reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "GaiaExporter reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GaiaExporter writes health summaries you request to the Health app.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Gaia Eyes uses your location to estimate local weather and air quality signals for personalized insights.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
