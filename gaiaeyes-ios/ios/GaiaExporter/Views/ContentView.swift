@@ -8769,7 +8769,6 @@ struct ContentView: View {
         let usingYesterdayFallback: Bool
         let forecast: ForecastSummary?
         let outlook: SpaceForecastOutlook?
-        let series: SpaceSeries?
         let magnetosphere: MagnetosphereData?
         let onRefresh: () async -> Void
         let onLoadFullForecast: () async -> Void
@@ -8788,7 +8787,7 @@ struct ContentView: View {
         }
 
         private var metrics: SpaceWeatherCardMetrics {
-            SpaceWeatherCardMetrics(current: current, outlook: outlook, series: series, magnetosphere: magnetosphere)
+            SpaceWeatherCardMetrics(current: current, outlook: outlook, series: nil, magnetosphere: magnetosphere)
         }
 
         private var needsInitialRefresh: Bool {
@@ -10692,7 +10691,6 @@ struct ContentView: View {
                             usingYesterdayFallback: usingYesterdayFallback,
                             forecast: forecast,
                             outlook: resolvedOutlook,
-                            series: seriesDetail,
                             magnetosphere: magnetosphere,
                             onRefresh: { await fetchSpaceWeatherDetailData(force: true) },
                             onLoadFullForecast: { await fetchSpaceOutlook(days: 7) }
