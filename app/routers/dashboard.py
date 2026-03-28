@@ -362,9 +362,9 @@ async def _fetch_member_post(conn, user_id: str, day: date) -> Optional[Dict[str
             select day, title, caption, body_markdown, updated_at
               from content.daily_posts_user
              where user_id = %s
-               and day = %s
+               and day <= %s
                and platform = 'member'
-             order by updated_at desc
+             order by day desc, updated_at desc
              limit 1
             """,
             (user_id, day),
@@ -372,7 +372,10 @@ async def _fetch_member_post(conn, user_id: str, day: date) -> Optional[Dict[str
         )
         row = await cur.fetchone()
     payload = _post_row_to_payload(row)
-    return None if _member_post_requires_refresh(payload) else payload
+    row_day = row.get("day") if isinstance(row, dict) else None
+    if row_day == day and _member_post_requires_refresh(payload):
+        return None
+    return payload
 
 
 async def _fetch_latest_gauges(conn, user_id: str, day: date) -> Dict[str, Any]:
@@ -619,9 +622,9 @@ async def earthscope_member(
                        metrics_json, sources_json, updated_at
                   from content.daily_posts_user
                  where user_id = %s
-                   and day = %s
+                   and day <= %s
                    and platform = 'member'
-                 order by updated_at desc
+                 order by day desc, updated_at desc
                  limit 1
                 """,
                 (user_id, day),
@@ -632,7 +635,7 @@ async def earthscope_member(
         return {"ok": False, "error": f"member earthscope fetch failed: {exc}"}
 
     payload = _post_row_to_payload(row)
-    if row and _member_post_requires_refresh(payload):
+    if row and row.get("day") == day and _member_post_requires_refresh(payload):
         row = None
 
     if not row:
@@ -650,9 +653,9 @@ async def earthscope_member(
                                metrics_json, sources_json, updated_at
                           from content.daily_posts_user
                          where user_id = %s
-                           and day = %s
+                           and day <= %s
                            and platform = 'member'
-                         order by updated_at desc
+                         order by day desc, updated_at desc
                          limit 1
                         """,
                         (user_id, day),

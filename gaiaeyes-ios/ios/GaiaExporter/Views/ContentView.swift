@@ -2697,8 +2697,11 @@ struct ContentView: View {
                 let currentPersonalPost = currentEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
                 let currentPublicPost = currentEarthscopePost(resolvedPayload.publicPost, requestedDay: dashboardDay)
                 let hasCurrentMemberEarthscope = (currentMemberPost != nil || currentPersonalPost != nil)
+                let hasAvailableMemberEarthscope =
+                    preferredEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay) != nil ||
+                    preferredEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay) != nil
 
-                if resolvedPayload.gauges == nil || !hasCurrentMemberEarthscope {
+                if resolvedPayload.gauges == nil || (!hasCurrentMemberEarthscope && !hasAvailableMemberEarthscope) {
                     if let memberEnv: MemberEarthscopeEnvelope = await bestEffortDashboardJSON(
                         api: api,
                         path: "v1/earthscope/member?day=\(dashboardDay)",
