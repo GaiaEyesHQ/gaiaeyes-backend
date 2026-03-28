@@ -13,12 +13,14 @@ from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from psycopg.rows import dict_row
 
 from app.db import get_db
+from app.db import feedback as feedback_db
 from app.db import ulf as ulf_db
 from app.security.auth import require_read_auth, require_write_auth
 from bots.definitions.load_definition_base import load_definition_base
 from bots.gauges.gauge_scorer import (
     fetch_health_status_context,
     fetch_recent_symptom_gauge_context,
+    fetch_symptom_summary,
     fetch_user_tags,
 )
 from bots.gauges.local_payload import get_local_payload
@@ -476,12 +478,22 @@ async def dashboard(
     out["gauges_delta"] = await _fetch_gauges_delta(conn, user_id, day)
 
     active_states, local_payload = await _resolve_signal_context(user_id, day, definition)
-    user_tags, pattern_rows, recent_outcomes, health_status_explainer, symptom_gauge_context = await asyncio.gather(
+    (
+        user_tags,
+        pattern_rows,
+        recent_outcomes,
+        health_status_explainer,
+        symptom_gauge_context,
+        symptom_summary,
+        latest_daily_check_in,
+    ) = await asyncio.gather(
         asyncio.to_thread(fetch_user_tags, user_id),
         fetch_best_pattern_rows(conn, user_id),
         fetch_recent_outcome_summary(conn, user_id, day),
         asyncio.to_thread(fetch_health_status_context, user_id, day),
         asyncio.to_thread(fetch_recent_symptom_gauge_context, user_id, day),
+        asyncio.to_thread(fetch_symptom_summary, user_id, day),
+        feedback_db.fetch_latest_daily_check_in(conn, user_id),
     )
     drivers = normalize_environmental_drivers(
         active_states=active_states,
@@ -539,6 +551,9 @@ async def dashboard(
         gauges_delta=out.get("gauges_delta") if isinstance(out.get("gauges_delta"), dict) else {},
         user_tags=user_tags,
         personal_relevance=personal_relevance,
+        symptoms=symptom_summary if isinstance(symptom_summary, dict) else {},
+        daily_check_in=latest_daily_check_in if isinstance(latest_daily_check_in, dict) else {},
+        health_status_explainer=health_status_explainer if isinstance(health_status_explainer, dict) else {},
     )
     out["earthscope_summary"] = build_earthscope_summary(
         user_id=user_id,

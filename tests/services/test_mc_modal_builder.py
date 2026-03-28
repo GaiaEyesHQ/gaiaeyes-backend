@@ -51,6 +51,7 @@ def test_build_modal_models_returns_gauge_and_driver_models() -> None:
     assert payload["drivers"]["pressure"]["title"] == "Pressure Swing \u2014 High"
     assert payload["drivers"]["pressure"]["cta"]["prefill"]
     assert payload["drivers"]["pressure"]["quick_log"]["default_severity"] == 5
+    assert payload["gauges"]["pain"]["state_line"]
 
 
 def test_pressure_modal_personalizes_for_migraine_history() -> None:
@@ -163,6 +164,62 @@ def test_solar_wind_modal_personalizes_for_autonomic_context() -> None:
     assert "palpitations" in sw["what_you_may_notice"][0].lower()
 
 
+def test_energy_modal_uses_daily_checkin_and_dedupes_effects() -> None:
+    payload = build_modal_models(
+        day=date(2026, 3, 27),
+        gauges={"energy": 82},
+        gauges_meta={"energy": {"zone": "high", "label": "Variable"}},
+        gauge_labels={"energy": "Energy"},
+        drivers=[
+            {
+                "key": "aqi",
+                "label": "AQI",
+                "severity": "high",
+                "state": "High",
+                "value": 128.0,
+                "unit": "AQI",
+            },
+            {
+                "key": "allergens",
+                "label": "Allergens",
+                "severity": "high",
+                "state": "High",
+                "value": 4.0,
+                "unit": "index",
+            },
+        ],
+        symptoms={
+            "top_symptoms": [
+                {"symptom_code": "FATIGUE", "events": 1, "max_severity": 8},
+            ]
+        },
+        daily_check_in={
+            "day": "2026-03-27",
+            "usable_energy": "limited",
+            "energy_level": "low",
+            "energy_detail": "brain_fog",
+        },
+        health_status_explainer={
+            "physiology_signals": [
+                {
+                    "key": "sleep_vs_14d_baseline_delta",
+                    "cause_line": "Sleep was shorter than your usual baseline, so recovery is still lower.",
+                    "gauge_keys": ["energy"],
+                    "priority": 80,
+                }
+            ]
+        },
+    )
+
+    energy = payload["gauges"]["energy"]
+    assert energy["title"] == "Energy \u2014 Low capacity"
+    assert energy["causal_callout"] == "You reported limited usable energy earlier, so your capacity is reduced."
+    assert energy["what_you_may_notice"][0] == "When pollen and air quality both stack up, fatigue or brain fog may show up faster."
+    assert len(energy["what_you_may_notice"]) <= 3
+    assert "updated from your recent logs" not in " ".join(energy["why"]).lower()
+    assert [item["code"] for item in energy["quick_log"]["options"]] == ["DRAINED", "BRAIN_FOG", "FATIGUE"]
+
+
 def test_build_earthscope_summary_mentions_top_drivers_and_gauges() -> None:
     summary = build_earthscope_summary(
         user_id="user-123",
@@ -183,5 +240,5 @@ def test_build_earthscope_summary_mentions_top_drivers_and_gauges() -> None:
 
     assert "Pressure Swing" in summary
     assert "right now" in summary.lower()
-    assert "patterns to watch, not certainties" in summary.lower()
+    assert "Pain" in summary or "Sleep" in summary
     assert "today" not in summary.lower()

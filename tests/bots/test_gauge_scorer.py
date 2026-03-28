@@ -57,6 +57,7 @@ if "psycopg" not in sys.modules:
 from bots.gauges.gauge_scorer import (  # noqa: E402
     _build_symptom_signal_summary,
     apply_symptom_gauge_adjustments,
+    apply_daily_check_in_energy_adjustment,
     build_health_status_explainer,
     compute_health_status,
 )
@@ -98,6 +99,33 @@ class GaugeScorerTests(unittest.TestCase):
         self.assertGreater(adjusted["pain"], 40.0)
         self.assertGreater(adjusted["focus"], 30.0)
         self.assertGreater(meta["adjustments"]["pain"], 10.0)
+
+    def test_daily_checkin_energy_adjustment_uses_weighted_recent_capacity(self) -> None:
+        adjusted, meta = apply_daily_check_in_energy_adjustment(
+            {"energy": 40.0},
+            [
+                {
+                    "day": "2026-03-27",
+                    "usable_energy": "very_limited",
+                    "energy_level": "depleted",
+                    "energy_detail": "brain_fog",
+                    "compared_to_yesterday": "worse",
+                },
+                {
+                    "day": "2026-03-26",
+                    "usable_energy": "limited",
+                    "energy_level": "low",
+                    "energy_detail": "drained",
+                    "compared_to_yesterday": "same",
+                },
+            ],
+            {"gauge_boosts": {}},
+        )
+
+        self.assertGreater(adjusted["energy"], 50.0)
+        self.assertGreater(meta["adjustment"], 0.0)
+        self.assertEqual(meta["entries_used"], 2)
+        self.assertEqual(meta["latest_entry"]["usable_energy"], "very_limited")
 
     def test_compute_health_status_includes_recovery_penalties(self) -> None:
         baseline_rows = [_baseline_row(idx) for idx in range(14)]

@@ -199,10 +199,14 @@ When trigger events are detected for paid users, the engine appends a “Trigger
       - `summary`: one-line explanation of the main current body-load drivers
       - `drivers`: top recovery/symptom contributors with `label`, `display`, `points`, and bounded `impact`
       - `context`: neutral optional context such as cycle timing when enabled
+      - `physiology_signals`: reusable causal lines for sleep/HRV/resting-HR context that gauge modals can surface directly
       - `calibrating` / `baseline_days`: baseline readiness hints for UI copy
     - `gauge_recent_log_boosts`: recent same-day symptom boosts keyed by gauge for client-side debug or label suppression
     - `last_symptom_update_at`: latest same-day symptom timestamp used for the current gauge weighting
     - `modal_models`: deterministic modal content for gauges and drivers
+      - gauge entries now expose `state_line`, optional `causal_callout`, `why`, `what_you_may_notice`, `suggested_actions`, and `quick_log`
+      - gauge explanations prioritize daily check-in input, recent symptom logs, active body-state signals, then environmental drivers and patterns
+      - effect/help bullets are deduplicated into at most 3 distinct items so repeated driver wording does not surface multiple near-identical outcomes
     - `earthscope_summary`: short deterministic summary paragraph for home cards
   - Driver ranking remains deterministic:
     - raw severity still matters

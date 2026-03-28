@@ -163,6 +163,10 @@ def _normalize_symptom_code(value: Any) -> str:
     return str(value).strip().replace("-", "_").replace(" ", "_").upper()
 
 
+def _normalize_token(value: Any) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
 def _local_day_bounds(day: date) -> Tuple[datetime, datetime]:
     start_local = datetime.combine(day, datetime.min.time(), tzinfo=LOCAL_TZ)
     end_local = start_local + timedelta(days=1)
@@ -433,6 +437,119 @@ def fetch_recent_symptom_gauge_context(user_id: str, day: date) -> Dict[str, Any
     return {
         "gauge_recent_log_boosts": summary.get("recent_gauge_boosts") or {},
         "last_symptom_update_at": summary.get("last_symptom_update_at"),
+    }
+
+
+_USABLE_ENERGY_ADJUSTMENTS = {
+    "plenty": -3.0,
+    "enough": -1.5,
+    "limited": 6.0,
+    "very_limited": 10.0,
+}
+
+_ENERGY_LEVEL_ADJUSTMENTS = {
+    "good": -0.8,
+    "manageable": 0.0,
+    "low": 1.6,
+    "depleted": 3.0,
+}
+
+_ENERGY_DETAIL_ADJUSTMENTS = {
+    "tired": 1.0,
+    "drained": 1.8,
+    "heavy_body": 1.6,
+    "brain_fog": 1.4,
+    "crashed_later": 1.8,
+}
+
+_CHECKIN_COMPARISON_ADJUSTMENTS = {
+    "better": -0.4,
+    "same": 0.0,
+    "worse": 0.8,
+}
+
+_CHECKIN_RECENCY_WEIGHTS = [1.0, 0.72, 0.48, 0.28]
+
+
+def fetch_recent_daily_checkins(
+    user_id: str,
+    day: date,
+    *,
+    limit: int = 4,
+) -> List[Dict[str, Any]]:
+    cols = table_columns("raw", "user_daily_checkins")
+    if not cols:
+        return []
+    try:
+        rows = pg.fetch(
+            """
+            select day,
+                   compared_to_yesterday,
+                   energy_level,
+                   usable_energy,
+                   energy_detail
+              from raw.user_daily_checkins
+             where user_id = %s
+               and day <= %s
+             order by day desc
+             limit %s
+            """,
+            user_id,
+            day,
+            int(limit),
+        )
+        return rows or []
+    except Exception:
+        return []
+
+
+def apply_daily_check_in_energy_adjustment(
+    gauges: Dict[str, Optional[float]],
+    daily_checkins: List[Dict[str, Any]],
+    symptoms: Dict[str, Any],
+) -> Tuple[Dict[str, Optional[float]], Dict[str, Any]]:
+    adjusted = dict(gauges)
+    current_energy = _safe_float(adjusted.get("energy"))
+    if current_energy is None or not daily_checkins:
+        return adjusted, {"adjustment": 0.0, "entries_used": 0}
+
+    symptom_pressure = _safe_float((symptoms.get("gauge_boosts") or {}).get("energy")) or 0.0
+    weighted_total = 0.0
+    latest_entry: Optional[Dict[str, Any]] = None
+
+    for idx, row in enumerate(daily_checkins[: len(_CHECKIN_RECENCY_WEIGHTS)]):
+        weight = _CHECKIN_RECENCY_WEIGHTS[idx]
+        usable = _normalize_token(row.get("usable_energy"))
+        energy_level = _normalize_token(row.get("energy_level"))
+        energy_detail = _normalize_token(row.get("energy_detail"))
+        comparison = _normalize_token(row.get("compared_to_yesterday"))
+
+        entry_points = _USABLE_ENERGY_ADJUSTMENTS.get(usable, 0.0)
+        entry_points += _ENERGY_LEVEL_ADJUSTMENTS.get(energy_level, 0.0)
+        entry_points += _ENERGY_DETAIL_ADJUSTMENTS.get(energy_detail, 0.0)
+        entry_points += _CHECKIN_COMPARISON_ADJUSTMENTS.get(comparison, 0.0)
+
+        if entry_points < 0 and (current_energy >= 45.0 or symptom_pressure >= 6.0):
+            entry_points = 0.0
+
+        if idx == 0 and entry_points != 0:
+            latest_entry = {
+                "day": row.get("day"),
+                "usable_energy": usable,
+                "energy_level": energy_level,
+                "energy_detail": energy_detail,
+                "comparison": comparison,
+                "weighted_points": round(entry_points * weight, 2),
+            }
+
+        weighted_total += entry_points * weight
+
+    capped = max(-3.0, min(12.0, weighted_total))
+    adjusted["energy"] = round(min(100.0, max(0.0, current_energy + capped)), 2)
+    return adjusted, {
+        "adjustment": round(capped, 2),
+        "entries_used": min(len(daily_checkins), len(_CHECKIN_RECENCY_WEIGHTS)),
+        "latest_entry": latest_entry,
     }
 
 
@@ -871,6 +988,90 @@ def _format_health_driver_display(key: str, value: Any) -> str:
     return f"{numeric:.1f}"
 
 
+def _build_physiology_signals(
+    today_row: Dict[str, Any],
+    health_meta: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    signals: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add_signal(key: str, *, cause_line: str, gauge_keys: List[str], priority: int = 72) -> None:
+        if key in seen:
+            return
+        seen.add(key)
+        signals.append(
+            {
+                "key": key,
+                "cause_line": cause_line,
+                "gauge_keys": gauge_keys,
+                "priority": priority,
+            }
+        )
+
+    recovery_penalties = health_meta.get("recovery_penalties") or {}
+    sleep_delta = _safe_float((recovery_penalties.get("sleep_vs_14d_baseline_delta") or {}).get("value"))
+    if sleep_delta is not None and sleep_delta <= -45:
+        add_signal(
+            "sleep_vs_14d_baseline_delta",
+            cause_line="Sleep was shorter than your usual baseline, so recovery is still lower.",
+            gauge_keys=["energy", "sleep", "stamina", "mood", "health_status"],
+            priority=80,
+        )
+
+    sleep_debt = _safe_float((recovery_penalties.get("sleep_debt_proxy") or {}).get("value"))
+    if sleep_debt is not None and sleep_debt >= 60:
+        add_signal(
+            "sleep_debt_proxy",
+            cause_line="Sleep debt is still sitting in the background, which can make recovery feel slower.",
+            gauge_keys=["energy", "sleep", "stamina", "health_status"],
+            priority=76,
+        )
+
+    resting_hr_delta = _safe_float((recovery_penalties.get("resting_hr_baseline_delta") or {}).get("value"))
+    if resting_hr_delta is not None and resting_hr_delta >= 4:
+        add_signal(
+            "resting_hr_baseline_delta",
+            cause_line="Resting heart rate is above your usual baseline, so recovery strain is higher.",
+            gauge_keys=["heart", "energy", "stamina", "health_status"],
+            priority=75,
+        )
+
+    metric_inputs = health_meta.get("metric_inputs") or {}
+    hrv_input = metric_inputs.get("hrv_avg") if isinstance(metric_inputs, dict) else None
+    if isinstance(hrv_input, dict):
+        today = _safe_float(hrv_input.get("today"))
+        mean = _safe_float(hrv_input.get("mean"))
+        std = _safe_float(hrv_input.get("std"))
+        if today is not None and mean is not None:
+            threshold = max((std or 0.0) * 0.35, 2.5)
+            if today <= (mean - threshold):
+                add_signal(
+                    "hrv_avg",
+                    cause_line="HRV is down from your usual range, which can make recovery feel slower.",
+                    gauge_keys=["heart", "energy", "sleep", "stamina", "health_status"],
+                    priority=78,
+                )
+
+    respiratory_delta = _safe_float((recovery_penalties.get("respiratory_rate_baseline_delta") or {}).get("value"))
+    if respiratory_delta is not None and respiratory_delta >= 2.0:
+        add_signal(
+            "respiratory_rate_baseline_delta",
+            cause_line="Breathing rate is running above your usual baseline, which can make the day feel a little heavier.",
+            gauge_keys=["heart", "energy", "health_status"],
+            priority=70,
+        )
+
+    if bool(today_row.get("menstrual_active")) and str(today_row.get("cycle_phase") or "").strip().lower() in {"luteal", "menstrual"}:
+        add_signal(
+            "cycle_context",
+            cause_line="Cycle-related load may also be adding to recovery strain right now.",
+            gauge_keys=["pain", "energy", "mood", "health_status"],
+            priority=62,
+        )
+
+    return signals
+
+
 def build_health_status_explainer(
     today_row: Dict[str, Any],
     symptoms: Dict[str, Any],
@@ -972,6 +1173,7 @@ def build_health_status_explainer(
         "summary": summary,
         "drivers": drivers[:4],
         "context": context_items,
+        "physiology_signals": _build_physiology_signals(today_row, health_meta),
         "calibrating": bool(health_meta.get("calibrating")),
         "baseline_days": int(health_meta.get("baseline_days") or 0),
     }
@@ -1286,6 +1488,7 @@ def score_user_day(
     active_states = resolve_signals(user_id, day, local_payload=local_payload, definition=definition)
     tags = fetch_user_tags(user_id)
     symptoms = fetch_symptom_summary(user_id, day)
+    daily_checkins = fetch_recent_daily_checkins(user_id, day)
     wearable = fetch_local_health_summary(user_id)
     today_features = fetch_daily_features(user_id, day)
     baseline_rows = fetch_daily_features_baseline(user_id, day)
@@ -1302,6 +1505,7 @@ def score_user_day(
 
     gauges = _score_gauges(definition, active_states, profile=profile)
     gauges, symptom_gauge_meta = apply_symptom_gauge_adjustments(gauges, symptoms)
+    gauges, daily_checkin_energy_meta = apply_daily_check_in_energy_adjustment(gauges, daily_checkins, symptoms)
     if health_status is not None:
         health_adjustment = health_status_contextual_adjustment(profile, active_states)
         if health_adjustment:
@@ -1329,9 +1533,11 @@ def score_user_day(
         "local_payload": local_payload,
         "tags": tags,
         "symptoms": symptoms,
+        "daily_checkins": daily_checkins,
         "wearable": wearable,
         "health_status_inputs": health_meta,
         "symptom_gauge_inputs": symptom_gauge_meta,
+        "daily_checkin_energy_inputs": daily_checkin_energy_meta,
     }
     inputs_hash = _hash_inputs(inputs_snapshot)
 

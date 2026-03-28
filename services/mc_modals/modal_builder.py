@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 import hashlib
 from datetime import date, datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
@@ -656,6 +657,265 @@ _DRIVER_SHORT_TIP = {
     "schumann": "Keep sensory load and sleep routine steady if that usually helps.",
 }
 
+_CHECKIN_USABLE_ENERGY_LABELS = {
+    "plenty": "plenty of usable energy",
+    "enough": "enough usable energy",
+    "limited": "limited usable energy",
+    "very_limited": "very limited usable energy",
+}
+
+_CHECKIN_ENERGY_DETAIL_LABELS = {
+    "tired": "tired",
+    "drained": "drained",
+    "heavy_body": "a heavy-body day",
+    "brain_fog": "brain fog",
+    "crashed_later": "a later crash",
+}
+
+_CHECKIN_PAIN_LABELS = {
+    "none": "no unusual pain",
+    "a_little": "a little pain",
+    "noticeable": "noticeable pain",
+    "strong": "strong pain",
+}
+
+_CHECKIN_MOOD_LABELS = {
+    "calm": "a calmer day",
+    "slightly_off": "a slightly off day",
+    "noticeable": "a more sensitive day",
+    "strong": "a strongly affected day",
+}
+
+_CHECKIN_SLEEP_IMPACT_LABELS = {
+    "yes_strongly": "sleep affected the day",
+    "yes_somewhat": "sleep affected part of the day",
+    "not_much": "sleep was not the main issue",
+    "unsure": "sleep impact was hard to read",
+}
+
+_SYMPTOM_DISPLAY_LABELS = {
+    "ANXIOUS": "anxious",
+    "BRAIN_FOG": "brain fog",
+    "CHEST_TIGHTNESS": "chest tightness",
+    "DRAINED": "low energy",
+    "FATIGUE": "fatigue",
+    "FOCUS_DRIFT": "focus drift",
+    "HEADACHE": "a headache",
+    "INSOMNIA": "insomnia",
+    "JOINT_PAIN": "joint pain",
+    "LIGHT_SENSITIVITY": "light sensitivity",
+    "MIGRAINE": "a migraine",
+    "NERVE_PAIN": "nerve pain",
+    "PAIN": "a pain flare",
+    "PALPITATIONS": "palpitations",
+    "RESP_IRRITATION": "breathing irritation",
+    "RESTLESS_SLEEP": "restless sleep",
+    "SINUS_PRESSURE": "sinus pressure",
+    "STIFFNESS": "stiffness",
+    "WIRED": "a wired stretch",
+}
+
+_GAUGE_MODAL_STATE_LABELS = {
+    "energy": {
+        "low": "Steady",
+        "mild": "Variable",
+        "elevated": "Reduced",
+        "high": "Low capacity",
+    },
+    "sleep": {
+        "low": "Steady",
+        "mild": "Lighter",
+        "elevated": "Reduced",
+        "high": "Reduced",
+    },
+    "stamina": {
+        "low": "Steady",
+        "mild": "Less steady",
+        "elevated": "Reduced",
+        "high": "Reduced",
+    },
+}
+
+_GAUGE_STATE_LINES = {
+    "pain": {
+        "active": "Pain load looks elevated right now.",
+        "steady": "Pain load looks relatively steady right now.",
+    },
+    "focus": {
+        "active": "Focus load looks more strained right now.",
+        "steady": "Focus looks relatively steady right now.",
+    },
+    "heart": {
+        "active": "Heart load looks more watchful right now.",
+        "steady": "Heart load looks relatively steady right now.",
+    },
+    "stamina": {
+        "active": "Recovery capacity looks reduced right now.",
+        "steady": "Recovery capacity looks relatively steady right now.",
+    },
+    "energy": {
+        "active": "Capacity looks reduced right now.",
+        "steady": "Capacity looks fairly steady right now.",
+    },
+    "sleep": {
+        "active": "Recovery looks reduced right now.",
+        "steady": "Recovery looks relatively steady right now.",
+    },
+    "mood": {
+        "active": "Mood looks more sensitive right now.",
+        "steady": "Mood looks relatively steady right now.",
+    },
+    "health_status": {
+        "active": "Overall system load looks elevated right now.",
+        "steady": "Overall system load looks relatively steady right now.",
+    },
+}
+
+_GAUGE_ALLOWED_EFFECT_BUCKETS = {
+    "pain": {"head_pressure", "sinus_irritation", "pain_flare"},
+    "focus": {"focus_drag", "head_pressure", "fatigue_fog"},
+    "heart": {"heart_reactivity", "fatigue_fog", "restlessness"},
+    "stamina": {"fatigue_fog", "pain_flare", "sleep_fragility"},
+    "energy": {"fatigue_fog", "restlessness", "sleep_fragility"},
+    "sleep": {"sleep_fragility", "fatigue_fog", "restlessness"},
+    "mood": {"mood_sensitivity", "restlessness", "fatigue_fog"},
+    "health_status": {"fatigue_fog", "head_pressure", "pain_flare", "restlessness", "sleep_fragility"},
+}
+
+_EFFECT_BUCKET_PRIORITY = {
+    "head_pressure": 9,
+    "sinus_irritation": 8,
+    "fatigue_fog": 10,
+    "focus_drag": 7,
+    "sleep_fragility": 8,
+    "restlessness": 7,
+    "pain_flare": 8,
+    "heart_reactivity": 8,
+    "mood_sensitivity": 7,
+}
+
+_EFFECT_BUCKET_QUICK_LOG = {
+    "head_pressure": [
+        {"code": "HEADACHE", "label": "Headache"},
+        {"code": "SINUS_PRESSURE", "label": "Sinus pressure"},
+        {"code": "BRAIN_FOG", "label": "Brain fog"},
+    ],
+    "sinus_irritation": [
+        {"code": "SINUS_PRESSURE", "label": "Sinus pressure"},
+        {"code": "HEADACHE", "label": "Headache"},
+        {"code": "RESP_IRRITATION", "label": "Breathing irritation"},
+    ],
+    "fatigue_fog": [
+        {"code": "DRAINED", "label": "Drained"},
+        {"code": "BRAIN_FOG", "label": "Brain fog"},
+        {"code": "FATIGUE", "label": "Fatigue"},
+    ],
+    "focus_drag": [
+        {"code": "BRAIN_FOG", "label": "Brain fog"},
+        {"code": "FOCUS_DRIFT", "label": "Focus drift"},
+        {"code": "HEADACHE", "label": "Headache"},
+    ],
+    "sleep_fragility": [
+        {"code": "RESTLESS_SLEEP", "label": "Restless sleep"},
+        {"code": "INSOMNIA", "label": "Insomnia"},
+        {"code": "DRAINED", "label": "Unrefreshed"},
+    ],
+    "restlessness": [
+        {"code": "ANXIOUS", "label": "Anxious"},
+        {"code": "WIRED", "label": "Wired"},
+        {"code": "DRAINED", "label": "Drained"},
+    ],
+    "pain_flare": [
+        {"code": "PAIN", "label": "Pain flare"},
+        {"code": "JOINT_PAIN", "label": "Joint pain"},
+        {"code": "STIFFNESS", "label": "Stiffness"},
+    ],
+    "heart_reactivity": [
+        {"code": "PALPITATIONS", "label": "Palpitations"},
+        {"code": "CHEST_TIGHTNESS", "label": "Chest tightness"},
+        {"code": "RESP_IRRITATION", "label": "Breathing irritation"},
+    ],
+    "mood_sensitivity": [
+        {"code": "ANXIOUS", "label": "Anxious"},
+        {"code": "WIRED", "label": "Wired"},
+        {"code": "DRAINED", "label": "Drained"},
+    ],
+}
+
+_SYMPTOM_CODES_BY_GAUGE = {
+    "pain": {"HEADACHE", "MIGRAINE", "SINUS_PRESSURE", "LIGHT_SENSITIVITY", "PAIN", "NERVE_PAIN", "JOINT_PAIN", "STIFFNESS"},
+    "focus": {"BRAIN_FOG", "FOCUS_DRIFT", "HEADACHE", "DRAINED", "FATIGUE"},
+    "heart": {"PALPITATIONS", "CHEST_TIGHTNESS", "RESP_IRRITATION", "ANXIOUS", "WIRED"},
+    "stamina": {"FATIGUE", "DRAINED", "PAIN", "JOINT_PAIN", "STIFFNESS", "RESTLESS_SLEEP", "INSOMNIA"},
+    "energy": {"FATIGUE", "DRAINED", "BRAIN_FOG", "RESTLESS_SLEEP", "INSOMNIA", "WIRED"},
+    "sleep": {"RESTLESS_SLEEP", "INSOMNIA", "WIRED", "ANXIOUS", "DRAINED"},
+    "mood": {"ANXIOUS", "WIRED", "DRAINED"},
+    "health_status": {"HEADACHE", "MIGRAINE", "SINUS_PRESSURE", "PAIN", "NERVE_PAIN", "JOINT_PAIN", "STIFFNESS", "FATIGUE", "DRAINED", "BRAIN_FOG", "RESTLESS_SLEEP", "INSOMNIA", "ANXIOUS", "PALPITATIONS", "RESP_IRRITATION"},
+}
+
+_SYMPTOM_EFFECT_BUCKETS = {
+    "ANXIOUS": {"restlessness", "mood_sensitivity", "heart_reactivity"},
+    "BRAIN_FOG": {"fatigue_fog", "focus_drag"},
+    "CHEST_TIGHTNESS": {"heart_reactivity"},
+    "DRAINED": {"fatigue_fog"},
+    "FATIGUE": {"fatigue_fog"},
+    "FOCUS_DRIFT": {"focus_drag"},
+    "HEADACHE": {"head_pressure"},
+    "INSOMNIA": {"sleep_fragility", "fatigue_fog"},
+    "JOINT_PAIN": {"pain_flare"},
+    "LIGHT_SENSITIVITY": {"head_pressure"},
+    "MIGRAINE": {"head_pressure"},
+    "NERVE_PAIN": {"pain_flare"},
+    "PAIN": {"pain_flare"},
+    "PALPITATIONS": {"heart_reactivity"},
+    "RESP_IRRITATION": {"heart_reactivity"},
+    "RESTLESS_SLEEP": {"sleep_fragility", "fatigue_fog"},
+    "SINUS_PRESSURE": {"sinus_irritation", "head_pressure"},
+    "STIFFNESS": {"pain_flare"},
+    "WIRED": {"restlessness", "sleep_fragility"},
+}
+
+_DRIVER_EFFECT_BUCKETS = {
+    "pressure": {"head_pressure", "pain_flare"},
+    "temp": {"pain_flare", "fatigue_fog"},
+    "aqi": {"sinus_irritation", "fatigue_fog", "focus_drag", "heart_reactivity"},
+    "allergens": {"sinus_irritation", "head_pressure", "fatigue_fog"},
+    "kp": {"restlessness", "sleep_fragility", "focus_drag"},
+    "bz": {"restlessness", "sleep_fragility", "focus_drag"},
+    "sw": {"restlessness", "sleep_fragility", "fatigue_fog", "heart_reactivity"},
+    "schumann": {"restlessness", "sleep_fragility", "focus_drag"},
+}
+
+_PHYSIOLOGY_EFFECT_BUCKETS = {
+    "sleep_vs_14d_baseline_delta": {"fatigue_fog", "sleep_fragility"},
+    "sleep_debt_proxy": {"fatigue_fog", "sleep_fragility"},
+    "hrv_avg": {"fatigue_fog", "heart_reactivity"},
+    "resting_hr_baseline_delta": {"heart_reactivity", "fatigue_fog"},
+}
+
+_DRIVER_HELP_BUCKETS = {
+    "pressure": {"quieter_environment", "hydration_pacing"},
+    "temp": {"hydration_pacing", "steadier_effort"},
+    "aqi": {"cleaner_air", "hydration_pacing"},
+    "allergens": {"allergy_support", "cleaner_air"},
+    "kp": {"lower_stimulation", "sleep_routine"},
+    "bz": {"lower_stimulation", "sleep_routine"},
+    "sw": {"lower_stimulation", "steadier_effort"},
+    "schumann": {"lower_stimulation", "sleep_routine"},
+}
+
+_EFFECT_HELP_BUCKETS = {
+    "head_pressure": {"quieter_environment", "hydration_pacing"},
+    "sinus_irritation": {"allergy_support", "cleaner_air"},
+    "fatigue_fog": {"hydration_pacing", "sleep_routine"},
+    "focus_drag": {"lower_stimulation", "hydration_pacing"},
+    "sleep_fragility": {"sleep_routine", "lower_stimulation"},
+    "restlessness": {"lower_stimulation", "sleep_routine"},
+    "pain_flare": {"steadier_effort", "hydration_pacing"},
+    "heart_reactivity": {"steadier_effort", "hydration_pacing"},
+    "mood_sensitivity": {"lower_stimulation", "sleep_routine"},
+}
+
 
 def _seed_index(day: date, key: str, bucket: str) -> int:
     text = f"{day.isoformat()}|{key}|{bucket}".encode("utf-8")
@@ -732,6 +992,590 @@ def _delta_line(delta: int) -> Optional[str]:
         return None
     direction = "up" if delta > 0 else "down"
     return f"This gauge moved {abs(delta)} points {direction} from the prior reading."
+
+
+def _normalize_token(value: Any) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _humanize_token(value: Any) -> str:
+    token = _normalize_token(value)
+    if not token:
+        return ""
+    return token.replace("_", " ")
+
+
+def _parse_iso_day(value: Any) -> Optional[date]:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw[:10])
+    except Exception:
+        return None
+
+
+def _feedback_time_phrase(entry_day: Optional[date], current_day: date) -> str:
+    if entry_day is None:
+        return "recently"
+    if entry_day == current_day:
+        return "earlier"
+    if (current_day - entry_day).days == 1:
+        return "yesterday"
+    return "recently"
+
+
+def _symptom_display_text(code: Any) -> str:
+    normalized = str(code or "").strip().upper().replace("-", "_").replace(" ", "_")
+    if not normalized:
+        return ""
+    return _SYMPTOM_DISPLAY_LABELS.get(normalized, normalized.lower().replace("_", " "))
+
+
+def _gauge_modal_status_label(gauge_key: str, meta: Dict[str, Any]) -> str:
+    zone = _normalized_zone_key(meta)
+    override = (_GAUGE_MODAL_STATE_LABELS.get(gauge_key) or {}).get(zone)
+    if override:
+        return override
+    return _normalized_zone_label(meta)
+
+
+def _gauge_state_line(gauge_key: str, zone: str) -> str:
+    bucket = "active" if zone in {"mild", "elevated", "high"} else "steady"
+    lines = _GAUGE_STATE_LINES.get(gauge_key) or {}
+    return lines.get(bucket, "This gauge looks steady right now.")
+
+
+def _gauge_steady_why_line(gauge_key: str) -> str:
+    fallback = {
+        "pain": "No strong pain-load drivers are stacking up right now, so this gauge is staying steadier.",
+        "focus": "No strong focus drags are stacking up right now, so this gauge is staying steadier.",
+        "heart": "No strong recovery or reactivity signals are stacking up right now, so this gauge is staying steadier.",
+        "stamina": "No strong recovery drags are stacking up right now, so this gauge is staying steadier.",
+        "energy": "No strong fatigue or recovery drags are stacking up right now, so this gauge is staying steadier.",
+        "sleep": "No strong sleep-disrupting signals are stacking up right now, so this gauge is staying steadier.",
+        "mood": "No strong reactivity signals are stacking up right now, so this gauge is staying steadier.",
+        "health_status": "No strong symptom or recovery load is stacking up right now, so this gauge is staying steadier.",
+    }
+    return fallback.get(gauge_key, "No strong drivers are stacking up right now, so this gauge is staying steadier.")
+
+
+def _matching_symptom_rows(gauge_key: str, symptoms: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows = [dict(item) for item in (symptoms or {}).get("top_symptoms") or [] if isinstance(item, dict)]
+    allowed = _SYMPTOM_CODES_BY_GAUGE.get(gauge_key) or set()
+    if not allowed:
+        return rows
+    filtered = [
+        row for row in rows
+        if str(row.get("symptom_code") or "").strip().upper() in allowed
+    ]
+    return filtered or rows
+
+
+def _build_feedback_cause_candidates(
+    *,
+    day: date,
+    gauge_key: str,
+    daily_check_in: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    if not isinstance(daily_check_in, dict):
+        return []
+
+    entry_day = _parse_iso_day(daily_check_in.get("day"))
+    when = _feedback_time_phrase(entry_day, day)
+    same_day = entry_day == day if entry_day else False
+    usable_energy = _normalize_token(daily_check_in.get("usable_energy"))
+    energy_detail = _normalize_token(daily_check_in.get("energy_detail"))
+    pain_level = _normalize_token(daily_check_in.get("pain_level"))
+    pain_type = _humanize_token(daily_check_in.get("pain_type"))
+    mood_level = _normalize_token(daily_check_in.get("mood_level"))
+    mood_type = _humanize_token(daily_check_in.get("mood_type"))
+    sleep_impact = _normalize_token(daily_check_in.get("sleep_impact"))
+    system_load = _normalize_token(daily_check_in.get("system_load"))
+    candidates: List[Dict[str, Any]] = []
+
+    if gauge_key == "energy" and usable_energy in {"limited", "very_limited"}:
+        label = _CHECKIN_USABLE_ENERGY_LABELS.get(usable_energy, "limited usable energy")
+        if same_day:
+            line = f"You reported {label} {when}, so your capacity is reduced."
+        else:
+            line = f"Because you reported {label} {when}, your energy baseline is still cautious today."
+        if energy_detail in _CHECKIN_ENERGY_DETAIL_LABELS and usable_energy == "very_limited":
+            detail = _CHECKIN_ENERGY_DETAIL_LABELS[energy_detail]
+            if same_day:
+                line = f"You reported {detail} with {label} {when}, so your capacity is reduced."
+        candidates.append({"line": line, "priority": 100, "source": "user_feedback"})
+    elif gauge_key == "energy" and usable_energy in {"plenty", "enough"} and same_day:
+        label = _CHECKIN_USABLE_ENERGY_LABELS.get(usable_energy, "usable energy")
+        candidates.append({"line": f"You reported {label} {when}, so this gauge is staying steadier.", "priority": 100, "source": "user_feedback"})
+
+    if gauge_key == "pain" and pain_level in {"noticeable", "strong"}:
+        descriptor = pain_type or _CHECKIN_PAIN_LABELS.get(pain_level, "pain")
+        candidates.append({"line": f"You reported {descriptor} {when}, so pain load is elevated.", "priority": 100, "source": "user_feedback"})
+
+    if gauge_key == "mood" and mood_level in {"slightly_off", "noticeable", "strong"}:
+        descriptor = mood_type or _CHECKIN_MOOD_LABELS.get(mood_level, "a more reactive day")
+        candidates.append({"line": f"You reported {descriptor} {when}, so mood is more sensitive right now.", "priority": 100, "source": "user_feedback"})
+
+    if gauge_key in {"sleep", "stamina", "health_status"} and sleep_impact in {"yes_strongly", "yes_somewhat"}:
+        impact_label = _CHECKIN_SLEEP_IMPACT_LABELS.get(sleep_impact, "sleep affected the day")
+        candidates.append({"line": f"You said {impact_label}, so recovery is being read more cautiously.", "priority": 100, "source": "user_feedback"})
+
+    if gauge_key == "health_status" and system_load in {"heavy", "overwhelming"}:
+        candidates.append({"line": f"You reported a {system_load.replace('_', ' ')} system-load day {when}, so overall load is elevated.", "priority": 100, "source": "user_feedback"})
+
+    return candidates
+
+
+def _build_symptom_cause_candidates(
+    *,
+    gauge_key: str,
+    symptoms: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    rows = _matching_symptom_rows(gauge_key, symptoms)
+    if not rows:
+        return []
+
+    if gauge_key == "health_status":
+        labels = [_symptom_display_text(row.get("symptom_code")) for row in rows[:2]]
+        labels = [label for label in labels if label]
+        if len(labels) >= 2:
+            return [{"line": f"You logged {labels[0]} and {labels[1]} today, so overall system load is elevated.", "priority": 90, "source": "recent_symptom"}]
+        if labels:
+            return [{"line": f"You logged {labels[0]} today, so overall system load is elevated.", "priority": 90, "source": "recent_symptom"}]
+        return []
+
+    code = str(rows[0].get("symptom_code") or "").strip().upper()
+    label = _symptom_display_text(code)
+    if not label:
+        return []
+
+    templates = {
+        "pain": f"You logged {label} earlier, so pain load is elevated.",
+        "focus": f"You logged {label} earlier, which is pulling focus down.",
+        "heart": f"You logged {label} earlier, so heart load is more watchful right now.",
+        "stamina": f"You logged {label} earlier, so recovery capacity is reduced.",
+        "energy": f"You logged {label} earlier, so your capacity is reduced.",
+        "sleep": f"You logged {label} earlier, which is still affecting recovery today.",
+        "mood": f"You logged {label} earlier, so mood is more sensitive right now.",
+    }
+    line = templates.get(gauge_key)
+    return [{"line": line, "priority": 90, "source": "recent_symptom"}] if line else []
+
+
+def _build_physiology_cause_candidates(
+    *,
+    gauge_key: str,
+    health_status_explainer: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    signals = [
+        dict(item)
+        for item in (health_status_explainer or {}).get("physiology_signals") or []
+        if isinstance(item, dict)
+    ]
+    candidates: List[Dict[str, Any]] = []
+    for signal in signals:
+        if gauge_key not in set(signal.get("gauge_keys") or []):
+            continue
+        cause_line = str(signal.get("cause_line") or "").strip()
+        if not cause_line:
+            continue
+        candidates.append(
+            {
+                "line": cause_line,
+                "priority": int(signal.get("priority") or 70),
+                "source": "physiology",
+            }
+        )
+    return candidates
+
+
+def _driver_cause_line_for_gauge(gauge_key: str, driver_key: str) -> str:
+    templates = {
+        "pain": {
+            "pressure": "Pressure is still shifting, which can add to head pressure.",
+            "temp": "Temperature swings can add to body tension or pain sensitivity.",
+            "aqi": "AQI is elevated, which can add to headache or sinus irritation.",
+            "allergens": "Allergen load is high, which can stack sinus irritation.",
+        },
+        "focus": {
+            "pressure": "Pressure is still shifting, which can add to head pressure or focus drag.",
+            "aqi": "AQI is elevated, which can add to brain fog or focus drag.",
+            "allergens": "Allergen load is high, which can stack fog or distraction faster.",
+            "kp": "Geomagnetic activity is active, which can make focus feel less steady for some people.",
+            "sw": "Solar wind is elevated, which can make focus feel less steady for some people.",
+            "schumann": "Schumann variability is elevated, which can make focus feel less steady for some people.",
+        },
+        "heart": {
+            "aqi": "AQI is elevated, which can make exertion feel heavier.",
+            "kp": "Geomagnetic activity is active, which can make your system feel more reactive.",
+            "bz": "Bz is active, which can make your system feel less steady.",
+            "sw": "Solar wind is elevated, which can make your system feel more reactive.",
+        },
+        "stamina": {
+            "temp": "Temperature swings can make recovery feel slower.",
+            "aqi": "AQI is elevated, which can stack fatigue faster.",
+            "allergens": "Allergen load is high, which can stack fatigue or fog faster.",
+            "sw": "Solar wind is elevated, which can make recovery feel less steady for some people.",
+        },
+        "energy": {
+            "temp": "Temperature swings can make the day feel heavier.",
+            "aqi": "AQI is elevated, which can add to fatigue or brain fog.",
+            "allergens": "Allergen load is high, which can stack fatigue faster.",
+            "sw": "Solar wind is elevated, which can make energy feel less steady for some people.",
+            "kp": "Geomagnetic activity is active, which can make energy feel less steady for some people.",
+        },
+        "sleep": {
+            "pressure": "Pressure is still shifting, which can make sleep feel lighter for some people.",
+            "temp": "Temperature swings can make wind-down less steady.",
+            "allergens": "Allergen load is high, which can make overnight irritation easier to notice.",
+            "kp": "Geomagnetic activity is active, which can make wind-down feel less steady for some people.",
+            "bz": "Bz is active, which can make sleep feel less settled for some people.",
+            "sw": "Solar wind is elevated, which can make sleep feel less settled for some people.",
+            "schumann": "Schumann variability is elevated, which can make sleep feel lighter for some people.",
+        },
+        "mood": {
+            "pressure": "Pressure is still shifting, which can make the day feel a little less steady.",
+            "kp": "Geomagnetic activity is active, which can make reactivity easier to notice for some people.",
+            "sw": "Solar wind is elevated, which can make reactivity easier to notice for some people.",
+            "schumann": "Schumann variability is elevated, which can make restlessness easier to notice for some people.",
+        },
+        "health_status": {
+            "pressure": "Pressure is still shifting, which can add to overall body load.",
+            "temp": "Temperature swings can make the day feel heavier.",
+            "aqi": "AQI is elevated, which can add to fatigue or irritation load.",
+            "allergens": "Allergen load is high, which can add to irritation or fatigue load.",
+            "sw": "Solar wind is elevated, which can make the day feel less steady for some people.",
+        },
+    }
+    return ((templates.get(gauge_key) or {}).get(driver_key) or "").strip()
+
+
+def _build_driver_cause_candidates(
+    *,
+    gauge_key: str,
+    related: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    candidates: List[Dict[str, Any]] = []
+    for index, driver in enumerate(_sorted_related_drivers(related)[:2]):
+        driver_key = str(driver.get("key") or "").strip()
+        line = _driver_cause_line_for_gauge(gauge_key, driver_key)
+        if not line:
+            continue
+        candidates.append({"line": line, "priority": 60 - (index * 5), "source": "driver"})
+    return candidates
+
+
+def _build_pattern_cause_candidates(personal_summary: Optional[str]) -> List[Dict[str, Any]]:
+    summary = str(personal_summary or "").strip()
+    if not summary:
+        return []
+    return [{"line": summary, "priority": 40, "source": "pattern"}]
+
+
+def _collect_effect_buckets(
+    *,
+    day: date,
+    gauge_key: str,
+    related: List[Dict[str, Any]],
+    symptoms: Optional[Dict[str, Any]],
+    daily_check_in: Optional[Dict[str, Any]],
+    health_status_explainer: Optional[Dict[str, Any]],
+) -> List[str]:
+    allowed = _GAUGE_ALLOWED_EFFECT_BUCKETS.get(gauge_key) or set()
+    scores: Dict[str, float] = defaultdict(float)
+
+    def add(bucket: str, value: float) -> None:
+        if bucket in allowed:
+            scores[bucket] += value + _EFFECT_BUCKET_PRIORITY.get(bucket, 0)
+
+    for idx, row in enumerate(_matching_symptom_rows(gauge_key, symptoms)[:3]):
+        code = str(row.get("symptom_code") or "").strip().upper()
+        for bucket in _SYMPTOM_EFFECT_BUCKETS.get(code, set()):
+            add(bucket, 12 - (idx * 2))
+
+    for idx, driver in enumerate(_sorted_related_drivers(related)[:2]):
+        key = str(driver.get("key") or "").strip()
+        for bucket in _DRIVER_EFFECT_BUCKETS.get(key, set()):
+            add(bucket, 8 - (idx * 1.5))
+
+    for signal in (health_status_explainer or {}).get("physiology_signals") or []:
+        if not isinstance(signal, dict):
+            continue
+        if gauge_key not in set(signal.get("gauge_keys") or []):
+            continue
+        for bucket in _PHYSIOLOGY_EFFECT_BUCKETS.get(str(signal.get("key") or ""), set()):
+            add(bucket, 7.5)
+
+    if isinstance(daily_check_in, dict):
+        usable_energy = _normalize_token(daily_check_in.get("usable_energy"))
+        energy_detail = _normalize_token(daily_check_in.get("energy_detail"))
+        pain_type = _normalize_token(daily_check_in.get("pain_type"))
+        mood_type = _normalize_token(daily_check_in.get("mood_type"))
+        sleep_impact = _normalize_token(daily_check_in.get("sleep_impact"))
+        if gauge_key == "energy" and usable_energy in {"limited", "very_limited"}:
+            add("fatigue_fog", 11 if usable_energy == "very_limited" else 9)
+            if energy_detail == "brain_fog":
+                add("focus_drag", 8)
+        if gauge_key == "pain" and pain_type in {"sinus_pressure", "head_pressure", "migraine", "headache"}:
+            add("head_pressure", 9)
+        if gauge_key == "pain" and pain_type in {"joint_pain", "nerve_pain", "muscle_pain", "cycle_related_pain"}:
+            add("pain_flare", 8)
+        if gauge_key == "mood" and mood_type in {"anxious", "wired", "emotionally_sensitive"}:
+            add("mood_sensitivity", 9)
+            add("restlessness", 7)
+        if gauge_key in {"sleep", "energy", "stamina", "health_status"} and sleep_impact in {"yes_strongly", "yes_somewhat"}:
+            add("sleep_fragility", 8)
+            add("fatigue_fog", 6)
+
+    ranked = sorted(scores.items(), key=lambda item: (-item[1], item[0]))
+    return [bucket for bucket, _ in ranked[:3]]
+
+
+def _render_effect_line(
+    bucket: str,
+    *,
+    related: List[Dict[str, Any]],
+    symptoms: Optional[Dict[str, Any]],
+    daily_check_in: Optional[Dict[str, Any]],
+    health_status_explainer: Optional[Dict[str, Any]],
+) -> str:
+    driver_keys = {str(driver.get("key") or "").strip() for driver in related if str(driver.get("key") or "").strip()}
+    symptom_codes = {
+        str(row.get("symptom_code") or "").strip().upper()
+        for row in (symptoms or {}).get("top_symptoms") or []
+        if isinstance(row, dict)
+    }
+    sleep_signal_keys = {
+        str(item.get("key") or "")
+        for item in (health_status_explainer or {}).get("physiology_signals") or []
+        if isinstance(item, dict)
+    }
+    usable_energy = _normalize_token((daily_check_in or {}).get("usable_energy"))
+
+    if bucket == "head_pressure":
+        if {"pressure", "allergens"} <= driver_keys or {"pressure", "aqi"} <= driver_keys:
+            return "Pressure shifts and irritation load can make head pressure or headaches easier to notice."
+        if "pressure" in driver_keys:
+            return "Head pressure or headaches may be easier to notice while pressure is shifting."
+        if "MIGRAINE" in symptom_codes or "HEADACHE" in symptom_codes:
+            return "Head pressure or headaches may stay closer to the surface."
+        return "Head pressure or headaches may be easier to notice."
+
+    if bucket == "sinus_irritation":
+        if {"aqi", "allergens"} <= driver_keys:
+            return "When pollen and air quality both stack up, sinus irritation can show up faster."
+        if "allergens" in driver_keys:
+            return "Allergen-heavy conditions can make sinus pressure or irritation easier to notice."
+        return "Sinus irritation may be easier to notice."
+
+    if bucket == "fatigue_fog":
+        if {"aqi", "allergens"} <= driver_keys:
+            return "When pollen and air quality both stack up, fatigue or brain fog may show up faster."
+        if usable_energy in {"limited", "very_limited"}:
+            return "Fatigue or brain fog may show up faster today."
+        if {"sleep_vs_14d_baseline_delta", "sleep_debt_proxy"} & sleep_signal_keys:
+            return "Fatigue or brain fog may show up faster while recovery is still catching up."
+        return "Fatigue or brain fog may show up faster today."
+
+    if bucket == "focus_drag":
+        return "Focus may drift faster, and concentration may take more effort."
+
+    if bucket == "sleep_fragility":
+        return "Sleep may feel lighter or less settled."
+
+    if bucket == "restlessness":
+        return "Restlessness or a wired edge may feel closer to the surface."
+
+    if bucket == "pain_flare":
+        return "Body tension, stiffness, or a pain flare may be easier to notice."
+
+    if bucket == "heart_reactivity":
+        return "Exertion or a more reactive, fluttery feel may be easier to notice."
+
+    if bucket == "mood_sensitivity":
+        return "Reactivity or a more sensitive mood may sit closer to the surface."
+
+    return "A few symptoms may stand out more easily right now."
+
+
+def _collect_help_buckets(
+    *,
+    gauge_key: str,
+    effect_buckets: List[str],
+    related: List[Dict[str, Any]],
+    daily_check_in: Optional[Dict[str, Any]],
+) -> List[str]:
+    scores: Dict[str, float] = defaultdict(float)
+
+    for bucket in effect_buckets:
+        for help_bucket in _EFFECT_HELP_BUCKETS.get(bucket, set()):
+            scores[help_bucket] += 4.0
+
+    for idx, driver in enumerate(_sorted_related_drivers(related)[:2]):
+        key = str(driver.get("key") or "").strip()
+        for help_bucket in _DRIVER_HELP_BUCKETS.get(key, set()):
+            scores[help_bucket] += 3.0 - (idx * 0.4)
+
+    if gauge_key == "energy" and _normalize_token((daily_check_in or {}).get("usable_energy")) in {"limited", "very_limited"}:
+        scores["hydration_pacing"] += 2.5
+        scores["sleep_routine"] += 1.4
+
+    ranked = sorted(scores.items(), key=lambda item: (-item[1], item[0]))
+    return [bucket for bucket, _ in ranked[:3]]
+
+
+def _render_help_line(bucket: str, *, related: List[Dict[str, Any]]) -> str:
+    driver_keys = {str(driver.get("key") or "").strip() for driver in related if str(driver.get("key") or "").strip()}
+
+    if bucket == "allergy_support":
+        if {"aqi", "allergens"} & driver_keys:
+            return "Favor your usual allergy supports and try to avoid your worst trigger windows if you can."
+        return "Use the supports that usually help before irritation fully stacks up."
+
+    if bucket == "cleaner_air":
+        return "Cleaner indoor air and shorter exposure windows may help if irritation is stacking up."
+
+    if bucket == "hydration_pacing":
+        return "Keep hydration, meals, and effort a little steadier today."
+
+    if bucket == "quieter_environment":
+        return "A quieter, lower-friction environment may help if pressure is building."
+
+    if bucket == "lower_stimulation":
+        return "Lower stimulation and shorter work blocks may help if your system feels reactive."
+
+    if bucket == "sleep_routine":
+        return "Protect your wind-down and keep tonight as predictable as you can."
+
+    if bucket == "steadier_effort":
+        return "Favor steadier effort over spikes if your system feels easy to overload."
+
+    return "Use the supports that usually help you and keep the day a little steadier."
+
+
+def _priority_quick_log_options(effect_buckets: List[str]) -> List[Dict[str, str]]:
+    options: List[Dict[str, str]] = []
+    for bucket in effect_buckets:
+        options.extend(_EFFECT_BUCKET_QUICK_LOG.get(bucket, []))
+    return options
+
+
+def _gauge_explanation_entry(
+    *,
+    day: date,
+    gauge_key: str,
+    label: str,
+    meta: Dict[str, Any],
+    delta: int,
+    related: List[Dict[str, Any]],
+    profile: PersonalizationProfile,
+    symptoms: Optional[Dict[str, Any]],
+    daily_check_in: Optional[Dict[str, Any]],
+    health_status_explainer: Optional[Dict[str, Any]],
+    personal_summary: Optional[str],
+) -> Dict[str, Any]:
+    zone = _normalized_zone_key(meta)
+    status = _gauge_modal_status_label(gauge_key, meta)
+
+    cause_candidates = (
+        _build_feedback_cause_candidates(day=day, gauge_key=gauge_key, daily_check_in=daily_check_in)
+        + _build_symptom_cause_candidates(gauge_key=gauge_key, symptoms=symptoms)
+        + _build_physiology_cause_candidates(gauge_key=gauge_key, health_status_explainer=health_status_explainer)
+        + _build_driver_cause_candidates(gauge_key=gauge_key, related=related)
+        + _build_pattern_cause_candidates(personal_summary)
+    )
+    cause_candidates.sort(key=lambda item: (-int(item.get("priority") or 0), str(item.get("line") or "")))
+
+    seen_lines: set[str] = set()
+    ordered_lines: List[Dict[str, Any]] = []
+    for candidate in cause_candidates:
+        line = _sentence(str(candidate.get("line") or "").strip())
+        if not line or line in seen_lines:
+            continue
+        seen_lines.add(line)
+        ordered_lines.append({**candidate, "line": line})
+
+    causal_callout: Optional[str] = None
+    if ordered_lines and ordered_lines[0].get("source") in {"user_feedback", "recent_symptom"}:
+        causal_callout = ordered_lines[0]["line"]
+
+    why_lines = [item["line"] for item in ordered_lines if item["line"] != causal_callout][:3]
+    if not why_lines:
+        delta_line = _delta_line(delta)
+        if delta_line:
+            why_lines.append(delta_line)
+        if not why_lines:
+            why_lines.append(_gauge_steady_why_line(gauge_key))
+
+    effect_buckets = _collect_effect_buckets(
+        day=day,
+        gauge_key=gauge_key,
+        related=related,
+        symptoms=symptoms,
+        daily_check_in=daily_check_in,
+        health_status_explainer=health_status_explainer,
+    )
+    effect_lines = _unique_lines(
+        [
+            _render_effect_line(
+                bucket,
+                related=related,
+                symptoms=symptoms,
+                daily_check_in=daily_check_in,
+                health_status_explainer=health_status_explainer,
+            )
+            for bucket in effect_buckets
+        ]
+    )[:3]
+    if not effect_lines:
+        effect_lines = ["No strong symptom layer is standing out right now."]
+
+    help_buckets = _collect_help_buckets(
+        gauge_key=gauge_key,
+        effect_buckets=effect_buckets,
+        related=related,
+        daily_check_in=daily_check_in,
+    )
+    help_lines = _unique_lines([_render_help_line(bucket, related=related) for bucket in help_buckets])[:3]
+    if not help_lines:
+        help_lines = ["Keep pacing and recovery basics steady."]
+
+    personalized_options: List[Dict[str, str]] = []
+    personalized_prefill: List[str] = []
+    for driver in related:
+        content = _driver_personalized_content(str(driver.get("key") or "").strip(), profile)
+        personalized_options.extend(content.get("quick_log") or [])
+        personalized_prefill.extend([item.get("code") for item in content.get("quick_log") or [] if item.get("code")])
+
+    effect_priority_options = _priority_quick_log_options(effect_buckets)
+    effect_priority_prefill = [item.get("code") for item in effect_priority_options if item.get("code")]
+    quick_log = _quick_log(
+        context_type="gauge",
+        context_key=gauge_key,
+        zone=zone,
+        default_options=_GAUGE_QUICK_LOG.get(gauge_key, []),
+        default_prefill=_GAUGE_PREFILL.get(gauge_key, ["OTHER"]),
+        priority_options=_merge_quick_log_options(effect_priority_options, personalized_options),
+        priority_prefill=_merge_prefill_codes(effect_priority_prefill, personalized_prefill),
+        delta=delta if abs(delta) >= 1 else None,
+    )
+
+    return {
+        "modal_type": "full",
+        "title": f"{label} \u2014 {status}",
+        "state_line": _gauge_state_line(gauge_key, zone),
+        "causal_callout": causal_callout,
+        "why": why_lines,
+        "what_you_may_notice": effect_lines,
+        "suggested_actions": help_lines,
+        "quick_log": quick_log,
+        "cta": {
+            "label": "Log symptoms",
+            "action": "open_symptom_log",
+            "prefill": quick_log.get("prefill_codes") or _GAUGE_PREFILL.get(gauge_key, ["OTHER"]),
+        },
+    }
 
 
 def _personal_relevance_gauge_summary(personal_relevance: Optional[Dict[str, Any]], gauge_key: str) -> Optional[str]:
@@ -1350,6 +2194,9 @@ def build_modal_models(
     gauges_delta: Optional[Dict[str, int]] = None,
     user_tags: Optional[Iterable[Any]] = None,
     personal_relevance: Optional[Dict[str, Any]] = None,
+    symptoms: Optional[Dict[str, Any]] = None,
+    daily_check_in: Optional[Dict[str, Any]] = None,
+    health_status_explainer: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Dict[str, Dict[str, Any]]]:
     gauges = gauges or {}
     gauges_meta = gauges_meta or {}
@@ -1367,66 +2214,23 @@ def build_modal_models(
     for gauge_key in _GAUGE_ORDER:
         label = gauge_labels.get(gauge_key) or _GAUGE_FALLBACK_LABELS.get(gauge_key) or gauge_key
         meta = gauges_meta.get(gauge_key) or {}
-        zone = _normalized_zone_key(meta)
-        status = _normalized_zone_label(meta)
         delta = int(gauges_delta.get(gauge_key) or 0)
         related_keys = _GAUGE_DRIVER_MAP.get(gauge_key) or []
         related = _sorted_related_drivers([drivers_by_key[k] for k in related_keys if k in drivers_by_key])
         personal_summary = _personal_relevance_gauge_summary(personal_relevance, gauge_key)
-        modal_type = _gauge_modal_type(zone, delta, related, personal_summary=personal_summary)
-        personalized_options: List[Dict[str, str]] = []
-        personalized_prefill: List[str] = []
-        for driver in related:
-            content = _driver_personalized_content(str(driver.get("key") or "").strip(), profile)
-            personalized_options.extend(content.get("quick_log") or [])
-            personalized_prefill.extend([item.get("code") for item in content.get("quick_log") or [] if item.get("code")])
-
-        quick_log = _quick_log(
-            context_type="gauge",
-            context_key=gauge_key,
-            zone=zone,
-            default_options=_GAUGE_QUICK_LOG.get(gauge_key, []),
-            default_prefill=_GAUGE_PREFILL.get(gauge_key, ["OTHER"]),
-            priority_options=personalized_options,
-            priority_prefill=personalized_prefill,
-            delta=delta if abs(delta) >= 1 else None,
+        gauge_models[gauge_key] = _gauge_explanation_entry(
+            day=day,
+            gauge_key=gauge_key,
+            label=label,
+            meta=meta,
+            delta=delta,
+            related=related,
+            profile=profile,
+            symptoms=symptoms,
+            daily_check_in=daily_check_in,
+            health_status_explainer=health_status_explainer,
+            personal_summary=personal_summary,
         )
-        cta_prefill = quick_log.get("prefill_codes") or _GAUGE_PREFILL.get(gauge_key, ["OTHER"])
-
-        if modal_type == "short":
-            gauge_models[gauge_key] = {
-                "modal_type": "short",
-                "title": f"{label} \u2014 Steady",
-                "body": _GAUGE_SHORT_BODY.get(gauge_key, "Steady is a good sign right now."),
-                "tip": _GAUGE_SHORT_TIP.get(gauge_key, "Keep pacing and recovery basics steady."),
-                "quick_log": quick_log,
-                "cta": {
-                    "label": "Log symptoms",
-                    "action": "open_symptom_log",
-                    "prefill": cta_prefill,
-                },
-            }
-            continue
-
-        gauge_models[gauge_key] = {
-            "modal_type": "full",
-            "title": f"{label} \u2014 {status}",
-            "why": _gauge_why_lines(
-                day=day,
-                gauge_key=gauge_key,
-                related=related,
-                delta=delta,
-                personal_summary=personal_summary,
-            ),
-            "what_you_may_notice": _gauge_notice_lines(day=day, gauge_key=gauge_key, related=related, profile=profile),
-            "suggested_actions": _gauge_action_lines(day=day, gauge_key=gauge_key, related=related, profile=profile),
-            "quick_log": quick_log,
-            "cta": {
-                "label": "Log symptoms",
-                "action": "open_symptom_log",
-                "prefill": cta_prefill,
-            },
-        }
 
     driver_models: Dict[str, Dict[str, Any]] = {}
     for driver in driver_rows:

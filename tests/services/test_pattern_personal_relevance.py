@@ -89,7 +89,8 @@ class PatternPersonalRelevanceTests(unittest.TestCase):
 
         pain_gauge = payload["gauges"]["pain"]
         pressure_driver = payload["drivers"]["pressure"]
-        self.assertIn("pain flare history", pain_gauge["why"][0].lower())
+        why_blob = " ".join(pain_gauge.get("why") or []) + " " + str(pain_gauge.get("causal_callout") or "")
+        self.assertIn("pain flare history", why_blob.lower())
         self.assertIn("pain flare history", pressure_driver["why"][0].lower())
 
     def test_high_signal_stays_visible_when_personal_relevance_is_low(self) -> None:

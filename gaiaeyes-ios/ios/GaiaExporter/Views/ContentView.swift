@@ -581,6 +581,8 @@ private struct DashboardQuickLog: Codable, Hashable {
 private struct DashboardModalEntry: Codable, Hashable {
     let modalType: String?
     let title: String?
+    let stateLine: String?
+    let causalCallout: String?
     let body: String?
     let tip: String?
     let why: [String]?
@@ -5027,6 +5029,7 @@ struct ContentView: View {
 
         return VStack(spacing: 16) {
             MissionControlSectionView(
+                experienceMode: experienceProfile.mode,
                 gauges: dashboardGauges,
                 gaugesMeta: dashboardGaugesMeta,
                 gaugeZones: dashboardGaugeZones,
@@ -5137,6 +5140,7 @@ struct ContentView: View {
     }
 
     private struct MissionControlSectionView: View {
+        let experienceMode: ExperienceMode
         let gauges: DashboardGaugeSet?
         let gaugesMeta: [String: DashboardGaugeMeta]
         let gaugeZones: [DashboardGaugeZone]
@@ -5610,6 +5614,7 @@ struct ContentView: View {
         }
 
         private struct ContextModalSheetView: View {
+            let experienceMode: ExperienceMode
             let contextType: String
             let contextKey: String
             let entry: DashboardModalEntry
@@ -5621,8 +5626,32 @@ struct ContentView: View {
             @Environment(\.dismiss) private var dismiss
             @State private var selectedQuickLogs: Set<DashboardQuickLogOption> = []
 
+            private var vocabulary: CopyVocabulary {
+                experienceMode.copyVocabulary
+            }
+
             private var modalType: String {
                 (entry.modalType ?? "full").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            }
+
+            private func translated(_ raw: String?) -> String? {
+                vocabulary.translating(raw)
+            }
+
+            private var whyHeading: String {
+                experienceMode == .scientific ? "Why This Is Standing Out Now" : "Why This Feels Activated Now"
+            }
+
+            private var stateHeading: String {
+                "Current State"
+            }
+
+            private var effectHeading: String {
+                experienceMode == .scientific ? "What May Stand Out" : "What May Rise To The Surface"
+            }
+
+            private var helpHeading: String {
+                experienceMode == .scientific ? "What May Help Right Now" : "What May Help Right Now"
             }
 
             private var quickLog: DashboardQuickLog? {
@@ -5644,69 +5673,12 @@ struct ContentView: View {
                 )
             }
 
-            private var recentSymptomBoost: Double? {
-                guard contextType == "gauge" else { return nil }
-                guard let boost = gaugeRecentLogBoosts[contextKey], boost > 0 else { return nil }
-                return boost
-            }
-
-            private var recentSymptomSummary: String? {
-                guard let boost = recentSymptomBoost else { return nil }
-                if boost >= 9 {
-                    return "Your recent symptom logs are keeping this reading more watchful right now."
-                }
-                return "Your recent symptom logs are influencing this reading."
-            }
-
-            private func formattedSymptomUpdate(_ raw: String?) -> String? {
-                guard let raw, let date = ISO8601DateFormatter().date(from: raw) else { return nil }
-                let formatter = DateFormatter()
-                formatter.dateStyle = .none
-                formatter.timeStyle = .short
-                return formatter.string(from: date)
-            }
-
-            private var displayTitle: String? {
-                guard let title = entry.title, !title.isEmpty else { return entry.title }
-                guard let boost = recentSymptomBoost else { return title }
-                let parts = title.components(separatedBy: " — ")
-                guard parts.count >= 2 else { return title }
-                let prefix = parts.first ?? title
-                guard boost >= 9 else { return title }
-                return "\(prefix) — Watchful now"
-            }
-
-            @ViewBuilder
-            private var recentSymptomSection: some View {
-                if let summary = recentSymptomSummary {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Updated from your recent logs")
-                            .font(.headline)
-                        Text(summary)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        if let updateText = formattedSymptomUpdate(lastSymptomUpdateAt) {
-                            Text("Updated from your recent logs at \(updateText).")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .padding(12)
-                    .background(Color.black.opacity(0.20))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                    )
-                }
-            }
-
             private func quickLogSection(_ quickLog: DashboardQuickLog) -> some View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Quick Log")
                         .font(.headline)
                     if let title = quickLog.title, !title.isEmpty {
-                        Text(title)
+                        Text(translated(title) ?? title)
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
@@ -5722,7 +5694,7 @@ struct ContentView: View {
                                     selectedQuickLogs.insert(option)
                                 }
                             } label: {
-                                Text(option.label)
+                                Text(translated(option.label) ?? option.label)
                                     .font(.subheadline.weight(.semibold))
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 10)
@@ -5801,17 +5773,16 @@ struct ContentView: View {
                 NavigationStack {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
-                            if let title = displayTitle, !title.isEmpty {
+                            if let title = translated(entry.title), !title.isEmpty {
                                 Text(title)
                                     .font(.title3.weight(.bold))
                             }
-                            recentSymptomSection
                             if modalType == "short" {
-                                if let body = entry.body, !body.isEmpty {
+                                if let body = translated(entry.body), !body.isEmpty {
                                     Text(body)
                                         .font(.body)
                                 }
-                                if let tip = entry.tip, !tip.isEmpty {
+                                if let tip = translated(entry.tip), !tip.isEmpty {
                                     VStack(alignment: .leading, spacing: 8) {
                                         Text("Tip")
                                             .font(.headline)
@@ -5819,32 +5790,58 @@ struct ContentView: View {
                                             .font(.subheadline)
                                     }
                                 }
-                            } else if let why = entry.why, !why.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("What's shaping things now")
-                                        .font(.headline)
-                                    ForEach(Array(why.enumerated()), id: \.offset) { _, line in
-                                        Text("\u{2022} \(line)")
+                            } else {
+                                if contextType == "gauge", let stateLine = translated(entry.stateLine), !stateLine.isEmpty {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text(stateHeading)
+                                            .font(.headline)
+                                        Text(stateLine)
                                             .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                if contextType == "gauge", let causalCallout = translated(entry.causalCallout), !causalCallout.isEmpty {
+                                    Text(causalCallout)
+                                        .font(.subheadline.weight(.semibold))
+                                        .padding(12)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(Color.white.opacity(0.06))
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                        )
+                                }
+                                if let why = entry.why, !why.isEmpty {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text(contextType == "gauge" ? whyHeading : "What's Shaping Things Now")
+                                            .font(.headline)
+                                        ForEach(Array(why.enumerated()), id: \.offset) { _, line in
+                                            let display = translated(line) ?? line
+                                            Text("\u{2022} \(display)")
+                                                .font(.subheadline)
+                                        }
                                     }
                                 }
                             }
                             if let notice = entry.whatYouMayNotice, !notice.isEmpty {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("What Might Stand Out")
+                                    Text(effectHeading)
                                         .font(.headline)
                                     ForEach(Array(notice.enumerated()), id: \.offset) { _, line in
-                                        Text("\u{2022} \(line)")
+                                        let display = translated(line) ?? line
+                                        Text("\u{2022} \(display)")
                                             .font(.subheadline)
                                     }
                                 }
                             }
                             if let actions = entry.suggestedActions, !actions.isEmpty {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("What May Help Right Now")
+                                    Text(helpHeading)
                                         .font(.headline)
                                     ForEach(Array(actions.enumerated()), id: \.offset) { _, line in
-                                        Text("\u{2022} \(line)")
+                                        let display = translated(line) ?? line
+                                        Text("\u{2022} \(display)")
                                             .font(.subheadline)
                                     }
                                 }
@@ -6429,12 +6426,6 @@ struct ContentView: View {
                             Text(summary)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            if !gaugeRecentLogBoosts.isEmpty,
-                               let updateText = formattedSymptomUpdate(lastSymptomUpdateAt) {
-                                Text("Updated from your recent logs at \(updateText).")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                            }
                             currentSymptomsButton
                             dailyCheckInButton
                         }
@@ -6511,6 +6502,7 @@ struct ContentView: View {
             }
             .sheet(item: $selectedModal) { modal in
                 ContextModalSheetView(
+                    experienceMode: experienceMode,
                     contextType: modal.contextType,
                     contextKey: modal.contextKey,
                     entry: modal.entry,
