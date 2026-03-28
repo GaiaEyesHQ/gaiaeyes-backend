@@ -1905,14 +1905,13 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
             max_completion_tokens=320,
             messages=[
                 {"role":"system","content":(
-                    "You are Gaia Eyes' space/Earth signal and weather writer. Write an accurate, human, relatable and humorous caption. "
-                    "Do not start with questions or phrases like 'Feeling', 'Are you', 'Ever feel', 'Ready to', 'Let’s'. "
+                    "You are Gaia Eyes' space/Earth signal and weather writer. Write an accurate, viral, relatable and humorous caption. "
                     "Never use emojis. Vary openings day‑to‑day."
                 )},
                 {"role":"user","content":(
                     "Using the data below, write one short, viral‑friendly humorous caption for Gaia Eyes. "
                     "Start with a declarative, data‑aware hook (4–10 words). No questions. No emojis. "
-                    "Relate concisely (one sentence max) to mood/energy/heart/nervous system—only if consistent with the data (calm vs stormy). "
+                    "Relate concisely (one sentence max) to mood/energy/heart/nervous system—only if consistent with the data. "
                     "On the final line include 4–6 relevant hashtags. ≤600 chars. Render flare/CME counts as integers.\n\n"
                     f"Kp max (24h): {kp_max}\nSolar wind (km/s): {wind}\nFlares (24h): {flr}\nCMEs (24h): {cme}\nSchumann: {sr} Hz ({sr_note})"
                 )},
@@ -2013,7 +2012,7 @@ Data:
         resp = _chat_create_compat(
             client,
             model=model, temperature=0.75, max_completion_tokens=900,
-            messages=[{"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, cackl, and helpful. Balance science, humor and mysticism."},
+            messages=[{"role":"system","content":"You are Gaia Eyes' space weather writer. Be accurate, funny, and helpful. Balance science, humor and mysticism."},
                      {"role":"user","content": prompt}],
         )
         text = resp.choices[0].message.content.strip()
