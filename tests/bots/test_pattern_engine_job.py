@@ -1,6 +1,8 @@
 import unittest
 from datetime import date, datetime, timezone
+from unittest.mock import patch
 
+import bots.patterns.pattern_engine_job as pattern_engine_job
 from bots.patterns.pattern_engine_job import (
     ASSOCIATION_PAIRS,
     build_user_daily_features,
@@ -150,6 +152,54 @@ class PatternEngineJobTests(unittest.TestCase):
         self.assertIn(("solar_wind_exposed", "high_hr_day"), ASSOCIATION_PAIRS)
         self.assertIn(("solar_wind_exposed", "short_sleep_day"), ASSOCIATION_PAIRS)
         self.assertIn(("kp_g1_plus_exposed", "short_sleep_day"), ASSOCIATION_PAIRS)
+
+    def test_run_pattern_engine_retries_transient_ssl_eof_errors(self) -> None:
+        expected = {"features": 1, "outcomes": 1, "associations": 1, "surfaced": 1}
+        with (
+            patch.object(pattern_engine_job, "_require_psycopg") as require_psycopg,
+            patch.object(
+                pattern_engine_job,
+                "_run_pattern_engine_once",
+                side_effect=[
+                    RuntimeError("consuming input failed: SSL SYSCALL error: EOF detected"),
+                    expected,
+                ],
+            ) as run_once,
+            patch.object(pattern_engine_job.time_module, "sleep") as sleep_mock,
+        ):
+            result = pattern_engine_job.run_pattern_engine(
+                as_of_day=date(2026, 3, 29),
+                days_back=180,
+                user_id=None,
+                dsn="postgresql://localhost/test",
+            )
+
+        self.assertEqual(result, expected)
+        require_psycopg.assert_called_once_with()
+        self.assertEqual(run_once.call_count, 2)
+        sleep_mock.assert_called_once_with(pattern_engine_job.DB_RETRY_BASE_SLEEP_SECONDS)
+
+    def test_run_pattern_engine_does_not_retry_non_transient_errors(self) -> None:
+        with (
+            patch.object(pattern_engine_job, "_require_psycopg") as require_psycopg,
+            patch.object(
+                pattern_engine_job,
+                "_run_pattern_engine_once",
+                side_effect=ValueError("column does not exist"),
+            ) as run_once,
+            patch.object(pattern_engine_job.time_module, "sleep") as sleep_mock,
+        ):
+            with self.assertRaisesRegex(ValueError, "column does not exist"):
+                pattern_engine_job.run_pattern_engine(
+                    as_of_day=date(2026, 3, 29),
+                    days_back=180,
+                    user_id=None,
+                    dsn="postgresql://localhost/test",
+                )
+
+        require_psycopg.assert_called_once_with()
+        self.assertEqual(run_once.call_count, 1)
+        sleep_mock.assert_not_called()
 
 
 if __name__ == "__main__":

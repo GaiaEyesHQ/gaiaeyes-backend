@@ -7,6 +7,7 @@ import json
 import logging
 import math
 import sys
+import time as time_module
 from collections import defaultdict, deque
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
@@ -31,6 +32,22 @@ from services.personalization.health_context import canonicalize_tag_key
 LOG_LEVEL = "INFO"
 logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
+
+DB_RETRY_ATTEMPTS = 3
+DB_RETRY_BASE_SLEEP_SECONDS = 2.0
+
+TRANSIENT_DB_ERROR_TOKENS = (
+    "ssl syscall error",
+    "eof detected",
+    "server closed the connection unexpectedly",
+    "closed the connection unexpectedly",
+    "connection not open",
+    "terminating connection due to administrator command",
+    "could not receive data from server",
+    "connection reset by peer",
+    "broken pipe",
+    "timeout expired",
+)
 
 GAUGE_KEYS = [
     "pain",
@@ -267,6 +284,34 @@ def _coerce_day(value: str | date | None) -> date:
 def _require_psycopg() -> None:
     if psycopg is None or dict_row is None:
         raise RuntimeError("psycopg is required to run the pattern engine job")
+
+
+def _connect_kwargs() -> dict[str, Any]:
+    # GitHub Actions occasionally sees transient SSL EOFs against Supabase/Postgres.
+    # Keep the socket active and fail fast on connect so the outer retry can recover.
+    return {
+        "row_factory": dict_row,
+        "connect_timeout": 15,
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 3,
+    }
+
+
+def _is_transient_db_error(exc: BaseException) -> bool:
+    message = str(exc).strip().lower()
+
+    if psycopg is not None and isinstance(
+        exc,
+        (
+            psycopg.OperationalError,
+            psycopg.InterfaceError,
+        ),
+    ):
+        return not message or any(token in message for token in TRANSIENT_DB_ERROR_TOKENS)
+
+    return bool(message) and any(token in message for token in TRANSIENT_DB_ERROR_TOKENS)
 
 
 def _safe_float(value: Any) -> float | None:
@@ -1600,18 +1645,17 @@ def _association_insert_columns() -> list[str]:
     ]
 
 
-def run_pattern_engine(
+def _run_pattern_engine_once(
     *,
     as_of_day: date,
     days_back: int,
     user_id: str | None,
     dsn: str | None = None,
 ) -> dict[str, int]:
-    _require_psycopg()
     since_day = as_of_day - timedelta(days=max(days_back - 1, 0))
     updated_at = datetime.now(timezone.utc)
 
-    with psycopg.connect(dsn or _resolve_dsn(), row_factory=dict_row) as conn:
+    with psycopg.connect(dsn or _resolve_dsn(), **_connect_kwargs()) as conn:
         base_rows = _fetch_base_daily_features(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
         if not base_rows and user_id is None:
             logger.warning(
@@ -1677,6 +1721,39 @@ def run_pattern_engine(
         "associations": len(association_rows),
         "surfaced": surfaced,
     }
+
+
+def run_pattern_engine(
+    *,
+    as_of_day: date,
+    days_back: int,
+    user_id: str | None,
+    dsn: str | None = None,
+) -> dict[str, int]:
+    _require_psycopg()
+
+    for attempt in range(1, DB_RETRY_ATTEMPTS + 1):
+        try:
+            return _run_pattern_engine_once(
+                as_of_day=as_of_day,
+                days_back=days_back,
+                user_id=user_id,
+                dsn=dsn,
+            )
+        except Exception as exc:
+            if not _is_transient_db_error(exc) or attempt >= DB_RETRY_ATTEMPTS:
+                raise
+            sleep_seconds = DB_RETRY_BASE_SLEEP_SECONDS * attempt
+            logger.warning(
+                "[pattern_engine] transient database error on attempt %s/%s: %s; retrying in %.1fs",
+                attempt,
+                DB_RETRY_ATTEMPTS,
+                exc,
+                sleep_seconds,
+            )
+            time_module.sleep(sleep_seconds)
+
+    raise RuntimeError("Pattern engine retry loop exited unexpectedly")
 
 
 def main() -> None:
