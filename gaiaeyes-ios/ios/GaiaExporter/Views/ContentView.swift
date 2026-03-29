@@ -1835,9 +1835,13 @@ struct ContentView: View {
     @State private var dashboardFetchInFlight: Bool = false
     @State private var dashboardLastFetchAt: Date = .distantPast
     @State private var dashboardLastUpdatedText: String? = nil
+    @State private var selectedTab: AppTab = .home
+    @State private var showGuideSheet: Bool = false
     @State private var showMissionSettingsSheet: Bool = false
     @State private var showMissionInsightsSheet: Bool = false
     @State private var missionInsightsPath: [InsightsRoute] = []
+    @State private var bodyPath: [InsightsRoute] = []
+    @State private var explorePath: [InsightsRoute] = []
     @State private var showLocalConditionsSheet: Bool = false
     @State private var showSchumannDashboardSheet: Bool = false
     @State private var showCameraHealthCheckSheet: Bool = false
@@ -1926,7 +1930,46 @@ struct ContentView: View {
         let events: [SymptomQueuedEvent]
     }
 
+    private enum AppTab: Hashable {
+        case home
+        case body
+        case patterns
+        case outlook
+        case explore
+
+        var title: String {
+            switch self {
+            case .home:
+                return "Home"
+            case .body:
+                return "Body"
+            case .patterns:
+                return "Patterns"
+            case .outlook:
+                return "Outlook"
+            case .explore:
+                return "Explore"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .home:
+                return "house.fill"
+            case .body:
+                return "heart.text.square"
+            case .patterns:
+                return "chart.line.uptrend.xyaxis"
+            case .outlook:
+                return "calendar.badge.clock"
+            case .explore:
+                return "square.grid.2x2"
+            }
+        }
+    }
+
     private enum InsightsRoute: String, Hashable, Identifiable {
+        case dailyCheckIn
         case yourOutlook
         case spaceWeather
         case localConditions
@@ -2006,9 +2049,37 @@ struct ContentView: View {
         }
     }
 
+    private func showSettingsSheet() {
+        showMissionSettingsSheet = true
+    }
+
+    private func openBody(route: InsightsRoute? = nil) {
+        selectedTab = .body
+        bodyPath = route.map { [$0] } ?? []
+    }
+
+    private func openExplore(route: InsightsRoute? = nil) {
+        selectedTab = .explore
+        explorePath = route.map { [$0] } ?? []
+    }
+
     private func openMissionInsights(route: InsightsRoute? = nil) {
-        missionInsightsPath = route.map { [$0] } ?? []
-        showMissionInsightsSheet = true
+        if let route {
+            switch route {
+            case .yourPatterns:
+                selectedTab = .patterns
+            case .yourOutlook:
+                selectedTab = .outlook
+            case .dailyCheckIn:
+                openBody(route: .dailyCheckIn)
+            case .currentSymptoms:
+                openBody(route: .currentSymptoms)
+            default:
+                openExplore(route: route)
+            }
+        } else {
+            openExplore()
+        }
     }
 
     private func openAllDrivers(focus key: String? = nil) {
@@ -2058,7 +2129,7 @@ struct ContentView: View {
     private func openSettingsFromAllDrivers() {
         showAllDriversSheet = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            showMissionSettingsSheet = true
+            showSettingsSheet()
         }
     }
 
@@ -2092,6 +2163,34 @@ struct ContentView: View {
             missionInsightsPath = [.schumann]
         default:
             openAllDriversAfterClosingInsights(focus: signal.driverKey ?? signal.key)
+        }
+    }
+
+    private var guideToolbarButton: some View {
+        Button {
+            showGuideSheet = true
+        } label: {
+            Label("Guide", systemImage: "questionmark.circle")
+        }
+        .accessibilityLabel("Guide")
+    }
+
+    private var settingsToolbarButton: some View {
+        Button {
+            showSettingsSheet()
+        } label: {
+            Image(systemName: "gearshape")
+        }
+        .accessibilityLabel("Settings")
+    }
+
+    @ToolbarContentBuilder
+    private var shellToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            guideToolbarButton
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            settingsToolbarButton
         }
     }
 
@@ -3425,13 +3524,13 @@ struct ContentView: View {
         showMissionSettingsSheet = false
         if targetType == "daily_checkin" {
             pendingPushRoute = nil
-            showDailyCheckInSheet = true
+            openBody(route: .dailyCheckIn)
             Task { await fetchDailyCheckInStatus(api: state.apiWithAuth()) }
             return
         }
         if targetType == "current_symptoms" || targetType == "symptoms" {
             pendingPushRoute = nil
-            showCurrentSymptomsSheet = true
+            openBody(route: .currentSymptoms)
             Task { await fetchCurrentSymptomsSummary(api: state.apiWithAuth()) }
             return
         }
@@ -5082,15 +5181,11 @@ struct ContentView: View {
                 onCurrentSymptoms: { showCurrentSymptomsSheet = true },
                 onDailyCheckIn: { showDailyCheckInSheet = true },
                 onSymptoms: { showSymptomSheet = true },
-                onInsights: { openMissionInsights() },
-                onLocalConditions: { showLocalConditionsSheet = true },
-                onSettings: { showMissionSettingsSheet = true },
                 onQuickCheck: {
                     if Self.cameraHealthCheckVisible {
                         showCameraHealthCheckSheet = true
                     }
                 },
-                onSchumann: { showSchumannDashboardSheet = true },
                 onResearch: {
 #if canImport(UIKit)
                     if let url = URL(string: "https://gaiaeyes.com/research/") {
@@ -5108,11 +5203,7 @@ struct ContentView: View {
         let onCurrentSymptoms: () -> Void
         let onDailyCheckIn: () -> Void
         let onSymptoms: () -> Void
-        let onInsights: () -> Void
-        let onLocalConditions: () -> Void
-        let onSettings: () -> Void
         let onQuickCheck: () -> Void
-        let onSchumann: () -> Void
         let onResearch: () -> Void
 
         var body: some View {
@@ -5126,14 +5217,10 @@ struct ContentView: View {
                         Button(action: onCurrentSymptoms) { Label("Current Symptoms", systemImage: "waveform.path.ecg.rectangle") }
                         Button(action: onDailyCheckIn) { Label("Daily Check-In", systemImage: "checklist") }
                         Button(action: onSymptoms) { Label("Symptoms", systemImage: "plus.circle") }
-                        Button(action: onInsights) { Label("Insights", systemImage: "chart.xyaxis.line") }
-                        Button(action: onLocalConditions) { Label("Local", systemImage: "location.fill") }
-                        Button(action: onSettings) { Label("Settings", systemImage: "gearshape") }
-                        Button(action: onSchumann) { Label("Schumann", systemImage: "waveform.path.ecg") }
                         Button(action: onResearch) { Label("Research", systemImage: "book.closed") }
                     }
                 }
-                Text("Quick links open dedicated views for all drivers, current symptoms, daily check-ins, insights, local conditions, and Schumann.")
+                Text("Quick links keep logging, daily check-ins, and the full driver list close without duplicating the main tab destinations.")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -7150,6 +7237,9 @@ struct ContentView: View {
         let hazardsBrief: HazardsBriefResponse?
         let hazardsLoading: Bool
         let hazardsError: String?
+        let showsPersonalCards: Bool
+        let navigationTitle: String
+        let onOpenAllDrivers: (() -> Void)?
         let onRefresh: () async -> Void
 
         private struct HubMetric: Identifiable {
@@ -7317,6 +7407,41 @@ struct ContentView: View {
             return resolvedZip.isEmpty ? "your area" : "ZIP \(resolvedZip)"
         }
 
+        private var introTitle: String {
+            showsPersonalCards ? "Start with what matters now." : "Explore deeper system context."
+        }
+
+        private var introSubtitle: String {
+            if showsPersonalCards {
+                return "Open a card for a calm, plain-language read on what may matter for you right now."
+            }
+            return "Space, local, and earth-system layers live here once you want more than the primary daily flow."
+        }
+
+        private var allDriversCard: some View {
+            let leadingCount = dashboardDrivers.filter { ($0.role ?? "").lowercased() == "leading" }.count
+            let supportingCount = dashboardDrivers.filter { ($0.role ?? "").lowercased() == "supporting" }.count
+
+            return Button {
+                onOpenAllDrivers?()
+            } label: {
+                HubCard(
+                    title: "All Drivers",
+                    icon: "list.bullet.rectangle.portrait",
+                    status: "Open the full system-level driver stack Gaia Eyes is watching right now.",
+                    pillText: dashboardDrivers.isEmpty ? "Loading" : "Priority Order",
+                    severity: dashboardDrivers.isEmpty ? .warn : .ok,
+                    metrics: [
+                        HubMetric(label: "Visible", value: dashboardDrivers.isEmpty ? "—" : "\(dashboardDrivers.count)", tint: GaugePalette.low),
+                        HubMetric(label: "Leading", value: "\(leadingCount)", tint: GaugePalette.mild),
+                        HubMetric(label: "Supporting", value: "\(supportingCount)", tint: GaugePalette.elevated)
+                    ],
+                    isExplore: true
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
         private var spaceWeatherCard: some View {
             let metrics = SpaceWeatherCardMetrics(current: current, outlook: outlook, series: nil, magnetosphere: magnetosphere)
             let kpNow = metrics.kpNow
@@ -7363,7 +7488,7 @@ struct ContentView: View {
                         HubMetric(label: "Geomag", value: geomagneticState, tint: geomagneticTint),
                         HubMetric(label: "Wind", value: windText, tint: GaugePalette.zoneColor(SpaceWeatherPresentation.windToneKey(swSpeed)))
                     ],
-                    isExplore: false
+                    isExplore: !showsPersonalCards
                 )
             }
             .buttonStyle(.plain)
@@ -7399,7 +7524,7 @@ struct ContentView: View {
                         HubMetric(label: "AQI", value: aqiText, tint: GaugePalette.mild),
                         HubMetric(label: "Pressure", value: pressureText, tint: GaugePalette.elevated)
                     ],
-                    isExplore: false
+                    isExplore: !showsPersonalCards
                 )
             }
             .buttonStyle(.plain)
@@ -7522,7 +7647,7 @@ struct ContentView: View {
                         HubMetric(label: "Bz", value: bzText, tint: GaugePalette.elevated),
                         HubMetric(label: "Kp", value: kpText, tint: GaugePalette.mild)
                     ],
-                    isExplore: false
+                    isExplore: !showsPersonalCards
                 )
             }
             .buttonStyle(.plain)
@@ -7552,7 +7677,7 @@ struct ContentView: View {
                         HubMetric(label: "f0", value: f0Text, tint: GaugePalette.mild),
                         HubMetric(label: "f1", value: f1Text, tint: GaugePalette.elevated)
                     ],
-                    isExplore: false
+                    isExplore: !showsPersonalCards
                 )
             }
             .buttonStyle(.plain)
@@ -7678,9 +7803,9 @@ struct ContentView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Start with what matters now.")
+                            Text(introTitle)
                                 .font(.system(size: 32, weight: .bold, design: .rounded))
-                            Text("Open a card for a calm, plain-language read on what may matter for you right now.")
+                            Text(introSubtitle)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                             if usingYesterdayFallback {
@@ -7690,18 +7815,30 @@ struct ContentView: View {
                             }
                         }
 
+                        if onOpenAllDrivers != nil {
+                            allDriversCard
+                        }
+
                         spaceWeatherCard
                         localConditionsCard
-                        yourOutlookCard
-                        yourPatternsCard
+                        if showsPersonalCards {
+                            yourOutlookCard
+                            yourPatternsCard
+                        }
                         magnetosphereCard
                         schumannCard
-                        healthCard
+                        if showsPersonalCards {
+                            healthCard
+                        }
 
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Explore")
+                            Text(showsPersonalCards ? "Explore" : "More to Explore")
                                 .font(.headline.weight(.semibold))
-                            Text("Interesting context, but kept secondary so Insights stays fast and personal.")
+                            Text(
+                                showsPersonalCards
+                                    ? "Interesting context, but kept secondary so Insights stays fast and personal."
+                                    : "These deeper system feeds stay reachable here without competing with the primary tabs."
+                            )
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             earthquakesCard
@@ -7716,7 +7853,7 @@ struct ContentView: View {
                     await onRefresh()
                 }
             }
-            .navigationTitle("Insights")
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -8059,7 +8196,7 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .navigationTitle("Your Outlook")
+            .navigationTitle("Outlook")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $shareDraft) { draft in
                 SharePreviewView(draft: draft)
@@ -8734,7 +8871,7 @@ struct ContentView: View {
                     _ = await (patternsRefresh, lunarRefresh)
                 }
             }
-            .navigationTitle("Your Patterns")
+            .navigationTitle("Patterns")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $shareDraft) { draft in
                 SharePreviewView(draft: draft)
@@ -9599,6 +9736,10 @@ struct ContentView: View {
         let latestCameraCheck: CameraHealthDailySummary?
         let latestCameraCheckLoading: Bool
         let latestCameraCheckError: String?
+        let dailyCheckInStatus: DailyCheckInStatus?
+        let dailyCheckInLoading: Bool
+        let dailyCheckInError: String?
+        let onOpenDailyCheckIn: () -> Void
         @Binding var showSymptomSheet: Bool
         let onOpenQuickCheck: () -> Void
         let onLoadComparison: () async -> Void
@@ -9648,6 +9789,24 @@ struct ContentView: View {
             return false
         }
 
+        private var dailyCheckInSummary: String {
+            if let error = ContentView.scrubError(dailyCheckInError), dailyCheckInStatus == nil {
+                return error
+            }
+            if dailyCheckInLoading && dailyCheckInStatus == nil {
+                return "Refreshing today’s check-in prompt."
+            }
+            if let entry = dailyCheckInStatus?.latestEntry,
+               let completedAt = entry.completedAt,
+               !completedAt.isEmpty {
+                return "Already completed for \(entry.day). Open it to update the read or review the last response."
+            }
+            if let prompt = dailyCheckInStatus?.prompt {
+                return prompt.questionText
+            }
+            return "Keep daily feedback lightweight so Gaia can compare the read with how the day actually felt."
+        }
+
         var body: some View {
             ZStack {
                 Color.black.opacity(0.97).ignoresSafeArea()
@@ -9661,6 +9820,20 @@ struct ContentView: View {
                             topSummary: topSummary,
                             onLogTap: { showSymptomSheet = true }
                         )
+
+                        Button(action: onOpenDailyCheckIn) {
+                            LocalConditionsSurfaceCard(title: "Daily Check-In", icon: "checklist") {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(dailyCheckInSummary)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundColor(.primary)
+                                    Text("Open the full check-in to log how the day actually felt and keep Body context up to date.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
 
                         NavigationLink(value: InsightsRoute.currentSymptoms) {
                             LocalConditionsSurfaceCard(title: "Current Symptoms", icon: "waveform.path.ecg.rectangle") {
@@ -9854,7 +10027,7 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .navigationTitle("Health & Symptoms")
+            .navigationTitle("Body")
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 ensureComparisonLoad()
@@ -10601,13 +10774,10 @@ struct ContentView: View {
                     state.log.removeFirst(state.log.count - 300)
                 }
             }
+            .navigationTitle("Home")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 0) { Text("Gaia Eyes").font(.title2).fontWeight(.semibold); Text("Decode the unseen.").font(.footnote).foregroundColor(.secondary).padding(.top, 1) }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showDebug.toggle() } label: { Image(systemName: "wrench.and.screwdriver") }.accessibilityLabel("Toggle Debug Panel")
-                }
+                shellToolbarContent
             }
             .onDisappear {
                 pendingRefreshTask?.cancel()
@@ -10618,8 +10788,408 @@ struct ContentView: View {
         }
     }
 
+    private var selectedFeaturesTuple: (current: FeaturesToday?, usingYesterdayFallback: Bool, updatedText: String?) {
+        let baseFeatures = features ?? lastKnownFeatures
+        let selected = baseFeatures.map { selectDisplayFeatures(for: $0) }
+        let current = selected?.0
+        let usingYesterdayFallback = selected?.1 ?? false
+        let updatedText = current?.updatedAt.flatMap { formatUpdated($0) }
+        return (current, usingYesterdayFallback, updatedText)
+    }
+
+    private var resolvedSpaceOutlookPayload: SpaceForecastOutlook? {
+        spaceOutlook ?? lastKnownSpaceOutlook
+    }
+
+    private var resolvedUserOutlookPayload: UserForecastOutlook? {
+        userOutlook ?? lastKnownUserOutlook
+    }
+
+    private var resolvedSeriesPayload: SpaceSeries? {
+        series ?? lastKnownSeries
+    }
+
+    private var resolvedSymptomPoints: [SymptomSparkPoint] {
+        symptomSparkPoints()
+    }
+
+    private var resolvedSymptomSummary: String? {
+        topSymptomSummary()
+    }
+
+    private var resolvedSymptomHighlights: [SymptomHighlight] {
+        symptomHighlights()
+    }
+
+    private var bodyNavigationStack: some View {
+        let selection = selectedFeaturesTuple
+
+        return NavigationStack(path: $bodyPath) {
+            InsightsHealthSymptomsView(
+                current: selection.current,
+                todayString: chicagoTodayString(),
+                updatedText: selection.updatedText,
+                bannerText: featuresCachedBannerText,
+                usingYesterdayFallback: selection.usingYesterdayFallback,
+                todayCount: symptomsToday.count,
+                queuedCount: state.symptomQueueCount,
+                sparklinePoints: resolvedSymptomPoints,
+                topSummary: resolvedSymptomSummary,
+                diagnostics: symptomDiagnostics,
+                currentSymptomsSnapshot: currentSymptomsSnapshot,
+                series: resolvedSeriesPayload,
+                lunarInsights: lunarInsights,
+                lunarInsightsLoading: lunarInsightsLoading,
+                lunarInsightsError: lunarInsightsError,
+                experienceMode: experienceProfile.mode,
+                lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared,
+                highlights: resolvedSymptomHighlights,
+                latestCameraCheck: latestCameraCheck,
+                latestCameraCheckLoading: latestCameraCheckLoading,
+                latestCameraCheckError: latestCameraCheckError,
+                dailyCheckInStatus: dailyCheckInStatus,
+                dailyCheckInLoading: dailyCheckInLoading,
+                dailyCheckInError: dailyCheckInError,
+                onOpenDailyCheckIn: {
+                    bodyPath = [.dailyCheckIn]
+                },
+                showSymptomSheet: $showSymptomSheet,
+                onOpenQuickCheck: { showCameraHealthCheckSheet = true },
+                onLoadComparison: {
+                    await fetchSpaceSeries(days: 30)
+                    await fetchLunarInsights()
+                }
+            )
+            .safeAreaInset(edge: .top) {
+                persistentSignalBar(onTap: handleMissionControlSignalTap)
+            }
+            .toolbar {
+                shellToolbarContent
+            }
+            .navigationDestination(for: InsightsRoute.self) { route in
+                shellDestinationView(for: route)
+            }
+            .task {
+                let api = state.apiWithAuth()
+                if currentSymptomsSnapshot == nil && !currentSymptomsLoading {
+                    await fetchCurrentSymptomsSummary(api: api)
+                }
+                if dailyCheckInStatus == nil && !dailyCheckInLoading {
+                    await fetchDailyCheckInStatus(api: api)
+                }
+                if symptomDaily.isEmpty && symptomsToday.isEmpty {
+                    await fetchSymptoms(api: api)
+                }
+            }
+        }
+    }
+
+    private var patternsNavigationStack: some View {
+        NavigationStack {
+            YourPatternsView(
+                experienceMode: experienceProfile.mode,
+                lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared
+            )
+            .safeAreaInset(edge: .top) {
+                persistentSignalBar(onTap: handleMissionControlSignalTap)
+            }
+            .toolbar {
+                shellToolbarContent
+            }
+        }
+    }
+
+    private var outlookNavigationStack: some View {
+        NavigationStack {
+            YourOutlookView(
+                mode: experienceProfile.mode,
+                payload: resolvedUserOutlookPayload,
+                isLoading: userOutlookLoading,
+                error: userOutlookError,
+                onRefresh: { Task { await fetchUserOutlook() } },
+                onOpenAllDrivers: {
+                    selectedTab = .explore
+                    openAllDrivers()
+                }
+            )
+            .safeAreaInset(edge: .top) {
+                persistentSignalBar(onTap: handleMissionControlSignalTap)
+            }
+            .toolbar {
+                shellToolbarContent
+            }
+            .task {
+                if userOutlook == nil && !userOutlookLoading {
+                    await fetchUserOutlook()
+                }
+            }
+        }
+    }
+
+    private var exploreNavigationStack: some View {
+        let selection = selectedFeaturesTuple
+
+        return NavigationStack(path: $explorePath) {
+            InsightsHubView(
+                current: selection.current,
+                outlook: resolvedSpaceOutlookPayload,
+                userOutlook: resolvedUserOutlookPayload,
+                updatedText: selection.updatedText,
+                usingYesterdayFallback: selection.usingYesterdayFallback,
+                localHealthZip: localHealthZip,
+                localHealth: localHealth,
+                localHealthLoading: localHealthLoading,
+                localHealthError: localHealthError,
+                userOutlookLoading: userOutlookLoading,
+                userOutlookError: userOutlookError,
+                useGPS: profileUseGPS,
+                localInsightsEnabled: profileLocalInsightsEnabled,
+                dashboardDrivers: dashboardPayload?.drivers ?? [],
+                magnetosphere: magnetosphere,
+                magnetosphereLoading: magnetosphereLoading,
+                magnetosphereError: magnetosphereError,
+                symptomsTodayCount: symptomsToday.count,
+                queuedSymptomsCount: state.symptomQueueCount,
+                topSymptomSummary: resolvedSymptomSummary,
+                currentSymptomsSnapshot: currentSymptomsSnapshot,
+                latestCameraCheck: latestCameraCheck,
+                latestCameraCheckLoading: latestCameraCheckLoading,
+                latestCameraCheckError: latestCameraCheckError,
+                quakeLatest: quakeLatest,
+                quakeEvents: quakeEvents,
+                quakeLoading: quakeLoading,
+                quakeError: quakeError,
+                hazardsBrief: hazardsBrief,
+                hazardsLoading: hazardsLoading,
+                hazardsError: hazardsError,
+                showsPersonalCards: false,
+                navigationTitle: "Explore",
+                onOpenAllDrivers: { openAllDrivers() },
+                onRefresh: { await fetchInsightsHubData(trigger: .refresh) }
+            )
+            .safeAreaInset(edge: .top) {
+                persistentSignalBar(onTap: handleMissionControlSignalTap)
+            }
+            .toolbar {
+                shellToolbarContent
+            }
+            .navigationDestination(for: InsightsRoute.self) { route in
+                shellDestinationView(for: route)
+            }
+            .task {
+                await fetchInsightsHubData(trigger: .initial)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func shellDestinationView(for route: InsightsRoute) -> some View {
+        let selection = selectedFeaturesTuple
+
+        switch route {
+        case .dailyCheckIn:
+            DailyCheckInView(
+                api: state.apiWithAuth(),
+                mode: experienceProfile.mode,
+                tone: experienceProfile.tone,
+                initialStatus: dailyCheckInStatus,
+                onStatusChanged: { status in
+                    dailyCheckInStatus = status
+                }
+            )
+        case .yourOutlook:
+            YourOutlookView(
+                mode: experienceProfile.mode,
+                payload: resolvedUserOutlookPayload,
+                isLoading: userOutlookLoading,
+                error: userOutlookError,
+                onRefresh: { Task { await fetchUserOutlook() } },
+                onOpenAllDrivers: { openAllDrivers() }
+            )
+            .task {
+                if userOutlook == nil && !userOutlookLoading {
+                    await fetchUserOutlook()
+                }
+            }
+        case .spaceWeather:
+            InsightsSpaceWeatherView(
+                current: selection.current,
+                updatedText: selection.updatedText,
+                usingYesterdayFallback: selection.usingYesterdayFallback,
+                forecast: forecast,
+                outlook: resolvedSpaceOutlookPayload,
+                magnetosphere: magnetosphere,
+                onRefresh: { await fetchSpaceWeatherDetailData(force: true) },
+                onLoadFullForecast: { await fetchSpaceOutlook(days: 7) }
+            )
+        case .localConditions:
+            LocalConditionsView(
+                zip: localHealthZip,
+                snapshot: localHealth,
+                drivers: dashboardPayload?.drivers ?? [],
+                mode: experienceProfile.mode,
+                tone: experienceProfile.tone,
+                isLoading: localHealthLoading,
+                error: localHealthError,
+                useGPS: profileUseGPS,
+                onRefresh: { Task { await fetchLocalHealth() } }
+            )
+            .task {
+                if localHealth == nil && !localHealthLoading {
+                    await fetchLocalHealth()
+                }
+                if dashboardPayload == nil {
+                    await fetchDashboardPayload()
+                }
+            }
+        case .yourPatterns:
+            YourPatternsView(
+                experienceMode: experienceProfile.mode,
+                lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared
+            )
+        case .magnetosphere:
+            InsightsMagnetosphereView(
+                data: magnetosphere,
+                isLoading: magnetosphereLoading,
+                error: magnetosphereError,
+                onRefresh: { await fetchMagnetosphere(force: true) }
+            )
+            .task {
+                if magnetosphere == nil && !magnetosphereLoading {
+                    await fetchMagnetosphere()
+                }
+            }
+        case .schumann:
+            SchumannDashboardView(
+                state: state,
+                mode: experienceProfile.mode,
+                tone: experienceProfile.tone
+            )
+        case .healthSymptoms:
+            InsightsHealthSymptomsView(
+                current: selection.current,
+                todayString: chicagoTodayString(),
+                updatedText: selection.updatedText,
+                bannerText: featuresCachedBannerText,
+                usingYesterdayFallback: selection.usingYesterdayFallback,
+                todayCount: symptomsToday.count,
+                queuedCount: state.symptomQueueCount,
+                sparklinePoints: resolvedSymptomPoints,
+                topSummary: resolvedSymptomSummary,
+                diagnostics: symptomDiagnostics,
+                currentSymptomsSnapshot: currentSymptomsSnapshot,
+                series: resolvedSeriesPayload,
+                lunarInsights: lunarInsights,
+                lunarInsightsLoading: lunarInsightsLoading,
+                lunarInsightsError: lunarInsightsError,
+                experienceMode: experienceProfile.mode,
+                lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared,
+                highlights: resolvedSymptomHighlights,
+                latestCameraCheck: latestCameraCheck,
+                latestCameraCheckLoading: latestCameraCheckLoading,
+                latestCameraCheckError: latestCameraCheckError,
+                dailyCheckInStatus: dailyCheckInStatus,
+                dailyCheckInLoading: dailyCheckInLoading,
+                dailyCheckInError: dailyCheckInError,
+                onOpenDailyCheckIn: {
+                    if selectedTab == .explore {
+                        selectedTab = .body
+                    }
+                    bodyPath = [.dailyCheckIn]
+                },
+                showSymptomSheet: $showSymptomSheet,
+                onOpenQuickCheck: { showCameraHealthCheckSheet = true },
+                onLoadComparison: {
+                    await fetchSpaceSeries(days: 30)
+                    await fetchLunarInsights()
+                }
+            )
+            .task {
+                if symptomDaily.isEmpty && symptomsToday.isEmpty {
+                    await fetchSymptoms(api: state.apiWithAuth())
+                }
+            }
+        case .currentSymptoms:
+            CurrentSymptomsView(
+                api: state.apiWithAuth(),
+                mode: experienceProfile.mode,
+                tone: experienceProfile.tone,
+                initialSnapshot: currentSymptomsSnapshot,
+                onLogMore: { showSymptomSheet = true },
+                onOpenAllDrivers: { focusKey in
+                    selectedTab = .explore
+                    openAllDrivers(focus: focusKey)
+                },
+                onSnapshotChanged: { snapshot in
+                    currentSymptomsSnapshot = snapshot
+                }
+            )
+        case .earthquakes:
+            EarthquakesDetailView(
+                latest: quakeLatest,
+                events: quakeEvents,
+                error: quakeError
+            )
+            .task {
+                if quakeLatest == nil && quakeEvents.isEmpty && !quakeLoading {
+                    await fetchQuakes()
+                }
+            }
+        case .hazards:
+            InsightsHazardsView(
+                payload: hazardsBrief,
+                isLoading: hazardsLoading,
+                error: hazardsError
+            )
+            .task {
+                if hazardsBrief == nil && !hazardsLoading {
+                    await fetchHazardsBrief()
+                }
+            }
+        }
+    }
+
     private var contentViewBody: some View {
-        dashboardNavigationStack
+        TabView(selection: $selectedTab) {
+            dashboardNavigationStack
+                .tabItem {
+                    Label(AppTab.home.title, systemImage: AppTab.home.systemImage)
+                }
+                .tag(AppTab.home)
+
+            bodyNavigationStack
+                .tabItem {
+                    Label(AppTab.body.title, systemImage: AppTab.body.systemImage)
+                }
+                .tag(AppTab.body)
+
+            patternsNavigationStack
+                .tabItem {
+                    Label(AppTab.patterns.title, systemImage: AppTab.patterns.systemImage)
+                }
+                .tag(AppTab.patterns)
+
+            outlookNavigationStack
+                .tabItem {
+                    Label(AppTab.outlook.title, systemImage: AppTab.outlook.systemImage)
+                }
+                .tag(AppTab.outlook)
+
+            exploreNavigationStack
+                .tabItem {
+                    Label(AppTab.explore.title, systemImage: AppTab.explore.systemImage)
+                }
+                .tag(AppTab.explore)
+        }
+        .sheet(isPresented: $showGuideSheet) {
+            NavigationStack {
+                GuideLandingView(
+                    mode: experienceProfile.mode,
+                    guide: experienceProfile.guide,
+                    selectedTab: $selectedTab
+                )
+            }
+        }
         .sheet(isPresented: $showMissionInsightsSheet) {
             let baseFeatures = features ?? lastKnownFeatures
             let selected: (FeaturesToday, Bool)? = baseFeatures.map { selectDisplayFeatures(for: $0) }
@@ -10666,10 +11236,23 @@ struct ContentView: View {
                     hazardsBrief: hazardsBrief,
                     hazardsLoading: hazardsLoading,
                     hazardsError: hazardsError,
+                    showsPersonalCards: true,
+                    navigationTitle: "Insights",
+                    onOpenAllDrivers: nil,
                     onRefresh: { await fetchInsightsHubData(trigger: .refresh) }
                 )
                 .navigationDestination(for: InsightsRoute.self) { route in
                     switch route {
+                    case .dailyCheckIn:
+                        DailyCheckInView(
+                            api: state.apiWithAuth(),
+                            mode: experienceProfile.mode,
+                            tone: experienceProfile.tone,
+                            initialStatus: dailyCheckInStatus,
+                            onStatusChanged: { status in
+                                dailyCheckInStatus = status
+                            }
+                        )
                     case .yourOutlook:
                         YourOutlookView(
                             mode: experienceProfile.mode,
@@ -10761,6 +11344,10 @@ struct ContentView: View {
                             latestCameraCheck: latestCameraCheck,
                             latestCameraCheckLoading: latestCameraCheckLoading,
                             latestCameraCheckError: latestCameraCheckError,
+                            dailyCheckInStatus: dailyCheckInStatus,
+                            dailyCheckInLoading: dailyCheckInLoading,
+                            dailyCheckInError: dailyCheckInError,
+                            onOpenDailyCheckIn: { missionInsightsPath = [.dailyCheckIn] },
                             showSymptomSheet: $showInsightsSymptomSheet,
                             onOpenQuickCheck: { showCameraHealthCheckSheet = true },
                             onLoadComparison: {
@@ -11326,6 +11913,18 @@ struct ContentView: View {
 
                         DisclosureGroup(isExpanded: $showTools) {
                             VStack(spacing: 12) {
+                                GroupBox {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Toggle("Show in-app debug panel", isOn: $showDebug)
+                                            .font(.subheadline.weight(.semibold))
+                                        Text("Keeps the existing debug panel and in-app log available on Home without exposing it as the main top-right action.")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                } label: {
+                                    Label("Developer Controls", systemImage: "ladybug")
+                                }
+
                                 ConnectionSettingsSection(state: state, isExpanded: $showConnections)
 
                                 DisclosureGroup(isExpanded: $showActions) {
@@ -11636,6 +12235,109 @@ struct ContentView: View {
                     }
                 )
                 .ignoresSafeArea()
+            }
+        }
+    }
+
+    private struct GuideLandingView: View {
+        let mode: ExperienceMode
+        let guide: GuideType
+        @Binding var selectedTab: AppTab
+
+        @Environment(\.dismiss) private var dismiss
+
+        private struct GuideStep: Identifiable {
+            let tab: AppTab
+            let title: String
+            let body: String
+
+            var id: AppTab { tab }
+        }
+
+        private var steps: [GuideStep] {
+            [
+                GuideStep(tab: .home, title: "Home", body: "Start with Mission Control, What Matters Now, and the EarthScope snapshot."),
+                GuideStep(tab: .body, title: "Body", body: "Open current symptoms, log something new, review sleep, and keep your recent body context updated."),
+                GuideStep(tab: .patterns, title: "Patterns", body: "See what repeats most clearly in your own history and what is still taking shape."),
+                GuideStep(tab: .outlook, title: "Outlook", body: "Check the next 24 hours to 7 days for what may stand out and what may help."),
+                GuideStep(tab: .explore, title: "Explore", body: "Go deeper into drivers, space weather, local conditions, magnetosphere, Schumann, hazards, and quakes.")
+            ]
+        }
+
+        private var headerLine: String {
+            switch guide {
+            case .cat:
+                return mode == .scientific ? "Quiet orientation before you go deeper." : "A calm read before you wander."
+            case .robot:
+                return mode == .scientific ? "Use the tabs as a clean decision tree." : "Five sections, one clear map."
+            case .dog:
+                return mode == .scientific ? "A steady path through the app." : "A grounded way to move through the app."
+            }
+        }
+
+        var body: some View {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Guide")
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                        Text(headerLine)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Text("Gaia Eyes works best when you move from overview, to body context, to repeating patterns, to the near-future outlook, then into deeper exploration as needed.")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
+
+                    ForEach(steps) { step in
+                        Button {
+                            selectedTab = step.tab
+                            dismiss()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(alignment: .top, spacing: 12) {
+                                    Image(systemName: step.tab.systemImage)
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                        .frame(width: 36, height: 36)
+                                        .background(Color.accentColor.opacity(0.9))
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(step.title)
+                                            .font(.headline)
+                                            .foregroundColor(.primary)
+                                        Text(step.body)
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "arrow.right")
+                                        .font(.caption.weight(.bold))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.white.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(16)
+            }
+            .background(Color.black.opacity(0.97).ignoresSafeArea())
+            .navigationTitle("Guide")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
             }
         }
     }
