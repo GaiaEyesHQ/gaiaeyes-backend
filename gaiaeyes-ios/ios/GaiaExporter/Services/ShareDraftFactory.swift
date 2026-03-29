@@ -87,7 +87,7 @@ enum ShareDraftFactory {
             format: .square,
             background: background,
             accentLevel: accent,
-            eyebrow: "Pattern detected",
+            eyebrow: "Pattern observed",
             title: relationship,
             subtitle: explanation,
             primaryText: explanation,

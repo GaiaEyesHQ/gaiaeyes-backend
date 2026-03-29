@@ -31,8 +31,8 @@ private struct AllDriversCopy {
                     humorous: "Conditions look relatively calm. The signal pile-up is taking a breather, but the full stack is still here if you want context."
                 ),
                 learningBody: tone.resolveCopy(
-                    straight: "We’re still learning how this tends to affect you.",
-                    balanced: "We’re still learning how these patterns tend to land for you.",
+                    straight: "We’re still learning how this tends to line up for you.",
+                    balanced: "We’re still learning how these patterns tend to line up for you.",
                     humorous: "We’re still learning your pattern language, so some drivers will stay more observational for now."
                 )
             )
@@ -52,8 +52,8 @@ private struct AllDriversCopy {
                     humorous: "Conditions look relatively calm. The field is behaving itself, but the full signal stack is still here if you want context."
                 ),
                 learningBody: tone.resolveCopy(
-                    straight: "We’re still learning how these patterns tend to move with you.",
-                    balanced: "We’re still learning how these patterns tend to move with you.",
+                    straight: "We’re still learning how these patterns tend to line up for you.",
+                    balanced: "We’re still learning how these patterns tend to line up for you.",
                     humorous: "We’re still learning your pattern language, so some influences will stay more observational for now."
                 )
             )
@@ -106,7 +106,7 @@ struct AllDriversView: View {
     }
 
     private func translatedText(_ raw: String?) -> String? {
-        vocabulary.translating(raw)
+        vocabulary.presenting(raw)
     }
 
     private func severity(for driver: DriverDetailItem) -> StatusPill.Severity {
@@ -883,7 +883,7 @@ private struct DriverExpandedDetailView: View {
     private var noPatternText: String {
         switch tone {
         case .straight:
-            return "We’re still learning how this tends to affect you."
+            return "We’re still learning how this tends to line up for you."
         case .balanced:
             return "We’re still learning how this tends to line up for you."
         case .humorous:
@@ -983,7 +983,7 @@ private struct DriverPatternBadgeView: View {
             }
 
             if let onOpenPatterns {
-                Button("Open pattern detail") {
+                Button("View pattern detail") {
                     onOpenPatterns()
                 }
                 .buttonStyle(.bordered)
@@ -1032,10 +1032,10 @@ private struct DriverSymptomLinkView: View {
                 symptomRow(title: "Active right now", values: currentSymptoms)
             }
             if !historicalSymptoms.isEmpty {
-                symptomRow(title: "Often matched before", values: historicalSymptoms)
+                symptomRow(title: "Appeared before", values: historicalSymptoms)
             }
             if currentSymptoms.isEmpty && historicalSymptoms.isEmpty {
-                Text("We’re still learning which symptoms this tends to line up with for you.")
+                Text("We’re still learning which symptoms tend to appear alongside this for you.")
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.72))
             }

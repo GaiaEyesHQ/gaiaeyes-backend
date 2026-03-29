@@ -9,7 +9,7 @@ enum SignalBarState: String, Codable, Hashable {
     var title: String {
         switch self {
         case .quiet:
-            return "Quiet"
+            return "Calm"
         case .watch:
             return "Watch"
         case .elevated:

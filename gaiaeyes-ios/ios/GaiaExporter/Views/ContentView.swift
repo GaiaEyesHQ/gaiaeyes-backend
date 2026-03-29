@@ -5481,11 +5481,11 @@ struct ContentView: View {
             var subtitle: String {
                 switch self {
                 case .leading:
-                    return "The clearest active signal in your mix right now."
+                    return "The clearest signal in your mix right now."
                 case .supporting:
-                    return "Still active, but secondary to the lead signal."
+                    return "Still active, but not leading."
                 case .background:
-                    return "Present, but not leading the picture."
+                    return "Present, but in the background."
                 }
             }
 
@@ -5626,7 +5626,7 @@ struct ContentView: View {
                 if !display.isEmpty {
                     return display
                 }
-                return "\(driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized) is \(driver.state ?? "Quiet")."
+                return "\(driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized) is \(driver.state ?? "Calm")."
             }
 
             private var content: some View {
@@ -5659,7 +5659,7 @@ struct ContentView: View {
                     Spacer(minLength: 8)
 
                     VStack(alignment: .trailing, spacing: 8) {
-                        StatusPill(driver.state ?? "Quiet", severity: pillSeverity)
+                        StatusPill(driver.state ?? "Calm", severity: pillSeverity)
 
                         let value = formattedValue()
                         if !value.isEmpty {
@@ -5725,7 +5725,7 @@ struct ContentView: View {
             }
 
             private func translated(_ raw: String?) -> String? {
-                vocabulary.translating(raw)
+                vocabulary.presenting(raw)
             }
 
             private var whyHeading: String {
@@ -5737,11 +5737,11 @@ struct ContentView: View {
             }
 
             private var effectHeading: String {
-                experienceMode == .scientific ? "What May Stand Out" : "What May Rise To The Surface"
+                experienceMode == .scientific ? "What May Be More Noticeable" : "What May Rise To The Surface"
             }
 
             private var helpHeading: String {
-                experienceMode == .scientific ? "What May Help Right Now" : "What May Help Right Now"
+                "What May Help"
             }
 
             private var quickLog: DashboardQuickLog? {
@@ -5902,36 +5902,36 @@ struct ContentView: View {
                                                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
                                         )
                                 }
-                                if let why = entry.why, !why.isEmpty {
+                                let whyLines = CopyRefiner.refineLines((entry.why ?? []).map { translated($0) ?? $0 })
+                                if !whyLines.isEmpty {
                                     VStack(alignment: .leading, spacing: 8) {
                                         Text(contextType == "gauge" ? whyHeading : "What's Shaping Things Now")
                                             .font(.headline)
-                                        ForEach(Array(why.enumerated()), id: \.offset) { _, line in
-                                            let display = translated(line) ?? line
-                                            Text("\u{2022} \(display)")
+                                        ForEach(Array(whyLines.enumerated()), id: \.offset) { _, line in
+                                            Text("\u{2022} \(line)")
                                                 .font(.subheadline)
                                         }
                                     }
                                 }
                             }
-                            if let notice = entry.whatYouMayNotice, !notice.isEmpty {
+                            let noticeLines = CopyRefiner.refineLines((entry.whatYouMayNotice ?? []).map { translated($0) ?? $0 })
+                            if !noticeLines.isEmpty {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text(effectHeading)
                                         .font(.headline)
-                                    ForEach(Array(notice.enumerated()), id: \.offset) { _, line in
-                                        let display = translated(line) ?? line
-                                        Text("\u{2022} \(display)")
+                                    ForEach(Array(noticeLines.enumerated()), id: \.offset) { _, line in
+                                        Text("\u{2022} \(line)")
                                             .font(.subheadline)
                                     }
                                 }
                             }
-                            if let actions = entry.suggestedActions, !actions.isEmpty {
+                            let actionLines = CopyRefiner.refineLines((entry.suggestedActions ?? []).map { translated($0) ?? $0 })
+                            if !actionLines.isEmpty {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text(helpHeading)
                                         .font(.headline)
-                                    ForEach(Array(actions.enumerated()), id: \.offset) { _, line in
-                                        let display = translated(line) ?? line
-                                        Text("\u{2022} \(display)")
+                                    ForEach(Array(actionLines.enumerated()), id: \.offset) { _, line in
+                                        Text("\u{2022} \(line)")
                                             .font(.subheadline)
                                     }
                                 }
@@ -6007,13 +6007,13 @@ struct ContentView: View {
                     return "Heart rate and HRV were captured."
                 case .partial:
                     if summary.hrvMetricStatus == .notRequested {
-                        return "Heart rate captured. HRV was not requested in Quick HR mode."
+                        return "Heart rate was captured. HRV was not requested in Quick HR mode."
                     }
-                    return "Heart rate captured. HRV was withheld because quality was too low."
+                    return "Heart rate was captured. HRV is not shown because signal quality was too low."
                 case .poor:
-                    return "No reliable reading captured."
+                    return "No reliable reading yet."
                 case .pending:
-                    return "Latest check pending."
+                    return "Latest check is still loading."
                 }
             }
 
@@ -6144,7 +6144,7 @@ struct ContentView: View {
                 guard let boost = gaugeRecentLogBoosts[key], boost > 0 else { return baseLabel }
                 let zone = (meta?.zone ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 let normalizedLabel = (baseLabel ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                if zone == "low" || normalizedLabel == "quiet" || normalizedLabel == "low strain" {
+                if zone == "low" || normalizedLabel == "quiet" || normalizedLabel == "calm" || normalizedLabel == "low strain" {
                     return boost >= 9 ? "Watchful" : baseLabel
                 }
                 return baseLabel
@@ -6311,7 +6311,7 @@ struct ContentView: View {
             }
             let count = snapshot.summary.activeCount
             if count <= 0 {
-                return "Nothing active right now. Log if something shifts."
+                return "No symptoms active right now. Log anything new here."
             }
             let labels = snapshot.items.prefix(2).map(\.label)
             if labels.isEmpty {
@@ -6322,7 +6322,7 @@ struct ContentView: View {
 
         private var dailyCheckInSummaryLine: String {
             guard let status = dailyCheckInStatus else {
-                return "Quick daily feedback helps Gaia compare the read with how the day actually felt."
+                return "A short daily check-in helps this view stay current."
             }
             if let prompt = status.prompt, prompt.status != "answered" {
                 if prompt.phase == "next_morning" {
@@ -6334,9 +6334,9 @@ struct ContentView: View {
                 return "Latest check-in saved for \(latest.day)."
             }
             if status.settings.enabled {
-                return "Daily check-ins are on and stay lightweight."
+                return "Daily check-ins are on."
             }
-            return "Turn on daily check-ins when a quick end-of-day feedback loop would help."
+            return "Turn on daily check-ins for a quick end-of-day read."
         }
 
         @ViewBuilder
@@ -6532,11 +6532,11 @@ struct ContentView: View {
                         let visibleDrivers = topWhatMattersDrivers()
                         Text("What Matters Now")
                             .font(.headline)
-                        Text("The top current drivers in your mix right now.")
+                        Text("The signals standing out most right now.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         if visibleDrivers.isEmpty {
-                            Text("Nothing is standing out strongly right now.")
+                            Text("Nothing looks especially active right now.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             Button("View All Drivers") {
@@ -6788,7 +6788,7 @@ struct ContentView: View {
                 return "Elevated"
             }
             if lower.contains("quiet") || lower.contains("low") || lower.contains("stable") {
-                return "Quiet"
+                return "Calm"
             }
             return trimmed.capitalized
         }
@@ -6864,7 +6864,7 @@ struct ContentView: View {
             if rank(for: storminess) >= 1 || (kp ?? 0) >= 4 || (speed ?? 0) >= 500 || (bz ?? 0) <= -3 {
                 return "Elevated"
             }
-            return normalizedLabel(storminess) ?? "Quiet"
+            return normalizedLabel(storminess) ?? "Calm"
         }
 
         static func resolvedStateLabel(
@@ -7385,7 +7385,7 @@ struct ContentView: View {
             if tempSwing >= 6 || pressureSwing >= 6 || aqi >= 51 {
                 return ("Watch", .warn)
             }
-            return ("Quiet", .ok)
+            return ("Calm", .ok)
         }
 
         private func countHazardSeverities(_ items: [HazardItem]) -> (red: Int, orange: Int) {
@@ -7408,14 +7408,14 @@ struct ContentView: View {
         }
 
         private var introTitle: String {
-            showsPersonalCards ? "Start with what matters now." : "Explore deeper system context."
+            showsPersonalCards ? "Start with what matters most." : "Explore broader signal context."
         }
 
         private var introSubtitle: String {
             if showsPersonalCards {
                 return "Open a card for a calm, plain-language read on what may matter for you right now."
             }
-            return "Space, local, and earth-system layers live here once you want more than the primary daily flow."
+            return "Space, local, and earth-system context lives here when you want a deeper read."
         }
 
         private var allDriversCard: some View {
@@ -7456,7 +7456,7 @@ struct ContentView: View {
                     bz: metrics.bzNow,
                     storminess: metrics.storminess
                 ),
-                fallback: "Quiet"
+                fallback: "Calm"
             )
             let liveOverride = SpaceWeatherPresentation.liveOverridesContext(
                 context: geomagneticContext,
@@ -7564,9 +7564,9 @@ struct ContentView: View {
             } else if userOutlook?.forecastDataReady?.locationFound == false {
                 status = "Add your location to unlock a personal near-future outlook."
             } else if let summary = primaryWindow?.summary, !summary.isEmpty {
-                status = summary
+                status = CopyRefiner.refine(summary) ?? summary
             } else {
-                status = "Your outlook is still taking shape while forecast inputs finish syncing."
+                status = "Your outlook is still loading while forecast inputs finish syncing."
             }
 
             return NavigationLink(value: InsightsRoute.yourOutlook) {
@@ -7592,7 +7592,7 @@ struct ContentView: View {
                 HubCard(
                     title: "Your Patterns",
                     icon: "chart.line.text.clipboard",
-                    status: "Patterns drawn from your own logs and repeating signal overlap.",
+                    status: "Patterns from your own logs and repeated signal overlap.",
                     pillText: "Observed",
                     severity: .ok,
                     metrics: [
@@ -7609,7 +7609,7 @@ struct ContentView: View {
         private var magnetosphereCard: some View {
             let kpis = magnetosphere?.kpis
             let sw = magnetosphere?.sw
-            let storminess = (kpis?.storminess ?? "Quiet").capitalized
+            let storminess = (kpis?.storminess ?? "Calm").capitalized
             let geoRisk = (kpis?.geoRisk ?? "Low").capitalized
             let bzText = sw?.bzNt.map { String(format: "%.1f nT", $0) } ?? "—"
             let r0Text = kpis?.r0Re.map { String(format: "%.1f Re", $0) } ?? "—"
@@ -7663,7 +7663,7 @@ struct ContentView: View {
                 schumannDriver?.state?.capitalized,
                 fallback: current?.schF0Hz?.value == nil ? "Pending" : "Active"
             )
-            let status = "Live resonance context with harmonics, source quality, and recent drift."
+            let status = "Earth resonance activity with harmonics, source quality, and recent drift."
 
             return NavigationLink(value: InsightsRoute.schumann) {
                 HubCard(
@@ -7701,10 +7701,10 @@ struct ContentView: View {
             } else if queuedSymptomsCount > 0 {
                 status = "\(queuedSymptomsCount) symptom entries are queued to sync."
             } else {
-                status = "Nothing active right now. Open for sleep, vitals, and deeper body context."
+                status = "No symptoms active right now. Open for sleep, vitals, and body context."
             }
             let severity: StatusPill.Severity = currentActiveCount >= 3 ? .alert : (currentActiveCount > 0 || queuedSymptomsCount > 0 ? .warn : .ok)
-            let pillText = currentActiveCount > 0 ? "Active" : (queuedSymptomsCount > 0 ? "Syncing" : "Quiet")
+            let pillText = currentActiveCount > 0 ? "Active" : (queuedSymptomsCount > 0 ? "Syncing" : "Calm")
             var metrics: [HubMetric] = [
                 HubMetric(label: "Sleep", value: sleepText, tint: GaugePalette.low),
                 HubMetric(label: "Steps", value: stepsText, tint: GaugePalette.mild)
@@ -8004,7 +8004,7 @@ struct ContentView: View {
                         .foregroundColor(.secondary)
                 }
                 if let explanation = domain.explanation, !explanation.isEmpty {
-                    Text(explanation)
+                    Text(CopyRefiner.refine(explanation) ?? explanation)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -8029,7 +8029,7 @@ struct ContentView: View {
                 LocalConditionsSurfaceCard(title: windowTitle(window.windowHours), icon: "sparkles.rectangle.stack.fill") {
                     VStack(alignment: .leading, spacing: 12) {
                         if let summary = window.summary, !summary.isEmpty {
-                            Text(summary)
+                            Text(CopyRefiner.refine(summary) ?? summary)
                                 .font(.subheadline)
                         }
 
@@ -8047,7 +8047,7 @@ struct ContentView: View {
                                     StatusPill((primary.severity ?? "watch").capitalized, severity: severity(primary.severity))
                                 }
                                 if let detail = primary.detail, !detail.isEmpty {
-                                    Text(detail)
+                                    Text(CopyRefiner.refine(detail) ?? detail)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -8075,7 +8075,7 @@ struct ContentView: View {
 
                         if !domains.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("What may stand out")
+                                Text("What may be more noticeable")
                                     .font(.caption2.weight(.semibold))
                                     .foregroundColor(.secondary)
                                 LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
@@ -8088,10 +8088,10 @@ struct ContentView: View {
 
                         if let supportLine = window.supportLine, !supportLine.isEmpty {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("What may help right now")
+                                Text("What may help")
                                     .font(.caption2.weight(.semibold))
                                     .foregroundColor(.secondary)
-                                Text(supportLine)
+                                Text(CopyRefiner.refine(supportLine) ?? supportLine)
                                     .font(.footnote)
                                     .foregroundColor(.secondary)
                             }
@@ -8125,7 +8125,7 @@ struct ContentView: View {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("Next 24 hours to 7 days")
                                         .font(.system(size: 30, weight: .bold, design: .rounded))
-                                    Text("Pattern-informed guidance from your recent history, current gauges, and live local weather plus SWPC forecast inputs.")
+                                    Text("A short forecast built from your patterns, current gauges, local conditions, and space-weather forecasts.")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                     if let updated = formatUpdate(payload?.generatedAt) {
@@ -8174,7 +8174,7 @@ struct ContentView: View {
                                     }
                                 }
                             } else if !isLoading && cleanError == nil {
-                                Text("Your outlook is still taking shape. Add location and give the forecast inputs a little more time.")
+                                Text("No outlook yet. Add your location and give forecast data a little more time.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -8186,7 +8186,7 @@ struct ContentView: View {
 
                         if payload?.forecastDataReady?.next7d != true {
                             LocalConditionsSurfaceCard(title: "7-Day Outlook", icon: "calendar") {
-                                Text("The 7-day view will appear once the forecast layer is stable enough to support it clearly.")
+                                Text("The 7-day view will appear once the forecast layer is steady enough to support it.")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
@@ -8245,14 +8245,14 @@ struct ContentView: View {
             let lift = String(format: "%.1fx", card.relativeLift ?? 0)
             let lag = card.lagLabel ?? "same day"
             let sample = card.sampleSize ?? card.exposedDays ?? 0
-            return "\(lift) more common when exposed • \(sample) exposed days • Lag \(lag)"
+            return "\(lift) more common when this signal was present • \(sample) days • Lag \(lag)"
         }
 
         private func rateLine(_ card: UserPatternCard) -> String {
             let exposedRate = Int(round((card.exposedRate ?? 0) * 100))
             let baselineRate = Int(round((card.unexposedRate ?? 0) * 100))
             let lastSeen = displayDate(card.lastSeenAt)
-            return "When exposed: \(exposedRate)% • When not exposed: \(baselineRate)% • Last seen: \(lastSeen)"
+            return "Signal present: \(exposedRate)% • Baseline: \(baselineRate)% • Last seen: \(lastSeen)"
         }
 
         private func iconName(for signalKey: String) -> String {
@@ -8421,7 +8421,7 @@ struct ContentView: View {
                 return "Possible lunar sensitivity"
             }
             if lunarInsights?.insufficientData == true {
-                return "Lunar windows still taking shape"
+                return "Lunar windows still forming"
             }
             return "No clear lunar signal yet"
         }
@@ -8432,7 +8432,7 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Lunar Windows")
                         .font(.title3.weight(.semibold))
-                    Text("Full and new moon comparisons using your own HRV, sleep, and symptom history.")
+                    Text("Full and new moon windows compared with your own sleep, HRV, and symptom history.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -8473,7 +8473,7 @@ struct ContentView: View {
                         }
                     } else {
                         if let lunarInsightMessage, !lunarInsightMessage.isEmpty {
-                            Text(lunarInsightMessage)
+                            Text(CopyRefiner.refine(lunarInsightMessage) ?? lunarInsightMessage)
                                 .font(.subheadline)
                                 .foregroundColor(.white.opacity(0.88))
                         }
@@ -8483,7 +8483,7 @@ struct ContentView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         } else if lunarInsights?.insufficientData == true {
-                            Text("Gaia needs more overlap before lunar windows can stand as a pattern section here.")
+                            Text("No lunar pattern yet. More overlap is needed before this section fills in.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -8691,7 +8691,7 @@ struct ContentView: View {
                         }
                     }
 
-                    Text(card.explanation)
+                    Text(CopyRefiner.refine(card.explanation) ?? card.explanation)
                         .font(.subheadline)
                         .foregroundColor(.white.opacity(0.88))
 
@@ -8800,9 +8800,9 @@ struct ContentView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("What keeps showing up for you.")
+                            Text("What keeps showing up in your history.")
                                 .font(.system(size: 30, weight: .bold, design: .rounded))
-                            Text(payload?.disclaimer ?? "Patterns compare your logged symptoms and health statistics with repeating signals in your recent history.")
+                            Text(CopyRefiner.refine(payload?.disclaimer) ?? "Patterns compare your logs and health stats with repeating signals in your history.")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -8820,7 +8820,7 @@ struct ContentView: View {
                         if isLoading && payload == nil {
                             HStack(spacing: 10) {
                                 ProgressView()
-                                Text("Refreshing your latest pattern readings.")
+                                Text("Refreshing your pattern view.")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
@@ -8832,17 +8832,17 @@ struct ContentView: View {
 
                         sectionView(
                             title: "Clearest Patterns",
-                            subtitle: "The patterns that repeat with the clearest evidence in your history so far.",
+                            subtitle: "The clearest repeats in your history so far.",
                             cards: strongest,
-                            emptyMessage: "We’re still learning what repeats most clearly here. More logs will sharpen this section.",
+                            emptyMessage: "No clear patterns yet. Keep logging to help this section fill in.",
                             expanded: $showsAllStrongestPatterns
                         )
 
                         sectionView(
                             title: "Still Taking Shape",
-                            subtitle: "Signals that may be repeating, but still need more overlap before they feel reliable.",
+                            subtitle: "Possible repeats that still need more overlap before they feel reliable.",
                             cards: emerging,
-                            emptyMessage: "Nothing is clearly emerging yet. This section fills in after more repeated overlap.",
+                            emptyMessage: "Nothing is clearly emerging yet. More overlap will help this section fill in.",
                             pendingMessage: "Loading the rest of your pattern history.",
                             isPending: isLoadingSupplementalSections,
                             expanded: $showsAllEmergingPatterns
@@ -8854,9 +8854,9 @@ struct ContentView: View {
 
                         sectionView(
                             title: "Body Signals",
-                            subtitle: "Wearable-based patterns only show when the overlap is strong enough to meet the current evidence rules.",
+                            subtitle: "Wearable-based patterns appear here when the overlap is strong enough.",
                             cards: bodySignals,
-                            emptyMessage: "No clear body-signal patterns are standing out yet.",
+                            emptyMessage: "No body-signal patterns are standing out yet.",
                             pendingMessage: "Checking wearable patterns now.",
                             isPending: isLoadingSupplementalSections,
                             expanded: $showsAllBodySignalPatterns
@@ -8942,7 +8942,7 @@ struct ContentView: View {
             if lower == "space weather outlook" || lower == "outlook" || lower == "forecast" {
                 return nil
             }
-            return trimmed
+            return CopyRefiner.refine(trimmed)
         }
 
         private var forecastBodyLines: [String] {
@@ -9371,7 +9371,7 @@ struct ContentView: View {
                         LocalConditionsSurfaceCard(title: "Magnetosphere Summary", icon: "shield.lefthalf.filled") {
                             HStack(alignment: .top, spacing: 12) {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text((kpis?.storminess ?? "Quiet").capitalized)
+                                    Text((kpis?.storminess ?? "Calm").capitalized)
                                         .font(.system(size: 32, weight: .bold, design: .rounded))
                                     Text("GEO risk \((kpis?.geoRisk ?? "Low").capitalized) • GIC feel \((kpis?.dbdt ?? "Low").capitalized)")
                                         .font(.subheadline)
@@ -9387,7 +9387,7 @@ struct ContentView: View {
                                     ProgressView()
                                 } else {
                                     StatusPill(
-                                        (kpis?.storminess ?? "Quiet"),
+                                        (kpis?.storminess ?? "Calm"),
                                         severity: (kpis?.storminess ?? "").lowercased().contains("storm")
                                             ? .alert
                                             : (kpis?.storminess ?? "").lowercased().contains("active")
@@ -9624,9 +9624,9 @@ struct ContentView: View {
                 return "Heart rate and HRV were captured."
             case .partial:
                 if summary.hrvMetricStatus == .notRequested {
-                    return "Heart rate captured. HRV was not requested in Quick HR mode."
+                    return "Heart rate was captured. HRV was not requested in Quick HR mode."
                 }
-                return "Heart rate captured. HRV was withheld because quality was too low."
+                return "Heart rate was captured. HRV is not shown because signal quality was too low."
             case .poor:
                 return "No reliable reading captured. Try lighter pressure and keep still."
             case .pending:
@@ -9794,7 +9794,7 @@ struct ContentView: View {
                 return error
             }
             if dailyCheckInLoading && dailyCheckInStatus == nil {
-                return "Refreshing today’s check-in prompt."
+                return "Refreshing today’s check-in."
             }
             if let entry = dailyCheckInStatus?.latestEntry,
                let completedAt = entry.completedAt,
@@ -9804,7 +9804,7 @@ struct ContentView: View {
             if let prompt = dailyCheckInStatus?.prompt {
                 return prompt.questionText
             }
-            return "Keep daily feedback lightweight so Gaia can compare the read with how the day actually felt."
+            return "A short daily check-in helps this view stay grounded."
         }
 
         var body: some View {
@@ -9827,7 +9827,7 @@ struct ContentView: View {
                                     Text(dailyCheckInSummary)
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundColor(.primary)
-                                    Text("Open the full check-in to log how the day actually felt and keep Body context up to date.")
+                                    Text("Open the full check-in to log how the day felt and keep Body context current.")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -9846,7 +9846,7 @@ struct ContentView: View {
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                     } else {
-                                        Text("Nothing active right now.")
+                                        Text("No symptoms active right now.")
                                             .font(.subheadline.weight(.semibold))
                                         Text("Open the live view for recent updates, notes, and the timeline.")
                                             .font(.caption)
@@ -9880,7 +9880,7 @@ struct ContentView: View {
 
                         if usingYesterdayFallback {
                             LocalConditionsSurfaceCard(title: "Feature Lag", icon: "calendar.badge.clock") {
-                                Text("Today’s health features are still filling in, so this page is using yesterday’s summary where it needs a fallback.")
+                                Text("Today’s health view is still filling in, so some cards are using yesterday’s summary.")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
@@ -9899,7 +9899,7 @@ struct ContentView: View {
                                             .font(.caption)
                                     } else {
                                         if let message = lunarInsightMessage, !message.isEmpty {
-                                            Text(message)
+                                            Text(CopyRefiner.refine(message) ?? message)
                                                 .font(.subheadline)
                                                 .foregroundColor(.primary)
                                         }
@@ -9914,7 +9914,7 @@ struct ContentView: View {
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                         } else if lunarInsights?.insufficientData == true {
-                                            Text("More nights are needed before Gaia compares lunar windows with your baseline.")
+                                            Text("No lunar pattern yet. More nights are needed before this can be compared with your baseline.")
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                         }
@@ -9964,8 +9964,8 @@ struct ContentView: View {
                                                 .font(.subheadline.weight(.semibold))
                                             Text(
                                                 series == nil
-                                                    ? "Loads after the page opens and stays hidden until you want the deeper comparison."
-                                                    : "7, 14, or 30 day signal comparison is ready on demand."
+                                                    ? "Loads after the page opens and stays tucked away until you want the deeper comparison."
+                                                    : "7, 14, or 30 day signal comparison is ready when you want it."
                                             )
                                             .font(.caption)
                                             .foregroundColor(.secondary)
@@ -9990,8 +9990,8 @@ struct ContentView: View {
                                     }
                                     .pickerStyle(.segmented)
 
-                                    Text("Signals vs symptoms over \(selectedRange.title.lowercased()). Default is 7 days for a faster read, with 14 and 30 day context on demand.")
-                                        .font(.caption)
+                                    Text("Compare signals and symptoms over \(selectedRange.title.lowercased()). The default is 7 days for a faster read.")
+                                        .font(.subheadline)
                                         .foregroundColor(.secondary)
 
                                     if let series {
@@ -10006,7 +10006,7 @@ struct ContentView: View {
                                         ProgressView("Loading comparison…")
                                             .font(.caption)
                                     } else {
-                                        Text("Open the chart to load the full signal comparison.")
+                                        Text("Open the chart to load the full comparison.")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                     }
@@ -12258,8 +12258,8 @@ struct ContentView: View {
             [
                 GuideStep(tab: .home, title: "Home", body: "Start with Mission Control, What Matters Now, and the EarthScope snapshot."),
                 GuideStep(tab: .body, title: "Body", body: "Open current symptoms, log something new, review sleep, and keep your recent body context updated."),
-                GuideStep(tab: .patterns, title: "Patterns", body: "See what repeats most clearly in your own history and what is still taking shape."),
-                GuideStep(tab: .outlook, title: "Outlook", body: "Check the next 24 hours to 7 days for what may stand out and what may help."),
+                GuideStep(tab: .patterns, title: "Patterns", body: "See what repeats most clearly in your own history and what is still forming."),
+                GuideStep(tab: .outlook, title: "Outlook", body: "Check the next 24 hours to 7 days for what may be more noticeable and what may help."),
                 GuideStep(tab: .explore, title: "Explore", body: "Go deeper into drivers, space weather, local conditions, magnetosphere, Schumann, hazards, and quakes.")
             ]
         }
@@ -12267,7 +12267,7 @@ struct ContentView: View {
         private var headerLine: String {
             switch guide {
             case .cat:
-                return mode == .scientific ? "Quiet orientation before you go deeper." : "A calm read before you wander."
+                return mode == .scientific ? "Calm orientation before you go deeper." : "A calm read before you wander."
             case .robot:
                 return mode == .scientific ? "Use the tabs as a clean decision tree." : "Five sections, one clear map."
             case .dog:
@@ -13941,13 +13941,13 @@ struct ContentView: View {
                         Text("Health context")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        Text("• Shifts in EM environment can increase reactivity in sensitives; paced breathing and short outdoor breaks may help.")
+                        Text("• Some people notice more sensitivity during EM shifts. Paced breathing and short outdoor breaks may help.")
                             .font(.caption2)
                             .foregroundColor(.secondary)
-                        Text("• Keep evenings low‑light and devices dimmed during elevated variability.")
+                        Text("• Keep evenings low-light and devices dimmed when variability is elevated.")
                             .font(.caption2)
                             .foregroundColor(.secondary)
-                        Text("• Some see HRV dips during geomagnetic activity; hydrate and take short daylight breaks.")
+                        Text("• Some people notice HRV dips during geomagnetic activity. Hydrate and take short daylight breaks.")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -14308,7 +14308,7 @@ struct ContentView: View {
             case "moderate":
                 return "Moderate"
             case "low":
-                return "Quiet"
+                return "Calm"
             default:
                 return "—"
             }
@@ -15694,21 +15694,21 @@ struct ContentView: View {
             switch key {
             case .checkin: return "Now"
             case .drivers: return "What's Shaping Things Now"
-            case .summary: return "What Might Stand Out"
-            case .actions: return "What May Help Right Now"
+            case .summary: return "What To Watch"
+            case .actions: return "What May Help"
             }
         }
 
         private static func defaultBody(_ key: EarthscopeBriefingKey) -> String {
             switch key {
             case .checkin:
-                return "EarthScope is still taking shape right now."
+                return "EarthScope is still loading."
             case .drivers:
-                return "Nothing is clearly leading right now."
+                return "No clear lead signal right now."
             case .summary:
-                return "Most signals look fairly steady right now. Check highlighted gauges for fresher context."
+                return "Signals look fairly steady right now. Check the highlighted gauges for fresh context."
             case .actions:
-                return "• Hydrate\n• Keep your sleep window steady\n• Use gentle movement"
+                return "• Hydrate\n• Keep your sleep window steady\n• Choose gentle movement"
             }
         }
 
@@ -15995,7 +15995,7 @@ struct ContentView: View {
             if let summaryText, !summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return summaryText.trimmingCharacters(in: .whitespacesAndNewlines)
             }
-            return "Keep an eye on highlighted gauges and drivers for context."
+            return "Check the highlighted gauges for fresh context."
         }
 
         private func previewSections() -> [EarthscopeBriefingSection] {
@@ -16025,7 +16025,7 @@ struct ContentView: View {
             let supporting = Array(driversCompact.dropFirst().prefix(2))
             let interpretation = summaryText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 ? summaryText!.trimmingCharacters(in: .whitespacesAndNewlines)
-                : compactBody(for: parsed.first(where: { $0.key == EarthscopeBriefingKey.summary.rawValue }) ?? parsed.first ?? EarthscopeBriefingSection(id: "summary", key: "summary", title: "Summary", body: "Gaia Eyes is translating today’s signal stack."))
+                : compactBody(for: parsed.first(where: { $0.key == EarthscopeBriefingKey.summary.rawValue }) ?? parsed.first ?? EarthscopeBriefingSection(id: "summary", key: "summary", title: "Summary", body: "Today’s signal mix is still coming together."))
             let accent: ShareAccentLevel = driversCompact.count >= 2 ? .elevated : (driversCompact.isEmpty ? .calm : .watch)
             let candidates = [
                 "checkin",
@@ -16232,7 +16232,7 @@ struct ContentView: View {
                     } else if let body = summary.body, !body.isEmpty {
                         Text(body).font(.caption).lineLimit(5)
                     } else {
-                        Text("No forecast available.").font(.caption).foregroundColor(.secondary)
+                        Text("No forecast data yet.").font(.caption).foregroundColor(.secondary)
                     }
                     Button("Read full forecast") { showDetail = true }
                         .font(.caption)
@@ -16268,7 +16268,7 @@ struct ContentView: View {
                                 }
                             }
                         } else {
-                            Text("No forecast available.")
+                            Text("No forecast data yet.")
                                 .font(.footnote)
                                 .foregroundColor(.secondary)
                         }
@@ -16407,7 +16407,7 @@ struct ContentView: View {
         }
 
         private func emptyText(_ label: String) -> String {
-            "No \(label) samples in the last \(window.days) days"
+            "No \(label) data in the last \(window.days) days"
         }
 
         var body: some View {

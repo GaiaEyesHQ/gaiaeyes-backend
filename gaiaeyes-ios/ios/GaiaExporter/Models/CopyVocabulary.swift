@@ -1,5 +1,86 @@
 import Foundation
 
+enum CopyRefiner {
+    private static let directReplacements: [(String, String)] = [
+        ("based on your data history", "in your history"),
+        ("in your data history", "in your history"),
+        ("based on your data", ""),
+        ("This suggests that ", ""),
+        ("this suggests that ", ""),
+        ("This suggests ", ""),
+        ("this suggests ", ""),
+        ("have shown up before", "have appeared before"),
+        ("has shown up before", "has appeared before"),
+        ("showed up before", "appeared before"),
+        ("shown up before", "appeared before"),
+        ("show up before", "appear before"),
+        ("most likely to affect", "most likely to line up with"),
+        ("likely to affect", "likely to line up with"),
+        ("stand out more", "be more noticeable"),
+    ]
+
+    private static let regexReplacements: [(String, String)] = [
+        (#"(?i)\bmay cause\b"#, "may line up with"),
+        (#"(?i)\bcausing\b"#, "appearing alongside"),
+        (#"(?i)\bcaused\b"#, "appeared alongside"),
+        (#"(?i)\bcause\b"#, "line up with"),
+    ]
+
+    static func refine(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let normalized = raw.replacingOccurrences(of: "\r\n", with: "\n")
+        let lines = normalized
+            .components(separatedBy: "\n")
+            .map { rewriteLine($0) }
+            .filter { !$0.isEmpty }
+
+        guard !lines.isEmpty else { return nil }
+        return dedupePreservingOrder(lines).joined(separator: "\n")
+    }
+
+    static func refineLines(_ lines: [String]) -> [String] {
+        let cleaned = lines
+            .compactMap { refine($0) }
+            .filter { !$0.isEmpty }
+        return dedupePreservingOrder(cleaned)
+    }
+
+    private static func rewriteLine(_ raw: String) -> String {
+        var result = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !result.isEmpty else { return "" }
+
+        for replacement in directReplacements {
+            result = result.replacingOccurrences(of: replacement.0, with: replacement.1)
+        }
+
+        for replacement in regexReplacements {
+            result = result.replacingOccurrences(
+                of: replacement.0,
+                with: replacement.1,
+                options: .regularExpression
+            )
+        }
+
+        result = result.replacingOccurrences(of: #"\s+([,.;:])"#, with: "$1", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+        result = result.replacingOccurrences(of: #" \."#, with: ".", options: .regularExpression)
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func dedupePreservingOrder(_ items: [String]) -> [String] {
+        var seen: Set<String> = []
+        var output: [String] = []
+        for item in items {
+            let key = item
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            guard !key.isEmpty, seen.insert(key).inserted else { continue }
+            output.append(item)
+        }
+        return output
+    }
+}
+
 struct CopyVocabulary {
     let mode: ExperienceMode
     let schumannLabel: String
@@ -147,6 +228,10 @@ struct CopyVocabulary {
         return replacements.reduce(raw) { partial, replacement in
             partial.replacingOccurrences(of: replacement.0, with: replacement.1)
         }
+    }
+
+    func presenting(_ raw: String?) -> String? {
+        CopyRefiner.refine(translating(raw))
     }
 }
 

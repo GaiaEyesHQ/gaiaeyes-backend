@@ -60,14 +60,14 @@ enum ShareCaptionEngine {
         let confidenceLine = valueOrNil(confidence).map { "Confidence: \($0)." }
 
         let scientific = [
-            "Pattern detected.",
+            "Pattern observed.",
             relationship + ".",
             evidenceLine,
             lagLine,
             confidenceLine,
         ].compactMap { valueOrNil($0) }.joined(separator: " ")
 
-        let balancedLead = mode == .mystical ? "This pattern keeps showing up." : "It may not be random."
+        let balancedLead = mode == .mystical ? "This pattern keeps showing up." : "This pattern has come up more than once."
         let balanced = [
             balancedLead,
             relationship + ".",
@@ -77,7 +77,7 @@ enum ShareCaptionEngine {
         ].compactMap { valueOrNil($0) }.joined(separator: " ")
 
         let humorous = [
-            "Pattern detected.",
+            "Pattern observed.",
             relationship + ".",
             evidenceCount.map { "Seen \($0) times." },
             mode == .mystical ? "Apparently the universe left receipts." : "Apparently the data kept receipts."
@@ -144,7 +144,7 @@ enum ShareCaptionEngine {
             valueOrNil(bulletLine),
         ].compactMap { valueOrNil($0) }.joined(separator: " ")
 
-        let humorousTail = mode == .mystical ? "Cosmic weather has entered the chat." : "Space weather is not being quiet."
+        let humorousTail = mode == .mystical ? "Cosmic weather has entered the chat." : "Space weather is not being subtle."
         let humorous = [
             "\(header).",
             context,
@@ -178,7 +178,7 @@ enum ShareCaptionEngine {
             "\(windowTitle).",
             "\(primaryDriver) looks most worth watching.",
             supportingLine.map { "\($0) may add context." },
-            domainsLine.map { "\($0) may stand out more in this window." },
+            domainsLine.map { "\($0) may be more noticeable in this window." },
             actionLine,
         ].compactMap { valueOrNil($0) }.joined(separator: " ")
 

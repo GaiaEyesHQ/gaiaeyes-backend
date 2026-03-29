@@ -183,15 +183,15 @@ struct DailyCheckInView: View {
     }
 
     private var energySubtitle: String {
-        mode == .mystical ? "A quick read on how steady your system felt." : "Keep it broad. This should stay quick."
+        mode == .mystical ? "A quick read on how steady your system felt." : "Keep this broad and quick."
     }
 
     private var usableEnergySubtitle: String {
-        mode == .mystical ? "This becomes Gaia’s stable read on how limited or open the day felt." : "Use this as the simple daily read on how much you could actually do."
+        mode == .mystical ? "A simple read on how open or limited the day felt." : "A simple read on how much you could actually do."
     }
 
     private var predictionSubtitle: String {
-        mode == .mystical ? "This helps Gaia tune its read without overreacting to one day." : "This calibrates Gaia’s read over time without instantly rewriting the model."
+        mode == .mystical ? "This helps Gaia stay grounded over time." : "This helps Gaia stay calibrated over time."
     }
 
     private var comparisonChoices: [DailyCheckInChoice] {
@@ -438,17 +438,17 @@ struct DailyCheckInView: View {
                 .foregroundColor(.white)
 
             if !activeLabels.isEmpty {
-                Text("Context from today: \(activeLabels.prefix(3).joined(separator: ", "))")
+                Text("Logged today: \(activeLabels.prefix(3).joined(separator: ", "))")
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.68))
             }
 
             if let latestEntry, isCompletedForTargetDay {
-                Text("You already checked in for \(latestEntry.day). Update it if the short version changed.")
+                Text("You already checked in for \(latestEntry.day). Update it if your read changed.")
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.68))
             } else if let reminder = status?.settings.reminderTime, !reminder.isEmpty {
-                Text("Reminder window: \(reminder)")
+                Text("Reminder: \(reminder)")
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.58))
             }
@@ -482,7 +482,7 @@ struct DailyCheckInView: View {
                     .fill(Color.white.opacity(0.05))
 
                 if noteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("Anything brief that stood out?")
+                    Text("Anything brief to note?")
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.35))
                         .padding(.horizontal, 14)
@@ -671,7 +671,7 @@ struct DailyCheckInView: View {
             await MainActor.run {
                 status = nextStatus
                 onStatusChanged(nextStatus)
-                statusMessage = "Daily check-in saved."
+                statusMessage = "Check-in saved."
                 isSaving = false
             }
             if showsCloseButton {

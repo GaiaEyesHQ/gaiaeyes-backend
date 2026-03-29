@@ -1239,7 +1239,7 @@ struct SchumannDashboardView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(gaugeSummary)
                             .font(.system(size: 34, weight: .bold, design: .rounded))
-                        Text("Index (0-20 Hz intensity; updates every 15 minutes).")
+                        Text("Activity across the 0-20 Hz range. Updates every 15 minutes.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -1268,7 +1268,7 @@ struct SchumannDashboardView: View {
                         .padding(.top, 8)
                     }
                 } else {
-                    Text("Tap to load the 48h heatmap.")
+                    Text("Open to load the 48-hour heatmap.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .padding(.top, 8)
@@ -1509,8 +1509,8 @@ struct SchumannDashboardView: View {
 
         let title = vocabulary.schumannLabel
         let interpretation = tone.resolveCopy(
-            straight: "Current resonance activity is running \(level.state.lowercased()).",
-            balanced: "The background resonance may feel a little different right now.",
+            straight: "Earth resonance activity is \(level.state.lowercased()) right now.",
+            balanced: "Earth resonance activity may feel a little different right now.",
             humorous: "The background hum is doing a bit more than whispering."
         )
         var bullets: [String] = []
@@ -1627,7 +1627,7 @@ private struct SchumannBandBarsView: View {
 
         VStack(alignment: .leading, spacing: 10) {
             if latest == nil {
-                Text("Band data unavailable.")
+                Text("No band data yet.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             } else {
@@ -1646,7 +1646,7 @@ private struct SchumannBandBarsView: View {
                             .frame(width: 64, alignment: .trailing)
                     }
                 }
-                Text("Relative strength vs last 48h. Trend compares to previous 2 hours.")
+                Text("Relative strength vs the last 48 hours. Trend compares with the previous 2 hours.")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -1974,7 +1974,7 @@ private struct TomskSparklineView: View {
                     .fill(Color.secondary.opacity(0.08))
                     .frame(height: 72)
                     .overlay {
-                        Text("No data")
+                        Text("No data yet")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }

@@ -28,25 +28,25 @@ private struct CurrentSymptomsCopy {
         case .scientific:
             return CurrentSymptomsCopy(
                 pageTitle: vocabulary.currentSymptomsLabel,
-                subtitle: "Updated from your recent logs and current conditions",
+                subtitle: "Recent logs and current conditions, in one place",
                 activeNowTitle: "Active Now",
                 logSymptomTitle: "Log symptom",
                 logSymptomsTitle: "Log symptoms",
                 timelineTitle: "Timeline",
-                contributingTitle: "Signals shaping this right now",
-                contributingEmptyBody: "When symptoms are active, the signals most likely to affect them will show up here.",
-                patternTitle: "What often matches your history",
-                patternEmptyBody: "We’re still learning what tends to line up with this.",
+                contributingTitle: "Signals around this right now",
+                contributingEmptyBody: "No nearby signals yet. When something is active, context will show up here.",
+                patternTitle: "What has appeared with this before",
+                patternEmptyBody: "No pattern yet. Keep logging to help this section fill in.",
                 notesTitle: "Notes / Journal",
-                notesEmptyBody: "Nothing active to update right now.",
-                notesPlaceholder: "Worse this afternoon, improved after resting, felt better after allergy meds…",
-                emptyTitle: "Nothing active right now",
+                notesEmptyBody: "No active symptoms to update right now.",
+                notesPlaceholder: "More noticeable this afternoon, easier after resting, stronger after being outside…",
+                emptyTitle: "No symptoms active right now",
                 emptyBody: tone.resolveCopy(
-                    balanced: "Nothing active right now. Log it if something changes.",
-                    humorous: "Nothing is waving a red flag right now. Log it if something changes."
+                    balanced: "No symptoms are active right now. Log anything new here.",
+                    humorous: "Nothing is waving a flag right now. Log anything new here."
                 ),
                 followUpTitle: "Follow-up check-ins",
-                followUpSyncingBody: "Follow-up settings are still syncing.",
+                followUpSyncingBody: "Follow-up settings are still loading.",
                 viewAllDriversTitle: "View \(vocabulary.allDriversLabel)",
                 openAllDriversTitle: "Open \(vocabulary.allDriversLabel)",
                 editDetailsTitle: "Edit symptom details"
@@ -54,25 +54,25 @@ private struct CurrentSymptomsCopy {
         case .mystical:
             return CurrentSymptomsCopy(
                 pageTitle: vocabulary.currentSymptomsLabel,
-                subtitle: "Your recent logs and today’s conditions are shaping this view",
+                subtitle: "Recent logs and current conditions, in one place",
                 activeNowTitle: "Active Right Now",
                 logSymptomTitle: "Log symptom",
                 logSymptomsTitle: "Log symptoms",
                 timelineTitle: "Timeline",
                 contributingTitle: "What may be shaping this",
-                contributingEmptyBody: "When symptoms are active, the conditions most likely to be shaping them will show up here.",
-                patternTitle: "What often echoes through your history",
-                patternEmptyBody: "We’re still learning what tends to move with this.",
+                contributingEmptyBody: "No nearby signals yet. When something is active, context will show up here.",
+                patternTitle: "What has echoed with this before",
+                patternEmptyBody: "No pattern yet. Keep logging to help this section fill in.",
                 notesTitle: "Notes / Reflections",
-                notesEmptyBody: "Nothing active to update right now.",
-                notesPlaceholder: "Worse this afternoon, improved after resting, felt better after allergy meds…",
-                emptyTitle: "Nothing active right now",
+                notesEmptyBody: "No active symptoms to update right now.",
+                notesPlaceholder: "More noticeable this afternoon, easier after resting, stronger after being outside…",
+                emptyTitle: "No symptoms active right now",
                 emptyBody: tone.resolveCopy(
-                    balanced: "Your system looks quieter right now. If something shifts, log it here.",
-                    humorous: "Your system looks quieter right now. If the plot thickens, log it."
+                    balanced: "Your system looks calmer right now. If something shifts, log it here.",
+                    humorous: "Your system looks calmer right now. If the plot thickens, log it here."
                 ),
                 followUpTitle: "Check-in reminders",
-                followUpSyncingBody: "Check-in settings are still syncing.",
+                followUpSyncingBody: "Check-in settings are still loading.",
                 viewAllDriversTitle: "View \(vocabulary.allDriversLabel)",
                 openAllDriversTitle: "Open \(vocabulary.allDriversLabel)",
                 editDetailsTitle: "Edit symptom details"
@@ -168,7 +168,7 @@ struct CurrentSymptomsView: View {
     }
 
     private func translatedText(_ raw: String?) -> String? {
-        vocabulary.translating(raw)
+        vocabulary.presenting(raw)
     }
 
     private var activeItems: [CurrentSymptomItem] {
@@ -876,7 +876,7 @@ struct CurrentSymptomsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(
                                 translatedText(pattern.text)
-                                ?? "\(vocabulary.driverLabel(for: pattern.signalKey, fallback: pattern.signal)) matches your \(pattern.outcome.lowercased()) pattern."
+                                ?? "In your history, \(vocabulary.driverLabel(for: pattern.signalKey, fallback: pattern.signal)) has appeared alongside \(pattern.outcome.lowercased())."
                             )
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundColor(.white)
@@ -1032,15 +1032,15 @@ struct CurrentSymptomsView: View {
 
     private func followUpDescription(for settings: CurrentSymptomsFollowUpSettings, enabled: Bool) -> String {
         if enabled && settings.pushEnabled {
-            return "Follow-up reminders are on. Gaia can check whether a symptom is still active, improving, worse, or resolved."
+            return "Follow-up reminders are on. You can track whether a symptom is still active, improving, worse, or resolved."
         }
         if enabled && settings.notificationsEnabled {
-            return "In-app follow-ups are on. Turn on push for reminder nudges outside the current symptoms view."
+            return "In-app follow-ups are on. Turn on push if you want reminders outside this view."
         }
         if enabled {
-            return "Follow-up check-ins are enabled here, but push reminders are off. Gaia will keep these lightweight and in-app."
+            return "Follow-up check-ins are on here, but push reminders are off."
         }
-        return "These are optional check-ins for active symptoms. Turn them on in Settings when reminders would help."
+        return "These optional check-ins help you keep symptom updates current."
     }
 
     private func stateColor(_ state: CurrentSymptomState) -> Color {
@@ -1167,7 +1167,7 @@ private struct CurrentSymptomEditorSheet: View {
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .fill(Color.white.opacity(0.05))
                             if noteDraft.isEmpty {
-                                Text("Worse this afternoon, improved after resting, felt better after allergy meds…")
+                                Text("More noticeable this afternoon, easier after resting, stronger after being outside…")
                                     .font(.caption)
                                     .foregroundColor(.white.opacity(0.35))
                                     .padding(.horizontal, 14)
