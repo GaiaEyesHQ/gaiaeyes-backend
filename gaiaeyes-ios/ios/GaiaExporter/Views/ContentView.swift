@@ -5710,8 +5710,11 @@ struct ContentView: View {
             let entry: DashboardModalEntry
             let gaugeRecentLogBoosts: [String: Double]
             let lastSymptomUpdateAt: String?
+            let currentSymptomsSnapshot: CurrentSymptomsSnapshot?
+            let drivers: [DashboardDriverItem]
             let onQuickLog: (MissionControlQuickLogRequest) -> Void
             let onOpenCustomLog: (SymptomQueuedEvent) -> Void
+            let onOpenCurrentSymptoms: () -> Void
             let onOpenAllDrivers: (String?) -> Void
             @Environment(\.dismiss) private var dismiss
             @State private var selectedQuickLogs: Set<DashboardQuickLogOption> = []
@@ -5724,24 +5727,82 @@ struct ContentView: View {
                 (entry.modalType ?? "full").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             }
 
+            private var isGaugeContext: Bool {
+                contextType == "gauge"
+            }
+
             private func translated(_ raw: String?) -> String? {
                 vocabulary.presenting(raw)
             }
 
-            private var whyHeading: String {
-                experienceMode == .scientific ? "Why This Is Standing Out Now" : "Why This Feels Activated Now"
+            private func normalizedPopupToken(_ raw: String?) -> String {
+                (raw ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased()
+                    .replacingOccurrences(of: "-", with: " ")
+                    .replacingOccurrences(of: "_", with: " ")
+                    .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " ")
             }
 
-            private var stateHeading: String {
-                "Current State"
+            private func normalizedGaugePopupKey(_ raw: String) -> String {
+                switch normalizedPopupToken(raw) {
+                case "stamina", "recovery load", "recoveryload", "recovery_load":
+                    return "recoveryLoad"
+                case "health status", "healthstatus", "health_status":
+                    return "healthStatus"
+                default:
+                    return raw
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .replacingOccurrences(of: "-", with: "_")
+                        .lowercased()
+                }
             }
 
-            private var effectHeading: String {
-                experienceMode == .scientific ? "What May Be More Noticeable" : "What May Rise To The Surface"
+            private func normalizedDriverPopupKey(_ raw: String?) -> String {
+                let normalized = (raw ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: "-", with: "_")
+                    .lowercased()
+                switch normalized {
+                case "temperature":
+                    return "temp"
+                case "resonance":
+                    return "schumann"
+                case "solar_wind":
+                    return "sw"
+                case "geomagnetic":
+                    return "kp"
+                default:
+                    return normalized
+                }
             }
 
-            private var helpHeading: String {
-                "What May Help"
+            private func gaugePopupTitle(for gaugeKey: String) -> String {
+                if let title = translated(entry.title), !title.isEmpty {
+                    return title
+                }
+                switch normalizedGaugePopupKey(gaugeKey) {
+                case "pain":
+                    return "Pain"
+                case "focus":
+                    return "Focus"
+                case "energy":
+                    return "Energy"
+                case "recoveryLoad":
+                    return "Recovery Load"
+                case "sleep":
+                    return "Sleep"
+                case "mood":
+                    return "Mood"
+                case "heart":
+                    return "Heart"
+                case "healthStatus":
+                    return "Health Status"
+                default:
+                    return gaugeKey.replacingOccurrences(of: "_", with: " ").capitalized
+                }
             }
 
             private var quickLog: DashboardQuickLog? {
@@ -5761,6 +5822,295 @@ struct ContentView: View {
                     defaultSeverity: 5,
                     baseTags: nil
                 )
+            }
+
+            private func dismissAndOpenCurrentSymptoms() {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    onOpenCurrentSymptoms()
+                }
+            }
+
+            private func dismissAndOpenAllDrivers() {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    onOpenAllDrivers(nil)
+                }
+            }
+
+            private func dedupedSymptomLabels(_ labels: [String]) -> [String] {
+                var seen: Set<String> = []
+                var output: [String] = []
+                for label in labels {
+                    let normalized = normalizedPopupToken(label)
+                    guard !normalized.isEmpty, !seen.contains(normalized) else { continue }
+                    seen.insert(normalized)
+                    output.append(label)
+                }
+                return output
+            }
+
+            private func symptomMatches(label: String, candidates: [String]) -> Bool {
+                let normalizedLabel = normalizedPopupToken(label)
+                guard !normalizedLabel.isEmpty else { return false }
+                return candidates.contains { candidate in
+                    let normalizedCandidate = normalizedPopupToken(candidate)
+                    guard !normalizedCandidate.isEmpty else { return false }
+                    if normalizedLabel == normalizedCandidate {
+                        return true
+                    }
+                    if normalizedCandidate == "pain" {
+                        return normalizedLabel.contains("pain")
+                    }
+                    return normalizedLabel.contains(normalizedCandidate)
+                }
+            }
+
+            func gaugePopupRelevantSymptoms(for gaugeKey: String) -> [String] {
+                guard let currentSymptomsSnapshot else { return [] }
+                let activeLabels = currentSymptomsSnapshot.items.map { translated($0.label) ?? $0.label }
+                let relevantLabels: [String]
+                switch normalizedGaugePopupKey(gaugeKey) {
+                case "pain":
+                    relevantLabels = activeLabels.filter {
+                        symptomMatches(
+                            label: $0,
+                            candidates: ["headache", "sinus pressure", "joint pain", "muscle pain", "nerve pain", "stiffness"]
+                        )
+                    }
+                case "focus":
+                    relevantLabels = activeLabels.filter {
+                        symptomMatches(
+                            label: $0,
+                            candidates: ["brain fog", "headache", "fatigue", "sinus pressure"]
+                        )
+                    }
+                case "energy":
+                    relevantLabels = activeLabels.filter {
+                        symptomMatches(label: $0, candidates: ["fatigue", "drained", "brain fog"])
+                    }
+                case "recoveryLoad":
+                    relevantLabels = activeLabels.filter {
+                        symptomMatches(label: $0, candidates: ["fatigue", "drained", "brain fog", "pain"])
+                    }
+                case "sleep":
+                    relevantLabels = activeLabels.filter {
+                        symptomMatches(label: $0, candidates: ["fatigue", "drained", "restless"])
+                    }
+                case "mood":
+                    relevantLabels = activeLabels.filter {
+                        symptomMatches(label: $0, candidates: ["anxious", "restless", "drained"])
+                    }
+                case "heart":
+                    relevantLabels = activeLabels.filter {
+                        symptomMatches(label: $0, candidates: ["palpitations", "anxious", "fatigue"])
+                    }
+                case "healthStatus":
+                    relevantLabels = activeLabels
+                default:
+                    relevantLabels = []
+                }
+                return Array(dedupedSymptomLabels(relevantLabels).prefix(3))
+            }
+
+            private func dedupedDrivers(_ source: [DashboardDriverItem]) -> [DashboardDriverItem] {
+                var seen: Set<String> = []
+                var output: [DashboardDriverItem] = []
+                for driver in source {
+                    let normalized = normalizedDriverPopupKey(driver.key)
+                    guard !normalized.isEmpty, !seen.contains(normalized) else { continue }
+                    seen.insert(normalized)
+                    output.append(driver)
+                }
+                return output
+            }
+
+            private func gaugePopupInfluencerScore(for driver: DashboardDriverItem) -> Double {
+                max(driver.personalRelevanceScore ?? 0, driver.rawSeverityScore ?? 0)
+            }
+
+            private func driverMatches(_ driver: DashboardDriverItem, candidates: [String]) -> Bool {
+                let normalized = normalizedDriverPopupKey(driver.key)
+                return candidates.contains { candidate in
+                    normalized == normalizedDriverPopupKey(candidate)
+                }
+            }
+
+            func gaugePopupCurrentInfluencers(for gaugeKey: String) -> [DashboardDriverItem] {
+                let availableDrivers = dedupedDrivers(drivers)
+                let normalizedGaugeKey = normalizedGaugePopupKey(gaugeKey)
+
+                if normalizedGaugeKey == "healthStatus" {
+                    return Array(
+                        availableDrivers
+                            .sorted {
+                                let lhs = gaugePopupInfluencerScore(for: $0)
+                                let rhs = gaugePopupInfluencerScore(for: $1)
+                                if lhs == rhs {
+                                    return normalizedDriverPopupKey($0.key) < normalizedDriverPopupKey($1.key)
+                                }
+                                return lhs > rhs
+                            }
+                            .prefix(4)
+                    )
+                }
+
+                let priorityMap: [[String]]
+                switch normalizedGaugeKey {
+                case "pain":
+                    priorityMap = [["allergens"], ["pressure"], ["temp", "temperature"], ["aqi"]]
+                case "focus":
+                    priorityMap = [["allergens"], ["pressure"], ["aqi"], ["schumann", "resonance"]]
+                case "energy":
+                    priorityMap = [["temp", "temperature"], ["aqi"], ["allergens"]]
+                case "recoveryLoad":
+                    priorityMap = [["temp", "temperature"], ["pressure"], ["aqi"]]
+                case "sleep":
+                    priorityMap = [["pressure"], ["temp", "temperature"], ["schumann", "resonance"]]
+                case "mood":
+                    priorityMap = [["pressure"], ["schumann", "resonance"], ["aqi"]]
+                case "heart":
+                    priorityMap = [["kp", "geomagnetic"], ["bz"], ["sw", "solar_wind"], ["pressure"]]
+                default:
+                    priorityMap = []
+                }
+
+                var selected: [DashboardDriverItem] = []
+                var seen: Set<String> = []
+                for candidates in priorityMap {
+                    guard let match = availableDrivers.first(where: {
+                        let normalized = normalizedDriverPopupKey($0.key)
+                        return !seen.contains(normalized) && driverMatches($0, candidates: candidates)
+                    }) else { continue }
+                    seen.insert(normalizedDriverPopupKey(match.key))
+                    selected.append(match)
+                    if selected.count == 4 {
+                        break
+                    }
+                }
+                return selected
+            }
+
+            func gaugePopupHelpfulTips(for gaugeKey: String) -> [String] {
+                switch normalizedGaugePopupKey(gaugeKey) {
+                case "pain":
+                    return [
+                        "Keep effort steadier today.",
+                        "Shorter exposure windows may help.",
+                        "Hydration and meals may help.",
+                    ]
+                case "focus":
+                    return [
+                        "Use shorter work blocks.",
+                        "Reduce stimulation where you can.",
+                        "Take quick resets.",
+                    ]
+                case "energy":
+                    return [
+                        "Pace earlier to avoid a crash.",
+                        "Keep meals and hydration steady.",
+                        "Save optional tasks for later.",
+                    ]
+                case "recoveryLoad":
+                    return [
+                        "Favor steadier effort over spikes.",
+                        "Lower-friction routines may help.",
+                        "Protect recovery time tonight.",
+                    ]
+                case "sleep":
+                    return [
+                        "Protect your wind-down tonight.",
+                        "Keep tonight predictable.",
+                        "Lower stimulation.",
+                    ]
+                case "mood":
+                    return [
+                        "Keep the day steadier.",
+                        "Lower stimulation if reactive.",
+                        "Add short resets.",
+                    ]
+                case "heart":
+                    return [
+                        "Keep effort smooth and steady.",
+                        "Hydration may help.",
+                        "Reduce stimulation.",
+                    ]
+                case "healthStatus":
+                    return [
+                        "Keep the day lighter.",
+                        "Steady effort over pushing.",
+                        "Protect your wind-down.",
+                    ]
+                default:
+                    return []
+                }
+            }
+
+            private func gaugePopupInfluencerLabel(for driver: DashboardDriverItem) -> String {
+                switch normalizedDriverPopupKey(driver.key) {
+                case "aqi":
+                    return "AQI"
+                case "pressure":
+                    return "Pressure Change"
+                case "temp":
+                    return "Temperature Swing"
+                case "schumann":
+                    return "Earth Resonance"
+                case "kp":
+                    return "Geomagnetic conditions"
+                case "bz":
+                    return "Bz coupling"
+                case "sw":
+                    return "Solar wind"
+                case "allergens":
+                    return "Allergens"
+                default:
+                    return translated(driver.label) ?? driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized
+                }
+            }
+
+            private func gaugePopupInfluencerLine(for driver: DashboardDriverItem) -> String {
+                let label = gaugePopupInfluencerLabel(for: driver)
+                let state = (translated(driver.state) ?? driver.state ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased()
+                guard !state.isEmpty else { return label }
+                switch normalizedDriverPopupKey(driver.key) {
+                case "aqi":
+                    return "AQI is \(state)"
+                case "allergens":
+                    return "Allergens are \(state)"
+                case "schumann":
+                    return "Earth Resonance is \(state)"
+                case "kp":
+                    return "Geomagnetic conditions are \(state)"
+                case "bz":
+                    return "Bz coupling is \(state)"
+                case "sw":
+                    return "Solar wind is \(state)"
+                default:
+                    return label
+                }
+            }
+
+            @ViewBuilder
+            private func compactSectionHeader(_ title: String, action: (() -> Void)? = nil) -> some View {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(title)
+                        .font(.headline)
+                    Spacer()
+                    if let action {
+                        Button(action: action) {
+                            HStack(spacing: 4) {
+                                Text("View all")
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2.weight(.semibold))
+                            }
+                            .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
 
             private func quickLogSection(_ quickLog: DashboardQuickLog) -> some View {
@@ -5859,97 +6209,160 @@ struct ContentView: View {
                 }
             }
 
+            @ViewBuilder
+            private var gaugePopupContent: some View {
+                let symptoms = gaugePopupRelevantSymptoms(for: contextKey)
+                let influencers = gaugePopupCurrentInfluencers(for: contextKey)
+                let tips = gaugePopupHelpfulTips(for: contextKey)
+
+                VStack(alignment: .leading, spacing: 18) {
+                    Text(gaugePopupTitle(for: contextKey))
+                        .font(.title3.weight(.bold))
+
+                    if !symptoms.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            compactSectionHeader("Active Symptoms", action: dismissAndOpenCurrentSymptoms)
+                            ForEach(symptoms, id: \.self) { symptom in
+                                Text(symptom)
+                                    .font(.subheadline)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.84)
+                            }
+                        }
+                    }
+
+                    if !influencers.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            compactSectionHeader("Current Influencers", action: dismissAndOpenAllDrivers)
+                            ForEach(influencers) { driver in
+                                Text(gaugePopupInfluencerLine(for: driver))
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.84)
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        compactSectionHeader("Helpful right now")
+                        ForEach(tips.prefix(3), id: \.self) { tip in
+                            Text("\u{2022} \(tip)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.84)
+                        }
+                    }
+
+                    if let quickLog {
+                        quickLogSection(quickLog)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+            }
+
+            @ViewBuilder
+            private var legacyContent: some View {
+                VStack(alignment: .leading, spacing: 16) {
+                    if let title = translated(entry.title), !title.isEmpty {
+                        Text(title)
+                            .font(.title3.weight(.bold))
+                    }
+                    if modalType == "short" {
+                        if let body = translated(entry.body), !body.isEmpty {
+                            Text(body)
+                                .font(.body)
+                        }
+                        if let tip = translated(entry.tip), !tip.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Tip")
+                                    .font(.headline)
+                                Text(tip)
+                                    .font(.subheadline)
+                            }
+                        }
+                    } else {
+                        if contextType == "gauge", let stateLine = translated(entry.stateLine), !stateLine.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Current State")
+                                    .font(.headline)
+                                Text(stateLine)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        if contextType == "gauge", let causalCallout = translated(entry.causalCallout), !causalCallout.isEmpty {
+                            Text(causalCallout)
+                                .font(.subheadline.weight(.semibold))
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.white.opacity(0.06))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                )
+                        }
+                        let whyLines = CopyRefiner.refineLines((entry.why ?? []).map { translated($0) ?? $0 })
+                        if !whyLines.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(contextType == "gauge" ? "Why This Is Standing Out Now" : "What's Shaping Things Now")
+                                    .font(.headline)
+                                ForEach(Array(whyLines.enumerated()), id: \.offset) { _, line in
+                                    Text("\u{2022} \(line)")
+                                        .font(.subheadline)
+                                }
+                            }
+                        }
+                    }
+                    let noticeLines = CopyRefiner.refineLines((entry.whatYouMayNotice ?? []).map { translated($0) ?? $0 })
+                    if !noticeLines.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(experienceMode == .scientific ? "What May Be More Noticeable" : "What May Rise To The Surface")
+                                .font(.headline)
+                            ForEach(Array(noticeLines.enumerated()), id: \.offset) { _, line in
+                                Text("\u{2022} \(line)")
+                                    .font(.subheadline)
+                            }
+                        }
+                    }
+                    let actionLines = CopyRefiner.refineLines((entry.suggestedActions ?? []).map { translated($0) ?? $0 })
+                    if !actionLines.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("What May Help")
+                                .font(.headline)
+                            ForEach(Array(actionLines.enumerated()), id: \.offset) { _, line in
+                                Text("\u{2022} \(line)")
+                                    .font(.subheadline)
+                            }
+                        }
+                    }
+                    if let quickLog {
+                        quickLogSection(quickLog)
+                    }
+                    Button(contextType == "driver" ? "Open All Drivers" : "View All Drivers") {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            onOpenAllDrivers(contextType == "driver" ? contextKey : nil)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+            }
+
             var body: some View {
                 NavigationStack {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            if let title = translated(entry.title), !title.isEmpty {
-                                Text(title)
-                                    .font(.title3.weight(.bold))
-                            }
-                            if modalType == "short" {
-                                if let body = translated(entry.body), !body.isEmpty {
-                                    Text(body)
-                                        .font(.body)
-                                }
-                                if let tip = translated(entry.tip), !tip.isEmpty {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Tip")
-                                            .font(.headline)
-                                        Text(tip)
-                                            .font(.subheadline)
-                                    }
-                                }
-                            } else {
-                                if contextType == "gauge", let stateLine = translated(entry.stateLine), !stateLine.isEmpty {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text(stateHeading)
-                                            .font(.headline)
-                                        Text(stateLine)
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                if contextType == "gauge", let causalCallout = translated(entry.causalCallout), !causalCallout.isEmpty {
-                                    Text(causalCallout)
-                                        .font(.subheadline.weight(.semibold))
-                                        .padding(12)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(Color.white.opacity(0.06))
-                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                                        )
-                                }
-                                let whyLines = CopyRefiner.refineLines((entry.why ?? []).map { translated($0) ?? $0 })
-                                if !whyLines.isEmpty {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text(contextType == "gauge" ? whyHeading : "What's Shaping Things Now")
-                                            .font(.headline)
-                                        ForEach(Array(whyLines.enumerated()), id: \.offset) { _, line in
-                                            Text("\u{2022} \(line)")
-                                                .font(.subheadline)
-                                        }
-                                    }
-                                }
-                            }
-                            let noticeLines = CopyRefiner.refineLines((entry.whatYouMayNotice ?? []).map { translated($0) ?? $0 })
-                            if !noticeLines.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text(effectHeading)
-                                        .font(.headline)
-                                    ForEach(Array(noticeLines.enumerated()), id: \.offset) { _, line in
-                                        Text("\u{2022} \(line)")
-                                            .font(.subheadline)
-                                    }
-                                }
-                            }
-                            let actionLines = CopyRefiner.refineLines((entry.suggestedActions ?? []).map { translated($0) ?? $0 })
-                            if !actionLines.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text(helpHeading)
-                                        .font(.headline)
-                                    ForEach(Array(actionLines.enumerated()), id: \.offset) { _, line in
-                                        Text("\u{2022} \(line)")
-                                            .font(.subheadline)
-                                    }
-                                }
-                            }
-                            if let quickLog {
-                                quickLogSection(quickLog)
-                            }
-                            Button(contextType == "driver" ? "Open All Drivers" : "View All Drivers") {
-                                dismiss()
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                    onOpenAllDrivers(contextType == "driver" ? contextKey : nil)
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
+                        if isGaugeContext {
+                            gaugePopupContent
+                        } else {
+                            legacyContent
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
                     }
                     .navigationTitle("Why This Matters Now")
                     .navigationBarTitleDisplayMode(.inline)
@@ -6598,6 +7011,8 @@ struct ContentView: View {
                     entry: modal.entry,
                     gaugeRecentLogBoosts: gaugeRecentLogBoosts,
                     lastSymptomUpdateAt: lastSymptomUpdateAt,
+                    currentSymptomsSnapshot: currentSymptomsSnapshot,
+                    drivers: drivers,
                     onQuickLog: onQuickLog,
                     onOpenCustomLog: { event in
                         selectedModal = nil
@@ -6605,6 +7020,7 @@ struct ContentView: View {
                             onOpenCustomLog(event)
                         }
                     },
+                    onOpenCurrentSymptoms: onOpenCurrentSymptoms,
                     onOpenAllDrivers: onOpenAllDrivers
                 )
             }
