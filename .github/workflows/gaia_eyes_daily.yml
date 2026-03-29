@@ -16,6 +16,10 @@ on:
         required: false
         default: "default"
 
+concurrency:
+  group: gaia-eyes-daily-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   generate:
     name: Generate Earthscope → Supabase
@@ -219,6 +223,15 @@ jobs:
       MEDIA_REPO_NAME:  ${{ secrets.MEDIA_REPO_NAME }}
       SUPABASE_URL:     ${{ secrets.SUPABASE_URL }}
       MEDIA_CDN_BASE:   ${{ secrets.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/latest
+      META_GRAPH_VERSION: v24.0
+      META_CREATE_RETRY_ATTEMPTS: "4"
+      META_PUBLISH_RETRY_ATTEMPTS: "2"
+      META_POLL_TIMEOUT_SEC: "300"
+      META_POLL_INTERVAL_SEC: "15"
+      META_POLL_MAX_INTERVAL_SEC: "60"
+      IG_CAROUSEL_CHILD_PACING_SEC: "1.5"
+      IG_CAROUSEL_SINGLE_IMAGE_FALLBACK: "true"
+      ALLOW_PARTIAL_META_FAILURE: "true"
     steps:
       - uses: actions/checkout@v4
       - name: Wait for CDN propagation
@@ -298,6 +311,8 @@ jobs:
         working-directory: bots/earthscope_post
         run: python meta_poster.py post-square --media-base "${{ env.MEDIA_CDN_BASE }}"
       - name: Post carousel (FB)
+        id: post_carousel_fb
+        continue-on-error: true
         working-directory: bots/earthscope_post
         run: |
           set -e
@@ -309,12 +324,42 @@ jobs:
             python meta_poster.py post-carousel-fb --media-base "${{ env.MEDIA_CDN_BASE }}"
           fi
       - name: Post carousel (IG)
+        id: post_carousel_ig
+        continue-on-error: true
         working-directory: bots/earthscope_post
         run: |
           set -euo pipefail
           # Use unified subcommand; IG content is mirrored from 'default' above
           echo "Using media base: ${{ env.MEDIA_CDN_BASE }}"
           python meta_poster.py post-carousel --platform ig --media-base "${{ env.MEDIA_CDN_BASE }}"
+      - name: Evaluate EarthScope image post outcomes
+        if: always()
+        env:
+          FB_OUTCOME: ${{ steps.post_carousel_fb.outcome }}
+          IG_OUTCOME: ${{ steps.post_carousel_ig.outcome }}
+          ALLOW_PARTIAL_META_FAILURE: ${{ env.ALLOW_PARTIAL_META_FAILURE }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## EarthScope image publish results"
+            echo
+            echo "- Facebook carousel: ${FB_OUTCOME}"
+            echo "- Instagram carousel: ${IG_OUTCOME}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${FB_OUTCOME}" = "success" ] && [ "${IG_OUTCOME}" = "success" ]; then
+            exit 0
+          fi
+
+          if [ "${FB_OUTCOME}" != "success" ] && [ "${IG_OUTCOME}" != "success" ]; then
+            echo "::error::Both Facebook and Instagram image posts failed."
+            exit 1
+          fi
+
+          echo "::warning::EarthScope image posting partially degraded. Review the failed platform logs above."
+          if [ "${ALLOW_PARTIAL_META_FAILURE}" != "true" ]; then
+            exit 1
+          fi
 
   reel:
     name: Build Reel → Supabase
@@ -333,6 +378,14 @@ jobs:
       IG_USER_ID: ${{ secrets.IG_USER_ID }}
       FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
       FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
+      META_GRAPH_VERSION: v24.0
+      META_CREATE_RETRY_ATTEMPTS: "4"
+      META_PUBLISH_RETRY_ATTEMPTS: "2"
+      META_POLL_TIMEOUT_SEC: "300"
+      META_POLL_INTERVAL_SEC: "15"
+      META_POLL_MAX_INTERVAL_SEC: "60"
+      IG_REEL_CREATE_CYCLES: "2"
+      ALLOW_PARTIAL_META_FAILURE: "true"
     steps:
       - uses: actions/checkout@v4
 
@@ -425,6 +478,22 @@ jobs:
             --out "${REEL_OUT}"
           test -s "${REEL_OUT}"
 
+      - name: Validate reel artifact (ffprobe)
+        run: |
+          set -euo pipefail
+          ARTIFACT="${GITHUB_WORKSPACE}/reel.mp4"
+          ffprobe -v error \
+            -show_entries format=format_name,duration,size \
+            -show_entries stream=index,codec_type,codec_name,width,height,avg_frame_rate,sample_rate,channels \
+            -of json "${ARTIFACT}" | tee /tmp/reel_probe.json
+
+          jq -e '
+            (.streams | map(select(.codec_type == "video")) | length) > 0 and
+            (.streams | map(select(.codec_type == "audio")) | length) > 0 and
+            (.format.duration | tonumber) >= 3 and
+            (.format.size | tonumber) > 0
+          ' /tmp/reel_probe.json >/dev/null
+
       - name: Upload reel to Supabase Storage (reels/latest)
         run: |
           set -euo pipefail
@@ -444,6 +513,10 @@ jobs:
             --data-binary @"${{ github.workspace }}/reel.mp4" \
             "${url}")
           echo "[upload] ${name} -> HTTP ${code}"
+          if [ "${code}" != "200" ] && [ "${code}" != "201" ]; then
+            echo "[error] Reel upload failed for ${name}"
+            exit 1
+          fi
 
           # also update latest.mp4 pointer for easy embedding
           url_latest="${SUPABASE_URL_TRIMMED}${OBJECT_BASE}/latest.mp4"
@@ -455,114 +528,64 @@ jobs:
             --data-binary @"${{ github.workspace }}/reel.mp4" \
             "${url_latest}")
           echo "[upload] latest.mp4 -> HTTP ${code_latest}"
-
-      - name: Wait for CDN (reel)
-        run: sleep 30
-
-      - name: Compose reel URL & caption
-        env:
-          REST_URL: ${{ env.SUPABASE_REST_URL }}
-          SERVICE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          set -euo pipefail
-
-          # Public URL of the just-uploaded reel
-          REEL_URL="${SUPABASE_URL}/storage/v1/object/public/space-visuals/social/earthscope/reels/latest/latest.mp4"
-          echo "REEL_URL=${REEL_URL}"
-          echo "REEL_URL=${REEL_URL}" >> "$GITHUB_ENV"
-
-          # Helper to fetch latest post row for a platform
-          fetch_cap() {
-            local plat="$1"
-            curl -sS \
-              -H "apikey: ${SERVICE_KEY}" \
-              -H "Authorization: Bearer ${SERVICE_KEY}" \
-              -H "Accept: application/json" \
-              -H "Accept-Profile: content" \
-              "${REST_URL}/daily_posts?select=*&platform=eq.${plat}&order=day.desc&limit=1"
-          }
-
-          # Prefer IG-specific post; fall back to default
-          cap_json="$(fetch_cap ig || true)"
-          if [ -z "${cap_json}" ] || [ "$(printf '%s' "$cap_json" | jq 'type=="array" and length or 0')" = "false" ]; then
-            cap_json="$(fetch_cap default || true)"
-          fi
-
-          # Extract a reasonable caption; clamp to 2200 chars for IG
-          caption="$(
-            printf '%s' "$cap_json" | jq -r '
-              (if type=="array" and length>0 then .[0] else . end)
-              | (.caption // .social_caption // .short_overview // .summary // "")
-            ' 2>/dev/null || true
-          )"
-          caption="$(printf '%s' "$caption" | head -c 2200)"
-          printf '%s' "$caption" > caption.txt
-          echo "Caption preview: $(printf '%s' "$caption" | tr -d '\n' | cut -c1-160)..."
-
-      - name: Post Reel to Instagram (Graph API)
-        run: |
-          set -euo pipefail
-          if [ -z "${IG_USER_ID:-}" ] || [ -z "${FB_ACCESS_TOKEN:-}" ]; then
-            echo "Missing IG_USER_ID or FB_ACCESS_TOKEN; skipping IG reel post."
-            exit 0
-          fi
-
-          # Create media container for the reel
-          create_resp="$(
-            curl -sS -X POST "https://graph.facebook.com/v20.0/${IG_USER_ID}/media" \
-              -F "media_type=REELS" \
-              -F "video_url=${REEL_URL}" \
-              --form-string "caption=$(cat caption.txt)" \
-              -F "access_token=${FB_ACCESS_TOKEN}"
-          )"
-          echo "IG create_resp: ${create_resp}"
-          creation_id="$(printf '%s' "$create_resp" | jq -r '.id // empty')"
-          if [ -z "$creation_id" ]; then
-            echo "No IG creation_id; cannot continue.";
+          if [ "${code_latest}" != "200" ] && [ "${code_latest}" != "201" ]; then
+            echo "[error] Reel upload failed for latest.mp4"
             exit 1
           fi
 
-          # Poll container status until FINISHED (or bail on ERROR)
-          status=""
-          for attempt in $(seq 1 20); do
-            status_resp="$(curl -sS "https://graph.facebook.com/v20.0/${creation_id}?fields=status_code&access_token=${FB_ACCESS_TOKEN}")"
-            status="$(printf '%s' "$status_resp" | jq -r '.status_code // empty')"
-            echo "IG status attempt ${attempt}: ${status_resp}"
-
-            if [ "$status" = "FINISHED" ]; then
-              break
-            fi
-            if [ "$status" = "ERROR" ]; then
-              echo "IG container error state; aborting publish.";
-              exit 1
-            fi
-            sleep 10
-          done
-
-          if [ "$status" != "FINISHED" ]; then
-            echo "IG container not ready after waiting; skipping publish for now.";
-            exit 0
-          fi
-
-          # Publish once ready
-          publish_resp="$(
-            curl -sS -X POST "https://graph.facebook.com/v20.0/${IG_USER_ID}/media_publish" \
-              -F "creation_id=${creation_id}" \
-              -F "access_token=${FB_ACCESS_TOKEN}"
-          )"
-          echo "IG publish_resp: ${publish_resp}"
-
-      - name: Post Reel to Facebook Page (Graph API)
+      - name: Wait for CDN (reel)
+        run: sleep 30
+      - name: Post reel (IG)
+        id: post_reel_ig
+        continue-on-error: true
+        working-directory: bots/earthscope_post
+        env:
+          REEL_URL: ${{ env.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/reels/latest/latest.mp4
+          REEL_COVER_URL: ${{ env.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/latest/daily_caption.jpg
         run: |
           set -euo pipefail
-          if [ -z "${FB_PAGE_ID:-}" ] || [ -z "${FB_ACCESS_TOKEN:-}" ]; then
-            echo "Missing FB_PAGE_ID or FB_ACCESS_TOKEN; skipping FB video post."
+          python meta_poster.py post-reel \
+            --platform ig \
+            --video-url "${REEL_URL}" \
+            --cover-url "${REEL_COVER_URL}"
+
+      - name: Post reel (FB)
+        id: post_reel_fb
+        continue-on-error: true
+        working-directory: bots/earthscope_post
+        env:
+          REEL_URL: ${{ env.SUPABASE_URL }}/storage/v1/object/public/space-visuals/social/earthscope/reels/latest/latest.mp4
+        run: |
+          set -euo pipefail
+          python meta_poster.py post-reel \
+            --platform fb \
+            --video-url "${REEL_URL}"
+
+      - name: Evaluate EarthScope reel post outcomes
+        if: always()
+        env:
+          FB_OUTCOME: ${{ steps.post_reel_fb.outcome }}
+          IG_OUTCOME: ${{ steps.post_reel_ig.outcome }}
+          ALLOW_PARTIAL_META_FAILURE: ${{ env.ALLOW_PARTIAL_META_FAILURE }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## EarthScope reel publish results"
+            echo
+            echo "- Facebook reel: ${FB_OUTCOME}"
+            echo "- Instagram reel: ${IG_OUTCOME}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${FB_OUTCOME}" = "success" ] && [ "${IG_OUTCOME}" = "success" ]; then
             exit 0
           fi
-          fb_resp="$(
-            curl -sS -X POST "https://graph.facebook.com/v20.0/${FB_PAGE_ID}/videos" \
-              -F "file_url=${REEL_URL}" \
-              --form-string "description=$(cat caption.txt)" \
-              -F "access_token=${FB_ACCESS_TOKEN}"
-          )"
-          echo "FB video resp: ${fb_resp}"
+
+          if [ "${FB_OUTCOME}" != "success" ] && [ "${IG_OUTCOME}" != "success" ]; then
+            echo "::error::Both Facebook and Instagram reel posts failed."
+            exit 1
+          fi
+
+          echo "::warning::EarthScope reel posting partially degraded. Review the failed platform logs above."
+          if [ "${ALLOW_PARTIAL_META_FAILURE}" != "true" ]; then
+            exit 1
+          fi

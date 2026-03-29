@@ -92,3 +92,19 @@
 
 ## Render
 Render-specific env vars are likely set in the dashboard (see `docs/OPEN_QUESTIONS.md`).
+
+## EarthScope Meta posting (GitHub Actions / bots)
+| Variable | Purpose | Example placeholder | Where used |
+| --- | --- | --- | --- |
+| `FB_ACCESS_TOKEN` | Facebook Page access token for Graph publish calls | `EAAB...` | `.github/workflows/gaia_eyes_daily.yml`, `bots/earthscope_post/meta_poster.py` |
+| `FB_PAGE_ID` | Facebook Page id for photo/feed/video publishing | `1234567890` | `.github/workflows/gaia_eyes_daily.yml`, `bots/earthscope_post/meta_poster.py` |
+| `IG_USER_ID` | Instagram professional account id | `1784...` | `.github/workflows/gaia_eyes_daily.yml`, `bots/earthscope_post/meta_poster.py` |
+| `META_GRAPH_VERSION` | Shared Graph API version for EarthScope posting | `v24.0` | `.github/workflows/gaia_eyes_daily.yml`, `bots/earthscope_post/meta_poster.py` |
+| `META_CREATE_RETRY_ATTEMPTS` | Retries for Meta create/stage calls | `4` | `bots/earthscope_post/meta_poster.py` |
+| `META_PUBLISH_RETRY_ATTEMPTS` | Retries for Meta publish calls on explicit transient responses | `2` | `bots/earthscope_post/meta_poster.py` |
+| `META_POLL_TIMEOUT_SEC` | Maximum IG container processing window | `300` | `bots/earthscope_post/meta_poster.py` |
+| `META_POLL_INTERVAL_SEC` | Initial delay between IG status polls | `15` | `bots/earthscope_post/meta_poster.py` |
+| `META_POLL_MAX_INTERVAL_SEC` | Maximum delay between IG status polls | `60` | `bots/earthscope_post/meta_poster.py` |
+| `IG_CAROUSEL_CHILD_PACING_SEC` | Delay between IG carousel child container creates | `1.5` | `bots/earthscope_post/meta_poster.py` |
+| `IG_CAROUSEL_SINGLE_IMAGE_FALLBACK` | Allow IG carousel downgrade to a single-image post after retries fail | `true` | `bots/earthscope_post/meta_poster.py` |
+| `IG_REEL_CREATE_CYCLES` | Number of full reel container recreate cycles before giving up | `2` | `bots/earthscope_post/meta_poster.py` |

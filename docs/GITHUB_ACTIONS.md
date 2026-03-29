@@ -33,7 +33,7 @@ This repo relies heavily on GitHub Actions for scheduled ingestion, JSON snapsho
 - `send_push_notifications.yml` — send queued APNs notifications and disable invalid tokens every 5 minutes. Requires GitHub Actions secrets `SUPABASE_DB_URL`, `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_BUNDLE_ID`, and `APNS_PRIVATE_KEY`.
 
 ### Content + social
-- `gaia_eyes_daily.yml` — daily Earthscope pipeline (Supabase + media JSON).
+- `gaia_eyes_daily.yml` — daily Earthscope pipeline (Supabase + media JSON + hardened FB/IG posting via `bots/earthscope_post/meta_poster.py`; see `docs/EARTHSCOPE_META_POSTING.md`).
 - `space_news.yml` — space news pipeline + WP publish.
 - `news-ingest.yml` — news JSON ingest.
 - `research_lane.yml` — research collection lane.
