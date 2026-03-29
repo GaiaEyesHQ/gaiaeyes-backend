@@ -7374,10 +7374,14 @@ struct ContentView: View {
             return trimmed.isEmpty ? fallback : trimmed
         }
 
+        private func effectiveAQIValue(air: LocalAir?) -> Double? {
+            air?.aqi ?? dashboardDriver(for: "aqi")?.value
+        }
+
         private func localConditionsPill(weather: LocalWeather?, air: LocalAir?) -> (text: String, severity: StatusPill.Severity) {
             let tempSwing = abs(weather?.tempDelta24hC ?? 0)
             let pressureSwing = abs(weather?.baroDelta24hHpa ?? 0)
-            let aqi = air?.aqi ?? 0
+            let aqi = effectiveAQIValue(air: air) ?? 0
 
             if tempSwing >= 12 || pressureSwing >= 12 || aqi >= 151 {
                 return ("Elevated", .alert)
@@ -7500,7 +7504,7 @@ struct ContentView: View {
             let pill = localConditionsPill(weather: weather, air: air)
             let tempText = LocalConditionsFormatting.formatTempMetric(weather?.tempC)
             let pressureText = LocalConditionsFormatting.formatPressureShort(weather?.pressureHpa)
-            let aqiText = LocalConditionsFormatting.formatNumber(air?.aqi, decimals: 0)
+            let aqiText = LocalConditionsFormatting.formatNumber(effectiveAQIValue(air: air), decimals: 0)
             let status: String
             if let error = ContentView.scrubError(localHealthError) {
                 status = error
@@ -14709,6 +14713,10 @@ struct ContentView: View {
             drivers.first { $0.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == key.lowercased() }
         }
 
+        private func effectiveAQIValue(air: LocalAir?) -> Double? {
+            air?.aqi ?? driver(for: "aqi")?.value
+        }
+
         private func formattedDriverValue(_ driver: DashboardDriverItem) -> String? {
             guard let value = driver.value else { return nil }
             let unit = (driver.unit ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -14819,7 +14827,7 @@ struct ContentView: View {
         }
 
         private func airQualityStatus(air: LocalAir?) -> LocalConditionsDriverStatus {
-            let aqi = air?.aqi
+            let aqi = effectiveAQIValue(air: air)
             let severity: String
             if let aqi, aqi >= 151 {
                 severity = "high"
@@ -15156,9 +15164,10 @@ struct ContentView: View {
                         }
 
                         LocalConditionsSurfaceCard(title: "Air Quality", icon: "wind") {
+                            let displayedAQI = effectiveAQIValue(air: air)
                             HStack(alignment: .top, spacing: 12) {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(LocalConditionsFormatting.formatNumber(air?.aqi, decimals: 0))
+                                    Text(LocalConditionsFormatting.formatNumber(displayedAQI, decimals: 0))
                                         .font(.system(size: 34, weight: .bold, design: .rounded))
                                     Text(air?.category ?? airStatus.state)
                                         .font(.subheadline)
@@ -15178,7 +15187,7 @@ struct ContentView: View {
                                     status: airStatus,
                                     interpretation: "Air quality may be adding extra friction today.",
                                     bullets: [
-                                        "AQI: \(LocalConditionsFormatting.formatNumber(air?.aqi, decimals: 0))",
+                                        "AQI: \(LocalConditionsFormatting.formatNumber(displayedAQI, decimals: 0))",
                                         "Category: \(air?.category ?? airStatus.state)",
                                         "Pollutant: \(air?.pollutant ?? "—")"
                                     ],
