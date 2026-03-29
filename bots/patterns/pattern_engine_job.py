@@ -35,6 +35,8 @@ logger = logging.getLogger(__name__)
 
 DB_RETRY_ATTEMPTS = 3
 DB_RETRY_BASE_SLEEP_SECONDS = 2.0
+DB_STATEMENT_TIMEOUT_MS = 180000
+DB_LOCK_TIMEOUT_MS = 15000
 
 TRANSIENT_DB_ERROR_TOKENS = (
     "ssl syscall error",
@@ -290,6 +292,7 @@ def _connect_kwargs() -> dict[str, Any]:
     # GitHub Actions occasionally sees transient SSL EOFs against Supabase/Postgres.
     # Keep the socket active and fail fast on connect so the outer retry can recover.
     return {
+        "application_name": "gaia_pattern_engine_v1",
         "row_factory": dict_row,
         "connect_timeout": 15,
         "keepalives": 1,
@@ -312,6 +315,12 @@ def _is_transient_db_error(exc: BaseException) -> bool:
         return not message or any(token in message for token in TRANSIENT_DB_ERROR_TOKENS)
 
     return bool(message) and any(token in message for token in TRANSIENT_DB_ERROR_TOKENS)
+
+
+def _configure_connection(conn: psycopg.Connection) -> None:
+    with conn.cursor() as cur:
+        cur.execute(f"set statement_timeout = {DB_STATEMENT_TIMEOUT_MS}")
+        cur.execute(f"set lock_timeout = {DB_LOCK_TIMEOUT_MS}")
 
 
 def _safe_float(value: Any) -> float | None:
@@ -791,8 +800,10 @@ def _fetch_tag_flags(
         return {user_id: dict(default_flags) for user_id in user_ids}
 
     sql: str
+    user_filter_expr: str
     if tag_col:
         sql = f"select {user_col} as user_id, {tag_col} as tag_key from app.user_tags"
+        user_filter_expr = user_col
     elif "tag_id" in columns and _table_exists(conn, "dim", "user_tag_catalog"):
         cat_columns = _table_columns(conn, "dim", "user_tag_catalog")
         if "id" not in cat_columns or "tag_key" not in cat_columns:
@@ -802,8 +813,13 @@ def _fetch_tag_flags(
               from app.user_tags ut
               left join dim.user_tag_catalog c on ut.tag_id = c.id
         """
+        user_filter_expr = f"ut.{user_col}"
     else:
         return {user_id: dict(default_flags) for user_id in user_ids}
+
+    if user_ids:
+        sql += f" where {user_filter_expr} = any(%s)"
+        params.append(sorted(user_ids))
 
     rows = _fetch_rows(conn, sql, params)
     out = {user_id: dict(default_flags) for user_id in user_ids}
@@ -817,7 +833,11 @@ def _fetch_tag_flags(
     return out
 
 
-def _fetch_current_zip_map(conn: psycopg.Connection) -> dict[str, str]:
+def _fetch_current_zip_map(
+    conn: psycopg.Connection,
+    *,
+    user_ids: set[str] | None = None,
+) -> dict[str, str]:
     if not _table_exists(conn, "app", "user_locations"):
         return {}
     columns = _table_columns(conn, "app", "user_locations")
@@ -834,16 +854,21 @@ def _fetch_current_zip_map(conn: psycopg.Connection) -> dict[str, str]:
     if updated_col:
         order_parts.append(f"{updated_col} desc")
     order_sql = ", ".join(order_parts) if order_parts else user_col
+    params: list[Any] = []
+    where = [f"{zip_col} is not null"]
+    if user_ids:
+        where.append(f"{user_col} = any(%s)")
+        params.append(sorted(user_ids))
 
     sql = f"""
         select distinct on ({user_col})
           {user_col} as user_id,
           {zip_col} as zip
         from app.user_locations
-        where {zip_col} is not null
+        where {" and ".join(where)}
         order by {user_col}, {order_sql}
     """
-    rows = _fetch_rows(conn, sql)
+    rows = _fetch_rows(conn, sql, params)
     return {str(row["user_id"]): str(row["zip"]) for row in rows if row.get("zip")}
 
 
@@ -925,9 +950,12 @@ def _fetch_local_signals_daily(
     *,
     since_day: date,
     as_of_day: date,
+    zip_codes: Sequence[str],
 ) -> dict[tuple[str, date], dict[str, Any]]:
-    if not _table_exists(conn, "ext", "local_signals_cache"):
+    if not zip_codes or not _table_exists(conn, "ext", "local_signals_cache"):
         return {}
+    since_ts = datetime.combine(since_day, time.min, tzinfo=timezone.utc)
+    until_ts = datetime.combine(as_of_day + timedelta(days=1), time.min, tzinfo=timezone.utc)
     sql = """
         with ranked as (
           select
@@ -940,14 +968,15 @@ def _fetch_local_signals_daily(
               order by asof desc
             ) as rn
           from ext.local_signals_cache
-          where (asof at time zone 'utc')::date >= %s
-            and (asof at time zone 'utc')::date <= %s
+          where zip = any(%s)
+            and asof >= %s
+            and asof < %s
         )
         select zip, day, asof, payload
           from ranked
          where rn = 1
     """
-    rows = _fetch_rows(conn, sql, [since_day, as_of_day])
+    rows = _fetch_rows(conn, sql, [list(zip_codes), since_ts, until_ts])
     out: dict[tuple[str, date], dict[str, Any]] = {}
     for row in rows:
         payload = _parse_json_map(row.get("payload"))
@@ -1023,6 +1052,19 @@ def _fetch_schumann_variability_daily(
         previous_f0 = f0
 
     return out
+
+
+def _collect_relevant_zip_codes(
+    day_zip_map: dict[tuple[str, date], str],
+    current_zip_map: dict[str, str],
+) -> list[str]:
+    return sorted(
+        {
+            str(zip_code).strip()
+            for zip_code in list(day_zip_map.values()) + list(current_zip_map.values())
+            if str(zip_code or "").strip()
+        }
+    )
 
 
 def build_user_daily_features(
@@ -1656,6 +1698,13 @@ def _run_pattern_engine_once(
     updated_at = datetime.now(timezone.utc)
 
     with psycopg.connect(dsn or _resolve_dsn(), **_connect_kwargs()) as conn:
+        _configure_connection(conn)
+        logger.info(
+            "[pattern_engine] start since=%s as_of=%s user=%s",
+            since_day,
+            as_of_day,
+            user_id or "all",
+        )
         base_rows = _fetch_base_daily_features(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
         if not base_rows and user_id is None:
             logger.warning(
@@ -1668,6 +1717,7 @@ def _run_pattern_engine_once(
         user_ids = {str(row["user_id"]) for row in base_rows if row.get("user_id")}
         if user_id:
             user_ids.add(user_id)
+        logger.info("[pattern_engine] base_rows=%d users=%d", len(base_rows), len(user_ids))
 
         gauges = _fetch_gauges(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
         gauge_deltas = _fetch_gauge_deltas(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
@@ -1675,13 +1725,32 @@ def _run_pattern_engine_once(
         camera_rows = _fetch_camera_rows(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
         tag_flags = _fetch_tag_flags(conn, user_ids=user_ids)
         day_zip_map = _fetch_day_zip_map(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
-        current_zip_map = _fetch_current_zip_map(conn)
-        local_signals_daily = _fetch_local_signals_daily(conn, since_day=since_day, as_of_day=as_of_day)
+        current_zip_map = _fetch_current_zip_map(conn, user_ids=user_ids)
+        zip_codes = _collect_relevant_zip_codes(day_zip_map, current_zip_map)
+        local_signals_daily = _fetch_local_signals_daily(
+            conn,
+            since_day=since_day,
+            as_of_day=as_of_day,
+            zip_codes=zip_codes,
+        )
         schumann_daily = _fetch_schumann_variability_daily(
             conn,
             since_day=since_day,
             as_of_day=as_of_day,
             base_rows=base_rows,
+        )
+        logger.info(
+            "[pattern_engine] fetched gauges=%d deltas=%d symptoms=%d camera=%d tag_users=%d day_zips=%d current_zips=%d scoped_zips=%d local_signals=%d schumann=%d",
+            len(gauges),
+            len(gauge_deltas),
+            len(symptom_rows),
+            len(camera_rows),
+            len(tag_flags),
+            len(day_zip_map),
+            len(current_zip_map),
+            len(zip_codes),
+            len(local_signals_daily),
+            len(schumann_daily),
         )
 
         feature_rows = build_user_daily_features(
@@ -1704,6 +1773,12 @@ def _run_pattern_engine_once(
             as_of_day=as_of_day,
             updated_at=updated_at,
         )
+        logger.info(
+            "[pattern_engine] built feature_rows=%d outcome_rows=%d association_rows=%d",
+            len(feature_rows),
+            len(outcome_rows),
+            len(association_rows),
+        )
 
         _delete_scope(conn, "marts.user_pattern_associations", since_day=None, user_id=user_id, day_scoped=False)
         _delete_scope(conn, "marts.user_daily_outcomes", since_day=since_day, user_id=user_id, day_scoped=True)
@@ -1713,6 +1788,7 @@ def _run_pattern_engine_once(
         _insert_rows(conn, "marts.user_daily_outcomes", _outcome_insert_columns(), outcome_rows)
         _insert_rows(conn, "marts.user_pattern_associations", _association_insert_columns(), association_rows)
         conn.commit()
+        logger.info("[pattern_engine] commit complete")
 
     surfaced = sum(1 for row in association_rows if row.get("surfaceable"))
     return {

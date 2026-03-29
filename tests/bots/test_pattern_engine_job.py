@@ -8,6 +8,7 @@ from bots.patterns.pattern_engine_job import (
     build_user_daily_features,
     build_user_daily_outcomes,
     confidence_bucket,
+    _collect_relevant_zip_codes,
     percentile_nearest_rank,
     select_best_lag,
     signal_exposure,
@@ -152,6 +153,21 @@ class PatternEngineJobTests(unittest.TestCase):
         self.assertIn(("solar_wind_exposed", "high_hr_day"), ASSOCIATION_PAIRS)
         self.assertIn(("solar_wind_exposed", "short_sleep_day"), ASSOCIATION_PAIRS)
         self.assertIn(("kp_g1_plus_exposed", "short_sleep_day"), ASSOCIATION_PAIRS)
+
+    def test_collect_relevant_zip_codes_dedupes_and_sorts(self) -> None:
+        self.assertEqual(
+            _collect_relevant_zip_codes(
+                {
+                    ("user-1", date(2026, 3, 29)): "60610",
+                    ("user-2", date(2026, 3, 29)): "02139",
+                },
+                {
+                    "user-1": "60610",
+                    "user-3": "98109",
+                },
+            ),
+            ["02139", "60610", "98109"],
+        )
 
     def test_run_pattern_engine_retries_transient_ssl_eof_errors(self) -> None:
         expected = {"features": 1, "outcomes": 1, "associations": 1, "surfaced": 1}
