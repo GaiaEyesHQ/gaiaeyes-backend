@@ -18,7 +18,7 @@ private struct AllDriversCopy {
         case .scientific:
             return AllDriversCopy(
                 pageTitle: vocabulary.allDriversLabel,
-                subtitle: "What’s active right now, in priority order",
+                subtitle: "Current Influences",
                 activeMetricTitle: "Active",
                 categoryMetricTitle: "Category",
                 stateMetricTitle: "State",
@@ -39,7 +39,7 @@ private struct AllDriversCopy {
         case .mystical:
             return AllDriversCopy(
                 pageTitle: vocabulary.allDriversLabel,
-                subtitle: "What’s moving through your field right now, in priority order",
+                subtitle: "Current Influences",
                 activeMetricTitle: "Active",
                 categoryMetricTitle: "Category",
                 stateMetricTitle: "State",
@@ -636,20 +636,17 @@ struct AllDriversView: View {
                                                 mode: mode,
                                                 tone: tone,
                                                 translatedLabel: translatedLabel(for: driver),
-                                                translatedWhatItIs: translatedText(driver.whatItIs),
-                                                translatedActiveNowText: translatedText(driver.activeNowText),
-                                                translatedPersonalReason: translatedText(driver.personalReason),
-                                            translatedPatternSummary: translatedText(driver.patternSummary),
-                                            translatedOutlookSummary: translatedText(driver.outlookSummary),
-                                            translatedScienceNote: translatedText(driver.scienceNote),
-                                            sharePrompt: sharePrompt(for: accentLevel(for: driver.severity ?? driver.state)),
-                                            onShare: {
-                                                shareDraft = signalShareDraft(for: driver)
-                                            },
-                                            onOpenCurrentSymptoms: onOpenCurrentSymptoms == nil ? nil : {
-                                                AppAnalytics.track("all_drivers_symptom_cta", properties: ["driver_key": driver.key])
-                                                onOpenCurrentSymptoms?()
-                                            },
+                                                translatedPatternSummary: translatedText(driver.patternSummary),
+                                                translatedOutlookSummary: translatedText(driver.outlookSummary),
+                                                translatedScienceNote: translatedText(driver.scienceNote),
+                                                sharePrompt: sharePrompt(for: accentLevel(for: driver.severity ?? driver.state)),
+                                                onShare: {
+                                                    shareDraft = signalShareDraft(for: driver)
+                                                },
+                                                onOpenCurrentSymptoms: onOpenCurrentSymptoms == nil ? nil : {
+                                                    AppAnalytics.track("all_drivers_symptom_cta", properties: ["driver_key": driver.key])
+                                                    onOpenCurrentSymptoms?()
+                                                },
                                                 onLogSymptoms: onLogSymptoms == nil ? nil : {
                                                     AppAnalytics.track("all_drivers_log_symptoms", properties: ["driver_key": driver.key])
                                                     onLogSymptoms?()
@@ -867,9 +864,6 @@ private struct DriverExpandedDetailView: View {
     let mode: ExperienceMode
     let tone: ToneStyle
     let translatedLabel: String
-    let translatedWhatItIs: String?
-    let translatedActiveNowText: String?
-    let translatedPersonalReason: String?
     let translatedPatternSummary: String?
     let translatedOutlookSummary: String?
     let translatedScienceNote: String?
@@ -901,17 +895,6 @@ private struct DriverExpandedDetailView: View {
                 .controlSize(.small)
             }
 
-            detailSection("What it is", text: translatedWhatItIs)
-            detailSection("What’s active right now", text: translatedActiveNowText)
-            detailSection("Why it may matter for you", text: translatedPersonalReason)
-
-            DriverSymptomLinkView(
-                currentSymptoms: driver.currentSymptoms,
-                historicalSymptoms: driver.historicalSymptoms,
-                onOpenCurrentSymptoms: onOpenCurrentSymptoms,
-                onLogSymptoms: onLogSymptoms
-            )
-
             DriverPatternBadgeView(
                 statusLabel: driver.patternStatusLabel ?? driver.patternStatus?.rawValue.replacingOccurrences(of: "_", with: " ").capitalized ?? "No clear pattern yet",
                 summary: translatedPatternSummary ?? noPatternText,
@@ -927,6 +910,13 @@ private struct DriverExpandedDetailView: View {
                     onOpenOutlook: onOpenOutlook
                 )
             }
+
+            DriverSymptomLinkView(
+                currentSymptoms: driver.currentSymptoms,
+                historicalSymptoms: driver.historicalSymptoms,
+                onOpenCurrentSymptoms: onOpenCurrentSymptoms,
+                onLogSymptoms: onLogSymptoms
+            )
 
             if let translatedScienceNote, !translatedScienceNote.isEmpty, mode == .scientific {
                 detailSection("Science note", text: translatedScienceNote)

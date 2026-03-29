@@ -116,11 +116,12 @@ struct SignalBarView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.black.opacity(0.72))
+                .fill(Color(red: 0.05, green: 0.07, blue: 0.10).opacity(0.92))
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.16), lineWidth: 1)
                 )
+                .shadow(color: Color.black.opacity(0.24), radius: 10, x: 0, y: 4)
         )
         .padding(.horizontal, 12)
         .padding(.top, 6)
@@ -156,12 +157,20 @@ private struct SignalBarButton: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(signal.state.tint.opacity(0.16))
+            .background(
+                Capsule()
+                    .fill(Color.black.opacity(0.30))
+                    .overlay(
+                        Capsule()
+                            .fill(signal.state.tint.opacity(0.28))
+                    )
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 999, style: .continuous)
-                    .stroke(signal.state.tint.opacity(0.52), lineWidth: 1)
+                    .stroke(signal.state.tint.opacity(0.68), lineWidth: 1)
             )
             .clipShape(Capsule())
+            .shadow(color: Color.black.opacity(0.18), radius: 4, x: 0, y: 1)
             .shadow(color: signal.state.tint.opacity(signal.state.glowOpacity), radius: signal.state.glowRadius, x: 0, y: 0)
         }
         .buttonStyle(.plain)
