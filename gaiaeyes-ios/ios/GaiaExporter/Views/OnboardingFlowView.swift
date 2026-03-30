@@ -439,18 +439,81 @@ struct OnboardingFlowView: View {
     }
 
     private var guideStep: some View {
-        selectionStep(
-            title: copy.guideTitle,
-            subtitle: copy.guideSubtitle,
-            options: GuideType.allCases,
-            selected: profile.guide,
-            titleFor: \.title,
-            subtitleFor: \.subtitle
-        ) { guide in
-            profile.guide = guide
-            await onPersistExperience(UserExperienceProfileUpdate(guide: guide, onboardingStep: .tone))
-            currentStep = .tone
+        onboardingCard {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(copy.guideTitle)
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                Text(copy.guideSubtitle)
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    Spacer()
+                    VStack(spacing: 12) {
+                        GuideAvatarView(
+                            guide: profile.guide,
+                            expression: .guide,
+                            size: .large,
+                            emphasis: .standard,
+                            showBackingPlate: true,
+                            animate: true
+                        )
+                        Text(profile.guide.title)
+                            .font(.headline)
+                        Text(profile.guide.subtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, 8)
+
+                VStack(spacing: 12) {
+                    ForEach(guideSelectionOptions, id: \.self) { guide in
+                        Button {
+                            Task {
+                                profile.guide = guide
+                                await onPersistExperience(UserExperienceProfileUpdate(guide: guide, onboardingStep: .tone))
+                                currentStep = .tone
+                            }
+                        } label: {
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: guide == profile.guide ? "checkmark.circle.fill" : "circle")
+                                    .font(.title3)
+                                    .foregroundStyle(
+                                        guide == profile.guide
+                                        ? Color(red: 0.51, green: 0.82, blue: 0.97)
+                                        : .secondary
+                                    )
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(guide.title)
+                                        .font(.headline)
+                                    Text(guide.subtitle)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(guide == profile.guide ? Color.white.opacity(0.10) : Color.white.opacity(0.04))
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Button("Back") {
+                    goBack()
+                }
+                .buttonStyle(.bordered)
+            }
         }
+    }
+
+    private var guideSelectionOptions: [GuideType] {
+        [.cat, .dog, .robot]
     }
 
     private var toneStep: some View {

@@ -847,6 +847,54 @@ def _summarize_context(facts: Dict[str, Any]) -> str:
 def _contains_digits(s: str) -> bool:
     return bool(re.search(r"\d", s or ""))
 
+
+def _split_text_sentences(text: str) -> List[str]:
+    """Split mixed paragraph/bullet text into sentence-like chunks for cleanup."""
+    if not text:
+        return []
+    parts: List[str] = []
+    for line in _strip_section_labels(str(text)).splitlines():
+        clean_line = line.strip().strip("•").strip()
+        if not clean_line:
+            continue
+        for piece in re.split(r"(?<=[.!?])\s+", clean_line):
+            piece = piece.strip().strip("•").strip()
+            if piece:
+                parts.append(piece)
+    return parts
+
+
+def _strip_numeric_sentences(text: str) -> str:
+    """
+    Prefer salvaging the non-numeric sentences from a rewrite rather than
+    discarding the entire OpenAI response when it leaks a metric/date clause.
+    """
+    parts = _split_text_sentences(text)
+    if not parts:
+        return ""
+    kept = [part for part in parts if not _contains_digits(part)]
+    if not kept:
+        return ""
+    out = " ".join(kept)
+    out = re.sub(r"\s+([,.;:!?])", r"\1", out)
+    out = re.sub(r"\s+", " ", out).strip()
+    return out
+
+
+def _normalize_rewrite_payload(obj: Any) -> Any:
+    if not isinstance(obj, dict):
+        return obj
+    cleaned = dict(obj)
+    for key in ("caption", "snapshot"):
+        raw = cleaned.get(key)
+        if not isinstance(raw, str) or not raw.strip() or not _contains_digits(raw):
+            continue
+        normalized = _strip_numeric_sentences(raw)
+        if normalized and normalized != raw.strip():
+            _dbg(f"rewrite: normalized {key} by dropping numeric sentences")
+            cleaned[key] = normalized
+    return cleaned
+
 # --- Robust JSON extractor ---
 from typing import Optional
 def _extract_first_json_object(text: str) -> Optional[str]:
@@ -893,7 +941,7 @@ def _validate_rewrite(obj: Any, facts: Optional[Dict[str, Any]] = None) -> Optio
         return None
     required = ["caption", "snapshot", "affects", "playbook", "hashtags"]
     for k in required:
-        if k not in obj or not isinstance(obj[k], str):
+        if k not in obj or not isinstance(obj[k], str) or not obj[k].strip():
             _dbg(f"validate: missing or non-str key: {k}")
             return None
     # Enforce number-free narrative in top fields only
@@ -1074,6 +1122,7 @@ def _rewrite_json_interpretive(client: Optional["OpenAI"], draft: Dict[str, str]
         # Make response robust: if hashtags missing, inject a sane default before validation
         if isinstance(obj, dict) and ("hashtags" not in obj or not isinstance(obj.get("hashtags"), str) or not obj.get("hashtags").strip()):
             obj["hashtags"] = "#GaiaEyes #SpaceWeather #ChronicPain #Schumann #HRV #Frequency #Wellness"
+        obj = _normalize_rewrite_payload(obj)
         valid = _validate_rewrite(obj, facts)
         _dbg("rewrite: JSON valid") if valid else _dbg("rewrite: JSON invalid by validator")
         if not valid:

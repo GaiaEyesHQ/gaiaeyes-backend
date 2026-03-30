@@ -17,7 +17,16 @@ The shell is implemented in `gaiaeyes-ios/ios/GaiaExporter/Views/ContentView.swi
 - Top-left: `Guide`
 - Top-right: `Settings`
 
-`Guide` is a lightweight orientation sheet that routes first-time users into the correct primary tab.
+`Guide` now opens a dedicated Guide Hub instead of the earlier lightweight orientation sheet.
+Its toolbar entry is icon-only and uses the shared guide avatar system, with the cat-first top-left state mapped to `cat_avatar_icon` for compact presentation.
+
+Guide Hub is the centralized home for:
+
+- Daily Check-In
+- Daily Poll / lightweight feedback
+- EarthScope / What Matters Now entry
+- Understanding Gaia Eyes
+- future guide-driven follow-ups and helper moments
 
 `Settings` is now the canonical place for:
 
@@ -50,7 +59,9 @@ This preserves the existing developer workflow without making debug affordances 
 ## Reviewer checks
 
 - Confirm the 5 tabs remain visible when moving between the main app sections.
-- Confirm `Guide` opens from the top-left and can route into each tab.
+- Confirm the top-left guide entry is icon-only and opens Guide Hub.
+- Confirm Guide Hub shows Daily Check-In, Daily Poll, EarthScope, and Understanding Gaia Eyes sections.
 - Confirm `Settings` opens from the top-right.
+- Confirm the Guide section in Settings shows the shared avatar preview and the reserved app-icon preference path.
 - Confirm the debug panel can still be enabled from `Settings` -> `Advanced`.
 - Confirm existing sheets and detail routes still open for symptom logging, current symptoms, daily check-in, all drivers, local conditions, Schumann, and settings.

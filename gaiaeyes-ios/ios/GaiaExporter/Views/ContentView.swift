@@ -1806,6 +1806,7 @@ struct ContentView: View {
     @State private var profileLocationMessage: String?
     @State private var profileLocationSaving: Bool = false
     @State private var experienceProfile: UserExperienceProfile = .default
+    @StateObject private var guideProfileStore = GuideProfileStore()
     @State private var healthPermissionsMessage: String?
     @State private var backfillMessage: String?
     @State private var backfillInFlight: Bool = false
@@ -1837,6 +1838,7 @@ struct ContentView: View {
     @State private var dashboardLastUpdatedText: String? = nil
     @State private var selectedTab: AppTab = .home
     @State private var showGuideSheet: Bool = false
+    @State private var guideHubFocus: GuideHubFocus = .overview
     @State private var showMissionSettingsSheet: Bool = false
     @State private var showMissionInsightsSheet: Bool = false
     @State private var missionInsightsPath: [InsightsRoute] = []
@@ -2053,6 +2055,18 @@ struct ContentView: View {
         showMissionSettingsSheet = true
     }
 
+    private func openGuideHub(focus: GuideHubFocus = .overview) {
+        guideHubFocus = focus
+        showGuideSheet = true
+    }
+
+    private func closeGuideHubThen(_ action: @escaping () -> Void) {
+        showGuideSheet = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            action()
+        }
+    }
+
     private func openBody(route: InsightsRoute? = nil) {
         selectedTab = .body
         bodyPath = route.map { [$0] } ?? []
@@ -2167,12 +2181,9 @@ struct ContentView: View {
     }
 
     private var guideToolbarButton: some View {
-        Button {
-            showGuideSheet = true
-        } label: {
-            Label("Guide", systemImage: "questionmark.circle")
+        GuideEntryButton(guideType: experienceProfile.guide) {
+            openGuideHub()
         }
-        .accessibilityLabel("Guide")
     }
 
     private var settingsToolbarButton: some View {
@@ -2735,6 +2746,24 @@ struct ContentView: View {
         return hasVisibleContent ? post : nil
     }
 
+    private var guideEarthscopeSummary: String? {
+        let summary = dashboardPayload?.earthscopeSummary?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let summary, !summary.isEmpty {
+            return summary
+        }
+        let requestedDay = dashboardPayload?.day ?? chicagoTodayString()
+        return preferredEarthscopePost(dashboardPayload?.personalPost, requestedDay: requestedDay)?.caption
+            ?? preferredEarthscopePost(dashboardPayload?.memberPost, requestedDay: requestedDay)?.caption
+            ?? preferredEarthscopePost(dashboardPayload?.publicPost, requestedDay: requestedDay)?.caption
+    }
+
+    private var guideEarthscopeUpdatedAt: String? {
+        let requestedDay = dashboardPayload?.day ?? chicagoTodayString()
+        return preferredEarthscopePost(dashboardPayload?.personalPost, requestedDay: requestedDay)?.updatedAt
+            ?? preferredEarthscopePost(dashboardPayload?.memberPost, requestedDay: requestedDay)?.updatedAt
+            ?? preferredEarthscopePost(dashboardPayload?.publicPost, requestedDay: requestedDay)?.updatedAt
+    }
+
     private func bestEffortDashboardJSON<T: Decodable>(
         api: APIClient,
         path: String,
@@ -3097,6 +3126,7 @@ struct ContentView: View {
         }
 
         experienceProfile = resolved
+        guideProfileStore.sync(from: resolved)
         onboardingStepRaw = resolved.onboardingStep.rawValue
         onboardingCompleted = resolved.onboardingCompleted
         if resolved.onboardingCompleted {
@@ -3522,10 +3552,31 @@ struct ContentView: View {
         showLocalConditionsSheet = false
         showSchumannDashboardSheet = false
         showMissionSettingsSheet = false
+        showGuideSheet = false
         if targetType == "daily_checkin" {
             pendingPushRoute = nil
             openBody(route: .dailyCheckIn)
             Task { await fetchDailyCheckInStatus(api: state.apiWithAuth()) }
+            return
+        }
+        if targetType == "guide" || targetType == "guide_hub" {
+            pendingPushRoute = nil
+            openGuideHub()
+            return
+        }
+        if targetType == "daily_poll" || targetType == "daily_feedback" {
+            pendingPushRoute = nil
+            openGuideHub(focus: .dailyPoll)
+            return
+        }
+        if targetType == "earthscope" || targetType == "what_matters_now" {
+            pendingPushRoute = nil
+            openGuideHub(focus: .earthScope)
+            return
+        }
+        if targetType == "understanding" || targetType == "how_it_works" {
+            pendingPushRoute = nil
+            openGuideHub(focus: .understanding)
             return
         }
         if targetType == "current_symptoms" || targetType == "symptoms" {
@@ -11602,13 +11653,54 @@ struct ContentView: View {
                 .tag(AppTab.explore)
         }
         .sheet(isPresented: $showGuideSheet) {
-            NavigationStack {
-                GuideLandingView(
-                    mode: experienceProfile.mode,
-                    guide: experienceProfile.guide,
-                    selectedTab: $selectedTab
-                )
-            }
+            GuideHubView(
+                profileStore: guideProfileStore,
+                api: state.apiWithAuth(),
+                dailyCheckInStatus: dailyCheckInStatus,
+                dailyCheckInLoading: dailyCheckInLoading,
+                dailyCheckInError: dailyCheckInError,
+                currentSymptomsSnapshot: currentSymptomsSnapshot,
+                earthscopeSummary: guideEarthscopeSummary,
+                earthscopeUpdatedAt: guideEarthscopeUpdatedAt,
+                whatMattersNow: dashboardPayload?.driversCompact ?? [],
+                initialFocus: guideHubFocus,
+                onRefreshDailyCheckIn: {
+                    Task { await fetchDailyCheckInStatus(api: state.apiWithAuth()) }
+                },
+                onOpenEarthScope: {
+                    closeGuideHubThen {
+                        selectedTab = .home
+                    }
+                },
+                onOpenCurrentSymptoms: {
+                    closeGuideHubThen {
+                        openBody(route: .currentSymptoms)
+                    }
+                },
+                onOpenSettings: {
+                    closeGuideHubThen {
+                        showSettingsSheet()
+                    }
+                },
+                onOpenNotifications: {
+                    closeGuideHubThen {
+                        showNotificationSettingsSection = true
+                        showSettingsSheet()
+                    }
+                },
+                onOpenAllDrivers: {
+                    closeGuideHubThen {
+                        selectedTab = .explore
+                        openAllDrivers()
+                    }
+                },
+                onDailyCheckInStatusChanged: { status in
+                    dailyCheckInStatus = status
+                }
+            )
+        }
+        .onChange(of: experienceProfile, initial: true) { _, newValue in
+            guideProfileStore.sync(from: newValue)
         }
         .sheet(isPresented: $showMissionInsightsSheet) {
             let baseFeatures = features ?? lastKnownFeatures
@@ -11869,6 +11961,24 @@ struct ContentView: View {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Guide")
                                         .font(.subheadline.weight(.semibold))
+                                    HStack(alignment: .center, spacing: 12) {
+                                        GuideAvatarView(
+                                            guide: experienceProfile.guide,
+                                            expression: .guide,
+                                            size: .medium,
+                                            emphasis: .standard,
+                                            tintMode: .softened,
+                                            showBackingPlate: true
+                                        )
+
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(experienceProfile.guide.title)
+                                                .font(.headline)
+                                            Text("Guide Hub, prompts, and the top-left entry use the same shared avatar system.")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
                                     Picker("Guide", selection: $experienceProfile.guide) {
                                         ForEach(GuideType.allCases) { guide in
                                             Text(guide.title).tag(guide)
@@ -11877,6 +11987,19 @@ struct ContentView: View {
                                     .pickerStyle(.segmented)
                                     Text(experienceProfile.guide.subtitle)
                                         .font(.caption)
+                                        .foregroundColor(.secondary)
+
+                                    Toggle(
+                                        "Use guide as app icon",
+                                        isOn: Binding(
+                                            get: { guideProfileStore.profile.useGuideAppIcon },
+                                            set: { guideProfileStore.setUseGuideAppIcon($0) }
+                                        )
+                                    )
+                                    .disabled(!guideProfileStore.supportsAlternateIcons)
+
+                                    Text(guideProfileStore.iconPreferenceFootnote)
+                                        .font(.caption2)
                                         .foregroundColor(.secondary)
                                 }
 
@@ -12659,110 +12782,6 @@ struct ContentView: View {
         }
     }
 
-    private struct GuideLandingView: View {
-        let mode: ExperienceMode
-        let guide: GuideType
-        @Binding var selectedTab: AppTab
-
-        @Environment(\.dismiss) private var dismiss
-
-        private struct GuideStep: Identifiable {
-            let tab: AppTab
-            let title: String
-            let body: String
-
-            var id: AppTab { tab }
-        }
-
-        private var steps: [GuideStep] {
-            [
-                GuideStep(tab: .home, title: "Home", body: "Start with Mission Control, What Matters Now, and the EarthScope snapshot."),
-                GuideStep(tab: .body, title: "Body", body: "Open current symptoms, log something new, review sleep, and keep your recent body context updated."),
-                GuideStep(tab: .patterns, title: "Patterns", body: "See what repeats most clearly in your own history and what is still forming."),
-                GuideStep(tab: .outlook, title: "Outlook", body: "Check the next 24 hours to 7 days for what may be more noticeable and what may help."),
-                GuideStep(tab: .explore, title: "Explore", body: "Go deeper into drivers, space weather, local conditions, magnetosphere, Schumann, hazards, and quakes.")
-            ]
-        }
-
-        private var headerLine: String {
-            switch guide {
-            case .cat:
-                return mode == .scientific ? "Calm orientation before you go deeper." : "A calm read before you wander."
-            case .robot:
-                return mode == .scientific ? "Use the tabs as a clean decision tree." : "Five sections, one clear map."
-            case .dog:
-                return mode == .scientific ? "A steady path through the app." : "A grounded way to move through the app."
-            }
-        }
-
-        var body: some View {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Guide")
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
-                        Text(headerLine)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Text("Gaia Eyes works best when you move from overview, to body context, to repeating patterns, to the near-future outlook, then into deeper exploration as needed.")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                    }
-
-                    ForEach(steps) { step in
-                        Button {
-                            selectedTab = step.tab
-                            dismiss()
-                        } label: {
-                            VStack(alignment: .leading, spacing: 10) {
-                                HStack(alignment: .top, spacing: 12) {
-                                    Image(systemName: step.tab.systemImage)
-                                        .font(.headline)
-                                        .foregroundColor(.white)
-                                        .frame(width: 36, height: 36)
-                                        .background(Color.accentColor.opacity(0.9))
-                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(step.title)
-                                            .font(.headline)
-                                            .foregroundColor(.primary)
-                                        Text(step.body)
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "arrow.right")
-                                        .font(.caption.weight(.bold))
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            .padding(16)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.white.opacity(0.05))
-                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(16)
-            }
-            .background(Color.black.opacity(0.97).ignoresSafeArea())
-            .navigationTitle("Guide")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                }
-            }
-        }
-    }
-    
-    
     // Resolve MEDIA_BASE_URL from Info.plist; default to Supabase public bucket
     private func appMediaBaseURL() -> URL? {
         if let raw = Bundle.main.object(forInfoDictionaryKey: "MEDIA_BASE_URL") as? String {
