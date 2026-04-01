@@ -34,11 +34,14 @@ _SYMPTOM_FOLLOWUP_STATES = {"new", "ongoing", "improving", "worse"}
 _EXPERIENCE_MODES = {"scientific", "mystical"}
 _GUIDE_TYPES = {"cat", "robot", "dog"}
 _TONE_STYLES = {"straight", "balanced", "humorous"}
+_TEMP_UNITS = {"F", "C"}
+_DEFAULT_TEMP_UNIT = "F"
 _ONBOARDING_STEPS = {
     "welcome",
     "mode",
     "guide",
     "tone",
+    "temperature_unit",
     "sensitivities",
     "health_context",
     "location",
@@ -94,6 +97,7 @@ class ProfilePreferencesIn(BaseModel):
     mode: Optional[str] = Field(default=None)
     guide: Optional[str] = Field(default=None)
     tone: Optional[str] = Field(default=None)
+    temp_unit: Optional[str] = Field(default=None)
     lunar_sensitivity_declared: Optional[bool] = Field(default=None)
     onboarding_step: Optional[str] = Field(default=None)
     onboarding_completed: Optional[bool] = Field(default=None)
@@ -128,6 +132,13 @@ def _normalize_tone_style(value: Optional[str], *, fallback: str) -> str:
     candidate = str(value or fallback).strip().lower() or fallback
     if candidate not in _TONE_STYLES:
         raise HTTPException(status_code=400, detail="invalid tone style")
+    return candidate
+
+
+def _normalize_temp_unit(value: Optional[str], *, fallback: str) -> str:
+    candidate = str(value or fallback).strip().upper() or fallback
+    if candidate not in _TEMP_UNITS:
+        raise HTTPException(status_code=400, detail="invalid temperature unit")
     return candidate
 
 
@@ -265,6 +276,7 @@ def _default_profile_preferences() -> Dict[str, Any]:
         "mode": "scientific",
         "guide": "cat",
         "tone": "balanced",
+        "temp_unit": None,
         "lunar_sensitivity_declared": False,
         "onboarding_step": "welcome",
         "onboarding_completed": False,
@@ -361,6 +373,7 @@ async def _fetch_profile_preferences(conn, user_id: str) -> Dict[str, Any]:
         "mode",
         "guide",
         "tone",
+        "temp_unit",
         "lunar_sensitivity_declared",
         "onboarding_step",
         "onboarding_completed",
@@ -389,6 +402,7 @@ async def _fetch_profile_preferences(conn, user_id: str) -> Dict[str, Any]:
         "mode": _normalize_experience_mode(row.get("mode"), fallback=defaults["mode"]),
         "guide": _normalize_guide_type(row.get("guide"), fallback=defaults["guide"]),
         "tone": _normalize_tone_style(row.get("tone"), fallback=defaults["tone"]),
+        "temp_unit": _normalize_temp_unit(row.get("temp_unit"), fallback=_DEFAULT_TEMP_UNIT) if row.get("temp_unit") else None,
         "lunar_sensitivity_declared": bool(row.get("lunar_sensitivity_declared")),
         "onboarding_step": _normalize_onboarding_step(row.get("onboarding_step"), fallback=defaults["onboarding_step"]),
         "onboarding_completed": bool(row.get("onboarding_completed")),
@@ -521,6 +535,7 @@ async def profile_preferences_upsert(
         "mode": _normalize_experience_mode(payload.mode, fallback=str(current.get("mode") or defaults["mode"])),
         "guide": _normalize_guide_type(payload.guide, fallback=str(current.get("guide") or defaults["guide"])),
         "tone": _normalize_tone_style(payload.tone, fallback=str(current.get("tone") or defaults["tone"])),
+        "temp_unit": _normalize_temp_unit(payload.temp_unit, fallback=str(current.get("temp_unit") or _DEFAULT_TEMP_UNIT)),
         "lunar_sensitivity_declared": (
             bool(payload.lunar_sensitivity_declared)
             if payload.lunar_sensitivity_declared is not None

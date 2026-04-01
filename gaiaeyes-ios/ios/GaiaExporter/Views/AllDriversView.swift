@@ -65,6 +65,7 @@ struct AllDriversView: View {
     let api: APIClient
     var mode: ExperienceMode = .scientific
     var tone: ToneStyle = .balanced
+    var tempUnit: TemperatureUnit = .localeDefault
     var showsCloseButton: Bool = true
     var initialFocusKey: String? = nil
     var signalBar: [SignalPill] = []
@@ -152,6 +153,19 @@ struct AllDriversView: View {
 
     private func translatedText(_ raw: String?) -> String? {
         vocabulary.presenting(raw)
+    }
+
+    private func localizedTemperatureDelta(_ celsius: Double?) -> String {
+        guard let celsius else { return "—" }
+        let converted = tempUnit == .fahrenheit ? celsius * 9.0 / 5.0 : celsius
+        return String(format: "%+.1f %@", converted, tempUnit.symbol)
+    }
+
+    private func localizedReading(for driver: DriverDetailItem) -> String? {
+        if driver.key == "temp" {
+            return localizedTemperatureDelta(driver.readingValue)
+        }
+        return driver.reading
     }
 
     private func severity(for driver: DriverDetailItem) -> StatusPill.Severity {
@@ -420,7 +434,7 @@ struct AllDriversView: View {
             mode: mode,
             tone: tone,
             title: translatedLabel(for: driver),
-            value: driver.reading,
+            value: localizedReading(for: driver),
             state: driver.stateLabel ?? driver.state.capitalized,
             interpretation: translatedReason,
             bullets: bullets,
@@ -668,6 +682,7 @@ struct AllDriversView: View {
                                     VStack(alignment: .leading, spacing: 0) {
                                         DriverRowView(
                                             driver: driver,
+                                            readingText: localizedReading(for: driver),
                                             translatedLabel: translatedLabel(for: driver),
                                             stateSeverity: severity(for: driver),
                                             roleAccent: roleAccent(driver.role),
@@ -895,6 +910,7 @@ private struct DriverCategoryFilterView: View {
 
 private struct DriverRowView: View {
     let driver: DriverDetailItem
+    let readingText: String?
     let translatedLabel: String
     let stateSeverity: StatusPill.Severity
     let roleAccent: Color
@@ -930,7 +946,7 @@ private struct DriverRowView: View {
                         Spacer(minLength: 8)
                         VStack(alignment: .trailing, spacing: 6) {
                             StatusPill(driver.stateLabel ?? driver.state.capitalized, severity: stateSeverity)
-                            if let reading = driver.reading, !reading.isEmpty {
+                            if let reading = readingText, !reading.isEmpty {
                                 Text(reading)
                                     .font(.caption.weight(.semibold))
                                     .foregroundColor(.white.opacity(0.64))

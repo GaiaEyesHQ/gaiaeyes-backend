@@ -67,11 +67,51 @@ enum ToneStyle: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum TemperatureUnit: String, CaseIterable, Codable, Identifiable {
+    case fahrenheit = "F"
+    case celsius = "C"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .fahrenheit:
+            return "Fahrenheit (\u{00B0}F)"
+        case .celsius:
+            return "Celsius (\u{00B0}C)"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .fahrenheit:
+            return "US-style weather display"
+        case .celsius:
+            return "Metric weather display"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .fahrenheit:
+            return "\u{00B0}F"
+        case .celsius:
+            return "\u{00B0}C"
+        }
+    }
+
+    static var localeDefault: TemperatureUnit {
+        let region = (Locale.current.region?.identifier ?? "").uppercased()
+        return region == "US" ? .fahrenheit : .celsius
+    }
+}
+
 enum OnboardingStep: String, CaseIterable, Codable, Identifiable {
     case welcome
     case mode
     case guide
     case tone
+    case temperatureUnit = "temperature_unit"
     case sensitivities
     case healthContext = "health_context"
     case location
@@ -87,6 +127,7 @@ enum OnboardingStep: String, CaseIterable, Codable, Identifiable {
         .mode,
         .guide,
         .tone,
+        .temperatureUnit,
         .sensitivities,
         .healthContext,
         .location,
@@ -188,6 +229,7 @@ struct UserExperienceProfile: Codable, Equatable {
     var mode: ExperienceMode = .scientific
     var guide: GuideType = .cat
     var tone: ToneStyle = .balanced
+    var tempUnit: TemperatureUnit = .localeDefault
     var lunarSensitivityDeclared: Bool = false
     var onboardingStep: OnboardingStep = .welcome
     var onboardingCompleted: Bool = false
@@ -201,6 +243,7 @@ struct UserExperienceProfile: Codable, Equatable {
         case mode
         case guide
         case tone
+        case tempUnit
         case lunarSensitivityDeclared
         case onboardingStep
         case onboardingCompleted
@@ -214,6 +257,7 @@ struct UserExperienceProfile: Codable, Equatable {
         mode = try container.decodeIfPresent(ExperienceMode.self, forKey: .mode) ?? .scientific
         guide = try container.decodeIfPresent(GuideType.self, forKey: .guide) ?? .cat
         tone = try container.decodeIfPresent(ToneStyle.self, forKey: .tone) ?? .balanced
+        tempUnit = try container.decodeIfPresent(TemperatureUnit.self, forKey: .tempUnit) ?? .localeDefault
         lunarSensitivityDeclared = try container.decodeIfPresent(Bool.self, forKey: .lunarSensitivityDeclared) ?? false
         onboardingStep = try container.decodeIfPresent(OnboardingStep.self, forKey: .onboardingStep) ?? .welcome
         onboardingCompleted = try container.decodeIfPresent(Bool.self, forKey: .onboardingCompleted) ?? false
@@ -236,6 +280,7 @@ struct UserExperienceProfileUpdate: Encodable {
     var mode: ExperienceMode? = nil
     var guide: GuideType? = nil
     var tone: ToneStyle? = nil
+    var tempUnit: TemperatureUnit? = nil
     var lunarSensitivityDeclared: Bool? = nil
     var onboardingStep: OnboardingStep? = nil
     var onboardingCompleted: Bool? = nil
@@ -246,6 +291,7 @@ struct UserExperienceProfileUpdate: Encodable {
         case mode
         case guide
         case tone
+        case tempUnit = "temp_unit"
         case lunarSensitivityDeclared = "lunar_sensitivity_declared"
         case onboardingStep = "onboarding_step"
         case onboardingCompleted = "onboarding_completed"

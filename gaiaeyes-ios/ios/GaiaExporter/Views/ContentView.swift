@@ -3118,8 +3118,12 @@ struct ContentView: View {
         let localStep = OnboardingStep(rawValue: onboardingStepRaw) ?? remoteStep
         let localIndex = OnboardingStep.ordered.firstIndex(of: localStep) ?? 0
         let remoteIndex = OnboardingStep.ordered.firstIndex(of: remoteStep) ?? 0
+        let temperatureStepIndex = OnboardingStep.ordered.firstIndex(of: .temperatureUnit) ?? 0
         if !incoming.onboardingCompleted && localIndex > remoteIndex {
             resolved.onboardingStep = localStep
+        }
+        if !incoming.onboardingCompleted && remoteIndex <= temperatureStepIndex {
+            resolved.tempUnit = .localeDefault
         }
         if onboardingCompleted && !incoming.onboardingCompleted {
             resolved.onboardingCompleted = true
@@ -3671,6 +3675,10 @@ struct ContentView: View {
             fallback: driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized
         )
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        if driver.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "temp",
+           let value = driver.value {
+            return "\(label) is running at a \(LocalConditionsFormatting.formatTemperatureDelta(value, unit: experienceProfile.tempUnit)) day-over-day swing."
+        }
         let display = (vocabulary.translating(driver.display) ?? driver.display ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !display.isEmpty {
@@ -5183,6 +5191,7 @@ struct ContentView: View {
         return VStack(spacing: 16) {
             MissionControlSectionView(
                 experienceMode: experienceProfile.mode,
+                tempUnit: experienceProfile.tempUnit,
                 gauges: dashboardGauges,
                 gaugesMeta: dashboardGaugesMeta,
                 gaugeZones: dashboardGaugeZones,
@@ -5232,6 +5241,7 @@ struct ContentView: View {
 
     private struct MissionControlSectionView: View {
         let experienceMode: ExperienceMode
+        let tempUnit: TemperatureUnit
         let gauges: DashboardGaugeSet?
         let gaugesMeta: [String: DashboardGaugeMeta]
         let gaugeZones: [DashboardGaugeZone]
@@ -5570,6 +5580,7 @@ struct ContentView: View {
         private struct DriverStatusRow: View {
             let driver: DashboardDriverItem
             let role: WhatMattersRole
+            let tempUnit: TemperatureUnit
             let zoneKey: String
             let pillSeverity: StatusPill.Severity
             let onTap: (() -> Void)?
@@ -5588,10 +5599,10 @@ struct ContentView: View {
                 } else {
                     text = String(format: "%.1f", value)
                 }
-                if unit.isEmpty { return text }
                 if key == "temp" {
-                    return "\(text)\u{00B0}C"
+                    return LocalConditionsFormatting.formatTemperatureDelta(value, unit: tempUnit)
                 }
+                if unit.isEmpty { return text }
                 return "\(text) \(unit)"
             }
 
@@ -5622,6 +5633,10 @@ struct ContentView: View {
                 let personal = (driver.personalReason ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 if !personal.isEmpty {
                     return personal
+                }
+                if driver.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "temp",
+                   let value = driver.value {
+                    return "Temperature swing is \(LocalConditionsFormatting.formatTemperatureDelta(value, unit: tempUnit)) over the last day."
                 }
                 let display = (driver.display ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 if !display.isEmpty {
@@ -6964,6 +6979,7 @@ struct ContentView: View {
                                 DriverStatusRow(
                                     driver: item.driver,
                                     role: item.role,
+                                    tempUnit: tempUnit,
                                     zoneKey: zoneKey,
                                     pillSeverity: pillSeverity(item.driver.severity),
                                     onTap: {
@@ -7626,6 +7642,7 @@ struct ContentView: View {
         let current: FeaturesToday?
         let outlook: SpaceForecastOutlook?
         let userOutlook: UserForecastOutlook?
+        let tempUnit: TemperatureUnit
         let updatedText: String?
         let usingYesterdayFallback: Bool
         let localHealthZip: String
@@ -7919,7 +7936,7 @@ struct ContentView: View {
             let weather = localHealth?.weather
             let air = localHealth?.air
             let pill = localConditionsPill(weather: weather, air: air)
-            let tempText = LocalConditionsFormatting.formatTempMetric(weather?.tempC)
+            let tempText = LocalConditionsFormatting.formatTemperature(weather?.tempC, unit: tempUnit)
             let pressureText = LocalConditionsFormatting.formatPressureShort(weather?.pressureHpa)
             let aqiText = LocalConditionsFormatting.formatNumber(effectiveAQIValue(air: air), decimals: 0)
             let status: String
@@ -9904,6 +9921,7 @@ struct ContentView: View {
     private struct InsightsHealthStatsCard: View {
         let current: FeaturesToday?
         let updatedText: String?
+        let tempUnit: TemperatureUnit
 
         private func metric(_ label: String, value: String, tint: Color) -> some View {
             LocalConditionsValueChip(label: label, value: value, tint: tint)
@@ -9970,7 +9988,7 @@ struct ContentView: View {
                             )
                             metric(
                                 "Temp Δ",
-                                value: signedValue(current?.temperatureDeviation?.value, suffix: "°C"),
+                                value: LocalConditionsFormatting.formatTemperatureDelta(current?.temperatureDeviation?.value, unit: tempUnit),
                                 tint: GaugePalette.elevated
                             )
                         }
@@ -10133,6 +10151,7 @@ struct ContentView: View {
         let current: FeaturesToday?
         let todayString: String
         let updatedText: String?
+        let tempUnit: TemperatureUnit
         let bannerText: String?
         let usingYesterdayFallback: Bool
         let todayCount: Int
@@ -10303,7 +10322,8 @@ struct ContentView: View {
 
                         InsightsHealthStatsCard(
                             current: current,
-                            updatedText: updatedText
+                            updatedText: updatedText,
+                            tempUnit: tempUnit
                         )
 
                         if shouldShowLunarCard {
@@ -11244,6 +11264,7 @@ struct ContentView: View {
                 current: selection.current,
                 todayString: chicagoTodayString(),
                 updatedText: selection.updatedText,
+                tempUnit: experienceProfile.tempUnit,
                 bannerText: featuresCachedBannerText,
                 usingYesterdayFallback: selection.usingYesterdayFallback,
                 todayCount: symptomsToday.count,
@@ -11349,6 +11370,7 @@ struct ContentView: View {
                 current: selection.current,
                 outlook: resolvedSpaceOutlookPayload,
                 userOutlook: resolvedUserOutlookPayload,
+                tempUnit: experienceProfile.tempUnit,
                 updatedText: selection.updatedText,
                 usingYesterdayFallback: selection.usingYesterdayFallback,
                 localHealthZip: localHealthZip,
@@ -11444,6 +11466,7 @@ struct ContentView: View {
                 drivers: dashboardPayload?.drivers ?? [],
                 mode: experienceProfile.mode,
                 tone: experienceProfile.tone,
+                tempUnit: experienceProfile.tempUnit,
                 isLoading: localHealthLoading,
                 error: localHealthError,
                 useGPS: profileUseGPS,
@@ -11485,6 +11508,7 @@ struct ContentView: View {
                 current: selection.current,
                 todayString: chicagoTodayString(),
                 updatedText: selection.updatedText,
+                tempUnit: experienceProfile.tempUnit,
                 bannerText: featuresCachedBannerText,
                 usingYesterdayFallback: selection.usingYesterdayFallback,
                 todayCount: symptomsToday.count,
@@ -11565,37 +11589,8 @@ struct ContentView: View {
     }
 
     private var contentViewBody: some View {
-        TabView(selection: $selectedTab) {
-            dashboardNavigationStack
-                .tabItem {
-                    Label(AppTab.home.title, systemImage: AppTab.home.systemImage)
-                }
-                .tag(AppTab.home)
-
-            bodyNavigationStack
-                .tabItem {
-                    Label(AppTab.body.title, systemImage: AppTab.body.systemImage)
-                }
-                .tag(AppTab.body)
-
-            patternsNavigationStack
-                .tabItem {
-                    Label(AppTab.patterns.title, systemImage: AppTab.patterns.systemImage)
-                }
-                .tag(AppTab.patterns)
-
-            outlookNavigationStack
-                .tabItem {
-                    Label(AppTab.outlook.title, systemImage: AppTab.outlook.systemImage)
-                }
-                .tag(AppTab.outlook)
-
-            exploreNavigationStack
-                .tabItem {
-                    Label(AppTab.explore.title, systemImage: AppTab.explore.systemImage)
-                }
-                .tag(AppTab.explore)
-        }
+        let primaryModalShell = AnyView(
+            mainTabView
         .sheet(isPresented: $showGuideSheet) {
             GuideHubView(
                 profileStore: guideProfileStore,
@@ -11664,6 +11659,7 @@ struct ContentView: View {
                     current: current,
                     outlook: resolvedOutlook,
                     userOutlook: resolvedUserOutlook,
+                    tempUnit: experienceProfile.tempUnit,
                     updatedText: updatedText,
                     usingYesterdayFallback: usingYesterdayFallback,
                     localHealthZip: localHealthZip,
@@ -11741,6 +11737,7 @@ struct ContentView: View {
                             drivers: dashboardPayload?.drivers ?? [],
                             mode: experienceProfile.mode,
                             tone: experienceProfile.tone,
+                            tempUnit: experienceProfile.tempUnit,
                             isLoading: localHealthLoading,
                             error: localHealthError,
                             useGPS: profileUseGPS,
@@ -11782,6 +11779,7 @@ struct ContentView: View {
                             current: current,
                             todayString: chicagoTodayString(),
                             updatedText: updatedText,
+                            tempUnit: experienceProfile.tempUnit,
                             bannerText: featuresCachedBannerText,
                             usingYesterdayFallback: usingYesterdayFallback,
                             todayCount: symptomsToday.count,
@@ -11864,6 +11862,10 @@ struct ContentView: View {
                 persistentSignalBar(onTap: handleInsightsSignalTap)
             }
         }
+        )
+
+        let settingsModalShell = AnyView(
+            primaryModalShell
         .sheet(isPresented: $showMissionSettingsSheet) {
             let sectionForTag: (TagCatalogItem) -> Bool = { item in
                 let canonicalKey = canonicalProfileTagKey(item.tagKey)
@@ -11961,6 +11963,20 @@ struct ContentView: View {
                                         .foregroundColor(.secondary)
                                 }
 
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Temperature Units")
+                                        .font(.subheadline.weight(.semibold))
+                                    Picker("Temperature Units", selection: $experienceProfile.tempUnit) {
+                                        ForEach(TemperatureUnit.allCases) { unit in
+                                            Text(unit.rawValue == "F" ? "\u{00B0}F" : "\u{00B0}C").tag(unit)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    Text("Current weather, forecast, drivers, and alerts switch instantly.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+
                                 Toggle(isOn: $experienceProfile.lunarSensitivityDeclared) {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("Prioritize lunar overlays")
@@ -11983,6 +11999,9 @@ struct ContentView: View {
                         }
                         .onChange(of: experienceProfile.tone, initial: false) { _, newValue in
                             Task { await saveProfilePreferences(UserExperienceProfileUpdate(tone: newValue)) }
+                        }
+                        .onChange(of: experienceProfile.tempUnit, initial: false) { _, newValue in
+                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(tempUnit: newValue)) }
                         }
                         .onChange(of: experienceProfile.lunarSensitivityDeclared, initial: false) { _, newValue in
                             Task { await saveProfilePreferences(UserExperienceProfileUpdate(lunarSensitivityDeclared: newValue)) }
@@ -12542,6 +12561,10 @@ struct ContentView: View {
                 .navigationBarTitleDisplayMode(.inline)
             }
         }
+        )
+
+        let secondaryModalShell = AnyView(
+            settingsModalShell
         .sheet(isPresented: $showLocalConditionsSheet) {
             NavigationStack {
                 LocalConditionsView(
@@ -12550,6 +12573,7 @@ struct ContentView: View {
                     drivers: dashboardPayload?.drivers ?? [],
                     mode: experienceProfile.mode,
                     tone: experienceProfile.tone,
+                    tempUnit: experienceProfile.tempUnit,
                     isLoading: localHealthLoading,
                     error: localHealthError,
                     useGPS: profileUseGPS,
@@ -12621,14 +12645,15 @@ struct ContentView: View {
                     api: state.apiWithAuth(),
                     mode: experienceProfile.mode,
                     tone: experienceProfile.tone,
+                    tempUnit: experienceProfile.tempUnit,
                     showsCloseButton: true,
                     initialFocusKey: allDriversFocusKey,
                     signalBar: persistentSignalBarItems,
+                    onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },
+                    onLogSymptoms: { openSymptomLogFromAllDrivers() },
                     onOpenHome: { selectedTab = .home },
                     onOpenBody: { selectedTab = .body },
                     onOpenPatternsTab: { selectedTab = .patterns },
-                    onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },
-                    onLogSymptoms: { openSymptomLogFromAllDrivers() },
                     onOpenPatterns: { openInsightsFromAllDrivers(route: .yourPatterns) },
                     onOpenOutlookTab: { selectedTab = .outlook },
                     onOpenOutlook: { openInsightsFromAllDrivers(route: .yourOutlook) },
@@ -12642,6 +12667,10 @@ struct ContentView: View {
         }) {
             symptomLogSheet(isPresented: $showSymptomSheet)
         }
+        )
+
+        let onboardingShell = AnyView(
+            secondaryModalShell
         .fullScreenCover(isPresented: $showOnboardingFlow) {
             OnboardingFlowView(
                 isPresented: $showOnboardingFlow,
@@ -12715,6 +12744,9 @@ struct ContentView: View {
         .sheet(isPresented: $showMagnetosphereDetail) {
             MagnetosphereDetailView(data: magnetosphere)
         }
+        )
+
+        return onboardingShell
         .fullScreenCover(isPresented: $showInteractiveViewer) {
             if let item = interactiveVisualItem {
                 VisualsInteractiveViewer(
@@ -12729,6 +12761,86 @@ struct ContentView: View {
                 .ignoresSafeArea()
             }
         }
+    }
+
+    private struct RootTabShellView: View {
+        @Binding var selectedTab: AppTab
+        let homeTab: AnyView
+        let bodyTab: AnyView
+        let patternsTab: AnyView
+        let outlookTab: AnyView
+        let exploreTab: AnyView
+
+        var body: some View {
+            TabView(selection: $selectedTab) {
+                homeTab
+                bodyTab
+                patternsTab
+                outlookTab
+                exploreTab
+            }
+        }
+    }
+
+    private var mainTabView: some View {
+        RootTabShellView(
+            selectedTab: $selectedTab,
+            homeTab: homeTabView,
+            bodyTab: bodyTabView,
+            patternsTab: patternsTabView,
+            outlookTab: outlookTabView,
+            exploreTab: exploreTabView
+        )
+    }
+
+    private var homeTabView: AnyView {
+        AnyView(
+            dashboardNavigationStack
+                .tabItem {
+                    Label(AppTab.home.title, systemImage: AppTab.home.systemImage)
+                }
+                .tag(AppTab.home)
+        )
+    }
+
+    private var bodyTabView: AnyView {
+        AnyView(
+            bodyNavigationStack
+                .tabItem {
+                    Label(AppTab.body.title, systemImage: AppTab.body.systemImage)
+                }
+                .tag(AppTab.body)
+        )
+    }
+
+    private var patternsTabView: AnyView {
+        AnyView(
+            patternsNavigationStack
+                .tabItem {
+                    Label(AppTab.patterns.title, systemImage: AppTab.patterns.systemImage)
+                }
+                .tag(AppTab.patterns)
+        )
+    }
+
+    private var outlookTabView: AnyView {
+        AnyView(
+            outlookNavigationStack
+                .tabItem {
+                    Label(AppTab.outlook.title, systemImage: AppTab.outlook.systemImage)
+                }
+                .tag(AppTab.outlook)
+        )
+    }
+
+    private var exploreTabView: AnyView {
+        AnyView(
+            exploreNavigationStack
+                .tabItem {
+                    Label(AppTab.explore.title, systemImage: AppTab.explore.systemImage)
+                }
+                .tag(AppTab.explore)
+        )
     }
 
     // Resolve MEDIA_BASE_URL from Info.plist; default to Supabase public bucket
@@ -14638,20 +14750,42 @@ struct ContentView: View {
             return String(format: "%.\(decimals)f", value)
         }
 
+        static func convertTemp(_ valueC: Double?, unit: TemperatureUnit) -> Double? {
+            guard let valueC else { return nil }
+            if unit == .fahrenheit {
+                return (valueC * 9.0 / 5.0) + 32.0
+            }
+            return valueC
+        }
+
+        static func convertTempDelta(_ valueC: Double?, unit: TemperatureUnit) -> Double? {
+            guard let valueC else { return nil }
+            if unit == .fahrenheit {
+                return valueC * 9.0 / 5.0
+            }
+            return valueC
+        }
+
+        static func formatTemperature(_ celsius: Double?, unit: TemperatureUnit, decimals: Int = 1) -> String {
+            guard let converted = convertTemp(celsius, unit: unit) else { return "—" }
+            return "\(String(format: "%.\(decimals)f", converted)) \(unit.symbol)"
+        }
+
+        static func formatTemperatureDelta(_ celsius: Double?, unit: TemperatureUnit, decimals: Int = 1) -> String {
+            guard let converted = convertTempDelta(celsius, unit: unit) else { return "—" }
+            return "\(String(format: "%+.\(decimals)f", converted)) \(unit.symbol)"
+        }
+
         static func formatTempMetric(_ celsius: Double?) -> String {
-            guard let celsius else { return "—" }
-            return "\(String(format: "%.1f", celsius)) °C"
+            formatTemperature(celsius, unit: .celsius)
         }
 
         static func formatTempImperial(_ celsius: Double?) -> String {
-            guard let celsius else { return "—" }
-            let fahrenheit = (celsius * 9.0 / 5.0) + 32.0
-            return "\(String(format: "%.1f", fahrenheit)) °F"
+            formatTemperature(celsius, unit: .fahrenheit)
         }
 
-        static func formatTempDelta(_ celsius: Double?) -> String {
-            guard let celsius else { return "—" }
-            return "\(String(format: "%+.1f", celsius)) °C"
+        static func formatTempDelta(_ celsius: Double?, unit: TemperatureUnit = .celsius) -> String {
+            formatTemperatureDelta(celsius, unit: unit)
         }
 
         static func formatPressure(_ hpa: Double?) -> String {
@@ -15060,6 +15194,7 @@ struct ContentView: View {
         let drivers: [DashboardDriverItem]
         let mode: ExperienceMode
         let tone: ToneStyle
+        let tempUnit: TemperatureUnit
         let isLoading: Bool
         let error: String?
         let useGPS: Bool
@@ -15073,6 +15208,7 @@ struct ContentView: View {
             drivers: [DashboardDriverItem],
             mode: ExperienceMode = .scientific,
             tone: ToneStyle = .balanced,
+            tempUnit: TemperatureUnit,
             isLoading: Bool,
             error: String?,
             useGPS: Bool,
@@ -15083,6 +15219,7 @@ struct ContentView: View {
             self.drivers = drivers
             self.mode = mode
             self.tone = tone
+            self.tempUnit = tempUnit
             self.isLoading = isLoading
             self.error = error
             self.useGPS = useGPS
@@ -15104,7 +15241,7 @@ struct ContentView: View {
             case "aqi", "sw":
                 return unit.isEmpty ? String(Int(round(value))) : "\(String(Int(round(value)))) \(unit)"
             case "temp":
-                return "\(String(format: "%+.1f", value))°C"
+                return LocalConditionsFormatting.formatTemperatureDelta(value, unit: tempUnit)
             case "pressure", "bz":
                 return unit.isEmpty ? String(format: "%+.1f", value) : "\(String(format: "%+.1f", value)) \(unit)"
             case "schumann":
@@ -15202,7 +15339,7 @@ struct ContentView: View {
                 fallbackLabel: "Temperature Swing",
                 fallbackState: state,
                 fallbackSeverity: severity,
-                fallbackDetail: LocalConditionsFormatting.formatTempDelta(weather?.tempDelta24hC)
+                fallbackDetail: LocalConditionsFormatting.formatTemperatureDelta(weather?.tempDelta24hC, unit: tempUnit)
             )
         }
 
@@ -15302,8 +15439,8 @@ struct ContentView: View {
         }
 
         private func forecastTempRange(_ day: LocalForecastDay) -> String {
-            let high = LocalConditionsFormatting.formatTempMetric(day.tempHighC)
-            let low = LocalConditionsFormatting.formatTempMetric(day.tempLowC)
+            let high = LocalConditionsFormatting.formatTemperature(day.tempHighC, unit: tempUnit)
+            let low = LocalConditionsFormatting.formatTemperature(day.tempLowC, unit: tempUnit)
             return "\(high) / \(low)"
         }
 
@@ -15448,16 +15585,16 @@ struct ContentView: View {
                         LocalConditionsSurfaceCard(title: "Weather", icon: "thermometer.medium") {
                             HStack(alignment: .top, spacing: 12) {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(LocalConditionsFormatting.formatTempMetric(weather?.tempC))
+                                    Text(LocalConditionsFormatting.formatTemperature(weather?.tempC, unit: tempUnit))
                                         .font(.system(size: 34, weight: .bold, design: .rounded))
-                                    Text(LocalConditionsFormatting.formatTempImperial(weather?.tempC))
+                                    Text("Shown in \(tempUnit.symbol)")
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
                                 }
                                 Spacer()
                                 LocalConditionsValueChip(
                                     label: "Temp 24h Δ",
-                                    value: LocalConditionsFormatting.formatTempDelta(weather?.tempDelta24hC),
+                                    value: LocalConditionsFormatting.formatTemperatureDelta(weather?.tempDelta24hC, unit: tempUnit),
                                     tint: GaugePalette.zoneColor(tempStatus.severityKey)
                                 )
                             }
@@ -15486,8 +15623,8 @@ struct ContentView: View {
                                         humorous: "The weather changed its mind again."
                                     ),
                                     bullets: [
-                                        "Current temp: \(LocalConditionsFormatting.formatTempMetric(weather?.tempC))",
-                                        "24h swing: \(LocalConditionsFormatting.formatTempDelta(weather?.tempDelta24hC))",
+                                        "Current temp: \(LocalConditionsFormatting.formatTemperature(weather?.tempC, unit: tempUnit))",
+                                        "24h swing: \(LocalConditionsFormatting.formatTemperatureDelta(weather?.tempDelta24hC, unit: tempUnit))",
                                         "Humidity: \(LocalConditionsFormatting.formatPercent(weather?.humidityPct))"
                                     ],
                                     updatedText: updatedText
@@ -15679,7 +15816,7 @@ struct ContentView: View {
                                                     Text(forecastTempRange(day))
                                                         .font(.subheadline.weight(.semibold))
                                                     if let tempDelta = day.tempDeltaFromPriorDayC {
-                                                        Text("\(String(format: "%+.1f", tempDelta))°C vs prior day")
+                                                        Text("\(LocalConditionsFormatting.formatTemperatureDelta(tempDelta, unit: tempUnit)) vs prior day")
                                                             .font(.caption2)
                                                             .foregroundColor(.secondary)
                                                     }

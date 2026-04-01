@@ -31,6 +31,8 @@ private struct OnboardingFlowCopy {
     let guideSubtitle: String
     let toneTitle: String
     let toneSubtitle: String
+    let temperatureTitle: String
+    let temperatureSubtitle: String
     let sensitivitiesTitle: String
     let sensitivitiesSubtitle: String
     let healthContextTitle: String
@@ -89,6 +91,8 @@ private struct OnboardingFlowCopy {
                 guideSubtitle: "A little personality, without changing the truth layer.",
                 toneTitle: "How should Gaia Eyes speak to you?",
                 toneSubtitle: "Tone changes the presentation, not the underlying truth.",
+                temperatureTitle: "How do you prefer temperature?",
+                temperatureSubtitle: "Gaia keeps weather data internally in Celsius and converts it only for display.",
                 sensitivitiesTitle: "What tends to affect you most?",
                 sensitivitiesSubtitle: "Pick the signals Gaia should emphasize first. You can adjust these later.",
                 healthContextTitle: "Optional health context",
@@ -155,6 +159,8 @@ private struct OnboardingFlowCopy {
                 guideSubtitle: "A little personality, without changing the truth layer.",
                 toneTitle: "How should Gaia Eyes speak to you?",
                 toneSubtitle: "Tone changes the presentation, not the underlying truth.",
+                temperatureTitle: "How do you prefer temperature?",
+                temperatureSubtitle: "Gaia keeps weather data internally in Celsius and converts it only for display.",
                 sensitivitiesTitle: "What tends to affect you most?",
                 sensitivitiesSubtitle: "Pick the signals Gaia should emphasize first. You can adjust these later.",
                 healthContextTitle: "Optional health context",
@@ -380,6 +386,8 @@ struct OnboardingFlowView: View {
             guideStep
         case .tone:
             toneStep
+        case .temperatureUnit:
+            temperatureStep
         case .sensitivities:
             tagStep(
                 title: copy.sensitivitiesTitle,
@@ -526,7 +534,22 @@ struct OnboardingFlowView: View {
             subtitleFor: \.subtitle
         ) { tone in
             profile.tone = tone
-            await onPersistExperience(UserExperienceProfileUpdate(tone: tone, onboardingStep: .sensitivities))
+            await onPersistExperience(UserExperienceProfileUpdate(tone: tone, onboardingStep: .temperatureUnit))
+            currentStep = .temperatureUnit
+        }
+    }
+
+    private var temperatureStep: some View {
+        selectionStep(
+            title: copy.temperatureTitle,
+            subtitle: copy.temperatureSubtitle,
+            options: TemperatureUnit.allCases,
+            selected: profile.tempUnit,
+            titleFor: \.title,
+            subtitleFor: \.subtitle
+        ) { unit in
+            profile.tempUnit = unit
+            await onPersistExperience(UserExperienceProfileUpdate(tempUnit: unit, onboardingStep: .sensitivities))
             currentStep = .sensitivities
         }
     }
