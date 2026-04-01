@@ -626,13 +626,41 @@ private struct DashboardEarthscopePost: Codable, Hashable {
     let title: String?
     let caption: String?
     let bodyMarkdown: String?
+    let metricsJson: MemberEarthscopeMetricsPayload?
     let updatedAt: String?
 
     private enum CodingKeys: String, CodingKey {
         case day, title, caption
         case bodyMarkdown
+        case metricsJson
         case updatedAt
     }
+}
+
+private struct DashboardVoiceSemanticFacts: Codable, Hashable {
+    let symptomPhrases: [String]?
+}
+
+private struct DashboardVoiceSemanticInterpretation: Codable, Hashable {
+    let seedDailyBrief: String?
+    let seedSummary: String?
+    let seedNowText: String?
+    let themeSentence: String?
+}
+
+private struct DashboardVoiceSemanticAction: Codable, Hashable {
+    let label: String?
+}
+
+private struct DashboardVoiceSemanticActions: Codable, Hashable {
+    let primary: [DashboardVoiceSemanticAction]?
+}
+
+private struct DashboardVoiceSemantic: Codable, Hashable {
+    let kind: String?
+    let facts: DashboardVoiceSemanticFacts?
+    let interpretation: DashboardVoiceSemanticInterpretation?
+    let actions: DashboardVoiceSemanticActions?
 }
 
 private struct DashboardPayload: Codable {
@@ -708,8 +736,9 @@ private struct UserPatternsPayload: Codable {
     let bodySignalsPatterns: [UserPatternCard]?
 }
 
-private struct MemberEarthscopeMetricsPayload: Decodable {
+private struct MemberEarthscopeMetricsPayload: Codable, Hashable {
     let gauges: DashboardGaugeSet?
+    let voiceSemantic: DashboardVoiceSemantic?
 }
 
 private struct MemberEarthscopePostPayload: Decodable {
@@ -2737,15 +2766,74 @@ struct ContentView: View {
         return hasVisibleContent ? post : nil
     }
 
+    private func compactEarthscopeSummary(_ values: [String?], maxCount: Int) -> String? {
+        var cleaned: [String] = []
+        for value in values {
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if trimmed.isEmpty || cleaned.contains(trimmed) {
+                continue
+            }
+            cleaned.append(trimmed)
+            if cleaned.count >= maxCount {
+                break
+            }
+        }
+        guard !cleaned.isEmpty else { return nil }
+        return cleaned.joined(separator: " ")
+    }
+
+    private func earthscopeSemanticSummary(from post: DashboardEarthscopePost?) -> String? {
+        guard let semantic = post?.metricsJson?.voiceSemantic else { return nil }
+        let symptomPreview = semantic.facts?.symptomPhrases?.first
+        let primaryAction = semantic.actions?.primary?.first?.label
+
+        switch semantic.kind {
+        case "earthscope_member_post":
+            return compactEarthscopeSummary(
+                [
+                    semantic.interpretation?.seedSummary,
+                    semantic.interpretation?.seedNowText,
+                    symptomPreview.map { "You may notice \($0)." },
+                    primaryAction,
+                ],
+                maxCount: 2
+            )
+        case "earthscope_summary":
+            return compactEarthscopeSummary(
+                [
+                    semantic.interpretation?.seedDailyBrief,
+                    semantic.interpretation?.themeSentence,
+                    primaryAction,
+                ],
+                maxCount: 2
+            )
+        default:
+            return compactEarthscopeSummary(
+                [
+                    semantic.interpretation?.seedDailyBrief,
+                    semantic.interpretation?.themeSentence,
+                    primaryAction,
+                ],
+                maxCount: 1
+            )
+        }
+    }
+
     private var guideEarthscopeSummary: String? {
         let summary = dashboardPayload?.earthscopeSummary?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let summary, !summary.isEmpty {
             return summary
         }
         let requestedDay = dashboardPayload?.day ?? chicagoTodayString()
-        return preferredEarthscopePost(dashboardPayload?.personalPost, requestedDay: requestedDay)?.caption
-            ?? preferredEarthscopePost(dashboardPayload?.memberPost, requestedDay: requestedDay)?.caption
-            ?? preferredEarthscopePost(dashboardPayload?.publicPost, requestedDay: requestedDay)?.caption
+        let personalPost = preferredEarthscopePost(dashboardPayload?.personalPost, requestedDay: requestedDay)
+        let memberPost = preferredEarthscopePost(dashboardPayload?.memberPost, requestedDay: requestedDay)
+        let publicPost = preferredEarthscopePost(dashboardPayload?.publicPost, requestedDay: requestedDay)
+        return personalPost?.caption
+            ?? earthscopeSemanticSummary(from: personalPost)
+            ?? memberPost?.caption
+            ?? earthscopeSemanticSummary(from: memberPost)
+            ?? publicPost?.caption
+            ?? earthscopeSemanticSummary(from: publicPost)
     }
 
     private var guideEarthscopeUpdatedAt: String? {
@@ -2835,6 +2923,7 @@ struct ContentView: View {
                             title: memberPost.title,
                             caption: memberPost.caption,
                             bodyMarkdown: memberPost.bodyMarkdown,
+                            metricsJson: memberPost.metricsJson,
                             updatedAt: memberPost.updatedAt
                         )
                         resolvedPayload = DashboardPayload(
@@ -2942,6 +3031,7 @@ struct ContentView: View {
                             title: features.postTitle,
                             caption: features.postCaption,
                             bodyMarkdown: features.postBody,
+                            metricsJson: nil,
                             updatedAt: features.updatedAt
                         )
                         resolvedPayload = DashboardPayload(
@@ -3720,7 +3810,7 @@ struct ContentView: View {
         let headline: String
         if let topDriver = liveDrivers.first?.title, !topDriver.isEmpty {
             headline = "\(topDriver) is one of the clearest live signals right now."
-        } else if let summary = vocabulary.translating(dashboardPayload?.earthscopeSummary), !summary.isEmpty {
+        } else if let summary = vocabulary.translating(guideEarthscopeSummary), !summary.isEmpty {
             headline = summary
         } else {
             headline = "Your live signal stack is ready."
@@ -5170,7 +5260,7 @@ struct ContentView: View {
         let dashboardPrimaryDriver = dashboardPayload?.primaryDriver
         let dashboardSupportingDrivers = dashboardPayload?.supportingDrivers ?? []
         let dashboardModalModels = dashboardPayload?.modalModels
-        let dashboardEarthscopeSummary = dashboardPayload?.earthscopeSummary
+        let dashboardEarthscopeSummary = guideEarthscopeSummary
         let dashboardAlerts = dashboardPayload?.alerts ?? []
         let requestedEarthscopeDay = chicagoTodayString()
         let resolvedEarthscope: DashboardEarthscopePost? = {

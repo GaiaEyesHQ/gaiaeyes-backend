@@ -308,11 +308,27 @@ async def _call_dashboard_payload(conn, user_id: str, day: date) -> tuple[Dict[s
 def _post_row_to_payload(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not row:
         return None
+    metrics_json = row.get("metrics_json")
+    if isinstance(metrics_json, str):
+        try:
+            metrics_json = json.loads(metrics_json)
+        except Exception:
+            metrics_json = None
+
+    sources_json = row.get("sources_json")
+    if isinstance(sources_json, str):
+        try:
+            sources_json = json.loads(sources_json)
+        except Exception:
+            sources_json = None
+
     return {
         "day": str(row.get("day")) if row.get("day") else None,
         "title": row.get("title"),
         "caption": row.get("caption"),
         "body_markdown": row.get("body_markdown"),
+        "metrics_json": metrics_json if isinstance(metrics_json, dict) else None,
+        "sources_json": sources_json if isinstance(sources_json, dict) else None,
         "updated_at": (
             row.get("updated_at").astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
             if isinstance(row.get("updated_at"), datetime)
@@ -342,7 +358,7 @@ async def _fetch_public_post(conn, day: date) -> Optional[Dict[str, Any]]:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
             """
-            select day, title, caption, body_markdown, updated_at
+            select day, title, caption, body_markdown, metrics_json, sources_json, updated_at
               from content.daily_posts
              where day <= %s
              order by day desc, updated_at desc
@@ -359,7 +375,7 @@ async def _fetch_member_post(conn, user_id: str, day: date) -> Optional[Dict[str
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
             """
-            select day, title, caption, body_markdown, updated_at
+            select day, title, caption, body_markdown, metrics_json, sources_json, updated_at
               from content.daily_posts_user
              where user_id = %s
                and day <= %s
