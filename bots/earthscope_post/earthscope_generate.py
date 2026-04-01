@@ -15,7 +15,7 @@ Notes:
 
 import os, json, argparse, re
 import math
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 import sys
 from typing import Optional, Dict, Any, List
@@ -48,6 +48,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from services.openai_models import resolve_openai_model
+from services.voice import VoiceProfile, build_public_earthscope_semantic, render_public_earthscope_post
 
 # Supabase
 from supabase import create_client
@@ -447,6 +448,17 @@ def _ctx_platform(ctx: Dict[str, Any]) -> str:
     return str(ctx.get("platform") or PLATFORM or "default").strip() or "default"
 
 
+def _public_voice_bundle(ctx: Dict[str, Any]):
+    day_iso = _ctx_day_iso(ctx)
+    try:
+        day_value = date.fromisoformat(day_iso)
+    except Exception:
+        day_value = datetime.utcnow().date()
+    payload = build_public_earthscope_semantic(day=day_value, ctx=ctx)
+    rendered = render_public_earthscope_post(payload, voice_profile=VoiceProfile.public_playful())
+    return payload, rendered
+
+
 def _stable_ctx_hash(ctx: Dict[str, Any]) -> str:
     omit = {"day", "platform", "intro_hint", "banned_openers", "recent_captions", "recent_analogies"}
     normalized = {k: ctx[k] for k in sorted(ctx.keys()) if k not in omit}
@@ -692,75 +704,14 @@ def _needs_rehook(s: str) -> bool:
 
 # --- deterministic rule-based copy ---
 def _rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
-    kp = ctx.get("kp_max_24h")
-    bz = ctx.get("bz_min")
-    sw = ctx.get("solar_wind_kms")
-    flr = ctx.get("flares_24h")
-    cme = ctx.get("cmes_24h")
-    sr = ctx.get("schumann_value_hz")
-
-    tone = _tone_from_ctx(ctx)
-    # Caption: concise, clinical, social-friendly
-    kp_band = _band_kp(kp); sw_band = _band_sw(sw); bz_txt = _bz_desc(bz)
-    parts = []
-    if kp is not None: parts.append(f"Kp { _fmt_num(kp,1) } ({kp_band})")
-    if sw is not None: parts.append(f"SW { int(round(float(sw))) } km/s ({sw_band})")
-    if bz is not None: parts.append(f"Bz { _fmt_num(bz,1) } nT ({bz_txt})")
-    cap_lead = " • ".join(parts) if parts else "Space weather update"
-    if tone == "stormy":
-        trailing = "Expect sensitivity and flares; readjust plans as necessary."
-    elif tone == "unsettled":
-        trailing = "Some variability—schedule breaks in your day and pace yourself with critical tasks."
-    elif tone == "calm":
-        trailing = "Ideal day—great day for playing catch up and recovery."
-    else:
-        trailing = "Moderate conditions—steady and consistent tends to work best."
-    caption = f"{cap_lead}. {trailing}"
-
-    # Snapshot bullets (only present values)
-    snap = []
-    if kp is not None: snap.append(f"- Kp max (24h): { _fmt_num(kp,1) }")
-    if sw is not None: snap.append(f"- Solar wind: { int(round(float(sw))) } km/s")
-    if bz is not None: snap.append(f"- Bz: { _fmt_num(bz,1) } nT ({bz_txt})")
-    if flr is not None: snap.append(f"- Flares (24h): {int(round(float(flr)))}")
-    if cme is not None: snap.append(f"- CMEs (24h): {int(round(float(cme)))}")
-    if sr is not None: snap.append(f"- Schumann f0: { _fmt_num(sr,2) } Hz")
-    snapshot = "\n".join(snap)
-
-    # How it may feel (human clinical tone)
-    feel = []
-    if tone in ("stormy","unsettled"):
-        feel.append(f"- Focus/energy: {_pick_variant('feel_unsettled') or 'Expect ebbs/spikes; keep tasks short.'}")
-        feel.append("- Autonomic/HRV: Southward Bz or higher Kp can nudge HRV down in some; paced breathing helps.")
-        feel.append(f"- Sleep: {_pick_variant('sleep_guard')}")
-        if EARTHSCOPE_FIRST_PERSON:
-            feel.append(f"- Clinician note: {_pick_variant('nerve_note', seed_extra=1)}")
-        else:
-            feel.append(f"- Sensitivity note: {_pick_variant('nerve_note', seed_extra=1)}")
-        feel.append("- Comms/GPS: Tech may be glitchy today. Satellite based services, especially. Nervous System sensitivities may increase.")
-    else:
-        feel.append(f"- Focus/energy: {_pick_variant('feel_stable') or 'Stable; good window to get things done.'}")
-        feel.append("- Autonomic/HRV: Great for recovery and healing practices.")
-        feel.append("- Sleep: Keep evening light warm and low.")
-        if EARTHSCOPE_FIRST_PERSON:
-            feel.append("- Clinician note: I see steadier HRV and less reactivity for many on days like this.")
-    affects = "\n".join(feel)
-
-    # Care notes (practical, small set)
-    care_lines = []
-    if tone in ("stormy","unsettled"):
-        care_lines.append("- 5–10 min paced breathing (e.g., 4:6) or brief HRV biofeedback")
-        care_lines.append("- Hydration + electrolytes; short daylight exposure; move easy")
-        care_lines.append("- Protect sleep: blue‑light filters and a consistent wind‑down")
-        care_lines.append("- If sensitive, quick grounding/outdoor walk; warm pack for nerve flare windows")
-    else:
-        care_lines.append("- Block 1–2 focus sessions (60–90 min) while the field is steady")
-        care_lines.append("- Natural light and movement breaks to reinforce circadian tone")
-        care_lines.append("- Hydrate; keep caffeine earlier in the day")
-    playbook = "\n".join(care_lines)
-
-    tags = "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann"
-    return {"caption": caption, "snapshot": snapshot, "affects": affects, "playbook": playbook, "hashtags": tags}
+    _, rendered = _public_voice_bundle(ctx)
+    return {
+        "caption": rendered["caption"],
+        "snapshot": rendered["snapshot"],
+        "affects": rendered["affects"],
+        "playbook": rendered["playbook"],
+        "hashtags": rendered["hashtags"],
+    }
 
 # --- banned phrase and repetition scrubber ---
 
@@ -1252,69 +1203,8 @@ def _build_snapshot_md(ctx: Dict[str, Any]) -> str:
 # --- qualitative, number-free snapshot builder ---
 
 def _qualitative_snapshot(ctx: Dict[str, Any]) -> str:
-    """Compose a brief, human overview (no numbers) for the snapshot section.
-    Keeps the same key ('snapshot') so downstream remains compatible.
-    """
-    tone = _tone_from_ctx(ctx)
-    kp_band = _band_kp(ctx.get("kp_max_24h"))
-    sw_band = _band_sw(ctx.get("solar_wind_kms"))
-    bz_txt  = _bz_desc(ctx.get("bz_min"))
-    flr  = ctx.get("flares_24h")
-    cmes = ctx.get("cmes_24h")
-    sr   = ctx.get("schumann_value_hz")
-
-    lines: List[str] = []
-
-    # Lead sentence based on tone/bands
-    if tone == "stormy":
-        lines.append("It's an electrified day. Expect short surges and dips in energy.")
-    elif tone == "unsettled":
-        lines.append("Things are looking lively in the field—expect some fluctuations.")
-    elif tone == "calm":
-        lines.append("Steady as she goes—it's a good day for focused work and recovery.")
-    else:
-        lines.append("We've achieved the happy medium field day—consistency wins.")
-
-    # Optional humor/metaphor line (fallback only)
-    mh = (ctx.get("metaphor_hint") or "").strip()
-    if mh:
-        lines.append(f"Translation: it can feel like {mh} for some—pace the big stuff.")
-
-    # Solar drivers without citing numbers
-    driver_bits: List[str] = []
-    if (cmes or 0) > 0:
-        driver_bits.append("recent CME after-effects")
-    if (flr or 0) > 0:
-        driver_bits.append("fresh flare activity")
-    if bz_txt in ("southward", "strong southward", "slightly southward"):
-        driver_bits.append("southward IMF windows")
-    if sw_band in ("elevated", "high", "very-high"):
-        driver_bits.append("faster solar wind")
-    if driver_bits:
-        lines.append("Drivers: " + ", ".join(driver_bits) + ".")
-
-    # Schumann / resonance context
-    if isinstance(sr, (int, float)) and sr:
-        lines.append("Schumann resonance has been lively, matching reports of vivid dreams or restlessness for some.")
-    else:
-        lines.append("Resonance looks ordinary overall.")
-
-    # Aurora chances
-    if ctx.get("aurora_headline"):
-        lines.append("Aurora chances look favorable at higher latitudes—dark skies after local midnight tend to help.")
-
-    # Recent notable quakes
-    if ctx.get("quakes_count"):
-        lines.append("Recent notable earthquakes were logged; keep news checks brief if you’re prone to stress.")
-
-    # Severe weather
-    if ctx.get("severe_summary"):
-        lines.append("Regional storm/flood alerts are active—check local guidance if you’re in the affected area.")
-
-    # Close with guidance intent
-    lines.append("Keep a steady rhythm; if you run sensitive, utilize quick breath resets and short movement breaks. Try grounding techniques.")
-
-    return "Space Weather Snapshot\n" + " ".join(lines)
+    _, rendered = _public_voice_bundle(ctx)
+    return rendered["qualitative_snapshot"]
 # ============================================================
 # Optional pulse file: aurora, quakes, severe
 # ============================================================
@@ -2182,6 +2072,7 @@ def main():
         "harmonics": sr.get("schumann_harmonics"),
         "day": day,
         "platform": args.platform,
+        "first_person": EARTHSCOPE_FIRST_PERSON,
     }
     ctx["banned_openers"] = _recent_platform_openers(args.platform, limit=3)
     recent_captions = _recent_platform_captions(args.platform, limit=EARTHSCOPE_SIM_RECENT, before_day=day)
@@ -2264,6 +2155,7 @@ def main():
         "affects": affects,
         "playbook": playbook,
     }
+    public_voice_payload, public_voice_render = _public_voice_bundle(ctx)
 
     # Title via LLM (uses cached rewrite), with safe heuristic fallback
     client = openai_client()
@@ -2276,20 +2168,7 @@ def main():
     if llm_title:
         title = llm_title
     else:
-        # Fallback heuristic (previous behavior)
-        kpmax = ctx.get("kp_max_24h"); wind  = ctx.get("solar_wind_kms")
-        if kpmax is None and wind is None:
-            title = "Space Weather Update"
-        elif kpmax is not None and kpmax >= 6:
-            title = "Geomagnetic Storm Watch"
-        elif kpmax is not None and kpmax >= 4:
-            title = "Active Geomagnetics"
-        elif wind is not None and wind >= 600:
-            title = "High-Speed Solar Wind"
-        else:
-            # nudge small variety on calm days
-            calm_titles = ["Magnetic Calm","Steady Field","Quiet Skies","Clear Runway"]
-            random.seed(_daily_seed()); title = random.choice(calm_titles)
+        title = public_voice_render["title"]
 
     # 3) Prepare payloads
     metrics_json = {
@@ -2310,6 +2189,7 @@ def main():
         "tone": tone,
         "bands": bands,
         "sections": sections_struct,
+        "voice_semantic": public_voice_payload.to_dict(),
     }
     sources_json = {
         "marts.space_weather_daily": True,

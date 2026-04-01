@@ -21,6 +21,7 @@ from services.personalization.health_context import (
     PersonalizationProfile,
     build_personalization_profile,
 )
+from services.voice.drivers import build_driver_summary_semantic, render_driver_daily_brief
 
 
 SIGNAL_LABELS = {
@@ -668,20 +669,15 @@ def compute_personal_relevance(
         for row in supporting_drivers
         if str(row.get("personal_reason_short") or row.get("personal_reason") or "").strip()
     ]
-    daily_brief = ""
-    if primary_driver:
-        label = str(primary_driver.get("label") or primary_driver.get("key") or "This signal")
-        primary_short = str(primary_driver.get("personal_reason_short") or "").strip()
-        if override_note:
-            daily_brief = override_note
-        elif primary_short:
-            daily_brief = f"Right now, {label.lower()} looks most relevant for you. {primary_short}"
-        else:
-            daily_brief = f"Right now, {label.lower()} looks like the clearest current driver in your mix."
-        if supporting_drivers:
-            support_label = str(supporting_drivers[0].get("label") or supporting_drivers[0].get("key") or "").strip()
-            if support_label:
-                daily_brief += f" {support_label} is also in the mix."
+    driver_summary_semantic = build_driver_summary_semantic(
+        day=day,
+        raw_top_drivers=raw_top_drivers,
+        primary_driver=primary_driver,
+        supporting_drivers=supporting_drivers,
+        today_personal_themes=today_personal_themes,
+        override_note=override_note,
+    )
+    daily_brief = render_driver_daily_brief(driver_summary_semantic)
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -698,6 +694,7 @@ def compute_personal_relevance(
             "daily_brief": daily_brief,
             "override_note": override_note,
         },
+        "driver_summary_semantic": driver_summary_semantic.to_dict(),
         "compact_driver_lines": [_compact_driver_line(row) for row in scored_rows[:3]],
     }
 

@@ -53,7 +53,7 @@ Each major concept has one primary home:
 
 The Home surface no longer duplicates those destinations with a separate quick-links row. Cross-section movement should happen through the shared bottom navigation model.
 
-`All Drivers` now adds a matching bottom navigation strip inside its sheet so users can jump directly to `Home`, `Body`, `Patterns`, `Outlook`, or `Explore` without closing back through the modal flow first.
+`All Drivers` now opens inside the `Explore` navigation stack instead of a separate sheet, so it uses the exact same system bottom tab bar as the rest of the app.
 
 ## Debug / developer controls
 
@@ -75,6 +75,6 @@ This preserves the existing developer workflow without making debug affordances 
 - Confirm `Settings` includes an `About Gaia Eyes` section that opens the full page.
 - Confirm the Guide section in Settings shows the shared avatar preview and the reserved app-icon preference path.
 - Confirm the Home tab no longer shows the old quick-links row.
-- Confirm the `All Drivers` sheet shows the bottom tab shortcuts and each one returns to the matching main tab.
+- Confirm opening `All Drivers` keeps the real shared tab bar visible because the page now lives inside the `Explore` stack.
 - Confirm the debug panel can still be enabled from `Settings` -> `Advanced`.
 - Confirm existing sheets and detail routes still open for symptom logging, current symptoms, daily check-in, all drivers, local conditions, Schumann, and settings.

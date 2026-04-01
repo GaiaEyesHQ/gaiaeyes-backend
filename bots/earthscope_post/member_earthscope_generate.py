@@ -22,6 +22,7 @@ from bots.gauges.gauge_scorer import (
 from bots.gauges.signal_resolver import resolve_signals
 from bots.gauges.db_utils import upsert_row
 from services.mc_modals.modal_builder import earthscope_condition_note, earthscope_ranked_symptoms
+from services.voice.earthscope_posts import build_member_earthscope_semantic, render_member_earthscope_post
 
 try:
     from openai import OpenAI
@@ -698,31 +699,27 @@ def _render_member_post(
     now_text = f"{hook} {_health_status_now_sentence(gauges_row.get('health_status'), highlights)}".strip()
 
     all_driver_lines = _observed_driver_lines(active_states, alerts, local_payload)
-    driver_lines = "\n".join([f"- {line}" for line in all_driver_lines])
-
-    action_lines = "\n".join([f"- {a}" for a in actions])
     summary = _what_you_may_feel(ranked_symptoms=ranked_symptoms, condition_note=condition_note)
 
     disclaimer = definition.get("global_disclaimer") or ""
-
-    body = (
-        f"## Now\n{now_text}\n\n"
-        f"## Current Drivers\n{driver_lines}\n\n"
-        f"## What You May Feel\n{summary}\n\n"
-        f"## Supportive Actions\n{action_lines}\n\n"
-        f"## Disclaimer\n{disclaimer}\n"
+    semantic = build_member_earthscope_semantic(
+        day=_coerce_day(gauges_row.get("day")),
+        health_status=gauges_row.get("health_status"),
+        highlights=highlights,
+        drivers=normalized_drivers,
+        driver_lines=all_driver_lines,
+        ranked_symptoms=ranked_symptoms,
+        condition_note=condition_note,
+        actions=actions,
+        disclaimer=disclaimer,
+        seed_now_text=now_text,
+        seed_summary=summary,
+        title="Your EarthScope",
+        caption=None,
     )
-
-    title = "Your EarthScope"
-    caption = None
-    return {
-        "title": title,
-        "caption": caption,
-        "body_markdown": body,
-        "driver_lines": all_driver_lines,
-        "actions": actions,
-        "health_line": _health_status_line(gauges_row.get("health_status"), include_value=False),
-    }
+    rendered = render_member_earthscope_post(semantic)
+    rendered["voice_semantic"] = semantic.to_dict()
+    return rendered
 
 
 def _render_with_openai(
@@ -1032,6 +1029,10 @@ def generate_member_post_for_user(
         advisory = _render_trigger_advisory(trigger_events, gauges_row.get("health_status"))
         rendered["body_markdown"] = f"{rendered.get('body_markdown')}\n\n## Triggered Advisory\n{advisory}\n"
 
+    metrics_payload = dict(inputs_snapshot)
+    if rendered.get("voice_semantic"):
+        metrics_payload["voice_semantic"] = rendered.get("voice_semantic")
+
     payload = {
         "user_id": user_id,
         "day": day,
@@ -1039,7 +1040,7 @@ def generate_member_post_for_user(
         "title": rendered.get("title"),
         "caption": rendered.get("caption"),
         "body_markdown": rendered.get("body_markdown"),
-        "metrics_json": json.dumps(inputs_snapshot),
+        "metrics_json": json.dumps(metrics_payload),
         "sources_json": json.dumps({}),
         "inputs_hash": inputs_hash,
         "updated_at": datetime.now(timezone.utc),

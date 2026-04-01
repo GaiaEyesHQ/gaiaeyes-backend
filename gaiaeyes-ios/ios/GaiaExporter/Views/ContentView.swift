@@ -1895,7 +1895,6 @@ struct ContentView: View {
     @State private var dailyCheckInLoading: Bool = false
     @State private var dailyCheckInError: String? = nil
     @State private var showDailyCheckInSheet: Bool = false
-    @State private var showAllDriversSheet: Bool = false
     @State private var allDriversFocusKey: String? = nil
     @State private var isSubmittingSymptom: Bool = false
     @State private var symptomToast: SymptomToastState? = nil
@@ -1983,6 +1982,7 @@ struct ContentView: View {
         case currentSymptoms
         case earthquakes
         case hazards
+        case allDrivers
 
         var id: String { rawValue }
     }
@@ -2089,6 +2089,8 @@ struct ContentView: View {
                 openBody(route: .dailyCheckIn)
             case .currentSymptoms:
                 openBody(route: .currentSymptoms)
+            case .allDrivers:
+                openExplore(route: .allDrivers)
             default:
                 openExplore(route: route)
             }
@@ -2099,7 +2101,7 @@ struct ContentView: View {
 
     private func openAllDrivers(focus key: String? = nil) {
         allDriversFocusKey = normalizeDriverFocusKey(key)
-        showAllDriversSheet = true
+        openExplore(route: .allDrivers)
     }
 
     private func openAllDriversAfterClosingCurrentSymptoms(focus key: String? = nil) {
@@ -2107,7 +2109,7 @@ struct ContentView: View {
         showCurrentSymptomsSheet = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             allDriversFocusKey = normalized
-            showAllDriversSheet = true
+            openExplore(route: .allDrivers)
         }
     }
 
@@ -2116,36 +2118,24 @@ struct ContentView: View {
         showMissionInsightsSheet = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             allDriversFocusKey = normalized
-            showAllDriversSheet = true
+            openExplore(route: .allDrivers)
         }
     }
 
     private func openCurrentSymptomsFromAllDrivers() {
-        showAllDriversSheet = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            showCurrentSymptomsSheet = true
-        }
+        openBody(route: .currentSymptoms)
     }
 
     private func openSymptomLogFromAllDrivers() {
-        showAllDriversSheet = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            showSymptomSheet = true
-        }
+        showSymptomSheet = true
     }
 
     private func openInsightsFromAllDrivers(route: InsightsRoute) {
-        showAllDriversSheet = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            openMissionInsights(route: route)
-        }
+        openMissionInsights(route: route)
     }
 
     private func openSettingsFromAllDrivers() {
-        showAllDriversSheet = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            showSettingsSheet()
-        }
+        showSettingsSheet()
     }
 
     private var persistentSignalBarItems: [SignalPill] {
@@ -11616,6 +11606,21 @@ struct ContentView: View {
                     await fetchHazardsBrief()
                 }
             }
+        case .allDrivers:
+            AllDriversView(
+                api: state.apiWithAuth(),
+                mode: experienceProfile.mode,
+                tone: experienceProfile.tone,
+                tempUnit: experienceProfile.tempUnit,
+                showsCloseButton: false,
+                initialFocusKey: allDriversFocusKey,
+                signalBar: persistentSignalBarItems,
+                onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },
+                onLogSymptoms: { openSymptomLogFromAllDrivers() },
+                onOpenPatterns: { openInsightsFromAllDrivers(route: .yourPatterns) },
+                onOpenOutlook: { openInsightsFromAllDrivers(route: .yourOutlook) },
+                onOpenSetup: { openSettingsFromAllDrivers() }
+            )
         }
     }
 
@@ -11888,6 +11893,21 @@ struct ContentView: View {
                                 await fetchHazardsBrief()
                             }
                         }
+                    case .allDrivers:
+                        AllDriversView(
+                            api: state.apiWithAuth(),
+                            mode: experienceProfile.mode,
+                            tone: experienceProfile.tone,
+                            tempUnit: experienceProfile.tempUnit,
+                            showsCloseButton: false,
+                            initialFocusKey: allDriversFocusKey,
+                            signalBar: persistentSignalBarItems,
+                            onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },
+                            onLogSymptoms: { openSymptomLogFromAllDrivers() },
+                            onOpenPatterns: { openInsightsFromAllDrivers(route: .yourPatterns) },
+                            onOpenOutlook: { openInsightsFromAllDrivers(route: .yourOutlook) },
+                            onOpenSetup: { openSettingsFromAllDrivers() }
+                        )
                     }
                 }
                 .sheet(isPresented: $showInsightsSymptomSheet, onDismiss: {
@@ -12696,31 +12716,6 @@ struct ContentView: View {
                     onStatusChanged: { status in
                         dailyCheckInStatus = status
                     }
-                )
-            }
-        }
-        .sheet(isPresented: $showAllDriversSheet, onDismiss: {
-            allDriversFocusKey = nil
-        }) {
-            NavigationStack {
-                AllDriversView(
-                    api: state.apiWithAuth(),
-                    mode: experienceProfile.mode,
-                    tone: experienceProfile.tone,
-                    tempUnit: experienceProfile.tempUnit,
-                    showsCloseButton: true,
-                    initialFocusKey: allDriversFocusKey,
-                    signalBar: persistentSignalBarItems,
-                    onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },
-                    onLogSymptoms: { openSymptomLogFromAllDrivers() },
-                    onOpenHome: { selectedTab = .home },
-                    onOpenBody: { selectedTab = .body },
-                    onOpenPatternsTab: { selectedTab = .patterns },
-                    onOpenPatterns: { openInsightsFromAllDrivers(route: .yourPatterns) },
-                    onOpenOutlookTab: { selectedTab = .outlook },
-                    onOpenOutlook: { openInsightsFromAllDrivers(route: .yourOutlook) },
-                    onOpenExplore: { selectedTab = .explore },
-                    onOpenSetup: { openSettingsFromAllDrivers() }
                 )
             }
         }

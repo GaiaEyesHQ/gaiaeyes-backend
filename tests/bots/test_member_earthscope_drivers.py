@@ -98,3 +98,4 @@ def test_render_member_post_uses_now_headings_and_live_tone() -> None:
     assert "strongest possibilities right now" in body
     assert rendered["title"] == "Your EarthScope"
     assert rendered["caption"] is None
+    assert rendered["voice_semantic"]["kind"] == "earthscope_member_post"

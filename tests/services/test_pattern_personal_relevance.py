@@ -52,6 +52,8 @@ class PatternPersonalRelevanceTests(unittest.TestCase):
         self.assertIn("pain flare history", primary["personal_reason"].lower())
         self.assertEqual(primary["role_label"], "Leading now")
         self.assertIn("matters more for you right now", relevance["today_relevance_explanations"]["daily_brief"])
+        self.assertEqual(relevance["driver_summary_semantic"]["kind"], "driver_summary")
+        self.assertEqual(relevance["driver_summary_semantic"]["schema_version"], "1.0")
 
     def test_modal_builder_uses_pattern_summary_when_present(self) -> None:
         payload = build_modal_models(

@@ -15,6 +15,8 @@ from services.personalization.health_context import (
     PersonalizationProfile,
     build_personalization_profile,
 )
+from services.voice.profiles import VoiceProfile
+from services.voice.semantic import SemanticAction, SemanticGuardrails, SemanticPayload, SemanticRenderHints
 
 
 _GAUGE_ORDER = [
@@ -2307,6 +2309,86 @@ def build_earthscope_summary(
     user_tags: Optional[Iterable[Any]] = None,
     personal_relevance: Optional[Dict[str, Any]] = None,
 ) -> str:
+    payload = build_earthscope_semantic_payload(
+        day=day,
+        gauges=gauges,
+        gauges_meta=gauges_meta,
+        gauge_labels=gauge_labels,
+        drivers=drivers,
+        user_tags=user_tags,
+        personal_relevance=personal_relevance,
+    )
+    return render_earthscope_summary(
+        payload,
+        user_id=user_id,
+        voice_profile=VoiceProfile.app_summary_default(),
+    )
+
+
+def _summary_confidence_level(
+    personal_primary: Optional[Dict[str, Any]],
+    personal_themes: List[Dict[str, Any]],
+    top_drivers: List[Dict[str, Any]],
+) -> str:
+    confidence_raw = ""
+    if personal_primary:
+        confidence_raw = str(personal_primary.get("confidence") or "").strip().lower()
+    elif personal_themes:
+        confidence_raw = str((personal_themes[0] or {}).get("confidence") or "").strip().lower()
+    elif top_drivers:
+        severity = str((top_drivers[0] or {}).get("severity") or "").strip().lower()
+        if severity in {"high", "watch", "elevated"}:
+            return "moderate"
+    if confidence_raw == "strong":
+        return "high"
+    if confidence_raw == "moderate":
+        return "moderate"
+    return "low"
+
+
+def _claim_strength_for_confidence(confidence: str) -> str:
+    if confidence == "high":
+        return "likely_notice"
+    if confidence == "moderate":
+        return "may_notice"
+    return "observe_only"
+
+
+def _max_urgency(
+    top_drivers: List[Dict[str, Any]],
+    top_gauges: List[Dict[str, Any]],
+    gauges_meta: Dict[str, Dict[str, Any]],
+) -> str:
+    if top_drivers:
+        severity = str((top_drivers[0] or {}).get("severity") or "").strip().lower()
+        if severity == "high":
+            return "high"
+        if severity in {"watch", "elevated"}:
+            return "watch"
+        if severity == "mild":
+            return "notable"
+    for gauge in top_gauges:
+        gauge_key = str(gauge.get("key") or "").strip()
+        if not gauge_key:
+            continue
+        zone = str((gauges_meta.get(gauge_key) or {}).get("zone") or "").strip().lower()
+        if zone == "high":
+            return "high"
+        if zone in {"watch", "elevated"}:
+            return "watch"
+    return "quiet"
+
+
+def build_earthscope_semantic_payload(
+    *,
+    day: date,
+    gauges: Optional[Dict[str, Any]],
+    gauges_meta: Optional[Dict[str, Dict[str, Any]]],
+    gauge_labels: Optional[Dict[str, str]],
+    drivers: Optional[Iterable[Dict[str, Any]]],
+    user_tags: Optional[Iterable[Any]] = None,
+    personal_relevance: Optional[Dict[str, Any]] = None,
+) -> SemanticPayload:
     gauges = gauges or {}
     gauges_meta = gauges_meta or {}
     gauge_labels = gauge_labels or {}
@@ -2315,7 +2397,6 @@ def build_earthscope_summary(
     driver_rows.sort(key=lambda item: _driver_rank(item), reverse=True)
     top_drivers = driver_rows[:2]
     top_gauges = _elevated_gauges(gauges, gauges_meta)[:2]
-    bucket_key = _earthscope_refresh_bucket()
     relevance_explanations = (
         personal_relevance.get("today_relevance_explanations")
         if isinstance(personal_relevance, dict)
@@ -2345,13 +2426,104 @@ def build_earthscope_summary(
         )
         if isinstance(item, dict)
     ]
+    support_driver = personal_supporting[0] if personal_supporting else (top_drivers[1] if len(top_drivers) > 1 else None)
+    theme_sentence = _summary_theme_sentence(personal_themes[0] if personal_themes else None)
+    action_sentence = _summary_action_sentence(day, personal_primary or (top_drivers[0] if top_drivers else None), profile)
+    confidence = _summary_confidence_level(personal_primary, personal_themes, top_drivers)
 
+    primary_driver = personal_primary
+    supporting_driver = personal_supporting[0] if personal_supporting else None
+
+    actions: List[SemanticAction] = []
+    if action_sentence:
+        reason_key = str((primary_driver or {}).get("key") or "general").strip() or "general"
+        actions.append(
+            SemanticAction(
+                key="pace_and_support",
+                priority=1,
+                reason=reason_key,
+                label=action_sentence,
+            )
+        )
+
+    return SemanticPayload(
+        schema_version="1.0",
+        kind="earthscope_summary",
+        date=day.isoformat(),
+            facts={
+                "drivers": top_drivers,
+                "gauges": [
+                    {
+                        "key": gauge_key,
+                        "label": gauge_labels.get(gauge_key, gauge_key.replace("_", " ").title()),
+                        "value": gauge.get("value"),
+                        "zone": (gauge.get("meta") or {}).get("zone"),
+                        "state_label": (gauge.get("meta") or {}).get("label"),
+                    }
+                    for gauge in top_gauges
+                    for gauge_key in [str(gauge.get("key") or "").strip()]
+                    if gauge_key
+                ],
+            },
+        interpretation={
+            "primary_driver": primary_driver,
+            "supporting_driver": supporting_driver,
+            "body_theme": personal_themes[0] if personal_themes else None,
+            "seed_daily_brief": daily_brief or None,
+            "fallback_gauge_sentence": None if theme_sentence else _earthscope_gauge_sentence(top_gauges, gauge_labels),
+            "theme_sentence": theme_sentence,
+        },
+        actions={
+            "primary": [item.__dict__ for item in actions],
+            "secondary": [],
+        },
+        guardrails=SemanticGuardrails(
+            confidence_overall=confidence,
+            claim_strength=_claim_strength_for_confidence(confidence),
+            evidence_basis=[
+                basis
+                for basis in (
+                    "personal_pattern_history" if personal_primary else None,
+                    "current_driver_mix" if top_drivers else None,
+                    "current_gauge_state" if top_gauges else None,
+                )
+                if basis
+            ],
+            max_urgency=_max_urgency(top_drivers, top_gauges, gauges_meta),
+        ),
+        render_hints=SemanticRenderHints(
+            preferred_summary_length="short",
+            preferred_detail_sections=["what_is_active", "what_you_may_notice", "what_may_help"],
+            humor_ok=False,
+            metaphor_ok=False,
+            persona_strength="light",
+        ),
+    )
+
+
+def render_earthscope_summary(
+    payload: SemanticPayload,
+    *,
+    user_id: str = "",
+    voice_profile: Optional[VoiceProfile] = None,
+) -> str:
+    voice_profile = voice_profile or VoiceProfile.app_summary_default()
+    facts = payload.facts or {}
+    interpretation = payload.interpretation or {}
+    top_drivers = [item for item in facts.get("drivers") or [] if isinstance(item, dict)]
+    daily_brief = str(interpretation.get("seed_daily_brief") or "").strip()
+    primary_driver = interpretation.get("primary_driver") if isinstance(interpretation.get("primary_driver"), dict) else None
+    supporting_driver = interpretation.get("supporting_driver") if isinstance(interpretation.get("supporting_driver"), dict) else None
+    theme_sentence = str(interpretation.get("theme_sentence") or "").strip()
+    fallback_gauge_sentence = str(interpretation.get("fallback_gauge_sentence") or "").strip()
+
+    bucket_key = _earthscope_refresh_bucket()
     sentences: List[str] = []
     if daily_brief:
         sentences.append(daily_brief)
-    elif personal_primary:
-        label = str(personal_primary.get("label") or personal_primary.get("key") or "This signal").strip()
-        short_reason = str(personal_primary.get("personal_reason_short") or "").strip()
+    elif primary_driver:
+        label = str(primary_driver.get("label") or primary_driver.get("key") or "This signal").strip()
+        short_reason = str(primary_driver.get("personal_reason_short") or "").strip()
         if short_reason:
             sentences.append(f"Right now, {label.lower()} looks most relevant for you. {short_reason}")
         else:
@@ -2404,21 +2576,21 @@ def build_earthscope_summary(
             )
         )
 
-    support_driver = personal_supporting[0] if personal_supporting else (top_drivers[1] if len(top_drivers) > 1 else None)
-    if support_driver:
-        support_label = str(support_driver.get("label") or support_driver.get("key") or "").strip()
+    if supporting_driver:
+        support_label = str(supporting_driver.get("label") or supporting_driver.get("key") or "").strip()
         if support_label and support_label.lower() not in daily_brief.lower():
             sentences.append(f"{support_label} is also in the mix right now.")
 
-    theme_sentence = _summary_theme_sentence(personal_themes[0] if personal_themes else None)
     if theme_sentence:
         sentences.append(theme_sentence)
-    else:
-        sentences.append(_earthscope_gauge_sentence(top_gauges, gauge_labels))
+    elif fallback_gauge_sentence:
+        sentences.append(fallback_gauge_sentence)
 
-    action_sentence = _summary_action_sentence(day, personal_primary or (top_drivers[0] if top_drivers else None), profile)
-    if action_sentence:
-        sentences.append(action_sentence)
+    primary_actions = payload.actions.get("primary") if isinstance(payload.actions, dict) else []
+    if primary_actions and isinstance(primary_actions[0], dict):
+        action_label = str(primary_actions[0].get("label") or "").strip()
+        if action_label:
+            sentences.append(action_label)
 
-    sentences.append("These are patterns to watch, not certainties.")
+    sentences.append(voice_profile.caution_line())
     return " ".join(sentences[:4]).strip()

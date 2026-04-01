@@ -9,22 +9,16 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - local unit tests can run without psycopg installed.
     dict_row = None
 
-from app.db import symptoms as symptoms_db
-from app.db import ulf as ulf_db
-from bots.definitions.load_definition_base import load_definition_base
-from bots.gauges.gauge_scorer import fetch_health_status_context, fetch_user_tags
 from bots.notifications.push_logic import flare_class_rank
 from bots.patterns.pattern_engine_job import OUTCOME_SYMPTOM_CODES
 from services.drivers.driver_normalize import normalize_environmental_drivers
-from services.external import pollen
-from services.forecast_outlook import build_user_outlook_payload
-from services.geomagnetic_context import normalize_ulf_context
 from services.patterns.personal_relevance import (
     compute_personal_relevance,
     fetch_best_pattern_rows,
     fetch_recent_outcome_summary,
     resolve_current_drivers,
 )
+from services.voice.drivers import build_driver_reason_semantic, render_driver_reason
 
 
 UTC = timezone.utc
@@ -278,6 +272,8 @@ def _reading_from_value(key: str, value: Any, unit: str | None = None) -> Option
 
 
 def _allergen_severity(level: str | None, index_value: float | None) -> str:
+    from services.external import pollen
+
     if level:
         rank = pollen.LEVEL_RANK.get(level, 0)
         if rank >= pollen.LEVEL_RANK.get("very_high", 5):
@@ -342,6 +338,8 @@ def _build_base_driver(
 
 
 def _base_short_reason(key: str, value: float | None, local_payload: Mapping[str, Any]) -> tuple[str, str, str | None]:
+    from services.external import pollen
+
     weather = dict(local_payload.get("weather") or {})
     air = dict(local_payload.get("air") or {})
     allergens = dict(local_payload.get("allergens") or {})
@@ -489,6 +487,8 @@ def _seed_environmental_drivers(
 
 
 def _seed_allergen_driver(local_payload: Mapping[str, Any], *, generated_at: str) -> Optional[Dict[str, Any]]:
+    from services.external import pollen
+
     allergens = dict(local_payload.get("allergens") or {})
     level = str(allergens.get("overall_level") or "").strip().lower() or None
     index_value = _safe_float(allergens.get("overall_index") or allergens.get("relevance_score"))
@@ -527,6 +527,8 @@ def _seed_allergen_driver(local_payload: Mapping[str, Any], *, generated_at: str
 
 
 def _seed_ulf_driver(raw_context: Mapping[str, Any] | None) -> Optional[Dict[str, Any]]:
+    from services.geomagnetic_context import normalize_ulf_context
+
     context = normalize_ulf_context(raw_context)
     if not context or not bool(context.get("is_usable")):
         return None
@@ -908,6 +910,7 @@ def _canonicalize_pattern_refs(driver_key: str, refs: Sequence[Mapping[str, Any]
 def _finalize_driver_items(
     ranked_rows: Sequence[Mapping[str, Any]],
     *,
+    day: date,
     current_symptom_rows: Sequence[Mapping[str, Any]],
     outlook_payload: Mapping[str, Any] | None,
     generated_at: str,
@@ -932,6 +935,17 @@ def _finalize_driver_items(
             not personal_reason or personal_reason.lower().endswith("no stronger personal pattern is leading with it yet.")
         ):
             personal_reason = _body_personal_reason(row)
+        short_reason = row.get("short_reason") or f"{row.get('label') or canonical_key} is active right now."
+        reason_row = dict(row)
+        reason_row["key"] = canonical_key
+        reason_row["label"] = row.get("label") or canonical_key.replace("_", " ").title()
+        reason_row["short_reason"] = short_reason
+        reason_row["personal_reason"] = personal_reason or f"{row.get('label') or canonical_key} is active right now."
+        reason_row["pattern_status"] = pattern_status
+        reason_row["current_symptoms"] = current_symptoms
+        reason_row["historical_symptoms"] = historical_symptoms
+        reason_row["outlook_summary"] = outlook_summary
+        reason_semantic = build_driver_reason_semantic(day=day, row=reason_row)
 
         output.append(
             {
@@ -954,8 +968,8 @@ def _finalize_driver_items(
                 "reading": row.get("reading") or _reading_from_value(internal_key, row.get("value"), row.get("unit")),
                 "reading_value": _safe_float(row.get("value")),
                 "reading_unit": row.get("unit"),
-                "short_reason": row.get("short_reason") or f"{row.get('label') or canonical_key} is active right now.",
-                "personal_reason": personal_reason or f"{row.get('label') or canonical_key} is active right now.",
+                "short_reason": render_driver_reason(reason_semantic, variant="short"),
+                "personal_reason": render_driver_reason(reason_semantic, variant="full"),
                 "current_symptoms": current_symptoms,
                 "historical_symptoms": historical_symptoms,
                 "pattern_status": pattern_status,
@@ -976,6 +990,7 @@ def _finalize_driver_items(
                 "personal_relevance_score": _safe_float(row.get("personal_relevance_score")),
                 "display_score": _safe_float(row.get("display_score")),
                 "is_objectively_active": state_key != "quiet",
+                "voice_semantic": reason_semantic.to_dict(),
             }
         )
 
@@ -1061,6 +1076,7 @@ def compose_all_drivers_payload(
     ranked_rows = [dict(item) for item in personal.get("ranked_drivers") or [] if isinstance(item, Mapping)]
     finalized = _finalize_driver_items(
         ranked_rows,
+        day=day,
         current_symptom_rows=current_symptom_rows,
         outlook_payload=outlook_payload,
         generated_at=generated_at,
@@ -1101,10 +1117,15 @@ def compose_all_drivers_payload(
             current_symptom_rows=current_symptom_rows,
         ),
         "today_relevance_explanations": personal.get("today_relevance_explanations") or {},
+        "voice_semantics": {
+            "driver_summary": personal.get("driver_summary_semantic") or {},
+        },
     }
 
 
 async def _fetch_current_symptom_rows(conn, user_id: str) -> list[dict[str, Any]]:
+    from app.db import symptoms as symptoms_db
+
     try:
         return await symptoms_db.fetch_current_symptom_items(conn, user_id, window_hours=12)
     except Exception:
@@ -1174,6 +1195,11 @@ async def build_all_drivers_payload(
     user_id: str,
     day: date,
 ) -> Dict[str, Any]:
+    from app.db import ulf as ulf_db
+    from bots.definitions.load_definition_base import load_definition_base
+    from bots.gauges.gauge_scorer import fetch_health_status_context, fetch_user_tags
+    from services.forecast_outlook import build_user_outlook_payload
+
     generated_at = datetime.now(UTC).isoformat()
     try:
         definition, _ = load_definition_base()
