@@ -10,10 +10,12 @@ from .earthscope_posts import (
     render_member_earthscope_post,
     render_public_earthscope_post,
 )
+from .symptoms import build_current_symptoms_semantic
 from .profiles import VoiceProfile
 from .semantic import SemanticAction, SemanticGuardrails, SemanticPayload, SemanticRenderHints
 
 __all__ = [
+    "build_current_symptoms_semantic",
     "build_driver_reason_semantic",
     "build_driver_summary_semantic",
     "build_member_earthscope_semantic",

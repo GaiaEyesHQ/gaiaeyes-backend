@@ -163,6 +163,41 @@ struct CurrentSymptomsView: View {
         CurrentSymptomsCopy.resolve(mode: mode, tone: tone)
     }
 
+    private var semantic: CurrentSymptomsVoiceSemantic? {
+        snapshot?.voiceSemantic
+    }
+
+    private func semanticText(_ raw: String?) -> String? {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return translatedText(trimmed) ?? trimmed
+    }
+
+    private var headerSummaryText: String? {
+        semanticText(semantic?.interpretation?.headerSummary)
+    }
+
+    private var activeSummaryText: String? {
+        semanticText(semantic?.interpretation?.activeSummary)
+    }
+
+    private var emptyStateBodyText: String? {
+        semanticText(semantic?.interpretation?.emptyState)
+    }
+
+    private var contributingEmptyBodyText: String? {
+        semanticText(semantic?.interpretation?.contributingEmpty)
+    }
+
+    private var patternEmptyBodyText: String? {
+        semanticText(semantic?.interpretation?.patternEmpty)
+    }
+
+    private var followUpSummaryText: String? {
+        semanticText(semantic?.interpretation?.followUpSummary)
+    }
+
     private func translatedDriverLabel(for driver: CurrentSymptomDriver) -> String {
         vocabulary.driverLabel(for: driver.key, fallback: driver.label)
     }
@@ -297,7 +332,8 @@ struct CurrentSymptomsView: View {
                 items: [],
                 contributingDrivers: [],
                 patternContext: [],
-                followUpSettings: CurrentSymptomsFollowUpSettings(notificationsEnabled: false, enabled: false, notificationFamilyEnabled: false, pushEnabled: false, cadence: "balanced", states: ["new", "ongoing", "improving", "worse"], symptomCodes: [])
+                followUpSettings: CurrentSymptomsFollowUpSettings(notificationsEnabled: false, enabled: false, notificationFamilyEnabled: false, pushEnabled: false, cadence: "balanced", states: ["new", "ongoing", "improving", "worse"], symptomCodes: []),
+                voiceSemantic: nil
             )
             await MainActor.run {
                 snapshot = payload
@@ -618,6 +654,12 @@ struct CurrentSymptomsView: View {
                             .font(.subheadline)
                             .foregroundColor(.white.opacity(0.7))
                             .fixedSize(horizontal: false, vertical: true)
+                        if let headerSummaryText {
+                            Text(headerSummaryText)
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.72))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     Spacer()
                     if isLoading {
@@ -673,7 +715,7 @@ struct CurrentSymptomsView: View {
                         Text(copy.emptyTitle)
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(.white)
-                        Text(copy.emptyBody)
+                        Text(emptyStateBodyText ?? copy.emptyBody)
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.7))
                         Button(copy.logSymptomsTitle) {
@@ -682,6 +724,12 @@ struct CurrentSymptomsView: View {
                         .buttonStyle(.bordered)
                     }
                 } else {
+                    if let activeSummaryText {
+                        Text(activeSummaryText)
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.7))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     ForEach(activeItems) { item in
                         symptomCard(item)
                     }
@@ -849,7 +897,7 @@ struct CurrentSymptomsView: View {
                         .controlSize(.small)
                     }
                 } else {
-                    Text(copy.contributingEmptyBody)
+                    Text(contributingEmptyBodyText ?? copy.contributingEmptyBody)
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
                     if let onOpenAllDrivers {
@@ -898,7 +946,7 @@ struct CurrentSymptomsView: View {
                         .buttonStyle(.plain)
                     }
                 } else {
-                    Text(copy.patternEmptyBody)
+                    Text(patternEmptyBodyText ?? copy.patternEmptyBody)
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
                 }
@@ -997,7 +1045,7 @@ struct CurrentSymptomsView: View {
 
                 if let settings = snapshot?.followUpSettings {
                     let enabled = settings.enabled || settings.notificationFamilyEnabled
-                    Text(followUpDescription(for: settings, enabled: enabled))
+                    Text(followUpSummaryText ?? followUpDescription(for: settings, enabled: enabled))
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
 

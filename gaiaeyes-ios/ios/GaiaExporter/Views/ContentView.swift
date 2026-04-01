@@ -639,6 +639,10 @@ private struct DashboardEarthscopePost: Codable, Hashable {
 
 private struct DashboardVoiceSemanticFacts: Codable, Hashable {
     let symptomPhrases: [String]?
+    let driverLines: [String]?
+    let auroraHeadline: String?
+    let severeSummary: String?
+    let schumannNote: String?
 }
 
 private struct DashboardVoiceSemanticInterpretation: Codable, Hashable {
@@ -646,6 +650,10 @@ private struct DashboardVoiceSemanticInterpretation: Codable, Hashable {
     let seedSummary: String?
     let seedNowText: String?
     let themeSentence: String?
+    let conditionNote: String?
+    let title: String?
+    let caption: String?
+    let driverBits: [String]?
 }
 
 private struct DashboardVoiceSemanticAction: Codable, Hashable {
@@ -7077,9 +7085,9 @@ struct ContentView: View {
                     }
 
                     EarthscopeCardV2(
-                        title: earthscope?.title ?? fallbackTitle,
-                        updatedAt: earthscope?.updatedAt,
-                        bodyMarkdown: earthscope?.bodyMarkdown ?? fallbackBody,
+                        post: earthscope,
+                        fallbackTitle: fallbackTitle,
+                        fallbackBody: fallbackBody,
                         summaryText: earthscopeSummary,
                         driversCompact: driversCompact
                     )
@@ -16515,6 +16523,199 @@ struct ContentView: View {
         }
     }
 
+    private struct EarthscopeVoiceViewModel {
+        let post: DashboardEarthscopePost?
+        let fallbackTitle: String?
+        let fallbackBody: String?
+        let summaryText: String?
+        let driversCompact: [String]
+
+        private var semantic: DashboardVoiceSemantic? {
+            post?.metricsJson?.voiceSemantic
+        }
+
+        var effectiveUpdatedAt: String? {
+            post?.updatedAt
+        }
+
+        var effectiveTitle: String? {
+            Self.cleaned(post?.title)
+                ?? Self.cleaned(semantic?.interpretation?.title)
+                ?? Self.cleaned(fallbackTitle)
+        }
+
+        var effectiveBodyMarkdown: String? {
+            Self.cleaned(post?.bodyMarkdown)
+                ?? Self.cleaned(fallbackBody)
+        }
+
+        var effectiveSummaryText: String? {
+            compactSentence(
+                [
+                    summaryText,
+                    semantic?.interpretation?.seedSummary,
+                    semantic?.interpretation?.themeSentence,
+                    semantic?.interpretation?.conditionNote,
+                    post?.caption,
+                    semantic?.interpretation?.caption,
+                    symptomSummary(),
+                ],
+                maxCount: 2
+            )
+        }
+
+        func resolvedSections() -> [EarthscopeBriefingSection] {
+            if let effectiveBodyMarkdown {
+                return EarthscopeBriefingParser.parse(effectiveBodyMarkdown, driversCompact: driversCompact)
+            }
+            let semanticSections = semanticSections()
+            if !semanticSections.isEmpty {
+                return semanticSections
+            }
+            return EarthscopeBriefingParser.parse(nil, driversCompact: driversCompact)
+        }
+
+        func shareLeadingText() -> String {
+            driverHints.first ?? "Today’s mix"
+        }
+
+        func shareSupportingText() -> [String] {
+            Array(driverHints.dropFirst().prefix(2))
+        }
+
+        func shareInterpretationText(fallbackSections: [EarthscopeBriefingSection]) -> String {
+            if let effectiveSummaryText {
+                return effectiveSummaryText
+            }
+            if let summarySection = fallbackSections.first(where: { $0.key == EarthscopeBriefingKey.summary.rawValue }) {
+                return summarySection.body
+            }
+            if let firstSection = fallbackSections.first {
+                return firstSection.body
+            }
+            return "Today’s signal mix is still coming together."
+        }
+
+        private func semanticSections() -> [EarthscopeBriefingSection] {
+            let checkin = compactSentence(
+                [
+                    semantic?.interpretation?.seedNowText,
+                    semantic?.interpretation?.seedDailyBrief,
+                    post?.caption,
+                    semantic?.interpretation?.caption,
+                ],
+                maxCount: 2
+            )
+            let summary = effectiveSummaryText
+            let actions = actionHints
+
+            var sections: [EarthscopeBriefingSection] = []
+            if let checkin {
+                sections.append(
+                    EarthscopeBriefingSection(
+                        id: EarthscopeBriefingKey.checkin.rawValue,
+                        key: EarthscopeBriefingKey.checkin.rawValue,
+                        title: "Now",
+                        body: checkin
+                    )
+                )
+            }
+            if !driverHints.isEmpty {
+                sections.append(
+                    EarthscopeBriefingSection(
+                        id: EarthscopeBriefingKey.drivers.rawValue,
+                        key: EarthscopeBriefingKey.drivers.rawValue,
+                        title: "What's Shaping Things Now",
+                        body: driverHints.joined(separator: "\n")
+                    )
+                )
+            }
+            if let summary {
+                sections.append(
+                    EarthscopeBriefingSection(
+                        id: EarthscopeBriefingKey.summary.rawValue,
+                        key: EarthscopeBriefingKey.summary.rawValue,
+                        title: "What To Watch",
+                        body: summary
+                    )
+                )
+            }
+            if !actions.isEmpty {
+                sections.append(
+                    EarthscopeBriefingSection(
+                        id: EarthscopeBriefingKey.actions.rawValue,
+                        key: EarthscopeBriefingKey.actions.rawValue,
+                        title: "What May Help",
+                        body: actions.map { "• \($0)" }.joined(separator: "\n")
+                    )
+                )
+            }
+            return sections
+        }
+
+        private var driverHints: [String] {
+            var hints = uniqueCleaned(driversCompact)
+            if hints.isEmpty {
+                hints = uniqueCleaned(semantic?.facts?.driverLines ?? [])
+            }
+            if hints.isEmpty {
+                hints = uniqueCleaned(semantic?.interpretation?.driverBits ?? [])
+            }
+            if hints.isEmpty {
+                hints = uniqueCleaned(
+                    [
+                        semantic?.facts?.auroraHeadline,
+                        semantic?.facts?.severeSummary,
+                        semantic?.facts?.schumannNote,
+                    ].compactMap { $0 }
+                )
+            }
+            return hints
+        }
+
+        private var actionHints: [String] {
+            let primary = semantic?.actions?.primary ?? []
+            return uniqueCleaned(primary.compactMap(\.label))
+        }
+
+        private func symptomSummary() -> String? {
+            let phrases = uniqueCleaned(semantic?.facts?.symptomPhrases ?? [])
+            guard !phrases.isEmpty else { return nil }
+            let preview = Array(phrases.prefix(2))
+            if preview.count == 1, let first = preview.first {
+                return "You may notice \(first)."
+            }
+            if preview.count >= 2 {
+                return "You may notice \(preview[0]) or \(preview[1])."
+            }
+            return nil
+        }
+
+        private func compactSentence(_ values: [String?], maxCount: Int) -> String? {
+            let cleanedValues = uniqueCleaned(values.compactMap { $0 })
+            guard !cleanedValues.isEmpty else { return nil }
+            return Array(cleanedValues.prefix(maxCount)).joined(separator: " ")
+        }
+
+        private func uniqueCleaned(_ values: [String]) -> [String] {
+            var seen: Set<String> = []
+            var cleanedValues: [String] = []
+            for raw in values {
+                guard let trimmed = Self.cleaned(raw) else { continue }
+                let key = trimmed.lowercased()
+                guard !seen.contains(key) else { continue }
+                seen.insert(key)
+                cleanedValues.append(trimmed)
+            }
+            return cleanedValues
+        }
+
+        private static func cleaned(_ value: String?) -> String? {
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? nil : trimmed
+        }
+    }
+
     private struct EarthscopeBackgroundLayer: View {
         let candidates: [URL]
         @State private var index: Int = 0
@@ -16622,13 +16823,23 @@ struct ContentView: View {
 
     private struct EarthscopeCardV2: View {
         let mode: ExperienceMode = .scientific
-        let title: String?
-        let updatedAt: String?
-        let bodyMarkdown: String?
+        let post: DashboardEarthscopePost?
+        let fallbackTitle: String?
+        let fallbackBody: String?
         let summaryText: String?
         let driversCompact: [String]
         @State private var showFull: Bool = false
         @State private var shareDraft: ShareDraft? = nil
+
+        private var voiceViewModel: EarthscopeVoiceViewModel {
+            EarthscopeVoiceViewModel(
+                post: post,
+                fallbackTitle: fallbackTitle,
+                fallbackBody: fallbackBody,
+                summaryText: summaryText,
+                driversCompact: driversCompact
+            )
+        }
 
         private struct PreviewRow: View {
             let label: String
@@ -16651,7 +16862,7 @@ struct ContentView: View {
         }
 
         private func displayTitle() -> String {
-            let raw = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let raw = (voiceViewModel.effectiveTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let cleaned = raw.replacingOccurrences(
                 of: #"\s+—\s+\d{4}-\d{2}-\d{2}$"#,
                 with: "",
@@ -16661,11 +16872,11 @@ struct ContentView: View {
         }
 
         private func displayUpdatedText() -> String? {
-            LocalConditionsFormatting.asofText(updatedAt).map { "Updated \($0)" }
+            LocalConditionsFormatting.asofText(voiceViewModel.effectiveUpdatedAt).map { "Updated \($0)" }
         }
 
         private func sections() -> [EarthscopeBriefingSection] {
-            EarthscopeBriefingParser.parse(bodyMarkdown, driversCompact: driversCompact)
+            voiceViewModel.resolvedSections()
         }
 
         private func compactBody(for section: EarthscopeBriefingSection) -> String {
@@ -16677,8 +16888,8 @@ struct ContentView: View {
             if let first = lines.first {
                 return first
             }
-            if let summaryText, !summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return summaryText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let summaryText = voiceViewModel.effectiveSummaryText {
+                return summaryText
             }
             return "Check the highlighted gauges for fresh context."
         }
@@ -16702,11 +16913,9 @@ struct ContentView: View {
 
         private func missionControlShareDraft() -> ShareDraft {
             let parsed = sections()
-            let leading = driversCompact.first ?? compactBody(for: parsed.first ?? EarthscopeBriefingSection(id: "summary", key: "summary", title: "Summary", body: summaryText ?? "What matters now"))
-            let supporting = Array(driversCompact.dropFirst().prefix(2))
-            let interpretation = summaryText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-                ? summaryText!.trimmingCharacters(in: .whitespacesAndNewlines)
-                : compactBody(for: parsed.first(where: { $0.key == EarthscopeBriefingKey.summary.rawValue }) ?? parsed.first ?? EarthscopeBriefingSection(id: "summary", key: "summary", title: "Summary", body: "Today’s signal mix is still coming together."))
+            let leading = voiceViewModel.shareLeadingText()
+            let supporting = voiceViewModel.shareSupportingText()
+            let interpretation = voiceViewModel.shareInterpretationText(fallbackSections: parsed)
             let accent: ShareAccentLevel = driversCompact.count >= 2 ? .elevated : (driversCompact.isEmpty ? .calm : .watch)
             let candidates = [
                 "checkin",
@@ -16768,9 +16977,10 @@ struct ContentView: View {
             } label: { Label("EarthScope", systemImage: "globe.americas.fill") }
             .sheet(isPresented: $showFull) {
                 EarthscopeFullSheetV2(
-                    title: title,
-                    updatedAt: updatedAt,
-                    bodyText: bodyMarkdown,
+                    post: post,
+                    fallbackTitle: fallbackTitle,
+                    fallbackBody: fallbackBody,
+                    summaryText: summaryText,
                     driversCompact: driversCompact
                 )
             }
@@ -16781,14 +16991,25 @@ struct ContentView: View {
     }
 
     private struct EarthscopeFullSheetV2: View {
-        let title: String?
-        let updatedAt: String?
-        let bodyText: String?
+        let post: DashboardEarthscopePost?
+        let fallbackTitle: String?
+        let fallbackBody: String?
+        let summaryText: String?
         let driversCompact: [String]
         @Environment(\.dismiss) private var dismiss
 
+        private var voiceViewModel: EarthscopeVoiceViewModel {
+            EarthscopeVoiceViewModel(
+                post: post,
+                fallbackTitle: fallbackTitle,
+                fallbackBody: fallbackBody,
+                summaryText: summaryText,
+                driversCompact: driversCompact
+            )
+        }
+
         private func displayTitle() -> String {
-            let raw = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let raw = (voiceViewModel.effectiveTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let cleaned = raw.replacingOccurrences(
                 of: #"\s+—\s+\d{4}-\d{2}-\d{2}$"#,
                 with: "",
@@ -16798,14 +17019,14 @@ struct ContentView: View {
         }
 
         var body: some View {
-            let sections = EarthscopeBriefingParser.parse(bodyText, driversCompact: driversCompact)
+            let sections = voiceViewModel.resolvedSections()
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         Text(displayTitle())
                             .font(.title3)
                             .bold()
-                        if let updated = LocalConditionsFormatting.asofText(updatedAt) {
+                        if let updated = LocalConditionsFormatting.asofText(voiceViewModel.effectiveUpdatedAt) {
                             Text("Updated \(updated)")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)

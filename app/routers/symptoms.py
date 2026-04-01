@@ -22,6 +22,7 @@ from services.patterns.personal_relevance import (
     pattern_anchor_statement,
     resolve_current_drivers,
 )
+from services.voice.symptoms import build_current_symptoms_semantic
 from ..db import get_db
 from ..db import feedback as feedback_db
 from ..db import symptoms as symptoms_db
@@ -217,6 +218,7 @@ class CurrentSymptomsSnapshotOut(BaseModel):
     contributing_drivers: List[CurrentSymptomDriverOut] = Field(default_factory=list)
     pattern_context: List[CurrentSymptomPatternOut] = Field(default_factory=list)
     follow_up_settings: CurrentSymptomFollowUpOut
+    voice_semantic: Dict[str, Any] = Field(default_factory=dict)
 
 
 class CurrentSymptomsResponse(SymptomEnvelope):
@@ -424,32 +426,43 @@ async def _build_current_symptoms_payload(
 
     follow_up = await symptoms_db.fetch_symptom_follow_up_settings(conn, user_id)
     now_day = datetime.now(timezone.utc).date()
+    follow_up_settings = CurrentSymptomFollowUpOut(
+        notifications_enabled=bool(follow_up.get("notifications_enabled")),
+        enabled=bool(follow_up.get("enabled")),
+        notification_family_enabled=bool(follow_up.get("notification_family_enabled")),
+        push_enabled=bool(follow_up.get("push_enabled")),
+        cadence=str(follow_up.get("cadence") or "balanced"),
+        states=[_normalize_current_state(value) for value in (follow_up.get("states") or [])],
+        symptom_codes=[_normalize_symptom_code(value) for value in (follow_up.get("symptom_codes") or []) if value],
+    )
 
     if not rows:
+        summary = CurrentSymptomSummaryOut(
+            active_count=0,
+            new_count=0,
+            ongoing_count=0,
+            improving_count=0,
+            worse_count=0,
+            last_updated_at=None,
+            follow_up_available=False,
+        )
         return CurrentSymptomsSnapshotOut(
             generated_at=datetime.now(timezone.utc).isoformat(),
             window_hours=window_hours,
-            summary=CurrentSymptomSummaryOut(
-                active_count=0,
-                new_count=0,
-                ongoing_count=0,
-                improving_count=0,
-                worse_count=0,
-                last_updated_at=None,
-                follow_up_available=False,
-            ),
+            summary=summary,
             items=[],
             contributing_drivers=[],
             pattern_context=[],
-            follow_up_settings=CurrentSymptomFollowUpOut(
-                notifications_enabled=bool(follow_up.get("notifications_enabled")),
-                enabled=bool(follow_up.get("enabled")),
-                notification_family_enabled=bool(follow_up.get("notification_family_enabled")),
-                push_enabled=bool(follow_up.get("push_enabled")),
-                cadence=str(follow_up.get("cadence") or "balanced"),
-                states=[_normalize_current_state(value) for value in (follow_up.get("states") or [])],
-                symptom_codes=[_normalize_symptom_code(value) for value in (follow_up.get("symptom_codes") or []) if value],
-            ),
+            follow_up_settings=follow_up_settings,
+            voice_semantic=build_current_symptoms_semantic(
+                day=now_day,
+                window_hours=window_hours,
+                summary=summary.model_dump(),
+                items=[],
+                contributing_drivers=[],
+                pattern_context=[],
+                follow_up_settings=follow_up_settings.model_dump(),
+            ).to_dict(),
         )
 
     try:
@@ -597,15 +610,16 @@ async def _build_current_symptoms_payload(
         items=items,
         contributing_drivers=contributing_drivers,
         pattern_context=pattern_context,
-        follow_up_settings=CurrentSymptomFollowUpOut(
-            notifications_enabled=bool(follow_up.get("notifications_enabled")),
-            enabled=bool(follow_up.get("enabled")),
-            notification_family_enabled=bool(follow_up.get("notification_family_enabled")),
-            push_enabled=bool(follow_up.get("push_enabled")),
-            cadence=str(follow_up.get("cadence") or "balanced"),
-            states=[_normalize_current_state(value) for value in (follow_up.get("states") or [])],
-            symptom_codes=[_normalize_symptom_code(value) for value in (follow_up.get("symptom_codes") or []) if value],
-        ),
+        follow_up_settings=follow_up_settings,
+        voice_semantic=build_current_symptoms_semantic(
+            day=now_day,
+            window_hours=window_hours,
+            summary=summary.model_dump(),
+            items=[item.model_dump() for item in items],
+            contributing_drivers=[item.model_dump() for item in contributing_drivers],
+            pattern_context=[item.model_dump() for item in pattern_context],
+            follow_up_settings=follow_up_settings.model_dump(),
+        ).to_dict(),
     )
 
 

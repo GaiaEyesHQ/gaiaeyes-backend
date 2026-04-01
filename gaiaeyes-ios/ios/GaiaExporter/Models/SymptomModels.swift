@@ -137,6 +137,38 @@ struct CurrentSymptomsFollowUpSettings: Decodable, Hashable {
     let symptomCodes: [String]
 }
 
+struct CurrentSymptomsVoiceSemanticFacts: Decodable, Hashable {
+    let activeCount: Int?
+    let activeLabels: [String]?
+    let contributingDriverLabels: [String]?
+    let patternTexts: [String]?
+    let followUpEnabled: Bool?
+}
+
+struct CurrentSymptomsVoiceSemanticInterpretation: Decodable, Hashable {
+    let headerSummary: String?
+    let activeSummary: String?
+    let emptyState: String?
+    let contributingEmpty: String?
+    let patternEmpty: String?
+    let followUpSummary: String?
+}
+
+struct CurrentSymptomsVoiceSemanticAction: Decodable, Hashable {
+    let label: String?
+}
+
+struct CurrentSymptomsVoiceSemanticActions: Decodable, Hashable {
+    let primary: [CurrentSymptomsVoiceSemanticAction]?
+}
+
+struct CurrentSymptomsVoiceSemantic: Decodable, Hashable {
+    let kind: String?
+    let facts: CurrentSymptomsVoiceSemanticFacts?
+    let interpretation: CurrentSymptomsVoiceSemanticInterpretation?
+    let actions: CurrentSymptomsVoiceSemanticActions?
+}
+
 struct CurrentSymptomsSnapshot: Decodable, Hashable {
     let generatedAt: String
     let windowHours: Int
@@ -145,6 +177,7 @@ struct CurrentSymptomsSnapshot: Decodable, Hashable {
     let contributingDrivers: [CurrentSymptomDriver]
     let patternContext: [CurrentSymptomPatternHint]
     let followUpSettings: CurrentSymptomsFollowUpSettings
+    let voiceSemantic: CurrentSymptomsVoiceSemantic?
 }
 
 struct CurrentSymptomTimelineEntry: Decodable, Identifiable, Hashable {
