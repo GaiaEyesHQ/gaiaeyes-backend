@@ -70,8 +70,13 @@ struct AllDriversView: View {
     var signalBar: [SignalPill] = []
     var onOpenCurrentSymptoms: (() -> Void)? = nil
     var onLogSymptoms: (() -> Void)? = nil
+    var onOpenHome: (() -> Void)? = nil
+    var onOpenBody: (() -> Void)? = nil
+    var onOpenPatternsTab: (() -> Void)? = nil
     var onOpenPatterns: (() -> Void)? = nil
+    var onOpenOutlookTab: (() -> Void)? = nil
     var onOpenOutlook: (() -> Void)? = nil
+    var onOpenExplore: (() -> Void)? = nil
     var onOpenSetup: (() -> Void)? = nil
 
     @AppStorage("all_drivers_cache_json") private var allDriversCacheJSON: String = ""
@@ -84,6 +89,46 @@ struct AllDriversView: View {
     @State private var focusedDriverID: String?
     @State private var hasTrackedOpen: Bool = false
     @State private var shareDraft: ShareDraft?
+
+    private enum ShellTabShortcut: CaseIterable, Identifiable {
+        case home
+        case body
+        case patterns
+        case outlook
+        case explore
+
+        var id: Self { self }
+
+        var title: String {
+            switch self {
+            case .home:
+                return "Home"
+            case .body:
+                return "Body"
+            case .patterns:
+                return "Patterns"
+            case .outlook:
+                return "Outlook"
+            case .explore:
+                return "Explore"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .home:
+                return "house.fill"
+            case .body:
+                return "heart.text.square"
+            case .patterns:
+                return "chart.line.uptrend.xyaxis"
+            case .outlook:
+                return "calendar.badge.clock"
+            case .explore:
+                return "square.grid.2x2.fill"
+            }
+        }
+    }
 
     private var vocabulary: CopyVocabulary {
         mode.copyVocabulary
@@ -288,12 +333,8 @@ struct AllDriversView: View {
     }
 
     private func sharePrompt(for accent: ShareAccentLevel) -> String {
-        switch accent {
-        case .elevated, .storm:
-            return "This might be worth sharing"
-        case .calm, .watch:
-            return "Share this insight"
-        }
+        _ = accent
+        return "Share"
     }
 
     private func accentLevel(for severity: String?) -> ShareAccentLevel {
@@ -422,6 +463,14 @@ struct AllDriversView: View {
             updatedAt: formattedUpdate(snapshot.asof ?? snapshot.generatedAt),
             promptText: sharePrompt(for: accent)
         )
+    }
+
+    private func navigateToTab(_ action: (() -> Void)?) {
+        guard let action else { return }
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            action()
+        }
     }
 
     private func focusDriver(for signal: SignalPill) {
@@ -715,6 +764,9 @@ struct AllDriversView: View {
         .safeAreaInset(edge: .top) {
             SignalBarView(signals: signalBar, onTap: focusDriver(for:))
         }
+        .safeAreaInset(edge: .bottom) {
+            allDriversBottomNavigation
+        }
         .toolbar {
             if showsCloseButton {
                 ToolbarItem(placement: .cancellationAction) {
@@ -726,6 +778,52 @@ struct AllDriversView: View {
         }
         .sheet(item: $shareDraft) { draft in
             SharePreviewView(draft: draft)
+        }
+    }
+
+    private var allDriversBottomNavigation: some View {
+        HStack(spacing: 8) {
+            ForEach(ShellTabShortcut.allCases) { tab in
+                Button {
+                    switch tab {
+                    case .home:
+                        navigateToTab(onOpenHome)
+                    case .body:
+                        navigateToTab(onOpenBody)
+                    case .patterns:
+                        navigateToTab(onOpenPatternsTab)
+                    case .outlook:
+                        navigateToTab(onOpenOutlookTab)
+                    case .explore:
+                        navigateToTab(onOpenExplore)
+                    }
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: tab.systemImage)
+                            .font(.system(size: 15, weight: .semibold))
+                        Text(tab.title)
+                            .font(.caption2.weight(.semibold))
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(tab == .explore ? .white : .white.opacity(0.70))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(tab == .explore ? Color.white.opacity(0.12) : Color.clear)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.white.opacity(0.08))
+                .frame(height: 1)
         }
     }
 }
@@ -888,7 +986,7 @@ private struct DriverExpandedDetailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let onShare {
-                Button(sharePrompt ?? "Share this insight") {
+                Button(sharePrompt ?? "Share") {
                     onShare()
                 }
                 .buttonStyle(.bordered)

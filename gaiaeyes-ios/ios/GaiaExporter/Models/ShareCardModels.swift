@@ -132,6 +132,7 @@ struct ShareCardModel: Identifiable, Hashable {
     let eyebrow: String?
     let title: String
     let subtitle: String?
+    let signText: String?
     let primaryText: String?
     let valueText: String?
     let stateText: String?

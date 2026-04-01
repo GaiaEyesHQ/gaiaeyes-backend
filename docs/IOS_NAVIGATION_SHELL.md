@@ -46,6 +46,10 @@ Each major concept has one primary home:
 - `Outlook`: 24h / 72h / 7d forecast guidance and “what may help”
 - `Explore`: deeper system context including all drivers, space weather, local conditions, magnetosphere, Schumann, hazards, and earthquakes
 
+The Home surface no longer duplicates those destinations with a separate quick-links row. Cross-section movement should happen through the shared bottom navigation model.
+
+`All Drivers` now adds a matching bottom navigation strip inside its sheet so users can jump directly to `Home`, `Body`, `Patterns`, `Outlook`, or `Explore` without closing back through the modal flow first.
+
 ## Debug / developer controls
 
 The old top-right debug toggle is no longer exposed as a primary app-shell action.
@@ -63,5 +67,7 @@ This preserves the existing developer workflow without making debug affordances 
 - Confirm Guide Hub shows Daily Check-In, Daily Poll, EarthScope, and Understanding Gaia Eyes sections.
 - Confirm `Settings` opens from the top-right.
 - Confirm the Guide section in Settings shows the shared avatar preview and the reserved app-icon preference path.
+- Confirm the Home tab no longer shows the old quick-links row.
+- Confirm the `All Drivers` sheet shows the bottom tab shortcuts and each one returns to the matching main tab.
 - Confirm the debug panel can still be enabled from `Settings` -> `Advanced`.
 - Confirm existing sheets and detail routes still open for symptom logging, current symptoms, daily check-in, all drivers, local conditions, Schumann, and settings.

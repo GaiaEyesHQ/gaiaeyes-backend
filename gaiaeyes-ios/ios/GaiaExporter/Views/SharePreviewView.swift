@@ -103,9 +103,9 @@ struct SharePreviewView: View {
 
     private var previewBlock: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(draft.promptText ?? "Share this insight")
-                .font(.headline)
-                .foregroundColor(.white)
+            Label("Share", systemImage: "square.and.arrow.up")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.white.opacity(0.82))
 
             Group {
                 if let renderedImage {
@@ -176,7 +176,7 @@ struct SharePreviewView: View {
                     UIPasteboard.general.string = editableCaption
                     #endif
                 } label: {
-                    Label("Copy Caption", systemImage: "doc.on.doc")
+                    Label("Copy", systemImage: "doc.on.doc")
                 }
                 .buttonStyle(.bordered)
                 .tint(.white.opacity(0.85))

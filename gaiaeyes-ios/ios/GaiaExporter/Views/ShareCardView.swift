@@ -15,11 +15,11 @@ struct ShareCardView: View {
     private var padding: CGFloat {
         switch model.format {
         case .square:
-            return 24
-        case .portrait:
-            return 26
-        case .landscape:
             return 22
+        case .portrait:
+            return 24
+        case .landscape:
+            return 20
         }
     }
 
@@ -33,15 +33,15 @@ struct ShareCardView: View {
 
             LinearGradient(
                 colors: [
-                    Color.black.opacity(0.12),
-                    Color.black.opacity(0.34),
-                    Color.black.opacity(0.78)
+                    Color.black.opacity(0.08),
+                    Color.black.opacity(0.24),
+                    Color.black.opacity(0.66)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
 
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
                 topBar
                 Spacer(minLength: 0)
                 contentBlock
@@ -59,38 +59,49 @@ struct ShareCardView: View {
 
     private var topBar: some View {
         HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                if let eyebrow = model.eyebrow, !eyebrow.isEmpty {
-                    Text(eyebrow.uppercased())
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.72))
-                        .tracking(0.8)
-                }
-                Text(model.branding.title)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.94))
+            if let eyebrow = model.eyebrow, !eyebrow.isEmpty {
+                Text(eyebrow.uppercased())
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.72))
+                    .tracking(0.8)
+                    .lineLimit(1)
             }
             Spacer()
-            HStack(spacing: 8) {
-                if let state = model.stateText, !state.isEmpty {
-                    ShareStatePill(label: state, tint: accentColor)
-                }
-                ShareStatePill(label: model.accentLevel.pillTitle, tint: accentColor.opacity(0.88))
+            if let pillLabel = activePillLabel {
+                ShareStatePill(label: pillLabel, tint: accentColor)
             }
         }
     }
 
     private var contentBlock: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(model.title)
                 .font(.system(size: titleSize, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.72)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if let signText = model.signText, !signText.isEmpty {
+                Text(signText)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.94))
+                    .lineSpacing(1)
+                    .lineLimit(2)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(accentColor.opacity(0.16), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(accentColor.opacity(0.34), lineWidth: 1)
+                    )
+            }
 
             if let subtitle = model.subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .font(.system(size: 17, weight: .medium, design: .rounded))
                     .foregroundColor(.white.opacity(0.82))
+                    .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -98,14 +109,15 @@ struct ShareCardView: View {
                 Text(valueText)
                     .font(.system(size: valueSize, weight: .heavy, design: .rounded))
                     .foregroundColor(.white)
-                    .minimumScaleFactor(0.78)
+                    .minimumScaleFactor(0.72)
                     .lineLimit(2)
             }
 
             if let primaryText = model.primaryText, !primaryText.isEmpty {
                 Text(primaryText)
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
                     .foregroundColor(.white.opacity(0.94))
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -115,7 +127,7 @@ struct ShareCardView: View {
 
             if !model.bullets.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(model.bullets.prefix(3).enumerated()), id: \.offset) { _, bullet in
+                    ForEach(Array(model.bullets.prefix(2).enumerated()), id: \.offset) { _, bullet in
                         HStack(alignment: .top, spacing: 8) {
                             Circle()
                                 .fill(accentColor)
@@ -124,6 +136,7 @@ struct ShareCardView: View {
                             Text(bullet)
                                 .font(.system(size: 15, weight: .medium, design: .rounded))
                                 .foregroundColor(.white.opacity(0.88))
+                                .lineLimit(2)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -145,7 +158,7 @@ struct ShareCardView: View {
                 Text(sourceLine)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundColor(.white.opacity(0.62))
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
             }
 
             HStack(alignment: .center, spacing: 10) {
@@ -153,9 +166,10 @@ struct ShareCardView: View {
                     Text(model.branding.title)
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundColor(.white.opacity(0.92))
-                    Text(model.branding.subtitle)
+                    Text(model.branding.url)
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.56))
+                        .lineLimit(1)
                 }
 
                 Spacer()
@@ -163,6 +177,8 @@ struct ShareCardView: View {
                 Text(model.footer)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundColor(.white.opacity(0.66))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
                     .multilineTextAlignment(.trailing)
             }
         }
@@ -171,9 +187,9 @@ struct ShareCardView: View {
     private var titleSize: CGFloat {
         switch model.layout {
         case .personalPattern:
-            return 30
+            return 24
         case .dailyState:
-            return 32
+            return 28
         default:
             return 28
         }
@@ -182,12 +198,20 @@ struct ShareCardView: View {
     private var valueSize: CGFloat {
         switch model.format {
         case .square:
-            return 42
+            return 38
         case .portrait:
-            return 46
+            return 42
         case .landscape:
             return 34
         }
+    }
+
+    private var activePillLabel: String? {
+        let state = model.stateText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let state, !state.isEmpty {
+            return state
+        }
+        return model.accentLevel.pillTitle
     }
 }
 
@@ -197,7 +221,7 @@ private struct ShareHighlightsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(highlights.prefix(3).enumerated()), id: \.offset) { _, highlight in
+            ForEach(Array(highlights.prefix(2).enumerated()), id: \.offset) { _, highlight in
                 HStack {
                     Text(highlight.label.uppercased())
                         .font(.system(size: 10, weight: .bold, design: .rounded))
@@ -206,6 +230,8 @@ private struct ShareHighlightsView: View {
                     Text(highlight.value)
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundColor(.white.opacity(0.92))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)

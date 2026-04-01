@@ -5227,56 +5227,6 @@ struct ContentView: View {
             )
             .padding(.horizontal)
 
-            MissionMenuSectionView(
-                onAllDrivers: { openAllDrivers() },
-                onCurrentSymptoms: { showCurrentSymptomsSheet = true },
-                onDailyCheckIn: { showDailyCheckInSheet = true },
-                onSymptoms: { showSymptomSheet = true },
-                onQuickCheck: {
-                    if Self.cameraHealthCheckVisible {
-                        showCameraHealthCheckSheet = true
-                    }
-                },
-                onResearch: {
-#if canImport(UIKit)
-                    if let url = URL(string: "https://gaiaeyes.com/research/") {
-                        UIApplication.shared.open(url)
-                    }
-#endif
-                }
-            )
-            .padding(.horizontal)
-        }
-    }
-
-    private struct MissionMenuSectionView: View {
-        let onAllDrivers: () -> Void
-        let onCurrentSymptoms: () -> Void
-        let onDailyCheckIn: () -> Void
-        let onSymptoms: () -> Void
-        let onQuickCheck: () -> Void
-        let onResearch: () -> Void
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 6) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        if ContentView.cameraHealthCheckVisible {
-                            Button(action: onQuickCheck) { Label("Quick Check", systemImage: "camera.fill") }
-                        }
-                        Button(action: onAllDrivers) { Label("All Drivers", systemImage: "list.bullet.rectangle.portrait") }
-                        Button(action: onCurrentSymptoms) { Label("Current Symptoms", systemImage: "waveform.path.ecg.rectangle") }
-                        Button(action: onDailyCheckIn) { Label("Daily Check-In", systemImage: "checklist") }
-                        Button(action: onSymptoms) { Label("Symptoms", systemImage: "plus.circle") }
-                        Button(action: onResearch) { Label("Research", systemImage: "book.closed") }
-                    }
-                }
-                Text("Quick links keep logging, daily check-ins, and the full driver list close without duplicating the main tab destinations.")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
         }
     }
 
@@ -8396,12 +8346,8 @@ struct ContentView: View {
         }
 
         private func sharePrompt(for accent: ShareAccentLevel) -> String {
-            switch accent {
-            case .elevated, .storm:
-                return "This might be worth sharing"
-            case .calm, .watch:
-                return "Share this outlook"
-            }
+            _ = accent
+            return "Share"
         }
 
         private func accent(for raw: String?) -> ShareAccentLevel {
@@ -8768,10 +8714,8 @@ struct ContentView: View {
         }
 
         private func sharePrompt(for card: UserPatternCard) -> String {
-            if card.usedToday == true {
-                return "This might be worth sharing"
-            }
-            return "Share this pattern"
+            _ = card
+            return "Share"
         }
 
         private func shareBackground(for signalKey: String) -> ShareCardBackground {
@@ -12680,10 +12624,15 @@ struct ContentView: View {
                     showsCloseButton: true,
                     initialFocusKey: allDriversFocusKey,
                     signalBar: persistentSignalBarItems,
+                    onOpenHome: { selectedTab = .home },
+                    onOpenBody: { selectedTab = .body },
+                    onOpenPatternsTab: { selectedTab = .patterns },
                     onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },
                     onLogSymptoms: { openSymptomLogFromAllDrivers() },
                     onOpenPatterns: { openInsightsFromAllDrivers(route: .yourPatterns) },
+                    onOpenOutlookTab: { selectedTab = .outlook },
                     onOpenOutlook: { openInsightsFromAllDrivers(route: .yourOutlook) },
+                    onOpenExplore: { selectedTab = .explore },
                     onOpenSetup: { openSettingsFromAllDrivers() }
                 )
             }
@@ -13869,12 +13818,8 @@ struct ContentView: View {
         }
 
         private func sharePrompt(for accent: ShareAccentLevel) -> String {
-            switch accent {
-            case .elevated, .storm:
-                return "This might be worth sharing"
-            case .calm, .watch:
-                return "Share this update"
-            }
+            _ = accent
+            return "Share"
         }
 
         private func accent(for raw: String?) -> ShareAccentLevel {
@@ -15363,12 +15308,8 @@ struct ContentView: View {
         }
 
         private func sharePrompt(for accent: ShareAccentLevel) -> String {
-            switch accent {
-            case .elevated, .storm:
-                return "This might be worth sharing"
-            case .calm, .watch:
-                return "Share this insight"
-            }
+            _ = accent
+            return "Share"
         }
 
         private func accent(for severityKey: String) -> ShareAccentLevel {
@@ -15421,11 +15362,11 @@ struct ContentView: View {
                 $0.progress > $1.progress
             }
             let leading = ranked.first ?? tempStatus
-            let supporting = Array(ranked.dropFirst().prefix(2)).map { "\($0.label) — \($0.state)" }
+            let supporting = Array(ranked.dropFirst().prefix(2)).map(\.label)
             let accentLevel = accent(for: leading.severityKey)
             let interpretation = tone.resolveCopy(
                 straight: "\(leading.label) looks most active in your area right now.",
-                balanced: "\(leading.label) may be the local factor standing out most right now.",
+                balanced: "\(leading.label) is the local factor standing out most right now.",
                 humorous: "\(leading.label) is currently doing the loudest local weather monologue."
             )
             return ShareDraftFactory.dailyState(
@@ -15433,7 +15374,7 @@ struct ContentView: View {
                 analyticsKey: "local_snapshot",
                 mode: mode,
                 title: "Local Conditions",
-                leading: "\(leading.label) — \(leading.state)",
+                leading: leading.label,
                 supporting: supporting,
                 interpretation: interpretation,
                 accent: accentLevel,
@@ -15539,7 +15480,11 @@ struct ContentView: View {
                                 shareDraft = signalDraft(
                                     key: "temp",
                                     status: tempStatus,
-                                    interpretation: "Temperature shifts may be part of the local mix today.",
+                                    interpretation: tone.resolveCopy(
+                                        straight: "Temperature moved fast over the last day.",
+                                        balanced: "The temperature swung fast today.",
+                                        humorous: "The weather changed its mind again."
+                                    ),
                                     bullets: [
                                         "Current temp: \(LocalConditionsFormatting.formatTempMetric(weather?.tempC))",
                                         "24h swing: \(LocalConditionsFormatting.formatTempDelta(weather?.tempDelta24hC))",
@@ -15585,7 +15530,11 @@ struct ContentView: View {
                                 shareDraft = signalDraft(
                                     key: "pressure",
                                     status: baroStatus,
-                                    interpretation: "Pressure movement may be the local factor worth watching right now.",
+                                    interpretation: tone.resolveCopy(
+                                        straight: "Pressure moved sharply over the last day.",
+                                        balanced: "Those aches may have a reason. Pressure is swinging.",
+                                        humorous: "Pressure swing. Your joints probably noticed first."
+                                    ),
                                     bullets: [
                                         "Pressure: \(LocalConditionsFormatting.formatPressureShort(weather?.pressureHpa))",
                                         "24h delta: \(LocalConditionsFormatting.formatPressureDelta(weather?.baroDelta24hHpa))",
@@ -15620,7 +15569,11 @@ struct ContentView: View {
                                 shareDraft = signalDraft(
                                     key: "aqi",
                                     status: airStatus,
-                                    interpretation: "Air quality may be adding extra friction today.",
+                                    interpretation: tone.resolveCopy(
+                                        straight: "Air quality is adding extra load today.",
+                                        balanced: "The air may feel a little heavier today.",
+                                        humorous: "The air quality is not exactly being cute."
+                                    ),
                                     bullets: [
                                         "AQI: \(LocalConditionsFormatting.formatNumber(displayedAQI, decimals: 0))",
                                         "Category: \(air?.category ?? airStatus.state)",
@@ -15689,7 +15642,11 @@ struct ContentView: View {
                                     shareDraft = signalDraft(
                                         key: "allergens",
                                         status: allergenDriver,
-                                        interpretation: "Allergen load may be the local signal worth watching.",
+                                        interpretation: tone.resolveCopy(
+                                            straight: "Allergen load is climbing today.",
+                                            balanced: "Headache alert. Allergens are climbing.",
+                                            humorous: "Allergens are climbing. Right up your nose."
+                                        ),
                                         bullets: [
                                             "Primary: \(allergens?.primaryLabel ?? LocalConditionsFormatting.formatAllergenType(allergens?.primaryType))",
                                             "Overall: \(LocalConditionsFormatting.formatAllergenState(allergens?.overallLevel ?? allergens?.state, fallbackLabel: allergens?.overallLabel ?? allergens?.stateLabel))",
@@ -16455,12 +16412,8 @@ struct ContentView: View {
         }
 
         private func sharePrompt(for accent: ShareAccentLevel) -> String {
-            switch accent {
-            case .elevated, .storm:
-                return "This might be worth sharing"
-            case .calm, .watch:
-                return "Share this update"
-            }
+            _ = accent
+            return "Share"
         }
 
         private func missionControlShareDraft() -> ShareDraft {

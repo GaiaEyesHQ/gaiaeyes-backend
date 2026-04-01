@@ -4,199 +4,431 @@ enum ShareCaptionEngine {
     static func signalSnapshot(
         mode: ExperienceMode,
         tone: ToneStyle,
+        category: ShareHookCategory,
+        hook: String,
         title: String,
-        state: String?,
+        insight: String,
+        signText: String?,
+        bullets: [String],
         value: String?,
-        interpretation: String,
-        bullets: [String]
+        state: String?
     ) -> ShareCaptionSet {
-        let trimmedBullets = Array(bullets.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.prefix(3))
-        let stateLine = [title, state].compactMap { valueOrNil($0) }.joined(separator: " — ")
-        let valueLine = valueOrNil(value)
-        let bulletLine = trimmedBullets.joined(separator: " • ")
-        let scientific = [
-            valueLine.map { "\(stateLine) at \($0)." } ?? "\(stateLine).",
-            interpretation,
-            valueOrNil(bulletLine),
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
+        let dataLine = sentenceJoin([
+            titleMetricLine(title: title, value: value, state: state),
+            signText?.replacingOccurrences(of: "\n", with: " ")
+        ], maxCount: 1)
+        let feelLine = feelingLine(category: category, bullets: bullets, style: .scientific, mode: mode)
+        let balancedGrounding = tone == .humorous
+            ? "Take the day a little lighter if you can"
+            : groundingLine(category: category, style: .balanced, mode: mode)
 
-        let balancedIntro = tone.resolveCopy(
-            straight: "\(stateLine).",
-            balanced: "\(stateLine).",
-            humorous: "\(stateLine)."
+        return ShareCaptionSet(
+            scientific: caption([
+                hook,
+                dataLine ?? insight,
+                feelLine,
+                groundingLine(category: category, style: .scientific, mode: mode),
+            ]),
+            balanced: caption([
+                hook,
+                insight,
+                feelingLine(category: category, bullets: bullets, style: .balanced, mode: mode),
+                balancedGrounding,
+            ]),
+            humorous: caption([
+                hook,
+                playfulLine(category: category, title: title, mode: mode),
+                feelingLine(category: category, bullets: bullets, style: .humorous, mode: mode),
+                groundingLine(category: category, style: .humorous, mode: mode),
+            ])
         )
-        let balanced = [
-            balancedIntro,
-            interpretation,
-            trimmedBullets.isEmpty ? nil : "You might notice: \(bulletLine).",
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
-
-        let playfulCloser: String
-        switch mode {
-        case .scientific:
-            playfulCloser = tone == .humorous ? "My system: ???" : "Worth keeping an eye on."
-        case .mystical:
-            playfulCloser = tone == .humorous ? "My field: not subtle." : "The energy feels a little louder today."
-        }
-        let humorous = [
-            valueLine.map { "\(stateLine). \($0)." } ?? "\(stateLine).",
-            trimmedBullets.first,
-            playfulCloser,
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
-
-        return ShareCaptionSet(scientific: scientific, balanced: balanced, humorous: humorous)
     }
 
     static func personalPattern(
         mode: ExperienceMode,
+        hook: String,
         relationship: String,
+        insight: String,
+        bullets: [String],
         evidenceCount: Int?,
         lagText: String?,
-        confidence: String?,
-        explanation: String
+        confidence: String?
     ) -> ShareCaptionSet {
-        let evidenceLine = evidenceCount.map { "Observed across \($0) events." }
-        let lagLine = valueOrNil(lagText).map { "Lag: \($0)." }
-        let confidenceLine = valueOrNil(confidence).map { "Confidence: \($0)." }
+        let evidenceLine = sentenceJoin([
+            evidenceCount.map { "Seen \($0) times" },
+            lagText.map { "Lag \($0)" },
+            confidence.map { "Confidence \($0)" },
+        ], maxCount: 1)
 
-        let scientific = [
-            "Pattern observed.",
-            relationship + ".",
-            evidenceLine,
-            lagLine,
-            confidenceLine,
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
-
-        let balancedLead = mode == .mystical ? "This pattern keeps showing up." : "This pattern has come up more than once."
-        let balanced = [
-            balancedLead,
-            relationship + ".",
-            evidenceLine,
-            lagLine,
-            explanation,
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
-
-        let humorous = [
-            "Pattern observed.",
-            relationship + ".",
-            evidenceCount.map { "Seen \($0) times." },
-            mode == .mystical ? "Apparently the universe left receipts." : "Apparently the data kept receipts."
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
-
-        return ShareCaptionSet(scientific: scientific, balanced: balanced, humorous: humorous)
+        return ShareCaptionSet(
+            scientific: caption([
+                hook,
+                relationship,
+                evidenceLine ?? bullets.first,
+                "Worth watching as a pattern, not treating as proof",
+            ]),
+            balanced: caption([
+                hook,
+                insight,
+                bullets.first ?? "It keeps showing up in the same direction",
+                mode == .mystical ? "Treat it as a clue, not a sentence" : "Treat it as a clue, not a guarantee",
+            ]),
+            humorous: caption([
+                hook,
+                "Your log keeps bringing this one back",
+                bullets.first ?? evidenceLine ?? "Apparently the pattern has opinions",
+                mode == .mystical ? "The universe left a sticky note" : "The data left a sticky note",
+            ])
+        )
     }
 
     static func dailyState(
         mode: ExperienceMode,
+        category: ShareHookCategory,
+        hook: String,
         title: String,
+        insight: String,
+        bullets: [String],
         leading: String,
-        supporting: [String],
-        interpretation: String
+        supporting: [String]
     ) -> ShareCaptionSet {
-        let supportingLine = supporting.isEmpty ? nil : supporting.joined(separator: ", ")
-        let scientific = [
-            "\(title).",
-            "Leading driver: \(leading).",
-            supportingLine.map { "Also in play: \($0)." },
-            interpretation,
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
+        let dataLine = sentenceJoin([
+            "\(leading) is leading today",
+            supporting.first.map { "\($0) is also in play" }
+        ], maxCount: 1)
 
-        let balanced = [
-            "\(title).",
-            "\(leading) is leading.",
-            supportingLine.map { "\($0) is also in play." },
-            interpretation,
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
-
-        let humorousCloser = mode == .mystical ? "The field is making itself known." : "The dashboard is not being subtle."
-        let humorous = [
-            "\(title).",
-            "\(leading) is doing the loudest talking.",
-            supportingLine.map { "\($0) is chiming in too." },
-            humorousCloser,
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
-
-        return ShareCaptionSet(scientific: scientific, balanced: balanced, humorous: humorous)
+        return ShareCaptionSet(
+            scientific: caption([
+                hook,
+                dataLine ?? title,
+                bullets.first ?? feelingLine(category: category, bullets: [], style: .scientific, mode: mode),
+                groundingLine(category: category, style: .scientific, mode: mode),
+            ]),
+            balanced: caption([
+                hook,
+                insight,
+                bullets.first ?? feelingLine(category: category, bullets: [], style: .balanced, mode: mode),
+                groundingLine(category: category, style: .balanced, mode: mode),
+            ]),
+            humorous: caption([
+                hook,
+                "\(leading) is running the group chat",
+                bullets.first ?? feelingLine(category: category, bullets: [], style: .humorous, mode: mode),
+                groundingLine(category: category, style: .humorous, mode: mode),
+            ])
+        )
     }
 
     static func event(
         mode: ExperienceMode,
+        category: ShareHookCategory,
+        hook: String,
         title: String,
         severity: String?,
-        context: String,
-        bullets: [String],
-        earthDirectedNote: String?
+        insight: String,
+        bullets: [String]
     ) -> ShareCaptionSet {
-        let header = [title, valueOrNil(severity)].compactMap { $0 }.joined(separator: " — ")
-        let bulletLine = Array(bullets.prefix(3)).joined(separator: " • ")
+        let dataLine = sentenceJoin([
+            titleMetricLine(title: title, value: nil, state: severity),
+            bullets.first
+        ], maxCount: 1)
 
-        let scientific = [
-            "\(header).",
-            context,
-            earthDirectedNote,
-            valueOrNil(bulletLine),
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
-
-        let balanced = [
-            "\(header).",
-            context,
-            earthDirectedNote,
-            valueOrNil(bulletLine),
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
-
-        let humorousTail = mode == .mystical ? "Cosmic weather has entered the chat." : "Space weather is not being subtle."
-        let humorous = [
-            "\(header).",
-            context,
-            earthDirectedNote,
-            humorousTail,
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
-
-        return ShareCaptionSet(scientific: scientific, balanced: balanced, humorous: humorous)
+        return ShareCaptionSet(
+            scientific: caption([
+                hook,
+                dataLine ?? insight,
+                feelingLine(category: category, bullets: bullets, style: .scientific, mode: mode),
+                groundingLine(category: category, style: .scientific, mode: mode),
+            ]),
+            balanced: caption([
+                hook,
+                insight,
+                feelingLine(category: category, bullets: bullets, style: .balanced, mode: mode),
+                groundingLine(category: category, style: .balanced, mode: mode),
+            ]),
+            humorous: caption([
+                hook,
+                playfulLine(category: category, title: title, mode: mode),
+                feelingLine(category: category, bullets: bullets, style: .humorous, mode: mode),
+                groundingLine(category: category, style: .humorous, mode: mode),
+            ])
+        )
     }
 
     static func outlook(
         mode: ExperienceMode,
+        category: ShareHookCategory,
+        hook: String,
         windowTitle: String,
         primaryDriver: String,
-        supportingDrivers: [String],
-        affectedDomains: [String],
+        insight: String,
+        bullets: [String],
         actionLine: String
     ) -> ShareCaptionSet {
-        let supportingLine = supportingDrivers.isEmpty ? nil : supportingDrivers.joined(separator: ", ")
-        let domainsLine = affectedDomains.isEmpty ? nil : affectedDomains.joined(separator: ", ")
+        let dataLine = sentenceJoin([
+            "\(windowTitle) has \(primaryDriver) out front",
+            bullets.first
+        ], maxCount: 1)
 
-        let scientific = [
-            "\(windowTitle).",
-            "Primary driver: \(primaryDriver).",
-            supportingLine.map { "Supporting drivers: \($0)." },
-            domainsLine.map { "Likely affected domains: \($0)." },
-            actionLine,
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
+        return ShareCaptionSet(
+            scientific: caption([
+                hook,
+                dataLine ?? insight,
+                clippedSentence(actionLine, maxWords: 14) ?? feelingLine(category: category, bullets: bullets, style: .scientific, mode: mode),
+                groundingLine(category: category, style: .scientific, mode: mode),
+            ]),
+            balanced: caption([
+                hook,
+                insight,
+                clippedSentence(actionLine, maxWords: 14) ?? feelingLine(category: category, bullets: bullets, style: .balanced, mode: mode),
+                groundingLine(category: category, style: .balanced, mode: mode),
+            ]),
+            humorous: caption([
+                hook,
+                "\(primaryDriver) looks ready to call the shots",
+                clippedSentence(actionLine, maxWords: 14) ?? feelingLine(category: category, bullets: bullets, style: .humorous, mode: mode),
+                groundingLine(category: category, style: .humorous, mode: mode),
+            ])
+        )
+    }
 
-        let balanced = [
-            "\(windowTitle).",
-            "\(primaryDriver) looks most worth watching.",
-            supportingLine.map { "\($0) may add context." },
-            domainsLine.map { "\($0) may be more noticeable in this window." },
-            actionLine,
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
+    private enum CaptionTone {
+        case scientific
+        case balanced
+        case humorous
+    }
 
-        let humorousTail = mode == .mystical ? "Future-you may want softer edges." : "Future-me may want fewer plans."
-        let humorous = [
-            "\(windowTitle).",
-            "\(primaryDriver) is lining up first.",
-            supportingLine.map { "\($0) is tagging along." },
-            humorousTail,
-            actionLine,
-        ].compactMap { valueOrNil($0) }.joined(separator: " ")
+    private static func caption(_ lines: [String?]) -> String {
+        let unique = uniqueLines(lines).prefix(4)
+        return unique.map(sentence).joined(separator: " ")
+    }
 
-        return ShareCaptionSet(scientific: scientific, balanced: balanced, humorous: humorous)
+    private static func titleMetricLine(title: String, value: String?, state: String?) -> String? {
+        if let value = valueOrNil(value), let state = valueOrNil(state) {
+            return "\(title) is \(state.lowercased()) at \(value)"
+        }
+        if let value = valueOrNil(value) {
+            return "\(title) is at \(value)"
+        }
+        if let state = valueOrNil(state) {
+            return "\(title) is \(state.lowercased()) right now"
+        }
+        return nil
+    }
+
+    private static func feelingLine(
+        category: ShareHookCategory,
+        bullets: [String],
+        style: CaptionTone,
+        mode: ExperienceMode
+    ) -> String {
+        if let bullet = preferredFeelingBullet(from: bullets) {
+            switch style {
+            case .scientific:
+                return bullet
+            case .balanced:
+                return "You may notice \(lowercasedStart(bullet))"
+            case .humorous:
+                return bullet
+            }
+        }
+
+        switch (category, style) {
+        case (.pressure, .scientific):
+            return "Rapid swings like this can line up with tension or headache days for some"
+        case (.pressure, .balanced):
+            return "You may notice a little more tension or body sensitivity"
+        case (.pressure, .humorous):
+            return "If your head feels dramatic, it may have a reason"
+        case (.air, .scientific):
+            return "Higher irritant load can line up with sinus, headache, or fatigue days"
+        case (.air, .balanced):
+            return "You may notice your sinuses, head, or energy a little more"
+        case (.air, .humorous):
+            return "If your sinuses are complaining, they may have a point"
+        case (.solar, .scientific):
+            return "Active solar windows can overlap with sleep or recovery shifts for some"
+        case (.solar, .balanced):
+            return "You may feel a little more wired, off rhythm, or extra sensitive"
+        case (.solar, .humorous):
+            return "If your system feels a little weird, space weather may be freelancing"
+        case (.geomagnetic, .scientific):
+            return "Some people notice sensitivity, restlessness, or sleep shifts during active field periods"
+        case (.geomagnetic, .balanced):
+            return "You may notice restless energy or a less settled baseline"
+        case (.geomagnetic, .humorous):
+            return mode == .mystical
+                ? "If the vibes feel loud, you are not imagining the volume"
+                : "If the background feels loud, it is not just your imagination"
+        case (.pattern, .scientific):
+            return "This is showing up consistently enough to keep on your radar"
+        case (.pattern, .balanced):
+            return "It may be worth trusting this pattern a little more"
+        case (.pattern, .humorous):
+            return "At this point the pattern might want a name tag"
+        case (.earth, .scientific):
+            return "The overall signal mix looks a little more loaded than usual"
+        case (.earth, .balanced):
+            return "You may feel a little less effortless than usual"
+        case (.earth, .humorous):
+            return "If the day feels slightly sideways, fair enough"
+        }
+    }
+
+    private static func playfulLine(category: ShareHookCategory, title: String, mode: ExperienceMode) -> String {
+        switch category {
+        case .pressure:
+            return "The weather picked a dramatic angle"
+        case .air:
+            return "The air quality did not choose subtlety"
+        case .solar:
+            return title.lowercased().contains("flare")
+                ? "The sun chose a dramatic entrance"
+                : "Space weather did not come to whisper"
+        case .geomagnetic:
+            return mode == .mystical ? "The field brought extra static" : "The background brought extra static"
+        case .pattern:
+            return "Your data keeps pulling this thread"
+        case .earth:
+            return "The day has opinions"
+        }
+    }
+
+    private static func groundingLine(
+        category: ShareHookCategory,
+        style: CaptionTone,
+        mode: ExperienceMode
+    ) -> String {
+        switch style {
+        case .scientific:
+            return "Worth watching without overcalling it"
+        case .balanced:
+            switch category {
+            case .pressure, .air:
+                return "Keep the pace a little gentler if you can"
+            case .solar, .geomagnetic:
+                return mode == .mystical ? "Stay a little softer with yourself today" : "Keep your baseline a little steadier today"
+            case .pattern:
+                return "Log it and see if it keeps holding"
+            case .earth:
+                return "Give yourself a little more margin today"
+            }
+        case .humorous:
+            switch category {
+            case .pressure, .air:
+                return "Maybe let your body set the schedule"
+            case .solar, .geomagnetic:
+                return mode == .mystical ? "Decode the unseen" : "Maybe do not argue with physics today"
+            case .pattern:
+                return "Consider this your recurring reminder"
+            case .earth:
+                return "Let the day be weird without helping it"
+            }
+        }
+    }
+
+    private static func preferredFeelingBullet(from bullets: [String]) -> String? {
+        let keywords = [
+            "ache", "energy", "fatigue", "feel", "head", "headache", "mood", "notice",
+            "pain", "restless", "sensitivity", "sinus", "sleep", "tension"
+        ]
+        return bullets
+            .compactMap(valueOrNil)
+            .first { line in
+                let lower = line.lowercased()
+                return keywords.contains { lower.contains($0) }
+            }
+    }
+
+    private static func clippedSentence(_ raw: String?, maxWords: Int) -> String? {
+        guard let value = valueOrNil(raw) else { return nil }
+        let first = value
+            .split(whereSeparator: { ".!?".contains($0) })
+            .first
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? value
+        let words = first.split(separator: " ")
+        guard words.count > maxWords else { return first }
+        return words.prefix(maxWords).joined(separator: " ") + "…"
+    }
+
+    private static func uniqueLines(_ values: [String?]) -> [String] {
+        var result: [String] = []
+        for value in values {
+            guard let cleaned = valueOrNil(value) else { continue }
+            guard !result.contains(where: { areSimilar(cleaned, $0) }) else { continue }
+            result.append(cleaned)
+        }
+        return result
+    }
+
+    private static func sentenceJoin(_ values: [String?], maxCount: Int) -> String? {
+        let lines = uniqueLines(values)
+        guard !lines.isEmpty else { return nil }
+        return lines.prefix(maxCount).map(sentence).joined(separator: " ")
+    }
+
+    private static func sentence(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return trimmed }
+        if trimmed.hasSuffix(".") || trimmed.hasSuffix("!") || trimmed.hasSuffix("?") {
+            return trimmed
+        }
+        return trimmed + "."
+    }
+
+    private static func lowercasedStart(_ raw: String) -> String {
+        guard let first = raw.first else { return raw }
+        return String(first).lowercased() + raw.dropFirst()
     }
 
     private static func valueOrNil(_ raw: String?) -> String? {
         guard let raw else { return nil }
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+        let cleaned = raw
+            .replacingOccurrences(of: "\n", with: " ")
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? nil : cleaned
+    }
+
+    private static func normalized(_ raw: String) -> String {
+        let allowed = raw.lowercased().map { character -> Character in
+            character.isLetter || character.isNumber ? character : " "
+        }
+        return String(allowed)
+            .split(separator: " ")
+            .joined(separator: " ")
+    }
+
+    private static func semanticTokens(_ raw: String) -> Set<String> {
+        let stopWords: Set<String> = [
+            "a", "an", "and", "are", "as", "at", "be", "for", "from", "in", "is", "it", "may",
+            "more", "not", "of", "on", "or", "some", "than", "that", "the", "this", "today",
+            "up", "with", "you", "your"
+        ]
+        return Set(
+            normalized(raw)
+                .split(separator: " ")
+                .map(String.init)
+                .filter { !stopWords.contains($0) }
+        )
+    }
+
+    private static func areSimilar(_ lhs: String, _ rhs: String) -> Bool {
+        let left = normalized(lhs)
+        let right = normalized(rhs)
+        if left == right || left.contains(right) || right.contains(left) {
+            return true
+        }
+
+        let leftTokens = semanticTokens(lhs)
+        let rightTokens = semanticTokens(rhs)
+        guard !leftTokens.isEmpty, !rightTokens.isEmpty else { return false }
+
+        let overlap = leftTokens.intersection(rightTokens).count
+        let ratio = Double(overlap) / Double(max(leftTokens.count, rightTokens.count))
+        return ratio >= 0.72
     }
 }

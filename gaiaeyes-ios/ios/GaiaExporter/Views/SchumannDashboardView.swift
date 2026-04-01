@@ -1483,12 +1483,8 @@ struct SchumannDashboardView: View {
     }
 
     private func sharePromptLabel(for accent: ShareAccentLevel) -> String {
-        switch accent {
-        case .elevated, .storm:
-            return "This might be worth sharing"
-        case .calm, .watch:
-            return "Share this insight"
-        }
+        _ = accent
+        return "Share"
     }
 
     private func schumannShareDraft() -> ShareDraft? {
