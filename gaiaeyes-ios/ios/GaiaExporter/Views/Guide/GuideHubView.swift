@@ -346,8 +346,8 @@ struct GuideHubView: View {
             emphasis: .standard,
             eyebrow: "Understanding Gaia Eyes",
             title: "How Gaia Eyes works",
-            message: "See how Gaia Eyes combines signal context, body feedback, and patterns without changing the underlying truth layer.",
-            primaryActionTitle: "Open guide",
+            message: "See what Gaia Eyes watches, how it learns from your feedback, what the research context looks like, and where the limits are.",
+            primaryActionTitle: "Learn how Gaia works",
             primaryAction: { navigationPath.append(.understanding) },
             secondaryActionTitle: "Guide settings",
             secondaryAction: onOpenSettings
@@ -438,46 +438,5 @@ struct GuideHubView: View {
         let formatter = ISO8601DateFormatter()
         guard let date = formatter.date(from: iso) else { return nil }
         return DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .short)
-    }
-}
-
-private struct UnderstandingGaiaEyesView: View {
-    let profile: GuideProfile
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                GuideHubSectionCard(
-                    guideType: profile.guideType,
-                    expression: .helpful,
-                    emphasis: .standard,
-                    eyebrow: "Trust",
-                    title: "Gaia Eyes is a translation layer, not a diagnosis engine",
-                    message: "Gaia Eyes combines space weather, Earth weather, local conditions, HealthKit signals, and your own feedback to help you understand what may matter. The guide changes the framing, not the underlying truth layer."
-                )
-
-                GuideHubSectionCard(
-                    guideType: profile.guideType,
-                    expression: .curious,
-                    emphasis: .quiet,
-                    eyebrow: "Feedback Loop",
-                    title: "Why check-ins and polls matter",
-                    message: "Daily check-ins and quick pulse questions help Gaia Eyes compare what it predicted with how the day actually felt. That is how the system gets more useful without pretending certainty it does not have."
-                )
-
-                GuideHubSectionCard(
-                    guideType: profile.guideType,
-                    expression: .calm,
-                    emphasis: .quiet,
-                    eyebrow: "Scope",
-                    title: "What Gaia Eyes is trying to do",
-                    message: "Give you a fast overview, body context, pattern memory, and a near-future read so you can decide what deserves attention without hunting through every data surface manually."
-                )
-            }
-            .padding(16)
-        }
-        .background(Color.black.opacity(0.97).ignoresSafeArea())
-        .navigationTitle("Understanding Gaia Eyes")
-        .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -1972,6 +1972,7 @@ struct ContentView: View {
 
     private enum InsightsRoute: String, Hashable, Identifiable {
         case dailyCheckIn
+        case understandingGaiaEyes
         case yourOutlook
         case spaceWeather
         case localConditions
@@ -7856,6 +7857,25 @@ struct ContentView: View {
             return "Space, local, and earth-system context lives here when you want a deeper read."
         }
 
+        private var understandingCard: some View {
+            NavigationLink(value: InsightsRoute.understandingGaiaEyes) {
+                HubCard(
+                    title: "Understanding Gaia Eyes",
+                    icon: "info.circle.fill",
+                    status: "See what Gaia watches, how it learns from feedback, what the research context looks like, and where the limits are.",
+                    pillText: "How it works",
+                    severity: .ok,
+                    metrics: [
+                        HubMetric(label: "Signals", value: "Environment", tint: GaugePalette.low),
+                        HubMetric(label: "Body", value: "Health + logs", tint: GaugePalette.mild),
+                        HubMetric(label: "Limits", value: "Observational", tint: GaugePalette.elevated)
+                    ],
+                    isExplore: false
+                )
+            }
+            .buttonStyle(.plain)
+        }
+
         private var allDriversCard: some View {
             let leadingCount = dashboardDrivers.filter { ($0.role ?? "").lowercased() == "leading" }.count
             let supportingCount = dashboardDrivers.filter { ($0.role ?? "").lowercased() == "supporting" }.count
@@ -8251,6 +8271,10 @@ struct ContentView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
+                        }
+
+                        if showsPersonalCards {
+                            understandingCard
                         }
 
                         if onOpenAllDrivers != nil {
@@ -11434,6 +11458,13 @@ struct ContentView: View {
                     dailyCheckInStatus = status
                 }
             )
+        case .understandingGaiaEyes:
+            UnderstandingGaiaEyesView(
+                profile: GuideProfile(
+                    experienceProfile: experienceProfile,
+                    useGuideAppIcon: guideProfileStore.profile.useGuideAppIcon
+                )
+            )
         case .yourOutlook:
             YourOutlookView(
                 mode: experienceProfile.mode,
@@ -11704,6 +11735,13 @@ struct ContentView: View {
                             onStatusChanged: { status in
                                 dailyCheckInStatus = status
                             }
+                        )
+                    case .understandingGaiaEyes:
+                        UnderstandingGaiaEyesView(
+                            profile: GuideProfile(
+                                experienceProfile: experienceProfile,
+                                useGuideAppIcon: guideProfileStore.profile.useGuideAppIcon
+                            )
                         )
                     case .yourOutlook:
                         YourOutlookView(
@@ -12107,6 +12145,30 @@ struct ContentView: View {
                             }
                         } label: {
                             Label("Health & Data", systemImage: "heart.text.square")
+                        }
+                        .padding(.horizontal)
+
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("See what Gaia Eyes watches, how it personalizes over time, what the research context looks like, and what the app does not claim.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+
+                                NavigationLink(
+                                    destination: UnderstandingGaiaEyesView(
+                                        profile: GuideProfile(
+                                            experienceProfile: experienceProfile,
+                                            useGuideAppIcon: guideProfileStore.profile.useGuideAppIcon
+                                        )
+                                    )
+                                ) {
+                                    Label("Open Understanding Gaia Eyes", systemImage: "info.circle")
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        } label: {
+                            Label("About Gaia Eyes", systemImage: "info.circle")
                         }
                         .padding(.horizontal)
 

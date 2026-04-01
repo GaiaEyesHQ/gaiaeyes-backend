@@ -28,6 +28,11 @@ Guide Hub is the centralized home for:
 - Understanding Gaia Eyes
 - future guide-driven follow-ups and helper moments
 
+`Understanding Gaia Eyes` also has direct trust-layer entry points from:
+
+- `Insights` via a dedicated "Understanding Gaia Eyes" card
+- `Settings` via an `About Gaia Eyes` section
+
 `Settings` is now the canonical place for:
 
 - experience/profile preferences
@@ -65,7 +70,9 @@ This preserves the existing developer workflow without making debug affordances 
 - Confirm the 5 tabs remain visible when moving between the main app sections.
 - Confirm the top-left guide entry is icon-only and opens Guide Hub.
 - Confirm Guide Hub shows Daily Check-In, Daily Poll, EarthScope, and Understanding Gaia Eyes sections.
+- Confirm the `Insights` surface includes a direct `Understanding Gaia Eyes` card.
 - Confirm `Settings` opens from the top-right.
+- Confirm `Settings` includes an `About Gaia Eyes` section that opens the full page.
 - Confirm the Guide section in Settings shows the shared avatar preview and the reserved app-icon preference path.
 - Confirm the Home tab no longer shows the old quick-links row.
 - Confirm the `All Drivers` sheet shows the bottom tab shortcuts and each one returns to the matching main tab.
