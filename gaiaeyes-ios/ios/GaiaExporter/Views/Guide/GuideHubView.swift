@@ -18,6 +18,7 @@ struct GuideHubView: View {
     let earthscopeSummary: String?
     let earthscopeUpdatedAt: String?
     let whatMattersNow: [String]
+    let whatMattersSummary: String?
     var initialFocus: GuideHubFocus = .overview
     let onRefreshDailyCheckIn: () -> Void
     let onOpenEarthScope: () -> Void
@@ -63,6 +64,16 @@ struct GuideHubView: View {
 
     private var followUpItem: CurrentSymptomItem? {
         currentSymptomsSnapshot?.items.first(where: { $0.pendingFollowUp != nil })
+    }
+
+    private var followUpMessage: String {
+        if let followUpItem {
+            return "You have a follow-up waiting for \(followUpItem.label.lowercased()). Open Body to respond in the real symptom workflow."
+        }
+        if let summary = currentSymptomsSnapshot?.semanticFollowUpSummary {
+            return summary
+        }
+        return "When Gaia Eyes needs one more body detail, those follow-up moments will collect here and in Body rather than scattering around the app."
     }
 
     private var dailyCheckInCardBadge: String? {
@@ -113,6 +124,9 @@ struct GuideHubView: View {
 
     private var earthscopeBody: String {
         if let summary = earthscopeSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty {
+            return summary
+        }
+        if let summary = whatMattersSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty {
             return summary
         }
         if !whatMattersNow.isEmpty {
@@ -331,8 +345,7 @@ struct GuideHubView: View {
             emphasis: followUpItem == nil ? .quiet : .standard,
             eyebrow: "Follow-Ups",
             title: followUpItem == nil ? "Nothing is waiting right now" : "A symptom follow-up is waiting",
-            message: followUpItem.map { "You have a follow-up waiting for \($0.label.lowercased()). Open Body to respond in the real symptom workflow." }
-                ?? "When Gaia Eyes needs one more body detail, those follow-up moments will collect here and in Body rather than scattering around the app.",
+            message: followUpMessage,
             badgeText: followUpItem == nil ? "Future-ready" : "Active",
             primaryActionTitle: "Open Body context",
             primaryAction: onOpenCurrentSymptoms

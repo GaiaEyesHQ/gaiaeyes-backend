@@ -180,6 +180,53 @@ struct CurrentSymptomsSnapshot: Decodable, Hashable {
     let voiceSemantic: CurrentSymptomsVoiceSemantic?
 }
 
+private extension String {
+    var nilIfTrimmedEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+extension CurrentSymptomsSnapshot {
+    var semanticHeaderSummary: String? {
+        voiceSemantic?.interpretation?.headerSummary?.nilIfTrimmedEmpty
+    }
+
+    var semanticActiveSummary: String? {
+        voiceSemantic?.interpretation?.activeSummary?.nilIfTrimmedEmpty
+    }
+
+    var semanticEmptyStateSummary: String? {
+        voiceSemantic?.interpretation?.emptyState?.nilIfTrimmedEmpty
+    }
+
+    var semanticContributingEmptySummary: String? {
+        voiceSemantic?.interpretation?.contributingEmpty?.nilIfTrimmedEmpty
+    }
+
+    var semanticPatternEmptySummary: String? {
+        voiceSemantic?.interpretation?.patternEmpty?.nilIfTrimmedEmpty
+    }
+
+    var semanticFollowUpSummary: String? {
+        voiceSemantic?.interpretation?.followUpSummary?.nilIfTrimmedEmpty
+    }
+
+    var semanticActiveLabelPreview: [String] {
+        let semanticLabels = (voiceSemantic?.facts?.activeLabels ?? []).compactMap(\.nilIfTrimmedEmpty)
+        if !semanticLabels.isEmpty {
+            return semanticLabels
+        }
+        return items.compactMap { $0.label.nilIfTrimmedEmpty }
+    }
+
+    var semanticActiveLabelSummary: String? {
+        let labels = Array(semanticActiveLabelPreview.prefix(2))
+        guard !labels.isEmpty else { return nil }
+        return labels.joined(separator: " • ")
+    }
+}
+
 struct CurrentSymptomTimelineEntry: Decodable, Identifiable, Hashable {
     let id: String
     let episodeId: String

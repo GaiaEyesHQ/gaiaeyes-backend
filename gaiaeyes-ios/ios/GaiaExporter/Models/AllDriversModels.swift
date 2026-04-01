@@ -1,5 +1,12 @@
 import Foundation
 
+private extension String {
+    var nilIfTrimmedEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
 enum DriverCategory: String, Codable, CaseIterable, Hashable, Identifiable {
     case all
     case space
@@ -62,6 +69,43 @@ struct DriverPageSummary: Codable, Hashable {
     let hasPersonalPatterns: Bool?
 }
 
+struct DriverSemanticFacts: Codable, Hashable {
+    struct DriverInfo: Codable, Hashable {
+        let key: String?
+        let label: String?
+        let state: String?
+        let stateLabel: String?
+        let severity: String?
+        let reading: String?
+        let category: String?
+    }
+
+    let driver: DriverInfo?
+    let currentSymptoms: [String]?
+    let historicalSymptoms: [String]?
+}
+
+struct DriverSemanticInterpretation: Codable, Hashable {
+    let role: String?
+    let seedShortReason: String?
+    let seedPersonalReason: String?
+    let patternSummary: String?
+    let outlookSummary: String?
+    let patternStatus: String?
+}
+
+struct DriverVoiceSemantic: Codable, Hashable {
+    let kind: String?
+    let facts: DriverSemanticFacts?
+    let interpretation: DriverSemanticInterpretation?
+}
+
+struct DriverTodayRelevanceExplanations: Codable, Hashable {
+    let primaryDriver: String?
+    let supportingDrivers: [String]?
+    let dailyBrief: String?
+}
+
 struct DriverDetailItem: Codable, Identifiable, Hashable {
     let id: String
     let key: String
@@ -100,6 +144,7 @@ struct DriverDetailItem: Codable, Identifiable, Hashable {
     let personalRelevanceScore: Double?
     let displayScore: Double?
     let isObjectivelyActive: Bool?
+    let voiceSemantic: DriverVoiceSemantic?
 
     func matches(focusKey raw: String?) -> Bool {
         guard let raw else { return false }
@@ -113,6 +158,22 @@ struct DriverDetailItem: Codable, Identifiable, Hashable {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "-", with: "_").lowercased() }
             .contains(normalized)
     }
+
+    var semanticShortReason: String? {
+        voiceSemantic?.interpretation?.seedShortReason?.nilIfTrimmedEmpty ?? shortReason.nilIfTrimmedEmpty
+    }
+
+    var semanticPersonalReason: String? {
+        voiceSemantic?.interpretation?.seedPersonalReason?.nilIfTrimmedEmpty ?? personalReason?.nilIfTrimmedEmpty
+    }
+
+    var semanticPatternSummary: String? {
+        voiceSemantic?.interpretation?.patternSummary?.nilIfTrimmedEmpty ?? patternSummary?.nilIfTrimmedEmpty
+    }
+
+    var semanticOutlookSummary: String? {
+        voiceSemantic?.interpretation?.outlookSummary?.nilIfTrimmedEmpty ?? outlookSummary?.nilIfTrimmedEmpty
+    }
 }
 
 struct AllDriversSnapshot: Codable, Hashable {
@@ -124,4 +185,11 @@ struct AllDriversSnapshot: Codable, Hashable {
     let filters: [DriverFilterOption]
     let drivers: [DriverDetailItem]
     let setupHints: [DriverSetupHint]
+    let todayRelevanceExplanations: DriverTodayRelevanceExplanations?
+}
+
+extension AllDriversSnapshot {
+    var semanticDailyBrief: String? {
+        todayRelevanceExplanations?.dailyBrief?.nilIfTrimmedEmpty ?? summary.note?.nilIfTrimmedEmpty
+    }
 }

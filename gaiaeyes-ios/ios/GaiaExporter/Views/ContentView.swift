@@ -3570,6 +3570,29 @@ struct ContentView: View {
         )
     }
 
+    private var notificationsSettingsSummaryLine: String {
+        guard notificationPreferences.enabled else {
+            return "Notifications off"
+        }
+        if notificationPreferences.symptomFollowupsEnabled {
+            if let activeLabels = currentSymptomsSnapshot?.semanticActiveLabelSummary {
+                return "Follow-up prompts on for \(activeLabels)"
+            }
+            return "Follow-up prompts on"
+        }
+        if notificationPreferences.dailyCheckinsEnabled {
+            return "Daily check-ins on"
+        }
+        return "Notifications on"
+    }
+
+    private var symptomFollowUpSettingsSummaryLine: String {
+        if let summary = currentSymptomsSnapshot?.semanticFollowUpSummary {
+            return summary
+        }
+        return "Receive check-in prompts after you log a symptom so Gaia can learn how it changes over time."
+    }
+
     private func requestHealthPermissionsForOnboarding() async -> Bool {
         await MainActor.run {
             healthPermissionsMessage = nil
@@ -6829,13 +6852,15 @@ struct ContentView: View {
             }
             let count = snapshot.summary.activeCount
             if count <= 0 {
-                return "No symptoms active right now. Log anything new here."
+                return snapshot.semanticEmptyStateSummary ?? "No symptoms active right now. Log anything new here."
             }
-            let labels = snapshot.items.prefix(2).map(\.label)
-            if labels.isEmpty {
-                return "\(count) active right now."
+            if let semanticSummary = snapshot.semanticActiveSummary {
+                return semanticSummary
             }
-            return "\(count) active right now: \(labels.joined(separator: ", "))"
+            if let labelSummary = snapshot.semanticActiveLabelSummary {
+                return "\(count) active right now: \(labelSummary)"
+            }
+            return "\(count) active right now."
         }
 
         private var dailyCheckInSummaryLine: String {
@@ -8238,14 +8263,18 @@ struct ContentView: View {
             let stepsText = current.map { "\(Int(($0.stepsTotal?.value ?? 0).rounded()))" } ?? "—"
             let currentActiveCount = currentSymptomsSnapshot?.summary.activeCount ?? 0
             let status: String
-            if currentActiveCount > 0 {
-                status = "\(currentActiveCount) symptoms are active right now. Open for body context, recent logs, and follow-up updates."
+            if let snapshot = currentSymptomsSnapshot, currentActiveCount > 0 {
+                status = snapshot.semanticHeaderSummary
+                    ?? snapshot.semanticActiveSummary
+                    ?? "\(currentActiveCount) symptoms are active right now. Open for body context, recent logs, and follow-up updates."
             } else if symptomsTodayCount > 0 {
                 status = "\(symptomsTodayCount) symptoms logged today. Open for sleep, vitals, and body-context detail."
             } else if let topSymptomSummary, !topSymptomSummary.isEmpty {
                 status = topSymptomSummary
             } else if queuedSymptomsCount > 0 {
                 status = "\(queuedSymptomsCount) symptom entries are queued to sync."
+            } else if let emptySummary = currentSymptomsSnapshot?.semanticEmptyStateSummary {
+                status = emptySummary
             } else {
                 status = "No symptoms active right now. Open for sleep, vitals, and body context."
             }
@@ -10385,16 +10414,16 @@ struct ContentView: View {
                             LocalConditionsSurfaceCard(title: "Current Symptoms", icon: "waveform.path.ecg.rectangle") {
                                 VStack(alignment: .leading, spacing: 8) {
                                     if let snapshot = currentSymptomsSnapshot, snapshot.summary.activeCount > 0 {
-                                        Text("\(snapshot.summary.activeCount) symptoms are active right now.")
+                                        Text(snapshot.semanticHeaderSummary ?? "\(snapshot.summary.activeCount) symptoms are active right now.")
                                             .font(.subheadline.weight(.semibold))
                                             .foregroundColor(.primary)
-                                        Text(snapshot.items.prefix(2).map(\.label).joined(separator: " • "))
+                                        Text(snapshot.semanticActiveLabelSummary ?? snapshot.semanticActiveSummary ?? "Open the live view for recent updates, notes, and the timeline.")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                     } else {
-                                        Text("No symptoms active right now.")
+                                        Text(currentSymptomsSnapshot?.semanticEmptyStateSummary ?? "No symptoms active right now.")
                                             .font(.subheadline.weight(.semibold))
-                                        Text("Open the live view for recent updates, notes, and the timeline.")
+                                        Text(currentSymptomsSnapshot?.semanticFollowUpSummary ?? "Open the live view for recent updates, notes, and the timeline.")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                     }
@@ -11736,6 +11765,7 @@ struct ContentView: View {
                 earthscopeSummary: guideEarthscopeSummary,
                 earthscopeUpdatedAt: guideEarthscopeUpdatedAt,
                 whatMattersNow: dashboardPayload?.driversCompact ?? [],
+                whatMattersSummary: dashboardPayload?.todayRelevanceExplanations?.dailyBrief,
                 initialFocus: guideHubFocus,
                 onRefreshDailyCheckIn: {
                     Task { await fetchDailyCheckInStatus(api: state.apiWithAuth()) }
@@ -12456,7 +12486,7 @@ struct ContentView: View {
                                         Text("Symptom Follow-up Prompts")
                                             .font(.subheadline.weight(.semibold))
                                         Toggle("Symptom follow-up prompts", isOn: $notificationPreferences.symptomFollowupsEnabled)
-                                        Text("Receive check-in prompts after you log a symptom so Gaia can learn how it changes over time.")
+                                        Text(symptomFollowUpSettingsSummaryLine)
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
                                         if notificationPreferences.symptomFollowupsEnabled {
@@ -12571,7 +12601,7 @@ struct ContentView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Alert families, quiet hours, and follow-up prompts")
                                         .font(.subheadline.weight(.semibold))
-                                    Text(notificationPreferences.enabled ? "Notifications on" : "Notifications off")
+                                    Text(notificationsSettingsSummaryLine)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }

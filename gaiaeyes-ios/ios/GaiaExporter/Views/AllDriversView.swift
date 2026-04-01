@@ -364,15 +364,15 @@ struct AllDriversView: View {
     }
 
     private func signalShareDraft(for driver: DriverDetailItem) -> ShareDraft {
-        let translatedReason = translatedText(driver.shortReason) ?? driver.shortReason
+        let translatedReason = translatedText(driver.semanticShortReason) ?? driver.semanticShortReason ?? driver.shortReason
         var bullets: [String] = []
-        if let personal = translatedText(driver.personalReason), !personal.isEmpty {
+        if let personal = translatedText(driver.semanticPersonalReason), !personal.isEmpty {
             bullets.append(personal)
         }
-        if let pattern = translatedText(driver.patternSummary), !pattern.isEmpty {
+        if let pattern = translatedText(driver.semanticPatternSummary), !pattern.isEmpty {
             bullets.append(pattern)
         }
-        if let outlook = translatedText(driver.outlookSummary), !outlook.isEmpty {
+        if let outlook = translatedText(driver.semanticOutlookSummary), !outlook.isEmpty {
             bullets.append(outlook)
         }
         if bullets.isEmpty {
@@ -409,7 +409,10 @@ struct AllDriversView: View {
             .filter { $0.id != leading.id }
             .prefix(2)
             .map { translatedLabel(for: $0) }
-        let interpretation = translatedText(snapshot.summary.note)
+        let interpretation = translatedText(snapshot.semanticDailyBrief)
+            ?? snapshot.semanticDailyBrief
+            ?? translatedText(leading.semanticShortReason)
+            ?? leading.semanticShortReason
             ?? translatedText(leading.shortReason)
             ?? leading.shortReason
         let accent = accentLevel(for: leading.severity ?? leading.state)
@@ -488,7 +491,7 @@ struct AllDriversView: View {
                         SummaryMetric(title: copy.categoryMetricTitle, value: summary.strongestCategory ?? "—")
                         SummaryMetric(title: copy.stateMetricTitle, value: summary.primaryState ?? "—")
                     }
-                    if let note = translatedText(summary.note), !note.isEmpty {
+                    if let note = translatedText(snapshot?.semanticDailyBrief) ?? snapshot?.semanticDailyBrief, !note.isEmpty {
                         Text(note)
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(.white.opacity(0.86))
@@ -636,7 +639,7 @@ struct AllDriversView: View {
                                             iconName: iconName(for: driver),
                                             zoneKey: stateZoneKey(for: driver),
                                             isExpanded: isExpanded(driver),
-                                            translatedShortReason: translatedText(driver.shortReason)
+                                            translatedShortReason: translatedText(driver.semanticShortReason) ?? driver.semanticShortReason
                                         ) {
                                             toggle(driver)
                                         }
@@ -647,8 +650,9 @@ struct AllDriversView: View {
                                                 mode: mode,
                                                 tone: tone,
                                                 translatedLabel: translatedLabel(for: driver),
-                                                translatedPatternSummary: translatedText(driver.patternSummary),
-                                                translatedOutlookSummary: translatedText(driver.outlookSummary),
+                                                translatedPersonalReason: translatedText(driver.semanticPersonalReason) ?? driver.semanticPersonalReason,
+                                                translatedPatternSummary: translatedText(driver.semanticPatternSummary) ?? driver.semanticPatternSummary,
+                                                translatedOutlookSummary: translatedText(driver.semanticOutlookSummary) ?? driver.semanticOutlookSummary,
                                                 translatedScienceNote: translatedText(driver.scienceNote),
                                                 sharePrompt: sharePrompt(for: accentLevel(for: driver.severity ?? driver.state)),
                                                 onShare: {
@@ -876,6 +880,7 @@ private struct DriverExpandedDetailView: View {
     let mode: ExperienceMode
     let tone: ToneStyle
     let translatedLabel: String
+    let translatedPersonalReason: String?
     let translatedPatternSummary: String?
     let translatedOutlookSummary: String?
     let translatedScienceNote: String?
@@ -905,6 +910,10 @@ private struct DriverExpandedDetailView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+            }
+
+            if let translatedPersonalReason, !translatedPersonalReason.isEmpty {
+                detailSection("Why it matters now", text: translatedPersonalReason)
             }
 
             DriverPatternBadgeView(
