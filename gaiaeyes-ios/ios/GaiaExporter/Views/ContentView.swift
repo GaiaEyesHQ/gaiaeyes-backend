@@ -6607,7 +6607,68 @@ struct ContentView: View {
             }
 
             @ViewBuilder
-            private var modalContent: some View {
+            private var compactGaugeModalContent: some View {
+                let symptoms = gaugePopupRelevantSymptoms(for: contextKey)
+                let influencers = gaugePopupCurrentInfluencers(for: contextKey)
+                let helperLines = Array(renderedActionLines.prefix(3))
+                let fallbackSummary = renderedCausalCallout ?? renderedStateSummary ?? renderedHeaderSummary
+
+                VStack(alignment: .leading, spacing: 18) {
+                    if let title = modalDisplayTitle {
+                        Text(title)
+                            .font(.title3.weight(.bold))
+                    }
+
+                    if !symptoms.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            compactSectionHeader("Active Symptoms", action: dismissAndOpenCurrentSymptoms)
+                            ForEach(symptoms, id: \.self) { symptom in
+                                Text(symptom)
+                                    .font(.subheadline)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.84)
+                            }
+                        }
+                    }
+
+                    if !influencers.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            compactSectionHeader("Current Influencers", action: dismissAndOpenAllDrivers)
+                            ForEach(influencers) { driver in
+                                Text(gaugePopupInfluencerLine(for: driver))
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.84)
+                            }
+                        }
+                    }
+
+                    if !helperLines.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            compactSectionHeader("Helpful right now")
+                            ForEach(Array(helperLines.enumerated()), id: \.offset) { _, line in
+                                Text("\u{2022} \(line)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    } else if symptoms.isEmpty && influencers.isEmpty, let fallbackSummary {
+                        Text(fallbackSummary)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+
+                    if let quickLog {
+                        quickLogSection(quickLog)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+            }
+
+            @ViewBuilder
+            private var detailedModalContent: some View {
                 let symptoms = gaugePopupRelevantSymptoms(for: contextKey)
                 let influencers = gaugePopupCurrentInfluencers(for: contextKey)
 
@@ -6724,7 +6785,11 @@ struct ContentView: View {
             var body: some View {
                 NavigationStack {
                     ScrollView {
-                        modalContent
+                        if isGaugeContext {
+                            compactGaugeModalContent
+                        } else {
+                            detailedModalContent
+                        }
                     }
                     .navigationTitle("Why This Matters Now")
                     .navigationBarTitleDisplayMode(.inline)

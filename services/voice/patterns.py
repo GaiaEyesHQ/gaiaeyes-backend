@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Mapping
 
 from .semantic import SemanticAction, SemanticGuardrails, SemanticPayload, SemanticRenderHints
@@ -28,24 +28,45 @@ def _claim_strength(raw: str) -> str:
     return "observe_only"
 
 
+def _value(row: Mapping[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in row:
+            value = row.get(key)
+            if value is not None:
+                return value
+    return None
+
+
+def _format_last_seen(value: Any) -> str:
+    raw = _clean_text(value)
+    if not raw:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return parsed.strftime("%b %d, %Y").replace(" 0", " ")
+    except Exception:
+        return raw
+
+
 def _lift_text(row: Mapping[str, Any]) -> str:
-    relative_lift = float(row.get("relative_lift") or 0.0)
-    sample_size = int(row.get("sample_size") or row.get("exposed_n") or row.get("exposed_days") or 0)
-    lag_label = _clean_text(row.get("lag_label")) or (
-        "same day" if int(row.get("lag_hours") or 0) == 0 else f"{int(row.get('lag_hours') or 0)}h"
+    relative_lift = float(_value(row, "relative_lift", "relativeLift") or 0.0)
+    sample_size = int(_value(row, "sample_size", "sampleSize", "exposed_n", "exposed_days", "exposedDays") or 0)
+    lag_hours = int(_value(row, "lag_hours", "lagHours") or 0)
+    lag_label = _clean_text(_value(row, "lag_label", "lagLabel")) or (
+        "same day" if lag_hours == 0 else f"{lag_hours}h"
     )
     if sample_size > 0 and relative_lift > 0:
-        return f"{relative_lift:.1f}x more common across {sample_size} matched days • Lag {lag_label}"
+        return f"{relative_lift:.1f}x more common when exposed • {sample_size} exposed days • Lag {lag_label}"
     if sample_size > 0:
-        return f"{sample_size} matched days • Lag {lag_label}"
+        return f"{sample_size} exposed days • Lag {lag_label}"
     return f"Lag {lag_label}"
 
 
 def _baseline_text(row: Mapping[str, Any]) -> str:
-    exposed_rate = int(round(float(row.get("exposed_rate") or 0.0) * 100))
-    baseline_rate = int(round(float(row.get("unexposed_rate") or 0.0) * 100))
-    last_seen = _clean_text(row.get("last_seen_at"))
-    bits = [f"Signal present: {exposed_rate}%", f"Baseline: {baseline_rate}%"]
+    exposed_rate = int(round(float(_value(row, "exposed_rate", "exposedRate") or 0.0) * 100))
+    baseline_rate = int(round(float(_value(row, "unexposed_rate", "unexposedRate") or 0.0) * 100))
+    last_seen = _format_last_seen(_value(row, "last_seen_at", "lastSeenAt"))
+    bits = [f"When exposed: {exposed_rate}%", f"When not exposed: {baseline_rate}%"]
     if last_seen:
         bits.append(f"Last seen: {last_seen}")
     return " • ".join(bits)
@@ -93,9 +114,9 @@ def build_pattern_card_semantic(
             "outcome": outcome,
             "confidence": confidence,
             "used_today": used_today,
-            "sample_size": int(row.get("sample_size") or row.get("exposed_n") or row.get("exposed_days") or 0),
-            "lag_hours": int(row.get("lag_hours") or 0),
-            "relative_lift": float(row.get("relative_lift") or 0.0),
+            "sample_size": int(_value(row, "sample_size", "sampleSize", "exposed_n", "exposed_days", "exposedDays") or 0),
+            "lag_hours": int(_value(row, "lag_hours", "lagHours") or 0),
+            "relative_lift": float(_value(row, "relative_lift", "relativeLift") or 0.0),
         },
         interpretation={
             "header_summary": explanation,

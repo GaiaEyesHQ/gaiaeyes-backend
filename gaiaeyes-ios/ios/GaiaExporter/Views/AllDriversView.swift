@@ -649,8 +649,6 @@ struct AllDriversView: View {
                                                 driver: driver,
                                                 mode: mode,
                                                 tone: tone,
-                                                translatedLabel: translatedLabel(for: driver),
-                                                translatedPersonalReason: translatedText(driver.semanticPersonalReason) ?? driver.semanticPersonalReason,
                                                 translatedPatternSummary: translatedText(driver.semanticPatternSummary) ?? driver.semanticPatternSummary,
                                                 translatedOutlookSummary: translatedText(driver.semanticOutlookSummary) ?? driver.semanticOutlookSummary,
                                                 translatedScienceNote: translatedText(driver.scienceNote),
@@ -879,8 +877,6 @@ private struct DriverExpandedDetailView: View {
     let driver: DriverDetailItem
     let mode: ExperienceMode
     let tone: ToneStyle
-    let translatedLabel: String
-    let translatedPersonalReason: String?
     let translatedPatternSummary: String?
     let translatedOutlookSummary: String?
     let translatedScienceNote: String?
@@ -910,10 +906,6 @@ private struct DriverExpandedDetailView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-            }
-
-            if let translatedPersonalReason, !translatedPersonalReason.isEmpty {
-                detailSection("Why it matters now", text: translatedPersonalReason)
             }
 
             DriverPatternBadgeView(
