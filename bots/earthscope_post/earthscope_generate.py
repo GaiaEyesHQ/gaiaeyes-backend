@@ -2196,6 +2196,16 @@ def _rewrite_shadow_caption_minimal(
         return None, runtime
 
     facts = _build_facts(ctx)
+    snapshot_parts = _split_text_sentences(sections.get("snapshot") or "")
+    affects_parts = [
+        part for part in _split_text_sentences(sections.get("affects") or "")
+        if not re.search(r"\b(clinician|clinicians|hrv|autonomic)\b", part, flags=re.I)
+    ]
+    playbook_lines = [
+        line.strip().strip("•").strip()
+        for line in str(sections.get("playbook") or "").splitlines()
+        if line.strip()
+    ]
     good_examples = [
         "Today’s space weather is a bit like a rollercoaster—some ups and downs, but nothing too wild. Pace yourself and schedule breaks throughout the day.",
         "Today brings a lively yet unsettled atmosphere in space, enough to make things feel a little off-kilter. A gentle reminder to pace yourself and tackle only what you can handle cleanly.",
@@ -2213,23 +2223,29 @@ def _rewrite_shadow_caption_minimal(
         "Do not open with technical phrases like 'Geomagnetic conditions', 'Unsettled geomagnetic conditions', "
         "'Near-Earth space', 'Recent solar eruptions', or 'Unsettled space weather'. "
         "Use at most one analogy. Keep the science grounded, but do not lead with it. "
+        "Do not mention clinicians, professional audiences, HRV, autonomic markers, or other app-style support language in the caption. "
+        "Do not copy phrases directly from the context bullets. "
         "No emojis. No questions. No fear language. No deterministic medical claims. "
         "Do not include measurements, units, or a metric footer. "
-        "Return ONLY a compact JSON object with string keys: caption, hashtags."
+        "Keep it to 2–3 sentences and end on a practical pacing note. "
+        "Return ONLY a compact JSON object with the string key: caption."
     )
     user_msg = {
         "task": "Rewrite the caption so it sounds more like the good examples and less like the anti-examples.",
         "seed_caption": seed_caption,
         "context_hint": _summarize_context(facts),
-        "snapshot_context": sections.get("snapshot"),
-        "affects_context": sections.get("affects"),
+        "context_clues": {
+            "space_setup": snapshot_parts[:2],
+            "felt_effects": affects_parts[:2],
+            "pacing_actions": playbook_lines[:2],
+        },
         "good_examples": good_examples,
         "anti_examples": anti_examples,
         "constraints": {
-            "caption_sentences": "2-4",
+            "caption_sentences": "2-3",
             "caption_style": "human, authored, lightly playful, practical",
             "one_analogy_max": True,
-            "hashtags_required": True,
+            "preserve_seed_intent": True,
         },
     }
     try:
@@ -2256,14 +2272,13 @@ def _rewrite_shadow_caption_minimal(
         if not isinstance(obj, dict):
             return None, runtime
         caption = _sanitize_caption(str(obj.get("caption") or ""))
-        out_hashtags = str(obj.get("hashtags") or "").strip() or hashtags
         if not caption:
             return None, runtime
         runtime["rewrite_used"] = True
         runtime["caption_path"] = "minimal_caption_rewrite"
         return {
             "caption": caption,
-            "hashtags": out_hashtags,
+            "hashtags": hashtags,
         }, runtime
     except Exception:
         return None, runtime
