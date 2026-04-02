@@ -15,6 +15,14 @@ on:
         description: "daily_posts.platform"
         required: false
         default: "default"
+      public_shadow:
+        description: "Generate a public EarthScope shadow-review artifact"
+        required: false
+        default: "false"
+      public_candidate_mode:
+        description: "Shadow candidate strategy"
+        required: false
+        default: "public_draft_restored"
 
 concurrency:
   group: gaia-eyes-daily-${{ github.ref }}
@@ -47,6 +55,9 @@ jobs:
       GAIAEYES_API_BASE: https://gaiaeyes-backend.onrender.com
       EARTHSCOPE_HYBRID_REWRITE: "true"
       EARTHSCOPE_FORCE_RULES: "false"
+      EARTHSCOPE_PUBLIC_SHADOW: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.public_shadow || 'false') || 'false' }}
+      EARTHSCOPE_PUBLIC_CANDIDATE_MODE: ${{ github.event.inputs.public_candidate_mode || 'public_draft_restored' }}
+      EARTHSCOPE_PUBLIC_SHADOW_OUTPUT: ${{ github.workspace }}/artifacts/public-earthscope-shadow.json
       AURORA_REGION: "mid"
     steps:
       - uses: actions/checkout@v4
@@ -66,6 +77,13 @@ jobs:
           DATE_ARG=""
           if [ -n "${{ github.event.inputs.date }}" ]; then DATE_ARG="--date ${{ github.event.inputs.date }}"; fi
           python earthscope_generate.py $DATE_ARG --platform ${{ env.EARTHSCOPE_PLATFORM }}
+      - name: Upload public EarthScope shadow artifact
+        if: ${{ env.EARTHSCOPE_PUBLIC_SHADOW == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-earthscope-shadow-${{ github.run_id }}
+          path: ${{ env.EARTHSCOPE_PUBLIC_SHADOW_OUTPUT }}
+          if-no-files-found: error
 
   render:
     name: Render Images → Media Repo

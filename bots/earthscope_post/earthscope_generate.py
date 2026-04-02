@@ -99,6 +99,9 @@ EARTHSCOPE_DEBUG_REWRITE = os.getenv("EARTHSCOPE_DEBUG_REWRITE", "false").strip(
 EARTHSCOPE_SIM_GUARD = os.getenv("EARTHSCOPE_SIM_GUARD", "1").strip().lower() in ("1","true","yes","on")
 EARTHSCOPE_SIM_THRESH = float(os.getenv("EARTHSCOPE_SIM_THRESH", "0.35"))
 EARTHSCOPE_SIM_RECENT = max(1, int(os.getenv("EARTHSCOPE_SIM_RECENT", "5")))
+EARTHSCOPE_PUBLIC_SHADOW = os.getenv("EARTHSCOPE_PUBLIC_SHADOW", "false").strip().lower() in ("1","true","yes","on")
+EARTHSCOPE_PUBLIC_SHADOW_OUTPUT = (os.getenv("EARTHSCOPE_PUBLIC_SHADOW_OUTPUT") or "").strip()
+EARTHSCOPE_PUBLIC_CANDIDATE_MODE = (os.getenv("EARTHSCOPE_PUBLIC_CANDIDATE_MODE") or "public_draft_restored").strip().lower()
 
 def _dbg(msg: str) -> None:
     if EARTHSCOPE_DEBUG_REWRITE:
@@ -107,6 +110,37 @@ def _dbg(msg: str) -> None:
 
 def _writer_model() -> Optional[str]:
     return resolve_openai_model("public_writer")
+
+
+def _hybrid_rewrite_enabled() -> bool:
+    return os.getenv("EARTHSCOPE_HYBRID_REWRITE", "true").strip().lower() in ("1","true","yes","on")
+
+
+_RUNTIME_TRACE: Dict[str, Any] = {}
+
+
+def _reset_runtime_trace() -> None:
+    global _RUNTIME_TRACE
+    _RUNTIME_TRACE = {
+        "model": _writer_model(),
+        "force_rules": EARTHSCOPE_FORCE_RULES,
+        "hybrid_rewrite_enabled": _hybrid_rewrite_enabled(),
+        "client_available": False,
+        "rewrite_used": False,
+        "rewrite_cache_hit": False,
+        "similarity_guard_triggered": False,
+        "hook_rescue_triggered": False,
+        "caption_path": None,
+        "sections_path": None,
+    }
+
+
+def _trace_mark(key: str, value: Any = True) -> None:
+    _RUNTIME_TRACE[key] = value
+
+
+def _trace_snapshot() -> Dict[str, Any]:
+    return dict(_RUNTIME_TRACE)
 
 
 INTRO_LINES = [
@@ -713,6 +747,90 @@ def _rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
         "hashtags": rendered["hashtags"],
     }
 
+
+def _legacy_public_rule_copy(ctx: Dict[str, Any]) -> Dict[str, str]:
+    kp = ctx.get("kp_max_24h")
+    bz = ctx.get("bz_min")
+    sw = ctx.get("solar_wind_kms")
+    flr = ctx.get("flares_24h")
+    cme = ctx.get("cmes_24h")
+    sr = ctx.get("schumann_value_hz")
+
+    tone = _tone_from_ctx(ctx)
+    kp_band = _band_kp(kp)
+    sw_band = _band_sw(sw)
+    bz_txt = _bz_desc(bz)
+    parts = []
+    if kp is not None:
+        parts.append(f"Kp {_fmt_num(kp,1)} ({kp_band})")
+    if sw is not None:
+        parts.append(f"SW {int(round(float(sw)))} km/s ({sw_band})")
+    if bz is not None:
+        parts.append(f"Bz {_fmt_num(bz,1)} nT ({bz_txt})")
+    cap_lead = " • ".join(parts) if parts else "Space weather update"
+    if tone == "stormy":
+        trailing = "Expect sensitivity and flares; readjust plans as necessary."
+    elif tone == "unsettled":
+        trailing = "Some variability—schedule breaks in your day and pace yourself with critical tasks."
+    elif tone == "calm":
+        trailing = "Ideal day—great day for playing catch up and recovery."
+    else:
+        trailing = "Moderate conditions—steady and consistent tends to work best."
+    caption = f"{cap_lead}. {trailing}"
+
+    snap = []
+    if kp is not None:
+        snap.append(f"- Kp max (24h): {_fmt_num(kp,1)}")
+    if sw is not None:
+        snap.append(f"- Solar wind: {int(round(float(sw)))} km/s")
+    if bz is not None:
+        snap.append(f"- Bz: {_fmt_num(bz,1)} nT ({bz_txt})")
+    if flr is not None:
+        snap.append(f"- Flares (24h): {int(round(float(flr)))}")
+    if cme is not None:
+        snap.append(f"- CMEs (24h): {int(round(float(cme)))}")
+    if sr is not None:
+        snap.append(f"- Schumann f0: {_fmt_num(sr,2)} Hz")
+    snapshot = "\n".join(snap)
+
+    feel = []
+    if tone in ("stormy", "unsettled"):
+        feel.append(f"- Focus/energy: {_pick_variant('feel_unsettled') or 'Expect ebbs/spikes; keep tasks short.'}")
+        feel.append("- Autonomic/HRV: Southward Bz or higher Kp can nudge HRV down in some; paced breathing helps.")
+        feel.append(f"- Sleep: {_pick_variant('sleep_guard')}")
+        if EARTHSCOPE_FIRST_PERSON:
+            feel.append(f"- Clinician note: {_pick_variant('nerve_note', seed_extra=1)}")
+        else:
+            feel.append(f"- Sensitivity note: {_pick_variant('nerve_note', seed_extra=1)}")
+        feel.append("- Comms/GPS: Tech may be glitchy today. Satellite based services, especially. Nervous System sensitivities may increase.")
+    else:
+        feel.append(f"- Focus/energy: {_pick_variant('feel_stable') or 'Stable; good window to get things done.'}")
+        feel.append("- Autonomic/HRV: Great for recovery and healing practices.")
+        feel.append("- Sleep: Keep evening light warm and low.")
+        if EARTHSCOPE_FIRST_PERSON:
+            feel.append("- Clinician note: I see steadier HRV and less reactivity for many on days like this.")
+    affects = "\n".join(feel)
+
+    care_lines = []
+    if tone in ("stormy", "unsettled"):
+        care_lines.append("- 5–10 min paced breathing (e.g., 4:6) or brief HRV biofeedback")
+        care_lines.append("- Hydration + electrolytes; short daylight exposure; move easy")
+        care_lines.append("- Protect sleep: blue‑light filters and a consistent wind‑down")
+        care_lines.append("- If sensitive, quick grounding/outdoor walk; warm pack for nerve flare windows")
+    else:
+        care_lines.append("- Block 1–2 focus sessions (60–90 min) while the field is steady")
+        care_lines.append("- Natural light and movement breaks to reinforce circadian tone")
+        care_lines.append("- Hydrate; keep caffeine earlier in the day")
+    playbook = "\n".join(care_lines)
+
+    return {
+        "caption": caption,
+        "snapshot": snapshot,
+        "affects": affects,
+        "playbook": playbook,
+        "hashtags": "#GaiaEyes #SpaceWeather #Frequency #HRV #ChronicIllness #Schumann",
+    }
+
 # --- banned phrase and repetition scrubber ---
 
 def _scrub_banned_phrases(text: str) -> str:
@@ -1131,6 +1249,7 @@ def _llm_rewrite_from_rules(client: Optional["OpenAI"], caption: str, snapshot: 
     if out and EARTHSCOPE_SIM_GUARD:
         recent_caps = [x for x in (ctx.get("recent_captions") or []) if isinstance(x, str)]
         if _caption_too_similar(out.get("caption", ""), recent_caps, EARTHSCOPE_SIM_THRESH):
+            _trace_mark("similarity_guard_triggered", True)
             _dbg("rewrite: similarity guard triggered; trying alternate template")
             alt_template = _select_caption_template_id(_ctx_day_iso(ctx), _ctx_platform(ctx), salt=1)
             out_retry = _rewrite_json_interpretive(client, draft, facts, temperature=0.95, template_id=alt_template)
@@ -1734,6 +1853,8 @@ def _get_cached_rewrite(client: Optional["OpenAI"], ctx: Dict[str, Any]) -> Opti
     _dbg("rewrite-cache: check")
     if key in _REWRITE_CACHE:
         _dbg(f"rewrite-cache: hit key={key_short}")
+        _trace_mark("rewrite_used", True)
+        _trace_mark("rewrite_cache_hit", True)
         return _REWRITE_CACHE.get(key)
     if not client:
         _dbg("rewrite-cache: no client; skipping")
@@ -1746,6 +1867,7 @@ def _get_cached_rewrite(client: Optional["OpenAI"], ctx: Dict[str, Any]) -> Opti
     )
     if out:
         _REWRITE_CACHE[key] = out
+        _trace_mark("rewrite_used", True)
     _dbg(f"rewrite-cache: {'stored' if key in _REWRITE_CACHE else 'compute failed; using None'} key={key_short}")
     return _REWRITE_CACHE.get(key)
 
@@ -1780,17 +1902,20 @@ def _apply_intro_guard(caption: str, ctx: Dict[str, Any]) -> str:
 
 def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     client = openai_client()
+    _trace_mark("client_available", bool(client))
     if EARTHSCOPE_FORCE_RULES or not client:
+        _trace_mark("caption_path", "rule_copy")
         rc = _rule_copy(ctx)
         return rc["caption"].strip(), rc["hashtags"]
 
     # Hybrid: generate rule copy and ask LLM to tighten it (no change of facts)
     rc = _rule_copy(ctx)
-    try_rewrite = os.getenv("EARTHSCOPE_HYBRID_REWRITE", "true").strip().lower() in ("1","true","yes","on")
+    try_rewrite = _hybrid_rewrite_enabled()
     if try_rewrite:
         # New: interpretive, number-free JSON rewrite (cached single-call reuse)
         out = _get_cached_rewrite(client, ctx)
         if out and out.get("caption"):
+            _trace_mark("caption_path", "hybrid_rewrite")
             cap = out["caption"]
 
             # Encourage fuller paragraph; ensure period on calm day
@@ -1801,6 +1926,7 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
             cap = _sanitize_caption(cap)
             first_line = _first_nonempty_line(cap).lower()
             if any(first_line.startswith(p) for p in BAN_CAPTION_OPENERS):
+                _trace_mark("hook_rescue_triggered", True)
                 tone = _tone_from_ctx(ctx)
                 hook = _pick_hook(tone, last_used=_recent_openers(7))
                 first_split = re.split(r"(?<=\.)\s+", cap, maxsplit=1)
@@ -1832,9 +1958,11 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
 
     model = _writer_model()
     if not model:
+        _trace_mark("caption_path", "rule_copy")
         rc = _rule_copy(ctx)
         return rc["caption"].strip(), rc.get("hashtags", "#GaiaEyes #SpaceWeather")
     try:
+        _trace_mark("caption_path", "legacy_caption_llm")
         resp = _chat_create_compat(
             client,
             model=model,
@@ -1870,6 +1998,7 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
         # Prevent sterile bulletin-style openers (check first non-empty line only)
         first_line = _first_nonempty_line(caption).lower()
         if any(first_line.startswith(p) for p in BAN_CAPTION_OPENERS):
+            _trace_mark("hook_rescue_triggered", True)
             tone = _tone_from_ctx(ctx)
             hook = _pick_hook(tone, last_used=_recent_openers(7))
             # Replace a sterile opener with a hook, keeping the remainder of the caption.
@@ -1890,6 +2019,7 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
         else:  # guard
             doit = _needs_rehook(caption)
         if doit:
+            _trace_mark("hook_rescue_triggered", True)
             tone = _tone_from_ctx(ctx)
             last_used = _recent_openers(7)
             hook = _pick_hook(tone, last_used=last_used)
@@ -1902,6 +2032,7 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
         caption = _scrub_banned_phrases(caption)
         return caption.strip(), hashtags
     except Exception:
+        _trace_mark("caption_path", "rule_copy")
         rc = _rule_copy(ctx)
         return rc["caption"].strip(), rc["hashtags"]
 
@@ -1909,14 +2040,16 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
 def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
     client = openai_client()
     if EARTHSCOPE_FORCE_RULES or not client:
+        _trace_mark("sections_path", "rule_copy")
         rc = _rule_copy(ctx)
         return rc["snapshot"], rc["affects"], rc["playbook"], rc["hashtags"]
     # Hybrid paraphrase path
-    try_rewrite = os.getenv("EARTHSCOPE_HYBRID_REWRITE", "true").strip().lower() in ("1","true","yes","on")
+    try_rewrite = _hybrid_rewrite_enabled()
     if try_rewrite:
         # New: interpretive, number-free JSON rewrite (cached single-call reuse)
         out = _get_cached_rewrite(client, ctx)
         if out:
+            _trace_mark("sections_path", "hybrid_rewrite")
             return out["snapshot"], out["affects"], out["playbook"], out.get("hashtags", "#GaiaEyes #SpaceWeather #Wellness #HeartBrain")
 
     # Fallback: legacy LLM block splitting
@@ -1930,6 +2063,7 @@ def generate_long_sections(ctx: Dict[str, Any]) -> (str, str, str, str):
 
     model = _writer_model()
     if not model:
+        _trace_mark("sections_path", "rule_copy")
         rc = _rule_copy(ctx)
         return rc["snapshot"], rc["affects"], rc["playbook"], rc["hashtags"]
     prompt = f"""
@@ -1985,8 +2119,10 @@ Data:
         snapshot = _scrub_banned_phrases(snapshot)
         affects = _scrub_banned_phrases(affects)
         playbook = _scrub_banned_phrases(playbook)
+        _trace_mark("sections_path", "legacy_sections_llm")
         return snapshot.strip(), affects.strip(), playbook.strip(), hashtags
     except Exception:
+        _trace_mark("sections_path", "rule_copy")
         rc = _rule_copy(ctx)
         return rc["snapshot"], rc["affects"], rc["playbook"], rc["hashtags"]
 # ============================================================
@@ -2012,6 +2148,119 @@ def emit_earthscope_json(day: str, title: str, caption: str, snapshot: str, affe
         print(f"[earthscope] wrote card JSON -> {out}")
     except Exception as e:
         print(f"[WARN] failed to write earthscope card JSON: {e}")
+
+
+def _shadow_output_path(day: str, platform: str) -> Path:
+    if EARTHSCOPE_PUBLIC_SHADOW_OUTPUT:
+        raw = Path(EARTHSCOPE_PUBLIC_SHADOW_OUTPUT)
+        if raw.suffix.lower() == ".json":
+            return raw
+        return raw / f"{day}-{platform}.json"
+    return (REPO_ROOT / "tmp" / "earthscope_shadow" / f"{day}-{platform}.json").resolve()
+
+
+def _build_shadow_candidate_bundle(
+    *,
+    day: str,
+    platform: str,
+    ctx: Dict[str, Any],
+    live_title: str,
+    mode: str,
+) -> Dict[str, Any]:
+    strategy = (mode or "public_draft_restored").strip().lower()
+    if strategy == "live_current":
+        draft = _rule_copy(ctx)
+        caption_path = "rule_copy"
+    else:
+        strategy = "public_draft_restored"
+        draft = _legacy_public_rule_copy(ctx)
+        caption_path = "legacy_rule_copy"
+
+    body_md = (
+        "Gaia Eyes — Daily EarthScope\n\n" +
+        "\n\n".join([draft["snapshot"], draft["affects"], draft["playbook"]]).strip()
+    )
+    return {
+        "strategy": strategy,
+        "title": live_title,
+        "caption": draft["caption"].strip(),
+        "hashtags": draft["hashtags"].strip(),
+        "body_markdown": body_md,
+        "metrics_json": {
+            "sections": {
+                "caption": draft["caption"].strip(),
+                "snapshot": draft["snapshot"].strip(),
+                "affects": draft["affects"].strip(),
+                "playbook": draft["playbook"].strip(),
+            }
+        },
+        "runtime": {
+            "strategy": strategy,
+            "model": None,
+            "rewrite_used": False,
+            "rewrite_cache_hit": False,
+            "similarity_guard_triggered": False,
+            "hook_rescue_triggered": False,
+            "caption_path": caption_path,
+            "sections_path": caption_path,
+        },
+    }
+
+
+def _build_shadow_review_bundle(
+    *,
+    day: str,
+    platform: str,
+    live_bundle: Dict[str, Any],
+    candidate_bundle: Dict[str, Any],
+    live_runtime: Dict[str, Any],
+    ctx: Dict[str, Any],
+) -> Dict[str, Any]:
+    live_metrics = live_bundle.get("metrics_json") if isinstance(live_bundle.get("metrics_json"), dict) else {}
+    candidate_metrics = candidate_bundle.get("metrics_json") if isinstance(candidate_bundle.get("metrics_json"), dict) else {}
+    live_sections = live_metrics.get("sections") if isinstance(live_metrics, dict) else {}
+    candidate_sections = candidate_metrics.get("sections") if isinstance(candidate_metrics, dict) else {}
+    required_keys = ("caption", "snapshot", "affects", "playbook")
+    return {
+        "day": day,
+        "platform": platform,
+        "ctx_summary": {
+            "kp_now": ctx.get("kp_now"),
+            "kp_max_24h": ctx.get("kp_max_24h"),
+            "bz_min": ctx.get("bz_min"),
+            "solar_wind_kms": ctx.get("solar_wind_kms"),
+            "flares_24h": ctx.get("flares_24h"),
+            "cmes_24h": ctx.get("cmes_24h"),
+            "schumann_value_hz": ctx.get("schumann_value_hz"),
+            "aurora_headline": ctx.get("aurora_headline"),
+            "severe_summary": ctx.get("severe_summary"),
+            "candidate_mode": candidate_bundle.get("strategy"),
+        },
+        "live": live_bundle,
+        "candidate": candidate_bundle,
+        "runtime": {
+            "live": live_runtime,
+            "candidate": candidate_bundle.get("runtime") or {},
+        },
+        "comparison": {
+            "title_changed": (live_bundle.get("title") or "") != (candidate_bundle.get("title") or ""),
+            "caption_length_delta": len(candidate_bundle.get("caption") or "") - len(live_bundle.get("caption") or ""),
+            "hashtags_changed": (live_bundle.get("hashtags") or "") != (candidate_bundle.get("hashtags") or ""),
+            "sections_keys_preserved": all(
+                key in live_sections and key in candidate_sections and bool(str(candidate_sections.get(key) or "").strip())
+                for key in required_keys
+            ),
+        },
+        "generated_at_utc": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z"),
+    }
+
+
+def _write_shadow_review_bundle(bundle: Dict[str, Any], *, day: str, platform: str) -> Path:
+    out = _shadow_output_path(day, platform)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(bundle, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"[earthscope.shadow] wrote review bundle -> {out}")
+    return out
 
 # ============================================================
 # Supabase write: posts upsert
@@ -2136,6 +2385,7 @@ def main():
         ctx["aurora_severity"] = "G0"
 
     # 2) Generate copy
+    _reset_runtime_trace()
     short_caption, short_tags = generate_short_caption(ctx)
     snapshot, affects, playbook, long_tags = generate_long_sections(ctx)
     _, dbg_key_short = _rewrite_cache_key(ctx)
@@ -2213,6 +2463,32 @@ def main():
         "Gaia Eyes — Daily EarthScope\n\n" +
         "\n\n".join([snapshot, affects, playbook]).strip()
     )
+
+    live_bundle = {
+        "title": title,
+        "caption": short_caption,
+        "hashtags": (long_tags or short_tags),
+        "body_markdown": body_md,
+        "metrics_json": metrics_json,
+    }
+
+    if EARTHSCOPE_PUBLIC_SHADOW:
+        candidate_bundle = _build_shadow_candidate_bundle(
+            day=day,
+            platform=args.platform,
+            ctx=ctx,
+            live_title=title,
+            mode=EARTHSCOPE_PUBLIC_CANDIDATE_MODE,
+        )
+        shadow_bundle = _build_shadow_review_bundle(
+            day=day,
+            platform=args.platform,
+            live_bundle=live_bundle,
+            candidate_bundle=candidate_bundle,
+            live_runtime=_trace_snapshot(),
+            ctx=ctx,
+        )
+        _write_shadow_review_bundle(shadow_bundle, day=day, platform=args.platform)
 
     upsert_supabase_post({
         "day": day,
