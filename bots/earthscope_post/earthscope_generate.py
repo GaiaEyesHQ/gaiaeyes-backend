@@ -2175,6 +2175,100 @@ def _shadow_sections_from_live_bundle(
     return out
 
 
+def _rewrite_shadow_caption_minimal(
+    *,
+    seed_caption: str,
+    hashtags: str,
+    ctx: Dict[str, Any],
+    sections: Dict[str, str],
+) -> tuple[Optional[Dict[str, str]], Dict[str, Any]]:
+    runtime = {
+        "model": _writer_model(),
+        "rewrite_used": False,
+        "rewrite_cache_hit": False,
+        "similarity_guard_triggered": False,
+        "hook_rescue_triggered": False,
+        "caption_path": "minimal_seed_caption",
+        "sections_path": "live_sections",
+    }
+    client = openai_client()
+    if EARTHSCOPE_FORCE_RULES or not _hybrid_rewrite_enabled() or not client:
+        return None, runtime
+
+    facts = _build_facts(ctx)
+    good_examples = [
+        "Today’s space weather is a bit like a rollercoaster—some ups and downs, but nothing too wild. Pace yourself and schedule breaks throughout the day.",
+        "Today brings a lively yet unsettled atmosphere in space, enough to make things feel a little off-kilter. A gentle reminder to pace yourself and tackle only what you can handle cleanly.",
+        "The atmosphere might feel a tad unsettled—think gentle wave, not wild storm. Expect fluctuations in focus and energy, so take breaks between tasks.",
+    ]
+    anti_examples = [
+        "A geomagnetic storm window is active with a strong southward field and elevated solar wind pressure, so conditions are punchier than usual.",
+        "Unsettled geomagnetic conditions with a south-leaning field and recent solar activity—expect variability through the day.",
+        "The geomagnetic window is active with the field leaning south and the global resonance a touch lively, so nervous-system sensitivity may be higher.",
+    ]
+    system_msg = (
+        "You are editing only the public Gaia Eyes caption in the founder's voice. "
+        "Sound authored, human, slightly playful, and useful. This is not a bulletin, not app copy, and not a technical report. "
+        "Prefer a first sentence that starts with the felt shape of the day, a pacing line, or one fitting image. "
+        "Do not open with technical phrases like 'Geomagnetic conditions', 'Unsettled geomagnetic conditions', "
+        "'Near-Earth space', 'Recent solar eruptions', or 'Unsettled space weather'. "
+        "Use at most one analogy. Keep the science grounded, but do not lead with it. "
+        "No emojis. No questions. No fear language. No deterministic medical claims. "
+        "Do not include measurements, units, or a metric footer. "
+        "Return ONLY a compact JSON object with string keys: caption, hashtags."
+    )
+    user_msg = {
+        "task": "Rewrite the caption so it sounds more like the good examples and less like the anti-examples.",
+        "seed_caption": seed_caption,
+        "context_hint": _summarize_context(facts),
+        "snapshot_context": sections.get("snapshot"),
+        "affects_context": sections.get("affects"),
+        "good_examples": good_examples,
+        "anti_examples": anti_examples,
+        "constraints": {
+            "caption_sentences": "2-4",
+            "caption_style": "human, authored, lightly playful, practical",
+            "one_analogy_max": True,
+            "hashtags_required": True,
+        },
+    }
+    try:
+        resp = _chat_create_compat(
+            client,
+            model=_writer_model(),
+            temperature=1.0,
+            top_p=0.95,
+            presence_penalty=0.15,
+            frequency_penalty=0.1,
+            reasoning_effort="low",
+            max_completion_tokens=700,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": json.dumps(user_msg, ensure_ascii=False)},
+            ],
+        )
+        text = _chat_text(resp).strip()
+        raw = _extract_first_json_object(text)
+        if not raw:
+            return None, runtime
+        obj = json.loads(raw)
+        if not isinstance(obj, dict):
+            return None, runtime
+        caption = _sanitize_caption(str(obj.get("caption") or ""))
+        out_hashtags = str(obj.get("hashtags") or "").strip() or hashtags
+        if not caption:
+            return None, runtime
+        runtime["rewrite_used"] = True
+        runtime["caption_path"] = "minimal_caption_rewrite"
+        return {
+            "caption": caption,
+            "hashtags": out_hashtags,
+        }, runtime
+    except Exception:
+        return None, runtime
+
+
 def _rewrite_shadow_candidate_from_draft(
     *,
     draft: Dict[str, str],
@@ -2259,6 +2353,21 @@ def _build_shadow_candidate_bundle(
         rewritten, runtime = _rewrite_shadow_candidate_from_draft(draft=rewrite_draft, ctx=ctx)
         caption = rewrite_draft["caption"]
         hashtags = rewrite_draft["hashtags"]
+        if rewritten and rewritten.get("caption"):
+            caption = str(rewritten.get("caption") or "").strip() or caption
+            hashtags = str(rewritten.get("hashtags") or "").strip() or hashtags
+        runtime["strategy"] = strategy
+    elif strategy == "minimal_caption_rewrite":
+        legacy_draft = _legacy_public_rule_copy(ctx)
+        sections = _shadow_sections_from_live_bundle(live_bundle, fallback=_rule_copy(ctx))
+        caption = legacy_draft["caption"].strip()
+        hashtags = live_hashtags or legacy_draft["hashtags"].strip()
+        rewritten, runtime = _rewrite_shadow_caption_minimal(
+            seed_caption=caption,
+            hashtags=hashtags,
+            ctx=ctx,
+            sections=sections,
+        )
         if rewritten and rewritten.get("caption"):
             caption = str(rewritten.get("caption") or "").strip() or caption
             hashtags = str(rewritten.get("hashtags") or "").strip() or hashtags

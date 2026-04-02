@@ -11,6 +11,7 @@ enum GuideHubFocus: String, Hashable {
 struct GuideHubView: View {
     @ObservedObject var profileStore: GuideProfileStore
     let api: APIClient
+    let helpContext: HelpCenterContext
     let dailyCheckInStatus: DailyCheckInStatus?
     let dailyCheckInLoading: Bool
     let dailyCheckInError: String?
@@ -39,6 +40,7 @@ struct GuideHubView: View {
     private enum GuideHubRoute: Hashable {
         case dailyCheckIn
         case understanding
+        case helpCenter
     }
 
     private struct GuideDailyPollChoice: Identifiable, Hashable {
@@ -245,6 +247,12 @@ struct GuideHubView: View {
                         )
                     case .understanding:
                         UnderstandingGaiaEyesView(profile: profile)
+                    case .helpCenter:
+                        if let category = HelpCenterContent.shared.category(id: "understanding-gaia-eyes") {
+                            HelpCategoryView(category: category, document: HelpCenterContent.shared, context: helpContext)
+                        } else {
+                            HelpCenterView(context: helpContext)
+                        }
                     }
                 }
                 .task {
@@ -385,13 +393,13 @@ struct GuideHubView: View {
             guideType: profile.guideType,
             expression: .guide,
             emphasis: .standard,
-            eyebrow: "Understanding Gaia Eyes",
-            title: "How Gaia Eyes works",
+            eyebrow: "Help and Understanding",
+            title: "Start with the basics",
             message: GuidePromptStyle.understandingCardMessage(for: profile),
-            primaryActionTitle: "Learn how Gaia works",
-            primaryAction: { navigationPath.append(.understanding) },
-            secondaryActionTitle: "Guide settings",
-            secondaryAction: onOpenSettings
+            primaryActionTitle: "Open help center",
+            primaryAction: { navigationPath.append(.helpCenter) },
+            secondaryActionTitle: "Deep dive",
+            secondaryAction: { navigationPath.append(.understanding) }
         )
     }
 

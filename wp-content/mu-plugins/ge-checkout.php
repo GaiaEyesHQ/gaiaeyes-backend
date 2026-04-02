@@ -72,6 +72,11 @@ add_shortcode('ge_checkout', function ($atts) {
             <?php endif; ?>
         </div>
         <div class="ge-checkout-msg" aria-live="polite" style="margin-top:8px;"></div>
+        <div class="ge-checkout-help">
+            <a href="<?php echo esc_url(home_url('/support/#need-help-with-billing')); ?>">Billing help</a>
+            <a href="<?php echo esc_url(home_url('/support/#restore-purchases')); ?>">Restore access</a>
+            <a href="<?php echo esc_url(home_url('/support/#free-vs-plus')); ?>">Free vs Plus</a>
+        </div>
     </div>
     <?php
     return ob_get_clean();
@@ -178,6 +183,12 @@ add_shortcode('ge_checkout_plans', function ($atts) {
                 </div>
             </article>
         </div>
+        <div class="ge-plans-support">
+            <span>Need billing help before checkout?</span>
+            <a href="<?php echo esc_url(home_url('/support/#need-help-with-billing')); ?>">Billing help</a>
+            <a href="<?php echo esc_url(home_url('/support/#restore-purchases')); ?>">Restore access</a>
+            <a href="<?php echo esc_url(home_url('/support/#what-gaia-eyes-does')); ?>">Understanding Gaia Eyes</a>
+        </div>
     </section>
     <?php
     return ob_get_clean();
@@ -217,6 +228,9 @@ add_action('wp_enqueue_scripts', function () {
         .ge-checkout-btn { border: none; border-radius: 999px; padding: 12px 18px; font-weight: 600; background: #2cc6a0; color: #0a1411; cursor: pointer; }
         .ge-checkout-btn--yearly { background: #1d2f2a; color: #e7f2ee; border: 1px solid rgba(255,255,255,0.15); }
         .ge-checkout-msg { margin-top: 8px; color: #f6c85f; font-size: 13px; min-height: 18px; }
+        .ge-checkout-help, .ge-plans-support { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 13px; color: #c9d6d1; }
+        .ge-checkout-help a, .ge-plans-support a { color: #9ee9d6; text-decoration: none; }
+        .ge-checkout-help a:hover, .ge-plans-support a:hover { text-decoration: underline; }
         @media (max-width: 640px) { .ge-plans-title { font-size: 26px; } }
     ');
 

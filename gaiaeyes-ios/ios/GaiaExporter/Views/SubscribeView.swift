@@ -2,6 +2,9 @@ import SwiftUI
 import SafariServices
 
 struct SubscribeView: View {
+    let guideProfile: GuideProfile?
+    let helpContext: HelpCenterContext
+
     @EnvironmentObject var auth: AuthManager
     @AppStorage("gaia.membership.cached_plan") private var cachedPlanRaw: String = MembershipPlan.free.rawValue
     @AppStorage("gaia.membership.last_sync_at") private var cachedPlanSyncedAt: String = ""
@@ -14,6 +17,14 @@ struct SubscribeView: View {
     @State private var entitlementsLoading = false
 
     private let billingPortalURL = Bundle.main.object(forInfoDictionaryKey: "GAIA_BILLING_PORTAL_URL") as? String
+
+    init(
+        guideProfile: GuideProfile? = nil,
+        helpContext: HelpCenterContext = HelpCenterContext()
+    ) {
+        self.guideProfile = guideProfile
+        self.helpContext = helpContext
+    }
 
     private var activeEntitlements: [Entitlement] {
         entitlements.filter { $0.isActive == true }
@@ -49,6 +60,14 @@ struct SubscribeView: View {
     private var billingPortalResolvedURL: URL? {
         guard let billingPortalURL else { return nil }
         return URL(string: billingPortalURL)
+    }
+
+    private var resolvedHelpContext: HelpCenterContext {
+        var context = helpContext
+        if context.guideProfile == nil {
+            context.guideProfile = guideProfile
+        }
+        return context
     }
 
     var body: some View {
@@ -87,6 +106,11 @@ struct SubscribeView: View {
                         .buttonStyle(.bordered)
                     }
 
+                    Button("Restore Purchases") {
+                        Task { await refreshMembershipStatus() }
+                    }
+                    .buttonStyle(.bordered)
+
                     Button("Sign Out") { auth.signOutSupabase() }
                         .buttonStyle(.bordered)
                 }
@@ -100,6 +124,8 @@ struct SubscribeView: View {
                         .foregroundColor(.orange)
                         .font(.footnote)
                 }
+
+                helpCard
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
@@ -210,6 +236,28 @@ struct SubscribeView: View {
                 secondaryTitle: "Get Pro (Yearly)",
                 secondaryPlan: "pro_yearly"
             )
+        }
+    }
+
+    private var helpCard: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Need help with billing, restore access, Health sync, or privacy questions?")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                NavigationLink(destination: HelpCenterView(context: resolvedHelpContext)) {
+                    Label("Open Help Center", systemImage: "questionmark.circle")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+
+                if auth.supabaseAccessToken == nil {
+                    Text("Use the same sign-in you checked out with to restore access on this device.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

@@ -2318,6 +2318,20 @@ struct ContentView: View {
         showMissionSettingsSheet = true
     }
 
+    private var currentGuideProfile: GuideProfile {
+        GuideProfile(
+            experienceProfile: experienceProfile,
+            useGuideAppIcon: guideProfileStore.profile.useGuideAppIcon
+        )
+    }
+
+    private var helpCenterContext: HelpCenterContext {
+        HelpCenterContext(
+            guideProfile: currentGuideProfile,
+            appState: state
+        )
+    }
+
     private func openGuideHub(focus: GuideHubFocus = .overview) {
         guideHubFocus = focus
         showGuideSheet = true
@@ -11271,7 +11285,7 @@ struct ContentView: View {
                     DisclosureGroup(isExpanded: $showTools) {
                         VStack(spacing: 12) {
                             ConnectionSettingsSection(state: state, isExpanded: $showConnections)
-                            NavigationLink(destination: SubscribeView()) {
+                            NavigationLink(destination: SubscribeView(guideProfile: currentGuideProfile, helpContext: helpCenterContext)) {
                                 Label("Account & Membership", systemImage: "creditcard")
                                     .frame(maxWidth: .infinity)
                             }
@@ -11308,7 +11322,7 @@ struct ContentView: View {
             DisclosureGroup(isExpanded: $showTools) {
                 VStack(spacing: 12) {
                     ConnectionSettingsSection(state: state, isExpanded: $showConnections)
-                    NavigationLink(destination: SubscribeView()) {
+                    NavigationLink(destination: SubscribeView(guideProfile: currentGuideProfile, helpContext: helpCenterContext)) {
                         Label("Account & Membership", systemImage: "creditcard")
                             .frame(maxWidth: .infinity)
                     }
@@ -12087,6 +12101,7 @@ struct ContentView: View {
             GuideHubView(
                 profileStore: guideProfileStore,
                 api: state.apiWithAuth(),
+                helpContext: helpCenterContext,
                 dailyCheckInStatus: dailyCheckInStatus,
                 dailyCheckInLoading: dailyCheckInLoading,
                 dailyCheckInError: dailyCheckInError,
@@ -12633,10 +12648,7 @@ struct ContentView: View {
 
                                 NavigationLink(
                                     destination: UnderstandingGaiaEyesView(
-                                        profile: GuideProfile(
-                                            experienceProfile: experienceProfile,
-                                            useGuideAppIcon: guideProfileStore.profile.useGuideAppIcon
-                                        )
+                                        profile: currentGuideProfile
                                     )
                                 ) {
                                     Label("Open Understanding Gaia Eyes", systemImage: "info.circle")
@@ -12646,6 +12658,23 @@ struct ContentView: View {
                             }
                         } label: {
                             Label("About Gaia Eyes", systemImage: "info.circle")
+                        }
+                        .padding(.horizontal)
+
+                        GroupBox {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Troubleshooting, billing answers, privacy basics, and contact paths live in the shared Help Center.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+
+                                NavigationLink(destination: HelpCenterView(context: helpCenterContext)) {
+                                    Label("Open Help Center", systemImage: "questionmark.circle")
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        } label: {
+                            Label("Help & Support", systemImage: "questionmark.circle")
                         }
                         .padding(.horizontal)
 
@@ -12945,7 +12974,7 @@ struct ContentView: View {
                                 Text("Signed-in state, current plan, billing, and upgrade options live here.")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
-                                NavigationLink(destination: SubscribeView()) {
+                                NavigationLink(destination: SubscribeView(guideProfile: currentGuideProfile, helpContext: helpCenterContext)) {
                                     Label("Open Account & Membership", systemImage: "creditcard")
                                         .frame(maxWidth: .infinity)
                                 }

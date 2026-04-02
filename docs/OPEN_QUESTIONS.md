@@ -41,5 +41,9 @@
    - **Where to fill**: Apple Developer → Associated Domains + Supabase Auth redirect settings.
 
 11. **RPC signatures for dashboard + local signals**
-    - **Why needed**: The backend calls `app.get_local_signals_for_user` and `app.get_dashboard_payload`; it is unclear whether these require a `user_id` argument or rely on JWT context.
-    - **Where to fill**: Supabase SQL definitions for the RPCs (or runbook notes).
+   - **Why needed**: The backend calls `app.get_local_signals_for_user` and `app.get_dashboard_payload`; it is unclear whether these require a `user_id` argument or rely on JWT context.
+   - **Where to fill**: Supabase SQL definitions for the RPCs (or runbook notes).
+
+12. **Dedicated support inbox before launch**
+   - **Why needed**: The launch-ready Help Center currently uses the existing repo-visible contact `gaiaeyes7.83@gmail.com` as the email fallback for bug reports, billing help, Health sync help, and feedback. A dedicated support inbox may still be preferred before launch.
+   - **Where to fill**: Product / ops decision on the public support email and any mailbox ownership rules.

@@ -1,0 +1,1164 @@
+{
+  "metadata": {
+    "updated_at": "2026-04-01",
+    "support_email": "gaiaeyes7.83@gmail.com",
+    "web_support_url": "https://gaiaeyes.com/support"
+  },
+  "categories": [
+    {
+      "id": "understanding-gaia-eyes",
+      "title": "Understanding Gaia Eyes",
+      "summary": "What Gaia Eyes watches, how it learns, and why the app keeps its limits visible.",
+      "icon": "info.circle"
+    },
+    {
+      "id": "health-permissions",
+      "title": "Permissions and Health Sync",
+      "summary": "How optional Health access, wearable sync, and local permissions affect what you see.",
+      "icon": "heart.text.square"
+    },
+    {
+      "id": "data-freshness",
+      "title": "Data Freshness",
+      "summary": "Why some parts of the app update faster than others, and what the timestamps mean.",
+      "icon": "clock.arrow.circlepath"
+    },
+    {
+      "id": "patterns-drivers-earthscope",
+      "title": "Symptoms, Drivers, Patterns, and EarthScope",
+      "summary": "A plain-language guide to the app's main explanation surfaces.",
+      "icon": "waveform.path.ecg"
+    },
+    {
+      "id": "billing-subscriptions",
+      "title": "Billing and Subscriptions",
+      "summary": "Plan basics, billing flow details, and what to do if access looks wrong.",
+      "icon": "creditcard"
+    },
+    {
+      "id": "privacy-health-data",
+      "title": "Privacy and Health Data",
+      "summary": "What Gaia Eyes uses, what stays in your control, and what the app does not claim.",
+      "icon": "lock.shield"
+    },
+    {
+      "id": "contact-feedback",
+      "title": "Contact and Feedback",
+      "summary": "Simple ways to report bugs, ask billing questions, or send feedback.",
+      "icon": "paperplane"
+    }
+  ],
+  "articles": [
+    {
+      "id": "what-gaia-eyes-does",
+      "title": "What Gaia Eyes does",
+      "summary": "Gaia Eyes helps you notice how environmental signals, optional Health data, and your own logs may line up over time.",
+      "category": "understanding-gaia-eyes",
+      "keywords": [
+        "overview",
+        "how it works",
+        "signals",
+        "patterns"
+      ],
+      "body_sections": [
+        {
+          "id": "what-it-is",
+          "title": "What it is",
+          "paragraphs": [
+            "Gaia Eyes is a pattern-finding tool. It gives you a calmer read on the day by comparing current conditions with the personal context you choose to share.",
+            "It looks across space and Earth signals, local conditions, optional Health data, and the feedback you log in the app so repeated overlap becomes easier to notice."
+          ],
+          "bullets": [
+            "Space and Earth signals",
+            "Local weather and air context",
+            "Optional Health data",
+            "Symptoms, check-ins, and notes you log"
+          ]
+        },
+        {
+          "id": "what-it-is-not",
+          "title": "What it is not",
+          "paragraphs": [
+            "Gaia Eyes is about patterns, not certainties. It does not diagnose, prove a cause, or replace clinical care.",
+            "The goal is to help you notice timing, context, and repeated themes without pretending the app can know everything."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "patterns-not-certainties-link",
+          "label": "Read patterns, not certainties",
+          "kind": "article",
+          "target": "patterns-not-certainties"
+        },
+        {
+          "id": "earthscope-link",
+          "label": "See what EarthScope means",
+          "kind": "article",
+          "target": "what-earthscope-is"
+        }
+      ]
+    },
+    {
+      "id": "how-gaia-eyes-uses-environmental-signals",
+      "title": "How Gaia Eyes uses environmental signals",
+      "summary": "Gaia Eyes starts with environmental context so it can compare your day with the wider conditions around you.",
+      "category": "understanding-gaia-eyes",
+      "keywords": [
+        "space weather",
+        "weather",
+        "air quality",
+        "environment"
+      ],
+      "body_sections": [
+        {
+          "id": "what-counts",
+          "title": "What counts as environmental context",
+          "paragraphs": [
+            "Gaia Eyes watches the conditions around you before it tries to say anything personal. That can include space weather, geomagnetic conditions, local weather, temperature swings, pressure, air quality, allergens, and related context.",
+            "Those signals help explain what kind of day you are moving through, even before your own body or symptom data is layered in."
+          ]
+        },
+        {
+          "id": "why-it-matters",
+          "title": "Why the app pays attention to it",
+          "paragraphs": [
+            "Environmental signals can matter because they change the background conditions you are living in. Gaia Eyes uses them as context, not as proof.",
+            "If the same outside conditions keep showing up next to the same symptoms or body-state shifts, that repeated overlap becomes more useful to watch."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "patterns-link-env",
+          "label": "Read how patterns are found",
+          "kind": "article",
+          "target": "how-patterns-are-found"
+        }
+      ]
+    },
+    {
+      "id": "how-gaia-eyes-uses-optional-health-data",
+      "title": "How Gaia Eyes uses optional Health data",
+      "summary": "Optional Health data gives Gaia Eyes better body-state context, but the app can still work without it.",
+      "category": "understanding-gaia-eyes",
+      "keywords": [
+        "healthkit",
+        "apple health",
+        "optional health data"
+      ],
+      "body_sections": [
+        {
+          "id": "why-it-is-optional",
+          "title": "Why it is optional",
+          "paragraphs": [
+            "Apple Health is optional in Gaia Eyes. You can use the app without connecting Health at all, and you can still log symptoms, read EarthScope, and follow environmental context.",
+            "When you do allow Health access, Gaia Eyes can add sleep, heart-rate, recovery, activity, and related body-state signals to the picture."
+          ]
+        },
+        {
+          "id": "control",
+          "title": "You stay in control",
+          "paragraphs": [
+            "You decide whether to connect Health data and which domains to allow. Gaia Eyes only reads the domains you grant and the app stays explicit that the data is optional.",
+            "Connecting Health data does not turn the app into a diagnosis tool. It adds personal context so patterns can become more useful over time."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "health-optional-link",
+          "label": "Read why Apple Health is optional",
+          "kind": "article",
+          "target": "why-apple-health-is-optional"
+        },
+        {
+          "id": "privacy-health-link",
+          "label": "See what Health data is used for",
+          "kind": "article",
+          "target": "what-health-data-is-used-for"
+        }
+      ]
+    },
+    {
+      "id": "patterns-not-certainties",
+      "title": "Patterns, not certainties",
+      "summary": "Gaia Eyes is designed to help you notice repeated overlap, not to promise exact answers.",
+      "category": "understanding-gaia-eyes",
+      "keywords": [
+        "certainty",
+        "cause",
+        "limits"
+      ],
+      "body_sections": [
+        {
+          "id": "careful-language",
+          "title": "Why Gaia uses careful language",
+          "paragraphs": [
+            "Human days are messy. Sleep debt, weather, stress, travel, recovery, hormones, and timing can all overlap. That is why Gaia Eyes uses language like may, could, and appears to matter.",
+            "When the app says something looks important, it is highlighting a useful pattern candidate, not making a guarantee."
+          ]
+        },
+        {
+          "id": "what-to-do",
+          "title": "How to use that framing",
+          "paragraphs": [
+            "Use Gaia Eyes to notice timing, ask better questions, and compare your own experience against the day more clearly.",
+            "Treat it as observational support. If something feels urgent, severe, or medically important, use professional medical care instead."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "no-diagnosis-link",
+          "label": "Read the medical disclaimer",
+          "kind": "article",
+          "target": "no-diagnosis-no-medical-advice"
+        }
+      ]
+    },
+    {
+      "id": "scientific-vs-mystical-mode",
+      "title": "Scientific and mystical modes",
+      "summary": "Scientific and mystical modes change the presentation and guide voice, not the underlying data.",
+      "category": "understanding-gaia-eyes",
+      "keywords": [
+        "mode",
+        "tone",
+        "guide",
+        "voice"
+      ],
+      "body_sections": [
+        {
+          "id": "same-data",
+          "title": "Same data, different presentation",
+          "paragraphs": [
+            "The signal layer does not change when you switch modes. Gaia Eyes still watches the same underlying conditions and the same personal context you choose to share.",
+            "What changes is the presentation style: more clinical and direct on one side, more symbolic and reflective on the other."
+          ]
+        },
+        {
+          "id": "guide-tone",
+          "title": "Guide and tone basics",
+          "paragraphs": [
+            "Your guide and tone settings shape how Gaia explains the day. They do not change what the app believes is true.",
+            "That split is intentional so the app can feel human without drifting away from signal truth."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "why-apple-health-is-optional",
+      "title": "Why Apple Health is optional",
+      "summary": "You do not need Apple Health connected to use Gaia Eyes.",
+      "category": "health-permissions",
+      "keywords": [
+        "apple health",
+        "health optional",
+        "permissions"
+      ],
+      "body_sections": [
+        {
+          "id": "without-health",
+          "title": "What still works without it",
+          "paragraphs": [
+            "Gaia Eyes still shows EarthScope, local conditions, drivers, and anything you log yourself even if you never connect Apple Health.",
+            "Optional Health data mostly helps the app add body-state context such as sleep, recovery, heart-rate, activity, and related timing."
+          ]
+        },
+        {
+          "id": "why-optional",
+          "title": "Why the app keeps it optional",
+          "paragraphs": [
+            "Health access is personal. Gaia Eyes keeps it optional so you can decide how much context you want to share.",
+            "User stays in control. You can connect later, disconnect later, or only allow selected domains."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "health-used-link",
+          "label": "See what Health data is used for",
+          "kind": "article",
+          "target": "what-health-data-is-used-for"
+        }
+      ]
+    },
+    {
+      "id": "why-sleep-may-not-appear-immediately",
+      "title": "Why sleep may not appear immediately",
+      "summary": "Sleep often has more than one handoff, so it can take time before the full night shows up in Gaia Eyes.",
+      "category": "health-permissions",
+      "keywords": [
+        "sleep delay",
+        "sleep sync",
+        "health sync"
+      ],
+      "body_sections": [
+        {
+          "id": "handoff",
+          "title": "Why there can be a delay",
+          "paragraphs": [
+            "A full night of sleep may need to pass through your wearable, the wearable app, Apple Health, and then Gaia Eyes. Any lag in that chain can make sleep appear later than expected.",
+            "Some devices also finalize stages or totals after you unlock your phone, open the vendor app, or wait for background sync to catch up."
+          ]
+        },
+        {
+          "id": "what-to-check",
+          "title": "What to check first",
+          "paragraphs": [
+            "Make sure the sleep session is already visible in Apple Health. If it is not there yet, Gaia Eyes cannot read it yet.",
+            "If it is visible in Health but not yet in Gaia Eyes, give the app a little time or run a manual Health refresh from Settings."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "background-sync-link",
+          "label": "Read how background Health sync works",
+          "kind": "article",
+          "target": "how-background-health-sync-works"
+        },
+        {
+          "id": "wearable-not-synced-link",
+          "label": "Wearable app not synced yet?",
+          "kind": "article",
+          "target": "wearable-app-not-synced"
+        }
+      ]
+    },
+    {
+      "id": "how-background-health-sync-works",
+      "title": "How background Health sync works",
+      "summary": "After you grant access, Gaia Eyes listens for new Health updates and also runs catch-up imports when needed.",
+      "category": "health-permissions",
+      "keywords": [
+        "background sync",
+        "backfill",
+        "healthkit"
+      ],
+      "body_sections": [
+        {
+          "id": "normal-flow",
+          "title": "Normal sync flow",
+          "paragraphs": [
+            "When permissions are granted, Gaia Eyes can watch for new Health data in the background and request refreshes after uploads.",
+            "That means many updates arrive without you needing to do anything, but timing still depends on what Apple Health already has available."
+          ]
+        },
+        {
+          "id": "manual-catch-up",
+          "title": "Manual catch-up",
+          "paragraphs": [
+            "If you want Gaia Eyes to catch up on recent history faster, use the manual sync option in Settings. The launch build also includes a last-30-days sync for a stronger starting baseline.",
+            "Background sync is useful, but manual catch-up is still the fastest way to fill gaps after a new install or a permissions change."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "last-updated-link-health",
+          "label": "Read what last updated means",
+          "kind": "article",
+          "target": "what-last-updated-means"
+        }
+      ]
+    },
+    {
+      "id": "wearable-app-not-synced",
+      "title": "What to do if your wearable app has not synced",
+      "summary": "If the wearable app has not handed data to Apple Health yet, Gaia Eyes has nothing new to import.",
+      "category": "health-permissions",
+      "keywords": [
+        "wearable",
+        "vendor app",
+        "apple health"
+      ],
+      "body_sections": [
+        {
+          "id": "where-delay-starts",
+          "title": "Where the delay usually starts",
+          "paragraphs": [
+            "Many sync issues start before Gaia Eyes. If the vendor app has not uploaded, processed, or shared the latest session with Apple Health yet, the delay is upstream.",
+            "This is common after Bluetooth reconnects, overnight sleep sessions, travel, low battery, or when the wearable app needs to open once before it finishes syncing."
+          ]
+        },
+        {
+          "id": "best-next-steps",
+          "title": "Best next steps",
+          "paragraphs": [
+            "Open the wearable app, confirm the data appears there, then confirm it reaches Apple Health. Once Apple Health has the data, Gaia Eyes can work with it.",
+            "If the data is already in Apple Health and still not showing after a reasonable delay, use a manual sync and contact support if the issue keeps repeating."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "health-sync-help-link",
+          "label": "Open Health sync help",
+          "kind": "article",
+          "target": "health-sync-help"
+        }
+      ]
+    },
+    {
+      "id": "location-permission-and-local-weather",
+      "title": "Location permission and local weather context",
+      "summary": "Location access helps Gaia Eyes tune local weather and air context to where you actually are.",
+      "category": "health-permissions",
+      "keywords": [
+        "location",
+        "weather",
+        "zip",
+        "gps"
+      ],
+      "body_sections": [
+        {
+          "id": "why-location-matters",
+          "title": "Why location matters",
+          "paragraphs": [
+            "Local weather, pressure, air quality, and temperature context are only useful when they are close to your actual location or the ZIP you choose.",
+            "Gaia Eyes supports live GPS or a fixed ZIP so you can decide whether you want travel-aware context or a stable local baseline."
+          ]
+        },
+        {
+          "id": "control-and-fallback",
+          "title": "You can still stay in control",
+          "paragraphs": [
+            "If you do not want live location on, you can often use a ZIP instead. That keeps local context available without requiring GPS all the time.",
+            "If neither is set, Gaia Eyes can still show broader signal context, but local conditions may be missing or less personal."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "why-signals-update-at-different-speeds",
+      "title": "Why some signals update at different speeds",
+      "summary": "Different data sources publish on different schedules, so not every part of Gaia Eyes refreshes at the same moment.",
+      "category": "data-freshness",
+      "keywords": [
+        "freshness",
+        "update speed",
+        "delay"
+      ],
+      "body_sections": [
+        {
+          "id": "different-pipelines",
+          "title": "Different sources, different timing",
+          "paragraphs": [
+            "Local conditions, space signals, wearable data, and app-generated summaries do not all come from one stream. Each source has its own cadence, cache behavior, and processing path.",
+            "That means one card may already be current while another is still waiting on a provider update, a wearable handoff, or a backend refresh."
+          ]
+        },
+        {
+          "id": "normal-not-broken",
+          "title": "A mismatch is not always a bug",
+          "paragraphs": [
+            "A temporary mismatch often just means the app is showing the newest trustworthy value available for each source.",
+            "If something stays stale for too long, then it is worth checking last updated labels, Health sync status, or support."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "last-updated-link",
+          "label": "Read what last updated means",
+          "kind": "article",
+          "target": "what-last-updated-means"
+        },
+        {
+          "id": "refresh-difference-link",
+          "label": "Why local, space, and health can differ",
+          "kind": "article",
+          "target": "why-local-space-and-health-refresh-differently"
+        }
+      ]
+    },
+    {
+      "id": "what-last-updated-means",
+      "title": "What last updated means",
+      "summary": "The last updated label tells you when that specific layer was most recently refreshed, not when every part of the app changed together.",
+      "category": "data-freshness",
+      "keywords": [
+        "last updated",
+        "timestamp",
+        "freshness label"
+      ],
+      "body_sections": [
+        {
+          "id": "per-layer",
+          "title": "It is usually per layer",
+          "paragraphs": [
+            "A last updated label usually belongs to one surface, feed, or summary. It is not a promise that every other card, trend, or Health value refreshed at the same time.",
+            "This matters because Gaia Eyes combines live context, cached context, and personal signals that can move on different schedules."
+          ]
+        },
+        {
+          "id": "how-to-read-it",
+          "title": "How to read it",
+          "paragraphs": [
+            "Use the timestamp as a clue about freshness for that specific view. If the time looks reasonable for the data source, the app is usually behaving as expected.",
+            "If the timestamp is far older than expected, check whether the upstream source, device, or connection may be the reason."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "cache-link",
+          "label": "Read why cached data may appear briefly",
+          "kind": "article",
+          "target": "why-cached-data-may-appear-briefly"
+        }
+      ]
+    },
+    {
+      "id": "why-local-space-and-health-refresh-differently",
+      "title": "Why local conditions, space signals, and Health data may not refresh at the same time",
+      "summary": "Those layers come from different systems, so it is normal for them to settle at different times.",
+      "category": "data-freshness",
+      "keywords": [
+        "local weather",
+        "space weather",
+        "health delay"
+      ],
+      "body_sections": [
+        {
+          "id": "separate-layers",
+          "title": "Three different timing patterns",
+          "paragraphs": [
+            "Space signals often depend on public monitoring feeds and processing windows. Local conditions depend on weather and air providers near your location. Health data depends on Apple Health and whatever device wrote into it.",
+            "Gaia Eyes brings those together, but it cannot force them into one universal refresh clock."
+          ]
+        },
+        {
+          "id": "what-this-means",
+          "title": "What this means in practice",
+          "paragraphs": [
+            "You may see current space context before local conditions settle. You may see local conditions before a wearable finishes overnight sync. You may see both before a personalized summary recalculates.",
+            "That is normal as long as each layer is updating within a reasonable window for its source."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "why-cached-data-may-appear-briefly",
+      "title": "Why cached data may appear briefly",
+      "summary": "Gaia Eyes may briefly show a recent cached value while it asks for a newer one.",
+      "category": "data-freshness",
+      "keywords": [
+        "cache",
+        "stale",
+        "refresh"
+      ],
+      "body_sections": [
+        {
+          "id": "why-cache-exists",
+          "title": "Why the app uses cache at all",
+          "paragraphs": [
+            "Cache helps the app load faster and stay useful when a network request or provider response is still in flight.",
+            "It is often better to show a recent value with clear timing than to show nothing while the latest fetch is still settling."
+          ]
+        },
+        {
+          "id": "when-to-worry",
+          "title": "When to worry",
+          "paragraphs": [
+            "A brief cached state is normal. A value that stays old for too long is the point where troubleshooting makes sense.",
+            "If you are on a development build, the diagnostics surface can also help explain whether the app is falling back to cache."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "freshness-link-root",
+          "label": "Back to data freshness basics",
+          "kind": "article",
+          "target": "why-signals-update-at-different-speeds"
+        }
+      ]
+    },
+    {
+      "id": "symptoms-vs-current-symptoms",
+      "title": "Symptoms vs current symptoms",
+      "summary": "Symptoms are everything you log. Current symptoms are the active, still-relevant symptom picture Gaia Eyes is tracking right now.",
+      "category": "patterns-drivers-earthscope",
+      "keywords": [
+        "current symptoms",
+        "symptom log",
+        "active symptoms"
+      ],
+      "body_sections": [
+        {
+          "id": "difference",
+          "title": "What is the difference",
+          "paragraphs": [
+            "Your symptom log is the full record of what you entered. Current symptoms is the smaller active snapshot Gaia Eyes uses to show what still seems in play right now.",
+            "That active snapshot can include state changes such as improving, ongoing, or resolved, plus likely drivers or follow-up prompts when relevant."
+          ]
+        },
+        {
+          "id": "why-current-exists",
+          "title": "Why Gaia separates them",
+          "paragraphs": [
+            "Without a current layer, the app would treat every old symptom like it is still equally loud. Current symptoms gives Gaia a more realistic read on the present moment.",
+            "It also makes follow-ups and driver explanations easier to understand without reopening your full history every time."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "what-drivers-mean",
+      "title": "What drivers mean",
+      "summary": "Drivers are the signals Gaia Eyes thinks are standing out most in the current picture.",
+      "category": "patterns-drivers-earthscope",
+      "keywords": [
+        "drivers",
+        "leading signal",
+        "supporting signal"
+      ],
+      "body_sections": [
+        {
+          "id": "driver-definition",
+          "title": "How to read a driver",
+          "paragraphs": [
+            "A driver is not a diagnosis and it is not a guaranteed cause. It is a signal or condition Gaia Eyes thinks is unusually relevant to what is happening right now.",
+            "Some drivers are leading. Others are supporting. Together they help explain why the app is emphasizing one pattern over another."
+          ]
+        },
+        {
+          "id": "why-driver-changes",
+          "title": "Why the list can change",
+          "paragraphs": [
+            "Driver rankings change as the day changes, new data arrives, or your personal context shifts. That is normal.",
+            "A driver is a live interpretation layer, not a permanent label."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "leading-signal-link",
+          "label": "Why today's leading signal may change",
+          "kind": "article",
+          "target": "why-todays-leading-signal-may-change"
+        }
+      ]
+    },
+    {
+      "id": "how-patterns-are-found",
+      "title": "How patterns are found",
+      "summary": "Gaia Eyes compares repeated overlap between what you log, what your body data shows, and what the day looked like around you.",
+      "category": "patterns-drivers-earthscope",
+      "keywords": [
+        "patterns",
+        "correlation",
+        "history"
+      ],
+      "body_sections": [
+        {
+          "id": "pattern-loop",
+          "title": "The basic loop",
+          "paragraphs": [
+            "Gaia Eyes watches signals, collects the feedback you log, and looks for repeated overlap over time. The more a theme repeats in a meaningful way, the more useful it becomes to watch.",
+            "This is why consistency matters. One rough day is a clue. A repeating pattern across similar days is much more useful."
+          ]
+        },
+        {
+          "id": "what-patterns-do-not-mean",
+          "title": "What a pattern still does not mean",
+          "paragraphs": [
+            "Even a repeated pattern is still observational. It can help you notice timing and ask better questions, but it does not prove a mechanism.",
+            "Gaia Eyes is built to surface patterns, not certainties."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "patterns-not-certainties-pattern",
+          "label": "Read patterns, not certainties",
+          "kind": "article",
+          "target": "patterns-not-certainties"
+        }
+      ]
+    },
+    {
+      "id": "what-earthscope-is",
+      "title": "What EarthScope is",
+      "summary": "EarthScope is Gaia Eyes' translated snapshot of the day: the current read, the strongest drivers, and the quickest route into deeper layers.",
+      "category": "patterns-drivers-earthscope",
+      "keywords": [
+        "earthscope",
+        "snapshot",
+        "what matters now"
+      ],
+      "body_sections": [
+        {
+          "id": "earthscope-role",
+          "title": "What EarthScope is for",
+          "paragraphs": [
+            "EarthScope is the fast, human-readable summary layer. It gives you a plain-language read on what may matter right now without making you parse every raw metric first.",
+            "It usually combines the current conditions, highlighted drivers, and a short interpretation of the day."
+          ]
+        },
+        {
+          "id": "what-next",
+          "title": "What it points toward",
+          "paragraphs": [
+            "If EarthScope says something looks important, you can usually open deeper views for drivers, patterns, local conditions, or related context.",
+            "Think of it as the front door, not the whole house."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "why-todays-leading-signal-may-change",
+      "title": "Why today's leading signal may change",
+      "summary": "The strongest signal right now is a live ranking, so it can move as the day evolves.",
+      "category": "patterns-drivers-earthscope",
+      "keywords": [
+        "leading signal",
+        "ranking",
+        "driver change"
+      ],
+      "body_sections": [
+        {
+          "id": "live-ranking",
+          "title": "Why rankings move",
+          "paragraphs": [
+            "A leading signal can change when new environmental data arrives, when Health data catches up, or when your own logs make a different pattern more relevant.",
+            "Gaia Eyes would rather update the ranking honestly than pretend the first guess was final."
+          ]
+        },
+        {
+          "id": "how-to-use-rankings",
+          "title": "How to use it",
+          "paragraphs": [
+            "Treat the leading signal as the app's best current read, not a permanent conclusion.",
+            "If the same signal keeps returning across similar days, that is often more informative than whether it stayed number one every hour."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "free-vs-plus",
+      "title": "Free vs Plus",
+      "summary": "Free keeps the core experience available. Plus adds richer personalization and more useful day-to-day context.",
+      "category": "billing-subscriptions",
+      "keywords": [
+        "plans",
+        "free",
+        "plus"
+      ],
+      "body_sections": [
+        {
+          "id": "free-plan",
+          "title": "What Free is for",
+          "paragraphs": [
+            "Free is there so you can understand the product and start using the core experience without committing right away.",
+            "It is the lower-friction way to see whether Gaia Eyes feels useful to you."
+          ]
+        },
+        {
+          "id": "plus-plan",
+          "title": "What Plus adds",
+          "paragraphs": [
+            "Plus is meant for people who want stronger current-state personalization and better everyday context.",
+            "The exact entitlement mix can change over time, but the high-level idea is more personal signal interpretation and richer day-to-day guidance."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "how-subscriptions-work-link",
+          "label": "Read how subscriptions work",
+          "kind": "article",
+          "target": "how-subscriptions-work"
+        }
+      ]
+    },
+    {
+      "id": "restore-purchases",
+      "title": "Restore purchases",
+      "summary": "If paid access looks missing, first sign in with the same account and refresh your membership status.",
+      "category": "billing-subscriptions",
+      "keywords": [
+        "restore",
+        "missing access",
+        "entitlements"
+      ],
+      "body_sections": [
+        {
+          "id": "first-steps",
+          "title": "Start with the account itself",
+          "paragraphs": [
+            "Gaia Eyes matches access to the account used during checkout. If access looks missing, make sure you are signed in with that same email or account first.",
+            "After that, refresh membership status so the app can fetch your latest entitlements."
+          ]
+        },
+        {
+          "id": "when-to-contact",
+          "title": "When to contact support",
+          "paragraphs": [
+            "If the right account is signed in and access still looks wrong after a refresh, contact billing help with the email used at checkout and a short description of what looks off.",
+            "That makes it much easier to track down the mismatch quickly."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "billing-help-link",
+          "label": "Need help with billing?",
+          "kind": "article",
+          "target": "need-help-with-billing"
+        }
+      ]
+    },
+    {
+      "id": "how-subscriptions-work",
+      "title": "How subscriptions work",
+      "summary": "Gaia Eyes uses account-based billing, so your access follows the account you used at checkout.",
+      "category": "billing-subscriptions",
+      "keywords": [
+        "subscription",
+        "billing",
+        "account"
+      ],
+      "body_sections": [
+        {
+          "id": "account-based-access",
+          "title": "Access follows the account",
+          "paragraphs": [
+            "Your plan is tied to the account used for checkout, not only to one device. That is why signing in with the correct account matters when you switch devices or reinstall the app.",
+            "The app checks your current entitlements and uses that result to decide which plan is active."
+          ]
+        },
+        {
+          "id": "managing-changes",
+          "title": "Changes and renewals",
+          "paragraphs": [
+            "Upgrade, renewal, and billing changes depend on the billing flow you used. Gaia Eyes shows your current plan and gives you a billing-management path when one is available.",
+            "If something looks wrong, start with a refresh and then contact billing help if needed."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "manage-subscription-on-apple-devices",
+      "title": "Managing subscriptions on Apple devices",
+      "summary": "On launch, Gaia Eyes billing may open a secure web billing flow rather than using the App Store subscription screen.",
+      "category": "billing-subscriptions",
+      "keywords": [
+        "apple",
+        "iphone",
+        "manage subscription"
+      ],
+      "body_sections": [
+        {
+          "id": "where-to-manage",
+          "title": "Where to manage your plan",
+          "paragraphs": [
+            "If Gaia Eyes gives you a Manage Billing button, use that first. In the current launch setup, billing changes may happen through the secure billing portal instead of the App Store subscriptions page.",
+            "That means the right management path depends on how the plan was originally purchased."
+          ]
+        },
+        {
+          "id": "if-you-are-unsure",
+          "title": "If you are not sure",
+          "paragraphs": [
+            "Open Account and Membership and look for the plan status or billing-management link there.",
+            "If you still are not sure where the subscription lives, billing help can confirm the right path."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "billing-help-link-apple",
+          "label": "Need help with billing?",
+          "kind": "article",
+          "target": "need-help-with-billing"
+        }
+      ]
+    },
+    {
+      "id": "offer-codes-and-promos",
+      "title": "Offer codes and promo basics",
+      "summary": "If promo or offer codes are available for your plan, they usually appear during the secure checkout flow.",
+      "category": "billing-subscriptions",
+      "keywords": [
+        "promo",
+        "offer code",
+        "discount"
+      ],
+      "body_sections": [
+        {
+          "id": "where-codes-show-up",
+          "title": "Where to look",
+          "paragraphs": [
+            "Gaia Eyes can support promotion codes in the checkout flow when that billing path is enabled for the plan you are using.",
+            "If a promotion applies, it should show up in checkout rather than needing a separate manual unlock in the app."
+          ]
+        },
+        {
+          "id": "if-code-fails",
+          "title": "If a code does not work",
+          "paragraphs": [
+            "Double-check the code, the plan, and whether the offer is still active. Some offers only apply to certain plans or certain windows.",
+            "If a valid-looking code still fails, contact billing help and include the code plus a screenshot if you can."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "what-data-stays-on-device-vs-backend",
+      "title": "What data stays on device vs backend",
+      "summary": "Gaia Eyes uses a mix of on-device state, synced account data, and backend-generated context depending on the feature.",
+      "category": "privacy-health-data",
+      "keywords": [
+        "device",
+        "backend",
+        "privacy"
+      ],
+      "body_sections": [
+        {
+          "id": "on-device",
+          "title": "What can stay local",
+          "paragraphs": [
+            "Some app state, preferences, recent cache, and temporary UI context can live on device so the app loads quickly and keeps your setup stable.",
+            "That local state helps with usability. It is not the same thing as the personalized account data the app may sync when features need it."
+          ]
+        },
+        {
+          "id": "backend-context",
+          "title": "What may use backend systems",
+          "paragraphs": [
+            "Account-linked features, plan status, synced signals, and some generated summaries can rely on backend services so the experience stays consistent across sessions and devices.",
+            "Gaia Eyes aims to be transparent about that split and avoids pretending every feature is purely local when it is not."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "what-health-data-is-used-for",
+      "title": "What Health data is used for",
+      "summary": "Health data is used to add body-state context, not to make diagnoses.",
+      "category": "privacy-health-data",
+      "keywords": [
+        "health data",
+        "sleep",
+        "hrv",
+        "privacy"
+      ],
+      "body_sections": [
+        {
+          "id": "what-it-helps-with",
+          "title": "What it helps with",
+          "paragraphs": [
+            "Optional Health data can help Gaia Eyes understand sleep, recovery, activity, and related body-state timing more clearly.",
+            "That makes personalized patterns easier to notice because the app can compare environmental conditions with what your body data was doing around the same time."
+          ]
+        },
+        {
+          "id": "what-it-does-not-do",
+          "title": "What it does not do",
+          "paragraphs": [
+            "Health data does not turn Gaia Eyes into a clinical tool. The app uses it as context, not as diagnosis, treatment, or medical proof.",
+            "No diagnosis and no medical advice remain core product rules."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "user-control-link",
+          "label": "Read user control over permissions",
+          "kind": "article",
+          "target": "user-control-over-permissions"
+        }
+      ]
+    },
+    {
+      "id": "user-control-over-permissions",
+      "title": "User control over permissions",
+      "summary": "You choose what Gaia Eyes can access and you can revisit those choices later.",
+      "category": "privacy-health-data",
+      "keywords": [
+        "control",
+        "permissions",
+        "settings"
+      ],
+      "body_sections": [
+        {
+          "id": "permission-control",
+          "title": "What you control",
+          "paragraphs": [
+            "You stay in control of Health permissions, notification choices, and local-context settings. Gaia Eyes is designed so those decisions are explicit and revisitable.",
+            "You can grant access later, turn categories off later, or keep parts of the app disconnected if that fits your comfort level better."
+          ]
+        },
+        {
+          "id": "why-that-matters",
+          "title": "Why that matters",
+          "paragraphs": [
+            "Trust matters more than squeezing every possible signal out of you. Gaia Eyes is meant to be useful without forcing an all-or-nothing setup.",
+            "That is why optional Health data and permission controls are treated as product principles, not just settings."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "no-diagnosis-no-medical-advice",
+      "title": "No diagnosis and no medical advice",
+      "summary": "Gaia Eyes is not a diagnostic tool and its explanations are not medical advice.",
+      "category": "privacy-health-data",
+      "keywords": [
+        "medical",
+        "diagnosis",
+        "disclaimer"
+      ],
+      "body_sections": [
+        {
+          "id": "clear-limit",
+          "title": "The limit is intentional",
+          "paragraphs": [
+            "Gaia Eyes is designed to help you observe patterns and context. It is not designed to diagnose illness, confirm causes, or tell you what treatment to use.",
+            "That limit stays in place whether the app is reading only environmental data or combining it with optional Health data and personal logs."
+          ]
+        },
+        {
+          "id": "when-to-seek-care",
+          "title": "When to seek care",
+          "paragraphs": [
+            "If something feels urgent, severe, or medically important, use a licensed medical professional or emergency care as appropriate.",
+            "Gaia Eyes can support awareness. It cannot replace medical judgment."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "report-a-bug",
+      "title": "Report a bug",
+      "summary": "The fastest bug reports include what you expected, what happened instead, and which screen you were on.",
+      "category": "contact-feedback",
+      "keywords": [
+        "bug",
+        "support",
+        "issue"
+      ],
+      "body_sections": [
+        {
+          "id": "what-to-send",
+          "title": "What helps most",
+          "paragraphs": [
+            "Tell us what you expected, what happened instead, and how often it happens. A screenshot and the exact screen name are both helpful.",
+            "If the problem looks tied to Health sync, billing, or a stale timestamp, say that clearly in the message subject."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "email-bug-report",
+          "label": "Email Bug Report",
+          "kind": "url",
+          "target": "mailto:gaiaeyes7.83@gmail.com?subject=Bug%20Report"
+        }
+      ]
+    },
+    {
+      "id": "send-feedback",
+      "title": "Send feedback",
+      "summary": "Product feedback is welcome, especially when you can say what felt useful, confusing, or missing.",
+      "category": "contact-feedback",
+      "keywords": [
+        "feedback",
+        "ideas",
+        "feature request"
+      ],
+      "body_sections": [
+        {
+          "id": "best-feedback",
+          "title": "What makes feedback useful",
+          "paragraphs": [
+            "The most helpful feedback is specific. Tell us which part of the app you were using, what felt unclear, and what would have made the experience easier to trust or use.",
+            "If you are suggesting a new feature, it also helps to explain the problem you were trying to solve."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "email-general-feedback",
+          "label": "Email General Feedback",
+          "kind": "url",
+          "target": "mailto:gaiaeyes7.83@gmail.com?subject=General%20Feedback"
+        }
+      ]
+    },
+    {
+      "id": "need-help-with-billing",
+      "title": "Need help with billing?",
+      "summary": "Billing help is easiest when you send the email used at checkout plus a short description of the issue.",
+      "category": "contact-feedback",
+      "keywords": [
+        "billing help",
+        "subscription help",
+        "payment"
+      ],
+      "body_sections": [
+        {
+          "id": "what-to-include",
+          "title": "What to include",
+          "paragraphs": [
+            "Send the email used during checkout, the plan you expected to have, and what looks wrong right now.",
+            "If you already tried refreshing your account status or opening the billing portal, mention that too."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "email-billing-help",
+          "label": "Email Billing Help",
+          "kind": "url",
+          "target": "mailto:gaiaeyes7.83@gmail.com?subject=Billing%20Help"
+        },
+        {
+          "id": "restore-purchases-contact-link",
+          "label": "Read restore purchases first",
+          "kind": "article",
+          "target": "restore-purchases"
+        }
+      ]
+    },
+    {
+      "id": "health-sync-help",
+      "title": "Health sync help",
+      "summary": "If Health data looks delayed or missing, start by checking where the sync chain stopped.",
+      "category": "contact-feedback",
+      "keywords": [
+        "health sync help",
+        "apple health help",
+        "sleep missing"
+      ],
+      "body_sections": [
+        {
+          "id": "how-to-frame-it",
+          "title": "What to say in your message",
+          "paragraphs": [
+            "Tell us which data is missing, whether it already appears in Apple Health, and whether the issue is repeatable or only happened once.",
+            "That makes it much easier to tell the difference between a device delay, a Health permission issue, and an app-side problem."
+          ]
+        }
+      ],
+      "links": [
+        {
+          "id": "email-health-sync-help",
+          "label": "Email Health Sync Help",
+          "kind": "url",
+          "target": "mailto:gaiaeyes7.83@gmail.com?subject=Health%20Sync%20Help"
+        },
+        {
+          "id": "background-sync-contact-link",
+          "label": "Read background sync basics",
+          "kind": "article",
+          "target": "how-background-health-sync-works"
+        }
+      ]
+    }
+  ]
+}

@@ -20,7 +20,7 @@ on:
         required: false
         default: "false"
       public_candidate_mode:
-        description: "Shadow candidate strategy (public_draft_restored or legacy_caption_rewrite)"
+        description: "Shadow candidate strategy (public_draft_restored, legacy_caption_rewrite, or minimal_caption_rewrite)"
         required: false
         default: "public_draft_restored"
 
