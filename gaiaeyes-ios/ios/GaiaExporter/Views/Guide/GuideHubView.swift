@@ -73,7 +73,7 @@ struct GuideHubView: View {
         if let summary = currentSymptomsSnapshot?.semanticFollowUpSummary {
             return summary
         }
-        return "When Gaia Eyes needs one more body detail, those follow-up moments will collect here and in Body rather than scattering around the app."
+        return GuidePromptStyle.followUpFallbackMessage(for: profile)
     }
 
     private var dailyCheckInCardBadge: String? {
@@ -132,7 +132,34 @@ struct GuideHubView: View {
         if !whatMattersNow.isEmpty {
             return "What’s standing out right now: \(whatMattersNow.prefix(2).joined(separator: ", "))."
         }
-        return "Mission Control has your current EarthScope snapshot, highlighted drivers, and the quickest route into the deeper signal layers."
+        return GuidePromptStyle.earthscopeFallbackMessage(for: profile)
+    }
+
+    private var guideOverviewSummary: String? {
+        let candidates = [
+            whatMattersSummary,
+            currentSymptomsSnapshot?.semanticHeaderSummary,
+            earthscopeSummary,
+        ]
+        for candidate in candidates {
+            let trimmed = candidate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+        return nil
+    }
+
+    private var dailyPollSupportText: String {
+        let context: GuidePromptStyle.DailyPollContext
+        if todayPollPrompt.id.hasPrefix("followup:") {
+            context = .followUp
+        } else if todayPollPrompt.id.hasPrefix("symptom:") {
+            context = .symptomPulse
+        } else {
+            context = .compareDay
+        }
+        return GuidePromptStyle.dailyPollSupportLine(for: profile, context: context)
     }
 
     private var earthscopeBadge: String? {
@@ -293,10 +320,10 @@ struct GuideHubView: View {
             eyebrow: "Daily Poll",
             title: "A faster pulse question",
             message: todayPollPrompt.question,
-            badgeText: hasPollResponseForToday ? "Saved" : "Quick"
-        ) {
+            badgeText: hasPollResponseForToday ? "Saved" : "Quick",
+            content: {
             VStack(alignment: .leading, spacing: 10) {
-                Text(todayPollPrompt.supportingText)
+                Text(dailyPollSupportText)
                     .font(.caption)
                     .foregroundStyle(style.secondaryText)
                 if hasPollResponseForToday {
@@ -315,7 +342,8 @@ struct GuideHubView: View {
                     }
                 }
             }
-        }
+            }
+        )
     }
 
     private var earthscopeCard: some View {
@@ -359,7 +387,7 @@ struct GuideHubView: View {
             emphasis: .standard,
             eyebrow: "Understanding Gaia Eyes",
             title: "How Gaia Eyes works",
-            message: "See what Gaia Eyes watches, how it learns from your feedback, what the research context looks like, and where the limits are.",
+            message: GuidePromptStyle.understandingCardMessage(for: profile),
             primaryActionTitle: "Learn how Gaia works",
             primaryAction: { navigationPath.append(.understanding) },
             secondaryActionTitle: "Guide settings",
@@ -391,6 +419,12 @@ struct GuideHubView: View {
                     Text(GuidePromptStyle.headerSupportLine(for: profile))
                         .font(.subheadline)
                         .foregroundStyle(headerStyle.tertiaryText)
+                    if let summary = guideOverviewSummary {
+                        Text(summary)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(headerStyle.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Text("\(profile.guideType.title) • \(profile.mode.title) • \(profile.tone.title)")
                         .font(.caption)
                         .foregroundStyle(headerStyle.tertiaryText)

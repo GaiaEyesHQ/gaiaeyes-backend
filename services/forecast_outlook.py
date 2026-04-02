@@ -18,6 +18,7 @@ from services.patterns.personal_relevance import (
     fetch_best_pattern_rows,
     pattern_anchor_statement,
 )
+from services.voice import build_user_outlook_overview_semantic, build_user_outlook_window_semantic
 from services.external import pollen
 
 
@@ -1648,6 +1649,18 @@ def build_window_outlook(
     if not merged_rows:
         return None
 
+    semantic_day = next(
+        (
+            item
+            for item in (
+                row.get("day") if isinstance(row.get("day"), date) else None
+                for row in merged_rows
+            )
+            if isinstance(item, date)
+        ),
+        date.today(),
+    )
+
     window_label = "24 hours" if window_hours == 24 else "72 hours" if window_hours == 72 else "7 days" if window_hours == 168 else f"{window_hours} hours"
 
     drivers = derive_forecast_drivers(merged_rows, window_hours=window_hours)
@@ -1740,7 +1753,7 @@ def build_window_outlook(
         summary = "No clearer short-range forecast driver stands out from the data available right now."
         support_line = "Worth sticking with your usual baseline routines while the next day or two settles out."
 
-    return {
+    payload = {
         "window_hours": window_hours,
         "likely_elevated_domains": [
             {key: value for key, value in item.items() if key != "score"}
@@ -1750,6 +1763,15 @@ def build_window_outlook(
         "summary": summary,
         "support_line": support_line,
     }
+    payload["voice_semantic"] = build_user_outlook_window_semantic(
+        day=semantic_day,
+        window_hours=window_hours,
+        top_drivers=top_drivers,
+        likely_domains=payload["likely_elevated_domains"],
+        summary=summary,
+        support_line=support_line,
+    ).to_dict()
+    return payload
 
 
 async def build_user_outlook_payload(conn, user_id: str) -> dict[str, Any]:
@@ -1803,8 +1825,25 @@ async def build_user_outlook_payload(conn, user_id: str) -> dict[str, Any]:
     if next_7d:
         available_windows.append("next_7d")
 
+    generated_at = datetime.now(UTC).isoformat()
+    overview_semantic = build_user_outlook_overview_semantic(
+        day=datetime.now(UTC).date(),
+        available_windows=available_windows,
+        forecast_data_ready={
+            "location_found": bool(location),
+            "local_forecast_daily": bool(local_rows),
+            "local_forecast_days": len(local_rows),
+            "space_forecast_daily": bool(space_rows),
+            "space_forecast_days": len(space_rows),
+            "next_24h": bool(next_24h),
+            "next_72h": bool(next_72h),
+            "next_7d": bool(next_7d),
+        },
+        windows=[next_24h, next_72h, next_7d],
+    )
+
     return {
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": generated_at,
         "available_windows": available_windows,
         "forecast_data_ready": {
             "location_found": bool(location),
@@ -1819,4 +1858,7 @@ async def build_user_outlook_payload(conn, user_id: str) -> dict[str, Any]:
         "next_24h": next_24h,
         "next_72h": next_72h,
         "next_7d": next_7d,
+        "voice_semantics": {
+            "overview": overview_semantic.to_dict(),
+        },
     }

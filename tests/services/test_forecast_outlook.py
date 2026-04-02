@@ -330,6 +330,15 @@ Outlook For March 23-29
         self.assertIn("pressure may swing", payload["summary"].lower())
         self.assertIn("pacing and hydration", payload["support_line"].lower())
         self.assertIn("pain", payload["likely_elevated_domains"][0]["explanation"].lower())
+        self.assertEqual(payload["voice_semantic"]["kind"], "user_outlook_window")
+        self.assertIn(
+            "pressure may swing",
+            payload["voice_semantic"]["interpretation"]["header_summary"].lower(),
+        )
+        self.assertIn(
+            "pain",
+            payload["voice_semantic"]["interpretation"]["domains_summary"].lower(),
+        )
 
     def test_build_window_outlook_surfaces_allergen_driver_when_present(self) -> None:
         merged_rows = [
@@ -359,6 +368,11 @@ Outlook For March 23-29
         self.assertEqual(payload["top_drivers"][0]["key"], "allergens")
         self.assertIn("tree pollen", payload["summary"].lower())
         self.assertIn("filters", payload["support_line"].lower())
+        self.assertEqual(payload["voice_semantic"]["kind"], "user_outlook_window")
+        self.assertIn(
+            "tree pollen",
+            payload["voice_semantic"]["interpretation"]["header_summary"].lower(),
+        )
 
     def test_forecast_row_serializers_emit_json_safe_shapes(self) -> None:
         local_rows = [

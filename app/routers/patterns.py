@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -19,6 +19,7 @@ from services.patterns.personal_relevance import (
     fetch_recent_outcome_summary,
     resolve_current_drivers,
 )
+from services.voice import build_pattern_card_semantic, build_patterns_overview_semantic
 
 
 router = APIRouter(prefix="/v1/patterns", tags=["patterns"])
@@ -129,14 +130,19 @@ def _sort_rows(rows: List[Dict[str, Any]], user_tags: set[str]) -> List[Dict[str
     )
 
 
-def _serialize_card(row: Dict[str, Any], *, used_today_ids: Optional[set[str]] = None) -> Dict[str, Any]:
+def _serialize_card(
+    row: Dict[str, Any],
+    *,
+    day: date,
+    used_today_ids: Optional[set[str]] = None,
+) -> Dict[str, Any]:
     last_seen_at = row.get("last_seen_at")
     signal_key = str(row.get("signal_key") or "")
     outcome_key = str(row.get("outcome_key") or "")
     lag_hours = int(row.get("lag_hours") or 0)
     card_id = f"{signal_key}|{outcome_key}|{lag_hours}"
     used_today = card_id in (used_today_ids or set())
-    return {
+    card = {
         "signalKey": signal_key,
         "signal": _signal_label(signal_key),
         "outcomeKey": outcome_key,
@@ -159,6 +165,13 @@ def _serialize_card(row: Dict[str, Any], *, used_today_ids: Optional[set[str]] =
         "usedToday": used_today,
         "usedTodayLabel": "Active now" if used_today else None,
     }
+    semantic = build_pattern_card_semantic(
+        day=day,
+        row=card,
+        used_today=used_today,
+    )
+    card["voiceSemantic"] = semantic.to_dict()
+    return card
 
 
 async def _fetch_best_rows(conn, user_id: str) -> List[Dict[str, Any]]:
@@ -249,13 +262,24 @@ def _categorize_rows(rows: List[Dict[str, Any]], user_tags: set[str]) -> Dict[st
 @router.get("/summary", dependencies=[Depends(require_read_auth)])
 async def user_patterns_summary(request: Request, conn=Depends(get_db)):
     user_id = _require_user_id(request)
+    today = datetime.now(timezone.utc).date()
     rows = await _load_pattern_rows(conn, user_id)
     raw_tags = await asyncio.to_thread(fetch_user_tags, user_id)
     user_tags = set(canonicalize_tag_keys(raw_tags))
     categorized = _categorize_rows(rows, user_tags)
 
     payload = _base_payload(partial=True)
-    payload["strongestPatterns"] = [_serialize_card(row) for row in categorized["strongest"]]
+    payload["strongestPatterns"] = [_serialize_card(row, day=today) for row in categorized["strongest"]]
+    payload["voiceSemantics"] = {
+        "overview": build_patterns_overview_semantic(
+            day=today,
+            strongest_count=len(categorized["strongest"]),
+            emerging_count=len(categorized["emerging"]),
+            body_count=len(categorized["body"]),
+            used_today_count=0,
+            partial=True,
+        ).to_dict()
+    }
     return payload
 
 
@@ -294,12 +318,22 @@ async def user_patterns(request: Request, conn=Depends(get_db)):
 
     payload = _base_payload(partial=False)
     payload["strongestPatterns"] = [
-        _serialize_card(row, used_today_ids=used_today_ids) for row in categorized["strongest"]
+        _serialize_card(row, day=today, used_today_ids=used_today_ids) for row in categorized["strongest"]
     ]
     payload["emergingPatterns"] = [
-        _serialize_card(row, used_today_ids=used_today_ids) for row in categorized["emerging"]
+        _serialize_card(row, day=today, used_today_ids=used_today_ids) for row in categorized["emerging"]
     ]
     payload["bodySignalsPatterns"] = [
-        _serialize_card(row, used_today_ids=used_today_ids) for row in categorized["body"]
+        _serialize_card(row, day=today, used_today_ids=used_today_ids) for row in categorized["body"]
     ]
+    payload["voiceSemantics"] = {
+        "overview": build_patterns_overview_semantic(
+            day=today,
+            strongest_count=len(categorized["strongest"]),
+            emerging_count=len(categorized["emerging"]),
+            body_count=len(categorized["body"]),
+            used_today_count=len(used_today_ids),
+            partial=False,
+        ).to_dict()
+    }
     return payload

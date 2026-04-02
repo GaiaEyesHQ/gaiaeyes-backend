@@ -728,10 +728,44 @@ private struct UserPatternCard: Codable, Hashable, Identifiable {
     let thresholdText: String?
     let usedToday: Bool?
     let usedTodayLabel: String?
+    let voiceSemantic: PatternCardVoiceSemantic?
 
     var id: String {
         "\(signalKey)|\(outcomeKey)|\(lagHours ?? 0)"
     }
+}
+
+private struct PatternCardVoiceInterpretation: Codable, Hashable {
+    let headerSummary: String?
+    let evidenceSummary: String?
+    let baselineSummary: String?
+    let activeTodaySummary: String?
+}
+
+private struct PatternCardVoiceSemantic: Codable, Hashable {
+    let kind: String?
+    let interpretation: PatternCardVoiceInterpretation?
+}
+
+private struct PatternsOverviewVoiceInterpretation: Codable, Hashable {
+    let headerSummary: String?
+    let strongestSubtitle: String?
+    let strongestEmpty: String?
+    let emergingSubtitle: String?
+    let emergingEmpty: String?
+    let emergingPending: String?
+    let bodySubtitle: String?
+    let bodyEmpty: String?
+    let bodyPending: String?
+}
+
+private struct PatternsOverviewVoiceSemantic: Codable, Hashable {
+    let kind: String?
+    let interpretation: PatternsOverviewVoiceInterpretation?
+}
+
+private struct PatternsVoiceSemantics: Codable, Hashable {
+    let overview: PatternsOverviewVoiceSemantic?
 }
 
 private struct UserPatternsPayload: Codable {
@@ -742,6 +776,59 @@ private struct UserPatternsPayload: Codable {
     let strongestPatterns: [UserPatternCard]?
     let emergingPatterns: [UserPatternCard]?
     let bodySignalsPatterns: [UserPatternCard]?
+    let voiceSemantics: PatternsVoiceSemantics?
+}
+
+private extension UserPatternCard {
+    var semanticExplanation: String? {
+        voiceSemantic?.interpretation?.headerSummary?.nilIfTrimmedEmpty ?? explanation.nilIfTrimmedEmpty
+    }
+
+    var semanticEvidenceSummary: String? {
+        voiceSemantic?.interpretation?.evidenceSummary?.nilIfTrimmedEmpty
+    }
+
+    var semanticBaselineSummary: String? {
+        voiceSemantic?.interpretation?.baselineSummary?.nilIfTrimmedEmpty
+    }
+}
+
+private extension UserPatternsPayload {
+    var semanticHeaderSummary: String? {
+        voiceSemantics?.overview?.interpretation?.headerSummary?.nilIfTrimmedEmpty
+    }
+
+    var semanticStrongestSubtitle: String? {
+        voiceSemantics?.overview?.interpretation?.strongestSubtitle?.nilIfTrimmedEmpty
+    }
+
+    var semanticStrongestEmpty: String? {
+        voiceSemantics?.overview?.interpretation?.strongestEmpty?.nilIfTrimmedEmpty
+    }
+
+    var semanticEmergingSubtitle: String? {
+        voiceSemantics?.overview?.interpretation?.emergingSubtitle?.nilIfTrimmedEmpty
+    }
+
+    var semanticEmergingEmpty: String? {
+        voiceSemantics?.overview?.interpretation?.emergingEmpty?.nilIfTrimmedEmpty
+    }
+
+    var semanticEmergingPending: String? {
+        voiceSemantics?.overview?.interpretation?.emergingPending?.nilIfTrimmedEmpty
+    }
+
+    var semanticBodySubtitle: String? {
+        voiceSemantics?.overview?.interpretation?.bodySubtitle?.nilIfTrimmedEmpty
+    }
+
+    var semanticBodyEmpty: String? {
+        voiceSemantics?.overview?.interpretation?.bodyEmpty?.nilIfTrimmedEmpty
+    }
+
+    var semanticBodyPending: String? {
+        voiceSemantics?.overview?.interpretation?.bodyPending?.nilIfTrimmedEmpty
+    }
 }
 
 private struct MemberEarthscopeMetricsPayload: Codable, Hashable {
@@ -926,6 +1013,13 @@ private extension KeyedDecodingContainer {
             if ["false", "f", "no", "n", "0"].contains(normalized) { return false }
         }
         return nil
+    }
+}
+
+private extension String {
+    var nilIfTrimmedEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
@@ -1466,9 +1560,10 @@ private struct UserOutlookWindow: Codable, Hashable {
     let topDrivers: [UserOutlookDriver]?
     let summary: String?
     let supportLine: String?
+    let voiceSemantic: UserOutlookWindowVoiceSemantic?
 
     private enum CodingKeys: String, CodingKey {
-        case windowHours, likelyElevatedDomains, topDrivers, summary, supportLine
+        case windowHours, likelyElevatedDomains, topDrivers, summary, supportLine, voiceSemantic
     }
 
     init(from decoder: Decoder) throws {
@@ -1478,7 +1573,21 @@ private struct UserOutlookWindow: Codable, Hashable {
         topDrivers = (try? container.decode(LossyArray<UserOutlookDriver>.self, forKey: .topDrivers))?.values
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
         supportLine = try container.decodeIfPresent(String.self, forKey: .supportLine)
+        voiceSemantic = try container.decodeIfPresent(UserOutlookWindowVoiceSemantic.self, forKey: .voiceSemantic)
     }
+}
+
+private struct UserOutlookWindowVoiceInterpretation: Codable, Hashable {
+    let headerSummary: String?
+    let leadingSignalSummary: String?
+    let domainsSummary: String?
+    let supportSummary: String?
+    let emptyState: String?
+}
+
+private struct UserOutlookWindowVoiceSemantic: Codable, Hashable {
+    let kind: String?
+    let interpretation: UserOutlookWindowVoiceInterpretation?
 }
 
 private struct UserOutlookDataReady: Codable, Hashable {
@@ -1552,6 +1661,7 @@ private struct UserForecastOutlook: Codable {
     let next72h: UserOutlookWindow?
     let next7d: UserOutlookWindow?
     let error: String?
+    let voiceSemantics: UserOutlookVoiceSemantics?
 
     private struct DynamicKey: CodingKey {
         var stringValue: String
@@ -1570,6 +1680,7 @@ private struct UserForecastOutlook: Codable {
         var next72h: UserOutlookWindow? = nil
         var next7d: UserOutlookWindow? = nil
         var error: String? = nil
+        var voiceSemantics: UserOutlookVoiceSemantics? = nil
 
         for key in container.allKeys {
             switch key.stringValue {
@@ -1589,6 +1700,8 @@ private struct UserForecastOutlook: Codable {
                 next7d = try? container.decode(UserOutlookWindow.self, forKey: key)
             case "error":
                 error = try? container.decode(String.self, forKey: key)
+            case "voiceSemantics", "voice_semantics":
+                voiceSemantics = try? container.decode(UserOutlookVoiceSemantics.self, forKey: key)
             default:
                 break
             }
@@ -1602,6 +1715,59 @@ private struct UserForecastOutlook: Codable {
         self.next72h = next72h
         self.next7d = next7d
         self.error = error
+        self.voiceSemantics = voiceSemantics
+    }
+}
+
+private struct UserOutlookOverviewVoiceInterpretation: Codable, Hashable {
+    let headerSummary: String?
+    let availabilitySummary: String?
+    let emptyState: String?
+    let sevenDayPending: String?
+}
+
+private struct UserOutlookOverviewVoiceSemantic: Codable, Hashable {
+    let kind: String?
+    let interpretation: UserOutlookOverviewVoiceInterpretation?
+}
+
+private struct UserOutlookVoiceSemantics: Codable, Hashable {
+    let overview: UserOutlookOverviewVoiceSemantic?
+}
+
+private extension UserOutlookWindow {
+    var semanticSummary: String? {
+        voiceSemantic?.interpretation?.headerSummary?.nilIfTrimmedEmpty ?? summary?.nilIfTrimmedEmpty
+    }
+
+    var semanticLeadingSignalSummary: String? {
+        voiceSemantic?.interpretation?.leadingSignalSummary?.nilIfTrimmedEmpty
+    }
+
+    var semanticDomainsSummary: String? {
+        voiceSemantic?.interpretation?.domainsSummary?.nilIfTrimmedEmpty
+    }
+
+    var semanticSupportSummary: String? {
+        voiceSemantic?.interpretation?.supportSummary?.nilIfTrimmedEmpty ?? supportLine?.nilIfTrimmedEmpty
+    }
+}
+
+private extension UserForecastOutlook {
+    var semanticHeaderSummary: String? {
+        voiceSemantics?.overview?.interpretation?.headerSummary?.nilIfTrimmedEmpty
+    }
+
+    var semanticAvailabilitySummary: String? {
+        voiceSemantics?.overview?.interpretation?.availabilitySummary?.nilIfTrimmedEmpty
+    }
+
+    var semanticEmptyState: String? {
+        voiceSemantics?.overview?.interpretation?.emptyState?.nilIfTrimmedEmpty
+    }
+
+    var semanticSevenDayPending: String? {
+        voiceSemantics?.overview?.interpretation?.sevenDayPending?.nilIfTrimmedEmpty
     }
 }
 
@@ -5314,6 +5480,7 @@ struct ContentView: View {
                 healthStatusExplainer: dashboardHealthStatusExplainer,
                 drivers: dashboardDrivers,
                 driversCompact: dashboardDriversCompact,
+                whatMattersSummary: dashboardPayload?.todayRelevanceExplanations?.dailyBrief,
                 primaryDriver: dashboardPrimaryDriver,
                 supportingDrivers: dashboardSupportingDrivers,
                 modalModels: dashboardModalModels,
@@ -5364,6 +5531,7 @@ struct ContentView: View {
         let healthStatusExplainer: DashboardHealthStatusExplainer?
         let drivers: [DashboardDriverItem]
         let driversCompact: [String]
+        let whatMattersSummary: String?
         let primaryDriver: DashboardDriverItem?
         let supportingDrivers: [DashboardDriverItem]
         let modalModels: DashboardModalModels?
@@ -6882,6 +7050,14 @@ struct ContentView: View {
             return "Turn on daily check-ins for a quick end-of-day read."
         }
 
+        private var whatMattersSummaryLine: String {
+            let trimmed = whatMattersSummary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+            return "The signals standing out most right now."
+        }
+
         @ViewBuilder
         private var currentSymptomsButton: some View {
             Button(action: onOpenCurrentSymptoms) {
@@ -7075,7 +7251,7 @@ struct ContentView: View {
                         let visibleDrivers = topWhatMattersDrivers()
                         Text("What Matters Now")
                             .font(.headline)
-                        Text("The signals standing out most right now.")
+                        Text(whatMattersSummaryLine)
                             .font(.caption)
                             .foregroundColor(.secondary)
                         if visibleDrivers.isEmpty {
@@ -8546,7 +8722,7 @@ struct ContentView: View {
             let domains = Array((window.likelyElevatedDomains ?? []).prefix(3)).map {
                 $0.label ?? $0.key.replacingOccurrences(of: "_", with: " ").capitalized
             }
-            let actionLine = window.supportLine ?? window.summary ?? primary.detail ?? "This window may be worth watching."
+            let actionLine = window.semanticSupportSummary ?? window.semanticSummary ?? primary.detail ?? "This window may be worth watching."
             let accentLevel = accent(for: primary.severity)
             return ShareDraftFactory.outlook(
                 surface: "your_outlook",
@@ -8603,7 +8779,7 @@ struct ContentView: View {
 
                 LocalConditionsSurfaceCard(title: windowTitle(window.windowHours), icon: "sparkles.rectangle.stack.fill") {
                     VStack(alignment: .leading, spacing: 12) {
-                        if let summary = window.summary, !summary.isEmpty {
+                        if let summary = window.semanticSummary, !summary.isEmpty {
                             Text(CopyRefiner.refine(summary) ?? summary)
                                 .font(.subheadline)
                         }
@@ -8621,7 +8797,7 @@ struct ContentView: View {
                                     Spacer()
                                     StatusPill((primary.severity ?? "watch").capitalized, severity: severity(primary.severity))
                                 }
-                                if let detail = primary.detail, !detail.isEmpty {
+                                if let detail = window.semanticLeadingSignalSummary ?? primary.detail, !detail.isEmpty {
                                     Text(CopyRefiner.refine(detail) ?? detail)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
@@ -8653,6 +8829,11 @@ struct ContentView: View {
                                 Text("What may be more noticeable")
                                     .font(.caption2.weight(.semibold))
                                     .foregroundColor(.secondary)
+                                if let domainsSummary = window.semanticDomainsSummary, !domainsSummary.isEmpty {
+                                    Text(CopyRefiner.refine(domainsSummary) ?? domainsSummary)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                                 LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
                                     ForEach(domains) { domain in
                                         domainCard(domain)
@@ -8661,7 +8842,7 @@ struct ContentView: View {
                             }
                         }
 
-                        if let supportLine = window.supportLine, !supportLine.isEmpty {
+                        if let supportLine = window.semanticSupportSummary, !supportLine.isEmpty {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("What may help")
                                     .font(.caption2.weight(.semibold))
@@ -8700,11 +8881,16 @@ struct ContentView: View {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("Next 24 hours to 7 days")
                                         .font(.system(size: 30, weight: .bold, design: .rounded))
-                                    Text("A short forecast built from your patterns, current gauges, local conditions, and space-weather forecasts.")
+                                    Text(payload?.semanticHeaderSummary ?? "A short forecast built from your patterns, current gauges, local conditions, and space-weather forecasts.")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                     if let updated = formatUpdate(payload?.generatedAt) {
                                         Text("Updated \(updated)")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    if let availability = payload?.semanticAvailabilitySummary, !availability.isEmpty {
+                                        Text(availability)
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
                                     }
@@ -8749,7 +8935,7 @@ struct ContentView: View {
                                     }
                                 }
                             } else if !isLoading && cleanError == nil {
-                                Text("No outlook yet. Add your location and give forecast data a little more time.")
+                                Text(payload?.semanticEmptyState ?? "No outlook yet. Add your location and give forecast data a little more time.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -8761,7 +8947,7 @@ struct ContentView: View {
 
                         if payload?.forecastDataReady?.next7d != true {
                             LocalConditionsSurfaceCard(title: "7-Day Outlook", icon: "calendar") {
-                                Text("The 7-day view will appear once the forecast layer is steady enough to support it.")
+                                Text(payload?.semanticSevenDayPending ?? "The 7-day view will appear once the forecast layer is steady enough to support it.")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
@@ -8817,6 +9003,9 @@ struct ContentView: View {
         }
 
         private func liftLine(_ card: UserPatternCard) -> String {
+            if let semantic = card.semanticEvidenceSummary {
+                return semantic
+            }
             let lift = String(format: "%.1fx", card.relativeLift ?? 0)
             let lag = card.lagLabel ?? "same day"
             let sample = card.sampleSize ?? card.exposedDays ?? 0
@@ -8824,6 +9013,9 @@ struct ContentView: View {
         }
 
         private func rateLine(_ card: UserPatternCard) -> String {
+            if let semantic = card.semanticBaselineSummary {
+                return semantic
+            }
             let exposedRate = Int(round((card.exposedRate ?? 0) * 100))
             let baselineRate = Int(round((card.unexposedRate ?? 0) * 100))
             let lastSeen = displayDate(card.lastSeenAt)
@@ -9108,7 +9300,8 @@ struct ContentView: View {
                 disclaimer: summary.disclaimer ?? current?.disclaimer,
                 strongestPatterns: summary.strongestPatterns ?? current?.strongestPatterns,
                 emergingPatterns: current?.emergingPatterns,
-                bodySignalsPatterns: current?.bodySignalsPatterns
+                bodySignalsPatterns: current?.bodySignalsPatterns,
+                voiceSemantics: summary.voiceSemantics ?? current?.voiceSemantics
             )
         }
 
@@ -9264,7 +9457,7 @@ struct ContentView: View {
                         }
                     }
 
-                    Text(CopyRefiner.refine(card.explanation) ?? card.explanation)
+                    Text(CopyRefiner.refine(card.semanticExplanation) ?? card.semanticExplanation ?? card.explanation)
                         .font(.subheadline)
                         .foregroundColor(.white.opacity(0.88))
 
@@ -9375,7 +9568,12 @@ struct ContentView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("What keeps showing up in your history.")
                                 .font(.system(size: 30, weight: .bold, design: .rounded))
-                            Text(CopyRefiner.refine(payload?.disclaimer) ?? "Patterns compare your logs and health stats with repeating signals in your history.")
+                            Text(
+                                CopyRefiner.refine(payload?.semanticHeaderSummary)
+                                ?? payload?.semanticHeaderSummary
+                                ?? CopyRefiner.refine(payload?.disclaimer)
+                                ?? "Patterns compare your logs and health stats with repeating signals in your history."
+                            )
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -9405,18 +9603,18 @@ struct ContentView: View {
 
                         sectionView(
                             title: "Clearest Patterns",
-                            subtitle: "The clearest repeats in your history so far.",
+                            subtitle: payload?.semanticStrongestSubtitle ?? "The clearest repeats in your history so far.",
                             cards: strongest,
-                            emptyMessage: "No clear patterns yet. Keep logging to help this section fill in.",
+                            emptyMessage: payload?.semanticStrongestEmpty ?? "No clear patterns yet. Keep logging to help this section fill in.",
                             expanded: $showsAllStrongestPatterns
                         )
 
                         sectionView(
                             title: "Still Taking Shape",
-                            subtitle: "Possible repeats that still need more overlap before they feel reliable.",
+                            subtitle: payload?.semanticEmergingSubtitle ?? "Possible repeats that still need more overlap before they feel reliable.",
                             cards: emerging,
-                            emptyMessage: "Nothing is clearly emerging yet. More overlap will help this section fill in.",
-                            pendingMessage: "Loading the rest of your pattern history.",
+                            emptyMessage: payload?.semanticEmergingEmpty ?? "Nothing is clearly emerging yet. More overlap will help this section fill in.",
+                            pendingMessage: payload?.semanticEmergingPending ?? "Loading the rest of your pattern history.",
                             isPending: isLoadingSupplementalSections,
                             expanded: $showsAllEmergingPatterns
                         )
@@ -9427,10 +9625,10 @@ struct ContentView: View {
 
                         sectionView(
                             title: "Body Signals",
-                            subtitle: "Wearable-based patterns appear here when the overlap is strong enough.",
+                            subtitle: payload?.semanticBodySubtitle ?? "Wearable-based patterns appear here when the overlap is strong enough.",
                             cards: bodySignals,
-                            emptyMessage: "No body-signal patterns are standing out yet.",
-                            pendingMessage: "Checking wearable patterns now.",
+                            emptyMessage: payload?.semanticBodyEmpty ?? "No body-signal patterns are standing out yet.",
+                            pendingMessage: payload?.semanticBodyPending ?? "Checking wearable patterns now.",
                             isPending: isLoadingSupplementalSections,
                             expanded: $showsAllBodySignalPatterns
                         )
