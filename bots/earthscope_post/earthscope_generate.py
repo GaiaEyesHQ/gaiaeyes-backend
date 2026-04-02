@@ -2159,51 +2159,150 @@ def _shadow_output_path(day: str, platform: str) -> Path:
     return (REPO_ROOT / "tmp" / "earthscope_shadow" / f"{day}-{platform}.json").resolve()
 
 
+def _shadow_sections_from_live_bundle(
+    live_bundle: Dict[str, Any],
+    fallback: Dict[str, str],
+) -> Dict[str, str]:
+    live_metrics = live_bundle.get("metrics_json") if isinstance(live_bundle.get("metrics_json"), dict) else {}
+    live_sections = live_metrics.get("sections") if isinstance(live_metrics, dict) else {}
+    out: Dict[str, str] = {}
+    for key in ("snapshot", "affects", "playbook"):
+        value = live_sections.get(key) if isinstance(live_sections, dict) else None
+        text = str(value or "").strip()
+        if not text:
+            text = str(fallback.get(key) or "").strip()
+        out[key] = text
+    return out
+
+
+def _rewrite_shadow_candidate_from_draft(
+    *,
+    draft: Dict[str, str],
+    ctx: Dict[str, Any],
+) -> tuple[Optional[Dict[str, str]], Dict[str, Any]]:
+    runtime = {
+        "model": _writer_model(),
+        "rewrite_used": False,
+        "rewrite_cache_hit": False,
+        "similarity_guard_triggered": False,
+        "hook_rescue_triggered": False,
+        "caption_path": "legacy_rule_copy",
+        "sections_path": "live_sections",
+    }
+    client = openai_client()
+    if EARTHSCOPE_FORCE_RULES or not _hybrid_rewrite_enabled() or not client:
+        return None, runtime
+
+    facts = _build_facts(ctx)
+    template_id = facts.get("template_id") if isinstance(facts.get("template_id"), int) else None
+    out = _rewrite_json_interpretive(client, draft, facts, temperature=0.8, template_id=template_id)
+    if out and EARTHSCOPE_SIM_GUARD:
+        recent_caps = [x for x in (ctx.get("recent_captions") or []) if isinstance(x, str)]
+        if _caption_too_similar(out.get("caption", ""), recent_caps, EARTHSCOPE_SIM_THRESH):
+            runtime["similarity_guard_triggered"] = True
+            alt_template = _select_caption_template_id(_ctx_day_iso(ctx), _ctx_platform(ctx), salt=1)
+            out_retry = _rewrite_json_interpretive(client, draft, facts, temperature=0.95, template_id=alt_template)
+            if out_retry:
+                out = out_retry
+                facts["template_id"] = alt_template
+    if not out:
+        alt_template = _select_caption_template_id(_ctx_day_iso(ctx), _ctx_platform(ctx), salt=2)
+        out = _rewrite_json_interpretive(client, draft, facts, temperature=0.9, template_id=alt_template)
+    if not out:
+        return None, runtime
+
+    runtime["rewrite_used"] = True
+    runtime["caption_path"] = "legacy_caption_hybrid_rewrite"
+    return out, runtime
+
+
 def _build_shadow_candidate_bundle(
     *,
     day: str,
     platform: str,
     ctx: Dict[str, Any],
-    live_title: str,
+    live_bundle: Dict[str, Any],
     mode: str,
 ) -> Dict[str, Any]:
     strategy = (mode or "public_draft_restored").strip().lower()
+    live_title = str(live_bundle.get("title") or "").strip()
+    live_hashtags = str(live_bundle.get("hashtags") or "").strip()
     if strategy == "live_current":
         draft = _rule_copy(ctx)
-        caption_path = "rule_copy"
-    else:
-        strategy = "public_draft_restored"
-        draft = _legacy_public_rule_copy(ctx)
-        caption_path = "legacy_rule_copy"
-
-    body_md = (
-        "Gaia Eyes — Daily EarthScope\n\n" +
-        "\n\n".join([draft["snapshot"], draft["affects"], draft["playbook"]]).strip()
-    )
-    return {
-        "strategy": strategy,
-        "title": live_title,
-        "caption": draft["caption"].strip(),
-        "hashtags": draft["hashtags"].strip(),
-        "body_markdown": body_md,
-        "metrics_json": {
-            "sections": {
-                "caption": draft["caption"].strip(),
-                "snapshot": draft["snapshot"].strip(),
-                "affects": draft["affects"].strip(),
-                "playbook": draft["playbook"].strip(),
-            }
-        },
-        "runtime": {
+        sections = {
+            "snapshot": draft["snapshot"].strip(),
+            "affects": draft["affects"].strip(),
+            "playbook": draft["playbook"].strip(),
+        }
+        caption = draft["caption"].strip()
+        hashtags = draft["hashtags"].strip()
+        runtime = {
             "strategy": strategy,
             "model": None,
             "rewrite_used": False,
             "rewrite_cache_hit": False,
             "similarity_guard_triggered": False,
             "hook_rescue_triggered": False,
-            "caption_path": caption_path,
-            "sections_path": caption_path,
+            "caption_path": "rule_copy",
+            "sections_path": "rule_copy",
+        }
+    elif strategy == "legacy_caption_rewrite":
+        legacy_draft = _legacy_public_rule_copy(ctx)
+        sections = _shadow_sections_from_live_bundle(live_bundle, fallback=_rule_copy(ctx))
+        rewrite_draft = {
+            "caption": legacy_draft["caption"].strip(),
+            "snapshot": sections["snapshot"],
+            "affects": sections["affects"],
+            "playbook": sections["playbook"],
+            "hashtags": live_hashtags or legacy_draft["hashtags"].strip(),
+        }
+        rewritten, runtime = _rewrite_shadow_candidate_from_draft(draft=rewrite_draft, ctx=ctx)
+        caption = rewrite_draft["caption"]
+        hashtags = rewrite_draft["hashtags"]
+        if rewritten and rewritten.get("caption"):
+            caption = str(rewritten.get("caption") or "").strip() or caption
+            hashtags = str(rewritten.get("hashtags") or "").strip() or hashtags
+        runtime["strategy"] = strategy
+    else:
+        strategy = "public_draft_restored"
+        draft = _legacy_public_rule_copy(ctx)
+        sections = {
+            "snapshot": draft["snapshot"].strip(),
+            "affects": draft["affects"].strip(),
+            "playbook": draft["playbook"].strip(),
+        }
+        caption = draft["caption"].strip()
+        hashtags = draft["hashtags"].strip()
+        runtime = {
+            "strategy": strategy,
+            "model": None,
+            "rewrite_used": False,
+            "rewrite_cache_hit": False,
+            "similarity_guard_triggered": False,
+            "hook_rescue_triggered": False,
+            "caption_path": "legacy_rule_copy",
+            "sections_path": "legacy_rule_copy",
+        }
+
+    body_md = (
+        "Gaia Eyes — Daily EarthScope\n\n" +
+        "\n\n".join([sections["snapshot"], sections["affects"], sections["playbook"]]).strip()
+    )
+    return {
+        "strategy": strategy,
+        "title": live_title,
+        "caption": caption,
+        "hashtags": hashtags,
+        "body_markdown": body_md,
+        "metrics_json": {
+            "sections": {
+                "caption": caption,
+                "snapshot": sections["snapshot"],
+                "affects": sections["affects"],
+                "playbook": sections["playbook"],
+            }
         },
+        "runtime": runtime,
     }
 
 
@@ -2473,11 +2572,12 @@ def main():
     }
 
     if EARTHSCOPE_PUBLIC_SHADOW:
+        live_runtime = _trace_snapshot()
         candidate_bundle = _build_shadow_candidate_bundle(
             day=day,
             platform=args.platform,
             ctx=ctx,
-            live_title=title,
+            live_bundle=live_bundle,
             mode=EARTHSCOPE_PUBLIC_CANDIDATE_MODE,
         )
         shadow_bundle = _build_shadow_review_bundle(
@@ -2485,7 +2585,7 @@ def main():
             platform=args.platform,
             live_bundle=live_bundle,
             candidate_bundle=candidate_bundle,
-            live_runtime=_trace_snapshot(),
+            live_runtime=live_runtime,
             ctx=ctx,
         )
         _write_shadow_review_bundle(shadow_bundle, day=day, platform=args.platform)
