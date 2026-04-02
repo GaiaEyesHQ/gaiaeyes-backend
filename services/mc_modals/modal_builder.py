@@ -2186,6 +2186,119 @@ def _driver_action_lines(day: date, key: str, profile: PersonalizationProfile) -
     return actions[:3] if actions else ["Use steady pacing and track symptoms to see personal patterns."]
 
 
+def _modal_confidence_level(zone: str) -> str:
+    if zone == "high":
+        return "high"
+    if zone in {"mild", "elevated"}:
+        return "moderate"
+    return "low"
+
+
+def _modal_max_urgency(zone: str) -> str:
+    if zone == "high":
+        return "high"
+    if zone == "elevated":
+        return "watch"
+    if zone == "mild":
+        return "notable"
+    return "quiet"
+
+
+def _build_modal_semantic(
+    *,
+    day: date,
+    context_type: str,
+    context_key: str,
+    modal_type: str,
+    zone: str,
+    title: str,
+    header_summary: Optional[str] = None,
+    state_summary: Optional[str] = None,
+    causal_callout: Optional[str] = None,
+    tip_summary: Optional[str] = None,
+    why_lines: Optional[List[str]] = None,
+    notice_lines: Optional[List[str]] = None,
+    action_lines: Optional[List[str]] = None,
+    quick_log: Optional[Dict[str, Any]] = None,
+    related_keys: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    why_lines = _unique_lines([_sentence(item) for item in (why_lines or []) if str(item or "").strip()])
+    notice_lines = _unique_lines([_sentence(item) for item in (notice_lines or []) if str(item or "").strip()])
+    action_lines = _unique_lines([_sentence(item) for item in (action_lines or []) if str(item or "").strip()])
+    actions = [
+        SemanticAction(
+            key=f"{context_type}_{context_key}_action_{index + 1}",
+            priority=index + 1,
+            reason="supportive_action",
+            label=line,
+        )
+        for index, line in enumerate(action_lines[:3])
+    ]
+    if quick_log and (quick_log.get("prefill_codes") or quick_log.get("options")):
+        actions.append(
+            SemanticAction(
+                key=f"{context_type}_{context_key}_quick_log",
+                priority=len(actions) + 1,
+                reason="log_symptoms",
+                label="Log symptoms if this matches what you notice.",
+            )
+        )
+
+    resolved_header = _sentence(
+        header_summary
+        or (state_summary if modal_type != "short" else "")
+        or (why_lines[0] if why_lines else "")
+    )
+
+    payload = SemanticPayload(
+        schema_version="1.0",
+        kind=f"{context_type}_modal",
+        date=day.isoformat(),
+        user_context={
+            "audience": "member",
+            "channel": "app_modal",
+            "context_type": context_type,
+            "context_key": context_key,
+            "modal_type": modal_type,
+        },
+        facts={
+            "title": title,
+            "zone": zone,
+            "related_keys": [str(item).strip() for item in (related_keys or []) if str(item).strip()],
+            "quick_log_codes": list(quick_log.get("prefill_codes") or []) if isinstance(quick_log, dict) else [],
+        },
+        interpretation={
+            "header_summary": resolved_header or None,
+            "state_summary": _sentence(state_summary or "") or None,
+            "causal_callout": _sentence(causal_callout or "") or None,
+            "tip_summary": _sentence(tip_summary or "") or None,
+            "why_lines": why_lines,
+            "notice_lines": notice_lines,
+            "action_lines": action_lines,
+        },
+        actions={
+            "primary": [item.__dict__ for item in actions],
+            "secondary": [],
+        },
+        guardrails=SemanticGuardrails(
+            confidence_overall=_modal_confidence_level(zone),
+            claim_strength="may_notice" if zone in {"mild", "elevated", "high"} else "observe_only",
+            evidence_basis=["current_driver_mix"] + (["recent_logs"] if causal_callout else []),
+            max_urgency=_modal_max_urgency(zone),
+        ),
+        render_hints=SemanticRenderHints(
+            preferred_summary_length="short",
+            preferred_detail_sections=["overview", "state", "why", "notice", "actions"]
+            if modal_type != "short"
+            else ["overview", "tip"],
+            humor_ok=False,
+            metaphor_ok=False,
+            persona_strength="light",
+        ),
+    )
+    return payload.to_dict()
+
+
 def build_modal_models(
     *,
     day: date,
@@ -2216,11 +2329,12 @@ def build_modal_models(
     for gauge_key in _GAUGE_ORDER:
         label = gauge_labels.get(gauge_key) or _GAUGE_FALLBACK_LABELS.get(gauge_key) or gauge_key
         meta = gauges_meta.get(gauge_key) or {}
+        zone = _normalized_zone_key(meta)
         delta = int(gauges_delta.get(gauge_key) or 0)
         related_keys = _GAUGE_DRIVER_MAP.get(gauge_key) or []
         related = _sorted_related_drivers([drivers_by_key[k] for k in related_keys if k in drivers_by_key])
         personal_summary = _personal_relevance_gauge_summary(personal_relevance, gauge_key)
-        gauge_models[gauge_key] = _gauge_explanation_entry(
+        entry = _gauge_explanation_entry(
             day=day,
             gauge_key=gauge_key,
             label=label,
@@ -2233,6 +2347,22 @@ def build_modal_models(
             health_status_explainer=health_status_explainer,
             personal_summary=personal_summary,
         )
+        entry["voice_semantic"] = _build_modal_semantic(
+            day=day,
+            context_type="gauge",
+            context_key=gauge_key,
+            modal_type=str(entry.get("modal_type") or "full"),
+            zone=zone,
+            title=str(entry.get("title") or label),
+            state_summary=str(entry.get("state_line") or "").strip() or None,
+            causal_callout=str(entry.get("causal_callout") or "").strip() or None,
+            why_lines=list(entry.get("why") or []),
+            notice_lines=list(entry.get("what_you_may_notice") or []),
+            action_lines=list(entry.get("suggested_actions") or []),
+            quick_log=entry.get("quick_log") if isinstance(entry.get("quick_log"), dict) else None,
+            related_keys=[str(driver.get("key") or "").strip() for driver in related if str(driver.get("key") or "").strip()],
+        )
+        gauge_models[gauge_key] = entry
 
     driver_models: Dict[str, Dict[str, Any]] = {}
     for driver in driver_rows:
@@ -2264,7 +2394,7 @@ def build_modal_models(
         ]
         why_lines = _unique_lines([line for line in why_lines if line])
         if _driver_modal_type(driver) == "short":
-            driver_models[key] = {
+            entry = {
                 "modal_type": "short",
                 "title": f"{label} \u2014 Steady",
                 "body": _DRIVER_SHORT_BODY.get(key, "This driver looks relatively steady right now."),
@@ -2276,9 +2406,22 @@ def build_modal_models(
                     "prefill": cta_prefill,
                 },
             }
+            entry["voice_semantic"] = _build_modal_semantic(
+                day=day,
+                context_type="driver",
+                context_key=key,
+                modal_type="short",
+                zone=zone,
+                title=str(entry.get("title") or label),
+                header_summary=str(entry.get("body") or "").strip() or None,
+                tip_summary=str(entry.get("tip") or "").strip() or None,
+                quick_log=quick_log,
+                related_keys=[key],
+            )
+            driver_models[key] = entry
             continue
 
-        driver_models[key] = {
+        entry = {
             "modal_type": "full",
             "title": f"{label} \u2014 {state}",
             "why": why_lines[:3],
@@ -2287,10 +2430,24 @@ def build_modal_models(
             "quick_log": quick_log,
             "cta": {
                 "label": "Log symptoms",
-                "action": "open_symptom_log",
-                "prefill": cta_prefill,
-            },
-        }
+                    "action": "open_symptom_log",
+                    "prefill": cta_prefill,
+                },
+            }
+        entry["voice_semantic"] = _build_modal_semantic(
+            day=day,
+            context_type="driver",
+            context_key=key,
+            modal_type="full",
+            zone=zone,
+            title=str(entry.get("title") or label),
+            why_lines=list(entry.get("why") or []),
+            notice_lines=list(entry.get("what_you_may_notice") or []),
+            action_lines=list(entry.get("suggested_actions") or []),
+            quick_log=quick_log,
+            related_keys=[key],
+        )
+        driver_models[key] = entry
 
     return {
         "gauges": gauge_models,

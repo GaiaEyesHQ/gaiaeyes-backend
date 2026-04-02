@@ -578,6 +578,30 @@ private struct DashboardQuickLog: Codable, Hashable {
     let baseTags: [String]?
 }
 
+private struct DashboardModalVoiceInterpretation: Codable, Hashable {
+    let headerSummary: String?
+    let stateSummary: String?
+    let causalCallout: String?
+    let tipSummary: String?
+    let whyLines: [String]?
+    let noticeLines: [String]?
+    let actionLines: [String]?
+}
+
+private struct DashboardModalVoiceAction: Codable, Hashable {
+    let label: String?
+}
+
+private struct DashboardModalVoiceActions: Codable, Hashable {
+    let primary: [DashboardModalVoiceAction]?
+}
+
+private struct DashboardModalVoiceSemantic: Codable, Hashable {
+    let kind: String?
+    let interpretation: DashboardModalVoiceInterpretation?
+    let actions: DashboardModalVoiceActions?
+}
+
 private struct DashboardModalEntry: Codable, Hashable {
     let modalType: String?
     let title: String?
@@ -590,6 +614,41 @@ private struct DashboardModalEntry: Codable, Hashable {
     let suggestedActions: [String]?
     let quickLog: DashboardQuickLog?
     let cta: DashboardModalCTA?
+    let voiceSemantic: DashboardModalVoiceSemantic?
+
+    var semanticHeaderSummary: String? {
+        voiceSemantic?.interpretation?.headerSummary?.nilIfTrimmedEmpty ?? body?.nilIfTrimmedEmpty
+    }
+
+    var semanticStateSummary: String? {
+        voiceSemantic?.interpretation?.stateSummary?.nilIfTrimmedEmpty ?? stateLine?.nilIfTrimmedEmpty
+    }
+
+    var semanticCausalCallout: String? {
+        voiceSemantic?.interpretation?.causalCallout?.nilIfTrimmedEmpty ?? causalCallout?.nilIfTrimmedEmpty
+    }
+
+    var semanticTipSummary: String? {
+        voiceSemantic?.interpretation?.tipSummary?.nilIfTrimmedEmpty ?? tip?.nilIfTrimmedEmpty
+    }
+
+    var semanticWhyLines: [String] {
+        let values = voiceSemantic?.interpretation?.whyLines ?? why ?? []
+        return values.compactMap(\.nilIfTrimmedEmpty)
+    }
+
+    var semanticNoticeLines: [String] {
+        let values = voiceSemantic?.interpretation?.noticeLines ?? whatYouMayNotice ?? []
+        return values.compactMap(\.nilIfTrimmedEmpty)
+    }
+
+    var semanticActionLines: [String] {
+        let interpreted = (voiceSemantic?.interpretation?.actionLines ?? suggestedActions ?? []).compactMap(\.nilIfTrimmedEmpty)
+        if !interpreted.isEmpty {
+            return interpreted
+        }
+        return (voiceSemantic?.actions?.primary ?? []).compactMap { $0.label?.nilIfTrimmedEmpty }
+    }
 }
 
 private struct DashboardModalModels: Codable, Hashable {
@@ -6389,6 +6448,48 @@ struct ContentView: View {
                 }
             }
 
+            private var modalDisplayTitle: String? {
+                if isGaugeContext {
+                    return gaugePopupTitle(for: contextKey).nilIfTrimmedEmpty
+                }
+                return (translated(entry.title) ?? entry.title)?.nilIfTrimmedEmpty
+            }
+
+            private var renderedHeaderSummary: String? {
+                (translated(entry.semanticHeaderSummary) ?? entry.semanticHeaderSummary)?.nilIfTrimmedEmpty
+            }
+
+            private var renderedStateSummary: String? {
+                (translated(entry.semanticStateSummary) ?? entry.semanticStateSummary)?.nilIfTrimmedEmpty
+            }
+
+            private var renderedCausalCallout: String? {
+                (translated(entry.semanticCausalCallout) ?? entry.semanticCausalCallout)?.nilIfTrimmedEmpty
+            }
+
+            private var renderedTipSummary: String? {
+                (translated(entry.semanticTipSummary) ?? entry.semanticTipSummary)?.nilIfTrimmedEmpty
+            }
+
+            private var renderedWhyLines: [String] {
+                CopyRefiner.refineLines(entry.semanticWhyLines.map { translated($0) ?? $0 })
+            }
+
+            private var renderedNoticeLines: [String] {
+                CopyRefiner.refineLines(entry.semanticNoticeLines.map { translated($0) ?? $0 })
+            }
+
+            private var renderedActionLines: [String] {
+                let lines = CopyRefiner.refineLines(entry.semanticActionLines.map { translated($0) ?? $0 })
+                if !lines.isEmpty {
+                    return lines
+                }
+                if isGaugeContext {
+                    return gaugePopupHelpfulTips(for: contextKey)
+                }
+                return []
+            }
+
             @ViewBuilder
             private func compactSectionHeader(_ title: String, action: (() -> Void)? = nil) -> some View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -6506,72 +6607,21 @@ struct ContentView: View {
             }
 
             @ViewBuilder
-            private var gaugePopupContent: some View {
+            private var modalContent: some View {
                 let symptoms = gaugePopupRelevantSymptoms(for: contextKey)
                 let influencers = gaugePopupCurrentInfluencers(for: contextKey)
-                let tips = gaugePopupHelpfulTips(for: contextKey)
 
                 VStack(alignment: .leading, spacing: 18) {
-                    Text(gaugePopupTitle(for: contextKey))
-                        .font(.title3.weight(.bold))
-
-                    if !symptoms.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            compactSectionHeader("Active Symptoms", action: dismissAndOpenCurrentSymptoms)
-                            ForEach(symptoms, id: \.self) { symptom in
-                                Text(symptom)
-                                    .font(.subheadline)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.84)
-                            }
-                        }
-                    }
-
-                    if !influencers.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            compactSectionHeader("Current Influencers", action: dismissAndOpenAllDrivers)
-                            ForEach(influencers) { driver in
-                                Text(gaugePopupInfluencerLine(for: driver))
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.84)
-                            }
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        compactSectionHeader("Helpful right now")
-                        ForEach(tips.prefix(3), id: \.self) { tip in
-                            Text("\u{2022} \(tip)")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.84)
-                        }
-                    }
-
-                    if let quickLog {
-                        quickLogSection(quickLog)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-            }
-
-            @ViewBuilder
-            private var legacyContent: some View {
-                VStack(alignment: .leading, spacing: 16) {
-                    if let title = translated(entry.title), !title.isEmpty {
+                    if let title = modalDisplayTitle {
                         Text(title)
                             .font(.title3.weight(.bold))
                     }
                     if modalType == "short" {
-                        if let body = translated(entry.body), !body.isEmpty {
-                            Text(body)
+                        if let headerSummary = renderedHeaderSummary {
+                            Text(headerSummary)
                                 .font(.body)
                         }
-                        if let tip = translated(entry.tip), !tip.isEmpty {
+                        if let tip = renderedTipSummary {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Tip")
                                     .font(.headline)
@@ -6580,16 +6630,16 @@ struct ContentView: View {
                             }
                         }
                     } else {
-                        if contextType == "gauge", let stateLine = translated(entry.stateLine), !stateLine.isEmpty {
+                        if let stateSummary = renderedStateSummary {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Current State")
                                     .font(.headline)
-                                Text(stateLine)
+                                Text(stateSummary)
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
                         }
-                        if contextType == "gauge", let causalCallout = translated(entry.causalCallout), !causalCallout.isEmpty {
+                        if let causalCallout = renderedCausalCallout {
                             Text(causalCallout)
                                 .font(.subheadline.weight(.semibold))
                                 .padding(12)
@@ -6601,35 +6651,55 @@ struct ContentView: View {
                                         .stroke(Color.white.opacity(0.08), lineWidth: 1)
                                 )
                         }
-                        let whyLines = CopyRefiner.refineLines((entry.why ?? []).map { translated($0) ?? $0 })
-                        if !whyLines.isEmpty {
+                        if isGaugeContext && !symptoms.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                compactSectionHeader("Active Symptoms", action: dismissAndOpenCurrentSymptoms)
+                                ForEach(symptoms, id: \.self) { symptom in
+                                    Text(symptom)
+                                        .font(.subheadline)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.84)
+                                }
+                            }
+                        }
+                        if isGaugeContext && !influencers.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                compactSectionHeader("Current Influencers", action: dismissAndOpenAllDrivers)
+                                ForEach(influencers) { driver in
+                                    Text(gaugePopupInfluencerLine(for: driver))
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.84)
+                                }
+                            }
+                        }
+                        if !renderedWhyLines.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(contextType == "gauge" ? "Why This Is Standing Out Now" : "What's Shaping Things Now")
                                     .font(.headline)
-                                ForEach(Array(whyLines.enumerated()), id: \.offset) { _, line in
+                                ForEach(Array(renderedWhyLines.enumerated()), id: \.offset) { _, line in
                                     Text("\u{2022} \(line)")
                                         .font(.subheadline)
                                 }
                             }
                         }
                     }
-                    let noticeLines = CopyRefiner.refineLines((entry.whatYouMayNotice ?? []).map { translated($0) ?? $0 })
-                    if !noticeLines.isEmpty {
+                    if !renderedNoticeLines.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(experienceMode == .scientific ? "What May Be More Noticeable" : "What May Rise To The Surface")
                                 .font(.headline)
-                            ForEach(Array(noticeLines.enumerated()), id: \.offset) { _, line in
+                            ForEach(Array(renderedNoticeLines.enumerated()), id: \.offset) { _, line in
                                 Text("\u{2022} \(line)")
                                     .font(.subheadline)
                             }
                         }
                     }
-                    let actionLines = CopyRefiner.refineLines((entry.suggestedActions ?? []).map { translated($0) ?? $0 })
-                    if !actionLines.isEmpty {
+                    if !renderedActionLines.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("What May Help")
                                 .font(.headline)
-                            ForEach(Array(actionLines.enumerated()), id: \.offset) { _, line in
+                            ForEach(Array(renderedActionLines.enumerated()), id: \.offset) { _, line in
                                 Text("\u{2022} \(line)")
                                     .font(.subheadline)
                             }
@@ -6654,11 +6724,7 @@ struct ContentView: View {
             var body: some View {
                 NavigationStack {
                     ScrollView {
-                        if isGaugeContext {
-                            gaugePopupContent
-                        } else {
-                            legacyContent
-                        }
+                        modalContent
                     }
                     .navigationTitle("Why This Matters Now")
                     .navigationBarTitleDisplayMode(.inline)

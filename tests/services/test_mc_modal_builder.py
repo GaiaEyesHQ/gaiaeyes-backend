@@ -48,9 +48,13 @@ def test_build_modal_models_returns_gauge_and_driver_models() -> None:
     assert payload["gauges"]["pain"]["title"] == "Pain \u2014 Flare"
     assert payload["gauges"]["pain"]["cta"]["action"] == "open_symptom_log"
     assert payload["gauges"]["pain"]["quick_log"]["default_severity"] == 5
+    assert payload["gauges"]["pain"]["voice_semantic"]["kind"] == "gauge_modal"
+    assert payload["gauges"]["pain"]["voice_semantic"]["interpretation"]["state_summary"]
     assert payload["drivers"]["pressure"]["title"] == "Pressure Swing \u2014 High"
     assert payload["drivers"]["pressure"]["cta"]["prefill"]
     assert payload["drivers"]["pressure"]["quick_log"]["default_severity"] == 5
+    assert payload["drivers"]["pressure"]["voice_semantic"]["kind"] == "driver_modal"
+    assert payload["drivers"]["pressure"]["voice_semantic"]["interpretation"]["why_lines"]
     assert payload["gauges"]["pain"]["state_line"]
 
 
@@ -218,6 +222,33 @@ def test_energy_modal_uses_daily_checkin_and_dedupes_effects() -> None:
     assert len(energy["what_you_may_notice"]) <= 3
     assert "updated from your recent logs" not in " ".join(energy["why"]).lower()
     assert [item["code"] for item in energy["quick_log"]["options"]] == ["DRAINED", "BRAIN_FOG", "FATIGUE"]
+    assert energy["voice_semantic"]["interpretation"]["causal_callout"] == energy["causal_callout"]
+    assert energy["voice_semantic"]["interpretation"]["action_lines"] == energy["suggested_actions"]
+
+
+def test_low_driver_modal_includes_short_semantic_summary() -> None:
+    payload = build_modal_models(
+        day=date(2026, 3, 27),
+        gauges={},
+        gauges_meta={},
+        gauge_labels={},
+        drivers=[
+            {
+                "key": "aqi",
+                "label": "AQI",
+                "severity": "low",
+                "state": "Low",
+                "value": 38.0,
+                "unit": "AQI",
+            }
+        ],
+    )
+
+    aqi = payload["drivers"]["aqi"]
+    assert aqi["modal_type"] == "short"
+    assert aqi["voice_semantic"]["kind"] == "driver_modal"
+    assert aqi["voice_semantic"]["interpretation"]["header_summary"] == aqi["body"]
+    assert aqi["voice_semantic"]["interpretation"]["tip_summary"] == aqi["tip"]
 
 
 def test_build_earthscope_summary_mentions_top_drivers_and_gauges() -> None:
