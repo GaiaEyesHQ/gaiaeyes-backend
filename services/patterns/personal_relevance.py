@@ -36,6 +36,7 @@ SIGNAL_LABELS = {
     "kp_g1_plus_exposed": "Kp 5+",
     "bz_south_exposed": "Southward Bz",
     "solar_wind_exposed": "Solar wind",
+    "sleep_deficit_exposed": "Sleep deficit",
     "schumann_exposed": "Schumann variability",
 }
 
@@ -208,6 +209,11 @@ _PATTERN_MESSAGE_MAP = {
         "full": "Elevated solar wind has lined up with more fatigue days in your history.",
         "short": "Elevated solar wind has lined up with more fatigue days for you.",
         "clause": "it has lined up with more fatigue days for you",
+    },
+    ("sleep_deficit_exposed", "fatigue_day"): {
+        "full": "Sleep-deficit nights have lined up with more fatigue days in your history.",
+        "short": "Sleep-deficit nights have lined up with more fatigue days for you.",
+        "clause": "they have lined up with more fatigue days for you",
     },
     ("solar_wind_exposed", "anxiety_day"): {
         "full": "Elevated solar wind has lined up with more restless days in your history.",

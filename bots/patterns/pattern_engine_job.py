@@ -201,6 +201,15 @@ SIGNAL_DEFINITIONS = {
         "threshold": 550.0,
         "threshold_text": "sw_speed_avg >= 550",
     },
+    "sleep_deficit_exposed": {
+        "family": "sleep",
+        "operator": "composite>=",
+        "threshold": 2.0,
+        "threshold_text": (
+            "2 of: sleep_total_minutes < 390, sleep_efficiency < 0.85, "
+            "sleep_vs_14d_baseline_delta <= -60; severe override at sleep_total_minutes < 330"
+        ),
+    },
     "schumann_exposed": {
         "family": "schumann",
         "operator": ">=p80",
@@ -238,6 +247,7 @@ ASSOCIATION_PAIRS = [
     ("kp_g1_plus_exposed", "poor_sleep_day"),
     ("bz_south_exposed", "poor_sleep_day"),
     ("solar_wind_exposed", "fatigue_day"),
+    ("sleep_deficit_exposed", "fatigue_day"),
     ("solar_wind_exposed", "anxiety_day"),
     ("schumann_exposed", "poor_sleep_day"),
     ("schumann_exposed", "focus_fog_day"),
@@ -252,6 +262,10 @@ ASSOCIATION_PAIRS = [
     ("schumann_exposed", "short_sleep_day"),
     ("solar_wind_exposed", "hrv_dip_day"),
 ]
+
+PAIR_LAG_HOURS: dict[tuple[str, str], set[int]] = {
+    ("sleep_deficit_exposed", "fatigue_day"): {12, 24},
+}
 
 # The engine is daily-grain today, so 12h uses the next-day proxy just like 24h.
 LAG_SPECS = {
@@ -506,6 +520,40 @@ def signal_exposure(row: dict[str, Any], signal_key: str) -> tuple[bool | None, 
     if signal_key == "solar_wind_exposed":
         value = _safe_float(row.get("sw_speed_avg"))
         return (value >= 550.0, 550.0) if value is not None else (None, 550.0)
+    if signal_key == "sleep_deficit_exposed":
+        sleep_total = _safe_float(row.get("sleep_total_minutes"))
+        sleep_efficiency = _safe_float(row.get("sleep_efficiency"))
+        sleep_delta = _safe_float(row.get("sleep_vs_14d_baseline_delta"))
+
+        conditions = 0
+        available = 0
+
+        if sleep_total is not None:
+            available += 1
+            if sleep_total < 390.0:
+                conditions += 1
+        if sleep_efficiency is not None:
+            available += 1
+            if sleep_efficiency < 0.85:
+                conditions += 1
+        if sleep_delta is not None:
+            available += 1
+            if sleep_delta <= -60.0:
+                conditions += 1
+
+        if available == 0:
+            return None, 2.0
+
+        severe_override = bool(
+            (sleep_total is not None and sleep_total < 330.0)
+            or (
+                sleep_total is not None
+                and sleep_total < 390.0
+                and sleep_delta is not None
+                and sleep_delta <= -60.0
+            )
+        )
+        return bool(severe_override or conditions >= 2), 2.0
     if signal_key == "schumann_exposed":
         proxy = _safe_float(row.get("schumann_variability_proxy"))
         threshold = _safe_float(row.get("schumann_variability_p80"))
@@ -1334,8 +1382,11 @@ def build_associations(
         for signal_key, outcome_key in ASSOCIATION_PAIRS:
             signal_meta = SIGNAL_DEFINITIONS[signal_key]
             outcome_kind = OUTCOME_KIND.get(outcome_key, "symptom")
+            allowed_lag_hours = PAIR_LAG_HOURS.get((signal_key, outcome_key))
 
             for lag_hours, lag_offset in LAG_SPECS.items():
+                if allowed_lag_hours is not None and lag_hours not in allowed_lag_hours:
+                    continue
                 a = b = c = d = 0
                 observed_weeks: set[tuple[int, int]] = set()
                 threshold_values: list[float] = []
