@@ -11,6 +11,7 @@ from .routers import (
     dashboard,
     drivers,
     earth,
+    exposures,
     feedback,
     health as health_router,
     hazards,
@@ -147,6 +148,7 @@ app.include_router(dashboard.router)
 app.include_router(patterns.router)
 app.include_router(profile.router)
 app.include_router(feedback.router)
+app.include_router(exposures.router)
 # Local health check endpoints are public (used by WP card and iOS onboarding)
 app.include_router(local.router)
 

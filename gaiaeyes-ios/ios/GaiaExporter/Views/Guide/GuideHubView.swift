@@ -96,7 +96,7 @@ struct GuideHubView: View {
 
     private var isDailyCheckInCompleted: Bool {
         guard
-            let promptDay = dailyCheckInStatus?.prompt?.day ?? dailyCheckInStatus?.latestEntry?.day,
+            let promptDay = dailyCheckInStatus?.targetDay ?? dailyCheckInStatus?.prompt?.day,
             let completedAt = dailyCheckInStatus?.latestEntry?.completedAt,
             !completedAt.isEmpty
         else {
@@ -172,7 +172,7 @@ struct GuideHubView: View {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.dateFormat = "yyyy-MM-dd"
-        let today = dailyCheckInStatus?.prompt?.day ?? formatter.string(from: Date())
+        let today = dailyCheckInStatus?.targetDay ?? dailyCheckInStatus?.prompt?.day ?? formatter.string(from: Date())
 
         if let followUpItem {
             return GuideDailyPollPrompt(

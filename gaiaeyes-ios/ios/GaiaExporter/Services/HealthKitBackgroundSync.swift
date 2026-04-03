@@ -240,6 +240,51 @@ final class HealthKitBackgroundSync {
     }()
     @MainActor private var lastKickAt: Date? = nil
 
+    private func diagnosticsKey(_ prefix: String, metric: String) -> String {
+        "gaia.hk.\(prefix).\(metric)"
+    }
+
+    private func setDiagnosticsValue(_ value: String?, prefix: String, metric: String) {
+        let key = diagnosticsKey(prefix, metric: metric)
+        let defaults = UserDefaults.standard
+        if let value, !value.isEmpty {
+            defaults.set(value, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    private func setDiagnosticsDate(_ date: Date, prefix: String, metric: String) {
+        setDiagnosticsValue(Self.isoString(date), prefix: prefix, metric: metric)
+    }
+
+    private func recordObserverEvent(for metric: String, date: Date = Date()) {
+        setDiagnosticsDate(date, prefix: "observer_event", metric: metric)
+    }
+
+    private func recordBackgroundDeliveryStatus(for metric: String, enabled: Bool, error: String? = nil) {
+        setDiagnosticsValue(enabled ? "enabled" : "failed", prefix: "bg_delivery_status", metric: metric)
+        setDiagnosticsDate(Date(), prefix: "bg_delivery_checked_at", metric: metric)
+        setDiagnosticsValue(error?.trimmingCharacters(in: .whitespacesAndNewlines), prefix: "bg_delivery_error", metric: metric)
+    }
+
+    private func recordBackgroundDeliverySkipped(for metric: String, reason: String) {
+        setDiagnosticsValue("skipped", prefix: "bg_delivery_status", metric: metric)
+        setDiagnosticsDate(Date(), prefix: "bg_delivery_checked_at", metric: metric)
+        setDiagnosticsValue(reason, prefix: "bg_delivery_error", metric: metric)
+    }
+
+    private func recordAnchorAdvance(for metric: String, date: Date = Date()) {
+        setDiagnosticsDate(date, prefix: "anchor_advanced", metric: metric)
+    }
+
+    private func recordImportedSampleMetadata(for metric: String, samples: [HKSample]) {
+        guard let latest = samples.max(by: { $0.endDate < $1.endDate }) else { return }
+        setDiagnosticsDate(latest.endDate, prefix: "last_sample", metric: metric)
+        let sourceName = latest.sourceRevision.source.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        setDiagnosticsValue(sourceName.isEmpty ? nil : sourceName, prefix: "last_source", metric: metric)
+    }
+
     // Types
     private var hrType  = HKObjectType.quantityType(forIdentifier: .heartRate)!
     private var spo2Type = HKObjectType.quantityType(forIdentifier: .oxygenSaturation)!
@@ -324,24 +369,52 @@ final class HealthKitBackgroundSync {
             try registerObserver(for: menstrualFlowType, key: "menstrual_flow")
         }
 
-        healthStore.enableBackgroundDelivery(for: hrType,   frequency: .immediate) { ok, err in appLog("[HK] bg delivery heart_rate: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
-        healthStore.enableBackgroundDelivery(for: spo2Type, frequency: .immediate) { ok, err in appLog("[HK] bg delivery spo2: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
-        healthStore.enableBackgroundDelivery(for: stepsType,frequency: .immediate) { ok, err in appLog("[HK] bg delivery step_count: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
-        healthStore.enableBackgroundDelivery(for: hrvType,  frequency: .immediate) { ok, err in appLog("[HK] bg delivery hrv_sdnn: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
+        healthStore.enableBackgroundDelivery(for: hrType, frequency: .immediate) { ok, err in
+            self.recordBackgroundDeliveryStatus(for: "heart_rate", enabled: ok, error: err?.localizedDescription)
+            appLog("[HK] bg delivery heart_rate: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")")
+        }
+        healthStore.enableBackgroundDelivery(for: spo2Type, frequency: .immediate) { ok, err in
+            self.recordBackgroundDeliveryStatus(for: "spo2", enabled: ok, error: err?.localizedDescription)
+            appLog("[HK] bg delivery spo2: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")")
+        }
+        healthStore.enableBackgroundDelivery(for: stepsType, frequency: .immediate) { ok, err in
+            self.recordBackgroundDeliveryStatus(for: "step_count", enabled: ok, error: err?.localizedDescription)
+            appLog("[HK] bg delivery step_count: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")")
+        }
+        healthStore.enableBackgroundDelivery(for: hrvType, frequency: .immediate) { ok, err in
+            self.recordBackgroundDeliveryStatus(for: "hrv_sdnn", enabled: ok, error: err?.localizedDescription)
+            appLog("[HK] bg delivery hrv_sdnn: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")")
+        }
         // Blood pressure background delivery is not supported by HealthKit.
+        recordBackgroundDeliverySkipped(for: "blood_pressure", reason: "not supported")
         appLog("[HK] bg delivery blood_pressure: skipped (not supported)")
-        healthStore.enableBackgroundDelivery(for: sleepType,frequency: .immediate) { ok, err in appLog("[HK] bg delivery sleep_stage: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
+        healthStore.enableBackgroundDelivery(for: sleepType, frequency: .immediate) { ok, err in
+            self.recordBackgroundDeliveryStatus(for: "sleep_stage", enabled: ok, error: err?.localizedDescription)
+            appLog("[HK] bg delivery sleep_stage: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")")
+        }
         if let respiratoryRateType {
-            healthStore.enableBackgroundDelivery(for: respiratoryRateType, frequency: .immediate) { ok, err in appLog("[HK] bg delivery respiratory_rate: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
+            healthStore.enableBackgroundDelivery(for: respiratoryRateType, frequency: .immediate) { ok, err in
+                self.recordBackgroundDeliveryStatus(for: "respiratory_rate", enabled: ok, error: err?.localizedDescription)
+                appLog("[HK] bg delivery respiratory_rate: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")")
+            }
         }
         if let restingHeartRateType {
-            healthStore.enableBackgroundDelivery(for: restingHeartRateType, frequency: .immediate) { ok, err in appLog("[HK] bg delivery resting_heart_rate: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
+            healthStore.enableBackgroundDelivery(for: restingHeartRateType, frequency: .immediate) { ok, err in
+                self.recordBackgroundDeliveryStatus(for: "resting_heart_rate", enabled: ok, error: err?.localizedDescription)
+                appLog("[HK] bg delivery resting_heart_rate: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")")
+            }
         }
         if let temperatureDeviationType {
-            healthStore.enableBackgroundDelivery(for: temperatureDeviationType, frequency: .immediate) { ok, err in appLog("[HK] bg delivery temperature_deviation: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
+            healthStore.enableBackgroundDelivery(for: temperatureDeviationType, frequency: .immediate) { ok, err in
+                self.recordBackgroundDeliveryStatus(for: "temperature_deviation", enabled: ok, error: err?.localizedDescription)
+                appLog("[HK] bg delivery temperature_deviation: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")")
+            }
         }
         if let menstrualFlowType {
-            healthStore.enableBackgroundDelivery(for: menstrualFlowType, frequency: .immediate) { ok, err in appLog("[HK] bg delivery menstrual_flow: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")") }
+            healthStore.enableBackgroundDelivery(for: menstrualFlowType, frequency: .immediate) { ok, err in
+                self.recordBackgroundDeliveryStatus(for: "menstrual_flow", enabled: ok, error: err?.localizedDescription)
+                appLog("[HK] bg delivery menstrual_flow: \(ok ? "enabled" : "failed") \(err?.localizedDescription ?? "")")
+            }
         }
     }
 
@@ -349,6 +422,7 @@ final class HealthKitBackgroundSync {
         let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completion, error in
             guard let self else { completion(); return }
             if let error = error { appLog("Observer error \(key): \(error.localizedDescription)"); completion(); return }
+            self.recordObserverEvent(for: key)
             Task { [weak self] in
                 guard let self else { return }
                 await self.processingGate.runOnce(key: key, op: {
@@ -392,6 +466,7 @@ final class HealthKitBackgroundSync {
 
         guard !collected.isEmpty else {
             anchorStore.setAnchor(anchor, forKey: anchorKey)
+            recordAnchorAdvance(for: anchorKey)
             return
         }
 
@@ -448,6 +523,7 @@ final class HealthKitBackgroundSync {
 
         guard !samples.isEmpty else {
             anchorStore.setAnchor(anchor, forKey: anchorKey)
+            recordAnchorAdvance(for: anchorKey)
             return
         }
 
@@ -459,8 +535,10 @@ final class HealthKitBackgroundSync {
             let windowEnd = samples.map { $0.end_time }.max() ?? "-"
             appLog("[HK-UP] \(anchorKey) rows=\(samples.count) window=\(windowStart)..\(windowEnd)")
             anchorStore.setAnchor(anchor, forKey: anchorKey)
+            recordAnchorAdvance(for: anchorKey)
             StatusStore.shared.setUpload(for: anchorKey)
             if uploaded {
+                recordImportedSampleMetadata(for: anchorKey, samples: collected)
                 await requestFeaturesRefreshAfterUpload(rows: samples.count, source: "hk:\(anchorKey)")
             }
         } catch {
@@ -484,6 +562,7 @@ final class HealthKitBackgroundSync {
 
         guard !collected.isEmpty else {
             anchorStore.setAnchor(anchor, forKey: anchorKey)
+            recordAnchorAdvance(for: anchorKey)
             return
         }
 
@@ -510,6 +589,7 @@ final class HealthKitBackgroundSync {
 
         guard !out.isEmpty else {
             anchorStore.setAnchor(anchor, forKey: anchorKey)
+            recordAnchorAdvance(for: anchorKey)
             return
         }
 
@@ -520,8 +600,10 @@ final class HealthKitBackgroundSync {
             let windowEnd = out.map { $0.end_time }.max() ?? "-"
             appLog("[HK-UP] \(anchorKey) rows=\(out.count) window=\(windowStart)..\(windowEnd)")
             anchorStore.setAnchor(anchor, forKey: anchorKey)
+            recordAnchorAdvance(for: anchorKey)
             StatusStore.shared.setUpload(for: anchorKey)
             if uploaded {
+                recordImportedSampleMetadata(for: anchorKey, samples: collected)
                 await requestFeaturesRefreshAfterUpload(rows: out.count, source: "hk:sleep_stage")
             }
         } catch {
@@ -546,6 +628,7 @@ final class HealthKitBackgroundSync {
 
         guard !collected.isEmpty else {
             anchorStore.setAnchor(anchor, forKey: anchorKey)
+            recordAnchorAdvance(for: anchorKey)
             return
         }
 
@@ -566,6 +649,7 @@ final class HealthKitBackgroundSync {
 
         guard !out.isEmpty else {
             anchorStore.setAnchor(anchor, forKey: anchorKey)
+            recordAnchorAdvance(for: anchorKey)
             return
         }
 
@@ -576,8 +660,10 @@ final class HealthKitBackgroundSync {
             let windowEnd = out.map { $0.end_time }.max() ?? "-"
             appLog("[HK-UP] \(anchorKey) rows=\(out.count) window=\(windowStart)..\(windowEnd)")
             anchorStore.setAnchor(anchor, forKey: anchorKey)
+            recordAnchorAdvance(for: anchorKey)
             StatusStore.shared.setUpload(for: anchorKey)
             if uploaded {
+                recordImportedSampleMetadata(for: anchorKey, samples: collected)
                 await requestFeaturesRefreshAfterUpload(rows: out.count, source: "hk:menstrual_flow")
             }
         } catch {
@@ -1164,9 +1250,11 @@ final class HealthKitBackgroundSync {
             let api = buildAPI()
             let uploaded = try await api.postSamplesChunked(samples, chunkSize: chunkSize, maxRetries: maxRetries)
             anchorStore.setAnchor(anchor, forKey: "menstrual_flow")
+            recordAnchorAdvance(for: "menstrual_flow")
             StatusStore.shared.setUpload(for: "menstrual_flow")
             appLog("[Backfill] uploaded \(samples.count) menstrual_flow samples")
             if uploaded {
+                recordImportedSampleMetadata(for: "menstrual_flow", samples: collected)
                 await requestFeaturesRefreshAfterUpload(rows: samples.count, source: "hk:backfill_menstrual_flow")
             }
             return HealthBackfillMetricResult(
@@ -1294,6 +1382,7 @@ final class HealthKitBackgroundSync {
             appLog("[Backfill] no samples for \(anchorKey) in range")
             if persistAnchor {
                 anchorStore.setAnchor(anchor, forKey: anchorKey)
+                recordAnchorAdvance(for: anchorKey)
             }
             return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)
         }
@@ -1325,6 +1414,7 @@ final class HealthKitBackgroundSync {
         guard !samples.isEmpty else {
             if persistAnchor {
                 anchorStore.setAnchor(anchor, forKey: anchorKey)
+                recordAnchorAdvance(for: anchorKey)
             }
             return HealthBackfillMetricResult(collectedCount: collected.count, uploadedRows: 0, failureDescription: nil)
         }
@@ -1334,10 +1424,12 @@ final class HealthKitBackgroundSync {
             let uploaded = try await api.postSamplesChunked(samples, chunkSize: chunkSize, maxRetries: maxRetries)
             if persistAnchor {
                 anchorStore.setAnchor(anchor, forKey: anchorKey)
+                recordAnchorAdvance(for: anchorKey)
             }
             StatusStore.shared.setUpload(for: anchorKey)
             appLog("[Backfill] uploaded \(samples.count) \(anchorKey) samples")
             if uploaded && requestRefresh {
+                recordImportedSampleMetadata(for: anchorKey, samples: collected)
                 await requestFeaturesRefreshAfterUpload(rows: samples.count, source: "hk:backfill_\(anchorKey)")
             }
             return HealthBackfillMetricResult(

@@ -13,6 +13,7 @@ SENSITIVITY_KEYS = frozenset(
     {
         "air_quality_sensitive",
         "anxiety_sensitive",
+        "exertion_recovery_sensitive",
         "geomagnetic_sensitive",
         "pain_sensitive",
         "pressure_sensitive",
@@ -60,6 +61,16 @@ AUTONOMIC_KEYS = frozenset(
 SINUS_KEYS = frozenset({"air_quality_sensitive", "allergies_sinus", "mcas_histamine"})
 AIRWAY_KEYS = frozenset({"air_quality_sensitive", "asthma_breathing_sensitive", "mcas_histamine"})
 SLEEP_DISRUPTION_KEYS = frozenset({"sleep_sensitive", "insomnia_sleep_disruption"})
+RECOVERY_LOAD_KEYS = frozenset(
+    {
+        "autoimmune_condition",
+        "chronic_pain",
+        "exertion_recovery_sensitive",
+        "fibromyalgia",
+        "hypermobility_eds",
+        "pots_dysautonomia",
+    }
+)
 
 PRESSURE_SIGNAL_KEYS = frozenset(
     {
@@ -222,3 +233,39 @@ def health_status_contextual_adjustment(
             max_adjustment = max(max_adjustment, state_weights.get(state_name, 0.0))
     # Health Status remains primarily wearable/symptom driven; AQI context only nudges it slightly.
     return min(max_adjustment, 4.0)
+
+
+def exposure_personalization_multiplier(
+    profile: PersonalizationProfile,
+    *,
+    exposure_key: str,
+    gauge_key: str,
+) -> float:
+    if not profile.all_tags:
+        return 1.0
+
+    multiplier = 1.0
+
+    if exposure_key == "overexertion":
+        if gauge_key in {"stamina", "energy", "sleep"} and profile.includes_any(RECOVERY_LOAD_KEYS):
+            multiplier += 0.25
+        if gauge_key == "pain" and profile.includes_any(PAIN_FLARE_KEYS):
+            multiplier += 0.20
+        if gauge_key == "heart" and profile.includes_any(AUTONOMIC_KEYS):
+            multiplier += 0.15
+
+    if exposure_key == "allergen_exposure":
+        if gauge_key in {"energy", "focus", "sleep"} and (
+            profile.includes_any(SINUS_KEYS) or profile.includes_any(AIRWAY_KEYS)
+        ):
+            multiplier += 0.25
+        if gauge_key == "pain" and (
+            profile.includes_any(SINUS_KEYS)
+            or profile.has_any("migraine_history")
+            or profile.has_any("mcas_histamine")
+        ):
+            multiplier += 0.15
+        if gauge_key == "heart" and profile.includes_any(AIRWAY_KEYS):
+            multiplier += 0.10
+
+    return min(multiplier, 1.75)

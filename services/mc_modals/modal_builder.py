@@ -717,6 +717,32 @@ _SYMPTOM_DISPLAY_LABELS = {
     "WIRED": "a wired stretch",
 }
 
+_EXPOSURE_DISPLAY_LABELS = {
+    "allergen_exposure": "allergen exposure",
+    "overexertion": "heavy activity",
+}
+
+_EXPOSURE_CODES_BY_GAUGE = {
+    "pain": {"allergen_exposure", "overexertion"},
+    "focus": {"allergen_exposure"},
+    "heart": {"allergen_exposure", "overexertion"},
+    "stamina": {"overexertion"},
+    "energy": {"allergen_exposure", "overexertion"},
+    "sleep": {"allergen_exposure", "overexertion"},
+    "mood": set(),
+    "health_status": {"allergen_exposure", "overexertion"},
+}
+
+_EXPOSURE_EFFECT_BUCKETS = {
+    "allergen_exposure": {"sinus_irritation", "head_pressure", "fatigue_fog", "focus_drag", "sleep_fragility"},
+    "overexertion": {"fatigue_fog", "pain_flare", "sleep_fragility", "heart_reactivity"},
+}
+
+_EXPOSURE_HELP_BUCKETS = {
+    "allergen_exposure": {"allergy_support", "cleaner_air"},
+    "overexertion": {"steadier_effort", "hydration_pacing", "sleep_routine"},
+}
+
 _GAUGE_MODAL_STATE_LABELS = {
     "energy": {
         "low": "Steady",
@@ -1074,6 +1100,18 @@ def _matching_symptom_rows(gauge_key: str, symptoms: Optional[Dict[str, Any]]) -
     return filtered or rows
 
 
+def _matching_exposure_rows(gauge_key: str, exposures: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows = [dict(item) for item in (exposures or {}).get("top_exposures") or [] if isinstance(item, dict)]
+    allowed = _EXPOSURE_CODES_BY_GAUGE.get(gauge_key) or set()
+    if not allowed:
+        return []
+    filtered = [
+        row for row in rows
+        if str(row.get("exposure_key") or "").strip().lower() in allowed
+    ]
+    return filtered or []
+
+
 def _build_feedback_cause_candidates(
     *,
     day: date,
@@ -1163,6 +1201,56 @@ def _build_symptom_cause_candidates(
     }
     line = templates.get(gauge_key)
     return [{"line": line, "priority": 90, "source": "recent_symptom"}] if line else []
+
+
+def _build_exposure_cause_candidates(
+    *,
+    gauge_key: str,
+    exposures: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    rows = _matching_exposure_rows(gauge_key, exposures)
+    if not rows:
+        return []
+
+    if gauge_key == "health_status":
+        labels = [
+            _EXPOSURE_DISPLAY_LABELS.get(str(row.get("exposure_key") or "").strip().lower(), "")
+            for row in rows[:2]
+        ]
+        labels = [label for label in labels if label]
+        if len(labels) >= 2:
+            return [{"line": f"You logged {labels[0]} and {labels[1]} recently, so overall load is being read more cautiously.", "priority": 85, "source": "recent_exposure"}]
+        if labels:
+            return [{"line": f"You logged {labels[0]} recently, so overall load is being read more cautiously.", "priority": 85, "source": "recent_exposure"}]
+        return []
+
+    exposure_key = str(rows[0].get("exposure_key") or "").strip().lower()
+    templates = {
+        "pain": {
+            "allergen_exposure": "You logged allergen exposure recently, so sinus or head-pressure load may be contributing to pain sensitivity.",
+            "overexertion": "You logged heavy activity recently, so body load may still be contributing to pain sensitivity.",
+        },
+        "focus": {
+            "allergen_exposure": "You logged allergen exposure recently, so fog or distraction may be stacking faster.",
+        },
+        "heart": {
+            "allergen_exposure": "You logged allergen exposure recently, so irritation load may be making exertion feel heavier.",
+            "overexertion": "You logged heavy activity recently, so recovery is being read more cautiously right now.",
+        },
+        "stamina": {
+            "overexertion": "You logged heavy activity recently, so recovery load is elevated.",
+        },
+        "energy": {
+            "allergen_exposure": "You logged allergen exposure recently, so irritation load may be adding to fatigue.",
+            "overexertion": "You logged heavy activity recently, so your capacity is being read more cautiously.",
+        },
+        "sleep": {
+            "allergen_exposure": "You logged allergen exposure recently, so overnight irritation may make recovery feel less settled.",
+            "overexertion": "You logged heavy activity recently, so recovery may need a calmer wind-down tonight.",
+        },
+    }
+    line = ((templates.get(gauge_key) or {}).get(exposure_key) or "").strip()
+    return [{"line": line, "priority": 85, "source": "recent_exposure"}] if line else []
 
 
 def _build_physiology_cause_candidates(
@@ -1281,6 +1369,7 @@ def _collect_effect_buckets(
     gauge_key: str,
     related: List[Dict[str, Any]],
     symptoms: Optional[Dict[str, Any]],
+    exposures: Optional[Dict[str, Any]],
     daily_check_in: Optional[Dict[str, Any]],
     health_status_explainer: Optional[Dict[str, Any]],
 ) -> List[str]:
@@ -1295,6 +1384,12 @@ def _collect_effect_buckets(
         code = str(row.get("symptom_code") or "").strip().upper()
         for bucket in _SYMPTOM_EFFECT_BUCKETS.get(code, set()):
             add(bucket, 12 - (idx * 2))
+
+    for idx, row in enumerate(_matching_exposure_rows(gauge_key, exposures)[:2]):
+        key = str(row.get("exposure_key") or "").strip().lower()
+        intensity = max(1, min(3, int(row.get("max_intensity") or 1)))
+        for bucket in _EXPOSURE_EFFECT_BUCKETS.get(key, set()):
+            add(bucket, 8 + intensity - (idx * 1.5))
 
     for idx, driver in enumerate(_sorted_related_drivers(related)[:2]):
         key = str(driver.get("key") or "").strip()
@@ -1406,6 +1501,7 @@ def _collect_help_buckets(
     gauge_key: str,
     effect_buckets: List[str],
     related: List[Dict[str, Any]],
+    exposures: Optional[Dict[str, Any]],
     daily_check_in: Optional[Dict[str, Any]],
 ) -> List[str]:
     scores: Dict[str, float] = defaultdict(float)
@@ -1418,6 +1514,11 @@ def _collect_help_buckets(
         key = str(driver.get("key") or "").strip()
         for help_bucket in _DRIVER_HELP_BUCKETS.get(key, set()):
             scores[help_bucket] += 3.0 - (idx * 0.4)
+
+    for row in _matching_exposure_rows(gauge_key, exposures)[:2]:
+        key = str(row.get("exposure_key") or "").strip().lower()
+        for help_bucket in _EXPOSURE_HELP_BUCKETS.get(key, set()):
+            scores[help_bucket] += 2.8
 
     if gauge_key == "energy" and _normalize_token((daily_check_in or {}).get("usable_energy")) in {"limited", "very_limited"}:
         scores["hydration_pacing"] += 2.5
@@ -1473,6 +1574,7 @@ def _gauge_explanation_entry(
     related: List[Dict[str, Any]],
     profile: PersonalizationProfile,
     symptoms: Optional[Dict[str, Any]],
+    exposures: Optional[Dict[str, Any]],
     daily_check_in: Optional[Dict[str, Any]],
     health_status_explainer: Optional[Dict[str, Any]],
     personal_summary: Optional[str],
@@ -1483,6 +1585,7 @@ def _gauge_explanation_entry(
     cause_candidates = (
         _build_feedback_cause_candidates(day=day, gauge_key=gauge_key, daily_check_in=daily_check_in)
         + _build_symptom_cause_candidates(gauge_key=gauge_key, symptoms=symptoms)
+        + _build_exposure_cause_candidates(gauge_key=gauge_key, exposures=exposures)
         + _build_physiology_cause_candidates(gauge_key=gauge_key, health_status_explainer=health_status_explainer)
         + _build_driver_cause_candidates(gauge_key=gauge_key, related=related)
         + _build_pattern_cause_candidates(personal_summary)
@@ -1499,7 +1602,7 @@ def _gauge_explanation_entry(
         ordered_lines.append({**candidate, "line": line})
 
     causal_callout: Optional[str] = None
-    if ordered_lines and ordered_lines[0].get("source") in {"user_feedback", "recent_symptom"}:
+    if ordered_lines and ordered_lines[0].get("source") in {"user_feedback", "recent_symptom", "recent_exposure"}:
         causal_callout = ordered_lines[0]["line"]
 
     why_lines = [item["line"] for item in ordered_lines if item["line"] != causal_callout][:3]
@@ -1515,6 +1618,7 @@ def _gauge_explanation_entry(
         gauge_key=gauge_key,
         related=related,
         symptoms=symptoms,
+        exposures=exposures,
         daily_check_in=daily_check_in,
         health_status_explainer=health_status_explainer,
     )
@@ -1537,6 +1641,7 @@ def _gauge_explanation_entry(
         gauge_key=gauge_key,
         effect_buckets=effect_buckets,
         related=related,
+        exposures=exposures,
         daily_check_in=daily_check_in,
     )
     help_lines = _unique_lines([_render_help_line(bucket, related=related) for bucket in help_buckets])[:3]
@@ -2310,6 +2415,7 @@ def build_modal_models(
     user_tags: Optional[Iterable[Any]] = None,
     personal_relevance: Optional[Dict[str, Any]] = None,
     symptoms: Optional[Dict[str, Any]] = None,
+    exposures: Optional[Dict[str, Any]] = None,
     daily_check_in: Optional[Dict[str, Any]] = None,
     health_status_explainer: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Dict[str, Dict[str, Any]]]:
@@ -2343,6 +2449,7 @@ def build_modal_models(
             related=related,
             profile=profile,
             symptoms=symptoms,
+            exposures=exposures,
             daily_check_in=daily_check_in,
             health_status_explainer=health_status_explainer,
             personal_summary=personal_summary,

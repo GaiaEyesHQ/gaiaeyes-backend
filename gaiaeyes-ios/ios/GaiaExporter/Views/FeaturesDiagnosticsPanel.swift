@@ -5,13 +5,14 @@ struct FeaturesDiagnosticsPanel: View {
     let onCopyTrace: (() -> Void)?
     let onShareTrace: (() -> Void)?
     let onCopyToStatus: (() -> Void)?
+    @State private var showFullTrace: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             metaSection
-            PresenceRow(title: "Initial Cache", map: diag.cacheSnapshotInitial)
-            PresenceRow(title: "Final Cache", map: diag.cacheSnapshotFinal)
-            PresenceRow(title: "Payload", map: diag.payloadSummary)
+            PresenceRow(title: "Initial Cache Snapshot", map: diag.cacheSnapshotInitial)
+            PresenceRow(title: "Final Cache Snapshot", map: diag.cacheSnapshotFinal)
+            PresenceRow(title: "Payload Presence", map: diag.payloadSummary)
             cacheRefreshSection
             errorsSection
             traceSection
@@ -27,7 +28,7 @@ struct FeaturesDiagnosticsPanel: View {
                 metaRow(label: "TZ", systemImage: "globe", value: diag.tz)
             }
         } label: {
-            Text("Meta")
+            Text("Fetch Meta")
         }
     }
 
@@ -100,10 +101,13 @@ struct FeaturesDiagnosticsPanel: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Trace (latest first)")
+                    Text(showFullTrace ? "Trace (latest first)" : "Trace Preview (latest first)")
                         .font(.subheadline)
                         .bold()
                     Spacer()
+                    Button(showFullTrace ? "Collapse" : "Expand") {
+                        showFullTrace.toggle()
+                    }
                     Button("Copy") { onCopyTrace?() }
                     Button("Share") { onShareTrace?() }
                     Button("Copy to Status") { onCopyToStatus?() }
@@ -119,7 +123,7 @@ struct FeaturesDiagnosticsPanel: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(minHeight: 160, maxHeight: 260)
+                .frame(minHeight: showFullTrace ? 220 : 120, maxHeight: showFullTrace ? 360 : 180)
             }
         } label: {
             Text("Diagnostics Trace")

@@ -19,6 +19,7 @@ from bots.gauges.local_payload import get_local_payload
 from services.gauges.alerts import dedupe_alert_pills
 from services.personalization.health_context import (
     build_personalization_profile,
+    exposure_personalization_multiplier,
     gauge_personalization_multiplier,
     health_status_contextual_adjustment,
 )
@@ -120,21 +121,36 @@ _SYMPTOM_CLUSTER_WEIGHTS: Dict[str, str] = {
 }
 
 _SYMPTOM_GAUGE_CAPS: Dict[str, float] = {
-    "pain": 28.0,
+    "pain": 24.0,
     "focus": 18.0,
     "heart": 18.0,
     "stamina": 20.0,
-    "energy": 24.0,
-    "sleep": 22.0,
+    "energy": 20.0,
+    "sleep": 19.0,
     "mood": 18.0,
-    "health_status": 26.0,
+    "health_status": 22.0,
 }
 
 _CURRENT_SYMPTOM_STATE_MULTIPLIERS: Dict[str, float] = {
     "new": 1.0,
-    "ongoing": 1.0,
-    "improving": 0.55,
+    "ongoing": 0.9,
+    "improving": 0.7,
     "resolved": 0.0,
+}
+
+_EXPOSURE_GAUGE_EFFECTS: Dict[str, Dict[str, float]] = {
+    "ALLERGEN_EXPOSURE": {"pain": 0.55, "focus": 0.45, "energy": 0.35, "sleep": 0.2, "heart": 0.15},
+    "OVEREXERTION": {"stamina": 1.0, "energy": 0.75, "pain": 0.35, "sleep": 0.2, "heart": 0.15},
+}
+
+_EXPOSURE_GAUGE_CAPS: Dict[str, float] = {
+    "pain": 10.0,
+    "focus": 8.0,
+    "heart": 6.0,
+    "stamina": 12.0,
+    "energy": 10.0,
+    "sleep": 8.0,
+    "mood": 5.0,
 }
 
 
@@ -283,25 +299,25 @@ def _severity_points(value: Any) -> float:
     if severity <= 2.0:
         return 2.0
     if severity <= 4.0:
-        return 5.0
+        return 4.0
     if severity <= 6.0:
-        return 9.0
+        return 7.0
     if severity <= 8.0:
-        return 14.0
-    return 18.0
+        return 10.0
+    return 13.0
 
 
 def _recency_multiplier(ts_utc: Optional[datetime], *, asof: Optional[datetime] = None) -> float:
     if ts_utc is None:
-        return 0.4
+        return 0.25
     anchor = asof or datetime.now(timezone.utc)
     age_hours = max(0.0, (anchor - ts_utc.astimezone(timezone.utc)).total_seconds() / 3600.0)
     if age_hours <= 3.0:
         return 1.0
     if age_hours <= 8.0:
-        return 0.7
+        return 0.6
     if age_hours <= 24.0:
-        return 0.4
+        return 0.25
     return 0.0
 
 
@@ -378,7 +394,7 @@ def _build_symptom_signal_summary(events: List[Dict[str, Any]]) -> Dict[str, Any
 
     cluster_bonus = 0.0
     if len(cluster_keys) >= 2:
-        cluster_bonus = min(8.0, float(len(cluster_keys) - 1) * 3.0)
+        cluster_bonus = min(5.0, float(len(cluster_keys) - 1) * 2.0)
         gauge_boosts["health_status"] = gauge_boosts.get("health_status", 0.0) + cluster_bonus
         if recent_gauge_boosts.get("health_status", 0.0) > 0:
             recent_gauge_boosts["health_status"] = recent_gauge_boosts.get("health_status", 0.0) + cluster_bonus
@@ -437,6 +453,201 @@ def fetch_recent_symptom_gauge_context(user_id: str, day: date) -> Dict[str, Any
     return {
         "gauge_recent_log_boosts": summary.get("recent_gauge_boosts") or {},
         "last_symptom_update_at": summary.get("last_symptom_update_at"),
+    }
+
+
+def _exposure_intensity_points(value: Any) -> float:
+    try:
+        intensity = int(value)
+    except Exception:
+        intensity = 1
+    intensity = max(1, min(3, intensity))
+    if intensity == 1:
+        return 3.0
+    if intensity == 2:
+        return 5.0
+    return 7.0
+
+
+def _exposure_recency_multiplier(
+    exposure_key: str,
+    ts_utc: Optional[datetime],
+    *,
+    asof: Optional[datetime] = None,
+) -> float:
+    if ts_utc is None:
+        return 0.0
+    anchor = asof or datetime.now(timezone.utc)
+    age_hours = max(0.0, (anchor - ts_utc.astimezone(timezone.utc)).total_seconds() / 3600.0)
+    if exposure_key == "OVEREXERTION":
+        if age_hours <= 12.0:
+            return 1.0
+        if age_hours <= 24.0:
+            return 0.7
+        if age_hours <= 48.0:
+            return 0.35
+        return 0.0
+    if exposure_key == "ALLERGEN_EXPOSURE":
+        if age_hours <= 24.0:
+            return 1.0
+        if age_hours <= 48.0:
+            return 0.6
+        if age_hours <= 72.0:
+            return 0.3
+        return 0.0
+    return 0.0
+
+
+def _is_recent_exposure(
+    exposure_key: str,
+    ts_utc: Optional[datetime],
+    *,
+    asof: Optional[datetime] = None,
+) -> bool:
+    if ts_utc is None:
+        return False
+    anchor = asof or datetime.now(timezone.utc)
+    age_hours = max(0.0, (anchor - ts_utc.astimezone(timezone.utc)).total_seconds() / 3600.0)
+    if exposure_key == "OVEREXERTION":
+        return age_hours <= 18.0
+    if exposure_key == "ALLERGEN_EXPOSURE":
+        return age_hours <= 24.0
+    return False
+
+
+def fetch_exposure_summary(
+    user_id: str,
+    day: date,
+    *,
+    profile=None,
+) -> Dict[str, Any]:
+    cols = table_columns("raw", "user_exposure_events")
+    if not cols:
+        return {}
+
+    start, end = _local_day_bounds(day)
+    window_start = start - timedelta(hours=72)
+    try:
+        rows = pg.fetch(
+            """
+            select exposure_key, intensity, event_ts_utc, source, note_text
+              from raw.user_exposure_events
+             where user_id = %s
+               and event_ts_utc >= %s
+               and event_ts_utc < %s
+             order by event_ts_utc desc, created_at desc
+            """,
+            user_id,
+            window_start,
+            end,
+        )
+    except Exception:
+        rows = []
+
+    asof = min(datetime.now(timezone.utc), end)
+    return _build_exposure_signal_summary(rows or [], asof=asof, profile=profile or build_personalization_profile([]))
+
+
+def _build_exposure_signal_summary(
+    events: List[Dict[str, Any]],
+    *,
+    asof: datetime,
+    profile,
+) -> Dict[str, Any]:
+    gauge_boosts: Dict[str, float] = {key: 0.0 for key in _GAUGE_KEYS}
+    recent_gauge_boosts: Dict[str, float] = {key: 0.0 for key in _GAUGE_KEYS}
+    grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    last_exposure_at: Optional[datetime] = None
+    max_intensity: Optional[int] = None
+
+    for raw in events:
+        exposure_key = _normalize_symptom_code(raw.get("exposure_key"))
+        effects = _EXPOSURE_GAUGE_EFFECTS.get(exposure_key) or {}
+        if not effects:
+            continue
+        ts_utc = raw.get("event_ts_utc")
+        if isinstance(ts_utc, str):
+            try:
+                ts_utc = datetime.fromisoformat(ts_utc.replace("Z", "+00:00"))
+            except Exception:
+                ts_utc = None
+        if isinstance(ts_utc, datetime) and ts_utc.tzinfo is None:
+            ts_utc = ts_utc.replace(tzinfo=timezone.utc)
+
+        recency_mult = _exposure_recency_multiplier(exposure_key, ts_utc, asof=asof)
+        if recency_mult <= 0:
+            continue
+
+        intensity = max(1, min(3, int(_safe_float(raw.get("intensity")) or 1)))
+        grouped[exposure_key].append(
+            {
+                "exposure_key": exposure_key,
+                "intensity": intensity,
+                "event_ts_utc": ts_utc,
+                "source": raw.get("source"),
+                "note_text": raw.get("note_text"),
+            }
+        )
+        max_intensity = intensity if max_intensity is None else max(max_intensity, intensity)
+        if isinstance(ts_utc, datetime):
+            last_exposure_at = ts_utc if last_exposure_at is None else max(last_exposure_at, ts_utc)
+
+        intensity_points = _exposure_intensity_points(intensity)
+        for gauge_key, weight in effects.items():
+            multiplier = exposure_personalization_multiplier(
+                profile,
+                exposure_key=exposure_key.lower(),
+                gauge_key=gauge_key,
+            )
+            contribution = intensity_points * float(weight) * recency_mult * multiplier
+            gauge_boosts[gauge_key] = gauge_boosts.get(gauge_key, 0.0) + contribution
+            if _is_recent_exposure(exposure_key, ts_utc, asof=asof):
+                recent_gauge_boosts[gauge_key] = recent_gauge_boosts.get(gauge_key, 0.0) + (
+                    intensity_points * float(weight) * multiplier
+                )
+
+    top_exposures: List[Dict[str, Any]] = []
+    for key, rows in grouped.items():
+        last_ts = max(
+            (item.get("event_ts_utc") for item in rows if isinstance(item.get("event_ts_utc"), datetime)),
+            default=None,
+        )
+        top_exposures.append(
+            {
+                "exposure_key": key.lower(),
+                "events": len(rows),
+                "max_intensity": max(int(item.get("intensity") or 1) for item in rows),
+                "last_ts": _serialize_iso_utc(last_ts),
+                "latest_source": str(rows[0].get("source") or "manual"),
+            }
+        )
+    top_exposures.sort(
+        key=lambda item: (
+            -int(item.get("events") or 0),
+            -int(item.get("max_intensity") or 0),
+            str(item.get("last_ts") or ""),
+        )
+    )
+
+    gauge_boosts = {
+        key: round(min(_EXPOSURE_GAUGE_CAPS.get(key, value), value), 2)
+        for key, value in gauge_boosts.items()
+        if value > 0
+    }
+    recent_gauge_boosts = {
+        key: round(min(_EXPOSURE_GAUGE_CAPS.get(key, value), value), 2)
+        for key, value in recent_gauge_boosts.items()
+        if value > 0
+    }
+
+    return {
+        "total_72h": len(events),
+        "max_intensity": max_intensity,
+        "top_exposures": top_exposures[:5],
+        "gauge_boosts": gauge_boosts,
+        "recent_gauge_boosts": recent_gauge_boosts,
+        "last_exposure_at": _serialize_iso_utc(last_exposure_at),
+        "recent_matching_gauges": sorted(key for key, value in recent_gauge_boosts.items() if value > 0),
     }
 
 
@@ -914,6 +1125,56 @@ def apply_symptom_gauge_adjustments(
         },
         "last_symptom_update_at": symptoms.get("last_symptom_update_at"),
         "health_status_symptom_boost": round(float(symptoms.get("health_status_symptom_boost") or 0.0), 2),
+    }
+
+
+def apply_exposure_gauge_adjustments(
+    gauges: Dict[str, Optional[float]],
+    exposures: Dict[str, Any],
+) -> Tuple[Dict[str, Optional[float]], Dict[str, Any]]:
+    adjusted = dict(gauges)
+    applied: Dict[str, float] = {}
+    drivers: List[Dict[str, Any]] = []
+
+    all_boosts = exposures.get("gauge_boosts") or {}
+    recent_boosts = exposures.get("recent_gauge_boosts") or {}
+
+    for row in exposures.get("top_exposures") or []:
+        exposure_key = _normalize_token(row.get("exposure_key"))
+        if not exposure_key:
+            continue
+        drivers.append(
+            {
+                "exposure_key": exposure_key,
+                "events": int(row.get("events") or 0),
+                "max_intensity": int(row.get("max_intensity") or 1),
+                "last_ts": row.get("last_ts"),
+                "latest_source": row.get("latest_source"),
+            }
+        )
+
+    for gauge_key in _GAUGE_KEYS:
+        points = _safe_float(all_boosts.get(gauge_key))
+        if points is None or points <= 0:
+            continue
+        applied[gauge_key] = points
+
+    for gauge_key, points in applied.items():
+        current = _safe_float(adjusted.get(gauge_key))
+        if current is None:
+            continue
+        capped_points = min(points, _EXPOSURE_GAUGE_CAPS.get(gauge_key, points))
+        adjusted[gauge_key] = round(min(100.0, current + capped_points), 2)
+
+    return adjusted, {
+        "drivers": drivers,
+        "adjustments": {key: round(value, 2) for key, value in applied.items() if value > 0},
+        "recent_adjustments": {
+            key: round(float(value), 2)
+            for key, value in recent_boosts.items()
+            if key in _GAUGE_KEYS and _safe_float(value) and float(value) > 0
+        },
+        "last_exposure_at": exposures.get("last_exposure_at"),
     }
 
 
@@ -1487,7 +1748,9 @@ def score_user_day(
     local_payload = local_payload or fetch_local_payload(user_id, day)
     active_states = resolve_signals(user_id, day, local_payload=local_payload, definition=definition)
     tags = fetch_user_tags(user_id)
+    profile = build_personalization_profile(tags)
     symptoms = fetch_symptom_summary(user_id, day)
+    exposures = fetch_exposure_summary(user_id, day, profile=profile)
     daily_checkins = fetch_recent_daily_checkins(user_id, day)
     wearable = fetch_local_health_summary(user_id)
     today_features = fetch_daily_features(user_id, day)
@@ -1501,10 +1764,9 @@ def score_user_day(
         hrv_source=hrv_source,
         camera_stress_index=camera_stress_index,
     )
-    profile = build_personalization_profile(tags)
-
     gauges = _score_gauges(definition, active_states, profile=profile)
     gauges, symptom_gauge_meta = apply_symptom_gauge_adjustments(gauges, symptoms)
+    gauges, exposure_gauge_meta = apply_exposure_gauge_adjustments(gauges, exposures)
     gauges, daily_checkin_energy_meta = apply_daily_check_in_energy_adjustment(gauges, daily_checkins, symptoms)
     if health_status is not None:
         health_adjustment = health_status_contextual_adjustment(profile, active_states)
@@ -1533,10 +1795,12 @@ def score_user_day(
         "local_payload": local_payload,
         "tags": tags,
         "symptoms": symptoms,
+        "exposures": exposures,
         "daily_checkins": daily_checkins,
         "wearable": wearable,
         "health_status_inputs": health_meta,
         "symptom_gauge_inputs": symptom_gauge_meta,
+        "exposure_gauge_inputs": exposure_gauge_meta,
         "daily_checkin_energy_inputs": daily_checkin_energy_meta,
     }
     inputs_hash = _hash_inputs(inputs_snapshot)

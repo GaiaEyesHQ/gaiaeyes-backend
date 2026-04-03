@@ -26,6 +26,7 @@ _PAIN_VALUES = {"none", "a_little", "noticeable", "strong"}
 _MOOD_VALUES = {"calm", "slightly_off", "noticeable", "strong"}
 _SLEEP_IMPACT_VALUES = {"yes_strongly", "yes_somewhat", "not_much", "unsure"}
 _PREDICTION_MATCH_VALUES = {"mostly_right", "partly_right", "not_really"}
+_EXPOSURE_VALUES = {"allergen_exposure", "overexertion"}
 
 
 def _require_user_id(request: Request) -> str:
@@ -97,6 +98,7 @@ class DailyCheckInEntryOut(BaseModel):
     prediction_match: Optional[str] = None
     note_text: Optional[str] = None
     completed_at: Optional[str] = None
+    exposures: List[str] = Field(default_factory=list)
 
 
 class FeedbackCalibrationSummaryOut(BaseModel):
@@ -121,6 +123,7 @@ class DailyCheckInSettingsOut(BaseModel):
 class DailyCheckInStatusOut(BaseModel):
     prompt: Optional[DailyCheckInPromptOut] = None
     latest_entry: Optional[DailyCheckInEntryOut] = None
+    target_day: Optional[str] = None
     calibration_summary: FeedbackCalibrationSummaryOut
     settings: DailyCheckInSettingsOut
 
@@ -152,6 +155,7 @@ class DailyCheckInEntryIn(BaseModel):
     sleep_impact: Optional[str] = None
     prediction_match: Optional[str] = None
     note_text: Optional[str] = None
+    exposures: List[str] = Field(default_factory=list)
     completed_at: Optional[datetime] = None
 
 
@@ -201,6 +205,7 @@ def _build_entry_out(payload: Dict[str, Any]) -> DailyCheckInEntryOut:
         prediction_match=_trimmed_text(payload.get("prediction_match")),
         note_text=_trimmed_text(payload.get("note_text")),
         completed_at=payload.get("completed_at"),
+        exposures=[str(value) for value in (payload.get("exposures") or []) if str(value or "").strip()],
     )
 
 
@@ -232,6 +237,7 @@ async def get_daily_check_in_status(request: Request, conn=Depends(get_db)):
             data=DailyCheckInStatusOut(
                 prompt=_build_prompt_out(status["prompt"]) if status.get("prompt") else None,
                 latest_entry=_build_entry_out(status["latest_entry"]) if status.get("latest_entry") else None,
+                target_day=_trimmed_text(status.get("target_day")),
                 calibration_summary=FeedbackCalibrationSummaryOut(**(status.get("calibration_summary") or {})),
                 settings=DailyCheckInSettingsOut(**(status.get("settings") or {})),
             )
@@ -269,6 +275,11 @@ async def submit_daily_check_in(
             sleep_impact=_validate_choice(payload.sleep_impact, _SLEEP_IMPACT_VALUES, detail="invalid sleep impact value") if payload.sleep_impact else None,
             prediction_match=_validate_choice(payload.prediction_match, _PREDICTION_MATCH_VALUES, detail="invalid prediction-match value") if payload.prediction_match else None,
             note_text=_trimmed_text(payload.note_text),
+            exposures=[
+                _validate_choice(str(value), _EXPOSURE_VALUES, detail="invalid exposure value")
+                for value in payload.exposures
+                if str(value or "").strip()
+            ],
             completed_at=payload.completed_at,
         )
     except HTTPException:

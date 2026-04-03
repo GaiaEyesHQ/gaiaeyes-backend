@@ -66,6 +66,63 @@ private struct DailyCheckInChoiceGrid: View {
     }
 }
 
+private struct DailyCheckInMultiChoiceGrid: View {
+    let title: String
+    let subtitle: String?
+    @Binding var selection: Set<String>
+    let choices: [DailyCheckInChoice]
+
+    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.headline)
+                .foregroundColor(.white)
+
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.68))
+            }
+
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(choices) { choice in
+                    let isSelected = selection.contains(choice.id)
+                    Button {
+                        if isSelected {
+                            selection.remove(choice.id)
+                        } else {
+                            selection.insert(choice.id)
+                        }
+                    } label: {
+                        Text(choice.label)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(isSelected ? Color(red: 0.35, green: 0.58, blue: 0.92).opacity(0.28) : Color.white.opacity(0.05))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(isSelected ? Color(red: 0.35, green: 0.58, blue: 0.92) : Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
 struct DailyCheckInView: View {
     let api: APIClient
     var mode: ExperienceMode = .scientific
@@ -93,6 +150,7 @@ struct DailyCheckInView: View {
     @State private var sleepImpact: String = ""
     @State private var predictionMatch: String = ""
     @State private var noteText: String = ""
+    @State private var exposures: Set<String> = []
 
     init(
         api: APIClient,
@@ -124,11 +182,11 @@ struct DailyCheckInView: View {
     }
 
     private var targetDay: String {
+        if let statusTargetDay = status?.targetDay ?? initialStatus?.targetDay, !statusTargetDay.isEmpty {
+            return statusTargetDay
+        }
         if let promptDay = prompt?.day, !promptDay.isEmpty {
             return promptDay
-        }
-        if let entryDay = latestEntry?.day, !entryDay.isEmpty {
-            return entryDay
         }
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
@@ -255,6 +313,13 @@ struct DailyCheckInView: View {
         ]
     }
 
+    private var exposureChoices: [DailyCheckInChoice] {
+        [
+            DailyCheckInChoice(id: "overexertion", label: "Heavy activity / overdid it"),
+            DailyCheckInChoice(id: "allergen_exposure", label: "Allergen exposure"),
+        ]
+    }
+
     private var painTypeChoices: [DailyCheckInChoice] {
         let suggested = prompt?.suggestedPainTypes ?? []
         let base = suggested.isEmpty ? ["sinus_pressure", "joint_pain", "nerve_pain", "muscle_pain", "head_pressure", "cycle_related_pain", "other"] : suggested
@@ -326,6 +391,13 @@ struct DailyCheckInView: View {
                     subtitle: nil,
                     selection: $systemLoad,
                     choices: systemLoadChoices
+                )
+
+                DailyCheckInMultiChoiceGrid(
+                    title: "Anything likely affected today?",
+                    subtitle: "Optional, but useful when gauges may be reading a confounder like overexertion or allergen load.",
+                    selection: $exposures,
+                    choices: exposureChoices
                 )
 
                 DailyCheckInChoiceGrid(
@@ -553,6 +625,7 @@ struct DailyCheckInView: View {
             let nextStatus = envelope.payload ?? DailyCheckInStatus(
                 prompt: nil,
                 latestEntry: nil,
+                targetDay: nil,
                 calibrationSummary: FeedbackCalibrationSummary(
                     windowDays: 21,
                     totalCheckins: 0,
@@ -590,7 +663,10 @@ struct DailyCheckInView: View {
     }
 
     private func seedForm(from status: DailyCheckInStatus) {
-        guard let entry = status.latestEntry else { return }
+        guard
+            let entry = status.latestEntry,
+            entry.day == (status.targetDay ?? prompt?.day ?? entry.day)
+        else { return }
         comparedToYesterday = entry.comparedToYesterday
         energyLevel = entry.energyLevel
         usableEnergy = entry.usableEnergy
@@ -603,12 +679,14 @@ struct DailyCheckInView: View {
         sleepImpact = validSleepImpactChoiceIds.contains(entry.sleepImpact ?? "") ? (entry.sleepImpact ?? "") : ""
         predictionMatch = entry.predictionMatch ?? ""
         noteText = entry.noteText ?? ""
+        exposures = Set(entry.exposures)
     }
 
     private func mergedStatus(with entry: DailyCheckInEntry) -> DailyCheckInStatus {
         DailyCheckInStatus(
             prompt: nil,
             latestEntry: entry,
+            targetDay: entry.day,
             calibrationSummary: fallbackCalibrationSummary,
             settings: fallbackSettings
         )
@@ -636,6 +714,7 @@ struct DailyCheckInView: View {
                 sleepImpact: sleepImpact.nilIfBlank,
                 predictionMatch: predictionMatch.nilIfBlank,
                 noteText: noteText.nilIfBlank,
+                exposures: Array(exposures).sorted(),
                 completedAt: Date()
             )
             if envelope.ok == false {
@@ -656,7 +735,8 @@ struct DailyCheckInView: View {
                 sleepImpact: sleepImpact.nilIfBlank,
                 predictionMatch: predictionMatch.nilIfBlank,
                 noteText: noteText.nilIfBlank,
-                completedAt: ISO8601DateFormatter().string(from: Date())
+                completedAt: ISO8601DateFormatter().string(from: Date()),
+                exposures: Array(exposures).sorted()
             )
             let nextStatus = mergedStatus(with: savedEntry)
             AppAnalytics.track(

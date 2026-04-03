@@ -18,6 +18,7 @@ from app.db import ulf as ulf_db
 from app.security.auth import require_read_auth, require_write_auth
 from bots.definitions.load_definition_base import load_definition_base
 from bots.gauges.gauge_scorer import (
+    fetch_exposure_summary,
     fetch_health_status_context,
     fetch_recent_symptom_gauge_context,
     fetch_symptom_summary,
@@ -35,6 +36,7 @@ from services.patterns.personal_relevance import (
     fetch_best_pattern_rows,
     fetch_recent_outcome_summary,
 )
+from services.personalization.health_context import build_personalization_profile
 from services.signal_bar import build_signal_bar
 
 
@@ -549,8 +551,13 @@ async def dashboard(
         health_status_explainer if isinstance(health_status_explainer, dict) else {}
     )
     symptom_gauge_context = symptom_gauge_context if isinstance(symptom_gauge_context, dict) else {}
+    profile = build_personalization_profile(user_tags)
+    exposure_summary = await asyncio.to_thread(fetch_exposure_summary, user_id, day, profile=profile)
+    exposure_summary = exposure_summary if isinstance(exposure_summary, dict) else {}
     out["gauge_recent_log_boosts"] = symptom_gauge_context.get("gauge_recent_log_boosts") or {}
     out["last_symptom_update_at"] = symptom_gauge_context.get("last_symptom_update_at")
+    out["recent_exposures"] = exposure_summary.get("top_exposures") or []
+    out["last_exposure_at"] = exposure_summary.get("last_exposure_at")
     if isinstance(out.get("gauges_meta"), dict):
         out["gauges_meta"] = _apply_recent_symptom_meta_overrides(
             out["gauges_meta"],
@@ -571,6 +578,7 @@ async def dashboard(
         user_tags=user_tags,
         personal_relevance=personal_relevance,
         symptoms=symptom_summary if isinstance(symptom_summary, dict) else {},
+        exposures=exposure_summary,
         daily_check_in=latest_daily_check_in if isinstance(latest_daily_check_in, dict) else {},
         health_status_explainer=health_status_explainer if isinstance(health_status_explainer, dict) else {},
     )
@@ -600,6 +608,11 @@ async def dashboard(
             "drivers_count": len(ranked_drivers),
             "health_status_explainer_available": bool(out.get("health_status_explainer")),
             "recent_symptom_gauges": sorted((out.get("gauge_recent_log_boosts") or {}).keys()),
+            "recent_exposure_keys": sorted(
+                str(item.get("exposure_key") or "").strip()
+                for item in out.get("recent_exposures") or []
+                if isinstance(item, dict) and str(item.get("exposure_key") or "").strip()
+            ),
             "geomagnetic_context_available": bool(out.get("geomagnetic_context")),
         }
 

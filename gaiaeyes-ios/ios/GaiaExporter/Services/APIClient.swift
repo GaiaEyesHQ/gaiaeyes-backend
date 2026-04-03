@@ -521,6 +521,7 @@ final class APIClient {
         let sleepImpact: String?
         let predictionMatch: String?
         let noteText: String?
+        let exposures: [String]
         let completedAt: String?
 
         enum CodingKeys: String, CodingKey {
@@ -538,6 +539,7 @@ final class APIClient {
             case sleepImpact = "sleep_impact"
             case predictionMatch = "prediction_match"
             case noteText = "note_text"
+            case exposures
             case completedAt = "completed_at"
         }
     }
@@ -690,6 +692,7 @@ final class APIClient {
         sleepImpact: String? = nil,
         predictionMatch: String? = nil,
         noteText: String? = nil,
+        exposures: [String] = [],
         completedAt: Date? = nil
     ) async throws -> Envelope<DailyCheckInEntry> {
         let payload = DailyCheckInEntryPayload(
@@ -707,6 +710,7 @@ final class APIClient {
             sleepImpact: sleepImpact,
             predictionMatch: predictionMatch,
             noteText: noteText,
+            exposures: exposures,
             completedAt: iso8601String(completedAt)
         )
         return try await postJSON(

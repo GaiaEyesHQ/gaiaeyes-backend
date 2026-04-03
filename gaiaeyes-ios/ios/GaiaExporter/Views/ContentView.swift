@@ -7,6 +7,7 @@ import UIKit
 import CoreLocation
 #endif
 import Foundation
+import HealthKit
 import WebKit
 import Charts
 #if canImport(SDWebImage)
@@ -1961,6 +1962,404 @@ private final class OneShotLocationProvider: NSObject, CLLocationManagerDelegate
 }
 #endif
 
+private enum DebugCacheTarget: String, CaseIterable, Identifiable {
+    case dashboardSnapshot = "Dashboard snapshot"
+    case featuresSnapshot = "Features snapshot"
+    case localConditions = "Local conditions"
+    case spaceForecast = "Space forecast"
+    case patterns = "Patterns"
+    case all = "All debug caches"
+
+    var id: String { rawValue }
+
+    var helpText: String {
+        switch self {
+        case .dashboardSnapshot:
+            return "Clears the cached dashboard payload and current in-memory snapshot."
+        case .featuresSnapshot:
+            return "Clears the features/today cache and diagnostics snapshot."
+        case .localConditions:
+            return "Clears the current local weather / AQI / allergen snapshot."
+        case .spaceForecast:
+            return "Clears cached space outlook, visuals, and series payloads."
+        case .patterns:
+            return "Clears cached pattern payloads."
+        case .all:
+            return "Clears every debug cache target listed above."
+        }
+    }
+}
+
+private enum DebugFreshnessState: String {
+    case fresh
+    case stale
+    case missing
+
+    var title: String { rawValue.capitalized }
+}
+
+private struct DebugFreshnessItem: Identifiable {
+    let id: String
+    let title: String
+    let endpoint: String
+    let sourceKind: String
+    let updatedAt: Date?
+    let state: DebugFreshnessState
+    let detail: String?
+}
+
+private struct DebugHealthMetricItem: Identifiable {
+    let id: String
+    let title: String
+    let permissionStatus: String
+    let backgroundDeliveryStatus: String
+    let lastObserverAt: Date?
+    let lastAnchorAt: Date?
+    let lastSampleAt: Date?
+    let sourceHint: String?
+}
+
+private struct DebugBillingSnapshot {
+    let planTitle: String
+    let signedInState: String
+    let activeEntitlementIDs: [String]
+    let customerState: String
+    let revenueCatState: String
+    let offerEligibility: String
+    let lastSyncAt: Date?
+    let productFetchStatus: String
+    let error: String?
+}
+
+private struct DebugProfileSnapshot {
+    let onboardingCompleted: Bool
+    let onboardingStep: String
+    let guide: String
+    let mode: String
+    let tone: String
+    let temperatureUnit: String
+    let locationMode: String
+    let healthConnected: String
+    let notificationsEnabled: String
+    let symptomFollowUps: String
+    let currentUserID: String
+    let devUserID: String
+}
+
+private struct DebugFeatureInputSnapshot {
+    let topDrivers: [String]
+    let gaugeSummary: [String]
+    let earthscopeBranch: String
+    let activeSymptomsSummary: String
+    let localValues: [String]
+    let spaceValues: [String]
+    let sourceNotes: [String]
+}
+
+private extension OnboardingStep {
+    var titleCased: String {
+        rawValue.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+}
+
+private struct LaunchDebugToolkitPanel: View {
+    let freshnessItems: [DebugFreshnessItem]
+    let healthItems: [DebugHealthMetricItem]
+    let billing: DebugBillingSnapshot
+    let profile: DebugProfileSnapshot
+    let featureInputs: DebugFeatureInputSnapshot
+    @Binding var selectedCacheTarget: DebugCacheTarget
+    let isBillingLoading: Bool
+    let isOnboardingResetInFlight: Bool
+    let message: String?
+    let sleepFreshnessNote: String
+    let onRefreshDashboard: () -> Void
+    let onRefreshLocalWeather: () -> Void
+    let onRefreshHealth: () -> Void
+    let onRefreshEntitlements: () -> Void
+    let onRestorePurchases: () -> Void
+    let onResetOnboarding: () -> Void
+    let onClearCache: () -> Void
+    let onCopyBundle: () -> Void
+    let onShareBundle: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            GroupBox {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Label("Launch Debug Toolkit", systemImage: "ladybug")
+                            .font(.headline)
+                        Spacer()
+                        Button("Copy Bundle", action: onCopyBundle)
+                            .buttonStyle(.bordered)
+                        Button("Share Bundle", action: onShareBundle)
+                            .buttonStyle(.borderedProminent)
+                    }
+                    Text("Developer-only launch checks, refresh actions, and exportable bug-report context.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    if let message, !message.isEmpty {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            } label: {
+                Label("Toolkit", systemImage: "wrench.and.screwdriver")
+            }
+
+            GroupBox {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(freshnessItems) { item in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.title)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("\(item.sourceKind) • \(item.endpoint)")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                statusBadge(item.state.title, state: item.state)
+                            }
+                            HStack(spacing: 12) {
+                                debugMeta(label: "Updated", value: formatted(item.updatedAt))
+                                debugMeta(label: "Age", value: age(item.updatedAt))
+                            }
+                            if let detail = item.detail, !detail.isEmpty {
+                                Text(detail)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        if item.id != freshnessItems.last?.id {
+                            Divider()
+                        }
+                    }
+                }
+            } label: {
+                Label("Data Freshness", systemImage: "clock.badge.checkmark")
+            }
+
+            GroupBox {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("HealthKit does not expose exact per-type read permission status after the prompt. This section shows selected metrics plus observed read/sync evidence instead of write-sharing status.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    ForEach(healthItems) { item in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .top) {
+                                Text(item.title)
+                                    .font(.subheadline.weight(.semibold))
+                                Spacer()
+                                statusBadge(item.backgroundDeliveryStatus, state: badgeState(for: item.backgroundDeliveryStatus))
+                            }
+                            Text("Read status: \(item.permissionStatus)")
+                                .font(.caption)
+                            Text("Observer: \(formatted(item.lastObserverAt)) • Anchor: \(formatted(item.lastAnchorAt))")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Text("Last sample: \(formatted(item.lastSampleAt)) • Source: \(item.sourceHint ?? "—")")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        if item.id != healthItems.last?.id {
+                            Divider()
+                        }
+                    }
+                    Text(sleepFreshnessNote)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            } label: {
+                Label("Health Sync", systemImage: "heart.text.square")
+            }
+
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    debugLine("Plan", billing.planTitle)
+                    debugLine("Session", billing.signedInState)
+                    debugLine("Customer state", billing.customerState)
+                    debugLine("Active entitlements", billing.activeEntitlementIDs.isEmpty ? "None" : billing.activeEntitlementIDs.joined(separator: ", "))
+                    debugLine("RevenueCat", billing.revenueCatState)
+                    debugLine("Offer / intro", billing.offerEligibility)
+                    debugLine("Last receipt refresh", formatted(billing.lastSyncAt))
+                    debugLine("Product fetch", billing.productFetchStatus)
+                    if let error = billing.error, !error.isEmpty {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    HStack {
+                        if isBillingLoading {
+                            ProgressView().scaleEffect(0.8)
+                        }
+                        Button("Refresh Entitlements", action: onRefreshEntitlements)
+                            .buttonStyle(.bordered)
+                        Button("Restore Purchases (Debug)", action: onRestorePurchases)
+                            .buttonStyle(.bordered)
+                    }
+                }
+            } label: {
+                Label("Billing & Entitlements", systemImage: "creditcard")
+            }
+
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    debugLine("Onboarding complete", profile.onboardingCompleted ? "Yes" : "No")
+                    debugLine("Current onboarding step", profile.onboardingStep)
+                    debugLine("Guide", profile.guide)
+                    debugLine("Mode", profile.mode)
+                    debugLine("Tone", profile.tone)
+                    debugLine("Temperature unit", profile.temperatureUnit)
+                    debugLine("Location mode", profile.locationMode)
+                    debugLine("Health connected", profile.healthConnected)
+                    debugLine("Notifications enabled", profile.notificationsEnabled)
+                    debugLine("Symptom follow-ups", profile.symptomFollowUps)
+                    debugLine("Current user", profile.currentUserID)
+                    debugLine("Dev test user", profile.devUserID)
+                }
+            } label: {
+                Label("Onboarding & Profile", systemImage: "person.crop.circle")
+            }
+
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    debugLine("Top drivers", featureInputs.topDrivers.isEmpty ? "None" : featureInputs.topDrivers.joined(separator: " | "))
+                    debugLine("Gauge summary", featureInputs.gaugeSummary.isEmpty ? "None" : featureInputs.gaugeSummary.joined(separator: " | "))
+                    debugLine("EarthScope branch", featureInputs.earthscopeBranch)
+                    debugLine("Current symptoms", featureInputs.activeSymptomsSummary)
+                    debugLine("Local values", featureInputs.localValues.isEmpty ? "None" : featureInputs.localValues.joined(separator: " | "))
+                    debugLine("Space values", featureInputs.spaceValues.isEmpty ? "None" : featureInputs.spaceValues.joined(separator: " | "))
+                    debugLine("Snapshot notes", featureInputs.sourceNotes.isEmpty ? "None" : featureInputs.sourceNotes.joined(separator: " | "))
+                }
+            } label: {
+                Label("Feature Inputs", systemImage: "slider.horizontal.below.square.and.square.filled")
+            }
+
+            GroupBox {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Debug-only actions")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Potentially destructive actions stay here so they are not exposed in the main experience.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    HStack {
+                        Button("Refresh Dashboard", action: onRefreshDashboard)
+                            .buttonStyle(.bordered)
+                        Button("Refresh Local Weather", action: onRefreshLocalWeather)
+                            .buttonStyle(.bordered)
+                    }
+                    HStack {
+                        Button("Run Health Catch-Up", action: onRefreshHealth)
+                            .buttonStyle(.bordered)
+                        Button(action: onResetOnboarding) {
+                            HStack {
+                                if isOnboardingResetInFlight {
+                                    ProgressView().scaleEffect(0.8)
+                                }
+                                Text(isOnboardingResetInFlight ? "Resetting..." : "Reset Onboarding")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isOnboardingResetInFlight)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("Cache target", selection: $selectedCacheTarget) {
+                            ForEach(DebugCacheTarget.allCases) { target in
+                                Text(target.rawValue).tag(target)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        Text(selectedCacheTarget.helpText)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Button("Clear Selected Cache", action: onClearCache)
+                            .buttonStyle(.borderedProminent)
+                            .tint(.orange)
+                    }
+                }
+            } label: {
+                Label("Debug Actions", systemImage: "exclamationmark.triangle")
+            }
+        }
+    }
+
+    private func formatted(_ date: Date?) -> String {
+        guard let date else { return "—" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    private func age(_ date: Date?) -> String {
+        guard let date else { return "—" }
+        let seconds = max(0, Int(Date().timeIntervalSince(date)))
+        if seconds < 60 { return "\(seconds)s" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(minutes)m" }
+        let hours = minutes / 60
+        if hours < 48 { return "\(hours)h" }
+        return "\(hours / 24)d"
+    }
+
+    private func badgeState(for value: String) -> DebugFreshnessState {
+        switch value.lowercased() {
+        case "enabled", "authorized":
+            return .fresh
+        case "failed", "denied":
+            return .stale
+        default:
+            return .missing
+        }
+    }
+
+    private func statusBadge(_ title: String, state: DebugFreshnessState) -> some View {
+        Text(title)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(badgeColor(state).opacity(0.18))
+            .foregroundColor(badgeColor(state))
+            .clipShape(Capsule())
+    }
+
+    private func badgeColor(_ state: DebugFreshnessState) -> Color {
+        switch state {
+        case .fresh:
+            return .green
+        case .stale:
+            return .orange
+        case .missing:
+            return .secondary
+        }
+    }
+
+    private func debugMeta(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.caption.monospaced())
+        }
+    }
+
+    private func debugLine(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.caption)
+                .textSelection(.enabled)
+        }
+    }
+}
+
 struct ContentView: View {
 #if os(iOS)
     private struct FeatureFetchState {
@@ -1993,12 +2392,16 @@ struct ContentView: View {
     @State private var lastFeaturesAttemptAt: Date = .distantPast
     @State private var lastFeaturesSuccessAt: Date = .distantPast
     @StateObject private var state = AppState()
+    @EnvironmentObject private var auth: AuthManager
     @AppStorage("features_cache_json") private var featuresCacheJSON: String = ""
     @AppStorage("series_cache_json") private var seriesCacheJSON: String = ""
     @AppStorage("symptom_codes_cache_json") private var symptomCodesCacheJSON: String = ""
     @AppStorage("space_visuals_cache_json") private var spaceVisualsCacheJSON: String = ""
     @AppStorage("space_outlook_cache_json") private var spaceOutlookCacheJSON: String = ""
     @AppStorage("user_outlook_cache_json") private var userOutlookCacheJSON: String = ""
+    @AppStorage("user_patterns_cache_json") private var userPatternsCacheJSON: String = ""
+    @AppStorage("gaia.membership.cached_plan") private var cachedPlanRaw: String = MembershipPlan.free.rawValue
+    @AppStorage("gaia.membership.last_sync_at") private var cachedPlanSyncedAt: String = ""
     @Environment(\.scenePhase) private var scenePhase
     @State private var showConnections: Bool = false
     @State private var expandLog: Bool = false
@@ -2012,6 +2415,13 @@ struct ContentView: View {
     @State private var featuresDiagnosticsLoading: Bool = false
     @State private var featuresDiagnosticsError: String?
     @State private var featuresDiagnostics: Diagnostics?
+    @State private var debugEntitlements: [Entitlement] = []
+    @State private var debugEntitlementsLoading: Bool = false
+    @State private var debugEntitlementsError: String?
+    @State private var debugEntitlementsUserId: String?
+    @State private var debugEntitlementsEmail: String?
+    @State private var debugToolkitMessage: String?
+    @State private var debugSelectedCacheTarget: DebugCacheTarget = .dashboardSnapshot
 
     @State private var pendingRefreshTask: Task<Void, Never>? = nil
     @State private var pendingDashboardRefreshTask: Task<Void, Never>? = nil
@@ -2728,6 +3138,662 @@ struct ContentView: View {
         state.statusLines.append(contentsOf: payload)
         appLog("[UI] diagnostics trace appended to status (\(payload.count) lines)")
         showSymptomToast("Trace appended to Status")
+    }
+
+    private func parseDebugDate(_ raw: String?) -> Date? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        let precise = ISO8601DateFormatter()
+        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = precise.date(from: raw) {
+            return date
+        }
+        if let date = ISO8601DateFormatter().date(from: raw) {
+            return date
+        }
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "yyyy-MM-dd"
+        dayFormatter.timeZone = TimeZone(identifier: "America/Chicago") ?? .current
+        return dayFormatter.date(from: raw)
+    }
+
+    private func debugFormattedDate(_ date: Date?) -> String {
+        guard let date else { return "—" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    private func debugAgeText(for date: Date?) -> String {
+        guard let date else { return "—" }
+        let seconds = max(0, Int(Date().timeIntervalSince(date)))
+        if seconds < 60 {
+            return "\(seconds)s"
+        }
+        let minutes = seconds / 60
+        if minutes < 60 {
+            return "\(minutes)m"
+        }
+        let hours = minutes / 60
+        if hours < 48 {
+            return "\(hours)h"
+        }
+        return "\(hours / 24)d"
+    }
+
+    private func debugFreshnessState(for date: Date?, staleAfter: TimeInterval) -> DebugFreshnessState {
+        guard let date else { return .missing }
+        return Date().timeIntervalSince(date) > staleAfter ? .stale : .fresh
+    }
+
+    private func healthDiagnosticsValue(prefix: String, metric: String) -> String? {
+        UserDefaults.standard.string(forKey: "gaia.hk.\(prefix).\(metric)")?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func healthDiagnosticsDate(prefix: String, metric: String) -> Date? {
+        parseDebugDate(healthDiagnosticsValue(prefix: prefix, metric: metric))
+    }
+
+    private func billingPlan(for entitlements: [Entitlement], hasAccessToken: Bool) -> MembershipPlan {
+        guard hasAccessToken else { return .free }
+        if entitlements.contains(where: { ($0.isActive == true) && $0.key.lowercased().contains("pro") }) {
+            return .pro
+        }
+        if entitlements.contains(where: { ($0.isActive == true) && $0.key.lowercased().contains("plus") }) {
+            return .plus
+        }
+        return MembershipPlan(rawValue: cachedPlanRaw) ?? .free
+    }
+
+    @MainActor
+    private func refreshBillingDiagnostics(showSuccessMessage: Bool = false) async {
+        debugEntitlementsError = nil
+        debugEntitlementsLoading = true
+        defer { debugEntitlementsLoading = false }
+
+        auth.loadFromKeychain()
+        let token = await auth.validAccessToken()
+        _ = await auth.resolveSupabaseUserId()
+
+        guard let token, !token.isEmpty else {
+            debugEntitlements = []
+            debugEntitlementsUserId = auth.supabaseUserId
+            debugEntitlementsEmail = auth.supabaseEmail
+            cachedPlanRaw = MembershipPlan.free.rawValue
+            if showSuccessMessage {
+                debugToolkitMessage = "No signed-in billing session on this device."
+            }
+            return
+        }
+
+        do {
+            let service = try CheckoutService()
+            let response = try await service.fetchEntitlements(accessToken: token)
+            debugEntitlements = response.entitlements
+            debugEntitlementsUserId = response.userId ?? auth.supabaseUserId
+            debugEntitlementsEmail = response.email ?? auth.supabaseEmail
+            let resolvedPlan = billingPlan(for: response.entitlements, hasAccessToken: true)
+            cachedPlanRaw = resolvedPlan.rawValue
+            cachedPlanSyncedAt = ISO8601DateFormatter().string(from: Date())
+            if showSuccessMessage {
+                debugToolkitMessage = "Entitlements refreshed."
+            }
+        } catch {
+            debugEntitlementsError = error.localizedDescription
+            if showSuccessMessage {
+                debugToolkitMessage = "Entitlement refresh failed."
+            }
+        }
+    }
+
+    @MainActor
+    private func restorePurchasesForDebug() async {
+        await refreshBillingDiagnostics(showSuccessMessage: false)
+        debugToolkitMessage = debugEntitlementsError == nil
+            ? "Restore purchases check completed."
+            : "Restore purchases check failed."
+    }
+
+    private func decodedPatternsPayloadFromCache() -> UserPatternsPayload? {
+        guard !userPatternsCacheJSON.isEmpty,
+              let data = userPatternsCacheJSON.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(UserPatternsPayload.self, from: data)
+    }
+
+    private func healthObjectType(for option: HealthPermissionOption) -> HKObjectType? {
+        switch option {
+        case .heartRate:
+            return HKObjectType.quantityType(forIdentifier: .heartRate)
+        case .heartRateVariability:
+            return HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)
+        case .sleep:
+            return HKObjectType.categoryType(forIdentifier: .sleepAnalysis)
+        case .spo2:
+            return HKObjectType.quantityType(forIdentifier: .oxygenSaturation)
+        case .respiratoryRate:
+            return HKObjectType.quantityType(forIdentifier: .respiratoryRate)
+        case .restingHeartRate:
+            return HKObjectType.quantityType(forIdentifier: .restingHeartRate)
+        case .bloodPressure:
+            return HKObjectType.correlationType(forIdentifier: .bloodPressure)
+        case .wristTemperature:
+            if #available(iOS 16.0, *) {
+                return HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature)
+            }
+            return nil
+        case .cycleTracking:
+            return HKObjectType.categoryType(forIdentifier: .menstrualFlow)
+        case .stepCount:
+            return HKObjectType.quantityType(forIdentifier: .stepCount)
+        }
+    }
+
+    private func healthPermissionStatus(for option: HealthPermissionOption, metric: String) -> String {
+        guard HKHealthStore.isHealthDataAvailable() else { return "Unavailable" }
+        guard let objectType = healthObjectType(for: option) else { return "Unsupported" }
+
+        let isSelected = state.selectedHealthPermissionKeys.contains(option.rawValue)
+        guard isSelected else { return "Not selected" }
+
+        let backgroundStatus = healthDiagnosticsValue(prefix: "bg_delivery_status", metric: metric)?.lowercased()
+        let backgroundError = healthDiagnosticsValue(prefix: "bg_delivery_error", metric: metric)?.lowercased() ?? ""
+        let lastObserverAt = healthDiagnosticsDate(prefix: "observer_event", metric: metric)
+        let lastAnchorAt = healthDiagnosticsDate(prefix: "anchor_advanced", metric: metric)
+        let lastSampleAt = healthDiagnosticsDate(prefix: "last_sample", metric: metric)
+        let sourceHint = healthDiagnosticsValue(prefix: "last_source", metric: metric)
+
+        if lastSampleAt != nil || sourceHint != nil {
+            return "Read active"
+        }
+        if lastObserverAt != nil || lastAnchorAt != nil {
+            return "Read active"
+        }
+        if backgroundStatus == "enabled" {
+            return "Read enabled"
+        }
+        if backgroundStatus == "skipped" {
+            return "Selected"
+        }
+        if backgroundStatus == "failed" {
+            if backgroundError.contains("not authorized") || backgroundError.contains("authorization") || backgroundError.contains("denied") {
+                return "Likely denied"
+            }
+            return "Verification failed"
+        }
+
+        let sharingStatus = HKHealthStore().authorizationStatus(for: objectType)
+        if sharingStatus == .sharingAuthorized {
+            return "Authorized"
+        }
+        if !state.healthkitRequestedAtISO.isEmpty {
+            return "Requested / pending evidence"
+        }
+        return "Not requested"
+    }
+
+    private func makeFreshnessItem(
+        id: String,
+        title: String,
+        date: Date?,
+        staleAfter: TimeInterval,
+        endpoint: String,
+        sourceKind: String,
+        detail: String? = nil
+    ) -> DebugFreshnessItem {
+        DebugFreshnessItem(
+            id: id,
+            title: title,
+            endpoint: endpoint,
+            sourceKind: sourceKind,
+            updatedAt: date,
+            state: debugFreshnessState(for: date, staleAfter: staleAfter),
+            detail: detail
+        )
+    }
+
+    private var debugHealthMetricItems: [DebugHealthMetricItem] {
+        let specs: [(String, String, HealthPermissionOption)] = [
+            ("heart_rate", "Heart rate", .heartRate),
+            ("sleep_stage", "Sleep", .sleep),
+            ("hrv_sdnn", "HRV", .heartRateVariability),
+            ("spo2", "SpO2", .spo2),
+            ("respiratory_rate", "Respiratory rate", .respiratoryRate),
+        ]
+        return specs.map { metric, title, option in
+            let backgroundStatus = healthDiagnosticsValue(prefix: "bg_delivery_status", metric: metric)?.capitalized ?? "Unknown"
+            let sourceHint = healthDiagnosticsValue(prefix: "last_source", metric: metric)
+            return DebugHealthMetricItem(
+                id: metric,
+                title: title,
+                permissionStatus: healthPermissionStatus(for: option, metric: metric),
+                backgroundDeliveryStatus: backgroundStatus,
+                lastObserverAt: healthDiagnosticsDate(prefix: "observer_event", metric: metric),
+                lastAnchorAt: healthDiagnosticsDate(prefix: "anchor_advanced", metric: metric),
+                lastSampleAt: healthDiagnosticsDate(prefix: "last_sample", metric: metric),
+                sourceHint: sourceHint
+            )
+        }
+    }
+
+    private var debugHealthImportDate: Date? {
+        let dates = [
+            StatusStore.shared.lastUpload(for: "heart_rate"),
+            StatusStore.shared.lastUpload(for: "sleep_stage"),
+            StatusStore.shared.lastUpload(for: "hrv_sdnn"),
+            StatusStore.shared.lastUpload(for: "spo2"),
+            StatusStore.shared.lastUpload(for: "respiratory_rate"),
+            parseDebugDate(state.lastHealthBackfillAtISO)
+        ].compactMap { $0 }
+        return dates.max()
+    }
+
+    private var debugSleepFreshnessNote: String {
+        let sleepDate = debugHealthMetricItems.first(where: { $0.id == "sleep_stage" })?.lastSampleAt
+        guard let sleepDate else {
+            return "No imported sleep-stage sample is tracked yet."
+        }
+        let hours = Date().timeIntervalSince(sleepDate) / 3600.0
+        if hours > 36 {
+            return "Sleep import looks stale (\(Int(hours.rounded()))h since the last imported sleep sample)."
+        }
+        return "Sleep import is within the expected freshness window."
+    }
+
+    private var debugFreshnessItems: [DebugFreshnessItem] {
+        let selected = features ?? lastKnownFeatures
+        let earthscopePersonal = preferredEarthscopePost(dashboardPayload?.personalPost, requestedDay: chicagoTodayString())
+        let earthscopeMember = preferredEarthscopePost(dashboardPayload?.memberPost, requestedDay: chicagoTodayString())
+        let earthscopePublic = preferredEarthscopePost(dashboardPayload?.publicPost, requestedDay: chicagoTodayString())
+        let earthscopePost = earthscopePersonal ?? earthscopeMember ?? earthscopePublic
+        let earthscopeKind: String = {
+            if earthscopePersonal != nil { return "personal_post" }
+            if earthscopeMember != nil { return "member_post" }
+            if earthscopePublic != nil { return "public_post" }
+            return "missing"
+        }()
+        let patternsPayload = decodedPatternsPayloadFromCache()
+        let patternsDate = parseDebugDate(patternsPayload?.generatedAt) ?? dashboardLastFetchAt
+        let schumannDate = parseDebugDate(selected?.updatedAt) ?? dashboardLastFetchAt
+
+        return [
+            makeFreshnessItem(
+                id: "dashboard",
+                title: "Dashboard snapshot",
+                date: dashboardLastFetchAt == .distantPast ? nil : dashboardLastFetchAt,
+                staleAfter: 30 * 60,
+                endpoint: "v1/dashboard?day=\(chicagoTodayString())",
+                sourceKind: dashboardLastUpdatedText == "cached" ? "cache" : "api",
+                detail: dashboardLastUpdatedText == "cached" ? "Using cached dashboard payload." : nil
+            ),
+            makeFreshnessItem(
+                id: "earthscope",
+                title: "EarthScope snapshot",
+                date: parseDebugDate(earthscopePost?.updatedAt),
+                staleAfter: 18 * 60 * 60,
+                endpoint: "v1/dashboard / v1/earthscope/member",
+                sourceKind: earthscopeKind,
+                detail: earthscopePost?.title ?? earthscopePost?.caption
+            ),
+            makeFreshnessItem(
+                id: "local_weather",
+                title: "Local weather",
+                date: parseDebugDate(localHealth?.asof),
+                staleAfter: 2 * 60 * 60,
+                endpoint: "v1/local/check?zip=\(sanitizedZip(localHealthZip))",
+                sourceKind: profileUseGPS ? "gps" : "zip"
+            ),
+            makeFreshnessItem(
+                id: "aqi_allergens",
+                title: "AQI / allergens",
+                date: parseDebugDate(localHealth?.allergens?.updatedAt) ?? parseDebugDate(localHealth?.asof),
+                staleAfter: 2 * 60 * 60,
+                endpoint: "v1/local/check?zip=\(sanitizedZip(localHealthZip))",
+                sourceKind: localHealth?.allergens?.source ?? "local_check"
+            ),
+            makeFreshnessItem(
+                id: "space_weather",
+                title: "Space weather current",
+                date: parseDebugDate(spaceOutlook?.issuedAt) ?? parseDebugDate(selected?.updatedAt),
+                staleAfter: 3 * 60 * 60,
+                endpoint: "v1/space/forecast/outlook?days=3",
+                sourceKind: "space_outlook"
+            ),
+            makeFreshnessItem(
+                id: "schumann",
+                title: "Schumann / special signals",
+                date: schumannDate == .distantPast ? nil : schumannDate,
+                staleAfter: 24 * 60 * 60,
+                endpoint: "v1/features/today / v1/space/series",
+                sourceKind: ((selected?.schStation?.isEmpty == false) || ((series ?? lastKnownSeries)?.schumannDaily?.isEmpty == false)) ? "surfaced" : "missing"
+            ),
+            makeFreshnessItem(
+                id: "health_import",
+                title: "Health import",
+                date: debugHealthImportDate,
+                staleAfter: 18 * 60 * 60,
+                endpoint: "HealthKitBackgroundSync",
+                sourceKind: "healthkit"
+            ),
+            makeFreshnessItem(
+                id: "current_symptoms",
+                title: "Current symptoms",
+                date: parseDebugDate(currentSymptomsSnapshot?.summary.lastUpdatedAt) ?? parseDebugDate(currentSymptomsSnapshot?.generatedAt),
+                staleAfter: 12 * 60 * 60,
+                endpoint: "v1/symptoms/current?window_hours=12",
+                sourceKind: "api"
+            ),
+            makeFreshnessItem(
+                id: "patterns",
+                title: "Patterns / personal relevance",
+                date: patternsPayload == nil ? nil : patternsDate,
+                staleAfter: 72 * 60 * 60,
+                endpoint: "v1/patterns / v1/patterns/summary",
+                sourceKind: patternsPayload == nil ? "missing" : "cache"
+            ),
+        ]
+    }
+
+    private var debugBillingSnapshot: DebugBillingSnapshot {
+        let hasToken = (auth.supabaseAccessToken?.isEmpty == false)
+        let plan = billingPlan(for: debugEntitlements, hasAccessToken: hasToken)
+        let userLabel: String = {
+            if let email = auth.supabaseEmail, !email.isEmpty {
+                return "Signed in as \(email)"
+            }
+            if let email = debugEntitlementsEmail, !email.isEmpty {
+                return "Signed in as \(email)"
+            }
+            if let userId = auth.supabaseUserId, !userId.isEmpty {
+                return "Signed in as \(userId)"
+            }
+            return hasToken ? "Signed in on this device" : "Not signed in"
+        }()
+        return DebugBillingSnapshot(
+            planTitle: plan.title,
+            signedInState: userLabel,
+            activeEntitlementIDs: debugEntitlements.filter { $0.isActive == true }.map(\.key),
+            customerState: hasToken ? "Backend entitlements available" : "No billing session",
+            revenueCatState: "Not integrated",
+            offerEligibility: "Not tracked in current billing flow",
+            lastSyncAt: parseDebugDate(cachedPlanSyncedAt),
+            productFetchStatus: "Stripe checkout + backend entitlement fetch",
+            error: debugEntitlementsError
+        )
+    }
+
+    private var debugProfileSnapshot: DebugProfileSnapshot {
+        let connectedStatuses: Set<String> = [
+            "Authorized",
+            "Read active",
+            "Read enabled",
+            "Selected",
+        ]
+        let authorizedCount = debugHealthMetricItems.filter { connectedStatuses.contains($0.permissionStatus) }.count
+        let healthConnected: String = {
+            if authorizedCount > 0 {
+                return "Yes (\(authorizedCount) types)"
+            }
+            if !state.healthkitRequestedAtISO.isEmpty {
+                return "Requested / limited"
+            }
+            return "No"
+        }()
+        let currentUser = auth.supabaseUserId ?? debugEntitlementsUserId ?? "-"
+        let devUser = state.userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        return DebugProfileSnapshot(
+            onboardingCompleted: onboardingCompleted,
+            onboardingStep: (OnboardingStep(rawValue: onboardingStepRaw) ?? .welcome).titleCased,
+            guide: experienceProfile.guide.title,
+            mode: experienceProfile.mode.title,
+            tone: experienceProfile.tone.title,
+            temperatureUnit: experienceProfile.tempUnit.title,
+            locationMode: profileUseGPS ? "GPS" : "ZIP (\(sanitizedZip(localHealthZip)))",
+            healthConnected: healthConnected,
+            notificationsEnabled: notificationPreferences.enabled ? "Yes" : "No",
+            symptomFollowUps: notificationPreferences.symptomFollowupsEnabled ? "Enabled" : "Disabled",
+            currentUserID: currentUser,
+            devUserID: devUser.isEmpty ? "-" : devUser
+        )
+    }
+
+    private var debugFeatureInputSnapshot: DebugFeatureInputSnapshot {
+        let selected = features ?? lastKnownFeatures
+        let drivers = (dashboardPayload?.primaryDriver.map { [$0] } ?? []) +
+            (dashboardPayload?.supportingDrivers ?? []) +
+            Array((dashboardPayload?.drivers ?? []).prefix(3))
+        let topDrivers = Array(
+            Set(
+                drivers.compactMap { driver in
+                    let label = driver.label ?? driver.key
+                    let value = driver.display ?? driver.value.map { String(format: "%.1f", $0) }
+                    let suffix = [value, driver.severity].compactMap { $0 }.joined(separator: " • ")
+                    return suffix.isEmpty ? label : "\(label) • \(suffix)"
+                }
+            )
+        ).prefix(4)
+
+        let gauges = dashboardPayload?.gauges
+        let gaugeSummary = [
+            ("Pain", gauges?.pain),
+            ("Focus", gauges?.focus),
+            ("Heart", gauges?.heart),
+            ("Stamina", gauges?.stamina),
+            ("Energy", gauges?.energy),
+            ("Sleep", gauges?.sleep),
+            ("Mood", gauges?.mood),
+            ("Health", gauges?.healthStatus),
+        ].compactMap { label, value in
+            value.map { "\(label) \(Int($0.rounded()))" }
+        }
+
+        let localValues = [
+            localHealth?.weather?.tempC.map { tempC in
+                let value: Double
+                let symbol: String
+                if experienceProfile.tempUnit == .fahrenheit {
+                    value = (tempC * 9.0 / 5.0) + 32.0
+                    symbol = "°F"
+                } else {
+                    value = tempC
+                    symbol = "°C"
+                }
+                return String(format: "Temp %.0f%@", value, symbol)
+            },
+            localHealth?.weather?.pressureHpa.map { String(format: "Pressure %.0f hPa", $0) },
+            localHealth?.air?.aqi.map { String(format: "AQI %.0f", $0) },
+            localHealth?.allergens?.primaryLabel ?? localHealth?.allergens?.overallLabel.map { "Allergens \($0)" }
+        ].compactMap { $0 }
+
+        let spaceValues = [
+            (spaceOutlook?.kp?.now ?? selected?.kpCurrent?.value).map { String(format: "Kp %.1f", $0) },
+            (spaceOutlook?.swSpeedNowKms ?? selected?.swSpeedAvg?.value).map { String(format: "SW %.0f km/s", $0) },
+            (spaceOutlook?.bzNow ?? selected?.bzMin?.value).map { String(format: "Bz %.1f nT", $0) },
+        ].compactMap { $0 }
+
+        var sourceNotes: [String] = []
+        if featuresShowingCachedSnapshot {
+            sourceNotes.append("Features are showing fallback or cached data.")
+        }
+        if dashboardLastUpdatedText == "cached" {
+            sourceNotes.append("Dashboard is using a cached snapshot.")
+        }
+        if debugFreshnessItems.contains(where: { $0.state == .stale }) {
+            sourceNotes.append("One or more freshness sources are stale.")
+        }
+
+        return DebugFeatureInputSnapshot(
+            topDrivers: Array(topDrivers),
+            gaugeSummary: gaugeSummary,
+            earthscopeBranch: featuresDiagnostics?.branch ?? "—",
+            activeSymptomsSummary: currentSymptomsSnapshot.map { "\($0.summary.activeCount) active" } ?? "No current summary",
+            localValues: localValues,
+            spaceValues: spaceValues,
+            sourceNotes: sourceNotes
+        )
+    }
+
+    private var diagnosticsBundleTraceLines: [String] {
+        let trace = featuresDiagnostics?.trace?.suffix(12).map { $0 } ?? []
+        if !trace.isEmpty {
+            return trace
+        }
+        return Array(state.log.suffix(12))
+    }
+
+    private func diagnosticsBundleText() -> String {
+        let billing = debugBillingSnapshot
+        let profile = debugProfileSnapshot
+        let featureInputs = debugFeatureInputSnapshot
+        let freshness = debugFreshnessItems
+        let healthItems = debugHealthMetricItems
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        let deviceDescription: String = {
+#if canImport(UIKit)
+            "\(UIDevice.current.model) • \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
+#else
+            "iOS"
+#endif
+        }()
+
+        var lines: [String] = []
+        lines.append("Gaia Eyes Diagnostics Bundle")
+        lines.append("Generated: \(debugFormattedDate(Date()))")
+        lines.append("App: \(version) (\(build))")
+        lines.append("Device: \(deviceDescription)")
+        lines.append("Current user: \(profile.currentUserID)")
+        lines.append("Dev user: \(profile.devUserID)")
+        lines.append("Guide / Mode / Tone: \(profile.guide) / \(profile.mode) / \(profile.tone)")
+        lines.append("Temperature unit: \(profile.temperatureUnit)")
+        lines.append("")
+        lines.append("Freshness:")
+        for item in freshness {
+            lines.append("- \(item.title): \(item.state.title) | updated \(debugFormattedDate(item.updatedAt)) | age \(debugAgeText(for: item.updatedAt)) | \(item.sourceKind) | \(item.endpoint)")
+        }
+        lines.append("")
+        lines.append("Billing:")
+        lines.append("- Plan: \(billing.planTitle)")
+        lines.append("- Status: \(billing.signedInState)")
+        lines.append("- Active entitlements: \(billing.activeEntitlementIDs.isEmpty ? "none" : billing.activeEntitlementIDs.joined(separator: ", "))")
+        lines.append("- RevenueCat: \(billing.revenueCatState)")
+        lines.append("- Offer eligibility: \(billing.offerEligibility)")
+        lines.append("- Last entitlement refresh: \(debugFormattedDate(billing.lastSyncAt))")
+        if let error = billing.error, !error.isEmpty {
+            lines.append("- Billing error: \(error)")
+        }
+        lines.append("")
+        lines.append("Health Sync:")
+        for item in healthItems {
+            lines.append("- \(item.title): read \(item.permissionStatus) | bg \(item.backgroundDeliveryStatus) | observer \(debugFormattedDate(item.lastObserverAt)) | anchor \(debugFormattedDate(item.lastAnchorAt)) | sample \(debugFormattedDate(item.lastSampleAt)) | source \(item.sourceHint ?? "—")")
+        }
+        lines.append("")
+        lines.append("Feature Inputs:")
+        lines.append("- Top drivers: \(featureInputs.topDrivers.isEmpty ? "none" : featureInputs.topDrivers.joined(separator: " | "))")
+        lines.append("- Gauges: \(featureInputs.gaugeSummary.isEmpty ? "none" : featureInputs.gaugeSummary.joined(separator: " | "))")
+        lines.append("- Local: \(featureInputs.localValues.isEmpty ? "none" : featureInputs.localValues.joined(separator: " | "))")
+        lines.append("- Space: \(featureInputs.spaceValues.isEmpty ? "none" : featureInputs.spaceValues.joined(separator: " | "))")
+        lines.append("")
+        lines.append("Recent Trace:")
+        if diagnosticsBundleTraceLines.isEmpty {
+            lines.append("- (no trace lines)")
+        } else {
+            lines.append(contentsOf: diagnosticsBundleTraceLines.map { "- \($0)" })
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    @MainActor
+    private func copyDiagnosticsBundle() {
+        let text = diagnosticsBundleText()
+#if canImport(UIKit)
+        UIPasteboard.general.string = text
+#endif
+        debugToolkitMessage = "Diagnostics bundle copied."
+        appLog("[UI] diagnostics bundle copied")
+        showSymptomToast("Copied diagnostics bundle")
+    }
+
+    @MainActor
+    private func shareDiagnosticsBundle() {
+#if canImport(UIKit)
+        let text = diagnosticsBundleText()
+        let activity = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = scene.windows.first,
+           let root = window.rootViewController {
+            if let popover = activity.popoverPresentationController {
+                popover.sourceView = root.view
+                popover.sourceRect = CGRect(x: root.view.bounds.midX, y: root.view.bounds.midY, width: 0, height: 0)
+            }
+            root.present(activity, animated: true)
+        }
+#endif
+        debugToolkitMessage = "Diagnostics bundle share sheet opened."
+        appLog("[UI] diagnostics bundle share presented")
+    }
+
+    @MainActor
+    private func rerunHealthCatchUp() async {
+        debugToolkitMessage = "Running Health catch-up…"
+        await HealthKitBackgroundSync.shared.kickOnce(reason: "debug toolkit")
+        state.refreshStatus()
+        await fetchDashboardPayload(force: true)
+        await fetchLocalHealth()
+        debugToolkitMessage = "Health catch-up requested."
+    }
+
+    @MainActor
+    private func clearSelectedDebugCache() {
+        switch debugSelectedCacheTarget {
+        case .dashboardSnapshot:
+            dashboardPayloadCacheJSON = ""
+            dashboardPayload = nil
+            lastNonNilDashboardGauges = nil
+            dashboardLastUpdatedText = nil
+        case .featuresSnapshot:
+            featuresCacheJSON = ""
+            features = nil
+            lastKnownFeatures = nil
+            featuresDiagnostics = nil
+        case .localConditions:
+            localHealth = nil
+            localHealthError = nil
+        case .spaceForecast:
+            spaceOutlookCacheJSON = ""
+            spaceVisualsCacheJSON = ""
+            seriesCacheJSON = ""
+            spaceOutlook = nil
+            lastKnownSpaceOutlook = nil
+            spaceVisuals = nil
+            lastKnownSpaceVisuals = nil
+            series = nil
+            lastKnownSeries = nil
+        case .patterns:
+            userPatternsCacheJSON = ""
+        case .all:
+            dashboardPayloadCacheJSON = ""
+            featuresCacheJSON = ""
+            spaceOutlookCacheJSON = ""
+            spaceVisualsCacheJSON = ""
+            seriesCacheJSON = ""
+            userPatternsCacheJSON = ""
+            dashboardPayload = nil
+            lastNonNilDashboardGauges = nil
+            dashboardLastUpdatedText = nil
+            features = nil
+            lastKnownFeatures = nil
+            featuresDiagnostics = nil
+            localHealth = nil
+            localHealthError = nil
+            spaceOutlook = nil
+            lastKnownSpaceOutlook = nil
+            spaceVisuals = nil
+            lastKnownSpaceVisuals = nil
+            series = nil
+            lastKnownSeries = nil
+        }
+        debugToolkitMessage = "Cleared \(debugSelectedCacheTarget.rawValue.lowercased())."
+        appLog("[UI] cleared debug cache target: \(debugSelectedCacheTarget.rawValue)")
     }
     
     private func formatISO(_ iso: String) -> Date? {
@@ -3957,6 +5023,7 @@ struct ContentView: View {
             : [
                 "pressure_sensitive",
                 "pain_sensitive",
+                "exertion_recovery_sensitive",
                 "sleep_sensitive",
                 "anxiety_sensitive",
                 "geomagnetic_sensitive",
@@ -3966,6 +5033,7 @@ struct ContentView: View {
         let fallback: [String: OnboardingTagOption] = [
             "pressure_sensitive": OnboardingTagOption(id: "pressure_sensitive", title: "Pressure Sensitive", subtitle: "Barometric swings can hit harder."),
             "pain_sensitive": OnboardingTagOption(id: "pain_sensitive", title: "Pain Sensitive", subtitle: "Pain or body flares can surface faster."),
+            "exertion_recovery_sensitive": OnboardingTagOption(id: "exertion_recovery_sensitive", title: "Exertion / Recovery Sensitive", subtitle: "Heavy activity can hit harder and recovery may take longer."),
             "sleep_sensitive": OnboardingTagOption(id: "sleep_sensitive", title: "Sleep Sensitive", subtitle: "Sleep disruption affects recovery quickly."),
             "anxiety_sensitive": OnboardingTagOption(id: "anxiety_sensitive", title: "Anxiety Sensitive", subtitle: "Stress-reactive periods can hit harder."),
             "geomagnetic_sensitive": OnboardingTagOption(id: "geomagnetic_sensitive", title: "Geomagnetic Sensitive", subtitle: "Space-weather shifts may feel more noticeable."),
@@ -7186,7 +8254,11 @@ struct ContentView: View {
                 }
                 return "Today’s quick check-in is ready."
             }
-            if let latest = status.latestEntry, let completedAt = latest.completedAt, !completedAt.isEmpty {
+            if let targetDay = status.targetDay,
+               let latest = status.latestEntry,
+               let completedAt = latest.completedAt,
+               !completedAt.isEmpty,
+               latest.day == targetDay {
                 return "Latest check-in saved for \(latest.day)."
             }
             if status.settings.enabled {
@@ -10714,9 +11786,11 @@ struct ContentView: View {
             if dailyCheckInLoading && dailyCheckInStatus == nil {
                 return "Refreshing today’s check-in."
             }
-            if let entry = dailyCheckInStatus?.latestEntry,
+            if let targetDay = dailyCheckInStatus?.targetDay,
+               let entry = dailyCheckInStatus?.latestEntry,
                let completedAt = entry.completedAt,
-               !completedAt.isEmpty {
+               !completedAt.isEmpty,
+               entry.day == targetDay {
                 return "Already completed for \(entry.day). Open it to update the read or review the last response."
             }
             if let prompt = dailyCheckInStatus?.prompt {
@@ -11285,7 +12359,7 @@ struct ContentView: View {
                     DisclosureGroup(isExpanded: $showTools) {
                         VStack(spacing: 12) {
                             ConnectionSettingsSection(state: state, isExpanded: $showConnections)
-                            NavigationLink(destination: SubscribeView(guideProfile: currentGuideProfile, helpContext: helpCenterContext)) {
+                            NavigationLink(destination: SubscribeView()) {
                                 Label("Account & Membership", systemImage: "creditcard")
                                     .frame(maxWidth: .infinity)
                             }
@@ -11322,7 +12396,7 @@ struct ContentView: View {
             DisclosureGroup(isExpanded: $showTools) {
                 VStack(spacing: 12) {
                     ConnectionSettingsSection(state: state, isExpanded: $showConnections)
-                    NavigationLink(destination: SubscribeView(guideProfile: currentGuideProfile, helpContext: helpCenterContext)) {
+                    NavigationLink(destination: SubscribeView()) {
                         Label("Account & Membership", systemImage: "creditcard")
                             .frame(maxWidth: .infinity)
                     }
@@ -11544,6 +12618,13 @@ struct ContentView: View {
                 }
                 scheduleLocalHealthRefresh()
             }
+            .onChange(of: showDebug, initial: false) { _, newValue in
+                guard newValue else { return }
+                Task {
+                    await fetchFeaturesDiagnostics()
+                    await refreshBillingDiagnostics(showSuccessMessage: false)
+                }
+            }
             .onChange(of: showHazards, initial: false) { _, newValue in
                 guard newValue, !hazardsLoading else { return }
                 if hazardsBrief == nil || hazardsBrief?.ok != true {
@@ -11590,6 +12671,10 @@ struct ContentView: View {
                     await refreshPushState()
                     await fetchProfileSettings(includeNotifications: true)
                     await fetchLocalHealth()
+                    if showDebug {
+                        await fetchFeaturesDiagnostics()
+                        await refreshBillingDiagnostics(showSuccessMessage: false)
+                    }
                 }
             }
             .onChange(of: showLocalConditionsSheet, initial: false) { _, newValue in
@@ -13068,6 +14153,39 @@ struct ContentView: View {
                                     }
                                 } label: {
                                     Text("Diagnostics")
+                                }
+
+                                if showDebug {
+                                    LaunchDebugToolkitPanel(
+                                        freshnessItems: debugFreshnessItems,
+                                        healthItems: debugHealthMetricItems,
+                                        billing: debugBillingSnapshot,
+                                        profile: debugProfileSnapshot,
+                                        featureInputs: debugFeatureInputSnapshot,
+                                        selectedCacheTarget: $debugSelectedCacheTarget,
+                                        isBillingLoading: debugEntitlementsLoading,
+                                        isOnboardingResetInFlight: onboardingResetInFlight,
+                                        message: debugToolkitMessage ?? onboardingResetMessage,
+                                        sleepFreshnessNote: debugSleepFreshnessNote,
+                                        onRefreshDashboard: { Task { await fetchDashboardPayload(force: true) } },
+                                        onRefreshLocalWeather: { Task { await fetchLocalHealth() } },
+                                        onRefreshHealth: { Task { await rerunHealthCatchUp() } },
+                                        onRefreshEntitlements: { Task { await refreshBillingDiagnostics(showSuccessMessage: true) } },
+                                        onRestorePurchases: { Task { await restorePurchasesForDebug() } },
+                                        onResetOnboarding: { Task { await resetOnboardingForDebug() } },
+                                        onClearCache: { clearSelectedDebugCache() },
+                                        onCopyBundle: { copyDiagnosticsBundle() },
+                                        onShareBundle: { shareDiagnosticsBundle() }
+                                    )
+                                } else {
+                                    GroupBox {
+                                        Text("Enable \"Show in-app debug panel\" above to unlock the launch-testing toolkit, refresh actions, and diagnostics bundle export.")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    } label: {
+                                        Label("Launch Toolkit", systemImage: "ladybug")
+                                    }
                                 }
 
                                 if Self.cameraHealthCheckVisible {

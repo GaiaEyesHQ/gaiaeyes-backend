@@ -4,6 +4,12 @@ struct HelpCenterMetadata: Decodable, Hashable {
     let updatedAt: String
     let supportEmail: String
     let webSupportURL: String
+
+    private enum CodingKeys: String, CodingKey {
+        case updatedAt
+        case supportEmail
+        case webSupportURL = "webSupportUrl"
+    }
 }
 
 struct HelpCenterCategory: Identifiable, Decodable, Hashable {
@@ -31,6 +37,28 @@ struct HelpCenterSection: Identifiable, Decodable, Hashable {
     let title: String
     let paragraphs: [String]
     let bullets: [String]
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case paragraphs
+        case bullets
+    }
+
+    init(id: String, title: String, paragraphs: [String], bullets: [String] = []) {
+        self.id = id
+        self.title = title
+        self.paragraphs = paragraphs
+        self.bullets = bullets
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        paragraphs = try container.decodeIfPresent([String].self, forKey: .paragraphs) ?? []
+        bullets = try container.decodeIfPresent([String].self, forKey: .bullets) ?? []
+    }
 }
 
 struct HelpCenterArticle: Identifiable, Decodable, Hashable {
@@ -41,6 +69,45 @@ struct HelpCenterArticle: Identifiable, Decodable, Hashable {
     let keywords: [String]
     let bodySections: [HelpCenterSection]
     let links: [HelpCenterLink]
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case summary
+        case category
+        case keywords
+        case bodySections
+        case links
+    }
+
+    init(
+        id: String,
+        title: String,
+        summary: String,
+        category: String,
+        keywords: [String] = [],
+        bodySections: [HelpCenterSection] = [],
+        links: [HelpCenterLink] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.summary = summary
+        self.category = category
+        self.keywords = keywords
+        self.bodySections = bodySections
+        self.links = links
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        summary = try container.decode(String.self, forKey: .summary)
+        category = try container.decode(String.self, forKey: .category)
+        keywords = try container.decodeIfPresent([String].self, forKey: .keywords) ?? []
+        bodySections = try container.decodeIfPresent([HelpCenterSection].self, forKey: .bodySections) ?? []
+        links = try container.decodeIfPresent([HelpCenterLink].self, forKey: .links) ?? []
+    }
 
     var searchText: String {
         let sectionText = bodySections.flatMap { $0.paragraphs + $0.bullets + [$0.title] }
@@ -100,7 +167,7 @@ enum HelpCenterContent {
         do {
             return try load()
         } catch {
-            assertionFailure("Failed to load HelpCenterContent.json: \(error)")
+            print("Failed to load HelpCenterContent.json: \(error)")
             return HelpCenterDocument(metadata: HelpCenterMetadata(updatedAt: "", supportEmail: "", webSupportURL: ""), categories: [], articles: [])
         }
     }()

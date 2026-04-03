@@ -42,6 +42,7 @@ struct DailyCheckInEntry: Decodable, Hashable {
     let predictionMatch: String?
     let noteText: String?
     let completedAt: String?
+    let exposures: [String]
 }
 
 struct FeedbackCalibrationSummary: Decodable, Hashable {
@@ -66,6 +67,7 @@ struct DailyCheckInSettings: Decodable, Hashable {
 struct DailyCheckInStatus: Decodable, Hashable {
     let prompt: DailyCheckInPrompt?
     let latestEntry: DailyCheckInEntry?
+    let targetDay: String?
     let calibrationSummary: FeedbackCalibrationSummary
     let settings: DailyCheckInSettings
 }

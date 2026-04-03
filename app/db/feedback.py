@@ -59,6 +59,7 @@ DEFAULT_PAIN_OPTIONS = [
 DEFAULT_ENERGY_OPTIONS = ["tired", "drained", "heavy_body", "brain_fog", "crashed_later"]
 DEFAULT_MOOD_OPTIONS = ["anxious", "wired", "irritable", "low_mood", "emotionally_sensitive"]
 DEFAULT_SLEEP_OPTIONS = ["yes_strongly", "yes_somewhat", "not_much", "unsure"]
+DEFAULT_EXPOSURE_OPTIONS = ["overexertion", "allergen_exposure"]
 
 
 def _normalize_ts(value: Optional[datetime]) -> Optional[datetime]:
@@ -1059,6 +1060,7 @@ async def fetch_latest_daily_check_in(conn, user_id: str) -> Optional[Dict[str, 
         "prediction_match": row.get("prediction_match"),
         "note_text": row.get("note_text"),
         "completed_at": _serialize_ts(row.get("completed_at")),
+        "exposures": _normalize_codes((payload or {}).get("exposures")),
         "context_payload": payload if isinstance(payload, dict) else {},
     }
 
@@ -1120,6 +1122,14 @@ async def fetch_daily_check_in_status(
     latest_entry = await fetch_latest_daily_check_in(conn, user_id)
     calibration = await fetch_feedback_calibration_summary(conn, user_id)
     preferences = await load_feedback_preferences(conn, user_id)
+    effective_now = _normalize_ts(now_utc) or datetime.now(UTC)
+    tz = _time_zone(preferences.get("time_zone"))
+    local_now = effective_now.astimezone(tz)
+    reminder_time = _parse_hhmm(preferences.get("daily_checkin_reminder_time"), fallback="20:00")
+    target_day = (
+        str((prompt or {}).get("prompt_day") or "")
+        or ((_daily_target_day(local_now, reminder_time) or local_now.date()).isoformat())
+    )
 
     if prompt and mark_delivered:
         prompt_id = str(prompt.get("id") or "")
@@ -1143,6 +1153,7 @@ async def fetch_daily_check_in_status(
     return {
         "prompt": prompt,
         "latest_entry": latest_entry,
+        "target_day": target_day,
         "calibration_summary": calibration,
         "settings": {
             "enabled": bool(preferences.get("daily_checkins_enabled")),
@@ -1171,6 +1182,7 @@ async def save_daily_check_in(
     sleep_impact: Optional[str],
     prediction_match: Optional[str],
     note_text: Optional[str],
+    exposures: Optional[List[str]] = None,
     completed_at: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     effective_completed_at = _normalize_ts(completed_at) or datetime.now(UTC)
@@ -1179,6 +1191,11 @@ async def save_daily_check_in(
         prompt = await _existing_prompt(conn, user_id, prompt_type="daily_check_in", prompt_day=day)
         if prompt and str(prompt.get("id") or "") == prompt_id:
             prompt_payload = _serialize_json(prompt.get("prompt_payload")) or {}
+    normalized_exposures = [value for value in _normalize_codes(exposures) if value in DEFAULT_EXPOSURE_OPTIONS]
+    if normalized_exposures:
+        prompt_payload["exposures"] = normalized_exposures
+    else:
+        prompt_payload.pop("exposures", None)
 
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
@@ -1264,6 +1281,50 @@ async def save_daily_check_in(
                 prepare=False,
             )
 
+    exposure_columns = await _table_columns(conn, "raw", "user_exposure_events")
+    if exposure_columns:
+        preferences = await load_feedback_preferences(conn, user_id)
+        tz = _time_zone(preferences.get("time_zone"))
+        start_local = datetime.combine(day, time.min, tzinfo=tz)
+        end_local = start_local + timedelta(days=1)
+        start_utc = start_local.astimezone(UTC)
+        end_utc = end_local.astimezone(UTC)
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                """
+                delete from raw.user_exposure_events
+                 where user_id = %s
+                   and source = 'daily_check_in'
+                   and event_ts_utc >= %s
+                   and event_ts_utc < %s
+                   and exposure_key in ('overexertion', 'allergen_exposure')
+                """,
+                (user_id, start_utc, end_utc),
+                prepare=False,
+            )
+            for exposure_key in normalized_exposures:
+                await cur.execute(
+                    """
+                    insert into raw.user_exposure_events (
+                        user_id,
+                        exposure_key,
+                        intensity,
+                        event_ts_utc,
+                        source,
+                        note_text
+                    )
+                    values (%s, %s, %s, %s, 'daily_check_in', %s)
+                    """,
+                    (
+                        user_id,
+                        exposure_key,
+                        2,
+                        effective_completed_at,
+                        f"daily_check_in:{day.isoformat()}",
+                    ),
+                    prepare=False,
+                )
+
     payload = _serialize_json((row or {}).get("context_payload")) or {}
     return {
         "day": str((row or {}).get("day") or day.isoformat()),
@@ -1281,6 +1342,7 @@ async def save_daily_check_in(
         "prediction_match": prediction_match,
         "note_text": note_text,
         "completed_at": _serialize_ts((row or {}).get("completed_at") or effective_completed_at),
+        "exposures": _normalize_codes((payload or {}).get("exposures")),
         "context_payload": payload if isinstance(payload, dict) else {},
     }
 
