@@ -140,109 +140,109 @@ ROLE_LABELS = {
 
 _PATTERN_MESSAGE_MAP = {
     ("pressure_swing_exposed", "pain_flare_day"): {
-        "full": "Pressure swings are a known repeating pattern in your pain flare history.",
-        "short": "Pressure often matches your pain pattern.",
-        "clause": "it often matches your pain pattern",
+        "full": "Pressure swings have lined up with more pain flare days in your history.",
+        "short": "Pressure has lined up with more pain flare days for you.",
+        "clause": "it has lined up with more pain flare days for you",
     },
     ("pressure_swing_exposed", "headache_day"): {
-        "full": "Pressure swings are a known repeating pattern in your headache history.",
-        "short": "Pressure often matches your headache pattern.",
-        "clause": "it often matches your headache pattern",
+        "full": "Pressure swings have lined up with more headache days in your history.",
+        "short": "Pressure has lined up with more headache days for you.",
+        "clause": "it has lined up with more headache days for you",
     },
     ("pressure_swing_exposed", "focus_fog_day"): {
-        "full": "Pressure swings have shown up before brain-fog days in your history.",
-        "short": "Pressure can precede brain-fog days for you.",
-        "clause": "it can precede brain-fog days for you",
+        "full": "Pressure swings have lined up with more brain-fog days in your history.",
+        "short": "Pressure has lined up with more brain-fog days for you.",
+        "clause": "it has lined up with more brain-fog days for you",
     },
     ("temp_swing_exposed", "pain_flare_day"): {
-        "full": "Temperature swings have shown up before your pain flare days.",
-        "short": "Temperature swings often show up before pain flare days.",
-        "clause": "they often show up before pain flare days",
+        "full": "Temperature swings have lined up with more pain flare days in your history.",
+        "short": "Temperature swings have lined up with more pain flare days for you.",
+        "clause": "they have lined up with more pain flare days for you",
     },
     ("temp_swing_exposed", "fatigue_day"): {
-        "full": "Temperature swings often match fatigue in your pattern history.",
-        "short": "Temperature swings often match fatigue for you.",
-        "clause": "they often match fatigue for you",
+        "full": "Temperature swings have lined up with more fatigue days in your history.",
+        "short": "Temperature swings have lined up with more fatigue days for you.",
+        "clause": "they have lined up with more fatigue days for you",
     },
     ("aqi_moderate_plus_exposed", "fatigue_day"): {
-        "full": "AQI often matches fatigue in your pattern history.",
-        "short": "AQI often matches fatigue for you.",
-        "clause": "it often matches fatigue for you",
+        "full": "Moderate-or-higher AQI has lined up with more fatigue days in your history.",
+        "short": "AQI has lined up with more fatigue days for you.",
+        "clause": "it has lined up with more fatigue days for you",
     },
     ("aqi_moderate_plus_exposed", "focus_fog_day"): {
-        "full": "AQI often matches brain-fog days in your pattern history.",
-        "short": "AQI often matches brain-fog days for you.",
-        "clause": "it often matches brain-fog days for you",
+        "full": "Moderate-or-higher AQI has lined up with more brain-fog days in your history.",
+        "short": "AQI has lined up with more brain-fog days for you.",
+        "clause": "it has lined up with more brain-fog days for you",
     },
     ("aqi_moderate_plus_exposed", "headache_day"): {
-        "full": "AQI often matches headache days in your pattern history.",
-        "short": "AQI often matches headache days for you.",
-        "clause": "it often matches headache days for you",
+        "full": "Moderate-or-higher AQI has lined up with more headache days in your history.",
+        "short": "AQI has lined up with more headache days for you.",
+        "clause": "it has lined up with more headache days for you",
     },
     ("pollen_overall_exposed", "headache_day"): {
-        "full": "Allergen load often matches headache days in your pattern history.",
-        "short": "Allergen load often matches headache days for you.",
-        "clause": "it often matches headache days for you",
+        "full": "Allergen load has lined up with more headache days in your history.",
+        "short": "Allergen load has lined up with more headache days for you.",
+        "clause": "it has lined up with more headache days for you",
     },
     ("pollen_overall_exposed", "fatigue_day"): {
-        "full": "Allergen load often matches fatigue in your pattern history.",
-        "short": "Allergen load often matches fatigue for you.",
-        "clause": "it often matches fatigue for you",
+        "full": "Allergen load has lined up with more fatigue days in your history.",
+        "short": "Allergen load has lined up with more fatigue days for you.",
+        "clause": "it has lined up with more fatigue days for you",
     },
     ("pollen_overall_exposed", "focus_fog_day"): {
-        "full": "Allergen load often matches brain-fog days in your pattern history.",
-        "short": "Allergen load often matches brain-fog days for you.",
-        "clause": "it often matches brain-fog days for you",
+        "full": "Allergen load has lined up with more brain-fog days in your history.",
+        "short": "Allergen load has lined up with more brain-fog days for you.",
+        "clause": "it has lined up with more brain-fog days for you",
     },
     ("solar_wind_exposed", "high_hr_day"): {
-        "full": "Elevated solar wind has shown up before higher heart-rate days in your history.",
-        "short": "Elevated solar wind has shown up before higher heart-rate days for you.",
-        "clause": "it has shown up before higher heart-rate days for you",
+        "full": "Elevated solar wind has lined up with more days of higher heart rate in your history.",
+        "short": "Elevated solar wind has lined up with more days of higher heart rate for you.",
+        "clause": "it has lined up with more days of higher heart rate for you",
     },
     ("solar_wind_exposed", "short_sleep_day"): {
-        "full": "Elevated solar wind has shown up before shorter-sleep days in your history.",
-        "short": "Elevated solar wind has shown up before shorter-sleep days for you.",
-        "clause": "it has shown up before shorter-sleep days for you",
+        "full": "Elevated solar wind has lined up with more short-sleep nights in your history.",
+        "short": "Elevated solar wind has lined up with more short-sleep nights for you.",
+        "clause": "it has lined up with more short-sleep nights for you",
     },
     ("solar_wind_exposed", "fatigue_day"): {
-        "full": "Elevated solar wind often matches fatigue in your pattern history.",
-        "short": "Elevated solar wind often matches fatigue for you.",
-        "clause": "it often matches fatigue for you",
+        "full": "Elevated solar wind has lined up with more fatigue days in your history.",
+        "short": "Elevated solar wind has lined up with more fatigue days for you.",
+        "clause": "it has lined up with more fatigue days for you",
     },
     ("solar_wind_exposed", "anxiety_day"): {
-        "full": "Elevated solar wind often matches restless days in your pattern history.",
-        "short": "Elevated solar wind often matches restless days for you.",
-        "clause": "it often matches restless days for you",
+        "full": "Elevated solar wind has lined up with more restless days in your history.",
+        "short": "Elevated solar wind has lined up with more restless days for you.",
+        "clause": "it has lined up with more restless days for you",
     },
     ("kp_g1_plus_exposed", "poor_sleep_day"): {
-        "full": "Geomagnetic activity has shown up before poorer-sleep days in your history.",
-        "short": "Geomagnetic activity has shown up before poorer sleep for you.",
-        "clause": "it has shown up before poorer sleep for you",
+        "full": "Geomagnetic activity has lined up with more poor-sleep nights in your history.",
+        "short": "Geomagnetic activity has lined up with more poor-sleep nights for you.",
+        "clause": "it has lined up with more poor-sleep nights for you",
     },
     ("bz_south_exposed", "poor_sleep_day"): {
-        "full": "Strong southward Bz has shown up before poorer-sleep days in your history.",
-        "short": "Strong southward Bz has shown up before poorer sleep for you.",
-        "clause": "it has shown up before poorer sleep for you",
+        "full": "Strong southward Bz has lined up with more poor-sleep nights in your history.",
+        "short": "Strong southward Bz has lined up with more poor-sleep nights for you.",
+        "clause": "it has lined up with more poor-sleep nights for you",
     },
     ("schumann_exposed", "poor_sleep_day"): {
-        "full": "Elevated Schumann variability has shown up before lighter or shorter sleep in your history.",
-        "short": "Schumann variability has shown up before lighter sleep for you.",
-        "clause": "it has shown up before lighter sleep for you",
+        "full": "Elevated Schumann variability has lined up with more lighter or shorter sleep nights in your history.",
+        "short": "Schumann variability has lined up with more lighter-sleep nights for you.",
+        "clause": "it has lined up with more lighter-sleep nights for you",
     },
     ("schumann_exposed", "short_sleep_day"): {
-        "full": "Elevated Schumann variability has shown up before lighter or shorter sleep in your history.",
-        "short": "Schumann variability has shown up before shorter sleep for you.",
-        "clause": "it has shown up before shorter sleep for you",
+        "full": "Elevated Schumann variability has lined up with more short-sleep nights in your history.",
+        "short": "Schumann variability has lined up with more short-sleep nights for you.",
+        "clause": "it has lined up with more short-sleep nights for you",
     },
     ("schumann_exposed", "focus_fog_day"): {
-        "full": "Elevated Schumann variability often matches focus drift in your pattern history.",
-        "short": "Schumann variability often matches focus drift for you.",
-        "clause": "it often matches focus drift for you",
+        "full": "Elevated Schumann variability has lined up with more focus-drift days in your history.",
+        "short": "Schumann variability has lined up with more focus-drift days for you.",
+        "clause": "it has lined up with more focus-drift days for you",
     },
     ("schumann_exposed", "anxiety_day"): {
-        "full": "Elevated Schumann variability often matches restless days in your pattern history.",
-        "short": "Schumann variability often matches restless days for you.",
-        "clause": "it often matches restless days for you",
+        "full": "Elevated Schumann variability has lined up with more restless days in your history.",
+        "short": "Schumann variability has lined up with more restless days for you.",
+        "clause": "it has lined up with more restless days for you",
     },
 }
 
@@ -401,9 +401,9 @@ def pattern_anchor_statement(row: Mapping[str, Any], *, variant: str = "full") -
     if entry.get(variant):
         return str(entry[variant])
     if variant == "short":
-        return f"{signal_label(signal_key)} often match your {outcome_label(outcome_key).lower()} pattern."
+        return f"{signal_label(signal_key)} have lined up with more {outcome_label(outcome_key).lower()} for you."
     if variant == "clause":
-        return f"they often match your {outcome_label(outcome_key).lower()} pattern"
+        return f"they have lined up with more {outcome_label(outcome_key).lower()} for you"
     return f"{signal_label(signal_key)} have lined up with {outcome_label(outcome_key).lower()} in your history."
 
 
@@ -480,7 +480,7 @@ def _dedupe_pattern_refs(rows: Iterable[Mapping[str, Any]]) -> List[Dict[str, An
 
 def _theme_summary(label: str, ref: Mapping[str, Any]) -> str:
     signal = str(ref.get("signal") or "This signal")
-    return f"{label} rises in priority right now because {signal.lower()} matches your pattern history."
+    return f"{label} rises in priority right now because {signal.lower()} has lined up in your pattern history."
 
 
 def _compact_driver_line(driver: Mapping[str, Any]) -> str:

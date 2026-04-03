@@ -427,17 +427,17 @@ def confidence_bucket(
     as_of_day: date,
 ) -> str | None:
     if (
-        exposed_n >= 12
+        exposed_n >= 14
         and relative_lift >= 2.2
-        and rate_diff >= 0.20
-        and observed_weeks >= 3
+        and rate_diff >= 0.22
+        and observed_weeks >= 4
         and last_outcome_day is not None
         and last_outcome_day >= as_of_day - timedelta(days=30)
     ):
         return "Strong"
-    if exposed_n >= 8 and relative_lift >= 1.8 and rate_diff >= 0.15 and observed_weeks >= 2:
+    if exposed_n >= 10 and relative_lift >= 1.9 and rate_diff >= 0.16 and observed_weeks >= 3:
         return "Moderate"
-    if exposed_n >= 6 and relative_lift >= 1.4 and rate_diff >= 0.10:
+    if exposed_n >= 8 and relative_lift >= 1.6 and rate_diff >= 0.12 and observed_weeks >= 2:
         return "Emerging"
     return None
 
@@ -1405,11 +1405,11 @@ def build_associations(
                     as_of_day=as_of_day,
                 )
                 surfaceable = bool(
-                    exposed_n >= 6
-                    and unexposed_n >= 6
-                    and a >= 3
-                    and relative_lift >= 1.4
-                    and rate_diff >= 0.10
+                    exposed_n >= 8
+                    and unexposed_n >= 8
+                    and a >= 4
+                    and relative_lift >= 1.6
+                    and rate_diff >= 0.12
                     and confidence is not None
                 )
 

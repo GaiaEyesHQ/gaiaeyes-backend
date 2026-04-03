@@ -76,23 +76,23 @@ def _outcome_label(outcome_key: str) -> str:
 def _build_explanation(row: Dict[str, Any]) -> str:
     signal_key = str(row.get("signal_key") or "")
     outcome_key = str(row.get("outcome_key") or "")
-    outcome = _outcome_label(outcome_key)
+    outcome = _outcome_label(outcome_key).lower()
 
     if signal_key == "pressure_swing_exposed":
-        return f"{outcome} appear more often for you when pressure swings exceed 6 hPa."
+        return f"In your history, days with {outcome} have overlapped more when pressure swings exceeded 6 hPa."
     if signal_key == "aqi_moderate_plus_exposed":
-        return f"{outcome} are more common for you on moderate-or-higher AQI days."
+        return f"In your history, days with {outcome} have overlapped more with moderate-or-higher AQI days."
     if signal_key == "temp_swing_exposed":
-        return f"{outcome} appear more often for you when temperatures swing 6 C or more in 24 hours."
+        return f"In your history, days with {outcome} have overlapped more when temperatures swung 6 C or more in 24 hours."
     if signal_key == "kp_g1_plus_exposed":
-        return f"{outcome} tend to show up more often for you after Kp 5+ days."
+        return f"In your history, days with {outcome} have overlapped more after Kp 5+ days."
     if signal_key == "bz_south_exposed":
-        return f"{outcome} tend to show up more often for you after strong southward Bz days."
+        return f"In your history, days with {outcome} have overlapped more after strong southward Bz days."
     if signal_key == "solar_wind_exposed":
-        return f"{outcome} tend to show up more often for you after elevated solar wind days."
+        return f"In your history, days with {outcome} have overlapped more after elevated solar wind days."
     if signal_key == "schumann_exposed":
-        return f"{outcome} appear more often for you on elevated Schumann variability days."
-    return f"{outcome} appear more often for you when {_signal_label(signal_key).lower()} are elevated."
+        return f"In your history, days with {outcome} have overlapped more with higher Schumann-variability days."
+    return f"In your history, days with {outcome} have overlapped more when {_signal_label(signal_key).lower()} were elevated."
 
 
 def _priority_boost(user_tags: set[str], row: Dict[str, Any]) -> int:

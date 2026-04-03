@@ -11896,13 +11896,11 @@ struct ContentView: View {
         let topSummary: String?
         let diagnostics: [SymptomDiagSummary]
         let currentSymptomsSnapshot: CurrentSymptomsSnapshot?
-        let series: SpaceSeries?
         let lunarInsights: LunarInsightPayload?
         let lunarInsightsLoading: Bool
         let lunarInsightsError: String?
         let experienceMode: ExperienceMode
         let lunarSensitivityDeclared: Bool
-        let highlights: [SymptomHighlight]
         let latestCameraCheck: CameraHealthDailySummary?
         let latestCameraCheckLoading: Bool
         let latestCameraCheckError: String?
@@ -11912,26 +11910,10 @@ struct ContentView: View {
         let onOpenDailyCheckIn: () -> Void
         @Binding var showSymptomSheet: Bool
         let onOpenQuickCheck: () -> Void
-        let onLoadComparison: () async -> Void
-        @State private var selectedRange: InsightsTrendRange = .days7
-        @State private var isComparisonExpanded: Bool = false
-        @State private var hasStartedComparisonLoad: Bool = false
+        let onLoadLunarInsights: () async -> Void
 
         private var topDiagnostics: [SymptomDiagSummary] {
             diagnostics.sorted { $0.events > $1.events }
-        }
-
-        private func ensureComparisonLoad(immediate: Bool = false) {
-            guard !hasStartedComparisonLoad else { return }
-            guard series == nil || lunarInsights == nil else { return }
-            hasStartedComparisonLoad = true
-            Task {
-                if !immediate {
-                    try? await Task.sleep(nanoseconds: 600_000_000)
-                }
-                if Task.isCancelled { return }
-                await onLoadComparison()
-            }
         }
 
         private var lunarInsightMessage: String? {
@@ -12124,72 +12106,6 @@ struct ContentView: View {
                             }
                         }
 
-                        LocalConditionsSurfaceCard(title: "Comparison Chart", icon: "chart.xyaxis.line") {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Button {
-                                    withAnimation(.easeInOut(duration: 0.18)) {
-                                        isComparisonExpanded.toggle()
-                                    }
-                                    if isComparisonExpanded {
-                                        ensureComparisonLoad(immediate: true)
-                                    }
-                                } label: {
-                                    HStack(alignment: .center, spacing: 12) {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text("Signals vs Symptoms")
-                                                .font(.subheadline.weight(.semibold))
-                                            Text(
-                                                series == nil
-                                                    ? "Loads after the page opens and stays tucked away until you want the deeper comparison."
-                                                    : "7, 14, or 30 day signal comparison is ready when you want it."
-                                            )
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                        }
-                                        Spacer()
-                                        if hasStartedComparisonLoad && series == nil {
-                                            ProgressView()
-                                                .scaleEffect(0.82)
-                                        }
-                                        Image(systemName: isComparisonExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
-                                            .foregroundColor(.white.opacity(0.72))
-                                    }
-                                }
-                                .buttonStyle(.plain)
-
-                                if isComparisonExpanded {
-                                    Picker("Range", selection: $selectedRange) {
-                                        ForEach(InsightsTrendRange.allCases) { range in
-                                            Text(range.rawValue).tag(range)
-                                        }
-                                    }
-                                    .pickerStyle(.segmented)
-
-                                    Text("Compare signals and symptoms over \(selectedRange.title.lowercased()). The default is 7 days for a faster read.")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-
-                                    if let series {
-                                        SpaceChartsCard(
-                                            title: "Signals vs Symptoms",
-                                            series: series,
-                                            highlights: highlights,
-                                            window: selectedRange,
-                                            showsSchumann: true
-                                        )
-                                    } else if hasStartedComparisonLoad {
-                                        ProgressView("Loading comparison…")
-                                            .font(.caption)
-                                    } else {
-                                        Text("Open the chart to load the full comparison.")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                        }
-
                         if ContentView.cameraHealthCheckVisible {
                             InsightsCameraCheckCard(
                                 summary: latestCameraCheck,
@@ -12206,7 +12122,9 @@ struct ContentView: View {
             .navigationTitle("Body")
             .navigationBarTitleDisplayMode(.inline)
             .task {
-                ensureComparisonLoad()
+                if lunarInsights == nil {
+                    await onLoadLunarInsights()
+                }
             }
         }
     }
@@ -12683,11 +12601,12 @@ struct ContentView: View {
                 await state.updateBackendDBFlag()
                 let api = state.apiWithAuth()
                 async let a: Void = fetchDashboardPayload(force: true)
+                async let h: Void = fetchFeaturesToday(trigger: .initial, bypassGuard: true)
                 async let b: Void = fetchProfileSettings()
                 async let e: Void = fetchLatestCameraCheck()
                 async let f: Void = fetchCurrentSymptomsSummary(api: api)
                 async let g: Void = fetchDailyCheckInStatus(api: api)
-                _ = await (a, b, e, f, g)
+                _ = await (a, h, b, e, f, g)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
                 async let d: Void = refreshSymptomPresets(api: api)
                 _ = await (c, d)
@@ -12696,11 +12615,12 @@ struct ContentView: View {
                 await state.updateBackendDBFlag()
                 let api = state.apiWithAuth()
                 async let a: Void = fetchDashboardPayload(force: true)
+                async let h: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
                 async let b: Void = fetchProfileSettings()
                 async let e: Void = fetchLatestCameraCheck()
                 async let f: Void = fetchCurrentSymptomsSummary(api: api)
                 async let g: Void = fetchDailyCheckInStatus(api: api)
-                _ = await (a, b, e, f, g)
+                _ = await (a, h, b, e, f, g)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
                 async let d: Void = refreshSymptomPresets(api: api)
                 _ = await (c, d)
@@ -13026,13 +12946,11 @@ struct ContentView: View {
                 topSummary: resolvedSymptomSummary,
                 diagnostics: symptomDiagnostics,
                 currentSymptomsSnapshot: currentSymptomsSnapshot,
-                series: resolvedSeriesPayload,
                 lunarInsights: lunarInsights,
                 lunarInsightsLoading: lunarInsightsLoading,
                 lunarInsightsError: lunarInsightsError,
                 experienceMode: experienceProfile.mode,
                 lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared,
-                highlights: resolvedSymptomHighlights,
                 latestCameraCheck: latestCameraCheck,
                 latestCameraCheckLoading: latestCameraCheckLoading,
                 latestCameraCheckError: latestCameraCheckError,
@@ -13044,8 +12962,7 @@ struct ContentView: View {
                 },
                 showSymptomSheet: $showSymptomSheet,
                 onOpenQuickCheck: { showCameraHealthCheckSheet = true },
-                onLoadComparison: {
-                    await fetchSpaceSeries(days: 30)
+                onLoadLunarInsights: {
                     await fetchLunarInsights()
                 }
             )
@@ -13277,13 +13194,11 @@ struct ContentView: View {
                 topSummary: resolvedSymptomSummary,
                 diagnostics: symptomDiagnostics,
                 currentSymptomsSnapshot: currentSymptomsSnapshot,
-                series: resolvedSeriesPayload,
                 lunarInsights: lunarInsights,
                 lunarInsightsLoading: lunarInsightsLoading,
                 lunarInsightsError: lunarInsightsError,
                 experienceMode: experienceProfile.mode,
                 lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared,
-                highlights: resolvedSymptomHighlights,
                 latestCameraCheck: latestCameraCheck,
                 latestCameraCheckLoading: latestCameraCheckLoading,
                 latestCameraCheckError: latestCameraCheckError,
@@ -13298,8 +13213,7 @@ struct ContentView: View {
                 },
                 showSymptomSheet: $showSymptomSheet,
                 onOpenQuickCheck: { showCameraHealthCheckSheet = true },
-                onLoadComparison: {
-                    await fetchSpaceSeries(days: 30)
+                onLoadLunarInsights: {
                     await fetchLunarInsights()
                 }
             )
@@ -13424,12 +13338,10 @@ struct ContentView: View {
             let current = selected?.0
             let usingYesterdayFallback = selected?.1 ?? false
             let updatedText = current?.updatedAt.flatMap { formatUpdated($0) }
-            let seriesDetail = series ?? lastKnownSeries
             let resolvedOutlook = spaceOutlook ?? lastKnownSpaceOutlook
             let resolvedUserOutlook = userOutlook ?? lastKnownUserOutlook
             let symptomPoints = symptomSparkPoints()
             let symptomSummary = topSymptomSummary()
-            let symptomHighlightList = symptomHighlights()
 
             NavigationStack(path: $missionInsightsPath) {
                 InsightsHubView(
@@ -13572,13 +13484,11 @@ struct ContentView: View {
                             topSummary: symptomSummary,
                             diagnostics: symptomDiagnostics,
                             currentSymptomsSnapshot: currentSymptomsSnapshot,
-                            series: seriesDetail,
                             lunarInsights: lunarInsights,
                             lunarInsightsLoading: lunarInsightsLoading,
                             lunarInsightsError: lunarInsightsError,
                             experienceMode: experienceProfile.mode,
                             lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared,
-                            highlights: symptomHighlightList,
                             latestCameraCheck: latestCameraCheck,
                             latestCameraCheckLoading: latestCameraCheckLoading,
                             latestCameraCheckError: latestCameraCheckError,
@@ -13588,8 +13498,7 @@ struct ContentView: View {
                             onOpenDailyCheckIn: { missionInsightsPath = [.dailyCheckIn] },
                             showSymptomSheet: $showInsightsSymptomSheet,
                             onOpenQuickCheck: { showCameraHealthCheckSheet = true },
-                            onLoadComparison: {
-                                await fetchSpaceSeries(days: 30)
+                            onLoadLunarInsights: {
                                 await fetchLunarInsights()
                             }
                         )
