@@ -113,6 +113,9 @@ struct GuideHubView: View {
             return "I’m checking whether today’s feedback prompt is ready."
         }
         if isDailyCheckInCompleted {
+            if let exposureSummary = dailyCheckInStatus?.latestEntry?.summaryExposureText {
+                return "Today’s check-in is already logged. Also noted: \(exposureSummary). You can reopen it if you want to review or update the entry."
+            }
             return "Today’s check-in is already logged. You can reopen it if you want to review or update the entry."
         }
         if let prompt = dailyCheckInStatus?.prompt {

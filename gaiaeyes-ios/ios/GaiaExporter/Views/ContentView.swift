@@ -7395,19 +7395,19 @@ struct ContentView: View {
                 let priorityMap: [[String]]
                 switch normalizedGaugeKey {
                 case "pain":
-                    priorityMap = [["allergens"], ["pressure"], ["temp", "temperature"], ["aqi"]]
+                    priorityMap = [["allergen_exposure"], ["overexertion"], ["allergens"], ["pressure"], ["temp", "temperature"], ["aqi"]]
                 case "focus":
-                    priorityMap = [["allergens"], ["pressure"], ["aqi"], ["schumann", "resonance"]]
+                    priorityMap = [["allergen_exposure"], ["allergens"], ["pressure"], ["aqi"], ["schumann", "resonance"]]
                 case "energy":
-                    priorityMap = [["temp", "temperature"], ["aqi"], ["allergens"]]
+                    priorityMap = [["overexertion"], ["allergen_exposure"], ["temp", "temperature"], ["aqi"], ["allergens"]]
                 case "recoveryLoad":
-                    priorityMap = [["temp", "temperature"], ["pressure"], ["aqi"]]
+                    priorityMap = [["overexertion"], ["temp", "temperature"], ["pressure"], ["aqi"]]
                 case "sleep":
-                    priorityMap = [["pressure"], ["temp", "temperature"], ["schumann", "resonance"]]
+                    priorityMap = [["overexertion"], ["allergen_exposure"], ["pressure"], ["temp", "temperature"], ["schumann", "resonance"]]
                 case "mood":
                     priorityMap = [["pressure"], ["schumann", "resonance"], ["aqi"]]
                 case "heart":
-                    priorityMap = [["kp", "geomagnetic"], ["bz"], ["sw", "solar_wind"], ["pressure"]]
+                    priorityMap = [["overexertion"], ["allergen_exposure"], ["kp", "geomagnetic"], ["bz"], ["sw", "solar_wind"], ["pressure"]]
                 default:
                     priorityMap = []
                 }
@@ -7501,6 +7501,10 @@ struct ContentView: View {
                     return "Solar wind"
                 case "allergens":
                     return "Allergens"
+                case "allergen_exposure":
+                    return "Allergen exposure"
+                case "overexertion":
+                    return "Heavy activity"
                 default:
                     return translated(driver.label) ?? driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized
                 }
@@ -7517,6 +7521,10 @@ struct ContentView: View {
                     return "AQI is \(state)"
                 case "allergens":
                     return "Allergens are \(state)"
+                case "allergen_exposure":
+                    return "Recent allergen exposure is in the mix"
+                case "overexertion":
+                    return "Recent heavy activity is in the mix"
                 case "schumann":
                     return "Earth Resonance is \(state)"
                 case "kp":
@@ -8259,6 +8267,9 @@ struct ContentView: View {
                let completedAt = latest.completedAt,
                !completedAt.isEmpty,
                latest.day == targetDay {
+                if let exposureSummary = latest.summaryExposureText {
+                    return "Latest check-in saved for \(latest.day). Also logged: \(exposureSummary)."
+                }
                 return "Latest check-in saved for \(latest.day)."
             }
             if status.settings.enabled {
@@ -11791,6 +11802,9 @@ struct ContentView: View {
                let completedAt = entry.completedAt,
                !completedAt.isEmpty,
                entry.day == targetDay {
+                if let exposureSummary = entry.summaryExposureText {
+                    return "Already completed for \(entry.day). Also logged: \(exposureSummary). Open it to update the read or review the last response."
+                }
                 return "Already completed for \(entry.day). Open it to update the read or review the last response."
             }
             if let prompt = dailyCheckInStatus?.prompt {

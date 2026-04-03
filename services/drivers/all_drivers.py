@@ -35,6 +35,8 @@ _DRIVER_CATEGORY = {
     "temp": "local",
     "aqi": "local",
     "allergens": "local",
+    "overexertion": "body_context",
+    "allergen_exposure": "body_context",
     "kp": "space",
     "bz": "space",
     "sw": "space",
@@ -61,6 +63,8 @@ _BASE_DRIVER_ORDER = {
     "sep": 11,
     "drap": 12,
     "schumann": 13,
+    "overexertion": 200,
+    "allergen_exposure": 201,
 }
 
 _SEVERITY_RANK = {
@@ -92,6 +96,8 @@ _KEY_ALIASES = {
     "sep": ["sep", "radiation"],
     "drap": ["drap", "radio"],
     "schumann": ["schumann"],
+    "overexertion": ["overexertion", "heavy_activity"],
+    "allergen_exposure": ["allergen_exposure", "allergen exposure"],
 }
 
 _WHAT_IT_IS = {
@@ -108,6 +114,8 @@ _WHAT_IT_IS = {
     "sep": "Solar energetic particle activity.",
     "drap": "High-frequency radio absorption from disturbed ionospheric conditions.",
     "schumann": "Recent variability in Earth-ionosphere resonance activity.",
+    "overexertion": "Recent heavy activity or overexertion you logged for today.",
+    "allergen_exposure": "Recent allergen exposure you logged for today.",
 }
 
 _SCIENCE_NOTES = {
@@ -124,12 +132,32 @@ _SCIENCE_NOTES = {
     "sep": "SEP levels describe energetic particle activity in near-Earth space.",
     "drap": "DRAP-style absorption reflects ionospheric radio absorption, especially on higher-latitude paths.",
     "schumann": "Schumann readings here are contextual environmental measurements, not a medical marker.",
+    "overexertion": "Logged exposures are body-context inputs that help explain recovery load alongside environmental drivers.",
+    "allergen_exposure": "Logged allergen exposure is body context from your own report, not a measured ambient pollen level.",
 }
 
 _BODY_CONTEXT_NOTE = (
     "Body context is personal context from your recent health and symptom data. "
     "It is not the same thing as an external environmental signal."
 )
+
+_EXPOSURE_DRIVER_WINDOWS_HOURS = {
+    "overexertion": 18.0,
+    "allergen_exposure": 24.0,
+}
+
+_EXPOSURE_DRIVER_META = {
+    "overexertion": {
+        "label": "Heavy Activity",
+        "short_reason": "Recent heavy activity may still be adding recovery load.",
+        "active_now_text": "Recent heavy activity is still in the mix for today.",
+    },
+    "allergen_exposure": {
+        "label": "Allergen Exposure",
+        "short_reason": "Recent allergen exposure may still be part of today’s body context.",
+        "active_now_text": "Recent allergen exposure is still in the mix for today.",
+    },
+}
 
 
 def _cursor_kwargs() -> dict[str, Any]:
@@ -174,6 +202,23 @@ def _iso(value: Any) -> Optional[str]:
     return text
 
 
+def _parse_utc_datetime(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+    text = _clean_text(value)
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
 def _normalize_local_payload(local_payload: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     if not isinstance(local_payload, Mapping):
         return {}
@@ -190,6 +235,24 @@ def _normalize_symptom_code(value: str) -> str:
 
 def _symptom_label(value: str) -> str:
     return _normalize_symptom_code(value).replace("_", " ").title()
+
+
+def _natural_label_series(value: str) -> tuple[str, int]:
+    parts = [item.strip() for item in str(value or "").split(",") if item.strip()]
+    if not parts:
+        return "", 0
+    if len(parts) == 1:
+        return parts[0], 1
+
+    normalized_tail = []
+    for item in parts[1:]:
+        if not item:
+            continue
+        normalized_tail.append(item[:1].lower() + item[1:] if item[:1].isupper() else item)
+
+    if len(parts) == 2:
+        return f"{parts[0]} and {normalized_tail[0]}", 2
+    return f"{parts[0]}, {', '.join(normalized_tail[:-1])}, and {normalized_tail[-1]}", len(parts)
 
 
 def _canonical_key(raw_key: str) -> str:
@@ -723,9 +786,19 @@ def _seed_body_context_drivers(health_status_explainer: Mapping[str, Any] | None
         display = _clean_text(payload.get("display"))
         short_reason = f"{label} is adding more body context right now."
         active_now = f"{label} is part of your current body context."
+        what_it_is = f"{label} from your recent health context."
         if display:
             short_reason = f"{label} is adding body context right now: {display}."
             active_now = f"{label} is showing {display.lower()} right now."
+        if source_key == "symptoms":
+            symptom_series, symptom_count = _natural_label_series(display or "")
+            short_reason = "Current symptoms are part of your body context right now."
+            active_now = "Current symptoms are part of your body context right now."
+            what_it_is = "Symptoms you recently logged as active."
+            if symptom_series:
+                verb = "is" if symptom_count == 1 else "are"
+                short_reason = f"{symptom_series} {verb} active right now."
+                active_now = f"Current symptoms in the mix right now: {display}."
 
         rows.append(
             _build_base_driver(
@@ -739,7 +812,7 @@ def _seed_body_context_drivers(health_status_explainer: Mapping[str, Any] | None
                 show_driver=True,
                 short_reason=short_reason,
                 active_now_text=active_now,
-                what_it_is=f"{label} from your recent health context.",
+                what_it_is=what_it_is,
                 science_note=_BODY_CONTEXT_NOTE,
                 source_hint="Recent health context",
                 updated_at=generated_at,
@@ -773,6 +846,76 @@ def _seed_body_context_drivers(health_status_explainer: Mapping[str, Any] | None
                 source_hint="Recent health context",
                 updated_at=generated_at,
                 aliases=[body_key, source_key],
+            )
+        )
+
+    return rows
+
+
+def _exposure_driver_signal_strength(max_intensity: int, events: int) -> float:
+    if max_intensity >= 3:
+        base = 0.9
+    elif max_intensity >= 2 or events >= 2:
+        base = 0.74
+    else:
+        base = 0.58
+    return min(0.96, base + (0.04 * max(0, min(events - 1, 2))))
+
+
+def _exposure_driver_severity(max_intensity: int, events: int) -> tuple[str, str]:
+    if max_intensity >= 3:
+        return "high", "Strong"
+    if max_intensity >= 2 or events >= 2:
+        return "watch", "Watch"
+    return "mild", "Active"
+
+
+def build_exposure_driver_rows(
+    exposure_summary: Mapping[str, Any] | None,
+    *,
+    generated_at: str,
+    asof: Optional[datetime] = None,
+) -> list[Dict[str, Any]]:
+    if not isinstance(exposure_summary, Mapping):
+        return []
+
+    anchor = asof or datetime.now(UTC)
+    rows: list[Dict[str, Any]] = []
+    for payload in exposure_summary.get("top_exposures") or []:
+        if not isinstance(payload, Mapping):
+            continue
+        key = str(payload.get("exposure_key") or "").strip().lower()
+        meta = _EXPOSURE_DRIVER_META.get(key)
+        if not meta:
+            continue
+        last_ts = _parse_utc_datetime(payload.get("last_ts"))
+        window_hours = _EXPOSURE_DRIVER_WINDOWS_HOURS.get(key)
+        if last_ts is None or window_hours is None:
+            continue
+        age_hours = max(0.0, (anchor - last_ts).total_seconds() / 3600.0)
+        if age_hours > window_hours:
+            continue
+
+        events = max(1, _safe_int(payload.get("events")) or 1)
+        max_intensity = max(1, min(3, _safe_int(payload.get("max_intensity")) or 1))
+        severity, state = _exposure_driver_severity(max_intensity, events)
+        reading = "Logged recently" if events == 1 else f"{events} recent logs"
+
+        rows.append(
+            _build_base_driver(
+                key=key,
+                label=str(meta["label"]),
+                severity=severity,
+                state=state,
+                reading=reading,
+                signal_strength=_exposure_driver_signal_strength(max_intensity, events),
+                force_visible=max_intensity >= 2,
+                show_driver=True,
+                short_reason=str(meta["short_reason"]),
+                active_now_text=str(meta["active_now_text"]),
+                source_hint="Recent exposure logs",
+                updated_at=_iso(last_ts) or generated_at,
+                aliases=_aliases_for_key(key),
             )
         )
 
@@ -1197,8 +1340,9 @@ async def build_all_drivers_payload(
 ) -> Dict[str, Any]:
     from app.db import ulf as ulf_db
     from bots.definitions.load_definition_base import load_definition_base
-    from bots.gauges.gauge_scorer import fetch_health_status_context, fetch_user_tags
+    from bots.gauges.gauge_scorer import fetch_exposure_summary, fetch_health_status_context, fetch_user_tags
     from services.forecast_outlook import build_user_outlook_payload
+    from services.personalization.health_context import build_personalization_profile
 
     generated_at = datetime.now(UTC).isoformat()
     try:
@@ -1230,6 +1374,8 @@ async def build_all_drivers_payload(
     space_context = await _fetch_space_context(conn, day)
 
     user_tags = await user_tags_task
+    profile = build_personalization_profile(user_tags)
+    exposure_summary = await asyncio.to_thread(fetch_exposure_summary, user_id, day, profile=profile)
     health_status_explainer = await health_status_task
 
     seed_drivers: list[Dict[str, Any]] = []
@@ -1244,6 +1390,7 @@ async def build_all_drivers_payload(
         seed_drivers.append(ulf_driver)
 
     seed_drivers.extend(_seed_space_context_drivers(space_context))
+    seed_drivers.extend(build_exposure_driver_rows(exposure_summary, generated_at=generated_at))
     seed_drivers.extend(_seed_body_context_drivers(health_status_explainer, generated_at=generated_at))
 
     return compose_all_drivers_payload(

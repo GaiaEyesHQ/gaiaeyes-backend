@@ -179,6 +179,13 @@ def _normalize_symptom_code(value: Any) -> str:
     return str(value).strip().replace("-", "_").replace(" ", "_").upper()
 
 
+def _symptom_label(value: Any) -> str:
+    normalized = _normalize_symptom_code(value)
+    if not normalized:
+        return ""
+    return normalized.replace("_", " ").lower().capitalize()
+
+
 def _normalize_token(value: Any) -> str:
     return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
 
@@ -1368,12 +1375,13 @@ def build_health_status_explainer(
         if _normalize_symptom_code(row.get("symptom_code"))
     ]
     if symptom_points > 0:
-        summary_codes = ", ".join(top_symptoms[:2]) if top_symptoms else "recent symptoms"
+        summary_labels = [_symptom_label(code) for code in top_symptoms[:2] if _symptom_label(code)]
+        summary_codes = ", ".join(summary_labels) if summary_labels else "Recent symptoms"
         drivers.append(
             {
                 "key": "symptoms",
                 "kind": "symptom",
-                "label": "Symptoms logged",
+                "label": "Current symptoms",
                 "display": summary_codes,
                 "points": round(symptom_points, 2),
                 "impact": _health_driver_impact(symptom_points),

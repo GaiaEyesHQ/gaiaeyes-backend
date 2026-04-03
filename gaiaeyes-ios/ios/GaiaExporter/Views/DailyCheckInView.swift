@@ -198,6 +198,11 @@ struct DailyCheckInView: View {
         latestEntry?.day == targetDay && latestEntry?.completedAt != nil
     }
 
+    private var completedExposureSummary: String? {
+        guard isCompletedForTargetDay else { return nil }
+        return latestEntry?.summaryExposureText
+    }
+
     private var canSubmit: Bool {
         !comparedToYesterday.isEmpty &&
         !energyLevel.isEmpty &&
@@ -250,6 +255,13 @@ struct DailyCheckInView: View {
 
     private var predictionSubtitle: String {
         mode == .mystical ? "This helps Gaia stay grounded over time." : "This helps Gaia stay calibrated over time."
+    }
+
+    private func exposureConfirmationText(for exposureIDs: [String]) -> String {
+        guard let summary = DailyCheckInEntry.summaryExposureText(for: exposureIDs) else {
+            return "Check-in saved."
+        }
+        return "Check-in saved. Also logged today: \(summary)."
     }
 
     private var comparisonChoices: [DailyCheckInChoice] {
@@ -519,7 +531,13 @@ struct DailyCheckInView: View {
                 Text("You already checked in for \(latestEntry.day). Update it if your read changed.")
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.68))
-            } else if let reminder = status?.settings.reminderTime, !reminder.isEmpty {
+            }
+
+            if let completedExposureSummary, !completedExposureSummary.isEmpty {
+                Text("Also logged today: \(completedExposureSummary)")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.68))
+            } else if !isCompletedForTargetDay, let reminder = status?.settings.reminderTime, !reminder.isEmpty {
                 Text("Reminder: \(reminder)")
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.58))
@@ -751,7 +769,7 @@ struct DailyCheckInView: View {
             await MainActor.run {
                 status = nextStatus
                 onStatusChanged(nextStatus)
-                statusMessage = "Check-in saved."
+                statusMessage = exposureConfirmationText(for: savedEntry.exposures)
                 isSaving = false
             }
             if showsCloseButton {

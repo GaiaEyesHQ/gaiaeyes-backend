@@ -26,6 +26,7 @@ from bots.gauges.gauge_scorer import (
 )
 from bots.gauges.local_payload import get_local_payload
 from bots.gauges.signal_resolver import resolve_signals
+from services.drivers.all_drivers import build_exposure_driver_rows
 from services.drivers.driver_normalize import normalize_environmental_drivers
 from services.gauges.alerts import dedupe_alert_pills
 from services.gauges.zones import decorate_gauge
@@ -522,14 +523,19 @@ async def dashboard(
         alerts_json=out.get("alerts"),
         limit=6,
     )
+    profile = build_personalization_profile(user_tags)
+    exposure_summary = await asyncio.to_thread(fetch_exposure_summary, user_id, day, profile=profile)
+    exposure_summary = exposure_summary if isinstance(exposure_summary, dict) else {}
+    exposure_drivers = build_exposure_driver_rows(exposure_summary, generated_at=datetime.now(timezone.utc).isoformat())
+    ranked_input_drivers = [*drivers, *exposure_drivers]
     personal_relevance = compute_personal_relevance(
         day=day,
-        drivers=drivers,
+        drivers=ranked_input_drivers,
         pattern_rows=pattern_rows,
         user_tags=user_tags,
         recent_outcomes=recent_outcomes,
     )
-    ranked_drivers = personal_relevance.get("ranked_drivers") or drivers
+    ranked_drivers = personal_relevance.get("ranked_drivers") or ranked_input_drivers
     out["drivers"] = ranked_drivers
     out["signal_bar"] = build_signal_bar(
         day=day,
@@ -551,9 +557,6 @@ async def dashboard(
         health_status_explainer if isinstance(health_status_explainer, dict) else {}
     )
     symptom_gauge_context = symptom_gauge_context if isinstance(symptom_gauge_context, dict) else {}
-    profile = build_personalization_profile(user_tags)
-    exposure_summary = await asyncio.to_thread(fetch_exposure_summary, user_id, day, profile=profile)
-    exposure_summary = exposure_summary if isinstance(exposure_summary, dict) else {}
     out["gauge_recent_log_boosts"] = symptom_gauge_context.get("gauge_recent_log_boosts") or {}
     out["last_symptom_update_at"] = symptom_gauge_context.get("last_symptom_update_at")
     out["recent_exposures"] = exposure_summary.get("top_exposures") or []
