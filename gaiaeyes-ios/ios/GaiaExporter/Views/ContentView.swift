@@ -3809,6 +3809,170 @@ struct ContentView: View {
         return out.string(from: d)
     }
 
+    private var bodySnapshotMergeKeys: Set<String> {
+        [
+            "health",
+            "steps_total",
+            "hr_min",
+            "hr_max",
+            "hrv_avg",
+            "spo2_avg",
+            "spo2_avg_pct",
+            "spo2_avg_percent",
+            "spo2_mean",
+            "bp_sys_avg",
+            "bp_dia_avg",
+            "respiratory_rate_avg",
+            "respiratory_rate_sleep_avg",
+            "respiratory_rate_baseline_delta",
+            "temperature_deviation",
+            "temperature_deviation_baseline_delta",
+            "temperature_source",
+            "resting_hr_avg",
+            "resting_hr_baseline_delta",
+            "bedtime_consistency_score",
+            "waketime_consistency_score",
+            "sleep_debt_proxy",
+            "sleep_vs_14d_baseline_delta",
+            "sleep_total_minutes",
+            "rem_m",
+            "core_m",
+            "deep_m",
+            "awake_m",
+            "inbed_m",
+            "sleep_efficiency",
+        ]
+    }
+
+    private func bodyMetricScore(for features: FeaturesToday) -> Int {
+        var score = 0
+        let numericFields: [Num?] = [
+            features.stepsTotal,
+            features.hrMin,
+            features.hrMax,
+            features.hrvAvg,
+            features.bpSysAvg,
+            features.bpDiaAvg,
+            features.respiratoryRateAvg,
+            features.respiratoryRateSleepAvg,
+            features.respiratoryRateBaselineDelta,
+            features.temperatureDeviation,
+            features.temperatureDeviationBaselineDelta,
+            features.restingHrAvg,
+            features.restingHrBaselineDelta,
+            features.bedtimeConsistencyScore,
+            features.waketimeConsistencyScore,
+            features.sleepDebtProxy,
+            features.sleepVs14dBaselineDelta,
+            features.sleepTotalMinutes,
+            features.remM,
+            features.coreM,
+            features.deepM,
+            features.awakeM,
+            features.inbedM,
+            features.sleepEfficiency,
+        ]
+        for field in numericFields where field?.value != nil {
+            score += 1
+        }
+        if features.spo2AvgDisplay != nil {
+            score += 1
+        }
+        if let source = features.temperatureSource, !source.isEmpty {
+            score += 1
+        }
+        return score
+    }
+
+    private func hasUsableSleepData(_ features: FeaturesToday) -> Bool {
+        let total = Int((features.sleepTotalMinutes?.value ?? 0).rounded())
+        if total > 0 {
+            return true
+        }
+        let stages: [Num?] = [
+            features.remM,
+            features.coreM,
+            features.deepM,
+            features.awakeM,
+            features.inbedM,
+            features.sleepEfficiency,
+        ]
+        return stages.contains { ($0?.value ?? 0) > 0 }
+    }
+
+    private func sameDayBodySnapshotIsRicher(_ lhs: FeaturesToday, than rhs: FeaturesToday) -> Bool {
+        guard lhs.day == rhs.day else { return false }
+        let lhsHasSleep = hasUsableSleepData(lhs)
+        let rhsHasSleep = hasUsableSleepData(rhs)
+        if lhsHasSleep != rhsHasSleep {
+            return lhsHasSleep && !rhsHasSleep
+        }
+        let lhsScore = bodyMetricScore(for: lhs)
+        let rhsScore = bodyMetricScore(for: rhs)
+        if lhsScore != rhsScore {
+            return lhsScore > rhsScore
+        }
+        if let lhsUpdated = lhs.updatedAt.flatMap(formatISO),
+           let rhsUpdated = rhs.updatedAt.flatMap(formatISO) {
+            return lhsUpdated >= rhsUpdated
+        }
+        return false
+    }
+
+    private func mergedFeaturesPreservingBody(base: FeaturesToday, bodyFrom donor: FeaturesToday) -> FeaturesToday {
+        guard base.day == donor.day else { return base }
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        guard
+            let baseData = try? encoder.encode(base),
+            let donorData = try? encoder.encode(donor),
+            let baseObject = try? JSONSerialization.jsonObject(with: baseData),
+            let donorObject = try? JSONSerialization.jsonObject(with: donorData),
+            var baseDict = baseObject as? [String: Any],
+            let donorDict = donorObject as? [String: Any]
+        else {
+            return donor
+        }
+        for key in bodySnapshotMergeKeys {
+            if let value = donorDict[key] {
+                baseDict[key] = value
+            }
+        }
+        guard
+            let mergedData = try? JSONSerialization.data(withJSONObject: baseDict),
+            let merged = try? decoder.decode(FeaturesToday.self, from: mergedData)
+        else {
+            return donor
+        }
+        return merged
+    }
+
+    private func resolvedFeaturesResponse(_ incoming: FeaturesToday) -> FeaturesToday {
+        guard let current = lastKnownFeatures ?? features else { return incoming }
+        if sameDayBodySnapshotIsRicher(current, than: incoming) {
+            return mergedFeaturesPreservingBody(base: incoming, bodyFrom: current)
+        }
+        return incoming
+    }
+
+    private func resolvedCacheVisibleFeatures(_ cached: FeaturesToday, current: FeaturesToday?) -> FeaturesToday? {
+        guard let current else { return cached }
+        if cached.day != current.day {
+            return cached.day > current.day ? cached : nil
+        }
+        if sameDayBodySnapshotIsRicher(cached, than: current) {
+            return mergedFeaturesPreservingBody(base: current, bodyFrom: cached)
+        }
+        if let cachedUpdated = cached.updatedAt.flatMap(formatISO),
+           let currentUpdated = current.updatedAt.flatMap(formatISO),
+           cachedUpdated > currentUpdated {
+            return cached
+        }
+        return nil
+    }
+
     private func decodeSpaceVisuals(from json: String) -> SpaceVisualsPayload? {
         guard !json.isEmpty, let data = json.data(using: .utf8) else { return nil }
         let dec = JSONDecoder()
@@ -5674,20 +5838,25 @@ struct ContentView: View {
         if (envelope.source ?? "") == "live" {
             self.featuresRefreshGuardUntil = Date()
         }
+        let resolved = resolvedFeaturesResponse(data)
         updateFeaturesDiagnostics(from: envelope, fallback: false)
-        self.features = data
-        self.lastKnownFeatures = data
+        self.features = resolved
+        self.lastKnownFeatures = resolved
         self.featuresLastEnvelopeOk = envelope.ok
         self.featuresLastEnvelopeSource = envelope.source
         self.featuresCancellations = envelope.cancellations ?? []
-        if let encoded = try? JSONEncoder().encode(data),
+        if let encoded = try? JSONEncoder().encode(resolved),
            let json = String(data: encoded, encoding: .utf8) {
             self.featuresCacheJSON = json
         }
         let okText = envelope.ok.map { $0 ? "true" : "false" } ?? "nil"
         let sourceText = envelope.source ?? "live"
         let triggerText = String(describing: trigger)
-        appLog("[UI] features ok: day=\(data.day) ok=\(okText) source=\(sourceText) trigger=\(triggerText)")
+        if sameDayBodySnapshotIsRicher(lastKnownFeatures ?? resolved, than: data) && resolved.day == data.day {
+            appLog("[UI] features ok: preserved richer same-day body snapshot day=\(resolved.day) source=\(sourceText) trigger=\(triggerText)")
+        } else {
+            appLog("[UI] features ok: day=\(resolved.day) ok=\(okText) source=\(sourceText) trigger=\(triggerText)")
+        }
         if let cancels = envelope.cancellations, !cancels.isEmpty {
             appLog("[UI] features cancellations: \(cancels.joined(separator: ", "))")
         }
@@ -12581,12 +12750,13 @@ struct ContentView: View {
             .onChange(of: featuresCacheJSON, initial: false) { oldValue, newValue in
                 guard newValue != oldValue, !newValue.isEmpty, let decoded = decodeFeatures(from: newValue) else { return }
                 lastKnownFeatures = decoded
-                if features == nil {
-                    features = decoded
+                if let resolved = resolvedCacheVisibleFeatures(decoded, current: features) {
+                    features = resolved
+                    lastKnownFeatures = resolved
                     featuresLastEnvelopeOk = nil
                     featuresLastEnvelopeSource = "cache"
                     updateFeaturesDiagnostics(from: nil, fallback: true)
-                    appLog("[UI] features updated from cache change day=\(decoded.day)")
+                    appLog("[UI] features updated from cache change day=\(resolved.day)")
                 }
             }
             .onChange(of: spaceVisualsCacheJSON, initial: false) { oldValue, newValue in

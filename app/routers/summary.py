@@ -1210,6 +1210,156 @@ def _summarize_feature_payload(payload: Optional[Dict[str, Any]]) -> Dict[str, A
     return summary
 
 
+_BODY_CACHE_KEYS = {
+    "health",
+    "steps_total",
+    "hr_min",
+    "hr_max",
+    "hrv_avg",
+    "spo2_avg",
+    "spo2_avg_pct",
+    "spo2_avg_percent",
+    "spo2_mean",
+    "bp_sys_avg",
+    "bp_dia_avg",
+    "respiratory_rate_avg",
+    "respiratory_rate_sleep_avg",
+    "respiratory_rate_baseline_delta",
+    "temperature_deviation",
+    "temperature_deviation_baseline_delta",
+    "temperature_source",
+    "resting_hr_avg",
+    "resting_hr_baseline_delta",
+    "bedtime_consistency_score",
+    "waketime_consistency_score",
+    "sleep_debt_proxy",
+    "sleep_vs_14d_baseline_delta",
+    "sleep_total_minutes",
+    "rem_m",
+    "core_m",
+    "deep_m",
+    "awake_m",
+    "inbed_m",
+    "sleep_efficiency",
+}
+
+_BODY_SCORE_INT_KEYS = (
+    "steps_total",
+    "hr_min",
+    "hr_max",
+    "hrv_avg",
+    "bp_sys_avg",
+    "bp_dia_avg",
+    "sleep_total_minutes",
+)
+
+_BODY_SCORE_FLOAT_KEYS = (
+    "spo2_avg",
+    "spo2_avg_pct",
+    "spo2_avg_percent",
+    "spo2_mean",
+    "respiratory_rate_avg",
+    "respiratory_rate_sleep_avg",
+    "respiratory_rate_baseline_delta",
+    "temperature_deviation",
+    "temperature_deviation_baseline_delta",
+    "resting_hr_avg",
+    "resting_hr_baseline_delta",
+    "bedtime_consistency_score",
+    "waketime_consistency_score",
+    "sleep_debt_proxy",
+    "sleep_vs_14d_baseline_delta",
+    "rem_m",
+    "core_m",
+    "deep_m",
+    "awake_m",
+    "inbed_m",
+    "sleep_efficiency",
+)
+
+_BODY_SLEEP_KEYS = (
+    "sleep_total_minutes",
+    "rem_m",
+    "core_m",
+    "deep_m",
+    "awake_m",
+    "inbed_m",
+    "sleep_efficiency",
+)
+
+
+def _payload_has_usable_sleep(payload: Optional[Dict[str, Any]]) -> bool:
+    if not payload:
+        return False
+    total = _coerce_int_value(payload.get("sleep_total_minutes"))
+    if total is not None and total > 0:
+        return True
+    for key in _BODY_SLEEP_KEYS[1:]:
+        value = _coerce_float_value(payload.get(key))
+        if value is not None and value > 0:
+            return True
+    return False
+
+
+def _body_metric_score(payload: Optional[Dict[str, Any]]) -> int:
+    if not payload:
+        return 0
+    score = 0
+    for key in _BODY_SCORE_INT_KEYS:
+        if _coerce_int_value(payload.get(key)) is not None:
+            score += 1
+    for key in _BODY_SCORE_FLOAT_KEYS:
+        if _coerce_float_value(payload.get(key)) is not None:
+            score += 1
+    health = payload.get("health")
+    if isinstance(health, dict) and any(value is not None for value in health.values()):
+        score += 1
+    temperature_source = payload.get("temperature_source")
+    if isinstance(temperature_source, str) and temperature_source.strip():
+        score += 1
+    return score
+
+
+def _same_day_cached_body_is_richer(
+    cached_payload: Optional[Dict[str, Any]],
+    current_payload: Optional[Dict[str, Any]],
+) -> bool:
+    if not cached_payload or not current_payload:
+        return False
+    cached_day = _coerce_day(cached_payload.get("day"))
+    current_day = _coerce_day(current_payload.get("day"))
+    if not cached_day or cached_day != current_day:
+        return False
+
+    cached_has_sleep = _payload_has_usable_sleep(cached_payload)
+    current_has_sleep = _payload_has_usable_sleep(current_payload)
+    if cached_has_sleep != current_has_sleep:
+        return cached_has_sleep and not current_has_sleep
+
+    cached_score = _body_metric_score(cached_payload)
+    current_score = _body_metric_score(current_payload)
+    if cached_score != current_score:
+        return cached_score > current_score
+
+    cached_updated_at = _coerce_datetime(cached_payload.get("updated_at"))
+    current_updated_at = _coerce_datetime(current_payload.get("updated_at"))
+    if cached_updated_at and current_updated_at:
+        return cached_updated_at >= current_updated_at
+    return False
+
+
+def _merge_payload_preserving_body(
+    base_payload: Optional[Dict[str, Any]],
+    body_from_payload: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    merged = dict(base_payload or {})
+    donor = body_from_payload or {}
+    for key in _BODY_CACHE_KEYS:
+        if key in donor and donor.get(key) is not None:
+            merged[key] = donor[key]
+    return merged
+
+
 def _normalize_features_payload(
     payload: Optional[Dict[str, Any]],
     diag_info: Dict[str, Any],
@@ -1368,6 +1518,7 @@ async def _collect_features(
     user_id: Optional[str],
     tz_name: str,
     tzinfo: ZoneInfo,
+    cached_payload: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any], Optional[str]]:
     diag_info: Dict[str, Any] = _init_diag_info(user_id, tz_name)
     _diag_trace(
@@ -1669,6 +1820,17 @@ async def _collect_features(
                     response_payload.update(sch)
                     response_payload.update(post)
 
+                if _same_day_cached_body_is_richer(cached_payload, response_payload):
+                    response_payload = _merge_payload_preserving_body(
+                        response_payload,
+                        cached_payload,
+                    )
+                    diag_info["cache_hit"] = True
+                    _diag_trace(
+                        diag_info,
+                        "merged richer same-day body fields from cached snapshot",
+                    )
+
                 cacheable_keys = {k for k in response_payload.keys() if k != "source"}
                 if (
                     user_id
@@ -1946,7 +2108,7 @@ async def features_today(
     else:
         try:
             response_payload, diag_info, error_text = await _collect_features(
-                conn, user_id, tz_name, tzinfo
+                conn, user_id, tz_name, tzinfo, cached_payload=cached_payload
             )
         except PoolTimeout as exc:
             primary_failed = True
