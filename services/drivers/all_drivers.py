@@ -961,6 +961,55 @@ def _current_symptom_rows_to_map(rows: Sequence[Mapping[str, Any]]) -> dict[str,
     return output
 
 
+def _seed_current_symptom_driver(
+    current_symptom_rows: Sequence[Mapping[str, Any]],
+    *,
+    generated_at: str,
+) -> Optional[Dict[str, Any]]:
+    labels: list[str] = []
+    seen: set[str] = set()
+    for row in current_symptom_rows:
+        if not isinstance(row, Mapping):
+            continue
+        label = _clean_text(row.get("label")) or _symptom_label(str(row.get("symptom_code") or ""))
+        normalized = label.lower()
+        if not label or normalized in seen:
+            continue
+        seen.add(normalized)
+        labels.append(label)
+
+    if not labels:
+        return None
+
+    symptom_series, symptom_count = _natural_label_series(", ".join(labels[:3]))
+    severity = "high" if symptom_count >= 3 else "watch" if symptom_count == 2 else "mild"
+    state = "Strong" if severity == "high" else "Watch" if severity == "watch" else "Active"
+    signal_strength = 0.9 if symptom_count >= 3 else 0.76 if symptom_count == 2 else 0.6
+    reading = f"{symptom_count} active" if symptom_count >= 2 else labels[0]
+    short_reason = "Current symptoms are part of your body context right now."
+    if symptom_series:
+        verb = "is" if symptom_count == 1 else "are"
+        short_reason = f"{symptom_series} {verb} active right now."
+
+    return _build_base_driver(
+        key="body_symptoms",
+        label="Current symptoms",
+        severity=severity,
+        state=state,
+        reading=reading,
+        signal_strength=signal_strength,
+        force_visible=symptom_count >= 2,
+        show_driver=True,
+        short_reason=short_reason,
+        active_now_text=f"Current symptoms in the mix right now: {', '.join(labels[:3])}.",
+        what_it_is="Symptoms you recently logged as active.",
+        science_note=_BODY_CONTEXT_NOTE,
+        source_hint="Current symptom log",
+        updated_at=generated_at,
+        aliases=["body_symptoms", "symptoms"],
+    )
+
+
 def _pattern_status(refs: Sequence[Mapping[str, Any]]) -> tuple[str, str]:
     confidence = ""
     if refs:
@@ -1174,7 +1223,11 @@ def _setup_hints(
             }
         )
 
-    health_ready = bool((health_status_explainer or {}).get("drivers")) or bool((health_status_explainer or {}).get("context"))
+    health_ready = (
+        bool((health_status_explainer or {}).get("drivers"))
+        or bool((health_status_explainer or {}).get("context"))
+        or bool(list(current_symptom_rows or []))
+    )
     if not health_ready:
         hints.append(
             {
@@ -1391,6 +1444,9 @@ async def build_all_drivers_payload(
 
     seed_drivers.extend(_seed_space_context_drivers(space_context))
     seed_drivers.extend(build_exposure_driver_rows(exposure_summary, generated_at=generated_at))
+    fallback_symptom_driver = _seed_current_symptom_driver(current_symptom_rows, generated_at=generated_at)
+    if fallback_symptom_driver:
+        seed_drivers.append(fallback_symptom_driver)
     seed_drivers.extend(_seed_body_context_drivers(health_status_explainer, generated_at=generated_at))
 
     return compose_all_drivers_payload(

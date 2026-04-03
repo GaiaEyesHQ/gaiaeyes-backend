@@ -120,6 +120,16 @@ struct AllDriversView: View {
         if driver.key == "temp" {
             return localizedTemperatureDelta(driver.readingValue)
         }
+        if driver.key == "body_symptoms" {
+            let symptomCount = driver.reading?
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .count ?? 0
+            if symptomCount >= 2 {
+                return "\(symptomCount) active"
+            }
+        }
         return driver.reading
     }
 
@@ -270,10 +280,11 @@ struct AllDriversView: View {
     }
 
     private func load(force: Bool = false) async {
-        if isLoading && !force {
+        if isLoading {
             return
         }
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
 
         do {
@@ -286,6 +297,8 @@ struct AllDriversView: View {
                 trackOpened(with: payload)
             }
         } catch {
+            if error is CancellationError { return }
+            if let uerr = error as? URLError, uerr.code == .cancelled { return }
             await MainActor.run {
                 errorMessage = error.localizedDescription
             }
@@ -850,8 +863,12 @@ private struct DriverRowView: View {
                                 Text(reading)
                                     .font(.caption.weight(.semibold))
                                     .foregroundColor(.white.opacity(0.64))
+                                    .multilineTextAlignment(.trailing)
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
+                        .frame(maxWidth: 96, alignment: .trailing)
                     }
 
                     if let translatedShortReason, !translatedShortReason.isEmpty {
