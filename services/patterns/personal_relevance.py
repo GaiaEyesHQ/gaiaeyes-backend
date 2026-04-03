@@ -47,6 +47,7 @@ OUTCOME_LABELS = {
     "pain_flare_day": "Pain flares",
     "fatigue_day": "Fatigue",
     "anxiety_day": "Anxious or restless days",
+    "restlessness_day": "Restless or reactive days",
     "poor_sleep_day": "Poor sleep",
     "focus_fog_day": "Brain fog",
     "hrv_dip_day": "HRV dips",
@@ -59,6 +60,7 @@ THEME_LABELS = {
     "pain_flare_day": "Pain flare watch",
     "fatigue_day": "Fatigue watch",
     "anxiety_day": "Restless-day watch",
+    "restlessness_day": "Restlessness watch",
     "poor_sleep_day": "Sleep watch",
     "focus_fog_day": "Focus watch",
     "hrv_dip_day": "Body-signal watch",
@@ -84,7 +86,7 @@ GAUGE_OUTCOME_KEYS = {
     "stamina": ("fatigue_day", "short_sleep_day"),
     "energy": ("fatigue_day", "anxiety_day"),
     "sleep": ("poor_sleep_day", "short_sleep_day"),
-    "mood": ("anxiety_day", "poor_sleep_day"),
+    "mood": ("anxiety_day", "restlessness_day", "poor_sleep_day"),
     "health_status": ("fatigue_day", "short_sleep_day", "high_hr_day"),
 }
 
@@ -99,7 +101,20 @@ GAUGE_LABELS = {
     "health_status": "Health Status",
 }
 
-OUTCOME_KEYS = list(OUTCOME_LABELS.keys())
+# These are the columns that currently exist in marts.user_daily_outcomes.
+# New derived pattern outcomes can be surfaced through associations before
+# they are promoted into that persisted table.
+OUTCOME_KEYS = [
+    "headache_day",
+    "pain_flare_day",
+    "fatigue_day",
+    "anxiety_day",
+    "poor_sleep_day",
+    "focus_fog_day",
+    "hrv_dip_day",
+    "high_hr_day",
+    "short_sleep_day",
+]
 
 CONFIDENCE_RANK = {
     "Strong": 3,
@@ -217,6 +232,11 @@ _PATTERN_MESSAGE_MAP = {
         "short": "Sleep-deficit nights have lined up with more fatigue days for you.",
         "clause": "they have lined up with more fatigue days for you",
     },
+    ("lunar_full_window_exposed", "restlessness_day"): {
+        "full": "Full-moon windows have lined up with more restless or reactive days in your history.",
+        "short": "Full-moon windows have lined up with more restless or reactive days for you.",
+        "clause": "they have lined up with more restless or reactive days for you",
+    },
     ("lunar_full_window_exposed", "poor_sleep_day"): {
         "full": "Full-moon windows have lined up with more poor-sleep nights in your history.",
         "short": "Full-moon windows have lined up with more poor-sleep nights for you.",
@@ -231,6 +251,11 @@ _PATTERN_MESSAGE_MAP = {
         "full": "New-moon windows have lined up with more poor-sleep nights in your history.",
         "short": "New-moon windows have lined up with more poor-sleep nights for you.",
         "clause": "they have lined up with more poor-sleep nights for you",
+    },
+    ("lunar_new_window_exposed", "restlessness_day"): {
+        "full": "New-moon windows have lined up with more restless or reactive days in your history.",
+        "short": "New-moon windows have lined up with more restless or reactive days for you.",
+        "clause": "they have lined up with more restless or reactive days for you",
     },
     ("lunar_new_window_exposed", "short_sleep_day"): {
         "full": "New-moon windows have lined up with more short-sleep nights in your history.",
@@ -416,6 +441,10 @@ def _outcome_relevance_weight(outcome_key: str, profile: PersonalizationProfile)
         ):
             return 1.45
         return 1.15
+    if outcome_key == "restlessness_day":
+        if profile.has_any("anxiety_sensitive") or profile.includes_any(AUTONOMIC_KEYS):
+            return 1.35
+        return 1.1
     if outcome_key == "anxiety_day":
         if profile.has_any("anxiety_sensitive") or profile.includes_any(AUTONOMIC_KEYS):
             return 1.4

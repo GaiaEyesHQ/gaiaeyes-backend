@@ -16,6 +16,17 @@ router = APIRouter(prefix="/v1", tags=["lunar"])
 
 MIN_TOTAL_OBSERVATIONS = 20
 MIN_WINDOW_OBSERVATIONS = 4
+LUNAR_SIGNAL_KEYS = ("lunar_full_window_exposed", "lunar_new_window_exposed")
+LUNAR_OUTCOME_KEYS = ("poor_sleep_day", "short_sleep_day", "restlessness_day")
+LUNAR_SIGNAL_TO_WINDOW = {
+    "lunar_full_window_exposed": "full",
+    "lunar_new_window_exposed": "new",
+}
+LUNAR_OUTCOME_TO_METRIC = {
+    "poor_sleep_day": "sleep",
+    "short_sleep_day": "short_sleep",
+    "restlessness_day": "restlessness",
+}
 
 _METRIC_SPECS: Dict[str, Dict[str, Any]] = {
     "hrv": {
@@ -245,6 +256,61 @@ async def _fetch_user_lunar_pattern_row(conn, user_id: str) -> Optional[Dict[str
     return dict(row) if row else None
 
 
+async def _fetch_canonical_lunar_pattern_rows(conn, user_id: str) -> list[Dict[str, Any]]:
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select *
+              from marts.user_pattern_associations
+             where user_id = %s
+               and signal_key = any(%s)
+               and outcome_key = any(%s)
+               and lag_hours = 0
+             order by confidence_rank desc, relative_lift desc, rate_diff desc, exposed_n desc
+            """,
+            (user_id, list(LUNAR_SIGNAL_KEYS), list(LUNAR_OUTCOME_KEYS)),
+            prepare=False,
+        )
+        return [dict(row) for row in await cur.fetchall()]
+
+
+def _canonical_pattern_strength(row: Optional[Dict[str, Any]]) -> str:
+    confidence = str((row or {}).get("confidence") or "").strip().lower()
+    if confidence in {"strong", "moderate"}:
+        return "moderate"
+    if confidence == "emerging":
+        return "weak"
+    return "none"
+
+
+def _canonical_lunar_message(row: Optional[Dict[str, Any]], *, scientific: bool, insufficient_data: bool) -> str:
+    if insufficient_data:
+        if scientific:
+            return "Gaia needs more overlap before comparing lunar windows with your sleep and restlessness patterns."
+        return "Gaia is still gathering enough overlap to see whether lunar windows stand out for you."
+    if not row:
+        if scientific:
+            return "Current comparisons do not show a consistent lunar pattern yet."
+        return "Your recent data does not point to a clear lunar sensitivity yet."
+
+    signal_key = str(row.get("signal_key") or "")
+    outcome_key = str(row.get("outcome_key") or "")
+    window = "full moon windows" if LUNAR_SIGNAL_TO_WINDOW.get(signal_key) == "full" else "new moon windows"
+
+    if scientific:
+        if outcome_key == "poor_sleep_day":
+            return f"In your history, poor-sleep nights have overlapped more during {window}."
+        if outcome_key == "short_sleep_day":
+            return f"In your history, short-sleep nights have overlapped more during {window}."
+        return f"In your history, restless or reactive days have overlapped more during {window}."
+
+    if outcome_key == "poor_sleep_day":
+        return f"Your data suggests {window} may coincide with lighter or more fragile sleep for you."
+    if outcome_key == "short_sleep_day":
+        return f"Your data suggests {window} may coincide with shorter nights for you."
+    return f"Your data suggests {window} may coincide with more restless or reactive days for you."
+
+
 @router.get("/lunar/current")
 async def lunar_current() -> Dict[str, Any]:
     utc_day = datetime.now(timezone.utc).date()
@@ -269,95 +335,28 @@ async def lunar_insights(request: Request, conn=Depends(get_db)) -> Dict[str, An
     current_context = moon_context_for_day(utc_day)
     preferences = await _fetch_profile_preferences(conn, user_id)
     declared_lunar_sensitivity = bool(preferences.get("lunar_sensitivity_declared"))
-
-    row = await _fetch_user_lunar_pattern_row(conn, user_id)
-    if not row:
-        insufficient_message = _scientific_message(None, insufficient_data=True)
-        mystical_message = _mystical_message(None, insufficient_data=True)
-        return {
-            "user_id": "current",
-            "declared_lunar_sensitivity": declared_lunar_sensitivity,
-            "current_lunar_context": current_context,
-            "observed_days": 0,
-            "n_nights": 0,
-            "full_window": {"days": 0, "hrv_avg": None, "sleep_efficiency_avg": None, "symptom_events_avg": None, "symptom_severity_avg": None},
-            "new_window": {"days": 0, "hrv_avg": None, "sleep_efficiency_avg": None, "symptom_events_avg": None, "symptom_severity_avg": None},
-            "baseline": {"days": 0, "hrv_avg": None, "sleep_efficiency_avg": None, "symptom_events_avg": None, "symptom_severity_avg": None},
-            "sample_sizes": _sample_sizes({}),
-            "deltas": {},
-            "pattern_strength": "none",
-            "highlight_window": None,
-            "highlight_metric": None,
-            "message_scientific": insufficient_message,
-            "message_mystical": mystical_message,
-            "insufficient_data": True,
-        }
-
-    full_window = _window_payload(row, "full")
-    new_window = _window_payload(row, "new")
-    baseline = {
-        "days": _int_or_zero(row.get("baseline_days")),
-        "hrv_avg": _float_or_none(row.get("hrv_baseline_avg")),
-        "sleep_efficiency_avg": _float_or_none(row.get("sleep_baseline_avg")),
-        "symptom_events_avg": _float_or_none(row.get("symptom_events_baseline_avg")),
-        "symptom_severity_avg": _float_or_none(row.get("symptom_severity_baseline_avg")),
-    }
-
-    deltas: Dict[str, Optional[float]] = {}
-    candidates = []
-    for metric_key, spec in _METRIC_SPECS.items():
-        baseline_value = _float_or_none(row.get(spec["baseline_key"]))
-        for window in ("full", "new"):
-            window_value = _float_or_none(row.get(spec["window_keys"][window]))
-            deltas[f"{metric_key}_{window}_vs_baseline"] = (
-                None if window_value is None or baseline_value is None else window_value - baseline_value
-            )
-            candidate = _build_candidate(row, metric_key, window)
-            if candidate:
-                candidates.append(candidate)
+    rows = await _fetch_canonical_lunar_pattern_rows(conn, user_id)
 
     strongest = None
-    ranked = [candidate for candidate in candidates if candidate["strength"] != "none"]
-    if ranked:
-        strongest = max(ranked, key=lambda candidate: (1 if candidate["strength"] == "moderate" else 0, candidate["score"]))
+    surfaced_rows = [row for row in rows if bool(row.get("surfaceable"))]
+    if surfaced_rows:
+        strongest = surfaced_rows[0]
 
-    observed_days = _int_or_zero(row.get("observed_days"))
-    n_nights = max(_int_or_zero(row.get("hrv_observed_days")), _int_or_zero(row.get("sleep_observed_days")))
-    sample_sizes = _sample_sizes(row)
-    insufficient_data = strongest is None and not any(
-        _build_candidate(row, metric_key, window)
-        for metric_key in _METRIC_SPECS
-        for window in ("full", "new")
-    )
-    # Treat partial data as sufficient when at least one metric crossed the minimum observation threshold
-    if not insufficient_data:
-        insufficient_data = not any(
-            sample_sizes[metric_key]["observed_days"] >= MIN_TOTAL_OBSERVATIONS
-            and sample_sizes[metric_key]["baseline_days"] >= MIN_WINDOW_OBSERVATIONS
-            and (
-                sample_sizes[metric_key]["full_window_days"] >= MIN_WINDOW_OBSERVATIONS
-                or sample_sizes[metric_key]["new_window_days"] >= MIN_WINDOW_OBSERVATIONS
-            )
-            for metric_key in ("hrv", "sleep_efficiency", "symptom_events")
-        )
-
-    pattern_strength = strongest["strength"] if strongest else "none"
+    observed_days = 0
+    if rows:
+        observed_days = max(_int_or_zero(row.get("exposed_n")) + _int_or_zero(row.get("unexposed_n")) for row in rows)
+    insufficient_data = observed_days < MIN_TOTAL_OBSERVATIONS
 
     return {
         "user_id": "current",
         "declared_lunar_sensitivity": declared_lunar_sensitivity,
         "current_lunar_context": current_context,
         "observed_days": observed_days,
-        "n_nights": n_nights,
-        "full_window": full_window,
-        "new_window": new_window,
-        "baseline": baseline,
-        "sample_sizes": sample_sizes,
-        "deltas": deltas,
-        "pattern_strength": pattern_strength,
-        "highlight_window": strongest["window"] if strongest else None,
-        "highlight_metric": strongest["metric_key"] if strongest else None,
-        "message_scientific": _scientific_message(strongest, insufficient_data=insufficient_data),
-        "message_mystical": _mystical_message(strongest, insufficient_data=insufficient_data),
+        "n_nights": observed_days,
+        "pattern_strength": _canonical_pattern_strength(strongest),
+        "highlight_window": LUNAR_SIGNAL_TO_WINDOW.get(str((strongest or {}).get("signal_key") or "")),
+        "highlight_metric": LUNAR_OUTCOME_TO_METRIC.get(str((strongest or {}).get("outcome_key") or "")),
+        "message_scientific": _canonical_lunar_message(strongest, scientific=True, insufficient_data=insufficient_data),
+        "message_mystical": _canonical_lunar_message(strongest, scientific=False, insufficient_data=insufficient_data),
         "insufficient_data": insufficient_data,
     }

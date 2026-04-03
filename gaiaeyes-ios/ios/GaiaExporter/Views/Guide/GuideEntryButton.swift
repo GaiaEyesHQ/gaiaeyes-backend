@@ -11,7 +11,7 @@ struct GuideEntryButton: View {
                 expression: .subtle,
                 size: .small,
                 emphasis: .standard,
-                showBackingPlate: true
+                showBackingPlate: false
             )
             .frame(minWidth: 44, minHeight: 44)
         }

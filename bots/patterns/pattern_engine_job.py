@@ -97,6 +97,7 @@ OUTCOME_SYMPTOM_CODES = {
     "pain_flare_day": {"pain", "joint_pain", "nerve_pain", "stiffness", "muscle_pain"},
     "fatigue_day": {"drained", "fatigue", "wired_tired", "low_energy"},
     "anxiety_day": {"anxious", "irritable", "panic", "restless", "wired"},
+    "restlessness_day": {"irritable", "restless", "wired"},
     "poor_sleep_day": {"insomnia", "restless_sleep", "poor_sleep"},
     "focus_fog_day": {"brain_fog", "focus_issues", "spacy"},
 }
@@ -106,6 +107,7 @@ OUTCOME_EVENT_FIELDS = {
     "pain_flare_day": "pain_symptom_events",
     "fatigue_day": "fatigue_symptom_events",
     "anxiety_day": "anxiety_symptom_events",
+    "restlessness_day": "restlessness_symptom_events",
     "poor_sleep_day": "poor_sleep_symptom_events",
     "focus_fog_day": "focus_fog_symptom_events",
 }
@@ -115,6 +117,7 @@ OUTCOME_KIND = {
     "pain_flare_day": "symptom",
     "fatigue_day": "symptom",
     "anxiety_day": "symptom",
+    "restlessness_day": "symptom",
     "poor_sleep_day": "symptom",
     "focus_fog_day": "symptom",
     "hrv_dip_day": "biometric",
@@ -264,8 +267,10 @@ ASSOCIATION_PAIRS = [
     ("solar_wind_exposed", "anxiety_day"),
     ("lunar_full_window_exposed", "poor_sleep_day"),
     ("lunar_full_window_exposed", "short_sleep_day"),
+    ("lunar_full_window_exposed", "restlessness_day"),
     ("lunar_new_window_exposed", "poor_sleep_day"),
     ("lunar_new_window_exposed", "short_sleep_day"),
+    ("lunar_new_window_exposed", "restlessness_day"),
     ("schumann_exposed", "poor_sleep_day"),
     ("schumann_exposed", "focus_fog_day"),
     ("schumann_exposed", "anxiety_day"),
@@ -285,8 +290,10 @@ PAIR_LAG_HOURS: dict[tuple[str, str], set[int]] = {
     ("sleep_deficit_exposed", "fatigue_day"): {12, 24},
     ("lunar_full_window_exposed", "poor_sleep_day"): {0},
     ("lunar_full_window_exposed", "short_sleep_day"): {0},
+    ("lunar_full_window_exposed", "restlessness_day"): {0},
     ("lunar_new_window_exposed", "poor_sleep_day"): {0},
     ("lunar_new_window_exposed", "short_sleep_day"): {0},
+    ("lunar_new_window_exposed", "restlessness_day"): {0},
 }
 
 PAIR_CONFIDENCE_RULES: dict[tuple[str, str], dict[str, dict[str, Any]]] = {
@@ -856,6 +863,7 @@ def _build_symptom_stats(rows: Sequence[dict[str, Any]]) -> dict[tuple[str, date
                 "pain_symptom_events": 0,
                 "fatigue_symptom_events": 0,
                 "anxiety_symptom_events": 0,
+                "restlessness_symptom_events": 0,
                 "poor_sleep_symptom_events": 0,
                 "focus_fog_symptom_events": 0,
             },
@@ -1340,6 +1348,7 @@ def build_user_daily_features(
             "pain_symptom_events": _safe_int(symptom_row.get("pain_symptom_events"), 0),
             "fatigue_symptom_events": _safe_int(symptom_row.get("fatigue_symptom_events"), 0),
             "anxiety_symptom_events": _safe_int(symptom_row.get("anxiety_symptom_events"), 0),
+            "restlessness_symptom_events": _safe_int(symptom_row.get("restlessness_symptom_events"), 0),
             "poor_sleep_symptom_events": _safe_int(symptom_row.get("poor_sleep_symptom_events"), 0),
             "focus_fog_symptom_events": _safe_int(symptom_row.get("focus_fog_symptom_events"), 0),
             "updated_at": updated_at,
@@ -1402,6 +1411,7 @@ def build_user_daily_outcomes(
             pain_events = _safe_int(row.get("pain_symptom_events"), 0)
             fatigue_events = _safe_int(row.get("fatigue_symptom_events"), 0)
             anxiety_events = _safe_int(row.get("anxiety_symptom_events"), 0)
+            restlessness_events = _safe_int(row.get("restlessness_symptom_events"), 0)
             poor_sleep_events = _safe_int(row.get("poor_sleep_symptom_events"), 0)
             focus_events = _safe_int(row.get("focus_fog_symptom_events"), 0)
 
@@ -1445,6 +1455,7 @@ def build_user_daily_outcomes(
                     "headache_day": headache_events > 0,
                     "pain_flare_day": pain_events > 0,
                     "anxiety_day": anxiety_events > 0,
+                    "restlessness_day": restlessness_events > 0,
                     "poor_sleep_day": poor_sleep_events > 0,
                     "fatigue_day": fatigue_events > 0,
                     "focus_fog_day": focus_events > 0,

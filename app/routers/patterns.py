@@ -43,6 +43,7 @@ OUTCOME_LABELS = {
     "pain_flare_day": "Pain flares",
     "fatigue_day": "Fatigue",
     "anxiety_day": "Anxious or restless days",
+    "restlessness_day": "Restless or reactive days",
     "poor_sleep_day": "Poor sleep",
     "focus_fog_day": "Brain fog",
     "hrv_dip_day": "HRV dips",
@@ -121,6 +122,10 @@ def _priority_boost(user_tags: set[str], row: Dict[str, Any]) -> int:
         {"pots_dysautonomia", "heart_rhythm_sensitive", "nervous_system_dysregulation"}
     ):
         score += 25
+    if outcome_key == "restlessness_day" and user_tags.intersection(
+        {"anxiety_sensitive", "nervous_system_dysregulation", "pots_dysautonomia"}
+    ):
+        score += 20
     if signal_key == "aqi_moderate_plus_exposed" and user_tags.intersection(
         {"air_quality_sensitive", "allergies_sinus", "asthma_breathing_sensitive", "mcas_histamine"}
     ):
