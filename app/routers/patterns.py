@@ -33,6 +33,8 @@ SIGNAL_LABELS = {
     "bz_south_exposed": "Southward Bz",
     "solar_wind_exposed": "Solar wind",
     "sleep_deficit_exposed": "Sleep deficit",
+    "lunar_full_window_exposed": "Full moon window",
+    "lunar_new_window_exposed": "New moon window",
     "schumann_exposed": "Schumann variability",
 }
 
@@ -93,6 +95,12 @@ def _build_explanation(row: Dict[str, Any]) -> str:
         return f"In your history, days with {outcome} have overlapped more after elevated solar wind days."
     if signal_key == "sleep_deficit_exposed":
         return f"In your history, days with {outcome} have overlapped more on the day after sleep-deficit nights."
+    if signal_key == "lunar_full_window_exposed":
+        return f"In your history, days with {outcome} have overlapped more during full-moon windows."
+    if signal_key == "lunar_new_window_exposed":
+        return f"In your history, days with {outcome} have overlapped more during new-moon windows."
+    if signal_key == "schumann_exposed" and outcome_key == "hrv_dip_day":
+        return "In your history, HRV dip days have overlapped more with higher Schumann-variability days."
     if signal_key == "schumann_exposed":
         return f"In your history, days with {outcome} have overlapped more with higher Schumann-variability days."
     return f"In your history, days with {outcome} have overlapped more when {_signal_label(signal_key).lower()} were elevated."

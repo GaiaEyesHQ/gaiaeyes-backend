@@ -27,6 +27,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from services.personalization.health_context import canonicalize_tag_key
+from services.time.moon import moon_context_for_day
 
 
 LOG_LEVEL = "INFO"
@@ -210,6 +211,18 @@ SIGNAL_DEFINITIONS = {
             "sleep_vs_14d_baseline_delta <= -60; severe override at sleep_total_minutes < 330"
         ),
     },
+    "lunar_full_window_exposed": {
+        "family": "lunar",
+        "operator": "abs<=",
+        "threshold": 2.0,
+        "threshold_text": "abs(days_from_full_moon) <= 2",
+    },
+    "lunar_new_window_exposed": {
+        "family": "lunar",
+        "operator": "abs<=",
+        "threshold": 2.0,
+        "threshold_text": "abs(days_from_new_moon) <= 2",
+    },
     "schumann_exposed": {
         "family": "schumann",
         "operator": ">=p80",
@@ -249,6 +262,10 @@ ASSOCIATION_PAIRS = [
     ("solar_wind_exposed", "fatigue_day"),
     ("sleep_deficit_exposed", "fatigue_day"),
     ("solar_wind_exposed", "anxiety_day"),
+    ("lunar_full_window_exposed", "poor_sleep_day"),
+    ("lunar_full_window_exposed", "short_sleep_day"),
+    ("lunar_new_window_exposed", "poor_sleep_day"),
+    ("lunar_new_window_exposed", "short_sleep_day"),
     ("schumann_exposed", "poor_sleep_day"),
     ("schumann_exposed", "focus_fog_day"),
     ("schumann_exposed", "anxiety_day"),
@@ -261,10 +278,48 @@ ASSOCIATION_PAIRS = [
     ("solar_wind_exposed", "high_hr_day"),
     ("schumann_exposed", "short_sleep_day"),
     ("solar_wind_exposed", "hrv_dip_day"),
+    ("schumann_exposed", "hrv_dip_day"),
 ]
 
 PAIR_LAG_HOURS: dict[tuple[str, str], set[int]] = {
     ("sleep_deficit_exposed", "fatigue_day"): {12, 24},
+    ("lunar_full_window_exposed", "poor_sleep_day"): {0},
+    ("lunar_full_window_exposed", "short_sleep_day"): {0},
+    ("lunar_new_window_exposed", "poor_sleep_day"): {0},
+    ("lunar_new_window_exposed", "short_sleep_day"): {0},
+}
+
+PAIR_CONFIDENCE_RULES: dict[tuple[str, str], dict[str, dict[str, Any]]] = {
+    ("schumann_exposed", "hrv_dip_day"): {
+        "moderate": {
+            "exposed_n": 10,
+            "unexposed_n": 10,
+            "exposed_outcome_n": 4,
+            "relative_lift": 1.8,
+            "rate_diff": 0.15,
+            "observed_weeks": 3,
+        },
+        "strong": {
+            "exposed_n": 14,
+            "unexposed_n": 14,
+            "exposed_outcome_n": 6,
+            "relative_lift": 2.2,
+            "rate_diff": 0.20,
+            "observed_weeks": 4,
+            "recent_days": 30,
+        },
+    },
+}
+
+PAIR_SURFACE_RULES: dict[tuple[str, str], dict[str, Any]] = {
+    ("schumann_exposed", "hrv_dip_day"): {
+        "exposed_n": 10,
+        "unexposed_n": 10,
+        "exposed_outcome_n": 4,
+        "relative_lift": 1.8,
+        "rate_diff": 0.15,
+        "observed_weeks": 3,
+    },
 }
 
 # The engine is daily-grain today, so 12h uses the next-day proxy just like 24h.
@@ -460,6 +515,63 @@ def confidence_rank(confidence: str | None) -> int:
     return {"Emerging": 1, "Moderate": 2, "Strong": 3}.get(str(confidence or ""), 0)
 
 
+def pair_confidence_bucket(
+    *,
+    signal_key: str,
+    outcome_key: str,
+    exposed_n: int,
+    unexposed_n: int,
+    exposed_outcome_n: int,
+    relative_lift: float,
+    rate_diff: float,
+    observed_weeks: int,
+    last_outcome_day: date | None,
+    as_of_day: date,
+) -> str | None:
+    pair_rules = PAIR_CONFIDENCE_RULES.get((signal_key, outcome_key))
+    if not pair_rules:
+        return confidence_bucket(
+            exposed_n=exposed_n,
+            relative_lift=relative_lift,
+            rate_diff=rate_diff,
+            observed_weeks=observed_weeks,
+            last_outcome_day=last_outcome_day,
+            as_of_day=as_of_day,
+        )
+
+    strong = pair_rules.get("strong") or {}
+    recent_days = int(strong.get("recent_days") or 0)
+    recent_ok = True
+    if recent_days > 0:
+        recent_ok = (
+            last_outcome_day is not None
+            and last_outcome_day >= as_of_day - timedelta(days=recent_days)
+        )
+    if (
+        exposed_n >= int(strong.get("exposed_n") or 0)
+        and unexposed_n >= int(strong.get("unexposed_n") or 0)
+        and exposed_outcome_n >= int(strong.get("exposed_outcome_n") or 0)
+        and relative_lift >= float(strong.get("relative_lift") or 0.0)
+        and rate_diff >= float(strong.get("rate_diff") or 0.0)
+        and observed_weeks >= int(strong.get("observed_weeks") or 0)
+        and recent_ok
+    ):
+        return "Strong"
+
+    moderate = pair_rules.get("moderate") or {}
+    if (
+        exposed_n >= int(moderate.get("exposed_n") or 0)
+        and unexposed_n >= int(moderate.get("unexposed_n") or 0)
+        and exposed_outcome_n >= int(moderate.get("exposed_outcome_n") or 0)
+        and relative_lift >= float(moderate.get("relative_lift") or 0.0)
+        and rate_diff >= float(moderate.get("rate_diff") or 0.0)
+        and observed_weeks >= int(moderate.get("observed_weeks") or 0)
+    ):
+        return "Moderate"
+
+    return None
+
+
 def select_best_lag(rows: Sequence[dict[str, Any]]) -> dict[str, Any] | None:
     if not rows:
         return None
@@ -554,6 +666,12 @@ def signal_exposure(row: dict[str, Any], signal_key: str) -> tuple[bool | None, 
             )
         )
         return bool(severe_override or conditions >= 2), 2.0
+    if signal_key == "lunar_full_window_exposed":
+        value = _safe_float(row.get("days_from_full_moon"))
+        return (abs(value) <= 2.0, 2.0) if value is not None else (None, 2.0)
+    if signal_key == "lunar_new_window_exposed":
+        value = _safe_float(row.get("days_from_new_moon"))
+        return (abs(value) <= 2.0, 2.0) if value is not None else (None, 2.0)
     if signal_key == "schumann_exposed":
         proxy = _safe_float(row.get("schumann_variability_proxy"))
         threshold = _safe_float(row.get("schumann_variability_p80"))
@@ -1145,6 +1263,7 @@ def build_user_daily_features(
         zip_code = day_zip_map.get(key) or current_zip_map.get(raw_user_id)
         local_row = local_signals_daily.get((zip_code, day_value), {}) if zip_code else {}
         sch_row = schumann_daily.get(day_value, {})
+        lunar_context = moon_context_for_day(day_value)
 
         row = {
             "user_id": raw_user_id,
@@ -1186,6 +1305,8 @@ def build_user_daily_features(
             "sch_fundamental_avg_hz": base.get("sch_fundamental_avg_hz"),
             "sch_cumiana_fundamental_avg_hz": base.get("sch_cumiana_fundamental_avg_hz"),
             "sch_any_fundamental_avg_hz": base.get("sch_any_fundamental_avg_hz"),
+            "days_from_full_moon": lunar_context.get("days_from_full_moon"),
+            "days_from_new_moon": lunar_context.get("days_from_new_moon"),
             "schumann_variability_proxy": sch_row.get("schumann_variability_proxy"),
             "schumann_variability_p80": sch_row.get("schumann_variability_p80"),
             "aqi": local_row.get("aqi"),
@@ -1447,22 +1568,38 @@ def build_associations(
                     odds_d += 0.5
                 odds_ratio = (odds_a / max(odds_b, 0.5)) / (odds_c / max(odds_d, 0.5))
 
-                confidence = confidence_bucket(
+                confidence = pair_confidence_bucket(
+                    signal_key=signal_key,
+                    outcome_key=outcome_key,
                     exposed_n=exposed_n,
+                    unexposed_n=unexposed_n,
+                    exposed_outcome_n=a,
                     relative_lift=relative_lift,
                     rate_diff=rate_diff,
                     observed_weeks=len(observed_weeks),
                     last_outcome_day=last_outcome_day,
                     as_of_day=as_of_day,
                 )
-                surfaceable = bool(
-                    exposed_n >= 8
-                    and unexposed_n >= 8
-                    and a >= 4
-                    and relative_lift >= 1.6
-                    and rate_diff >= 0.12
-                    and confidence is not None
-                )
+                pair_surface_rule = PAIR_SURFACE_RULES.get((signal_key, outcome_key))
+                if pair_surface_rule:
+                    surfaceable = bool(
+                        exposed_n >= int(pair_surface_rule.get("exposed_n") or 0)
+                        and unexposed_n >= int(pair_surface_rule.get("unexposed_n") or 0)
+                        and a >= int(pair_surface_rule.get("exposed_outcome_n") or 0)
+                        and relative_lift >= float(pair_surface_rule.get("relative_lift") or 0.0)
+                        and rate_diff >= float(pair_surface_rule.get("rate_diff") or 0.0)
+                        and len(observed_weeks) >= int(pair_surface_rule.get("observed_weeks") or 0)
+                        and confidence is not None
+                    )
+                else:
+                    surfaceable = bool(
+                        exposed_n >= 8
+                        and unexposed_n >= 8
+                        and a >= 4
+                        and relative_lift >= 1.6
+                        and rate_diff >= 0.12
+                        and confidence is not None
+                    )
 
                 threshold_to_store = None
                 if threshold_values:

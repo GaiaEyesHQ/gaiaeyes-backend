@@ -37,6 +37,8 @@ SIGNAL_LABELS = {
     "bz_south_exposed": "Southward Bz",
     "solar_wind_exposed": "Solar wind",
     "sleep_deficit_exposed": "Sleep deficit",
+    "lunar_full_window_exposed": "Full moon window",
+    "lunar_new_window_exposed": "New moon window",
     "schumann_exposed": "Schumann variability",
 }
 
@@ -215,6 +217,26 @@ _PATTERN_MESSAGE_MAP = {
         "short": "Sleep-deficit nights have lined up with more fatigue days for you.",
         "clause": "they have lined up with more fatigue days for you",
     },
+    ("lunar_full_window_exposed", "poor_sleep_day"): {
+        "full": "Full-moon windows have lined up with more poor-sleep nights in your history.",
+        "short": "Full-moon windows have lined up with more poor-sleep nights for you.",
+        "clause": "they have lined up with more poor-sleep nights for you",
+    },
+    ("lunar_full_window_exposed", "short_sleep_day"): {
+        "full": "Full-moon windows have lined up with more short-sleep nights in your history.",
+        "short": "Full-moon windows have lined up with more short-sleep nights for you.",
+        "clause": "they have lined up with more short-sleep nights for you",
+    },
+    ("lunar_new_window_exposed", "poor_sleep_day"): {
+        "full": "New-moon windows have lined up with more poor-sleep nights in your history.",
+        "short": "New-moon windows have lined up with more poor-sleep nights for you.",
+        "clause": "they have lined up with more poor-sleep nights for you",
+    },
+    ("lunar_new_window_exposed", "short_sleep_day"): {
+        "full": "New-moon windows have lined up with more short-sleep nights in your history.",
+        "short": "New-moon windows have lined up with more short-sleep nights for you.",
+        "clause": "they have lined up with more short-sleep nights for you",
+    },
     ("solar_wind_exposed", "anxiety_day"): {
         "full": "Elevated solar wind has lined up with more restless days in your history.",
         "short": "Elevated solar wind has lined up with more restless days for you.",
@@ -239,6 +261,11 @@ _PATTERN_MESSAGE_MAP = {
         "full": "Elevated Schumann variability has lined up with more short-sleep nights in your history.",
         "short": "Schumann variability has lined up with more short-sleep nights for you.",
         "clause": "it has lined up with more short-sleep nights for you",
+    },
+    ("schumann_exposed", "hrv_dip_day"): {
+        "full": "Higher Schumann variability has lined up with more HRV dip days in your history.",
+        "short": "Schumann variability has lined up with more HRV dip days for you.",
+        "clause": "it has lined up with more HRV dip days for you",
     },
     ("schumann_exposed", "focus_fog_day"): {
         "full": "Elevated Schumann variability has lined up with more focus-drift days in your history.",
