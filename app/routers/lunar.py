@@ -9,6 +9,7 @@ from psycopg.rows import dict_row
 
 from app.db import get_db
 from app.routers.profile import _fetch_profile_preferences
+from services.patterns.personal_relevance import fetch_best_pattern_rows
 from services.time.moon import lunar_overlay_windows, moon_context_for_day
 
 
@@ -127,11 +128,17 @@ async def lunar_insights(request: Request, conn=Depends(get_db)) -> Dict[str, An
     preferences = await _fetch_profile_preferences(conn, user_id)
     declared_lunar_sensitivity = bool(preferences.get("lunar_sensitivity_declared"))
     rows = await _fetch_canonical_lunar_pattern_rows(conn, user_id)
+    visible_rows = [
+        row
+        for row in await fetch_best_pattern_rows(conn, user_id)
+        if str(row.get("signal_key") or "") in LUNAR_SIGNAL_KEYS
+        and str(row.get("outcome_key") or "") in LUNAR_OUTCOME_KEYS
+        and int(row.get("lag_hours") or 0) == 0
+    ]
 
     strongest = None
-    surfaced_rows = [row for row in rows if bool(row.get("surfaceable"))]
-    if surfaced_rows:
-        strongest = surfaced_rows[0]
+    if visible_rows:
+        strongest = visible_rows[0]
 
     observed_days = 0
     if rows:
