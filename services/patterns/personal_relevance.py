@@ -101,14 +101,13 @@ GAUGE_LABELS = {
     "health_status": "Health Status",
 }
 
-# These are the columns that currently exist in marts.user_daily_outcomes.
-# New derived pattern outcomes can be surfaced through associations before
-# they are promoted into that persisted table.
+# These are the persisted columns that exist in marts.user_daily_outcomes.
 OUTCOME_KEYS = [
     "headache_day",
     "pain_flare_day",
     "fatigue_day",
     "anxiety_day",
+    "restlessness_day",
     "poor_sleep_day",
     "focus_fog_day",
     "hrv_dip_day",

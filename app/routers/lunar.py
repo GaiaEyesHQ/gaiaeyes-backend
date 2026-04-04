@@ -15,7 +15,6 @@ from services.time.moon import lunar_overlay_windows, moon_context_for_day
 router = APIRouter(prefix="/v1", tags=["lunar"])
 
 MIN_TOTAL_OBSERVATIONS = 20
-MIN_WINDOW_OBSERVATIONS = 4
 LUNAR_SIGNAL_KEYS = ("lunar_full_window_exposed", "lunar_new_window_exposed")
 LUNAR_OUTCOME_KEYS = ("poor_sleep_day", "short_sleep_day", "restlessness_day")
 LUNAR_SIGNAL_TO_WINDOW = {
@@ -28,88 +27,11 @@ LUNAR_OUTCOME_TO_METRIC = {
     "restlessness_day": "restlessness",
 }
 
-_METRIC_SPECS: Dict[str, Dict[str, Any]] = {
-    "hrv": {
-        "window_keys": {"full": "hrv_full_avg", "new": "hrv_new_avg"},
-        "baseline_key": "hrv_baseline_avg",
-        "observed_key": "hrv_observed_days",
-        "window_days": {"full": "hrv_full_days", "new": "hrv_new_days"},
-        "baseline_days_key": "hrv_baseline_days",
-        "label": "HRV",
-        "scientific_label": "HRV",
-        "mystical_label": "recovery",
-        "weak_ratio": 0.08,
-        "moderate_ratio": 0.18,
-        "weak_abs": 2.0,
-        "moderate_abs": 5.0,
-        "baseline_floor": 10.0,
-    },
-    "sleep_efficiency": {
-        "window_keys": {"full": "sleep_full_avg", "new": "sleep_new_avg"},
-        "baseline_key": "sleep_baseline_avg",
-        "observed_key": "sleep_observed_days",
-        "window_days": {"full": "sleep_full_days", "new": "sleep_new_days"},
-        "baseline_days_key": "sleep_baseline_days",
-        "label": "sleep efficiency",
-        "scientific_label": "sleep efficiency",
-        "mystical_label": "rest",
-        "weak_ratio": 0.05,
-        "moderate_ratio": 0.10,
-        "weak_abs": 2.0,
-        "moderate_abs": 4.0,
-        "baseline_floor": 10.0,
-    },
-    "symptom_events": {
-        "window_keys": {"full": "symptom_events_full_avg", "new": "symptom_events_new_avg"},
-        "baseline_key": "symptom_events_baseline_avg",
-        "observed_key": "symptom_observed_days",
-        "window_days": {"full": "symptom_full_days", "new": "symptom_new_days"},
-        "baseline_days_key": "symptom_baseline_days",
-        "label": "symptom frequency",
-        "scientific_label": "symptom frequency",
-        "mystical_label": "symptom activity",
-        "weak_ratio": 0.10,
-        "moderate_ratio": 0.22,
-        "weak_abs": 0.5,
-        "moderate_abs": 1.0,
-        "baseline_floor": 1.0,
-    },
-    "symptom_severity": {
-        "window_keys": {"full": "symptom_severity_full_avg", "new": "symptom_severity_new_avg"},
-        "baseline_key": "symptom_severity_baseline_avg",
-        "observed_key": "symptom_observed_days",
-        "window_days": {"full": "symptom_full_days", "new": "symptom_new_days"},
-        "baseline_days_key": "symptom_baseline_days",
-        "label": "symptom severity",
-        "scientific_label": "symptom severity",
-        "mystical_label": "symptom intensity",
-        "weak_ratio": 0.10,
-        "moderate_ratio": 0.22,
-        "weak_abs": 0.35,
-        "moderate_abs": 0.75,
-        "baseline_floor": 1.0,
-    },
-}
-
-
 def _require_user_id(request: Request) -> str:
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
         raise HTTPException(status_code=400, detail="user_id missing from request context")
     return user_id
-
-
-def _float_or_none(value: Any) -> Optional[float]:
-    if value is None:
-        return None
-    if isinstance(value, Decimal):
-        if value.is_nan():
-            return None
-        return float(value)
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _int_or_zero(value: Any) -> int:
@@ -123,137 +45,6 @@ def _int_or_zero(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
-
-
-def _window_payload(row: Dict[str, Any], prefix: str) -> Dict[str, Any]:
-    return {
-        "days": _int_or_zero(row.get(f"{prefix}_window_days")),
-        "hrv_avg": _float_or_none(row.get(f"hrv_{prefix}_avg")),
-        "sleep_efficiency_avg": _float_or_none(row.get(f"sleep_{prefix}_avg")),
-        "symptom_events_avg": _float_or_none(row.get(f"symptom_events_{prefix}_avg")),
-        "symptom_severity_avg": _float_or_none(row.get(f"symptom_severity_{prefix}_avg")),
-    }
-
-
-def _sample_sizes(row: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "hrv": {
-            "observed_days": _int_or_zero(row.get("hrv_observed_days")),
-            "full_window_days": _int_or_zero(row.get("hrv_full_days")),
-            "new_window_days": _int_or_zero(row.get("hrv_new_days")),
-            "baseline_days": _int_or_zero(row.get("hrv_baseline_days")),
-        },
-        "sleep_efficiency": {
-            "observed_days": _int_or_zero(row.get("sleep_observed_days")),
-            "full_window_days": _int_or_zero(row.get("sleep_full_days")),
-            "new_window_days": _int_or_zero(row.get("sleep_new_days")),
-            "baseline_days": _int_or_zero(row.get("sleep_baseline_days")),
-        },
-        "symptom_events": {
-            "observed_days": _int_or_zero(row.get("symptom_observed_days")),
-            "full_window_days": _int_or_zero(row.get("symptom_full_days")),
-            "new_window_days": _int_or_zero(row.get("symptom_new_days")),
-            "baseline_days": _int_or_zero(row.get("symptom_baseline_days")),
-        },
-    }
-
-
-def _strength_for_candidate(delta: float, ratio: float, spec: Dict[str, Any]) -> str:
-    if ratio >= spec["moderate_ratio"] or abs(delta) >= spec["moderate_abs"]:
-        return "moderate"
-    if ratio >= spec["weak_ratio"] or abs(delta) >= spec["weak_abs"]:
-        return "weak"
-    return "none"
-
-
-def _build_candidate(row: Dict[str, Any], metric_key: str, window: str) -> Optional[Dict[str, Any]]:
-    spec = _METRIC_SPECS[metric_key]
-    observed_days = _int_or_zero(row.get(spec["observed_key"]))
-    window_days = _int_or_zero(row.get(spec["window_days"][window]))
-    baseline_days = _int_or_zero(row.get(spec["baseline_days_key"]))
-
-    if observed_days < MIN_TOTAL_OBSERVATIONS or window_days < MIN_WINDOW_OBSERVATIONS or baseline_days < MIN_WINDOW_OBSERVATIONS:
-        return None
-
-    window_value = _float_or_none(row.get(spec["window_keys"][window]))
-    baseline_value = _float_or_none(row.get(spec["baseline_key"]))
-    if window_value is None or baseline_value is None:
-        return None
-
-    delta = window_value - baseline_value
-    ratio = abs(delta) / max(abs(baseline_value), spec["baseline_floor"])
-    strength = _strength_for_candidate(delta, ratio, spec)
-    return {
-        "metric_key": metric_key,
-        "window": window,
-        "window_value": window_value,
-        "baseline_value": baseline_value,
-        "delta": delta,
-        "ratio": ratio,
-        "strength": strength,
-        "score": max(ratio, abs(delta) / max(spec["moderate_abs"], 0.001)),
-        "observed_days": observed_days,
-        "window_days": window_days,
-        "baseline_days": baseline_days,
-        "spec": spec,
-    }
-
-
-def _window_label(window: str) -> str:
-    return "full moon windows" if window == "full" else "new moon windows"
-
-
-def _direction(delta: float) -> str:
-    if delta > 0:
-        return "higher"
-    if delta < 0:
-        return "lower"
-    return "about the same"
-
-
-def _scientific_message(candidate: Optional[Dict[str, Any]], *, insufficient_data: bool) -> Optional[str]:
-    if insufficient_data:
-        return "Gaia needs more nights before comparing lunar windows with your baseline."
-    if not candidate:
-        return "Current comparisons do not show a consistent lunar pattern yet."
-
-    qualifier = "slightly" if candidate["strength"] == "weak" else "more noticeably"
-    direction = _direction(candidate["delta"])
-    return (
-        f"Across {candidate['observed_days']} days with {candidate['spec']['scientific_label']} data, "
-        f"your {candidate['spec']['scientific_label']} was {qualifier} {direction} near "
-        f"{_window_label(candidate['window'])} than outside them."
-    )
-
-
-def _mystical_message(candidate: Optional[Dict[str, Any]], *, insufficient_data: bool) -> Optional[str]:
-    if insufficient_data:
-        return "Gaia is still gathering enough nights to see whether lunar windows stand out for you."
-    if not candidate:
-        return "Your recent data does not point to a clear lunar sensitivity yet."
-
-    direction = _direction(candidate["delta"])
-    qualifier = "a bit" if candidate["strength"] == "weak" else "more"
-    return (
-        f"Your data suggests you may be {qualifier} sensitive around {_window_label(candidate['window'])}, "
-        f"with {direction} {candidate['spec']['mystical_label']} in the same window."
-    )
-
-
-async def _fetch_user_lunar_pattern_row(conn, user_id: str) -> Optional[Dict[str, Any]]:
-    async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute(
-            """
-            select *
-            from marts.user_lunar_patterns
-            where user_id = %s
-            limit 1
-            """,
-            (user_id,),
-            prepare=False,
-        )
-        row = await cur.fetchone()
-    return dict(row) if row else None
 
 
 async def _fetch_canonical_lunar_pattern_rows(conn, user_id: str) -> list[Dict[str, Any]]:
