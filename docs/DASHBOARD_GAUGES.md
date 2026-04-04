@@ -182,7 +182,12 @@ When trigger events are detected for paid users, the engine appends a “Trigger
       - thresholds align with the live resolver inputs:
         - `KP`: `Elevated` at `>= 4`, `Strong` at `>= 6`
         - `SW`: `Watch` at `>= 550 km/s`, `Elevated` at `>= 650 km/s`, `Strong` at `>= 700 km/s`
-        - `SR`: `Elevated` when the Schumann variability trigger is active, otherwise `Quiet`
+        - `SR`: mirrors the live Schumann ladder used by the resonance dashboard:
+          - `Calm` / `Stable` -> quiet pill
+          - `Active` -> watch pill
+          - `Elevated` -> elevated pill
+          - `Intense` -> strong pill
+          - the stronger trigger-derived state still wins if resolver evidence is louder than the live amplitude bucket
         - `hPa`: `Watch` on 12h swings `>= 6 hPa`, `Elevated` on 24h swings `>= 8 hPa` or rapid-drop watch conditions, `Strong` on 12h swings `>= 10 hPa`, 24h swings `>= 12 hPa`, or rapid-drop high conditions
       - `detail_target` is intended for shared client routing:
         - `driver` for KP and solar wind

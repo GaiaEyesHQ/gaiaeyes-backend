@@ -48,7 +48,7 @@ class SignalBarTests(unittest.TestCase):
                 "sw_speed_now_kms": 689.0,
                 "updated_at": datetime(2026, 3, 26, 11, 55, tzinfo=timezone.utc),
             },
-        ):
+        ), patch.object(signal_bar, "_fetch_schumann_snapshot", return_value=None):
             payload = signal_bar.build_signal_bar(
                 day=date(2026, 3, 26),
                 active_states=active_states,
@@ -84,7 +84,7 @@ class SignalBarTests(unittest.TestCase):
                 "sw_speed_now_kms": 420.0,
                 "updated_at": datetime(2026, 3, 26, 12, 2, tzinfo=timezone.utc),
             },
-        ):
+        ), patch.object(signal_bar, "_fetch_schumann_snapshot", return_value=None):
             payload = signal_bar.build_signal_bar(
                 day=date(2026, 3, 26),
                 active_states=[],
@@ -98,6 +98,70 @@ class SignalBarTests(unittest.TestCase):
         self.assertEqual(items["schumann"]["value"], "Quiet")
         self.assertEqual(items["pressure"]["state"], "quiet")
         self.assertEqual(items["pressure"]["value"], "1016 →")
+
+    def test_build_signal_bar_uses_live_schumann_snapshot_for_watch_label(self) -> None:
+        with patch.object(
+            signal_bar.signal_resolver,
+            "_fetch_space_snapshot",
+            return_value={
+                "kp_now": 2.1,
+                "sw_speed_now_kms": 430.0,
+                "updated_at": datetime(2026, 3, 26, 12, 2, tzinfo=timezone.utc),
+            },
+        ), patch.object(
+            signal_bar,
+            "_fetch_schumann_snapshot",
+            return_value={
+                "label": "Active",
+                "state": "watch",
+                "updated_at": "2026-03-26T12:04:00Z",
+            },
+        ):
+            payload = signal_bar.build_signal_bar(
+                day=date(2026, 3, 26),
+                active_states=[],
+                local_payload={},
+            )
+
+        items = {item["key"]: item for item in payload["items"]}
+        self.assertEqual(items["schumann"]["state"], "watch")
+        self.assertEqual(items["schumann"]["value"], "Active")
+        self.assertEqual(items["schumann"]["updated_at"], "2026-03-26T12:04:00Z")
+
+    def test_build_signal_bar_keeps_stronger_schumann_trigger_when_live_snapshot_is_quiet(self) -> None:
+        with patch.object(
+            signal_bar.signal_resolver,
+            "_fetch_space_snapshot",
+            return_value={
+                "kp_now": 2.1,
+                "sw_speed_now_kms": 430.0,
+                "updated_at": datetime(2026, 3, 26, 12, 2, tzinfo=timezone.utc),
+            },
+        ), patch.object(
+            signal_bar,
+            "_fetch_schumann_snapshot",
+            return_value={
+                "label": "Calm",
+                "state": "quiet",
+                "updated_at": "2026-03-26T12:04:00Z",
+            },
+        ):
+            payload = signal_bar.build_signal_bar(
+                day=date(2026, 3, 26),
+                active_states=[
+                    {
+                        "signal_key": "schumann.variability_24h",
+                        "state": "elevated",
+                        "evidence": {"ts": "2026-03-26T12:01:00Z"},
+                    }
+                ],
+                local_payload={},
+            )
+
+        items = {item["key"]: item for item in payload["items"]}
+        self.assertEqual(items["schumann"]["state"], "elevated")
+        self.assertEqual(items["schumann"]["value"], "Elevated")
+        self.assertEqual(items["schumann"]["updated_at"], "2026-03-26T12:04:00Z")
 
 
 if __name__ == "__main__":

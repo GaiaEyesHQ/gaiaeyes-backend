@@ -4,6 +4,20 @@ from datetime import date, datetime, timezone
 from typing import Any, Mapping, Optional, Sequence
 
 from bots.gauges import signal_resolver
+from services.db import pg
+
+
+_STATE_RANK = {
+    "quiet": 0,
+    "watch": 1,
+    "elevated": 2,
+    "strong": 3,
+}
+
+_SCHUMANN_CALM_UPPER = 0.03
+_SCHUMANN_STABLE_UPPER = 0.06
+_SCHUMANN_ACTIVE_UPPER = 0.10
+_SCHUMANN_ELEVATED_UPPER = 0.16
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -39,6 +53,87 @@ def _signal_state(
         if state:
             return state
     return None
+
+
+def _normalize_bar_state(raw_state: Any) -> Optional[str]:
+    token = str(raw_state or "").strip().lower().replace(" ", "_")
+    if token in {"strong", "storm", "intense", "high"}:
+        return "strong"
+    if token in {"elevated", "moderate"}:
+        return "elevated"
+    if token in {"watch", "active"}:
+        return "watch"
+    if token in {"quiet", "calm", "stable", "mild", "low"}:
+        return "quiet"
+    return None
+
+
+def _pick_stronger_state(*states: Optional[str]) -> str:
+    picked = "quiet"
+    picked_rank = _STATE_RANK[picked]
+    for state in states:
+        normalized = _normalize_bar_state(state)
+        if normalized is None:
+            continue
+        rank = _STATE_RANK.get(normalized, 0)
+        if rank > picked_rank:
+            picked = normalized
+            picked_rank = rank
+    return picked
+
+
+def _schumann_live_level(amplitude: Optional[float]) -> Optional[dict[str, str]]:
+    if amplitude is None:
+        return None
+    if amplitude < _SCHUMANN_CALM_UPPER:
+        return {"label": "Calm", "state": "quiet"}
+    if amplitude < _SCHUMANN_STABLE_UPPER:
+        return {"label": "Stable", "state": "quiet"}
+    if amplitude < _SCHUMANN_ACTIVE_UPPER:
+        return {"label": "Active", "state": "watch"}
+    if amplitude < _SCHUMANN_ELEVATED_UPPER:
+        return {"label": "Elevated", "state": "elevated"}
+    return {"label": "Intense", "state": "strong"}
+
+
+def _fetch_schumann_snapshot() -> Optional[dict[str, Any]]:
+    try:
+        row = pg.fetchrow(
+            """
+            with latest_ts as (
+              select max(ts_utc) as ts_utc
+              from ext.schumann
+              where channel = 'fundamental_hz'
+                and (meta->>'source') = 'cumiana'
+                and (meta->>'status') = 'ok'
+            )
+            select
+              s.ts_utc,
+              coalesce(
+                max(s.value_num) filter (where s.channel = 'sr_total_0_20'),
+                max((s.meta->'amplitude_idx'->>'sr_total_0_20')::float)
+              ) as sr_total_0_20
+            from ext.schumann s
+            join latest_ts on latest_ts.ts_utc = s.ts_utc
+            group by s.ts_utc
+            limit 1
+            """
+        )
+    except Exception:
+        row = None
+
+    if not row:
+        return None
+
+    level = _schumann_live_level(_safe_float(row.get("sr_total_0_20")))
+    if not level:
+        return None
+
+    return {
+        "label": level["label"],
+        "state": level["state"],
+        "updated_at": _coerce_iso(row.get("ts_utc")),
+    }
 
 
 def _pressure_state(
@@ -157,13 +252,22 @@ def build_signal_bar(
     sw_candidates = [value for value in (sw_now, sw_avg) if value is not None]
     sw_value = max(sw_candidates) if sw_candidates else None
 
-    schumann_state = "elevated" if _signal_state(normalized_active, "schumann.variability_24h") else "quiet"
-    schumann_updated_at = None
+    schumann_live = _fetch_schumann_snapshot()
+    schumann_trigger_state = _signal_state(normalized_active, "schumann.variability_24h")
+    schumann_state = _pick_stronger_state(
+        schumann_live.get("state") if schumann_live else None,
+        schumann_trigger_state,
+    )
+    schumann_value = _state_label(schumann_state)
+    schumann_updated_at = schumann_live.get("updated_at") if schumann_live else None
+    if schumann_live and _normalize_bar_state(schumann_live.get("state")) == schumann_state:
+        schumann_value = str(schumann_live.get("label") or schumann_value)
     for item in normalized_active:
         if str(item.get("signal_key") or "").strip() != "schumann.variability_24h":
             continue
         evidence = item.get("evidence") if isinstance(item.get("evidence"), Mapping) else {}
-        schumann_updated_at = _coerce_iso(evidence.get("ts"))
+        if not schumann_updated_at:
+            schumann_updated_at = _coerce_iso(evidence.get("ts"))
         break
 
     pressure_updated_at = _coerce_iso(payload.get("asof") or payload.get("as_of"))
@@ -191,7 +295,7 @@ def build_signal_bar(
         {
             "key": "schumann",
             "label": "SR",
-            "value": _state_label(schumann_state),
+            "value": schumann_value,
             "state": schumann_state,
             "driver_key": "schumann",
             "detail_target": "schumann",
