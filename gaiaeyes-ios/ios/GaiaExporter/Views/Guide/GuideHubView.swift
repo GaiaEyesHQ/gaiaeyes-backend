@@ -416,7 +416,9 @@ struct GuideHubView: View {
                     expression: .guide,
                     size: .large,
                     emphasis: .elevated,
-                    showBackingPlate: true,
+                    showBackingPlate: false,
+                    showGlow: false,
+                    sizeMultiplier: 1.3,
                     animate: true
                 )
 

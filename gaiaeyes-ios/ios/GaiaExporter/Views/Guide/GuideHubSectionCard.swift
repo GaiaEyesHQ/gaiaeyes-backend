@@ -52,7 +52,9 @@ struct GuideHubSectionCard<Content: View>: View {
                     expression: expression,
                     size: .medium,
                     emphasis: emphasis,
-                    showBackingPlate: true
+                    showBackingPlate: false,
+                    showGlow: false,
+                    sizeMultiplier: 1.3
                 )
 
                 VStack(alignment: .leading, spacing: 6) {

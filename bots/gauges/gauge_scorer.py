@@ -973,20 +973,6 @@ def _penalty_from_threshold(
 def _compute_recovery_penalties(today_row: Dict[str, Any]) -> Dict[str, Dict[str, float | str]]:
     penalties: Dict[str, Dict[str, float | str]] = {}
 
-    sleep_debt = _safe_float(today_row.get("sleep_debt_proxy"))
-    sleep_debt_points = _penalty_from_threshold(
-        sleep_debt,
-        threshold=30.0,
-        span=180.0,
-        cap=12.0,
-    )
-    if sleep_debt_points:
-        penalties["sleep_debt_proxy"] = {
-            "label": "Sleep debt",
-            "value": sleep_debt or 0.0,
-            "points": round(sleep_debt_points, 2),
-        }
-
     sleep_delta = _safe_float(today_row.get("sleep_vs_14d_baseline_delta"))
     sleep_delta_points = _penalty_from_threshold(
         abs(sleep_delta) if sleep_delta is not None and sleep_delta < -30.0 else None,
@@ -996,9 +982,23 @@ def _compute_recovery_penalties(today_row: Dict[str, Any]) -> Dict[str, Dict[str
     )
     if sleep_delta_points:
         penalties["sleep_vs_14d_baseline_delta"] = {
-            "label": "Sleep below usual",
+            "label": "Last night below usual",
             "value": sleep_delta or 0.0,
             "points": round(sleep_delta_points, 2),
+        }
+
+    sleep_debt = _safe_float(today_row.get("sleep_debt_proxy"))
+    sleep_debt_points = _penalty_from_threshold(
+        sleep_debt,
+        threshold=30.0,
+        span=180.0,
+        cap=12.0,
+    )
+    if sleep_debt_points and sleep_delta is None:
+        penalties["sleep_debt_proxy"] = {
+            "label": "Built-up sleep debt",
+            "value": sleep_debt or 0.0,
+            "points": round(sleep_debt_points, 2),
         }
 
     resting_hr_delta = _safe_float(today_row.get("resting_hr_baseline_delta"))
@@ -1241,9 +1241,9 @@ def _format_health_driver_display(key: str, value: Any) -> str:
     if numeric is None:
         return ""
     if key == "sleep_debt_proxy":
-        return f"{int(round(numeric))}m behind usual"
+        return f"{int(round(numeric))}m behind sleep need"
     if key == "sleep_vs_14d_baseline_delta":
-        return f"{int(round(abs(numeric)))}m below baseline"
+        return f"{int(round(abs(numeric)))}m below your baseline"
     if key == "resting_hr_baseline_delta":
         return f"+{numeric:.1f} bpm vs usual"
     if key == "respiratory_rate_baseline_delta":
@@ -1281,7 +1281,7 @@ def _build_physiology_signals(
     if sleep_delta is not None and sleep_delta <= -45:
         add_signal(
             "sleep_vs_14d_baseline_delta",
-            cause_line="Sleep was shorter than your usual baseline, so recovery is still lower.",
+            cause_line="Last night ran shorter than your usual baseline, so recovery is still lower today.",
             gauge_keys=["energy", "sleep", "stamina", "mood", "health_status"],
             priority=80,
         )
@@ -1290,7 +1290,7 @@ def _build_physiology_signals(
     if sleep_debt is not None and sleep_debt >= 60:
         add_signal(
             "sleep_debt_proxy",
-            cause_line="Sleep debt is still sitting in the background, which can make recovery feel slower.",
+            cause_line="Sleep debt has built up across recent nights, which can make recovery feel slower.",
             gauge_keys=["energy", "sleep", "stamina", "health_status"],
             priority=76,
         )

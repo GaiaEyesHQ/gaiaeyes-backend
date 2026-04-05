@@ -766,6 +766,24 @@ private struct DashboardPayload: Codable {
     }
 }
 
+private struct SignalBarSchumannLatestAmplitude: Codable {
+    let srTotal020: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case srTotal020 = "sr_total_0_20"
+    }
+}
+
+private struct SignalBarSchumannLatestEnvelope: Codable {
+    let generatedAt: String?
+    let amplitude: SignalBarSchumannLatestAmplitude?
+
+    private enum CodingKeys: String, CodingKey {
+        case generatedAt = "generated_at"
+        case amplitude
+    }
+}
+
 private struct UserPatternCard: Codable, Hashable, Identifiable {
     let signalKey: String
     let signal: String
@@ -2508,6 +2526,7 @@ struct ContentView: View {
     @State private var dashboardFetchInFlight: Bool = false
     @State private var dashboardLastFetchAt: Date = .distantPast
     @State private var dashboardLastUpdatedText: String? = nil
+    @State private var liveSchumannSignalBarItem: SignalPill? = nil
     @State private var selectedTab: AppTab = .home
     @State private var showGuideSheet: Bool = false
     @State private var guideHubFocus: GuideHubFocus = .overview
@@ -2825,7 +2844,16 @@ struct ContentView: View {
     }
 
     private var persistentSignalBarItems: [SignalPill] {
-        dashboardPayload?.signalBar?.items ?? SignalPill.placeholders
+        var items = dashboardPayload?.signalBar?.items ?? SignalPill.placeholders
+        guard let liveSchumannSignalBarItem else {
+            return items
+        }
+        if let index = items.firstIndex(where: { $0.key == liveSchumannSignalBarItem.key }) {
+            items[index] = liveSchumannSignalBarItem
+        } else {
+            items.append(liveSchumannSignalBarItem)
+        }
+        return items
     }
 
     @ViewBuilder
@@ -4338,6 +4366,65 @@ struct ContentView: View {
         }
     }
 
+    private func signalBarSchumannPill(from envelope: SignalBarSchumannLatestEnvelope) -> SignalPill? {
+        guard let amplitude = envelope.amplitude?.srTotal020 else {
+            return nil
+        }
+
+        let value: String
+        let state: SignalBarState
+        switch amplitude {
+        case ..<0.03:
+            value = "Calm"
+            state = .quiet
+        case ..<0.06:
+            value = "Stable"
+            state = .quiet
+        case ..<0.10:
+            value = "Active"
+            state = .watch
+        case ..<0.16:
+            value = "Elevated"
+            state = .elevated
+        default:
+            value = "Intense"
+            state = .strong
+        }
+
+        return SignalPill(
+            key: "schumann",
+            label: "SR",
+            value: value,
+            state: state,
+            driverKey: "schumann",
+            detailTarget: "schumann",
+            updatedAt: envelope.generatedAt
+        )
+    }
+
+    private func fetchLiveSchumannSignalBarItem(api: APIClient) async -> SignalPill? {
+        guard let envelope: SignalBarSchumannLatestEnvelope = await bestEffortDashboardJSON(
+            api: api,
+            path: "v1/earth/schumann/latest",
+            as: SignalBarSchumannLatestEnvelope.self,
+            timeout: 5,
+            label: "signal bar schumann"
+        ) else {
+            return nil
+        }
+        return signalBarSchumannPill(from: envelope)
+    }
+
+    private func refreshLiveSchumannSignalBar(api: APIClient? = nil) async {
+        let resolvedAPI = api ?? state.apiWithAuth()
+        guard let pill = await fetchLiveSchumannSignalBarItem(api: resolvedAPI) else {
+            return
+        }
+        await MainActor.run {
+            liveSchumannSignalBarItem = pill
+        }
+    }
+
     private func fetchDashboardPayload(force: Bool = false) async {
         let shouldStart = await MainActor.run { () -> Bool in
             if dashboardFetchInFlight { return false }
@@ -4543,6 +4630,7 @@ struct ContentView: View {
 
                 let encoded = try? JSONEncoder().encode(resolvedPayload)
                 let json = encoded.flatMap { String(data: $0, encoding: .utf8) }
+                let liveSchumannSignalBarItem = await fetchLiveSchumannSignalBarItem(api: api)
                 let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000.0)
                 await MainActor.run {
                     if let g = resolvedPayload.gauges {
@@ -4577,6 +4665,9 @@ struct ContentView: View {
                         personalPost: preferredEarthscopePost(resolvedPayload.personalPost, requestedDay: dashboardDay)
                     )
                     dashboardPayload = effectivePayload
+                    if let liveSchumannSignalBarItem {
+                        self.liveSchumannSignalBarItem = liveSchumannSignalBarItem
+                    }
                     if let json {
                         dashboardPayloadCacheJSON = json
                     }
@@ -4600,8 +4691,12 @@ struct ContentView: View {
             }
         }
 
+        let liveSchumannSignalBarItem = await fetchLiveSchumannSignalBarItem(api: api)
         await MainActor.run {
             dashboardError = lastError?.localizedDescription ?? "dashboard fetch failed"
+            if let liveSchumannSignalBarItem {
+                self.liveSchumannSignalBarItem = liveSchumannSignalBarItem
+            }
             if dashboardPayload == nil, let cached = decodeDashboardPayload(from: dashboardPayloadCacheJSON) {
                 dashboardPayload = cached
                 dashboardLastUpdatedText = "cached"
@@ -8825,6 +8920,7 @@ struct ContentView: View {
             VStack(spacing: 16) {
                 SymptomsTileView(
                     todayCount: todayCount,
+                    activeCount: 0,
                     queuedCount: queuedCount,
                     sparklinePoints: sparklinePoints,
                     topSummary: topSummary,
@@ -11659,75 +11755,263 @@ struct ContentView: View {
         let updatedText: String?
         let tempUnit: TemperatureUnit
 
-        private func metric(_ label: String, value: String, tint: Color) -> some View {
-            LocalConditionsValueChip(label: label, value: value, tint: tint)
+        private struct HighlightStat: Identifiable, Hashable {
+            let id: String
+            let title: String
+            let value: String
+            let detail: String
+            let progress: Double
+            let tint: Color
         }
 
-        private func signedValue(_ value: Double?, suffix: String) -> String {
+        private struct HighlightTile: View {
+            let stat: HighlightStat
+
+            var body: some View {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(stat.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.secondary)
+                    Text(stat.value)
+                        .font(.title3.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                    Text(stat.detail)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                    LocalConditionsBar(progress: stat.progress, tint: stat.tint)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(Color.black.opacity(0.20))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(stat.tint.opacity(0.22), lineWidth: 1)
+                )
+            }
+        }
+
+        private struct SupportingStat: Identifiable, Hashable {
+            let id: String
+            let label: String
+            let value: String
+            let tint: Color
+        }
+
+        private func signedValue(_ value: Double?, suffix: String, decimals: Int = 1) -> String {
             guard let value else { return "—" }
-            return String(format: "%+.1f%@", value, suffix)
+            return String(format: "%+.\(decimals)f%@", value, suffix)
+        }
+
+        private func plainValue(_ value: Double?, suffix: String, decimals: Int = 1) -> String {
+            guard let value else { return "—" }
+            return String(format: "%.\(decimals)f%@", value, suffix)
+        }
+
+        private func deltaDetail(
+            _ value: Double?,
+            positive: String = "above usual",
+            negative: String = "below usual",
+            neutral: String = "near usual",
+            threshold: Double = 0.15
+        ) -> String {
+            guard let value else { return "No baseline yet" }
+            if value > threshold { return positive }
+            if value < -threshold { return negative }
+            return neutral
+        }
+
+        private func deltaProgress(_ value: Double?, maxAbs: Double) -> Double {
+            guard let value, maxAbs > 0 else { return 0.16 }
+            return LocalConditionsFormatting.clamped(abs(value) / maxAbs)
+        }
+
+        private func absoluteProgress(_ value: Double?, max: Double) -> Double {
+            guard let value, max > 0 else { return 0.16 }
+            return LocalConditionsFormatting.clamped(value / max)
+        }
+
+        private var heartRateRangeText: String? {
+            guard let min = current?.hrMin?.value, let max = current?.hrMax?.value else { return nil }
+            return "\(Int(min.rounded()))-\(Int(max.rounded())) bpm"
+        }
+
+        private var bloodPressureText: String? {
+            guard let sys = current?.bpSysAvg?.value, let dia = current?.bpDiaAvg?.value else { return nil }
+            return "\(Int(sys.rounded()))/\(Int(dia.rounded()))"
+        }
+
+        private var highlightStats: [HighlightStat] {
+            guard let current else { return [] }
+            var items: [HighlightStat] = []
+
+            if let delta = current.restingHrBaselineDelta?.value {
+                items.append(
+                    HighlightStat(
+                        id: "resting_hr_delta",
+                        title: "Resting HR Δ",
+                        value: signedValue(delta, suffix: " bpm"),
+                        detail: deltaDetail(delta),
+                        progress: deltaProgress(delta, maxAbs: 8),
+                        tint: GaugePalette.mild
+                    )
+                )
+            } else if let resting = current.restingHrAvg?.value {
+                items.append(
+                    HighlightStat(
+                        id: "resting_hr_avg",
+                        title: "Resting HR",
+                        value: "\(Int(resting.rounded())) bpm",
+                        detail: "daily average",
+                        progress: absoluteProgress(resting, max: 90),
+                        tint: GaugePalette.mild
+                    )
+                )
+            }
+
+            if let delta = current.respiratoryRateBaselineDelta?.value {
+                items.append(
+                    HighlightStat(
+                        id: "respiratory_delta",
+                        title: "Respiratory Δ",
+                        value: signedValue(delta, suffix: " br/min"),
+                        detail: deltaDetail(delta, threshold: 0.2),
+                        progress: deltaProgress(delta, maxAbs: 3),
+                        tint: GaugePalette.low
+                    )
+                )
+            } else if let rate = current.respiratoryRateSleepAvg?.value ?? current.respiratoryRateAvg?.value {
+                items.append(
+                    HighlightStat(
+                        id: "respiratory_avg",
+                        title: "Respiratory",
+                        value: plainValue(rate, suffix: " br/min"),
+                        detail: current.respiratoryRateSleepAvg?.value != nil ? "sleep average" : "daily average",
+                        progress: absoluteProgress(rate, max: 20),
+                        tint: GaugePalette.low
+                    )
+                )
+            }
+
+            if let rawDelta = current.temperatureDeviationBaselineDelta?.value ?? current.temperatureDeviation?.value {
+                let converted = LocalConditionsFormatting.convertTempDelta(rawDelta, unit: tempUnit)
+                items.append(
+                    HighlightStat(
+                        id: "temperature_delta",
+                        title: "Temp Δ",
+                        value: LocalConditionsFormatting.formatTemperatureDelta(rawDelta, unit: tempUnit),
+                        detail: deltaDetail(converted, threshold: tempUnit == .fahrenheit ? 0.35 : 0.2),
+                        progress: deltaProgress(converted, maxAbs: tempUnit == .fahrenheit ? 3.0 : 1.7),
+                        tint: GaugePalette.elevated
+                    )
+                )
+            }
+
+            if let hrv = current.hrvAvg?.value {
+                items.append(
+                    HighlightStat(
+                        id: "hrv",
+                        title: "HRV",
+                        value: "\(Int(hrv.rounded()))",
+                        detail: "daily average",
+                        progress: absoluteProgress(hrv, max: 70),
+                        tint: GaugePalette.low
+                    )
+                )
+            }
+
+            if let spo2 = current.spo2AvgDisplay {
+                items.append(
+                    HighlightStat(
+                        id: "spo2",
+                        title: "SpO₂",
+                        value: String(format: "%.0f%%", spo2),
+                        detail: "daily average",
+                        progress: LocalConditionsFormatting.clamped((spo2 - 90.0) / 10.0),
+                        tint: GaugePalette.mild
+                    )
+                )
+            }
+
+            if let steps = current.stepsTotal?.value {
+                items.append(
+                    HighlightStat(
+                        id: "steps",
+                        title: "Steps",
+                        value: "\(Int(steps.rounded()))",
+                        detail: "today so far",
+                        progress: absoluteProgress(steps, max: 10000),
+                        tint: GaugePalette.low
+                    )
+                )
+            }
+
+            return Array(items.prefix(3))
+        }
+
+        private var supportingStats: [SupportingStat] {
+            guard let current else { return [] }
+            let usedIDs = Set(highlightStats.map(\.id))
+            var items: [SupportingStat] = []
+
+            if !usedIDs.contains("steps"), let steps = current.stepsTotal?.value {
+                items.append(SupportingStat(id: "steps", label: "Steps", value: "\(Int(steps.rounded()))", tint: GaugePalette.low))
+            }
+            if !usedIDs.contains("hrv"), let hrv = current.hrvAvg?.value {
+                items.append(SupportingStat(id: "hrv", label: "HRV", value: "\(Int(hrv.rounded()))", tint: GaugePalette.low))
+            }
+            if !usedIDs.contains("spo2"), let spo2 = current.spo2AvgDisplay {
+                items.append(SupportingStat(id: "spo2", label: "SpO₂", value: String(format: "%.0f%%", spo2), tint: GaugePalette.mild))
+            }
+            if let heartRateRangeText {
+                items.append(SupportingStat(id: "heart_range", label: "Heart range", value: heartRateRangeText, tint: GaugePalette.low))
+            }
+            if let bloodPressureText {
+                items.append(SupportingStat(id: "blood_pressure", label: "Blood pressure", value: bloodPressureText, tint: GaugePalette.mild))
+            }
+            if !usedIDs.contains("respiratory_avg"), let rate = current.respiratoryRateSleepAvg?.value ?? current.respiratoryRateAvg?.value {
+                items.append(SupportingStat(id: "respiratory_avg", label: "Respiratory", value: plainValue(rate, suffix: " br/min"), tint: GaugePalette.low))
+            }
+
+            return items
+        }
+
+        private var supportingRows: [[SupportingStat]] {
+            stride(from: 0, to: supportingStats.count, by: 3).map { start in
+                let end = min(start + 3, supportingStats.count)
+                return Array(supportingStats[start..<end])
+            }
         }
 
         var body: some View {
             LocalConditionsSurfaceCard(title: "Health Stats", icon: "heart.fill") {
                 VStack(alignment: .leading, spacing: 12) {
+                    if highlightStats.isEmpty && supportingStats.isEmpty {
+                        Text("Health stats are still syncing for today.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    } else if !highlightStats.isEmpty {
+                        HStack(spacing: 10) {
+                            ForEach(highlightStats) { stat in
+                                HighlightTile(stat: stat)
+                            }
+                        }
+                    }
+
+                    ForEach(supportingRows.indices, id: \.self) { index in
+                        HStack(spacing: 10) {
+                            ForEach(supportingRows[index]) { stat in
+                                LocalConditionsValueChip(label: stat.label, value: stat.value, tint: stat.tint)
+                            }
+                        }
+                    }
+
                     if let updatedText {
                         Text("Updated \(updatedText)")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                    }
-                    HStack(spacing: 10) {
-                        metric("Steps", value: current.map { "\(Int(($0.stepsTotal?.value ?? 0).rounded()))" } ?? "—", tint: GaugePalette.low)
-                        metric("HRV", value: current?.hrvAvg?.value.map { "\(Int($0.rounded()))" } ?? "—", tint: GaugePalette.mild)
-                        metric("SpO₂", value: current?.spo2AvgDisplay.map { String(format: "%.0f%%", $0) } ?? "—", tint: GaugePalette.elevated)
-                    }
-                    HStack(spacing: 10) {
-                        metric(
-                            "Heart Rate",
-                            value: {
-                                let minText = current?.hrMin?.value.map { "\(Int($0.rounded()))" } ?? "—"
-                                let maxText = current?.hrMax?.value.map { "\(Int($0.rounded()))" } ?? "—"
-                                return "\(minText)-\(maxText)"
-                            }(),
-                            tint: GaugePalette.low
-                        )
-                        metric(
-                            "Blood Pressure",
-                            value: {
-                                let sys = current?.bpSysAvg?.value.map { "\(Int($0.rounded()))" } ?? "—"
-                                let dia = current?.bpDiaAvg?.value.map { "\(Int($0.rounded()))" } ?? "—"
-                                return "\(sys)/\(dia)"
-                            }(),
-                            tint: GaugePalette.mild
-                        )
-                    }
-
-                    if current?.respiratoryRateAvg?.value != nil
-                        || current?.respiratoryRateSleepAvg?.value != nil
-                        || current?.restingHrBaselineDelta?.value != nil
-                        || current?.temperatureDeviation?.value != nil
-                    {
-                        HStack(spacing: 10) {
-                            metric(
-                                "Respiratory",
-                                value: {
-                                    let value = current?.respiratoryRateSleepAvg?.value ?? current?.respiratoryRateAvg?.value
-                                    guard let value else { return "—" }
-                                    return String(format: "%.1f br/min", value)
-                                }(),
-                                tint: GaugePalette.low
-                            )
-                            metric(
-                                "Resting HR Δ",
-                                value: signedValue(current?.restingHrBaselineDelta?.value, suffix: " bpm"),
-                                tint: GaugePalette.mild
-                            )
-                            metric(
-                                "Temp Δ",
-                                value: LocalConditionsFormatting.formatTemperatureDelta(current?.temperatureDeviation?.value, unit: tempUnit),
-                                tint: GaugePalette.elevated
-                            )
-                        }
                     }
                 }
             }
@@ -11941,27 +12225,99 @@ struct ContentView: View {
             return false
         }
 
-        private var dailyCheckInSummary: String {
+        private var currentSymptomsCount: Int {
+            currentSymptomsSnapshot?.summary.activeCount ?? 0
+        }
+
+        private var currentSymptomsHeadline: String {
+            currentSymptomsCount > 0 ? "\(currentSymptomsCount) active right now" : "No symptoms active right now"
+        }
+
+        private var currentSymptomsLabels: String? {
+            guard currentSymptomsCount > 0 else { return nil }
+            return currentSymptomsSnapshot?.semanticActiveLabelSummary
+        }
+
+        private var currentSymptomsDetail: String {
+            if currentSymptomsCount > 0 {
+                return currentSymptomsSnapshot?.semanticActiveSummary ?? "Open the live view for notes, updates, and follow-ups."
+            }
+            return currentSymptomsSnapshot?.semanticFollowUpSummary ?? currentSymptomsSnapshot?.semanticEmptyStateSummary ?? "Open the live view for notes, updates, and follow-ups."
+        }
+
+        private var dailyCheckInHeadline: String {
             if let error = ContentView.scrubError(dailyCheckInError), dailyCheckInStatus == nil {
                 return error
             }
             if dailyCheckInLoading && dailyCheckInStatus == nil {
-                return "Refreshing today’s check-in."
+                return "Refreshing today’s check-in"
             }
             if let targetDay = dailyCheckInStatus?.targetDay,
                let entry = dailyCheckInStatus?.latestEntry,
                let completedAt = entry.completedAt,
                !completedAt.isEmpty,
                entry.day == targetDay {
-                if let exposureSummary = entry.summaryExposureText {
-                    return "Already completed for \(entry.day). Also logged: \(exposureSummary). Open it to update the read or review the last response."
-                }
-                return "Already completed for \(entry.day). Open it to update the read or review the last response."
+                return "Completed for today"
             }
-            if let prompt = dailyCheckInStatus?.prompt {
+            if dailyCheckInStatus?.prompt != nil {
+                return "Ready for today’s check-in"
+            }
+            return "Check in with the day"
+        }
+
+        private var dailyCheckInDetail: String {
+            if ContentView.scrubError(dailyCheckInError) != nil, dailyCheckInStatus == nil {
+                return "Try again in a moment."
+            }
+            if dailyCheckInLoading && dailyCheckInStatus == nil {
+                return "Pulling the latest prompt and status."
+            }
+            if let targetDay = dailyCheckInStatus?.targetDay,
+               let entry = dailyCheckInStatus?.latestEntry,
+               let completedAt = entry.completedAt,
+               !completedAt.isEmpty,
+               entry.day == targetDay {
+                return "Open to revise the read or review the last response."
+            }
+            if let prompt = dailyCheckInStatus?.prompt,
+               !prompt.questionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return prompt.questionText
             }
-            return "A short daily check-in helps this view stay grounded."
+            return "A short check-in helps keep this page grounded in how the day actually felt."
+        }
+
+        private var dailyCheckInExposureLine: String? {
+            guard let targetDay = dailyCheckInStatus?.targetDay,
+                  let entry = dailyCheckInStatus?.latestEntry,
+                  let completedAt = entry.completedAt,
+                  !completedAt.isEmpty,
+                  entry.day == targetDay else {
+                return nil
+            }
+            return entry.summaryExposureText.map { "Also logged: \($0)" }
+        }
+
+        private var dailyCheckInPill: (String, StatusPill.Severity)? {
+            if let targetDay = dailyCheckInStatus?.targetDay,
+               let entry = dailyCheckInStatus?.latestEntry,
+               let completedAt = entry.completedAt,
+               !completedAt.isEmpty,
+               entry.day == targetDay {
+                return ("Done", .ok)
+            }
+            if dailyCheckInStatus?.prompt != nil {
+                return ("Ready", .warn)
+            }
+            return nil
+        }
+
+        private var lunarStrengthPill: (String, StatusPill.Severity)? {
+            guard let strength = lunarInsights?.patternStrength?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !strength.isEmpty,
+                  strength.lowercased() != "none" else {
+                return nil
+            }
+            return (strength.capitalized, .warn)
         }
 
         var body: some View {
@@ -11972,42 +12328,34 @@ struct ContentView: View {
                     LazyVStack(spacing: 16) {
                         SymptomsTileView(
                             todayCount: todayCount,
+                            activeCount: currentSymptomsCount,
                             queuedCount: queuedCount,
                             sparklinePoints: sparklinePoints,
                             topSummary: topSummary,
                             onLogTap: { showSymptomSheet = true }
                         )
 
-                        Button(action: onOpenDailyCheckIn) {
-                            LocalConditionsSurfaceCard(title: "Daily Check-In", icon: "checklist") {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text(dailyCheckInSummary)
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundColor(.primary)
-                                    Text("Open the full check-in to log how the day felt and keep Body context current.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-
                         NavigationLink(value: InsightsRoute.currentSymptoms) {
                             LocalConditionsSurfaceCard(title: "Current Symptoms", icon: "waveform.path.ecg.rectangle") {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    if let snapshot = currentSymptomsSnapshot, snapshot.summary.activeCount > 0 {
-                                        Text(snapshot.semanticHeaderSummary ?? "\(snapshot.summary.activeCount) symptoms are active right now.")
+                                HStack(alignment: .top, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(currentSymptomsHeadline)
                                             .font(.subheadline.weight(.semibold))
                                             .foregroundColor(.primary)
-                                        Text(snapshot.semanticActiveLabelSummary ?? snapshot.semanticActiveSummary ?? "Open the live view for recent updates, notes, and the timeline.")
+                                        if let currentSymptomsLabels, !currentSymptomsLabels.isEmpty {
+                                            Text(currentSymptomsLabels)
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundColor(.white.opacity(0.82))
+                                                .fixedSize(horizontal: false, vertical: true)
+                                        }
+                                        Text(currentSymptomsDetail)
                                             .font(.caption)
                                             .foregroundColor(.secondary)
-                                    } else {
-                                        Text(currentSymptomsSnapshot?.semanticEmptyStateSummary ?? "No symptoms active right now.")
-                                            .font(.subheadline.weight(.semibold))
-                                        Text(currentSymptomsSnapshot?.semanticFollowUpSummary ?? "Open the live view for recent updates, notes, and the timeline.")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    Spacer(minLength: 8)
+                                    if currentSymptomsCount > 0 {
+                                        StatusPill("\(currentSymptomsCount) Active", severity: currentSymptomsCount >= 3 ? .warn : .ok)
                                     }
                                 }
                             }
@@ -12049,19 +12397,63 @@ struct ContentView: View {
                             tempUnit: tempUnit
                         )
 
+                        Button(action: onOpenDailyCheckIn) {
+                            LocalConditionsSurfaceCard(title: "Daily Check-In", icon: "checklist") {
+                                HStack(alignment: .top, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(dailyCheckInHeadline)
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundColor(.primary)
+                                        if let dailyCheckInExposureLine, !dailyCheckInExposureLine.isEmpty {
+                                            Text(dailyCheckInExposureLine)
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundColor(.white.opacity(0.82))
+                                                .fixedSize(horizontal: false, vertical: true)
+                                        }
+                                        Text(dailyCheckInDetail)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    Spacer(minLength: 8)
+                                    if let dailyCheckInPill {
+                                        StatusPill(dailyCheckInPill.0, severity: dailyCheckInPill.1)
+                                    }
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+
                         if shouldShowLunarCard {
                             LocalConditionsSurfaceCard(title: "Lunar Pattern Watch", icon: "moon.stars.fill") {
                                 VStack(alignment: .leading, spacing: 10) {
+                                    HStack(alignment: .top, spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            if let message = lunarInsightMessage, !message.isEmpty {
+                                                Text(CopyRefiner.refine(message) ?? message)
+                                                    .font(.subheadline.weight(.semibold))
+                                                    .foregroundColor(.primary)
+                                                    .fixedSize(horizontal: false, vertical: true)
+                                            } else if lunarInsightsLoading {
+                                                Text("Checking lunar windows in your history.")
+                                                    .font(.subheadline.weight(.semibold))
+                                                    .foregroundColor(.primary)
+                                            } else {
+                                                Text("No clear lunar signal yet")
+                                                    .font(.subheadline.weight(.semibold))
+                                                    .foregroundColor(.primary)
+                                            }
+                                        }
+                                        Spacer(minLength: 8)
+                                        if let lunarStrengthPill {
+                                            StatusPill(lunarStrengthPill.0, severity: lunarStrengthPill.1)
+                                        }
+                                    }
+
                                     if lunarInsightsLoading {
                                         ProgressView("Checking lunar windows…")
                                             .font(.caption)
                                     } else {
-                                        if let message = lunarInsightMessage, !message.isEmpty {
-                                            Text(CopyRefiner.refine(message) ?? message)
-                                                .font(.subheadline)
-                                                .foregroundColor(.primary)
-                                        }
-
                                         if let highlightWindow = lunarInsights?.highlightWindow,
                                            let highlightMetric = lunarInsights?.highlightMetric,
                                            let strength = lunarInsights?.patternStrength,
@@ -12665,7 +13057,13 @@ struct ContentView: View {
                 hydrateSymptomPresetsFromCache()
             }
             .onChange(of: scenePhase, initial: false) { _, newPhase in
-                if newPhase == .active { state.refreshStatus(); Task { await HealthKitBackgroundSync.shared.kickOnce(reason: "became active") } }
+                if newPhase == .active {
+                    state.refreshStatus()
+                    Task {
+                        await HealthKitBackgroundSync.shared.kickOnce(reason: "became active")
+                        await refreshLiveSchumannSignalBar(api: state.apiWithAuth())
+                    }
+                }
             }
             .onChange(of: featuresCacheJSON, initial: false) { oldValue, newValue in
                 guard newValue != oldValue, !newValue.isEmpty, let decoded = decodeFeatures(from: newValue) else { return }
@@ -12786,6 +13184,12 @@ struct ContentView: View {
                 Task {
                     await fetchLocalHealth()
                     await fetchDashboardPayload()
+                }
+            }
+            .onChange(of: showSchumannDashboardSheet, initial: false) { _, newValue in
+                guard newValue else { return }
+                Task {
+                    await refreshLiveSchumannSignalBar(api: state.apiWithAuth())
                 }
             }
             .onChange(of: showCameraHealthCheckSheet, initial: false) { _, newValue in
@@ -14692,54 +15096,68 @@ struct ContentView: View {
     
     private struct SymptomsTileView: View {
         let todayCount: Int
+        let activeCount: Int
         let queuedCount: Int
         let sparklinePoints: [SymptomSparkPoint]
         let topSummary: String?
         let onLogTap: () -> Void
         
         var body: some View {
-            GroupBox {
+            LocalConditionsSurfaceCard(title: "Today in Body", icon: "waveform.path.ecg") {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(activeCount > 0 ? "\(activeCount) active right now" : (todayCount > 0 ? "\(todayCount) logged today" : "Nothing logged yet today"))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.primary)
+                            if let topSummary {
+                                Text(topSummary)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                Text("Keep symptoms current so Body stays anchored to how the day actually feels.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        Spacer(minLength: 12)
+
                         Button(action: onLogTap) {
                             Label("Log a symptom", systemImage: "plus.circle.fill")
                                 .labelStyle(.titleAndIcon)
                         }
                         .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        
-                        Spacer()
-                        
-                        VStack(alignment: .trailing, spacing: 4) {
-                            Text("Today: \(todayCount)")
-                                .font(.headline)
-                            if queuedCount > 0 {
-                                Text("Queued: \(queuedCount)")
-                                    .font(.caption2)
-                                    .foregroundColor(.orange)
-                            }
+                        .controlSize(.regular)
+                    }
+
+                    HStack(spacing: 10) {
+                        LocalConditionsValueChip(
+                            label: "Today",
+                            value: "\(todayCount)",
+                            tint: todayCount > 0 ? GaugePalette.mild : GaugePalette.low
+                        )
+                        if activeCount > 0 {
+                            LocalConditionsValueChip(
+                                label: "Active",
+                                value: "\(activeCount)",
+                                tint: activeCount >= 3 ? GaugePalette.elevated : GaugePalette.low
+                            )
+                        }
+                        if queuedCount > 0 {
+                            LocalConditionsValueChip(
+                                label: "Queued",
+                                value: "\(queuedCount)",
+                                tint: GaugePalette.elevated
+                            )
                         }
                     }
-                    
-                    if let topSummary {
-                        Text(topSummary)
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    if #available(iOS 16.0, *) {
+
+                    if #available(iOS 16.0, *), !sparklinePoints.isEmpty {
                         SymptomSparklineView(points: sparklinePoints)
-                    } else {
-                        Text("Sparkline requires iOS 16+")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
                     }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } label: {
-                HStack {
-                    Image(systemName: "waveform.path.ecg")
-                    Text("Symptoms")
                 }
             }
         }

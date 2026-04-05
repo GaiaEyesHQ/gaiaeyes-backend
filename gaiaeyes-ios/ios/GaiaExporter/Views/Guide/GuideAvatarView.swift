@@ -138,6 +138,8 @@ struct GuideAvatarView: View {
     let emphasis: GuideAvatarEmphasis
     var tintMode: GuideAvatarTintMode = .fullColor
     var showBackingPlate: Bool = false
+    var showGlow: Bool = true
+    var sizeMultiplier: CGFloat = 1.0
     var animate: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -149,6 +151,10 @@ struct GuideAvatarView: View {
 
     private var glowStyle: GuideAvatarGlowStyle {
         emphasis.glowStyle
+    }
+
+    private var effectiveGlowPadding: CGFloat {
+        showGlow ? size.glowPadding : 0
     }
 
     private var shouldAnimate: Bool {
@@ -191,8 +197,8 @@ struct GuideAvatarView: View {
                             .stroke(glowStyle.color.opacity(glowStyle.backingStrokeOpacity), lineWidth: 1)
                     )
                     .frame(
-                        width: size.dimension * size.backingPlateScale,
-                        height: size.dimension * size.backingPlateScale
+                        width: size.dimension * size.backingPlateScale * sizeMultiplier,
+                        height: size.dimension * size.backingPlateScale * sizeMultiplier
                     )
             }
 
@@ -201,16 +207,22 @@ struct GuideAvatarView: View {
                 .renderingMode(.original)
                 .interpolation(.high)
                 .scaledToFit()
-                .frame(width: size.dimension, height: size.dimension)
+                .frame(width: size.dimension * sizeMultiplier, height: size.dimension * sizeMultiplier)
                 .scaleEffect(contentScale)
                 .opacity(contentOpacity * tintOpacity)
                 .saturation(tintSaturation)
-                .shadow(color: glowStyle.color.opacity(glowStyle.outerOpacity), radius: glowStyle.outerRadius)
-                .shadow(color: glowStyle.color.opacity(glowStyle.innerOpacity), radius: glowStyle.innerRadius)
+                .shadow(
+                    color: showGlow ? glowStyle.color.opacity(glowStyle.outerOpacity) : .clear,
+                    radius: showGlow ? glowStyle.outerRadius : 0
+                )
+                .shadow(
+                    color: showGlow ? glowStyle.color.opacity(glowStyle.innerOpacity) : .clear,
+                    radius: showGlow ? glowStyle.innerRadius : 0
+                )
         }
         .frame(
-            width: size.dimension + (size.glowPadding * 2),
-            height: size.dimension + (size.glowPadding * 2)
+            width: (size.dimension + (effectiveGlowPadding * 2)) * sizeMultiplier,
+            height: (size.dimension + (effectiveGlowPadding * 2)) * sizeMultiplier
         )
         .contentShape(Circle())
         .accessibilityHidden(true)
