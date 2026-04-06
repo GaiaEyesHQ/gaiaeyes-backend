@@ -1079,17 +1079,96 @@ async def _fetch_space_forecast_rows(conn, start_day: date, *, days: int = SPACE
     async with conn.cursor(**_cursor_kwargs()) as cur:
         await cur.execute(
             """
-            select forecast_day, issued_at, source_product_ts, source_src,
-                   kp_max_forecast, g_scale_max,
-                   s1_or_greater_pct, r1_r2_pct, r3_or_greater_pct,
-                   geomagnetic_rationale, radiation_rationale, radio_rationale,
-                   kp_blocks_json, raw_sections_json,
-                   flare_watch, cme_watch, solar_wind_watch,
-                   geomagnetic_severity_bucket, radiation_severity_bucket, radio_severity_bucket,
-                   updated_at
-              from marts.space_forecast_daily_latest
-             where forecast_day >= %s
-             order by forecast_day asc
+            with day_rows as (
+                select *
+                  from marts.space_forecast_daily
+                 where forecast_day >= %s
+            ),
+            latest as (
+                select distinct on (forecast_day)
+                    forecast_day,
+                    issued_at,
+                    source_product_ts,
+                    source_src
+                  from day_rows
+                 order by forecast_day, source_product_ts desc, updated_at desc
+            ),
+            merged as (
+                select
+                    forecast_day,
+                    (array_agg(kp_max_forecast order by source_product_ts desc, updated_at desc)
+                        filter (where kp_max_forecast is not null))[1] as kp_max_forecast,
+                    coalesce(
+                        (array_agg(g_scale_max order by source_product_ts desc, updated_at desc)
+                            filter (where nullif(g_scale_max, '') is not null))[1],
+                        'G0'
+                    ) as g_scale_max,
+                    (array_agg(s1_or_greater_pct order by source_product_ts desc, updated_at desc)
+                        filter (where s1_or_greater_pct is not null))[1] as s1_or_greater_pct,
+                    (array_agg(r1_r2_pct order by source_product_ts desc, updated_at desc)
+                        filter (where r1_r2_pct is not null))[1] as r1_r2_pct,
+                    (array_agg(r3_or_greater_pct order by source_product_ts desc, updated_at desc)
+                        filter (where r3_or_greater_pct is not null))[1] as r3_or_greater_pct,
+                    (array_agg(geomagnetic_rationale order by source_product_ts desc, updated_at desc)
+                        filter (where nullif(geomagnetic_rationale, '') is not null))[1] as geomagnetic_rationale,
+                    (array_agg(radiation_rationale order by source_product_ts desc, updated_at desc)
+                        filter (where nullif(radiation_rationale, '') is not null))[1] as radiation_rationale,
+                    (array_agg(radio_rationale order by source_product_ts desc, updated_at desc)
+                        filter (where nullif(radio_rationale, '') is not null))[1] as radio_rationale,
+                    coalesce(
+                        (array_agg(kp_blocks_json order by source_product_ts desc, updated_at desc)
+                            filter (where kp_blocks_json is not null and kp_blocks_json <> '[]'::jsonb))[1],
+                        '[]'::jsonb
+                    ) as kp_blocks_json,
+                    (array_agg(raw_sections_json order by source_product_ts desc, updated_at desc)
+                        filter (where raw_sections_json is not null))[1] as raw_sections_json,
+                    bool_or(flare_watch) as flare_watch,
+                    bool_or(cme_watch) as cme_watch,
+                    bool_or(solar_wind_watch) as solar_wind_watch,
+                    coalesce(
+                        (array_agg(geomagnetic_severity_bucket order by source_product_ts desc, updated_at desc)
+                            filter (where nullif(geomagnetic_severity_bucket, '') is not null))[1],
+                        'low'
+                    ) as geomagnetic_severity_bucket,
+                    coalesce(
+                        (array_agg(radiation_severity_bucket order by source_product_ts desc, updated_at desc)
+                            filter (where nullif(radiation_severity_bucket, '') is not null))[1],
+                        'low'
+                    ) as radiation_severity_bucket,
+                    coalesce(
+                        (array_agg(radio_severity_bucket order by source_product_ts desc, updated_at desc)
+                            filter (where nullif(radio_severity_bucket, '') is not null))[1],
+                        'low'
+                    ) as radio_severity_bucket,
+                    max(updated_at) as updated_at
+                  from day_rows
+                 group by forecast_day
+            )
+            select
+                latest.forecast_day,
+                latest.issued_at,
+                latest.source_product_ts,
+                latest.source_src,
+                merged.kp_max_forecast,
+                merged.g_scale_max,
+                merged.s1_or_greater_pct,
+                merged.r1_r2_pct,
+                merged.r3_or_greater_pct,
+                merged.geomagnetic_rationale,
+                merged.radiation_rationale,
+                merged.radio_rationale,
+                merged.kp_blocks_json,
+                merged.raw_sections_json,
+                merged.flare_watch,
+                merged.cme_watch,
+                merged.solar_wind_watch,
+                merged.geomagnetic_severity_bucket,
+                merged.radiation_severity_bucket,
+                merged.radio_severity_bucket,
+                merged.updated_at
+              from latest
+              join merged using (forecast_day)
+             order by latest.forecast_day asc
              limit %s
             """,
             (start_day, days),

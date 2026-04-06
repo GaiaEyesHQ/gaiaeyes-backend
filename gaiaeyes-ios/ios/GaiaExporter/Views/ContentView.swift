@@ -1849,6 +1849,24 @@ private extension UserForecastOutlook {
     }
 }
 
+private func userOutlookWindowHasContent(_ window: UserOutlookWindow?) -> Bool {
+    guard let window else { return false }
+    if window.semanticSummary?.nilIfTrimmedEmpty != nil { return true }
+    if window.semanticLeadingSignalSummary?.nilIfTrimmedEmpty != nil { return true }
+    if window.semanticDomainsSummary?.nilIfTrimmedEmpty != nil { return true }
+    if window.semanticSupportSummary?.nilIfTrimmedEmpty != nil { return true }
+    if let drivers = window.topDrivers, !drivers.isEmpty { return true }
+    if let domains = window.likelyElevatedDomains, !domains.isEmpty { return true }
+    return false
+}
+
+private func userOutlookNeedsRefresh(_ payload: UserForecastOutlook?) -> Bool {
+    guard let payload else { return true }
+    return !userOutlookWindowHasContent(payload.next24h)
+        || !userOutlookWindowHasContent(payload.next72h)
+        || !userOutlookWindowHasContent(payload.next7d)
+}
+
 private enum SpaceDetailSection: Hashable {
     case visuals
     case schumann
@@ -6532,7 +6550,7 @@ struct ContentView: View {
             }
         }
 
-        async let outlookTask: Void = fetchSpaceOutlook(days: 3, force: force)
+        async let outlookTask: Void = fetchSpaceOutlook(days: 7, force: force)
         async let magnetosphereTask: Void = fetchMagnetosphere(force: force)
         _ = await (outlookTask, magnetosphereTask)
     }
@@ -10233,8 +10251,63 @@ struct ContentView: View {
             )
         }
 
+        private func refinedText(_ raw: String?) -> String? {
+            guard let raw = raw?.nilIfTrimmedEmpty else { return nil }
+            return (CopyRefiner.refine(raw) ?? raw).nilIfTrimmedEmpty
+        }
+
+        private func normalizedOutlookText(_ raw: String?) -> String {
+            guard let text = refinedText(raw)?.lowercased(), !text.isEmpty else { return "" }
+            let cleaned = text
+                .replacingOccurrences(of: "—", with: "-")
+                .replacingOccurrences(of: "[^a-z0-9]+", with: " ", options: .regularExpression)
+                .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        private func textCarriesSameIdea(_ lhs: String?, _ rhs: String?) -> Bool {
+            let left = normalizedOutlookText(lhs)
+            let right = normalizedOutlookText(rhs)
+            guard !left.isEmpty, !right.isEmpty else { return false }
+            return left.contains(right) || right.contains(left)
+        }
+
+        private func firstSentence(_ raw: String?) -> String? {
+            guard let text = refinedText(raw) else { return nil }
+            if let end = text.firstIndex(where: { [".", "!", "?"].contains($0) }) {
+                return String(text[...end]).nilIfTrimmedEmpty
+            }
+            return text
+        }
+
+        private func trimmedLeadingPunctuation(_ raw: String?) -> String? {
+            guard let raw = raw?.nilIfTrimmedEmpty else { return nil }
+            return raw.trimmingCharacters(in: CharacterSet(charactersIn: " .,:;!-")).nilIfTrimmedEmpty
+        }
+
+        private func droppingRepeatedLead(from raw: String?, matching prefix: String?) -> String? {
+            guard let text = refinedText(raw) else { return nil }
+            guard let intro = firstSentence(text) else { return text }
+            guard textCarriesSameIdea(intro, prefix) else { return text }
+            let remainder = String(text.dropFirst(intro.count))
+            return trimmedLeadingPunctuation(remainder)
+        }
+
+        private func leadingDetail(for window: UserOutlookWindow, primary: UserOutlookDriver) -> String? {
+            let detail = refinedText(window.semanticLeadingSignalSummary ?? primary.detail)
+            guard !textCarriesSameIdea(window.semanticSummary, detail) else { return nil }
+            return detail
+        }
+
+        private func domainExplanation(_ domain: UserOutlookDomain, window: UserOutlookWindow, primary: UserOutlookDriver?) -> String? {
+            var detail = refinedText(domain.explanation)
+            detail = droppingRepeatedLead(from: detail, matching: firstSentence(window.semanticSummary))
+            detail = droppingRepeatedLead(from: detail, matching: window.semanticLeadingSignalSummary ?? primary?.detail)
+            return detail
+        }
+
         @ViewBuilder
-        private func domainCard(_ domain: UserOutlookDomain) -> some View {
+        private func domainCard(_ domain: UserOutlookDomain, window: UserOutlookWindow, primary: UserOutlookDriver?) -> some View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
                     Text(domain.label ?? domain.key.replacingOccurrences(of: "_", with: " ").capitalized)
@@ -10243,12 +10316,12 @@ struct ContentView: View {
                     StatusPill((domain.likelihood ?? "watch").capitalized, severity: severity(domain.likelihood))
                 }
                 if let gauge = domain.currentGauge {
-                    Text("Current gauge: \(Int(gauge.rounded()))")
+                    Text("Gauge now \(Int(gauge.rounded()))")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
-                if let explanation = domain.explanation, !explanation.isEmpty {
-                    Text(CopyRefiner.refine(explanation) ?? explanation)
+                if let explanation = domainExplanation(domain, window: window, primary: primary) {
+                    Text(explanation)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -10269,19 +10342,23 @@ struct ContentView: View {
             if let window {
                 let drivers = window.topDrivers ?? []
                 let domains = window.likelyElevatedDomains ?? []
+                let primary = drivers.first
+                let summary = refinedText(window.semanticSummary)
+                let domainsSummary = refinedText(window.semanticDomainsSummary)
+                let supportLine = refinedText(window.semanticSupportSummary)
 
                 LocalConditionsSurfaceCard(title: windowTitle(window.windowHours), icon: "sparkles.rectangle.stack.fill") {
                     VStack(alignment: .leading, spacing: 12) {
-                        if let summary = window.semanticSummary, !summary.isEmpty {
-                            Text(CopyRefiner.refine(summary) ?? summary)
+                        if let summary {
+                            Text(summary)
                                 .font(.subheadline)
                         }
 
-                        if let primary = drivers.first {
+                        if let primary {
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack(alignment: .top, spacing: 8) {
                                     VStack(alignment: .leading, spacing: 3) {
-                                        Text("Leading signal")
+                                        Text("Main thing to watch")
                                             .font(.caption2.weight(.semibold))
                                             .foregroundColor(.secondary)
                                         Text(primary.label ?? primary.key.replacingOccurrences(of: "_", with: " ").capitalized)
@@ -10290,8 +10367,8 @@ struct ContentView: View {
                                     Spacer()
                                     StatusPill((primary.severity ?? "watch").capitalized, severity: severity(primary.severity))
                                 }
-                                if let detail = window.semanticLeadingSignalSummary ?? primary.detail, !detail.isEmpty {
-                                    Text(CopyRefiner.refine(detail) ?? detail)
+                                if let detail = leadingDetail(for: window, primary: primary) {
+                                    Text(detail)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -10300,7 +10377,7 @@ struct ContentView: View {
 
                         if drivers.count > 1 {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Also in play")
+                                Text("Also contributing")
                                     .font(.caption2.weight(.semibold))
                                     .foregroundColor(.secondary)
                                 ScrollView(.horizontal, showsIndicators: false) {
@@ -10319,28 +10396,28 @@ struct ContentView: View {
 
                         if !domains.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("What may be more noticeable")
+                                Text("Most likely to show up in")
                                     .font(.caption2.weight(.semibold))
                                     .foregroundColor(.secondary)
-                                if let domainsSummary = window.semanticDomainsSummary, !domainsSummary.isEmpty {
-                                    Text(CopyRefiner.refine(domainsSummary) ?? domainsSummary)
+                                if let domainsSummary {
+                                    Text(domainsSummary)
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
                                 LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
                                     ForEach(domains) { domain in
-                                        domainCard(domain)
+                                        domainCard(domain, window: window, primary: primary)
                                     }
                                 }
                             }
                         }
 
-                        if let supportLine = window.semanticSupportSummary, !supportLine.isEmpty {
+                        if let supportLine {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("What may help")
+                                Text("A steadier way through it")
                                     .font(.caption2.weight(.semibold))
                                     .foregroundColor(.secondary)
-                                Text(CopyRefiner.refine(supportLine) ?? supportLine)
+                                Text(supportLine)
                                     .font(.footnote)
                                     .foregroundColor(.secondary)
                             }
@@ -10438,7 +10515,7 @@ struct ContentView: View {
                         windowSection(payload?.next72h)
                         windowSection(payload?.next7d)
 
-                        if payload?.forecastDataReady?.next7d != true {
+                        if !isLoading && !userOutlookWindowHasContent(payload?.next7d) {
                             LocalConditionsSurfaceCard(title: "7-Day Outlook", icon: "calendar") {
                                 Text(payload?.semanticSevenDayPending ?? "The 7-day view will appear once the forecast layer is steady enough to support it.")
                                     .font(.subheadline)
@@ -11192,7 +11269,18 @@ struct ContentView: View {
         }
 
         private var needsInitialRefresh: Bool {
-            outlook == nil || magnetosphere == nil
+            let forecastDayCount = outlook?.forecastDaily?.count ?? 0
+            let hasFullForecastDays = forecastDayCount >= 7
+            let hasOutlookSummaries =
+                !(outlook?.sections.isEmpty ?? true) ||
+                !(outlook?.alerts?.isEmpty ?? true) ||
+                !(outlook?.notes?.isEmpty ?? true)
+            let hasForecastSummary =
+                forecast != nil ||
+                !(outlook?.headline?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) ||
+                !(outlook?.summary?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+
+            return magnetosphere == nil || !hasForecastSummary || !hasFullForecastDays || (!hasOutlookSummaries && forecastDayCount == 0)
         }
 
         private func cleanedOutlookLine(_ raw: String?) -> String? {
@@ -13429,7 +13517,7 @@ struct ContentView: View {
                 shellToolbarContent
             }
             .task {
-                if userOutlook == nil && !userOutlookLoading {
+                if !userOutlookLoading && userOutlookNeedsRefresh(resolvedUserOutlookPayload) {
                     await fetchUserOutlook()
                 }
             }
@@ -13525,7 +13613,7 @@ struct ContentView: View {
                 onOpenAllDrivers: { openAllDrivers() }
             )
             .task {
-                if userOutlook == nil && !userOutlookLoading {
+                if !userOutlookLoading && userOutlookNeedsRefresh(resolvedUserOutlookPayload) {
                     await fetchUserOutlook()
                 }
             }
@@ -13815,7 +13903,7 @@ struct ContentView: View {
                             onOpenAllDrivers: { openAllDriversAfterClosingInsights() }
                         )
                         .task {
-                            if userOutlook == nil && !userOutlookLoading {
+                            if !userOutlookLoading && userOutlookNeedsRefresh(resolvedUserOutlookPayload) {
                                 await fetchUserOutlook()
                             }
                         }
@@ -15081,7 +15169,8 @@ struct ContentView: View {
                         }
                     }
                 }
-                .chartYAxis { AxisMarks(preset: .automatic, position: .leading) }
+                .chartYScale(domain: 0...20)
+                .chartYAxis { AxisMarks(position: .leading, values: [0, 5, 10, 15, 20]) }
                 .frame(height: 120)
                 .background {
                     if let gradient {
@@ -15126,7 +15215,7 @@ struct ContentView: View {
                         Spacer(minLength: 12)
 
                         Button(action: onLogTap) {
-                            Label("Log a symptom", systemImage: "plus.circle.fill")
+                            Label("Log", systemImage: "plus.circle.fill")
                                 .labelStyle(.titleAndIcon)
                         }
                         .buttonStyle(.borderedProminent)
