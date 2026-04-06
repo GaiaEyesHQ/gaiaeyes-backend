@@ -10136,6 +10136,7 @@ struct ContentView: View {
         private let columns = [
             GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 10, alignment: .topLeading)
         ]
+        private let suppressedOutlookPhrases = ["radio blackout", "radio-blackout"]
 
         private func severity(_ raw: String?) -> StatusPill.Severity {
             LocalConditionsStyle.pillSeverity(raw)
@@ -10226,8 +10227,9 @@ struct ContentView: View {
 
         private func shareDraft(for window: UserOutlookWindow?) -> ShareDraft? {
             guard let window else { return nil }
-            guard let primary = window.topDrivers?.first else { return nil }
-            let supporting = Array((window.topDrivers ?? []).dropFirst().prefix(2)).map {
+            let visible = visibleDrivers(window.topDrivers ?? [])
+            guard let primary = visible.first else { return nil }
+            let supporting = Array(visible.dropFirst().prefix(2)).map {
                 $0.label ?? $0.key.replacingOccurrences(of: "_", with: " ").capitalized
             }
             let domains = Array((window.likelyElevatedDomains ?? []).prefix(3)).map {
@@ -10251,18 +10253,63 @@ struct ContentView: View {
             )
         }
 
-        private func refinedText(_ raw: String?) -> String? {
-            guard let raw = raw?.nilIfTrimmedEmpty else { return nil }
-            return (CopyRefiner.refine(raw) ?? raw).nilIfTrimmedEmpty
-        }
-
-        private func normalizedOutlookText(_ raw: String?) -> String {
-            guard let text = refinedText(raw)?.lowercased(), !text.isEmpty else { return "" }
-            let cleaned = text
+        private func normalizeOutlookString(_ raw: String?) -> String {
+            guard let raw = raw?.lowercased(), !raw.isEmpty else { return "" }
+            return raw
                 .replacingOccurrences(of: "—", with: "-")
                 .replacingOccurrences(of: "[^a-z0-9]+", with: " ", options: .regularExpression)
                 .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        private func containsSuppressedOutlookPhrase(_ raw: String?) -> Bool {
+            let normalized = normalizeOutlookString(raw)
+            guard !normalized.isEmpty else { return false }
+            return suppressedOutlookPhrases.contains { normalized.contains($0) }
+        }
+
+        private func filteredOutlookText(_ raw: String?) -> String? {
+            guard let raw = raw?.nilIfTrimmedEmpty else { return nil }
+            let refined = (CopyRefiner.refine(raw) ?? raw).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !refined.isEmpty else { return nil }
+            let sentences = refined.components(separatedBy: .newlines)
+                .flatMap { block in
+                    block.split(whereSeparator: { [".", "!", "?"].contains($0) }).map(String.init)
+                }
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            let kept = sentences.filter { !containsSuppressedOutlookPhrase($0) }
+            if !kept.isEmpty {
+                let joined = kept.map { sentence -> String in
+                    if sentence.hasSuffix(".") || sentence.hasSuffix("!") || sentence.hasSuffix("?") {
+                        return sentence
+                    }
+                    return sentence + "."
+                }.joined(separator: " ")
+                return joined.nilIfTrimmedEmpty
+            }
+            return containsSuppressedOutlookPhrase(refined) ? nil : refined.nilIfTrimmedEmpty
+        }
+
+        private func refinedText(_ raw: String?) -> String? {
+            filteredOutlookText(raw)
+        }
+
+        private func normalizedOutlookText(_ raw: String?) -> String {
+            normalizeOutlookString(refinedText(raw))
+        }
+
+        private func visibleDrivers(_ drivers: [UserOutlookDriver]) -> [UserOutlookDriver] {
+            drivers.filter { driver in
+                let key = driver.key.lowercased()
+                if key == "radio" || key == "radio_blackout" || key == "radio-blackout" {
+                    return false
+                }
+                if containsSuppressedOutlookPhrase(driver.label) || containsSuppressedOutlookPhrase(driver.detail) {
+                    return false
+                }
+                return true
+            }
         }
 
         private func textCarriesSameIdea(_ lhs: String?, _ rhs: String?) -> Bool {
@@ -10311,18 +10358,18 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
                     Text(domain.label ?? domain.key.replacingOccurrences(of: "_", with: " ").capitalized)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.headline.weight(.semibold))
                     Spacer()
                     StatusPill((domain.likelihood ?? "watch").capitalized, severity: severity(domain.likelihood))
                 }
                 if let gauge = domain.currentGauge {
                     Text("Gauge now \(Int(gauge.rounded()))")
-                        .font(.caption2)
+                        .font(.footnote)
                         .foregroundColor(.secondary)
                 }
                 if let explanation = domainExplanation(domain, window: window, primary: primary) {
                     Text(explanation)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -10340,7 +10387,7 @@ struct ContentView: View {
         @ViewBuilder
         private func windowSection(_ window: UserOutlookWindow?) -> some View {
             if let window {
-                let drivers = window.topDrivers ?? []
+                let drivers = visibleDrivers(window.topDrivers ?? [])
                 let domains = window.likelyElevatedDomains ?? []
                 let primary = drivers.first
                 let summary = refinedText(window.semanticSummary)
@@ -10351,7 +10398,7 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         if let summary {
                             Text(summary)
-                                .font(.subheadline)
+                                .font(.body)
                         }
 
                         if let primary {
@@ -10359,7 +10406,7 @@ struct ContentView: View {
                                 HStack(alignment: .top, spacing: 8) {
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text("Main thing to watch")
-                                            .font(.caption2.weight(.semibold))
+                                            .font(.footnote.weight(.semibold))
                                             .foregroundColor(.secondary)
                                         Text(primary.label ?? primary.key.replacingOccurrences(of: "_", with: " ").capitalized)
                                             .font(.headline)
@@ -10369,7 +10416,7 @@ struct ContentView: View {
                                 }
                                 if let detail = leadingDetail(for: window, primary: primary) {
                                     Text(detail)
-                                        .font(.caption)
+                                        .font(.footnote)
                                         .foregroundColor(.secondary)
                                 }
                             }
@@ -10378,7 +10425,7 @@ struct ContentView: View {
                         if drivers.count > 1 {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Also contributing")
-                                    .font(.caption2.weight(.semibold))
+                                    .font(.footnote.weight(.semibold))
                                     .foregroundColor(.secondary)
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 10) {
@@ -10397,11 +10444,11 @@ struct ContentView: View {
                         if !domains.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Most likely to show up in")
-                                    .font(.caption2.weight(.semibold))
+                                    .font(.footnote.weight(.semibold))
                                     .foregroundColor(.secondary)
                                 if let domainsSummary {
                                     Text(domainsSummary)
-                                        .font(.caption)
+                                        .font(.footnote)
                                         .foregroundColor(.secondary)
                                 }
                                 LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
@@ -10415,10 +10462,10 @@ struct ContentView: View {
                         if let supportLine {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("A steadier way through it")
-                                    .font(.caption2.weight(.semibold))
+                                    .font(.footnote.weight(.semibold))
                                     .foregroundColor(.secondary)
                                 Text(supportLine)
-                                    .font(.footnote)
+                                    .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
                             .padding(.top, 2)
@@ -10448,20 +10495,15 @@ struct ContentView: View {
                     LazyVStack(spacing: 16) {
                         LocalConditionsSurfaceCard(title: "Near-Future Outlook", icon: "calendar.badge.clock") {
                             HStack(alignment: .top, spacing: 12) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("Next 24 hours to 7 days")
-                                        .font(.system(size: 30, weight: .bold, design: .rounded))
-                                    Text(payload?.semanticHeaderSummary ?? "A short forecast built from your patterns, current gauges, local conditions, and space-weather forecasts.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                VStack(alignment: .leading, spacing: 8) {
                                     if let updated = formatUpdate(payload?.generatedAt) {
                                         Text("Updated \(updated)")
-                                            .font(.caption2)
+                                            .font(.footnote)
                                             .foregroundColor(.secondary)
                                     }
                                     if let availability = payload?.semanticAvailabilitySummary, !availability.isEmpty {
                                         Text(availability)
-                                            .font(.caption2)
+                                            .font(.footnote)
                                             .foregroundColor(.secondary)
                                     }
                                 }
@@ -10480,7 +10522,7 @@ struct ContentView: View {
                                         .buttonStyle(.bordered)
                                         .controlSize(.small)
                                     }
-                                    Button("See all current drivers") { onOpenAllDrivers() }
+                                    Button("Drivers") { onOpenAllDrivers() }
                                         .buttonStyle(.bordered)
                                         .controlSize(.small)
                                 }
