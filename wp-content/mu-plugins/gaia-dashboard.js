@@ -745,10 +745,10 @@
       .replace(/[-\s]+/g, "_")
       .toUpperCase();
 
-  const dedupeStrings = (values) => {
+  const dedupeStrings = (values, normalizer = textOrEmpty) => {
     const seen = new Set();
     return maybeArray(values).filter((value) => {
-      const normalized = textOrEmpty(value);
+      const normalized = textOrEmpty(normalizer(value));
       if (!normalized) return false;
       if (seen.has(normalized)) return false;
       seen.add(normalized);
@@ -756,8 +756,35 @@
     });
   };
 
+  const normalizeSymptomLabel = (value) =>
+    textOrEmpty(value)
+      .replace(/\s+/g, " ")
+      .toLowerCase();
+
+  const dedupeSymptomCatalog = (items) => {
+    const seen = new Set();
+    return maybeArray(items).filter((item) => {
+      if (!item || typeof item !== "object") return false;
+      const normalizedCode = normalizeSymptomCode(item.symptom_code || item.symptomCode);
+      const displayLabel =
+        textOrEmpty(item.label) ||
+        (normalizedCode ? titleFromKey(normalizedCode) : "");
+      const normalizedLabel = normalizeSymptomLabel(displayLabel);
+      const dedupeKey = normalizedLabel || normalizedCode;
+      if (!dedupeKey || seen.has(dedupeKey)) return false;
+      seen.add(dedupeKey);
+      return true;
+    });
+  };
+
   const extractSymptomCodeCatalog = (payload) =>
-    maybeArray(extractEnvelopeData(payload)).filter((item) => item && typeof item === "object");
+    dedupeSymptomCatalog(maybeArray(extractEnvelopeData(payload)));
+
+  const extractPatternsPayload = (payload) => {
+    const data = extractEnvelopeData(payload);
+    if (data && typeof data === "object") return data;
+    return maybeObject(payload) || {};
+  };
 
   const symptomOptionLabel = (code, catalog) => {
     const normalized = normalizeSymptomCode(code);
@@ -897,7 +924,7 @@
   const postSymptomEvents = async (token, codes) => {
     const url = routeFor("symptomLog");
     if (!url) throw new Error("Symptom logging route is not configured.");
-    const normalizedCodes = dedupeStrings(maybeArray(codes).map(normalizeSymptomCode));
+    const normalizedCodes = dedupeStrings(maybeArray(codes).map(normalizeSymptomCode), normalizeSymptomCode);
     if (!normalizedCodes.length) throw new Error("Choose at least one symptom.");
     for (const code of normalizedCodes) {
       const response = await postJson(url, token, { symptom_code: code });
@@ -910,40 +937,16 @@
 
   const routeFor = (key, fallback = "") => normalizeBase(memberRoutes[key] || fallback);
 
-  const memberHubFetches = async (token) => {
+  const memberHubLoaders = (token) => {
     const timezone = (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || "America/Chicago";
-    const out = {
-      features: null,
-      currentSymptoms: null,
-      dailyCheckIn: null,
-      lunar: null,
-      outlook: null,
-      patternsSummary: null,
-      allDrivers: null,
-      errors: {},
+    return {
+      features: () => fetchJsonWithParams(routeFor("features"), token, { tz: timezone }),
+      currentSymptoms: () => fetchJsonWithParams(routeFor("currentSymptoms"), token, { window_hours: 12 }),
+      dailyCheckIn: () => fetchJson(routeFor("dailyCheckIn"), token),
+      lunar: () => fetchJson(routeFor("lunar"), token),
+      outlook: () => fetchJson(routeFor("outlook"), token),
+      patternsSummary: () => fetchJson(routeFor("patternsSummary"), token),
     };
-
-    const loaders = [
-      ["features", () => fetchJsonWithParams(routeFor("features"), token, { tz: timezone })],
-      ["currentSymptoms", () => fetchJsonWithParams(routeFor("currentSymptoms"), token, { window_hours: 12 })],
-      ["dailyCheckIn", () => fetchJson(routeFor("dailyCheckIn"), token)],
-      ["lunar", () => fetchJson(routeFor("lunar"), token)],
-      ["outlook", () => fetchJson(routeFor("outlook"), token)],
-      ["patternsSummary", () => fetchJson(routeFor("patternsSummary"), token)],
-      ["allDrivers", () => fetchJsonWithParams(routeFor("drivers"), token, { day: localDayISO() })],
-    ];
-
-    await Promise.all(
-      loaders.map(async ([key, loader]) => {
-        try {
-          out[key] = await loader();
-        } catch (err) {
-          out.errors[key] = err && err.message ? err.message : String(err);
-        }
-      })
-    );
-
-    return out;
   };
 
   const loadFullPatterns = async (token) => {
@@ -952,16 +955,133 @@
     return fetchJson(url, token);
   };
 
+  const defaultLoadingKeys = () => ({
+    features: false,
+    currentSymptoms: false,
+    dailyCheckIn: false,
+    lunar: false,
+    outlook: false,
+    patternsSummary: false,
+    patterns: false,
+  });
+
+  const ensureLoadingKeys = (state) => {
+    if (!state.ui.loadingKeys) {
+      state.ui.loadingKeys = defaultLoadingKeys();
+      return;
+    }
+    Object.keys(defaultLoadingKeys()).forEach((key) => {
+      if (typeof state.ui.loadingKeys[key] !== "boolean") {
+        state.ui.loadingKeys[key] = false;
+      }
+    });
+  };
+
+  const setMemberHydrationResult = (state, key, payload, errorMessage = "") => {
+    state.member[key] = payload;
+    if (errorMessage) {
+      state.member.errors[key] = errorMessage;
+    } else {
+      delete state.member.errors[key];
+    }
+  };
+
+  const hydrateMemberKeys = (root, state, keys, options = {}) => {
+    const force = !!(options && options.force);
+    const token = state && state.authCtx ? state.authCtx.token : "";
+    if (!token) return;
+    ensureLoadingKeys(state);
+    const loaders = memberHubLoaders(token);
+    maybeArray(keys).forEach((key) => {
+      const loader = loaders[key];
+      if (typeof loader !== "function") return;
+      if (state.ui.loadingKeys[key]) return;
+      if (!force && state.member[key]) return;
+      state.ui.loadingKeys[key] = true;
+      loader()
+        .then((payload) => {
+          setMemberHydrationResult(state, key, payload, "");
+        })
+        .catch((err) => {
+          const message = err && err.message ? err.message : String(err);
+          setMemberHydrationResult(state, key, null, message);
+        })
+        .finally(() => {
+          state.ui.loadingKeys[key] = false;
+          renderMemberHub(root, state);
+        });
+    });
+  };
+
+  const ensureFullPatternsLoaded = (root, state, options = {}) => {
+    const force = !!(options && options.force);
+    const token = state && state.authCtx ? state.authCtx.token : "";
+    if (!token) return;
+    ensureLoadingKeys(state);
+    if (state.ui.loadingKeys.patterns) return;
+    if (!force && state.member.patterns) return;
+    state.ui.loadingKeys.patterns = true;
+    state.ui.patternsLoading = true;
+    loadFullPatterns(token)
+      .then((patterns) => {
+        state.member.patterns = patterns;
+        delete state.member.errors.patterns;
+      })
+      .catch((err) => {
+        state.member.errors.patterns = err && err.message ? err.message : String(err);
+      })
+      .finally(() => {
+        state.ui.loadingKeys.patterns = false;
+        state.ui.patternsLoading = false;
+        renderMemberHub(root, state);
+      });
+  };
+
+  const hydrateTabData = (root, state, tab) => {
+    const key = normalizeTabKey(tab);
+    if (key === "mission") {
+      hydrateMemberKeys(root, state, ["outlook"]);
+      return;
+    }
+    if (key === "body") {
+      hydrateMemberKeys(root, state, ["currentSymptoms", "dailyCheckIn", "lunar", "features"]);
+      return;
+    }
+    if (key === "patterns") {
+      hydrateMemberKeys(root, state, ["patternsSummary"]);
+      ensureFullPatternsLoaded(root, state);
+      return;
+    }
+    if (key === "outlook") {
+      hydrateMemberKeys(root, state, ["outlook"]);
+      return;
+    }
+    if (key === "guide") {
+      hydrateMemberKeys(root, state, ["currentSymptoms", "dailyCheckIn", "outlook"]);
+      return;
+    }
+  };
+
+  const scheduleIdleHydration = (root, state) => {
+    const idle = window.requestIdleCallback || ((callback) => window.setTimeout(callback, 180));
+    idle(() => {
+      hydrateMemberKeys(root, state, ["currentSymptoms", "dailyCheckIn", "lunar", "patternsSummary"]);
+      idle(() => {
+        hydrateMemberKeys(root, state, ["features", "outlook"]);
+      });
+    });
+  };
+
   const renderSymptomPickerModal = (state) => {
     const picker = state && state.ui ? state.ui.symptomPicker : null;
-    const catalog = extractSymptomCodeCatalog(state && state.member ? state.member.symptomCodes : null)
+    const catalog = dedupeSymptomCatalog(extractSymptomCodeCatalog(state && state.member ? state.member.symptomCodes : null))
       .filter((item) => item.is_active !== false && item.isActive !== false)
       .sort((a, b) =>
         textOrEmpty(a && a.label).localeCompare(textOrEmpty(b && b.label), undefined, { sensitivity: "base" })
       );
-    const selected = new Set(dedupeStrings(picker && picker.selectedCodes));
+    const selected = new Set(dedupeStrings(picker && picker.selectedCodes, normalizeSymptomCode).map(normalizeSymptomCode));
     const query = textOrEmpty(picker && picker.query).toLowerCase();
-    const suggested = dedupeStrings(picker && picker.suggestedCodes)
+    const suggested = dedupeStrings(picker && picker.suggestedCodes, normalizeSymptomCode)
       .map((code) => normalizeSymptomCode(code))
       .filter((code) =>
         catalog.some((item) => normalizeSymptomCode(item && (item.symptom_code || item.symptomCode)) === code)
@@ -1117,8 +1237,8 @@
   const openSymptomPicker = async (root, state, options = {}) => {
     state.ui.symptomPicker = {
       title: textOrEmpty(options.title) || "Log symptoms",
-      suggestedCodes: dedupeStrings(maybeArray(options.suggestedCodes).map(normalizeSymptomCode)),
-      selectedCodes: dedupeStrings(maybeArray(options.selectedCodes).map(normalizeSymptomCode)),
+      suggestedCodes: dedupeStrings(maybeArray(options.suggestedCodes).map(normalizeSymptomCode), normalizeSymptomCode),
+      selectedCodes: dedupeStrings(maybeArray(options.selectedCodes).map(normalizeSymptomCode), normalizeSymptomCode),
       query: "",
       submitting: false,
       status: "Loading symptom options...",
@@ -1136,7 +1256,7 @@
 
   const toggleSymptomPickerSelection = (root, state, code) => {
     if (!state.ui.symptomPicker) return;
-    const selected = new Set(dedupeStrings(state.ui.symptomPicker.selectedCodes).map(normalizeSymptomCode));
+    const selected = new Set(dedupeStrings(state.ui.symptomPicker.selectedCodes, normalizeSymptomCode).map(normalizeSymptomCode));
     const normalized = normalizeSymptomCode(code);
     if (!normalized) return;
     if (selected.has(normalized)) {
@@ -1162,7 +1282,7 @@
 
   const submitSymptomPicker = async (root, state) => {
     if (!state.ui.symptomPicker || state.ui.symptomPicker.submitting) return;
-    const selectedCodes = dedupeStrings(state.ui.symptomPicker.selectedCodes).map(normalizeSymptomCode);
+    const selectedCodes = dedupeStrings(state.ui.symptomPicker.selectedCodes, normalizeSymptomCode).map(normalizeSymptomCode);
     if (!selectedCodes.length) {
       state.ui.symptomPicker.status = "Choose at least one symptom.";
       openModal(root, renderSymptomPickerModal(state));
@@ -1258,13 +1378,7 @@
       node.addEventListener("click", () => {
         state.ui.activeTab = normalizeTabKey(node.getAttribute("data-tab-target"));
         writeTabHash(state.ui.activeTab);
-        rerender();
-      });
-    });
-
-    root.querySelectorAll("[data-explore-filter]").forEach((node) => {
-      node.addEventListener("click", () => {
-        state.ui.exploreFilter = textOrEmpty(node.getAttribute("data-explore-filter")) || "all";
+        hydrateTabData(root, state, state.ui.activeTab);
         rerender();
       });
     });
@@ -1677,7 +1791,7 @@
     }
   };
 
-  const MEMBER_TAB_ORDER = ["mission", "body", "patterns", "outlook", "explore", "guide"];
+  const MEMBER_TAB_ORDER = ["mission", "body", "patterns", "outlook", "guide", "settings"];
 
   const DAILY_CHECKIN_SELECTS = {
     compared_to_yesterday: [
@@ -1738,6 +1852,8 @@
   const textOrEmpty = (value) => String(value == null ? "" : value).trim();
 
   const maybeArray = (value) => (Array.isArray(value) ? value : []);
+
+  const maybeObject = (value) => (value && typeof value === "object" && !Array.isArray(value) ? value : null);
 
   const titleFromKey = (value) =>
     textOrEmpty(value)
@@ -1843,14 +1959,44 @@
     return localDayISO();
   };
 
-  const extractEnvelopeData = (payload) =>
-    payload && payload.data && typeof payload.data === "object" ? payload.data : null;
+  const extractEnvelopeData = (payload) => {
+    const direct = maybeObject(payload);
+    if (!direct) return null;
+    if (Object.prototype.hasOwnProperty.call(direct, "data")) {
+      const data = direct.data;
+      if (data && typeof data === "object") return data;
+      return null;
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(direct, "ok") ||
+      Object.prototype.hasOwnProperty.call(direct, "error") ||
+      Object.prototype.hasOwnProperty.call(direct, "friendly_error")
+    ) {
+      return null;
+    }
+    return direct;
+  };
 
   const extractDailyCheckIn = (payload) => extractEnvelopeData(payload);
 
   const extractCurrentSymptoms = (payload) => extractEnvelopeData(payload);
 
   const extractFeatures = (payload) => extractEnvelopeData(payload);
+
+  const readPathValue = (source, path) =>
+    textOrEmpty(path)
+      .split(".")
+      .reduce((acc, segment) => (acc && typeof acc === "object" ? acc[segment] : null), source);
+
+  const firstDefinedValue = (source, paths) => {
+    for (const path of maybeArray(paths)) {
+      const value = readPathValue(source, path);
+      if (value != null && value !== "") return value;
+    }
+    return null;
+  };
+
+  const featureValue = (features, ...paths) => firstDefinedValue(features, paths);
 
   const firstPendingFollowUp = (currentSymptoms) =>
     maybeArray(currentSymptoms && currentSymptoms.items).find(
@@ -1865,17 +2011,19 @@
   const healthStatCards = (features) => {
     if (!features || typeof features !== "object") return [];
     const cards = [];
-    const restingHrDelta = asNumber(features.restingHrBaselineDelta);
-    const respiratoryDelta = asNumber(features.respiratoryRateBaselineDelta);
-    const spo2 = asNumber(features.spo2Avg) || asNumber(features.spo2AvgPct) || asNumber(features.spo2AvgPercent) || asNumber(features.spo2Mean) || (features.health && asNumber(features.health.spo2Avg));
-    const steps = asNumber(features.stepsTotal);
-    const hrv = asNumber(features.hrvAvg);
-    const tempDeviation = asNumber(features.temperatureDeviationBaselineDelta) ?? asNumber(features.temperatureDeviation);
-    const hrMin = asNumber(features.hrMin);
-    const hrMax = asNumber(features.hrMax);
-    const respiratoryAvg = asNumber(features.respiratoryRateAvg) ?? asNumber(features.respiratoryRateSleepAvg);
-    const bpSys = asNumber(features.bpSysAvg);
-    const bpDia = asNumber(features.bpDiaAvg);
+    const restingHrDelta = asNumber(featureValue(features, "resting_hr_baseline_delta", "restingHrBaselineDelta"));
+    const respiratoryDelta = asNumber(featureValue(features, "respiratory_rate_baseline_delta", "respiratoryRateBaselineDelta"));
+    const spo2 =
+      asNumber(featureValue(features, "spo2_avg", "spo2Avg", "health.spo2_avg", "health.spo2Avg")) ||
+      asNumber(featureValue(features, "spo2_avg_pct", "spo2AvgPct", "spo2_avg_percent", "spo2AvgPercent", "spo2_mean", "spo2Mean"));
+    const steps = asNumber(featureValue(features, "steps_total", "stepsTotal"));
+    const hrv = asNumber(featureValue(features, "hrv_avg", "hrvAvg", "hrv_sdnn", "hrvSdnn"));
+    const tempDeviation = asNumber(featureValue(features, "temperature_deviation_baseline_delta", "temperatureDeviationBaselineDelta", "temperature_deviation", "temperatureDeviation"));
+    const hrMin = asNumber(featureValue(features, "hr_min", "hrMin"));
+    const hrMax = asNumber(featureValue(features, "hr_max", "hrMax"));
+    const respiratoryAvg = asNumber(featureValue(features, "respiratory_rate_avg", "respiratoryRateAvg", "respiratory_rate_sleep_avg", "respiratoryRateSleepAvg"));
+    const bpSys = asNumber(featureValue(features, "bp_sys_avg", "bpSysAvg"));
+    const bpDia = asNumber(featureValue(features, "bp_dia_avg", "bpDiaAvg"));
 
     if (Number.isFinite(restingHrDelta)) {
       cards.push({ label: "Resting HR Δ", value: `${restingHrDelta > 0 ? "+" : ""}${restingHrDelta.toFixed(1)} bpm`, detail: restingHrDelta > 0 ? "above usual" : "below usual" });
@@ -1917,16 +2065,16 @@
   const sleepStageCards = (features) => {
     if (!features || typeof features !== "object") return [];
     return [
-      { label: "REM", value: formatMinutesShort(features.remM) },
-      { label: "Core", value: formatMinutesShort(features.coreM) },
-      { label: "Deep", value: formatMinutesShort(features.deepM) },
-      { label: "Awake", value: formatMinutesShort(features.awakeM) },
-      { label: "In bed", value: formatMinutesShort(features.inbedM) },
+      { label: "REM", value: formatMinutesShort(featureValue(features, "rem_m", "remM", "sleep_rem_minutes", "sleepRemMinutes")) },
+      { label: "Core", value: formatMinutesShort(featureValue(features, "core_m", "coreM", "sleep_core_minutes", "sleepCoreMinutes")) },
+      { label: "Deep", value: formatMinutesShort(featureValue(features, "deep_m", "deepM", "sleep_deep_minutes", "sleepDeepMinutes")) },
+      { label: "Awake", value: formatMinutesShort(featureValue(features, "awake_m", "awakeM", "sleep_awake_minutes", "sleepAwakeMinutes")) },
+      { label: "In bed", value: formatMinutesShort(featureValue(features, "inbed_m", "inbedM")) },
     ].filter((item) => item.value !== "—");
   };
 
-  const missionNavCard = (key, title, body) => `
-    <button class="gaia-dashboard__nav-card" type="button" data-tab-target="${esc(key)}">
+  const missionNavCard = (state, key, title, body) => `
+    <button class="gaia-dashboard__nav-card${state.ui.activeTab === key ? " is-active" : ""}" type="button" data-tab-target="${esc(key)}">
       <strong>${esc(title)}</strong>
       <span>${esc(body)}</span>
     </button>
@@ -1970,7 +2118,7 @@
 
     const drivers = maybeArray(window.topDrivers || window.top_drivers).filter((driver) => !/radio blackout/i.test(textOrEmpty(driver && driver.label)));
     const primary = drivers[0] || null;
-    const supporting = drivers.slice(1, 3);
+    const supporting = drivers.slice(1, 4).filter((driver) => !/radio blackout/i.test(textOrEmpty(driver && driver.label)));
     const domains = maybeArray(window.likelyElevatedDomains || window.likely_elevated_domains).slice(0, 3);
 
     return `
@@ -2014,14 +2162,16 @@
             ? `
               <div>
                 <div class="gaia-dashboard__mini-title">Most likely to show up in</div>
-                <div class="gaia-dashboard__grid gaia-dashboard__grid--3">
+                <div class="gaia-dashboard__outlook-domain-grid">
                   ${domains
                     .map(
                       (domain) => `
-                        <div class="gaia-dashboard__metric">
-                          <div class="gaia-dashboard__metric-label">${esc(domain.label || titleFromKey(domain.key))}</div>
-                          <div class="gaia-dashboard__metric-value">${esc(domain.likelihood || "Watch")}</div>
-                          <div class="gaia-dashboard__metric-detail">${esc(truncate(domain.explanation || "", 120) || "This domain may be easier to notice in this window.")}</div>
+                        <div class="gaia-dashboard__outlook-domain">
+                          <div class="gaia-dashboard__outlook-domain-head">
+                            <strong>${esc(domain.label || titleFromKey(domain.key))}</strong>
+                            <span class="${pillClass(domain.likelihood || "watch")}">${esc(domain.likelihood || "Watch")}</span>
+                          </div>
+                          <p>${esc(truncate(domain.explanation || "", 108) || "This domain may be easier to notice in this window.")}</p>
                         </div>
                       `
                     )
@@ -2049,8 +2199,9 @@
     const currentSymptoms = extractCurrentSymptoms(state.member.currentSymptoms);
     const followUp = firstPendingFollowUp(currentSymptoms);
     if (followUp) {
+      const followUpLabel = textOrEmpty(followUp.symptom_label || followUp.label).toLowerCase() || "this symptom";
       return {
-        question: `Has ${textOrEmpty(followUp.symptom_label).toLowerCase()} shifted since the last check?`,
+        question: `Has ${followUpLabel} shifted since the last check?`,
         support: "A quick pulse helps Guide stay current without asking for a full check-in.",
         choices: ["Yes", "A little", "Not really"],
       };
@@ -2113,6 +2264,8 @@
 
   const renderDailyCheckInCard = (state, location) => {
     const dailyCheckIn = extractDailyCheckIn(state.member.dailyCheckIn);
+    const dailyCheckInLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.dailyCheckIn);
+    const dailyCheckInError = textOrEmpty(state.member.errors && state.member.errors.dailyCheckIn);
     const targetDay = textOrEmpty(dailyCheckIn && dailyCheckIn.target_day) || localDayISO();
     const entry = dailyCheckIn && dailyCheckIn.latest_entry ? dailyCheckIn.latest_entry : null;
     const completedToday = !!(entry && textOrEmpty(entry.day) === targetDay);
@@ -2121,13 +2274,29 @@
     const form = state.ui.checkInForm;
     const showForm = state.ui.checkInEditing || (!completedToday && !!prompt);
     const exposureSet = new Set(maybeArray(form && form.exposures));
+    const title = dailyCheckInLoading && !dailyCheckIn
+      ? "Checking for today's prompt"
+      : completedToday
+        ? "Completed for today"
+        : prompt
+          ? "Check in with the day"
+          : dailyCheckInError
+            ? "Check-in temporarily unavailable"
+            : "Nothing waiting right now";
+    const copy = dailyCheckInLoading && !dailyCheckIn
+      ? "Loading your daily check-in state."
+      : completedToday
+        ? `Completed for ${formatDayLabel(targetDay)}${maybeArray(entry && entry.exposures).length ? `. Also logged: ${maybeArray(entry.exposures).map(titleFromKey).join(", ")}` : "."}`
+        : dailyCheckInError && !prompt
+          ? "The daily check-in service is having trouble right now. Try again in a moment."
+          : sentence(prompt && prompt.question_text, "Use the full check-in to keep the body read current.");
 
     return `
       <article class="gaia-dashboard__card">
         <div class="gaia-dashboard__card-title-row">
           <div>
             <span class="gaia-dashboard__eyebrow">${esc(location === "guide" ? "Daily check-in" : "Body check-in")}</span>
-            <h4 class="gaia-dashboard__card-title">${completedToday ? "Completed for today" : prompt ? "Check in with the day" : "Nothing waiting right now"}</h4>
+            <h4 class="gaia-dashboard__card-title">${esc(title)}</h4>
           </div>
           ${
             completedToday
@@ -2137,11 +2306,7 @@
                 : ""
           }
         </div>
-        <p class="gaia-dashboard__card-copy">${
-          completedToday
-            ? esc(`Completed for ${formatDayLabel(targetDay)}${maybeArray(entry && entry.exposures).length ? `. Also logged: ${maybeArray(entry.exposures).map(titleFromKey).join(", ")}` : "."}`)
-            : esc(sentence(prompt && prompt.question_text, "Use the full check-in to keep the body read current."))
-        }</p>
+        <p class="gaia-dashboard__card-copy">${esc(copy)}</p>
         ${
           completedToday && !showForm
             ? `
@@ -2174,13 +2339,13 @@
                   </div>
                   <div class="gaia-dashboard__field">
                     <label>Also logged</label>
-                    <div class="gaia-dashboard__meta-row">
+                    <div class="gaia-dashboard__exposure-grid">
                       ${DAILY_CHECKIN_EXPOSURES
                         .map(
                           ([key, label]) => `
-                            <label class="gaia-dashboard__meta-chip">
+                            <label class="gaia-dashboard__toggle-chip">
                               <input type="checkbox" name="exposures" value="${esc(key)}"${exposureSet.has(key) ? " checked" : ""} />
-                              ${esc(label)}
+                              <span>${esc(label)}</span>
                             </label>
                           `
                         )
@@ -2208,6 +2373,64 @@
               `
         }
       </article>
+    `;
+  };
+
+  const renderMissionOutlookCard = (state, fallbackSummary) => {
+    const outlook = state.member.outlook && typeof state.member.outlook === "object" ? state.member.outlook : {};
+    const window24 = maybeObject(outlook.next24h || outlook.next_24h);
+    const outlookLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.outlook);
+    const outlookError = textOrEmpty(state.member.errors && state.member.errors.outlook);
+    const drivers = maybeArray(window24 && (window24.topDrivers || window24.top_drivers))
+      .filter((driver) => !/radio blackout/i.test(textOrEmpty(driver && driver.label)));
+    const primary = drivers[0] || null;
+    const supportLine = textOrEmpty(window24 && (window24.supportLine || window24.support_line));
+    const summary = textOrEmpty(window24 && window24.summary) || fallbackSummary;
+
+    return `
+      <div class="gaia-dashboard__earthscope gaia-dashboard__earthscope--outlook">
+        <div class="gaia-dashboard__card-title-row">
+          <div>
+            <span class="gaia-dashboard__eyebrow">Current outlook</span>
+            <h4>${esc(
+              outlookLoading && !window24
+                ? "Current outlook loading"
+                : "Here's what's affecting you"
+            )}</h4>
+          </div>
+          ${primary ? `<span class="${pillClass(primary.severity || "watch")}">${esc(primary.label || primary.key || "Watch")}</span>` : ""}
+        </div>
+        <p class="gaia-dashboard__earthscope-summary">${
+          outlookLoading && !window24
+            ? "Loading the latest personal outlook."
+            : esc(summary || "Your near-future read is still filling in.")
+        }</p>
+        ${
+          primary
+            ? `
+              <div class="gaia-dashboard__earthscope-preview">
+                <div class="gaia-dashboard__earthscope-row">
+                  <div class="gaia-dashboard__earthscope-label">Main thing to watch</div>
+                  <div class="gaia-dashboard__earthscope-copy">${esc(sentence(primary.detail, "This looks most relevant in the current window."))}</div>
+                </div>
+                ${
+                  supportLine
+                    ? `
+                      <div class="gaia-dashboard__earthscope-row">
+                        <div class="gaia-dashboard__earthscope-label">A steadier way through it</div>
+                        <div class="gaia-dashboard__earthscope-copy">${esc(supportLine)}</div>
+                      </div>
+                    `
+                    : ""
+                }
+              </div>
+            `
+            : outlookError
+              ? `<div class="gaia-dashboard__muted">Current outlook is temporarily unavailable. Guide and Body can still use the last-good state.</div>`
+              : ""
+        }
+        <button class="gaia-dashboard__earthscope-link" type="button" data-tab-target="outlook">Open full Outlook</button>
+      </div>
     `;
   };
 
@@ -2253,19 +2476,6 @@
 
     return `
       <section class="gaia-dashboard__section${state.ui.activeTab === "mission" ? " is-active" : ""}" data-section="mission">
-        <div class="gaia-dashboard__section-head">
-          <div class="gaia-dashboard__section-copy">
-            <h3 class="gaia-dashboard__section-title">Mission Control</h3>
-            <p class="gaia-dashboard__section-subtitle">Your gauges, drivers, and EarthScope live here. Use the section cards to move through the same core read you get in the app.</p>
-          </div>
-        </div>
-        <div class="gaia-dashboard__nav-grid">
-          ${missionNavCard("body", "Body", "Current symptoms, check-in, sleep, health stats, and lunar watch.")}
-          ${missionNavCard("patterns", "Patterns", "The clearest repeats in your logs and wearable history.")}
-          ${missionNavCard("outlook", "Outlook", "Your 24h, 72h, and 7-day personal forecast windows.")}
-          ${missionNavCard("explore", "Explore", "All drivers plus links to deeper public detail pages.")}
-          ${missionNavCard("guide", "Guide", "A lighter orientation layer with daily check-in and help links.")}
-        </div>
         <div class="gaia-dashboard__gauges">
           ${gaugeRows.map((row) => renderGaugeCard(row, gaugeZones, !!(payload.modalModels && payload.modalModels.gauges && payload.modalModels.gauges[row.key]))).join("")}
         </div>
@@ -2290,11 +2500,7 @@
         }
         ${renderDriversSection(drivers, payload.modalModels || {})}
         ${renderGeomagneticContext(geomagneticContext)}
-        <div class="gaia-dashboard__earthscope">
-          <h4>${esc(cleanEarthscopeTitle(earthscope && earthscope.title))}</h4>
-          <div class="gaia-dashboard__earthscope-preview">${renderEarthscopePreview(earthscope, driversCompact, earthscopeSummary)}</div>
-          <button class="gaia-dashboard__earthscope-link" type="button" data-earthscope-full="1">Open full EarthScope</button>
-        </div>
+        ${renderMissionOutlookCard(state, earthscopeSummary)}
       </section>
     `;
   };
@@ -2303,6 +2509,12 @@
     const currentSymptoms = extractCurrentSymptoms(state.member.currentSymptoms);
     const features = extractFeatures(state.member.features);
     const lunar = state.member.lunar && typeof state.member.lunar === "object" ? state.member.lunar : null;
+    const currentSymptomsLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.currentSymptoms);
+    const featuresLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.features);
+    const lunarLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.lunar);
+    const currentSymptomsError = textOrEmpty(state.member.errors && state.member.errors.currentSymptoms);
+    const featuresError = textOrEmpty(state.member.errors && state.member.errors.features);
+    const lunarError = textOrEmpty(state.member.errors && state.member.errors.lunar);
     const symptomItems = maybeArray(currentSymptoms && currentSymptoms.items).slice(0, 4);
     const summary = currentSymptoms && currentSymptoms.summary ? currentSymptoms.summary : {};
     const healthCards = healthStatCards(features).slice(0, 8);
@@ -2326,7 +2538,15 @@
               <div class="gaia-dashboard__card-title-row">
                 <div>
                   <span class="gaia-dashboard__eyebrow">Current symptoms</span>
-                  <h4 class="gaia-dashboard__card-title">${summary && Number(summary.active_count || 0) > 0 ? `${Math.round(Number(summary.active_count || 0))} active right now` : "Nothing active right now"}</h4>
+                  <h4 class="gaia-dashboard__card-title">${
+                    currentSymptomsLoading && !currentSymptoms
+                      ? "Loading current symptoms"
+                      : summary && Number(summary.active_count || 0) > 0
+                        ? `${Math.round(Number(summary.active_count || 0))} active right now`
+                        : currentSymptomsError
+                          ? "Current symptoms unavailable"
+                          : "Nothing active right now"
+                  }</h4>
                 </div>
                 ${
                   topDriver
@@ -2335,14 +2555,24 @@
                 }
               </div>
               <p class="gaia-dashboard__card-copy">${
-                topDriver
+                currentSymptomsLoading && !currentSymptoms
+                  ? "Checking your recent symptom state."
+                  : topDriver
                   ? esc(sentence(topDriver.pattern_hint || topDriver.display || topDriver.relation, `${topDriver.label || "Current body context"} looks closest to this window.`))
+                  : currentSymptomsError
+                    ? "Current symptom context is temporarily unavailable. Try again in a moment."
                   : "No symptom follow-up is waiting right now."
               }</p>
               ${
                 symptomItems.length
                   ? `<div class="gaia-dashboard__meta-row">${symptomItems.map((item) => `<span class="gaia-dashboard__meta-chip">${esc(item.label || item.symptom_code || "Symptom")}</span>`).join("")}</div>`
-                  : `<div class="gaia-dashboard__helper">As symptoms are logged or updated, they will show here with the most likely context.</div>`
+                  : `<div class="gaia-dashboard__helper">${
+                      currentSymptomsLoading && !currentSymptoms
+                        ? "Recent symptoms will appear here as soon as the current state loads."
+                        : currentSymptomsError
+                          ? "Once the feed reconnects, the current symptom list will return here."
+                          : "As symptoms are logged or updated, they will show here with the most likely context."
+                    }</div>`
               }
             </article>
             ${renderDailyCheckInCard(state, "body")}
@@ -2352,10 +2582,15 @@
               <div class="gaia-dashboard__card-title-row">
                 <div>
                   <span class="gaia-dashboard__eyebrow">Sleep</span>
-                  <h4 class="gaia-dashboard__card-title">${formatHoursSummary(features && features.sleepTotalMinutes)} total</h4>
+                  <h4 class="gaia-dashboard__card-title">${formatHoursSummary(featureValue(features, "sleep_total_minutes", "sleepTotalMinutes"))} total</h4>
                 </div>
-                <span class="${pillClass("low")}">${formatPercent(features && features.sleepEfficiency)}</span>
+                <span class="${pillClass("low")}">${formatPercent(featureValue(features, "sleep_efficiency", "sleepEfficiency"))}</span>
               </div>
+              ${
+                featuresLoading && !sleepCards.length
+                  ? '<div class="gaia-dashboard__empty">Loading synced sleep data…</div>'
+                  : ""
+              }
               ${
                 sleepCards.length
                   ? `<div class="gaia-dashboard__stat-grid">${sleepCards
@@ -2368,7 +2603,11 @@
                         `
                       )
                       .join("")}</div>`
-                  : '<div class="gaia-dashboard__empty">Sleep will appear here once synced data is available.</div>'
+                  : !featuresLoading
+                    ? featuresError
+                      ? '<div class="gaia-dashboard__empty">Sleep is temporarily unavailable right now. Try again in a moment.</div>'
+                      : '<div class="gaia-dashboard__empty">Sleep will appear here once synced data is available.</div>'
+                    : ""
               }
             </article>
             <article class="gaia-dashboard__card">
@@ -2378,6 +2617,11 @@
                   <h4 class="gaia-dashboard__card-title">Synced body metrics</h4>
                 </div>
               </div>
+              ${
+                featuresLoading && !healthCards.length
+                  ? '<div class="gaia-dashboard__empty">Loading synced body data…</div>'
+                  : ""
+              }
               ${
                 healthCards.length
                   ? `<div class="gaia-dashboard__metric-grid gaia-dashboard__metric-grid--4">${healthCards
@@ -2391,17 +2635,35 @@
                         `
                       )
                       .join("")}</div>`
-                  : '<div class="gaia-dashboard__empty">Health stats appear here once the app has synced body data to your account.</div>'
+                  : !featuresLoading
+                    ? featuresError
+                      ? '<div class="gaia-dashboard__empty">Health stats are temporarily unavailable right now. Try again in a moment.</div>'
+                      : '<div class="gaia-dashboard__empty">Health stats appear here once the app has synced body data to your account.</div>'
+                    : ""
               }
             </article>
             <article class="gaia-dashboard__card">
               <div class="gaia-dashboard__card-title-row">
                 <div>
                   <span class="gaia-dashboard__eyebrow">Lunar watch</span>
-                  <h4 class="gaia-dashboard__card-title">${esc((lunar && (lunar.pattern_strength || "tracking")) ? titleFromKey(lunar.pattern_strength || "tracking") : "Tracking")}</h4>
+                  <h4 class="gaia-dashboard__card-title">${esc(
+                    lunarLoading && !lunar
+                      ? "Tracking"
+                      : (lunar && (lunar.pattern_strength || "tracking"))
+                        ? titleFromKey(lunar.pattern_strength || "tracking")
+                        : lunarError
+                          ? "Temporarily unavailable"
+                          : "Tracking"
+                  )}</h4>
                 </div>
               </div>
-              <p class="gaia-dashboard__card-copy">${esc(sentence(lunar && (lunar.message_scientific || lunar.message_mystical), "No clear lunar signal yet."))}</p>
+              <p class="gaia-dashboard__card-copy">${esc(
+                lunarLoading && !lunar
+                  ? "Loading the latest lunar watch."
+                  : lunarError
+                    ? "Lunar watch is temporarily unavailable right now."
+                    : sentence(lunar && (lunar.message_scientific || lunar.message_mystical), "No clear lunar signal yet.")
+              )}</p>
               <div class="gaia-dashboard__meta-row">
                 ${
                   lunar && lunar.highlight_window
@@ -2427,7 +2689,9 @@
   };
 
   const renderPatternsSection = (state) => {
-    const partial = state.member.patterns || state.member.patternsSummary || {};
+    const fullPatterns = extractPatternsPayload(state.member.patterns);
+    const summaryPatterns = extractPatternsPayload(state.member.patternsSummary);
+    const partial = Object.keys(fullPatterns).length ? fullPatterns : summaryPatterns;
     const strongest = maybeArray(partial.strongestPatterns);
     const emerging = maybeArray(partial.emergingPatterns);
     const bodySignals = maybeArray(partial.bodySignalsPatterns);
@@ -2478,6 +2742,15 @@
 
   const renderOutlookSection = (state) => {
     const outlook = state.member.outlook || {};
+    const outlookLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.outlook);
+    const outlookError = textOrEmpty(state.member.errors && state.member.errors.outlook);
+    const availableWindows = maybeArray(outlook.availableWindows || outlook.available_windows).map((item) => {
+      const key = textOrEmpty(item).toLowerCase();
+      if (key === "next_24h" || key === "next24h") return "24h";
+      if (key === "next_72h" || key === "next72h") return "72h";
+      if (key === "next_7d" || key === "next7d") return "7d";
+      return item;
+    });
     return `
       <section class="gaia-dashboard__section${state.ui.activeTab === "outlook" ? " is-active" : ""}" data-section="outlook">
         <div class="gaia-dashboard__section-head">
@@ -2490,86 +2763,30 @@
           <div class="gaia-dashboard__card-title-row">
             <div>
               <span class="gaia-dashboard__eyebrow">Near-future outlook</span>
-              <h4 class="gaia-dashboard__card-title">Ready windows</h4>
+              <h4 class="gaia-dashboard__card-title">${
+                outlookLoading && !availableWindows.length
+                  ? "Loading windows"
+                  : outlookError && !availableWindows.length
+                    ? "Outlook temporarily unavailable"
+                    : "Ready windows"
+              }</h4>
             </div>
           </div>
+          ${
+            outlookError && !availableWindows.length
+              ? `<p class="gaia-dashboard__card-copy">The personal outlook feed is temporarily unavailable. Try again in a moment.</p>`
+              : ""
+          }
           <div class="gaia-dashboard__meta-row">
-            ${maybeArray(outlook.availableWindows || outlook.available_windows)
+            ${availableWindows
               .map((item) => `<span class="gaia-dashboard__meta-chip">${esc(item)}</span>`)
-              .join("") || `<span class="gaia-dashboard__meta-chip">Building</span>`}
+              .join("") || `<span class="gaia-dashboard__meta-chip">${outlookLoading ? "Loading" : "Building"}</span>`}
           </div>
         </article>
         <div class="gaia-dashboard__grid gaia-dashboard__grid--3">
           ${renderOutlookWindow("Next 24 Hours", outlook.next24h || outlook.next_24h)}
           ${renderOutlookWindow("Next 72 Hours", outlook.next72h || outlook.next_72h)}
           ${renderOutlookWindow("Next 7 Days", outlook.next7d || outlook.next_7d)}
-        </div>
-      </section>
-    `;
-  };
-
-  const renderExploreSection = (state) => {
-    const allDrivers = state.member.allDrivers || {};
-    const filters = maybeArray(allDrivers.filters);
-    const currentFilter = state.ui.exploreFilter || "all";
-    const drivers = maybeArray(allDrivers.drivers).filter((driver) => currentFilter === "all" || textOrEmpty(driver && driver.category) === currentFilter);
-    const setupHints = maybeArray(allDrivers.setup_hints).slice(0, 3);
-    return `
-      <section class="gaia-dashboard__section${state.ui.activeTab === "explore" ? " is-active" : ""}" data-section="explore">
-        <div class="gaia-dashboard__section-head">
-          <div class="gaia-dashboard__section-copy">
-            <h3 class="gaia-dashboard__section-title">Explore</h3>
-            <p class="gaia-dashboard__section-subtitle">The full driver stack, grouped like the app, plus direct links into the public detail pages.</p>
-          </div>
-        </div>
-        <article class="gaia-dashboard__card">
-          <div class="gaia-dashboard__card-title-row">
-            <div>
-              <span class="gaia-dashboard__eyebrow">All drivers</span>
-              <h4 class="gaia-dashboard__card-title">${esc(sentence(allDrivers.summary && allDrivers.summary.note, "Nothing especially strong right now."))}</h4>
-            </div>
-          </div>
-          <div class="gaia-dashboard__pill-row">
-            ${filters
-              .map(
-                (filter) => `
-                  <button class="gaia-dashboard__pill-button${currentFilter === filter.key ? " is-active" : ""}" type="button" data-explore-filter="${esc(filter.key)}">
-                    ${esc(filter.label || filter.key)}
-                  </button>
-                `
-              )
-              .join("")}
-          </div>
-          ${
-            drivers.length
-              ? renderDriversSection(drivers, { drivers: {} }, drivers.length)
-              : '<div class="gaia-dashboard__empty">No drivers are matching this filter right now.</div>'
-          }
-          ${
-            setupHints.length
-              ? `
-                <div class="gaia-dashboard__grid gaia-dashboard__grid--3">
-                  ${setupHints
-                    .map(
-                      (hint) => `
-                        <div class="gaia-dashboard__metric">
-                          <div class="gaia-dashboard__metric-label">${esc(hint.label || "Setup")}</div>
-                          <div class="gaia-dashboard__metric-detail">${esc(sentence(hint.reason, ""))}</div>
-                        </div>
-                      `
-                    )
-                    .join("")}
-                </div>
-              `
-              : ""
-          }
-        </article>
-        <div class="gaia-dashboard__link-grid">
-          <a class="gaia-dashboard__link-card" href="${esc(publicLinks.spaceWeather || "/space-weather/")}"><strong>Space Weather</strong><small>Scientific forecast and current conditions.</small></a>
-          <a class="gaia-dashboard__link-card" href="${esc(publicLinks.schumann || "/schumann-resonance/")}"><strong>Schumann</strong><small>Current resonance detail and scientific context.</small></a>
-          <a class="gaia-dashboard__link-card" href="${esc(publicLinks.magnetosphere || "/magnetosphere/")}"><strong>Magnetosphere</strong><small>Shield state, compression, and recent change.</small></a>
-          <a class="gaia-dashboard__link-card" href="${esc(publicLinks.aurora || "/aurora-tracker/")}"><strong>Aurora</strong><small>Live tracker and viewlines.</small></a>
-          <a class="gaia-dashboard__link-card" href="${esc(publicLinks.earthquakes || "/earthquakes/")}"><strong>Earthquakes</strong><small>Global quake activity and recent clusters.</small></a>
         </div>
       </section>
     `;
@@ -2602,7 +2819,7 @@
             </div>
             <p class="gaia-dashboard__card-copy">${esc(sentence(earthscopeSummary, "Guide is still shaping today’s summary."))}</p>
             <div class="gaia-dashboard__section-actions">
-              <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="explore">Open Drivers</button>
+              <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="mission">Open Drivers</button>
               <a class="gaia-dashboard__btn gaia-dashboard__btn--quiet" href="${esc(supportUrl)}">Support</a>
             </div>
           </article>
@@ -2636,7 +2853,7 @@
             </div>
             <p class="gaia-dashboard__card-copy">${
               followUp
-                ? esc(`${followUp.question_text} Open Body to respond in the real symptom workflow.`)
+                ? esc(`${textOrEmpty(followUp.pending_follow_up && followUp.pending_follow_up.question_text) || "A follow-up is ready."} Open Body to respond in the real symptom workflow.`)
                 : "If Gaia wants one more body detail, the follow-up will appear here and in Body."
             }</p>
             ${followUp ? `<button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="body">Open Body</button>` : ""}
@@ -2661,9 +2878,68 @@
     `;
   };
 
-  const renderMissionControlApp = (root, state) => {
+  const renderSettingsSection = (state) => {
     const authCtx = state.authCtx || {};
-    const email = authCtx.email || "";
+    const isMember = state.dashboard.entitled === true || !!state.dashboard.memberPost;
+    return `
+      <section class="gaia-dashboard__section${state.ui.activeTab === "settings" ? " is-active" : ""}" data-section="settings">
+        <div class="gaia-dashboard__section-head">
+          <div class="gaia-dashboard__section-copy">
+            <h3 class="gaia-dashboard__section-title">Settings</h3>
+            <p class="gaia-dashboard__section-subtitle">Account actions, support links, and website shortcuts live here so the core hub can stay focused on the signal read.</p>
+          </div>
+        </div>
+        <div class="gaia-dashboard__grid gaia-dashboard__grid--2">
+          <article class="gaia-dashboard__card">
+            <div class="gaia-dashboard__card-title-row">
+              <div>
+                <span class="gaia-dashboard__eyebrow">Account</span>
+                <h4 class="gaia-dashboard__card-title">${esc(isMember ? "Member access" : "Free access")}</h4>
+              </div>
+              <span class="gaia-dashboard__mode">${isMember ? "Member" : "Free"}</span>
+            </div>
+            <div class="gaia-dashboard__list">
+              <div class="gaia-dashboard__list-row">
+                <strong>Email</strong>
+                <p>${esc(authCtx.email || "Signed-in email unavailable.")}</p>
+              </div>
+            </div>
+            <div class="gaia-dashboard__section-actions">
+              <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-switch>Email link</button>
+              <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-signout>Sign out</button>
+            </div>
+          </article>
+          <article class="gaia-dashboard__card">
+            <div class="gaia-dashboard__card-title-row">
+              <div>
+                <span class="gaia-dashboard__eyebrow">Website</span>
+                <h4 class="gaia-dashboard__card-title">Quick links</h4>
+              </div>
+            </div>
+            <div class="gaia-dashboard__link-grid gaia-dashboard__link-grid--settings">
+              <a class="gaia-dashboard__link-card" href="${esc(publicLinks.spaceWeather || "/space-weather/")}"><strong>Space Weather</strong><small>Scientific forecast and current conditions.</small></a>
+              <a class="gaia-dashboard__link-card" href="${esc(publicLinks.schumann || "/schumann-resonance/")}"><strong>Schumann</strong><small>Current resonance detail and scientific context.</small></a>
+              <a class="gaia-dashboard__link-card" href="${esc(publicLinks.magnetosphere || "/magnetosphere/")}"><strong>Magnetosphere</strong><small>Shield state, compression, and recent change.</small></a>
+              <a class="gaia-dashboard__link-card" href="${esc(publicLinks.aurora || "/aurora-tracker/")}"><strong>Aurora</strong><small>Live tracker and viewlines.</small></a>
+              <a class="gaia-dashboard__link-card" href="${esc(publicLinks.earthquakes || "/earthquakes/")}"><strong>Earthquakes</strong><small>Global quake activity and recent clusters.</small></a>
+              <a class="gaia-dashboard__link-card" href="${esc(supportUrl)}"><strong>Help Center</strong><small>Support, sync help, billing, and account guidance.</small></a>
+            </div>
+          </article>
+        </div>
+        <article class="gaia-dashboard__card">
+          <div class="gaia-dashboard__card-title-row">
+            <div>
+              <span class="gaia-dashboard__eyebrow">About this web hub</span>
+              <h4 class="gaia-dashboard__card-title">What syncs here</h4>
+            </div>
+          </div>
+          <p class="gaia-dashboard__card-copy">Body data on the website comes from the app’s synced account data. If sleep or health stats look light, open the app first so the latest device sync reaches your account.</p>
+        </article>
+      </section>
+    `;
+  };
+
+  const renderMissionControlApp = (root, state) => {
     const title = root.dataset.title || "Mission Control";
     root.innerHTML = `
       <div class="gaia-dashboard__shell">
@@ -2673,22 +2949,21 @@
             <h2 class="gaia-dashboard__title">${esc(title)}</h2>
             <p class="gaia-dashboard__shell-subtitle">Mission Control for the web: gauges, body context, patterns, outlook, drivers, and a lighter Guide layer in one signed-in shell.</p>
           </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
-            <span class="gaia-dashboard__mode">${state.dashboard.entitled === true || !!state.dashboard.memberPost ? "Member" : "Free"}</span>
-            ${email ? `<span class="gaia-dashboard__muted">${esc(email)}</span>` : ""}
-            <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-switch>Email link</button>
-            <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-signout>Sign out</button>
-          </div>
         </div>
-        <div class="gaia-dashboard__tabbar">
-          ${MEMBER_TAB_ORDER.map((key) => `<button class="gaia-dashboard__tab${state.ui.activeTab === key ? " is-active" : ""}" type="button" data-tab-target="${esc(key)}">${esc(titleFromKey(key === "mission" ? "Mission Control" : key))}</button>`).join("")}
+        <div class="gaia-dashboard__nav-grid gaia-dashboard__nav-grid--hub">
+          ${missionNavCard(state, "mission", "Mission Control", "Gauges, drivers, and EarthScope live here.")}
+          ${missionNavCard(state, "body", "Body", "Current symptoms, check-in, sleep, health stats, and lunar watch.")}
+          ${missionNavCard(state, "patterns", "Patterns", "The clearest repeats in your logs and wearable history.")}
+          ${missionNavCard(state, "outlook", "Outlook", "Your 24h, 72h, and 7-day personal forecast windows.")}
+          ${missionNavCard(state, "guide", "Guide", "A lighter orientation layer with daily check-in and help links.")}
+          ${missionNavCard(state, "settings", "Settings", "Account actions, support, and website shortcuts.")}
         </div>
         ${renderMissionSection(state)}
         ${renderBodySection(state)}
         ${renderPatternsSection(state)}
         ${renderOutlookSection(state)}
-        ${renderExploreSection(state)}
         ${renderGuideSection(state)}
+        ${renderSettingsSection(state)}
         <div class="gaia-dashboard__modal" data-gaia-modal>
           <div class="gaia-dashboard__modal-backdrop" data-gaia-modal-backdrop="1"></div>
           <div class="gaia-dashboard__modal-card" role="dialog" aria-modal="true">
@@ -2848,11 +3123,19 @@
         publicPost: (dashboard && (dashboard.public_post || dashboard.publicPost)) || null,
       };
       const user = data && data.session && data.session.user ? data.session.user : null;
-      root.innerHTML = '<div class="gaia-dashboard__status">Loading Mission Control…</div>';
-      const member = await memberHubFetches(token);
       const state = {
         dashboard: payload,
-        member,
+        member: {
+          features: null,
+          currentSymptoms: null,
+          dailyCheckIn: null,
+          lunar: null,
+          outlook: null,
+          patternsSummary: null,
+          patterns: null,
+          symptomCodes: null,
+          errors: {},
+        },
         authCtx: {
         email: user && user.email ? user.email : "",
         token,
@@ -2884,31 +3167,26 @@
         },
         ui: {
           activeTab: currentTabFromHash(),
-          exploreFilter: "all",
           guidePollChoice: "",
           checkInEditing: false,
           checkInSubmitting: false,
           checkInStatus: "",
           checkInForm: null,
-          patternsLoading: true,
+          patternsLoading: false,
+          loadingKeys: defaultLoadingKeys(),
         },
       };
       renderMemberHub(root, state);
       if (!root.dataset.gaiaHashBound) {
         window.addEventListener("hashchange", () => {
           state.ui.activeTab = currentTabFromHash();
+          hydrateTabData(root, state, state.ui.activeTab);
           renderMemberHub(root, state);
         });
         root.dataset.gaiaHashBound = "1";
       }
-      try {
-        state.member.patterns = await loadFullPatterns(token);
-      } catch (err) {
-        console.warn("[gaia-dashboard] full patterns fetch failed:", err && err.message ? err.message : String(err));
-      } finally {
-        state.ui.patternsLoading = false;
-        renderMemberHub(root, state);
-      }
+      hydrateTabData(root, state, state.ui.activeTab);
+      scheduleIdleHydration(root, state);
     } catch (err) {
       const msg = err && err.message ? String(err.message) : String(err);
       const authErr =

@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from ..db import (
     get_pool,
+    get_pool_metrics,
     settings,  # settings.DEV_BEARER, async pg pool
     handle_connection_failure,
     handle_pool_timeout,
@@ -322,13 +323,23 @@ on conflict (user_id, type, start_time, end_time) do nothing
 
 
 def _log_batch_summary(user: str, received: int, inserted: int, skipped: int, db_ok: bool) -> None:
-    logger.info(
-        "[BATCH] result user=%s received=%d inserted=%d skipped=%d db=%s",
+    pool_metrics = get_pool_metrics() or {}
+    backlog_len = len(_backlog)
+    logger_fn = logger.info if db_ok else logger.warning
+    logger_fn(
+        "[BATCH] result user=%s received=%d inserted=%d skipped=%d db=%s backlog=%d pool_backend=%s pool_ok=%s open=%s free=%s used=%s waiting=%s",
         user,
         received,
         inserted,
         skipped,
         db_ok,
+        backlog_len,
+        pool_metrics.get("backend"),
+        pool_metrics.get("ok"),
+        pool_metrics.get("open"),
+        pool_metrics.get("free"),
+        pool_metrics.get("used"),
+        pool_metrics.get("waiting"),
     )
 
 
@@ -351,22 +362,6 @@ async def samples_batch(
     x_uid = request.headers.get("X-Dev-UserId", "").strip() or None
     dev_uid = x_uid
     effective_user = dev_uid or "<unknown>"
-
-    monitor = get_health_monitor()
-    if monitor and not monitor.get_db_ok():
-        logger.warning(
-            "[BATCH] db unavailable; rejecting batch size=%d", received
-        )
-        _log_batch_summary(effective_user, received, 0, received, False)
-        return {
-            "ok": False,
-            "received": received,
-            "inserted": 0,
-            "skipped": received,
-            "db": False,
-            "errors": [{"reason": "db_unavailable"}],
-            "error": "db_unavailable",
-        }
 
     batch_start_iso: str | None = None
     batch_end_iso: str | None = None
@@ -431,6 +426,41 @@ async def samples_batch(
         "tz": tz_name,
     }
 
+    monitor = get_health_monitor()
+    if monitor and not monitor.get_db_ok():
+        if valid_rows:
+            await _enqueue_backlog(buffer_entry)
+        monitor_snapshot = monitor.snapshot()
+        logger.warning(
+            "[BATCH] db unavailable; buffering batch size=%d valid=%d backlog=%d sticky_age_ms=%s consec_fail=%s waiting=%s",
+            received,
+            len(valid_rows),
+            len(_backlog),
+            monitor_snapshot.get("sticky_age_ms"),
+            monitor_snapshot.get("consec_fail"),
+            ((monitor_snapshot.get("pool") or {}).get("waiting")),
+        )
+        errors = list(validation_errors)
+        if not errors:
+            errors = [{"reason": "db_unavailable"}]
+        _log_batch_summary(
+            effective_user or "<unknown>",
+            received,
+            0,
+            validation_skipped + len(valid_rows),
+            False,
+        )
+        return {
+            "ok": False,
+            "received": received,
+            "inserted": 0,
+            "skipped": validation_skipped + len(valid_rows),
+            "buffered": len(valid_rows),
+            "db": False,
+            "errors": errors,
+            "error": "db_unavailable",
+        }
+
     inserted = 0
     db_skipped = 0
     db_errors: List[Dict[str, Any]] = []
@@ -452,6 +482,7 @@ async def samples_batch(
             "received": received,
             "inserted": 0,
             "skipped": validation_skipped + len(valid_rows),
+            "buffered": len(valid_rows) if valid_rows else 0,
             "db": False,
             "errors": errors,
             "error": "db_timeout",
@@ -468,6 +499,7 @@ async def samples_batch(
             "received": received,
             "inserted": 0,
             "skipped": received,
+            "buffered": 0,
             "db": False,
             "errors": errors,
             "error": "server_error",
@@ -489,6 +521,7 @@ async def samples_batch(
                 "received": received,
                 "inserted": 0,
                 "skipped": validation_skipped + len(valid_rows),
+                "buffered": len(valid_rows),
                 "db": False,
                 "errors": combined_errors,
                 "error": exc.reason,
@@ -522,6 +555,7 @@ async def samples_batch(
         "received": received,
         "inserted": inserted,
         "skipped": total_skipped,
+        "buffered": 0,
         "db": db_healthy,
         "errors": combined_errors,
         "error": None,

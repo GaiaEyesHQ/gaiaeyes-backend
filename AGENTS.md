@@ -26,6 +26,7 @@ This file defines how automation agents (Codex/ChatGPT/etc.) must work in this r
 - Supabase schema changes must be migration SQL in `supabase/migrations`.
 - iOS changes must respect SwiftUI/AppState patterns.
 - WordPress changes must stay within mu-plugins or theme overrides already in use.
+- App-visible product changes must be mirrored to the website/member hub when the same surface exists. If parity is intentionally skipped, say so explicitly in the final response.
 
 ## When in doubt
 - **Do not guess.** Add a question to `docs/OPEN_QUESTIONS.md` with:

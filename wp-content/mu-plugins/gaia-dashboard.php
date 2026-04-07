@@ -149,9 +149,6 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__shell-copy{display:flex;flex-direction:column;gap:4px;max-width:760px}
         .gaia-dashboard__shell-kicker{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#9da9c1}
         .gaia-dashboard__shell-subtitle{font-size:14px;line-height:1.5;color:#c7d3eb;margin:0}
-        .gaia-dashboard__tabbar{display:flex;gap:8px;flex-wrap:wrap}
-        .gaia-dashboard__tab{border:1px solid rgba(255,255,255,.08);border-radius:999px;background:#141c28;color:#c8d7f0;padding:9px 14px;font-weight:650;cursor:pointer}
-        .gaia-dashboard__tab.is-active{background:#20344f;color:#fff;border-color:rgba(156,192,255,.44);box-shadow:0 0 0 1px rgba(156,192,255,.14) inset}
         .gaia-dashboard__section{display:none;flex-direction:column;gap:14px}
         .gaia-dashboard__section.is-active{display:flex}
         .gaia-dashboard__section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -159,8 +156,10 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__section-title{margin:0;font-size:24px;line-height:1.15}
         .gaia-dashboard__section-subtitle{margin:0;font-size:14px;line-height:1.5;color:#9da9c1;max-width:760px}
         .gaia-dashboard__nav-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-        @media(min-width:900px){.gaia-dashboard__nav-grid{grid-template-columns:repeat(5,minmax(0,1fr));}}
+        @media(min-width:900px){.gaia-dashboard__nav-grid{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));}}
+        .gaia-dashboard__nav-grid--hub{margin-top:2px}
         .gaia-dashboard__nav-card{padding:14px;border-radius:14px;background:#151c28;border:1px solid rgba(255,255,255,.08);cursor:pointer;text-align:left;color:#e8edf7}
+        .gaia-dashboard__nav-card.is-active{background:#1e314c;border-color:rgba(156,192,255,.38);box-shadow:0 0 0 1px rgba(156,192,255,.12) inset}
         .gaia-dashboard__nav-card strong{display:block;font-size:14px}
         .gaia-dashboard__nav-card span{display:block;margin-top:5px;font-size:12px;color:#9da9c1;line-height:1.45}
         .gaia-dashboard__grid{display:grid;grid-template-columns:1fr;gap:14px}
@@ -198,10 +197,17 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__field label{font-size:12px;color:#9da9c1}
         .gaia-dashboard__field input,.gaia-dashboard__field select,.gaia-dashboard__field textarea{width:100%;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:#101826;color:#e8edf7;padding:10px 12px}
         .gaia-dashboard__field textarea{min-height:84px;resize:vertical}
+        .gaia-dashboard__exposure-grid{display:grid;grid-template-columns:1fr;gap:10px}
+        @media(min-width:700px){.gaia-dashboard__exposure-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        .gaia-dashboard__toggle-chip{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:14px;background:#172130;border:1px solid rgba(255,255,255,.08);color:#d6e3fa;font-size:14px;line-height:1.45}
+        .gaia-dashboard__toggle-chip input{accent-color:#2b8cff;flex:0 0 auto;margin-top:3px}
+        .gaia-dashboard__toggle-chip span{display:block}
         .gaia-dashboard__helper{font-size:12px;color:#9da9c1;line-height:1.45}
         .gaia-dashboard__status-note{font-size:12px;color:#d8b176}
         .gaia-dashboard__link-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
         @media(min-width:900px){.gaia-dashboard__link-grid{grid-template-columns:repeat(5,minmax(0,1fr));}}
+        .gaia-dashboard__link-grid--settings{grid-template-columns:repeat(2,minmax(0,1fr))}
+        @media(min-width:900px){.gaia-dashboard__link-grid--settings{grid-template-columns:repeat(3,minmax(0,1fr));}}
         .gaia-dashboard__link-card{display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:14px;background:#151c28;border:1px solid rgba(255,255,255,.08);text-decoration:none;color:#e8edf7}
         .gaia-dashboard__link-card small{color:#9da9c1;line-height:1.45}
         .gaia-dashboard__empty{padding:16px;border-radius:14px;background:#121925;border:1px dashed rgba(255,255,255,.08);font-size:13px;color:#9da9c1;line-height:1.5}
@@ -216,10 +222,15 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__poll-choices{display:flex;flex-wrap:wrap;gap:8px}
         .gaia-dashboard__poll-choice{border:1px solid rgba(255,255,255,.08);border-radius:999px;background:#172130;color:#e8edf7;padding:8px 14px;cursor:pointer;font-weight:600}
         .gaia-dashboard__poll-choice.is-selected{background:#224064;border-color:rgba(156,192,255,.38)}
+        .gaia-dashboard__outlook-domain-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;align-items:start}
+        .gaia-dashboard__outlook-domain{padding:12px;border-radius:12px;background:#172130;border:1px solid rgba(255,255,255,.08)}
+        .gaia-dashboard__outlook-domain-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+        .gaia-dashboard__outlook-domain-head strong{font-size:14px;line-height:1.25}
+        .gaia-dashboard__outlook-domain p{margin:8px 0 0;font-size:14px;line-height:1.55;color:#c9d4e8}
         .gaia-dashboard__modal{position:fixed;inset:0;z-index:99999;display:none}
         .gaia-dashboard__modal.is-open{display:block}
         .gaia-dashboard__modal-backdrop{position:absolute;inset:0;background:rgba(2,6,12,.72)}
-        .gaia-dashboard__modal-card{position:relative;max-width:620px;margin:9vh auto;background:#101826;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:18px;max-height:82vh;overflow:auto;color:#e8edf7}
+        .gaia-dashboard__modal-card{position:relative;width:min(94vw,920px);max-width:920px;margin:7vh auto;background:#101826;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:18px;max-height:84vh;overflow:auto;color:#e8edf7}
         .gaia-dashboard__modal-title{margin:0 0 10px;font-size:22px}
         .gaia-dashboard__modal-group{margin-top:12px}
         .gaia-dashboard__modal-group h5{margin:0 0 7px;font-size:15px}

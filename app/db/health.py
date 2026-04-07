@@ -18,13 +18,27 @@ from . import (
 logger = logging.getLogger(__name__)
 
 
+def _pool_snapshot() -> Dict[str, Any]:
+    metrics = get_pool_metrics() or {}
+    return {
+        "backend": metrics.get("backend"),
+        "ok": metrics.get("ok"),
+        "open": metrics.get("open"),
+        "free": metrics.get("free"),
+        "used": metrics.get("used"),
+        "waiting": metrics.get("waiting"),
+        "last_refresh": metrics.get("last_refresh"),
+        "fallback_available": metrics.get("fallback_available"),
+    }
+
+
 class DBHealthMonitor:
     """Background task that tracks database availability with hysteresis."""
 
     _PROBE_INTERVAL_SECONDS = 3.0
-    _PROBE_TIMEOUT_SECONDS = 0.3
+    _PROBE_TIMEOUT_SECONDS = 0.75
     _REQUIRED_SUCCESSES = 2
-    _REQUIRED_FAILURES = 2
+    _REQUIRED_FAILURES = 3
 
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
@@ -78,10 +92,28 @@ class DBHealthMonitor:
             success = True
         except PoolTimeout as exc:
             await handle_pool_timeout("health monitor timeout")
-            logger.warning("[HEALTH] monitor pool timeout: %s", exc)
+            pool = _pool_snapshot()
+            logger.warning(
+                "[HEALTH] monitor pool timeout: %s backend=%s open=%s free=%s used=%s waiting=%s",
+                exc,
+                pool.get("backend"),
+                pool.get("open"),
+                pool.get("free"),
+                pool.get("used"),
+                pool.get("waiting"),
+            )
         except Exception as exc:
             await handle_connection_failure(exc)
-            logger.warning("[HEALTH] monitor probe failed: %s", exc)
+            pool = _pool_snapshot()
+            logger.warning(
+                "[HEALTH] monitor probe failed: %s backend=%s open=%s free=%s used=%s waiting=%s",
+                exc,
+                pool.get("backend"),
+                pool.get("open"),
+                pool.get("free"),
+                pool.get("used"),
+                pool.get("waiting"),
+            )
         finally:
             self._record_probe(success)
 
@@ -103,10 +135,27 @@ class DBHealthMonitor:
         self._db_ok = ok
         self._since = when
         self._last_change = when
+        pool = _pool_snapshot()
         if ok:
-            logger.info("[HEALTH] db=True  (%s)", reason)
+            logger.info(
+                "[HEALTH] db=True  (%s) backend=%s open=%s free=%s used=%s waiting=%s",
+                reason,
+                pool.get("backend"),
+                pool.get("open"),
+                pool.get("free"),
+                pool.get("used"),
+                pool.get("waiting"),
+            )
         else:
-            logger.warning("[HEALTH] db=False (%s)", reason)
+            logger.warning(
+                "[HEALTH] db=False (%s) backend=%s open=%s free=%s used=%s waiting=%s",
+                reason,
+                pool.get("backend"),
+                pool.get("open"),
+                pool.get("free"),
+                pool.get("used"),
+                pool.get("waiting"),
+            )
 
     def get_db_ok(self) -> bool:
         return self._db_ok
@@ -119,7 +168,7 @@ class DBHealthMonitor:
     def snapshot(self) -> Dict[str, Any]:
         since_iso = self._since.isoformat()
         last_change_iso = self._last_change.isoformat()
-        pool_metrics = get_pool_metrics()
+        pool_metrics = _pool_snapshot()
         return {
             "db_ok": self._db_ok,
             "since": since_iso,
@@ -129,6 +178,7 @@ class DBHealthMonitor:
             "last_probe": self._last_probe.isoformat() if self._last_probe else None,
             "sticky_age_ms": self.get_sticky_age_ms(),
             "pool_backend": pool_metrics.get("backend"),
+            "pool": pool_metrics,
         }
 
 
