@@ -35,6 +35,8 @@ add_action('wp_enqueue_scripts', function () {
         'patternsSummary' => esc_url_raw(rest_url('gaia/v1/member/patterns-summary')),
         'patterns' => esc_url_raw(rest_url('gaia/v1/member/patterns')),
         'features' => esc_url_raw(rest_url('gaia/v1/member/features')),
+        'symptomCodes' => esc_url_raw(rest_url('gaia/v1/member/symptom-codes')),
+        'symptomLog' => esc_url_raw(rest_url('gaia/v1/member/symptoms')),
         'currentSymptoms' => esc_url_raw(rest_url('gaia/v1/member/current-symptoms')),
         'dailyCheckIn' => esc_url_raw(rest_url('gaia/v1/member/daily-checkin')),
         'lunar' => esc_url_raw(rest_url('gaia/v1/member/lunar')),
@@ -464,6 +466,22 @@ add_action('rest_api_init', function () {
                 'sanitize_callback' => 'sanitize_text_field',
             ],
         ],
+    ]);
+
+    register_rest_route('gaia/v1', '/member/symptom-codes', [
+        'methods' => WP_REST_Server::READABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            return gaia_dashboard_proxy_json($request, '/v1/symptoms/codes');
+        },
+    ]);
+
+    register_rest_route('gaia/v1', '/member/symptoms', [
+        'methods' => WP_REST_Server::CREATABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            return gaia_dashboard_proxy_json($request, '/v1/symptoms', [], WP_REST_Server::CREATABLE);
+        },
     ]);
 
     register_rest_route('gaia/v1', '/member/current-symptoms', [

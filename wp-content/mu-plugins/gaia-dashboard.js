@@ -745,6 +745,28 @@
       .replace(/[-\s]+/g, "_")
       .toUpperCase();
 
+  const dedupeStrings = (values) => {
+    const seen = new Set();
+    return maybeArray(values).filter((value) => {
+      const normalized = textOrEmpty(value);
+      if (!normalized) return false;
+      if (seen.has(normalized)) return false;
+      seen.add(normalized);
+      return true;
+    });
+  };
+
+  const extractSymptomCodeCatalog = (payload) =>
+    maybeArray(extractEnvelopeData(payload)).filter((item) => item && typeof item === "object");
+
+  const symptomOptionLabel = (code, catalog) => {
+    const normalized = normalizeSymptomCode(code);
+    const match = maybeArray(catalog).find(
+      (item) => normalizeSymptomCode(item && (item.symptom_code || item.symptomCode)) === normalized
+    );
+    return textOrEmpty(match && (match.label || match.symptom_code || match.symptomCode)) || titleFromKey(normalized);
+  };
+
   const hideModal = (root) => {
     const modal = root.querySelector("[data-gaia-modal]");
     if (!modal) return;
@@ -793,49 +815,12 @@
       <div class="gaia-dashboard__modal-actions">
         ${
           ctaAction === "open_symptom_log"
-            ? `<button class="gaia-dashboard__btn" type="button" data-modal-log="1" data-prefill='${ctaPrefillAttr}'>${esc(ctaLabel)}</button>`
+            ? `<button class="gaia-dashboard__btn" type="button" data-open-symptom-picker="1" data-picker-title="${esc(ctaLabel)}" data-prefill='${ctaPrefillAttr}'>${esc(ctaLabel)}</button>`
             : ""
         }
         <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-modal-close="1">Close</button>
       </div>
     `;
-  };
-
-  const postQuickSymptom = async (token, prefill) => {
-    if (!backendBase) {
-      throw new Error("Backend base URL is not configured for symptom logging.");
-    }
-    const list = Array.isArray(prefill) ? prefill.map(normalizeSymptomCode).filter(Boolean) : [];
-    const code = list[0] || "OTHER";
-    const response = await fetch(`${backendBase}/v1/symptoms`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        symptom_code: code,
-        tags: list.length ? list : undefined,
-      }),
-    });
-    const raw = await response.text();
-    let parsed = null;
-    try {
-      parsed = raw ? JSON.parse(raw) : null;
-    } catch (_) {
-      parsed = null;
-    }
-    if (!response.ok) {
-      const detail = parsed && (parsed.detail || parsed.error || parsed.message)
-        ? parsed.detail || parsed.error || parsed.message
-        : raw.slice(0, 180);
-      throw new Error(`HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
-    }
-    if (parsed && parsed.ok === false) {
-      throw new Error(parsed.friendly_error || parsed.error || "Could not log symptom.");
-    }
-    return parsed;
   };
 
   const fetchJson = async (url, token) => {
@@ -903,6 +888,26 @@
     return parsed;
   };
 
+  const fetchSymptomCodes = async (token) => {
+    const url = routeFor("symptomCodes");
+    if (!url) throw new Error("Symptom code route is not configured.");
+    return fetchJson(url, token);
+  };
+
+  const postSymptomEvents = async (token, codes) => {
+    const url = routeFor("symptomLog");
+    if (!url) throw new Error("Symptom logging route is not configured.");
+    const normalizedCodes = dedupeStrings(maybeArray(codes).map(normalizeSymptomCode));
+    if (!normalizedCodes.length) throw new Error("Choose at least one symptom.");
+    for (const code of normalizedCodes) {
+      const response = await postJson(url, token, { symptom_code: code });
+      if (response && response.ok === false) {
+        throw new Error(response.friendly_error || response.error || "Could not log symptom.");
+      }
+    }
+    return { ok: true };
+  };
+
   const routeFor = (key, fallback = "") => normalizeBase(memberRoutes[key] || fallback);
 
   const memberHubFetches = async (token) => {
@@ -947,6 +952,144 @@
     return fetchJson(url, token);
   };
 
+  const renderSymptomPickerModal = (state) => {
+    const picker = state && state.ui ? state.ui.symptomPicker : null;
+    const catalog = extractSymptomCodeCatalog(state && state.member ? state.member.symptomCodes : null).filter(
+      (item) => item.is_active !== false && item.isActive !== false
+    );
+    const selected = new Set(dedupeStrings(picker && picker.selectedCodes));
+    const suggested = dedupeStrings(picker && picker.suggestedCodes)
+      .map((code) => normalizeSymptomCode(code))
+      .filter((code) =>
+        catalog.some((item) => normalizeSymptomCode(item && (item.symptom_code || item.symptomCode)) === code)
+      );
+    const remaining = catalog.filter((item) => !suggested.includes(normalizeSymptomCode(item && (item.symptom_code || item.symptomCode))));
+    const selectedCount = selected.size;
+
+    const renderOptionButton = (code, label, description) => `
+      <button
+        class="gaia-dashboard__quicklog-pill${selected.has(code) ? " is-selected" : ""}"
+        type="button"
+        data-symptom-select="${esc(code)}"
+      >
+        ${esc(label)}
+        ${description ? `<span class="gaia-dashboard__muted" style="display:block;margin-top:4px;font-size:11px">${esc(description)}</span>` : ""}
+      </button>
+    `;
+
+    return `
+      <h3 class="gaia-dashboard__modal-title">${esc((picker && picker.title) || "Log symptoms")}</h3>
+      <p class="gaia-dashboard__modal-copy">Choose one or more symptoms to log right now.</p>
+      ${
+        suggested.length
+          ? `
+            <section class="gaia-dashboard__modal-group">
+              <h5>Suggested for this view</h5>
+              <div class="gaia-dashboard__quicklog-pills">
+                ${suggested
+                  .map((code) => renderOptionButton(code, symptomOptionLabel(code, catalog), ""))
+                  .join("")}
+              </div>
+            </section>
+          `
+          : ""
+      }
+      <section class="gaia-dashboard__modal-group">
+        <h5>All symptom options</h5>
+        <div class="gaia-dashboard__quicklog-pills">
+          ${remaining
+            .map((item) =>
+              renderOptionButton(
+                normalizeSymptomCode(item && (item.symptom_code || item.symptomCode)),
+                textOrEmpty(item && item.label) || titleFromKey(item && (item.symptom_code || item.symptomCode)),
+                textOrEmpty(item && item.description)
+              )
+            )
+            .join("")}
+        </div>
+      </section>
+      ${
+        picker && picker.status
+          ? `<div class="gaia-dashboard__muted" data-modal-status>${esc(picker.status)}</div>`
+          : '<div class="gaia-dashboard__muted" data-modal-status></div>'
+      }
+      <div class="gaia-dashboard__modal-actions">
+        <button class="gaia-dashboard__btn" type="button" data-symptom-submit="1"${selectedCount ? "" : " disabled"}${picker && picker.submitting ? " disabled" : ""}>
+          ${picker && picker.submitting ? "Logging..." : selectedCount > 1 ? `Log ${selectedCount} symptoms` : "Log symptom"}
+        </button>
+        <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-modal-close="1">Close</button>
+      </div>
+    `;
+  };
+
+  const ensureSymptomCodesLoaded = async (state) => {
+    const existing = extractSymptomCodeCatalog(state && state.member ? state.member.symptomCodes : null);
+    if (existing.length) return existing;
+    const token = state && state.authCtx ? state.authCtx.token : "";
+    if (!token) throw new Error("Sign in again to load symptom options.");
+    state.member.symptomCodes = await fetchSymptomCodes(token);
+    return extractSymptomCodeCatalog(state.member.symptomCodes);
+  };
+
+  const openSymptomPicker = async (root, state, options = {}) => {
+    state.ui.symptomPicker = {
+      title: textOrEmpty(options.title) || "Log symptoms",
+      suggestedCodes: dedupeStrings(maybeArray(options.suggestedCodes).map(normalizeSymptomCode)),
+      selectedCodes: dedupeStrings(maybeArray(options.selectedCodes).map(normalizeSymptomCode)),
+      submitting: false,
+      status: "Loading symptom options...",
+    };
+    openModal(root, renderSymptomPickerModal(state));
+    try {
+      await ensureSymptomCodesLoaded(state);
+      state.ui.symptomPicker.status = "";
+      openModal(root, renderSymptomPickerModal(state));
+    } catch (err) {
+      state.ui.symptomPicker.status = err && err.message ? err.message : "Could not load symptom options.";
+      openModal(root, renderSymptomPickerModal(state));
+    }
+  };
+
+  const toggleSymptomPickerSelection = (root, state, code) => {
+    if (!state.ui.symptomPicker) return;
+    const selected = new Set(dedupeStrings(state.ui.symptomPicker.selectedCodes).map(normalizeSymptomCode));
+    const normalized = normalizeSymptomCode(code);
+    if (!normalized) return;
+    if (selected.has(normalized)) {
+      selected.delete(normalized);
+    } else {
+      selected.add(normalized);
+    }
+    state.ui.symptomPicker.selectedCodes = Array.from(selected);
+    openModal(root, renderSymptomPickerModal(state));
+  };
+
+  const submitSymptomPicker = async (root, state) => {
+    if (!state.ui.symptomPicker || state.ui.symptomPicker.submitting) return;
+    const selectedCodes = dedupeStrings(state.ui.symptomPicker.selectedCodes).map(normalizeSymptomCode);
+    if (!selectedCodes.length) {
+      state.ui.symptomPicker.status = "Choose at least one symptom.";
+      openModal(root, renderSymptomPickerModal(state));
+      return;
+    }
+    state.ui.symptomPicker.submitting = true;
+    state.ui.symptomPicker.status = selectedCodes.length > 1 ? `Logging ${selectedCodes.length} symptoms...` : "Logging symptom...";
+    openModal(root, renderSymptomPickerModal(state));
+    try {
+      await postSymptomEvents(state.authCtx && state.authCtx.token ? state.authCtx.token : "", selectedCodes);
+      try {
+        state.member.currentSymptoms = await fetchJsonWithParams(routeFor("currentSymptoms"), state.authCtx && state.authCtx.token ? state.authCtx.token : "", { window_hours: 12 });
+      } catch (_) {}
+      hideModal(root);
+      state.ui.symptomPicker = null;
+      renderMemberHub(root, state);
+    } catch (err) {
+      state.ui.symptomPicker.submitting = false;
+      state.ui.symptomPicker.status = err && err.message ? err.message : "Could not log symptom.";
+      openModal(root, renderSymptomPickerModal(state));
+    }
+  };
+
   const renderMemberHub = (root, state) => {
     renderMissionControlApp(root, state);
     const payload = state.dashboard || {};
@@ -962,30 +1105,32 @@
         const target = event.target;
         if (!(target instanceof Element)) return;
         if (target.closest("[data-modal-close]") || target.closest("[data-gaia-modal-backdrop]")) {
+          if (state.ui) state.ui.symptomPicker = null;
           hideModal(root);
           return;
         }
-        const logBtn = target.closest("[data-modal-log]");
-        if (logBtn) {
-          const status = modalNode.querySelector("[data-modal-status]");
+        const pickerBtn = target.closest("[data-open-symptom-picker]");
+        if (pickerBtn) {
           let prefill = [];
           try {
-            prefill = JSON.parse(logBtn.getAttribute("data-prefill") || "[]");
+            prefill = JSON.parse(pickerBtn.getAttribute("data-prefill") || "[]");
           } catch (_) {
             prefill = [];
           }
-          logBtn.disabled = true;
-          if (status) status.textContent = "Logging symptom...";
-          try {
-            await postQuickSymptom(state.authCtx && state.authCtx.token ? state.authCtx.token : "", prefill);
-            if (status) status.textContent = "Symptom logged.";
-          } catch (err) {
-            if (status) {
-              status.textContent = err && err.message ? err.message : "Could not log symptom.";
-            }
-          } finally {
-            logBtn.disabled = false;
-          }
+          await openSymptomPicker(root, state, {
+            title: pickerBtn.getAttribute("data-picker-title") || "Log symptoms",
+            suggestedCodes: prefill,
+          });
+          return;
+        }
+        const symptomSelect = target.closest("[data-symptom-select]");
+        if (symptomSelect) {
+          toggleSymptomPickerSelection(root, state, symptomSelect.getAttribute("data-symptom-select"));
+          return;
+        }
+        const symptomSubmit = target.closest("[data-symptom-submit]");
+        if (symptomSubmit) {
+          await submitSymptomPicker(root, state);
         }
       });
     }
@@ -1020,6 +1165,21 @@
       node.addEventListener("click", () => {
         state.ui.guidePollChoice = textOrEmpty(node.getAttribute("data-guide-poll-choice"));
         rerender();
+      });
+    });
+
+    root.querySelectorAll("[data-open-symptom-picker]").forEach((node) => {
+      node.addEventListener("click", async () => {
+        let prefill = [];
+        try {
+          prefill = JSON.parse(node.getAttribute("data-prefill") || "[]");
+        } catch (_) {
+          prefill = [];
+        }
+        await openSymptomPicker(root, state, {
+          title: node.getAttribute("data-picker-title") || "Log symptoms",
+          suggestedCodes: prefill,
+        });
       });
     });
 
@@ -1313,27 +1473,38 @@
           hideModal(root);
           return;
         }
-        const logBtn = target.closest("[data-modal-log]");
-        if (logBtn) {
-          const status = modalNode.querySelector("[data-modal-status]");
+        const pickerBtn = target.closest("[data-open-symptom-picker]");
+        if (pickerBtn) {
+          const legacyState = root.__gaiaLegacyState || {
+            member: { symptomCodes: null, currentSymptoms: null },
+            authCtx,
+            ui: { symptomPicker: null },
+          };
+          root.__gaiaLegacyState = legacyState;
           let prefill = [];
           try {
-            prefill = JSON.parse(logBtn.getAttribute("data-prefill") || "[]");
+            prefill = JSON.parse(pickerBtn.getAttribute("data-prefill") || "[]");
           } catch (_) {
             prefill = [];
           }
-          logBtn.disabled = true;
-          if (status) status.textContent = "Logging symptom...";
-          try {
-            await postQuickSymptom(authCtx && authCtx.token ? authCtx.token : "", prefill);
-            if (status) status.textContent = "Symptom logged.";
-          } catch (err) {
-            if (status) {
-              status.textContent = err && err.message ? err.message : "Could not log symptom.";
-            }
-          } finally {
-            logBtn.disabled = false;
-          }
+          await openSymptomPicker(root, legacyState, {
+            title: pickerBtn.getAttribute("data-picker-title") || "Log symptoms",
+            suggestedCodes: prefill,
+          });
+          return;
+        }
+        const symptomSelect = target.closest("[data-symptom-select]");
+        if (symptomSelect) {
+          const legacyState = root.__gaiaLegacyState;
+          if (!legacyState) return;
+          toggleSymptomPickerSelection(root, legacyState, symptomSelect.getAttribute("data-symptom-select"));
+          return;
+        }
+        const symptomSubmit = target.closest("[data-symptom-submit]");
+        if (symptomSubmit) {
+          const legacyState = root.__gaiaLegacyState;
+          if (!legacyState) return;
+          await submitSymptomPicker(root, legacyState);
         }
       });
     }
@@ -2022,7 +2193,7 @@
             <p class="gaia-dashboard__section-subtitle">Current symptoms, your daily check-in, sleep, synced health stats, and the current lunar watch.</p>
           </div>
           <div class="gaia-dashboard__section-actions">
-            <a class="gaia-dashboard__btn" href="${esc(cfg.symptomLogUrl || "/symptoms/")}">Log symptoms</a>
+            <button class="gaia-dashboard__btn" type="button" data-open-symptom-picker="1" data-picker-title="Log symptoms">Log symptoms</button>
           </div>
         </div>
         <div class="gaia-dashboard__split">
