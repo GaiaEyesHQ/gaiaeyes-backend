@@ -229,6 +229,26 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__quicklog-pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
         .gaia-dashboard__quicklog-pill{border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:8px 14px;background:#182234;color:#e8edf7;font-weight:600;cursor:pointer}
         .gaia-dashboard__quicklog-pill.is-selected{border-color:#67a7ff;background:#213150}
+        .gaia-dashboard__symptom-sheet{display:flex;flex-direction:column;gap:16px}
+        .gaia-dashboard__symptom-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+        .gaia-dashboard__symptom-hero-copy{display:flex;flex-direction:column;gap:6px;max-width:420px}
+        .gaia-dashboard__symptom-count{display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:38px;padding:0 12px;border-radius:999px;background:#213150;border:1px solid rgba(103,167,255,.28);color:#dce9ff;font-weight:700}
+        .gaia-dashboard__symptom-section{padding:14px;border-radius:14px;background:#151d2a;border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:10px}
+        .gaia-dashboard__symptom-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+        .gaia-dashboard__symptom-section-copy{display:flex;flex-direction:column;gap:4px}
+        .gaia-dashboard__symptom-section-title{margin:0;font-size:15px;line-height:1.25}
+        .gaia-dashboard__symptom-grid{display:grid;grid-template-columns:1fr;gap:10px}
+        @media(min-width:640px){.gaia-dashboard__symptom-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        .gaia-dashboard__symptom-search{width:100%;border-radius:12px;border:1px solid rgba(255,255,255,.10);background:#101826;color:#e8edf7;padding:11px 12px;font-size:14px}
+        .gaia-dashboard__symptom-pill{display:flex;flex-direction:column;align-items:flex-start;gap:4px;border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:12px 14px;background:#172130;color:#e8edf7;cursor:pointer;text-align:left;transition:border-color .15s ease,background .15s ease,transform .15s ease}
+        .gaia-dashboard__symptom-pill:hover{transform:translateY(-1px);border-color:rgba(156,192,255,.28)}
+        .gaia-dashboard__symptom-pill.is-selected{border-color:#67a7ff;background:#213150;box-shadow:0 0 0 1px rgba(103,167,255,.16) inset}
+        .gaia-dashboard__symptom-pill-title{font-size:14px;font-weight:700;line-height:1.25}
+        .gaia-dashboard__symptom-pill-copy{font-size:12px;line-height:1.45;color:#a9b8d4}
+        .gaia-dashboard__symptom-selected{display:flex;flex-wrap:wrap;gap:8px}
+        .gaia-dashboard__symptom-selected-chip{display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border-radius:999px;background:#213150;border:1px solid rgba(103,167,255,.26);color:#e8f2ff;font-size:12px;font-weight:650}
+        .gaia-dashboard__symptom-selected-chip button{border:0;background:transparent;color:inherit;cursor:pointer;padding:0;font-size:14px;line-height:1}
+        .gaia-dashboard__symptom-empty{padding:12px;border-radius:12px;background:#121925;border:1px dashed rgba(255,255,255,.08);font-size:13px;color:#9da9c1;line-height:1.5}
         .gaia-dashboard__modal-status-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;flex-wrap:wrap}
         .gaia-dashboard__modal-actions{display:flex;justify-content:space-between;gap:10px;margin-top:16px;flex-wrap:wrap}
         body.gaia-modal-open{overflow:hidden}

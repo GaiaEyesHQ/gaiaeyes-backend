@@ -954,70 +954,153 @@
 
   const renderSymptomPickerModal = (state) => {
     const picker = state && state.ui ? state.ui.symptomPicker : null;
-    const catalog = extractSymptomCodeCatalog(state && state.member ? state.member.symptomCodes : null).filter(
-      (item) => item.is_active !== false && item.isActive !== false
-    );
+    const catalog = extractSymptomCodeCatalog(state && state.member ? state.member.symptomCodes : null)
+      .filter((item) => item.is_active !== false && item.isActive !== false)
+      .sort((a, b) =>
+        textOrEmpty(a && a.label).localeCompare(textOrEmpty(b && b.label), undefined, { sensitivity: "base" })
+      );
     const selected = new Set(dedupeStrings(picker && picker.selectedCodes));
+    const query = textOrEmpty(picker && picker.query).toLowerCase();
     const suggested = dedupeStrings(picker && picker.suggestedCodes)
       .map((code) => normalizeSymptomCode(code))
       .filter((code) =>
         catalog.some((item) => normalizeSymptomCode(item && (item.symptom_code || item.symptomCode)) === code)
       );
-    const remaining = catalog.filter((item) => !suggested.includes(normalizeSymptomCode(item && (item.symptom_code || item.symptomCode))));
+    const selectedItems = catalog.filter((item) =>
+      selected.has(normalizeSymptomCode(item && (item.symptom_code || item.symptomCode)))
+    );
+    const remaining = catalog.filter((item) => {
+      const normalized = normalizeSymptomCode(item && (item.symptom_code || item.symptomCode));
+      if (suggested.includes(normalized)) return false;
+      if (!query) return true;
+      const label = textOrEmpty(item && item.label).toLowerCase();
+      const description = textOrEmpty(item && item.description).toLowerCase();
+      const code = normalized.toLowerCase();
+      return label.includes(query) || description.includes(query) || code.includes(query);
+    });
     const selectedCount = selected.size;
 
     const renderOptionButton = (code, label, description) => `
       <button
-        class="gaia-dashboard__quicklog-pill${selected.has(code) ? " is-selected" : ""}"
+        class="gaia-dashboard__symptom-pill${selected.has(code) ? " is-selected" : ""}"
         type="button"
         data-symptom-select="${esc(code)}"
       >
-        ${esc(label)}
-        ${description ? `<span class="gaia-dashboard__muted" style="display:block;margin-top:4px;font-size:11px">${esc(description)}</span>` : ""}
+        <span class="gaia-dashboard__symptom-pill-title">${esc(label)}</span>
+        ${description ? `<span class="gaia-dashboard__symptom-pill-copy">${esc(description)}</span>` : ""}
       </button>
     `;
 
     return `
-      <h3 class="gaia-dashboard__modal-title">${esc((picker && picker.title) || "Log symptoms")}</h3>
-      <p class="gaia-dashboard__modal-copy">Choose one or more symptoms to log right now.</p>
-      ${
-        suggested.length
-          ? `
-            <section class="gaia-dashboard__modal-group">
-              <h5>Suggested for this view</h5>
-              <div class="gaia-dashboard__quicklog-pills">
-                ${suggested
-                  .map((code) => renderOptionButton(code, symptomOptionLabel(code, catalog), ""))
-                  .join("")}
-              </div>
-            </section>
-          `
-          : ""
-      }
-      <section class="gaia-dashboard__modal-group">
-        <h5>All symptom options</h5>
-        <div class="gaia-dashboard__quicklog-pills">
-          ${remaining
-            .map((item) =>
-              renderOptionButton(
-                normalizeSymptomCode(item && (item.symptom_code || item.symptomCode)),
-                textOrEmpty(item && item.label) || titleFromKey(item && (item.symptom_code || item.symptomCode)),
-                textOrEmpty(item && item.description)
-              )
-            )
-            .join("")}
+      <div class="gaia-dashboard__symptom-sheet">
+        <div class="gaia-dashboard__symptom-hero">
+          <div class="gaia-dashboard__symptom-hero-copy">
+            <h3 class="gaia-dashboard__modal-title">${esc((picker && picker.title) || "Log symptoms")}</h3>
+            <p class="gaia-dashboard__modal-copy">Choose one or more symptoms to log right now. Suggestions use the current view, active drivers, and your recent symptom context.</p>
+          </div>
+          <div class="gaia-dashboard__symptom-count">${selectedCount}</div>
         </div>
-      </section>
-      ${
-        picker && picker.status
-          ? `<div class="gaia-dashboard__muted" data-modal-status>${esc(picker.status)}</div>`
-          : '<div class="gaia-dashboard__muted" data-modal-status></div>'
-      }
-      <div class="gaia-dashboard__modal-actions">
-        <button class="gaia-dashboard__btn" type="button" data-symptom-submit="1"${selectedCount ? "" : " disabled"}${picker && picker.submitting ? " disabled" : ""}>
-          ${picker && picker.submitting ? "Logging..." : selectedCount > 1 ? `Log ${selectedCount} symptoms` : "Log symptom"}
-        </button>
-        <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-modal-close="1">Close</button>
+        <section class="gaia-dashboard__symptom-section">
+          <div class="gaia-dashboard__symptom-section-head">
+            <div class="gaia-dashboard__symptom-section-copy">
+              <h5 class="gaia-dashboard__symptom-section-title">Find a symptom</h5>
+              <span class="gaia-dashboard__helper">Search the full list or tap the suggested chips first.</span>
+            </div>
+          </div>
+          <input
+            class="gaia-dashboard__symptom-search"
+            type="search"
+            placeholder="Search symptoms"
+            value="${esc(picker && picker.query ? picker.query : "")}"
+            data-symptom-search="1"
+          />
+        </section>
+        ${
+          suggested.length
+            ? `
+              <section class="gaia-dashboard__symptom-section">
+                <div class="gaia-dashboard__symptom-section-head">
+                  <div class="gaia-dashboard__symptom-section-copy">
+                    <h5 class="gaia-dashboard__symptom-section-title">Suggested right now</h5>
+                    <span class="gaia-dashboard__helper">These match the context you opened from.</span>
+                  </div>
+                </div>
+                <div class="gaia-dashboard__symptom-grid">
+                  ${suggested
+                    .map((code) => renderOptionButton(code, symptomOptionLabel(code, catalog), ""))
+                    .join("")}
+                </div>
+              </section>
+            `
+            : ""
+        }
+        ${
+          selectedItems.length
+            ? `
+              <section class="gaia-dashboard__symptom-section">
+                <div class="gaia-dashboard__symptom-section-head">
+                  <div class="gaia-dashboard__symptom-section-copy">
+                    <h5 class="gaia-dashboard__symptom-section-title">Selected symptoms</h5>
+                    <span class="gaia-dashboard__helper">Tap × to remove any symptom before saving.</span>
+                  </div>
+                </div>
+                <div class="gaia-dashboard__symptom-selected">
+                  ${selectedItems
+                    .map((item) => {
+                      const code = normalizeSymptomCode(item && (item.symptom_code || item.symptomCode));
+                      const label = textOrEmpty(item && item.label) || titleFromKey(code);
+                      return `
+                        <span class="gaia-dashboard__symptom-selected-chip">
+                          ${esc(label)}
+                          <button type="button" data-symptom-select="${esc(code)}" aria-label="Remove ${esc(label)}">×</button>
+                        </span>
+                      `;
+                    })
+                    .join("")}
+                </div>
+              </section>
+            `
+            : ""
+        }
+        <section class="gaia-dashboard__symptom-section">
+          <div class="gaia-dashboard__symptom-section-head">
+            <div class="gaia-dashboard__symptom-section-copy">
+              <h5 class="gaia-dashboard__symptom-section-title">All symptom options</h5>
+              <span class="gaia-dashboard__helper">${query ? `Showing results for “${picker.query}”.` : "Use the full list when the suggested set is too narrow."}</span>
+            </div>
+          </div>
+          ${
+            remaining.length
+              ? `
+                <div class="gaia-dashboard__symptom-grid">
+                  ${remaining
+                    .map((item) =>
+                      renderOptionButton(
+                        normalizeSymptomCode(item && (item.symptom_code || item.symptomCode)),
+                        textOrEmpty(item && item.label) || titleFromKey(item && (item.symptom_code || item.symptomCode)),
+                        textOrEmpty(item && item.description)
+                      )
+                    )
+                    .join("")}
+                </div>
+              `
+              : `<div class="gaia-dashboard__symptom-empty">${query ? "No symptoms match that search yet." : "No symptom options are available right now."}</div>`
+          }
+        </section>
+        ${
+          picker && picker.status
+            ? `<div class="gaia-dashboard__muted" data-modal-status>${esc(picker.status)}</div>`
+            : '<div class="gaia-dashboard__muted" data-modal-status></div>'
+        }
+        <div class="gaia-dashboard__modal-actions">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="gaia-dashboard__btn" type="button" data-symptom-submit="1"${selectedCount ? "" : " disabled"}${picker && picker.submitting ? " disabled" : ""}>
+              ${picker && picker.submitting ? "Logging..." : selectedCount > 1 ? `Log ${selectedCount} symptoms` : "Log symptom"}
+            </button>
+            <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-symptom-clear="1"${selectedCount ? "" : " disabled"}>Clear</button>
+          </div>
+          <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-modal-close="1">Close</button>
+        </div>
       </div>
     `;
   };
@@ -1036,6 +1119,7 @@
       title: textOrEmpty(options.title) || "Log symptoms",
       suggestedCodes: dedupeStrings(maybeArray(options.suggestedCodes).map(normalizeSymptomCode)),
       selectedCodes: dedupeStrings(maybeArray(options.selectedCodes).map(normalizeSymptomCode)),
+      query: "",
       submitting: false,
       status: "Loading symptom options...",
     };
@@ -1061,6 +1145,18 @@
       selected.add(normalized);
     }
     state.ui.symptomPicker.selectedCodes = Array.from(selected);
+    openModal(root, renderSymptomPickerModal(state));
+  };
+
+  const updateSymptomPickerQuery = (root, state, query) => {
+    if (!state.ui.symptomPicker) return;
+    state.ui.symptomPicker.query = textOrEmpty(query);
+    openModal(root, renderSymptomPickerModal(state));
+  };
+
+  const clearSymptomPickerSelection = (root, state) => {
+    if (!state.ui.symptomPicker) return;
+    state.ui.symptomPicker.selectedCodes = [];
     openModal(root, renderSymptomPickerModal(state));
   };
 
@@ -1128,10 +1224,22 @@
           toggleSymptomPickerSelection(root, state, symptomSelect.getAttribute("data-symptom-select"));
           return;
         }
+        const symptomClear = target.closest("[data-symptom-clear]");
+        if (symptomClear) {
+          clearSymptomPickerSelection(root, state);
+          return;
+        }
         const symptomSubmit = target.closest("[data-symptom-submit]");
         if (symptomSubmit) {
           await submitSymptomPicker(root, state);
         }
+      });
+      modalNode.addEventListener("input", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const search = target.closest("[data-symptom-search]");
+        if (!search) return;
+        updateSymptomPickerQuery(root, state, search.value || "");
       });
     }
 
@@ -1500,12 +1608,28 @@
           toggleSymptomPickerSelection(root, legacyState, symptomSelect.getAttribute("data-symptom-select"));
           return;
         }
+        const symptomClear = target.closest("[data-symptom-clear]");
+        if (symptomClear) {
+          const legacyState = root.__gaiaLegacyState;
+          if (!legacyState) return;
+          clearSymptomPickerSelection(root, legacyState);
+          return;
+        }
         const symptomSubmit = target.closest("[data-symptom-submit]");
         if (symptomSubmit) {
           const legacyState = root.__gaiaLegacyState;
           if (!legacyState) return;
           await submitSymptomPicker(root, legacyState);
         }
+      });
+      modalNode.addEventListener("input", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const search = target.closest("[data-symptom-search]");
+        if (!search) return;
+        const legacyState = root.__gaiaLegacyState;
+        if (!legacyState) return;
+        updateSymptomPickerQuery(root, legacyState, search.value || "");
       });
     }
 
