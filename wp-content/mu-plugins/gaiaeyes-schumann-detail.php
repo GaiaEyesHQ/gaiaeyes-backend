@@ -44,7 +44,7 @@ if (!function_exists('gaiaeyes_http_json_fallback')) {
 }
 
 if (!function_exists('gaiaeyes_schumann_detail_shortcode')) {
-  function gaiaeyes_schumann_detail_shortcode($atts){
+function gaiaeyes_schumann_detail_shortcode($atts){
     $a = shortcode_atts([
       'combined_url' => '',
       'latest_url'   => GAIAEYES_SCH_LATEST_URL,
@@ -54,14 +54,23 @@ if (!function_exists('gaiaeyes_schumann_detail_shortcode')) {
     ], $atts, 'gaia_schumann_detail');
 
     $ttl = max(1, intval($a['cache'])) * MINUTE_IN_SECONDS;
-    $latest   = gaiaeyes_http_json_fallback($a['latest_url'], GAIAEYES_SCH_LATEST_MIRROR, 'ge_sch_latest', $ttl);
-    $combined = null;
+    $detail_payload = function_exists('gaiaeyes_schumann_detail_payload')
+      ? gaiaeyes_schumann_detail_payload(false)
+      : null;
+    $latest = is_array($detail_payload) && is_array($detail_payload['latest'] ?? null)
+      ? $detail_payload['latest']
+      : gaiaeyes_http_json_fallback($a['latest_url'], GAIAEYES_SCH_LATEST_MIRROR, 'ge_sch_latest', $ttl);
+    $combined = is_array($detail_payload) && is_array($detail_payload['combined'] ?? null)
+      ? $detail_payload['combined']
+      : gaiaeyes_http_json_fallback(GAIAEYES_SCH_COMBINED_URL, GAIAEYES_SCH_COMBINED_MIRROR, 'ge_sch_detail_shortcode_combined', $ttl);
 
     // Prepare 24h series endpoint (F1). Prefer configured backend; hard‑fallback to public Render base.
-    $series_url_default = (defined('GAIAEYES_API_BASE')
-      ? rtrim(GAIAEYES_API_BASE, '/') . '/v1/earth/schumann/series?hours=24&station=' . rawurlencode($a['station'])
-      : 'https://gaiaeyes-backend.onrender.com/v1/earth/schumann/series?hours=24&station=' . rawurlencode($a['station'])
-    );
+    $series_url_default = is_array($detail_payload) && !empty($detail_payload['series_url'])
+      ? (string) $detail_payload['series_url']
+      : ((defined('GAIAEYES_API_BASE') && GAIAEYES_API_BASE)
+        ? rtrim(GAIAEYES_API_BASE, '/') . '/v1/earth/schumann/series?hours=24&station=' . rawurlencode($a['station'])
+        : 'https://gaiaeyes-backend.onrender.com/v1/earth/schumann/series?hours=24&station=' . rawurlencode($a['station'])
+      );
     $series_url = !empty($a['series_url']) ? $a['series_url'] : $series_url_default;
 
     // Fallback candidate URLs for JS chart

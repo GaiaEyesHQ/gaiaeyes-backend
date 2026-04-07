@@ -28,15 +28,36 @@ add_action('wp_enqueue_scripts', function () {
     }
     $request_uri = isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '/';
     $redirect_url = esc_url_raw(home_url($request_uri));
+    $member_routes = [
+        'dashboard' => esc_url_raw(rest_url('gaia/v1/dashboard')),
+        'drivers' => esc_url_raw(rest_url('gaia/v1/member/drivers')),
+        'outlook' => esc_url_raw(rest_url('gaia/v1/member/outlook')),
+        'patternsSummary' => esc_url_raw(rest_url('gaia/v1/member/patterns-summary')),
+        'patterns' => esc_url_raw(rest_url('gaia/v1/member/patterns')),
+        'features' => esc_url_raw(rest_url('gaia/v1/member/features')),
+        'currentSymptoms' => esc_url_raw(rest_url('gaia/v1/member/current-symptoms')),
+        'dailyCheckIn' => esc_url_raw(rest_url('gaia/v1/member/daily-checkin')),
+        'lunar' => esc_url_raw(rest_url('gaia/v1/member/lunar')),
+        'localCheck' => esc_url_raw(rest_url('gaia/v1/member/local-check')),
+    ];
 
     wp_localize_script('gaia-dashboard', 'GAIA_DASHBOARD_CFG', [
         'supabaseUrl' => $supabase_url ? rtrim($supabase_url, '/') : '',
         'supabaseAnon' => $supabase_anon ? trim($supabase_anon) : '',
         'backendBase' => $backend_base ? rtrim($backend_base, '/') : '',
         'dashboardProxy' => esc_url_raw(rest_url('gaia/v1/dashboard')),
+        'memberRoutes' => $member_routes,
         'mediaBase' => $media_base ? rtrim($media_base, '/') : '',
         'redirectUrl' => $redirect_url,
         'symptomLogUrl' => $symptom_log_url ? esc_url_raw($symptom_log_url) : '',
+        'supportUrl' => esc_url_raw(home_url('/support/')),
+        'publicLinks' => [
+            'spaceWeather' => esc_url_raw(home_url('/space-weather/')),
+            'schumann' => esc_url_raw(home_url('/schumann-resonance/')),
+            'magnetosphere' => esc_url_raw(home_url('/magnetosphere/')),
+            'aurora' => esc_url_raw(home_url('/aurora-tracker/')),
+            'earthquakes' => esc_url_raw(home_url('/earthquakes/')),
+        ],
     ]);
 
     wp_register_style('gaia-dashboard', false);
@@ -120,6 +141,79 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__signin{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
         .gaia-dashboard__btn{border:0;border-radius:999px;padding:8px 14px;background:#2b8cff;color:#fff;font-weight:600;cursor:pointer}
         .gaia-dashboard__btn--ghost{background:#1f2a3a;color:#d7e6ff}
+        .gaia-dashboard__btn--quiet{background:#172130;color:#d7e6ff;border:1px solid rgba(255,255,255,.08)}
+        .gaia-dashboard__shell{display:flex;flex-direction:column;gap:14px}
+        .gaia-dashboard__shell-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+        .gaia-dashboard__shell-copy{display:flex;flex-direction:column;gap:4px;max-width:760px}
+        .gaia-dashboard__shell-kicker{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#9da9c1}
+        .gaia-dashboard__shell-subtitle{font-size:14px;line-height:1.5;color:#c7d3eb;margin:0}
+        .gaia-dashboard__tabbar{display:flex;gap:8px;flex-wrap:wrap}
+        .gaia-dashboard__tab{border:1px solid rgba(255,255,255,.08);border-radius:999px;background:#141c28;color:#c8d7f0;padding:9px 14px;font-weight:650;cursor:pointer}
+        .gaia-dashboard__tab.is-active{background:#20344f;color:#fff;border-color:rgba(156,192,255,.44);box-shadow:0 0 0 1px rgba(156,192,255,.14) inset}
+        .gaia-dashboard__section{display:none;flex-direction:column;gap:14px}
+        .gaia-dashboard__section.is-active{display:flex}
+        .gaia-dashboard__section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+        .gaia-dashboard__section-copy{display:flex;flex-direction:column;gap:4px}
+        .gaia-dashboard__section-title{margin:0;font-size:24px;line-height:1.15}
+        .gaia-dashboard__section-subtitle{margin:0;font-size:14px;line-height:1.5;color:#9da9c1;max-width:760px}
+        .gaia-dashboard__nav-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+        @media(min-width:900px){.gaia-dashboard__nav-grid{grid-template-columns:repeat(5,minmax(0,1fr));}}
+        .gaia-dashboard__nav-card{padding:14px;border-radius:14px;background:#151c28;border:1px solid rgba(255,255,255,.08);cursor:pointer;text-align:left;color:#e8edf7}
+        .gaia-dashboard__nav-card strong{display:block;font-size:14px}
+        .gaia-dashboard__nav-card span{display:block;margin-top:5px;font-size:12px;color:#9da9c1;line-height:1.45}
+        .gaia-dashboard__grid{display:grid;grid-template-columns:1fr;gap:14px}
+        @media(min-width:900px){.gaia-dashboard__grid--2{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        @media(min-width:1200px){.gaia-dashboard__grid--3{grid-template-columns:repeat(3,minmax(0,1fr));}}
+        .gaia-dashboard__card{padding:16px;border-radius:16px;background:#141b27;border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:12px}
+        .gaia-dashboard__card-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+        .gaia-dashboard__card-title{margin:0;font-size:18px;line-height:1.2}
+        .gaia-dashboard__card-copy{margin:0;font-size:14px;line-height:1.55;color:#c9d4e8}
+        .gaia-dashboard__eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8f9db7}
+        .gaia-dashboard__meta-row{display:flex;flex-wrap:wrap;gap:8px}
+        .gaia-dashboard__meta-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#1a2434;color:#d6e3fa;font-size:12px}
+        .gaia-dashboard__metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+        @media(min-width:1100px){.gaia-dashboard__metric-grid--4{grid-template-columns:repeat(4,minmax(0,1fr));}}
+        @media(min-width:1100px){.gaia-dashboard__metric-grid--3{grid-template-columns:repeat(3,minmax(0,1fr));}}
+        .gaia-dashboard__metric{padding:12px;border-radius:12px;background:#172130;border:1px solid rgba(255,255,255,.08)}
+        .gaia-dashboard__metric-label{font-size:11px;color:#8f9db7;text-transform:uppercase;letter-spacing:.06em}
+        .gaia-dashboard__metric-value{font-size:20px;font-weight:700;margin-top:4px}
+        .gaia-dashboard__metric-detail{font-size:12px;color:#9da9c1;margin-top:4px;line-height:1.4}
+        .gaia-dashboard__stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+        @media(min-width:900px){.gaia-dashboard__stat-grid{grid-template-columns:repeat(4,minmax(0,1fr));}}
+        .gaia-dashboard__stat-box{padding:12px;border-radius:12px;background:#172130;border:1px solid rgba(255,255,255,.08)}
+        .gaia-dashboard__stat-box strong{display:block;font-size:12px;color:#8f9db7;text-transform:uppercase;letter-spacing:.05em}
+        .gaia-dashboard__stat-box span{display:block;margin-top:6px;font-size:20px;font-weight:700;color:#fff}
+        .gaia-dashboard__list{display:flex;flex-direction:column;gap:10px}
+        .gaia-dashboard__list-row{padding:12px;border-radius:12px;background:#172130;border:1px solid rgba(255,255,255,.06)}
+        .gaia-dashboard__list-row strong{display:block;font-size:14px}
+        .gaia-dashboard__list-row p{margin:6px 0 0;font-size:13px;line-height:1.45;color:#9da9c1}
+        .gaia-dashboard__split{display:grid;grid-template-columns:1fr;gap:14px}
+        @media(min-width:1000px){.gaia-dashboard__split{grid-template-columns:1.3fr .9fr;}}
+        .gaia-dashboard__form{display:flex;flex-direction:column;gap:12px}
+        .gaia-dashboard__form-grid{display:grid;grid-template-columns:1fr;gap:10px}
+        @media(min-width:900px){.gaia-dashboard__form-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        .gaia-dashboard__field{display:flex;flex-direction:column;gap:6px}
+        .gaia-dashboard__field label{font-size:12px;color:#9da9c1}
+        .gaia-dashboard__field input,.gaia-dashboard__field select,.gaia-dashboard__field textarea{width:100%;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:#101826;color:#e8edf7;padding:10px 12px}
+        .gaia-dashboard__field textarea{min-height:84px;resize:vertical}
+        .gaia-dashboard__helper{font-size:12px;color:#9da9c1;line-height:1.45}
+        .gaia-dashboard__status-note{font-size:12px;color:#d8b176}
+        .gaia-dashboard__link-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+        @media(min-width:900px){.gaia-dashboard__link-grid{grid-template-columns:repeat(5,minmax(0,1fr));}}
+        .gaia-dashboard__link-card{display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:14px;background:#151c28;border:1px solid rgba(255,255,255,.08);text-decoration:none;color:#e8edf7}
+        .gaia-dashboard__link-card small{color:#9da9c1;line-height:1.45}
+        .gaia-dashboard__empty{padding:16px;border-radius:14px;background:#121925;border:1px dashed rgba(255,255,255,.08);font-size:13px;color:#9da9c1;line-height:1.5}
+        .gaia-dashboard__pill-row{display:flex;flex-wrap:wrap;gap:8px}
+        .gaia-dashboard__pill-button{border:1px solid rgba(255,255,255,.08);border-radius:999px;background:#172130;color:#d7e6ff;padding:8px 12px;font-weight:600;cursor:pointer}
+        .gaia-dashboard__pill-button.is-active{background:#224064;border-color:rgba(156,192,255,.38)}
+        .gaia-dashboard__section-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+        .gaia-dashboard__mini-title{font-size:13px;font-weight:700;color:#eef4ff}
+        .gaia-dashboard__driver-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#1a2434;color:#cdd9ef;font-size:12px}
+        .gaia-dashboard__guide-stack{display:grid;grid-template-columns:1fr;gap:12px}
+        @media(min-width:960px){.gaia-dashboard__guide-stack{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        .gaia-dashboard__poll-choices{display:flex;flex-wrap:wrap;gap:8px}
+        .gaia-dashboard__poll-choice{border:1px solid rgba(255,255,255,.08);border-radius:999px;background:#172130;color:#e8edf7;padding:8px 14px;cursor:pointer;font-weight:600}
+        .gaia-dashboard__poll-choice.is-selected{background:#224064;border-color:rgba(156,192,255,.38)}
         .gaia-dashboard__modal{position:fixed;inset:0;z-index:99999;display:none}
         .gaia-dashboard__modal.is-open{display:block}
         .gaia-dashboard__modal-backdrop{position:absolute;inset:0;background:rgba(2,6,12,.72)}
@@ -182,55 +276,82 @@ add_action('init', function () {
     if (!shortcode_exists('gaia_dashboard')) {
         add_shortcode('gaia_dashboard', 'gaia_dashboard_shortcode_render');
     }
+    if (!shortcode_exists('gaia_member_hub')) {
+        add_shortcode('gaia_member_hub', 'gaia_dashboard_shortcode_render');
+    }
 });
 
 add_filter('the_content', function ($content) {
-    if (strpos($content, '[gaia_dashboard') === false) {
+    if (strpos($content, '[gaia_dashboard') === false && strpos($content, '[gaia_member_hub') === false) {
         return $content;
     }
     return do_shortcode($content);
 }, 20);
 
-if (!function_exists('gaia_dashboard_proxy_backend')) {
-function gaia_dashboard_proxy_backend(WP_REST_Request $request) {
+if (!function_exists('gaia_dashboard_backend_base')) {
+function gaia_dashboard_backend_base() {
     $backend_base = defined('GAIAEYES_API_BASE') ? GAIAEYES_API_BASE : getenv('GAIAEYES_API_BASE');
-    $backend_base = $backend_base ? rtrim((string) $backend_base, '/') : '';
-    if (!$backend_base) {
-        return new WP_REST_Response(['ok' => false, 'error' => 'GAIAEYES_API_BASE is not configured'], 500);
-    }
+    return $backend_base ? rtrim((string) $backend_base, '/') : '';
+}
+}
 
-    $day = sanitize_text_field((string) ($request->get_param('day') ?: ''));
-    if (!$day) {
-        $day = gmdate('Y-m-d');
-    }
-    $debug = $request->get_param('debug');
-
-    $query_args = ['day' => $day];
-    if ($debug !== null && $debug !== '' && $debug !== '0' && $debug !== 0 && $debug !== false) {
-        $query_args['debug'] = '1';
-    }
-
-    $url = add_query_arg($query_args, $backend_base . '/v1/dashboard');
-
+if (!function_exists('gaia_dashboard_forwarded_auth_header')) {
+function gaia_dashboard_forwarded_auth_header(WP_REST_Request $request) {
     $auth = (string) $request->get_header('authorization');
     if (!$auth && isset($_SERVER['HTTP_AUTHORIZATION'])) {
         $auth = (string) wp_unslash($_SERVER['HTTP_AUTHORIZATION']);
     }
+    return $auth;
+}
+}
+
+if (!function_exists('gaia_dashboard_proxy_json')) {
+function gaia_dashboard_proxy_json(
+    WP_REST_Request $request,
+    string $backend_path,
+    array $query_map = [],
+    string $method = WP_REST_Server::READABLE
+) {
+    $backend_base = gaia_dashboard_backend_base();
+    if ($backend_base === '') {
+        return new WP_REST_Response(['ok' => false, 'error' => 'GAIAEYES_API_BASE is not configured'], 500);
+    }
+
+    $query_args = [];
+    foreach ($query_map as $request_key => $backend_key) {
+        $value = $request->get_param($request_key);
+        if ($value === null || $value === '') {
+            continue;
+        }
+        $query_args[$backend_key] = sanitize_text_field((string) $value);
+    }
+
+    $url = add_query_arg($query_args, $backend_base . $backend_path);
 
     $headers = ['Accept' => 'application/json'];
+    $auth = gaia_dashboard_forwarded_auth_header($request);
     if ($auth !== '') {
         $headers['Authorization'] = $auth;
     }
 
-    $resp = wp_remote_get($url, [
+    $args = [
         'timeout' => 20,
+        'method' => $method,
         'headers' => $headers,
-    ]);
+    ];
+
+    if ($method !== WP_REST_Server::READABLE && $method !== 'GET') {
+        $headers['Content-Type'] = 'application/json';
+        $args['headers'] = $headers;
+        $args['body'] = (string) $request->get_body();
+    }
+
+    $resp = wp_remote_request($url, $args);
 
     if (is_wp_error($resp)) {
         return new WP_REST_Response([
             'ok' => false,
-            'error' => 'dashboard proxy fetch failed',
+            'error' => 'member hub proxy fetch failed',
             'detail' => $resp->get_error_message(),
         ], 502);
     }
@@ -242,12 +363,37 @@ function gaia_dashboard_proxy_backend(WP_REST_Request $request) {
     if (!is_array($decoded)) {
         return new WP_REST_Response([
             'ok' => false,
-            'error' => 'dashboard proxy invalid JSON',
+            'error' => 'member hub proxy invalid JSON',
             'status' => $status,
         ], 502);
     }
 
     return new WP_REST_Response($decoded, $status > 0 ? $status : 200);
+}
+}
+
+if (!function_exists('gaia_dashboard_proxy_backend')) {
+function gaia_dashboard_proxy_backend(WP_REST_Request $request) {
+    $day = sanitize_text_field((string) ($request->get_param('day') ?: ''));
+    if (!$day) {
+        $day = gmdate('Y-m-d');
+    }
+    if (!$request->get_param('day')) {
+        $request->set_param('day', $day);
+    }
+    $debug = $request->get_param('debug');
+    if ($debug !== null && $debug !== '' && $debug !== '0' && $debug !== 0 && $debug !== false) {
+        $request->set_param('debug', '1');
+    }
+
+    return gaia_dashboard_proxy_json(
+        $request,
+        '/v1/dashboard',
+        [
+            'day' => 'day',
+            'debug' => 'debug',
+        ]
+    );
 }
 }
 
@@ -262,6 +408,125 @@ add_action('rest_api_init', function () {
                 'sanitize_callback' => 'sanitize_text_field',
             ],
             'debug' => [
+                'required' => false,
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+        ],
+    ]);
+
+    register_rest_route('gaia/v1', '/member/drivers', [
+        'methods' => WP_REST_Server::READABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            return gaia_dashboard_proxy_json($request, '/v1/users/me/drivers', ['day' => 'day']);
+        },
+        'args' => [
+            'day' => [
+                'required' => false,
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+        ],
+    ]);
+
+    register_rest_route('gaia/v1', '/member/outlook', [
+        'methods' => WP_REST_Server::READABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            return gaia_dashboard_proxy_json($request, '/v1/users/me/outlook');
+        },
+    ]);
+
+    register_rest_route('gaia/v1', '/member/patterns-summary', [
+        'methods' => WP_REST_Server::READABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            return gaia_dashboard_proxy_json($request, '/v1/patterns/summary');
+        },
+    ]);
+
+    register_rest_route('gaia/v1', '/member/patterns', [
+        'methods' => WP_REST_Server::READABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            return gaia_dashboard_proxy_json($request, '/v1/patterns');
+        },
+    ]);
+
+    register_rest_route('gaia/v1', '/member/features', [
+        'methods' => WP_REST_Server::READABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            return gaia_dashboard_proxy_json($request, '/v1/features/today', ['tz' => 'tz']);
+        },
+        'args' => [
+            'tz' => [
+                'required' => false,
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+        ],
+    ]);
+
+    register_rest_route('gaia/v1', '/member/current-symptoms', [
+        'methods' => WP_REST_Server::READABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            return gaia_dashboard_proxy_json($request, '/v1/symptoms/current', ['window_hours' => 'window_hours']);
+        },
+        'args' => [
+            'window_hours' => [
+                'required' => false,
+                'sanitize_callback' => 'absint',
+            ],
+        ],
+    ]);
+
+    register_rest_route('gaia/v1', '/member/daily-checkin', [
+        [
+            'methods' => WP_REST_Server::READABLE,
+            'permission_callback' => '__return_true',
+            'callback' => function (WP_REST_Request $request) {
+                return gaia_dashboard_proxy_json($request, '/v1/feedback/daily-checkin');
+            },
+        ],
+        [
+            'methods' => WP_REST_Server::CREATABLE,
+            'permission_callback' => '__return_true',
+            'callback' => function (WP_REST_Request $request) {
+                return gaia_dashboard_proxy_json($request, '/v1/feedback/daily-checkin', [], WP_REST_Server::CREATABLE);
+            },
+        ],
+    ]);
+
+    register_rest_route('gaia/v1', '/member/daily-checkin/(?P<prompt_id>[^/]+)/dismiss', [
+        'methods' => WP_REST_Server::CREATABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            $prompt_id = sanitize_text_field((string) $request['prompt_id']);
+            return gaia_dashboard_proxy_json(
+                $request,
+                '/v1/feedback/daily-checkin/' . rawurlencode($prompt_id) . '/dismiss',
+                [],
+                WP_REST_Server::CREATABLE
+            );
+        },
+    ]);
+
+    register_rest_route('gaia/v1', '/member/lunar', [
+        'methods' => WP_REST_Server::READABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            return gaia_dashboard_proxy_json($request, '/v1/insights/lunar');
+        },
+    ]);
+
+    register_rest_route('gaia/v1', '/member/local-check', [
+        'methods' => WP_REST_Server::READABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            return gaia_dashboard_proxy_json($request, '/v1/local/check', ['zip' => 'zip']);
+        },
+        'args' => [
+            'zip' => [
                 'required' => false,
                 'sanitize_callback' => 'sanitize_text_field',
             ],
