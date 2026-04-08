@@ -14649,307 +14649,345 @@ struct ContentView: View {
         }
     }
 
+    private var missionSettingsTagBuckets: (environmental: [TagCatalogItem], health: [TagCatalogItem]) {
+        let sectionForTag: (TagCatalogItem) -> Bool = { item in
+            let canonicalKey = canonicalProfileTagKey(item.tagKey)
+            if healthContextTagKeys.contains(canonicalKey) {
+                return true
+            }
+            let section = (item.section ?? "").lowercased()
+            return section.contains("health") || section.contains("context")
+        }
+        let environmental = tagCatalog.filter { !sectionForTag($0) }.sorted {
+            ($0.label ?? $0.tagKey).localizedCaseInsensitiveCompare($1.label ?? $1.tagKey) == .orderedAscending
+        }
+        let health = tagCatalog.filter(sectionForTag).sorted {
+            ($0.label ?? $0.tagKey).localizedCaseInsensitiveCompare($1.label ?? $1.tagKey) == .orderedAscending
+        }
+        return (environmental, health)
+    }
+
     private var missionSettingsSheetContent: some View {
-            let sectionForTag: (TagCatalogItem) -> Bool = { item in
-                let canonicalKey = canonicalProfileTagKey(item.tagKey)
-                if healthContextTagKeys.contains(canonicalKey) {
-                    return true
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    missionSettingsTopSections
+                    missionSettingsContextAndNotificationSections
+                    missionSettingsAdvancedSection
                 }
-                let section = (item.section ?? "").lowercased()
-                return section.contains("health") || section.contains("context")
+                .padding(.vertical, 16)
             }
-            let environmentalTags = tagCatalog.filter { !sectionForTag($0) }.sorted {
-                ($0.label ?? $0.tagKey).localizedCaseInsensitiveCompare($1.label ?? $1.tagKey) == .orderedAscending
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    @ViewBuilder
+    private var missionSettingsTopSections: some View {
+        missionSettingsExperienceSection
+        missionSettingsSignalsSection
+        missionSettingsHealthDataSection
+        missionSettingsAboutSection
+        missionSettingsHelpSection
+    }
+
+    private var missionSettingsExperienceSection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Changes save automatically.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Mode")
+                        .font(.subheadline.weight(.semibold))
+                    Picker("Mode", selection: $experienceProfile.mode) {
+                        ForEach(ExperienceMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Text(experienceProfile.mode.subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Guide")
+                        .font(.subheadline.weight(.semibold))
+                    HStack(alignment: .center, spacing: 12) {
+                        GuideAvatarView(
+                            guide: experienceProfile.guide,
+                            expression: .guide,
+                            size: .medium,
+                            emphasis: .standard,
+                            tintMode: .softened,
+                            showBackingPlate: true
+                        )
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(experienceProfile.guide.title)
+                                .font(.headline)
+                            Text("Guide Hub, prompts, and the top-left entry use the same shared avatar system.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Picker("Guide", selection: $experienceProfile.guide) {
+                        ForEach(GuideType.allCases) { guide in
+                            Text(guide.title).tag(guide)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Text(experienceProfile.guide.subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Toggle(
+                        "Use guide as app icon",
+                        isOn: Binding(
+                            get: { guideProfileStore.profile.useGuideAppIcon },
+                            set: { guideProfileStore.setUseGuideAppIcon($0) }
+                        )
+                    )
+                    .disabled(!guideProfileStore.supportsAlternateIcons)
+
+                    Text(guideProfileStore.iconPreferenceFootnote)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Tone")
+                        .font(.subheadline.weight(.semibold))
+                    Picker("Tone", selection: $experienceProfile.tone) {
+                        ForEach(ToneStyle.allCases) { tone in
+                            Text(tone.title).tag(tone)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Text(experienceProfile.tone.subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Temperature Units")
+                        .font(.subheadline.weight(.semibold))
+                    Picker("Temperature Units", selection: $experienceProfile.tempUnit) {
+                        ForEach(TemperatureUnit.allCases) { unit in
+                            Text(unit.rawValue == "F" ? "\u{00B0}F" : "\u{00B0}C").tag(unit)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Text("Current weather, forecast, drivers, and alerts switch instantly.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                TrackedStatsSettingsSection(
+                    trackedStatKeys: $experienceProfile.trackedStatKeys,
+                    smartStatSwapEnabled: $experienceProfile.smartStatSwapEnabled
+                )
+
+                FavoriteSymptomsSettingsSection(
+                    presets: preferredSymptomPresets(symptomPresets, favoriteCodes: experienceProfile.favoriteSymptomCodes),
+                    favoriteSymptomCodes: $experienceProfile.favoriteSymptomCodes
+                )
+
+                Toggle(isOn: $experienceProfile.lunarSensitivityDeclared) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Prioritize lunar overlays")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Keeps lunar markers and pattern summaries more prominent. Observational only.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
-            let healthTags = tagCatalog.filter(sectionForTag).sorted {
-                ($0.label ?? $0.tagKey).localizedCaseInsensitiveCompare($1.label ?? $1.tagKey) == .orderedAscending
+        } label: {
+            Label("Experience", systemImage: "sparkles")
+        }
+        .padding(.horizontal)
+        .onChange(of: experienceProfile.mode, initial: false) { _, newValue in
+            Task { await saveProfilePreferences(UserExperienceProfileUpdate(mode: newValue)) }
+        }
+        .onChange(of: experienceProfile.guide, initial: false) { _, newValue in
+            Task { await saveProfilePreferences(UserExperienceProfileUpdate(guide: newValue)) }
+        }
+        .onChange(of: experienceProfile.tone, initial: false) { _, newValue in
+            Task { await saveProfilePreferences(UserExperienceProfileUpdate(tone: newValue)) }
+        }
+        .onChange(of: experienceProfile.tempUnit, initial: false) { _, newValue in
+            Task { await saveProfilePreferences(UserExperienceProfileUpdate(tempUnit: newValue)) }
+        }
+        .onChange(of: experienceProfile.trackedStatKeys, initial: false) { _, newValue in
+            Task { await saveProfilePreferences(UserExperienceProfileUpdate(trackedStatKeys: newValue)) }
+        }
+        .onChange(of: experienceProfile.smartStatSwapEnabled, initial: false) { _, newValue in
+            Task { await saveProfilePreferences(UserExperienceProfileUpdate(smartStatSwapEnabled: newValue)) }
+        }
+        .onChange(of: experienceProfile.favoriteSymptomCodes, initial: false) { _, newValue in
+            Task { await saveProfilePreferences(UserExperienceProfileUpdate(favoriteSymptomCodes: newValue.map(normalize))) }
+        }
+        .onChange(of: experienceProfile.lunarSensitivityDeclared, initial: false) { _, newValue in
+            Task { await saveProfilePreferences(UserExperienceProfileUpdate(lunarSensitivityDeclared: newValue)) }
+        }
+    }
+
+    private var missionSettingsSignalsSection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(profileLocalInsightsEnabled ? "Local insights on" : "Local insights off")
+                            .font(.headline)
+                        Text(
+                            profileUseGPS
+                            ? ((localHealth?.whereInfo?.zip ?? localHealthZip).isEmpty ? "Using GPS for your area" : "Using GPS for your area • ZIP \(localHealth?.whereInfo?.zip ?? localHealthZip)")
+                            : ((localHealth?.whereInfo?.zip ?? localHealthZip).isEmpty ? "Add a ZIP code to improve local conditions" : "ZIP \(localHealth?.whereInfo?.zip ?? localHealthZip)")
+                        )
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        if let updated = LocalConditionsFormatting.asofText(localHealth?.asof) {
+                            Text("Last updated \(updated)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button("Open Local Conditions") {
+                        showLocalConditionsSheet = true
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                TextField("ZIP code", text: $localHealthZip)
+                    .textFieldStyle(.roundedBorder)
+                    .keyboardType(.numberPad)
+
+                Toggle("Use GPS", isOn: $profileUseGPS)
+                Toggle("Enable local insights", isOn: $profileLocalInsightsEnabled)
+
+                Button(action: { Task { await saveProfileLocation() } }) {
+                    HStack {
+                        if profileLocationSaving {
+                            ProgressView().scaleEffect(0.8)
+                        }
+                        Text(profileLocationSaving ? "Saving..." : "Save Location")
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(profileLocationSaving)
+
+                if let msg = profileLocationMessage {
+                    Text(msg)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
-            NavigationStack {
-                ScrollView {
-                    VStack(spacing: 16) {
-                        GroupBox {
-                            VStack(alignment: .leading, spacing: 14) {
-                                Text("Changes save automatically.")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+        } label: {
+            Label("Your Signals", systemImage: "location.fill")
+        }
+        .padding(.horizontal)
+    }
 
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Mode")
-                                        .font(.subheadline.weight(.semibold))
-                                    Picker("Mode", selection: $experienceProfile.mode) {
-                                        ForEach(ExperienceMode.allCases) { mode in
-                                            Text(mode.title).tag(mode)
-                                        }
-                                    }
-                                    .pickerStyle(.segmented)
-                                    Text(experienceProfile.mode.subtitle)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
+    private var missionSettingsHealthDataSection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Use Health data to improve sleep, heart-rate, recovery, and pattern context. Gaia only reads the domains it can actually use.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
 
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Guide")
-                                        .font(.subheadline.weight(.semibold))
-                                    HStack(alignment: .center, spacing: 12) {
-                                        GuideAvatarView(
-                                            guide: experienceProfile.guide,
-                                            expression: .guide,
-                                            size: .medium,
-                                            emphasis: .standard,
-                                            tintMode: .softened,
-                                            showBackingPlate: true
-                                        )
+                Button {
+                    Task { _ = await requestHealthPermissionsForOnboarding() }
+                } label: {
+                    HStack {
+                        Text("Request / Update Health Permissions")
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
 
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(experienceProfile.guide.title)
-                                                .font(.headline)
-                                            Text("Guide Hub, prompts, and the top-left entry use the same shared avatar system.")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                    Picker("Guide", selection: $experienceProfile.guide) {
-                                        ForEach(GuideType.allCases) { guide in
-                                            Text(guide.title).tag(guide)
-                                        }
-                                    }
-                                    .pickerStyle(.segmented)
-                                    Text(experienceProfile.guide.subtitle)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-
-                                    Toggle(
-                                        "Use guide as app icon",
-                                        isOn: Binding(
-                                            get: { guideProfileStore.profile.useGuideAppIcon },
-                                            set: { guideProfileStore.setUseGuideAppIcon($0) }
-                                        )
-                                    )
-                                    .disabled(!guideProfileStore.supportsAlternateIcons)
-
-                                    Text(guideProfileStore.iconPreferenceFootnote)
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Tone")
-                                        .font(.subheadline.weight(.semibold))
-                                    Picker("Tone", selection: $experienceProfile.tone) {
-                                        ForEach(ToneStyle.allCases) { tone in
-                                            Text(tone.title).tag(tone)
-                                        }
-                                    }
-                                    .pickerStyle(.segmented)
-                                    Text(experienceProfile.tone.subtitle)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Temperature Units")
-                                        .font(.subheadline.weight(.semibold))
-                                    Picker("Temperature Units", selection: $experienceProfile.tempUnit) {
-                                        ForEach(TemperatureUnit.allCases) { unit in
-                                            Text(unit.rawValue == "F" ? "\u{00B0}F" : "\u{00B0}C").tag(unit)
-                                        }
-                                    }
-                                    .pickerStyle(.segmented)
-                                    Text("Current weather, forecast, drivers, and alerts switch instantly.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-
-                                TrackedStatsSettingsSection(
-                                    trackedStatKeys: $experienceProfile.trackedStatKeys,
-                                    smartStatSwapEnabled: $experienceProfile.smartStatSwapEnabled
-                                )
-
-                                FavoriteSymptomsSettingsSection(
-                                    presets: preferredSymptomPresets(symptomPresets, favoriteCodes: experienceProfile.favoriteSymptomCodes),
-                                    favoriteSymptomCodes: $experienceProfile.favoriteSymptomCodes
-                                )
-
-                                Toggle(isOn: $experienceProfile.lunarSensitivityDeclared) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Prioritize lunar overlays")
-                                            .font(.subheadline.weight(.semibold))
-                                        Text("Keeps lunar markers and pattern summaries more prominent. Observational only.")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                            }
-                        } label: {
-                            Label("Experience", systemImage: "sparkles")
+                Button {
+                    Task { _ = await runUnifiedHealthBackfill() }
+                } label: {
+                    HStack {
+                        if backfillInFlight {
+                            ProgressView().scaleEffect(0.8)
                         }
-                        .padding(.horizontal)
-                        .onChange(of: experienceProfile.mode, initial: false) { _, newValue in
-                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(mode: newValue)) }
-                        }
-                        .onChange(of: experienceProfile.guide, initial: false) { _, newValue in
-                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(guide: newValue)) }
-                        }
-                        .onChange(of: experienceProfile.tone, initial: false) { _, newValue in
-                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(tone: newValue)) }
-                        }
-                        .onChange(of: experienceProfile.tempUnit, initial: false) { _, newValue in
-                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(tempUnit: newValue)) }
-                        }
-                        .onChange(of: experienceProfile.trackedStatKeys, initial: false) { _, newValue in
-                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(trackedStatKeys: newValue)) }
-                        }
-                        .onChange(of: experienceProfile.smartStatSwapEnabled, initial: false) { _, newValue in
-                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(smartStatSwapEnabled: newValue)) }
-                        }
-                        .onChange(of: experienceProfile.favoriteSymptomCodes, initial: false) { _, newValue in
-                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(favoriteSymptomCodes: newValue.map(normalize))) }
-                        }
-                        .onChange(of: experienceProfile.lunarSensitivityDeclared, initial: false) { _, newValue in
-                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(lunarSensitivityDeclared: newValue)) }
-                        }
+                        Text(backfillInFlight ? "Syncing..." : "Sync Last 30 Days")
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(backfillInFlight)
 
-                        GroupBox {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack(alignment: .top) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(profileLocalInsightsEnabled ? "Local insights on" : "Local insights off")
-                                            .font(.headline)
-                                        Text(
-                                            profileUseGPS
-                                            ? ((localHealth?.whereInfo?.zip ?? localHealthZip).isEmpty ? "Using GPS for your area" : "Using GPS for your area • ZIP \(localHealth?.whereInfo?.zip ?? localHealthZip)")
-                                            : ((localHealth?.whereInfo?.zip ?? localHealthZip).isEmpty ? "Add a ZIP code to improve local conditions" : "ZIP \(localHealth?.whereInfo?.zip ?? localHealthZip)")
-                                        )
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                        if let updated = LocalConditionsFormatting.asofText(localHealth?.asof) {
-                                            Text("Last updated \(updated)")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                    Spacer()
-                                    Button("Open Local Conditions") {
-                                        showLocalConditionsSheet = true
-                                    }
-                                    .buttonStyle(.bordered)
-                                }
+                if let requested = experienceProfile.healthkitRequestedAt, let updated = formatUpdated(requested) {
+                    Text("Health permissions last requested \(updated). Reconnect any time if you want richer body context.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                if let msg = backfillMessage ?? healthPermissionsMessage {
+                    Text(msg)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        } label: {
+            Label("Health & Data", systemImage: "heart.text.square")
+        }
+        .padding(.horizontal)
+    }
 
-                                TextField("ZIP code", text: $localHealthZip)
-                                    .textFieldStyle(.roundedBorder)
-                                    .keyboardType(.numberPad)
+    private var missionSettingsAboutSection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("See what Gaia Eyes watches, how it personalizes over time, what the research context looks like, and what the app does not claim.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
 
-                                Toggle("Use GPS", isOn: $profileUseGPS)
-                                Toggle("Enable local insights", isOn: $profileLocalInsightsEnabled)
+                NavigationLink(
+                    destination: UnderstandingGaiaEyesView(
+                        profile: currentGuideProfile
+                    )
+                ) {
+                    Label("Open Understanding Gaia Eyes", systemImage: "info.circle")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        } label: {
+            Label("About Gaia Eyes", systemImage: "info.circle")
+        }
+        .padding(.horizontal)
+    }
 
-                                Button(action: { Task { await saveProfileLocation() } }) {
-                                    HStack {
-                                        if profileLocationSaving {
-                                            ProgressView().scaleEffect(0.8)
-                                        }
-                                        Text(profileLocationSaving ? "Saving..." : "Save Location")
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(profileLocationSaving)
+    private var missionSettingsHelpSection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Troubleshooting, billing answers, privacy basics, and contact paths live in the shared Help Center.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
 
-                                if let msg = profileLocationMessage {
-                                    Text(msg)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        } label: {
-                            Label("Your Signals", systemImage: "location.fill")
-                        }
-                        .padding(.horizontal)
+                NavigationLink(destination: HelpCenterView(context: helpCenterContext)) {
+                    Label("Open Help Center", systemImage: "questionmark.circle")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        } label: {
+            Label("Help & Support", systemImage: "questionmark.circle")
+        }
+        .padding(.horizontal)
+    }
 
-                        GroupBox {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Use Health data to improve sleep, heart-rate, recovery, and pattern context. Gaia only reads the domains it can actually use.")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-
-                                Button {
-                                    Task { _ = await requestHealthPermissionsForOnboarding() }
-                                } label: {
-                                    HStack {
-                                        Text("Request / Update Health Permissions")
-                                        Spacer()
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.borderedProminent)
-
-                                Button {
-                                    Task { _ = await runUnifiedHealthBackfill() }
-                                } label: {
-                                    HStack {
-                                        if backfillInFlight {
-                                            ProgressView().scaleEffect(0.8)
-                                        }
-                                        Text(backfillInFlight ? "Syncing..." : "Sync Last 30 Days")
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(backfillInFlight)
-
-                                if let requested = experienceProfile.healthkitRequestedAt, let updated = formatUpdated(requested) {
-                                    Text("Health permissions last requested \(updated). Reconnect any time if you want richer body context.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                if let msg = backfillMessage ?? healthPermissionsMessage {
-                                    Text(msg)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                        } label: {
-                            Label("Health & Data", systemImage: "heart.text.square")
-                        }
-                        .padding(.horizontal)
-
-                        GroupBox {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("See what Gaia Eyes watches, how it personalizes over time, what the research context looks like, and what the app does not claim.")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-
-                                NavigationLink(
-                                    destination: UnderstandingGaiaEyesView(
-                                        profile: currentGuideProfile
-                                    )
-                                ) {
-                                    Label("Open Understanding Gaia Eyes", systemImage: "info.circle")
-                                        .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.borderedProminent)
-                            }
-                        } label: {
-                            Label("About Gaia Eyes", systemImage: "info.circle")
-                        }
-                        .padding(.horizontal)
-
-                        GroupBox {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Troubleshooting, billing answers, privacy basics, and contact paths live in the shared Help Center.")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-
-                                NavigationLink(destination: HelpCenterView(context: helpCenterContext)) {
-                                    Label("Open Help Center", systemImage: "questionmark.circle")
-                                        .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.borderedProminent)
-                            }
-                        } label: {
-                            Label("Help & Support", systemImage: "questionmark.circle")
-                        }
-                        .padding(.horizontal)
-
+    @ViewBuilder
+    private var missionSettingsContextAndNotificationSections: some View {
+        let environmentalTags = missionSettingsTagBuckets.environmental
+        let healthTags = missionSettingsTagBuckets.health
                         GroupBox {
                             DisclosureGroup(isExpanded: $showPersonalContextSettings) {
                                 VStack(alignment: .leading, spacing: 10) {
@@ -15261,6 +15299,10 @@ struct ContentView: View {
                         }
                         .padding(.horizontal)
 
+    }
+
+    @ViewBuilder
+    private var missionSettingsAdvancedSection: some View {
                         DisclosureGroup(isExpanded: $showTools) {
                             VStack(spacing: 12) {
                                 GroupBox {
@@ -15431,12 +15473,7 @@ struct ContentView: View {
                             }
                         }
                         .padding(.horizontal)
-                    }
-                    .padding(.vertical, 16)
-                }
-                .navigationTitle("Settings")
-                .navigationBarTitleDisplayMode(.inline)
-            }
+
     }
 
     private var contentViewBody: some View {
