@@ -6,6 +6,17 @@
   const memberRoutes = cfg.memberRoutes && typeof cfg.memberRoutes === "object" ? cfg.memberRoutes : {};
   const supportUrl = cfg.supportUrl || "/support/";
   const publicLinks = cfg.publicLinks && typeof cfg.publicLinks === "object" ? cfg.publicLinks : {};
+  const DEFAULT_TRACKED_STAT_KEYS = ["resting_hr", "respiratory", "hrv", "spo2", "steps"];
+  const TRACKED_STAT_OPTIONS = [
+    { key: "resting_hr", label: "Resting HR", detail: "Baseline shift or daily average" },
+    { key: "respiratory", label: "Respiratory", detail: "Breathing-rate shift or average" },
+    { key: "spo2", label: "SpO₂", detail: "Oxygen average" },
+    { key: "hrv", label: "HRV", detail: "Recovery average" },
+    { key: "temperature", label: "Temperature", detail: "Temperature deviation" },
+    { key: "steps", label: "Steps", detail: "Today’s activity" },
+    { key: "heart_range", label: "Heart range", detail: "Min and max heart rate" },
+    { key: "blood_pressure", label: "Blood pressure", detail: "Average blood pressure" },
+  ];
 
   const esc = (value) =>
     String(value || "")
@@ -14,6 +25,30 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+
+  const normalizeTrackedStatKey = (value) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/-/g, "_")
+      .replace(/\s+/g, "_");
+
+  const normalizeTrackedStatKeys = (value) => {
+    const source = Array.isArray(value)
+      ? value
+      : typeof value === "string"
+        ? value.split(",")
+        : [];
+    const normalized = [];
+    source.forEach((item) => {
+      const key = normalizeTrackedStatKey(item);
+      if (!key) return;
+      if (!TRACKED_STAT_OPTIONS.some((option) => option.key === key)) return;
+      if (normalized.includes(key)) return;
+      if (normalized.length < 5) normalized.push(key);
+    });
+    return normalized.length ? normalized : [...DEFAULT_TRACKED_STAT_KEYS];
+  };
 
   const pillClass = (severity) => {
     const s = String(severity || "").toLowerCase();
@@ -915,6 +950,34 @@
     return parsed;
   };
 
+  const putJson = async (url, token, body) => {
+    const response = await fetch(url, {
+      method: "PUT",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body || {}),
+    });
+    const raw = await response.text();
+    let parsed = null;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      parsed = null;
+    }
+    if (!response.ok) {
+      const detail =
+        (parsed && (parsed.error || parsed.detail || parsed.message || parsed.friendly_error)) ||
+        (raw ? raw.slice(0, 180) : "");
+      throw new Error(`HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
+    }
+    return parsed;
+  };
+
   const fetchSymptomCodes = async (token) => {
     const url = routeFor("symptomCodes");
     if (!url) throw new Error("Symptom code route is not configured.");
@@ -940,6 +1003,8 @@
   const memberHubLoaders = (token) => {
     const timezone = (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || "America/Chicago";
     return {
+      profilePreferences: () =>
+        fetchJson(routeFor("profilePreferences"), token).then((payload) => extractProfilePreferences(payload) || {}),
       features: () => fetchJsonWithParams(routeFor("features"), token, { tz: timezone }),
       currentSymptoms: () => fetchJsonWithParams(routeFor("currentSymptoms"), token, { window_hours: 12 }),
       dailyCheckIn: () => fetchJson(routeFor("dailyCheckIn"), token),
@@ -956,6 +1021,7 @@
   };
 
   const defaultLoadingKeys = () => ({
+    profilePreferences: false,
     features: false,
     currentSymptoms: false,
     dailyCheckIn: false,
@@ -1044,7 +1110,7 @@
       return;
     }
     if (key === "body") {
-      hydrateMemberKeys(root, state, ["currentSymptoms", "dailyCheckIn", "lunar", "features"]);
+      hydrateMemberKeys(root, state, ["profilePreferences", "currentSymptoms", "dailyCheckIn", "lunar", "features"]);
       return;
     }
     if (key === "patterns") {
@@ -1060,12 +1126,15 @@
       hydrateMemberKeys(root, state, ["currentSymptoms", "dailyCheckIn", "outlook"]);
       return;
     }
+    if (key === "settings") {
+      hydrateMemberKeys(root, state, ["profilePreferences"]);
+    }
   };
 
   const scheduleIdleHydration = (root, state) => {
     const idle = window.requestIdleCallback || ((callback) => window.setTimeout(callback, 180));
     idle(() => {
-      hydrateMemberKeys(root, state, ["currentSymptoms", "dailyCheckIn", "lunar", "patternsSummary"]);
+      hydrateMemberKeys(root, state, ["profilePreferences", "currentSymptoms", "dailyCheckIn", "lunar", "patternsSummary"]);
       idle(() => {
         hydrateMemberKeys(root, state, ["features", "outlook"]);
       });
@@ -1377,9 +1446,36 @@
     root.querySelectorAll("[data-tab-target]").forEach((node) => {
       node.addEventListener("click", () => {
         state.ui.activeTab = normalizeTabKey(node.getAttribute("data-tab-target"));
+        if (state.ui.activeTab === "guide") {
+          writeGuideSeenSignature(state);
+        }
         writeTabHash(state.ui.activeTab);
         hydrateTabData(root, state, state.ui.activeTab);
         rerender();
+      });
+    });
+
+    root.querySelectorAll("[data-tracked-stat-toggle]").forEach((node) => {
+      node.addEventListener("click", async () => {
+        const key = normalizeTrackedStatKey(node.getAttribute("data-tracked-stat-toggle"));
+        if (!key) return;
+        const current = profileTrackedStatKeys(extractProfilePreferences(state.member.profilePreferences));
+        let next = current.slice();
+        if (next.includes(key)) {
+          next = next.filter((item) => item !== key);
+        } else if (next.length < 5) {
+          next.push(key);
+        }
+        if (!next.length) next = [...DEFAULT_TRACKED_STAT_KEYS];
+        await saveProfilePreferences(root, state, { tracked_stat_keys: next });
+      });
+    });
+
+    root.querySelectorAll("[data-smart-swap-toggle]").forEach((node) => {
+      node.addEventListener("change", async () => {
+        await saveProfilePreferences(root, state, {
+          smart_stat_swap_enabled: !!node.checked,
+        });
       });
     });
 
@@ -1860,12 +1956,68 @@
       .replace(/[_-]+/g, " ")
       .replace(/\b\w/g, (match) => match.toUpperCase());
 
+  const guideSeenStorageKey = (state) => {
+    const identity = textOrEmpty(state && state.authCtx && state.authCtx.email).toLowerCase() || "anon";
+    return `gaia.guide.last_seen_signature.${identity}`;
+  };
+
+  const readGuideSeenSignature = (state) => {
+    try {
+      return window.localStorage.getItem(guideSeenStorageKey(state)) || "";
+    } catch (_) {
+      return "";
+    }
+  };
+
+  const writeGuideSeenSignature = (state) => {
+    const signature = guideStateSignature(state);
+    try {
+      if (signature) {
+        window.localStorage.setItem(guideSeenStorageKey(state), signature);
+      } else {
+        window.localStorage.removeItem(guideSeenStorageKey(state));
+      }
+    } catch (_) {}
+  };
+
   const isOutlookHealthRelevantDriver = (driver) => {
     const key = textOrEmpty(driver && driver.key).toLowerCase();
     const label = textOrEmpty(driver && driver.label).toLowerCase();
     const detail = textOrEmpty(driver && driver.detail).toLowerCase();
     if (key === "radio" || key === "radio_blackout" || key === "radio-blackout") return false;
     return !label.includes("radio blackout") && !detail.includes("radio blackout");
+  };
+
+  const guideStateSignature = (state) => {
+    const currentSymptoms = extractCurrentSymptoms(state && state.member && state.member.currentSymptoms);
+    const followUp = firstPendingFollowUp(currentSymptoms);
+    const dailyCheckIn = extractDailyCheckIn(state && state.member && state.member.dailyCheckIn);
+    const prompt = dailyCheckIn && dailyCheckIn.prompt ? dailyCheckIn.prompt : null;
+    const earthscopeSummary = resolveEarthscopeSummary(
+      state && state.dashboard && state.dashboard.earthscopeSummary,
+      (state && state.dashboard && (state.dashboard.memberPost || state.dashboard.publicPost)) || null,
+      (state && state.dashboard && state.dashboard.driversCompact) || []
+    );
+    const parts = [];
+    if (prompt && textOrEmpty(prompt.status).toLowerCase() !== "answered") {
+      parts.push(`checkin:${textOrEmpty(prompt.id)}:${textOrEmpty(prompt.day)}:${textOrEmpty(prompt.status) || "ready"}`);
+    }
+    if (followUp) {
+      const followUpPrompt = maybeObject(followUp.pending_follow_up);
+      parts.push(
+        `followup:${textOrEmpty(followUpPrompt && followUpPrompt.id)}:${textOrEmpty(followUp && followUp.id)}:${textOrEmpty(followUpPrompt && followUpPrompt.status) || "pending"}`
+      );
+    }
+    if (earthscopeSummary) {
+      parts.push(`summary:${earthscopeSummary}`);
+    }
+    return parts.join("|");
+  };
+
+  const guideHasUnseen = (state) => {
+    const signature = guideStateSignature(state);
+    if (!signature) return false;
+    return readGuideSeenSignature(state) !== signature;
   };
 
   const asNumber = (value) => {
@@ -1991,6 +2143,13 @@
 
   const extractFeatures = (payload) => extractEnvelopeData(payload);
 
+  const extractProfilePreferences = (payload) => {
+    const direct = maybeObject(payload);
+    if (!direct) return null;
+    if (maybeObject(direct.preferences)) return direct.preferences;
+    return extractEnvelopeData(payload);
+  };
+
   const readPathValue = (source, path) =>
     textOrEmpty(path)
       .split(".")
@@ -2016,7 +2175,15 @@
       .map((item) => textOrEmpty(item && item.label))
       .filter(Boolean);
 
-  const healthStatCards = (features) => {
+  const profileTrackedStatKeys = (profilePreferences) =>
+    normalizeTrackedStatKeys(profilePreferences && profilePreferences.tracked_stat_keys);
+
+  const profileSmartSwapEnabled = (profilePreferences) =>
+    profilePreferences && typeof profilePreferences.smart_stat_swap_enabled === "boolean"
+      ? profilePreferences.smart_stat_swap_enabled
+      : true;
+
+  const healthStatCards = (features, profilePreferences) => {
     if (!features || typeof features !== "object") return [];
     const cards = [];
     const restingHrDelta = asNumber(featureValue(features, "resting_hr_baseline_delta", "restingHrBaselineDelta"));
@@ -2034,40 +2201,109 @@
     const bpDia = asNumber(featureValue(features, "bp_dia_avg", "bpDiaAvg"));
 
     if (Number.isFinite(restingHrDelta)) {
-      cards.push({ label: "Resting HR Δ", value: `${restingHrDelta > 0 ? "+" : ""}${restingHrDelta.toFixed(1)} bpm`, detail: restingHrDelta > 0 ? "above usual" : "below usual" });
+      cards.push({
+        key: "resting_hr",
+        label: "Resting HR Δ",
+        value: `${restingHrDelta > 0 ? "+" : ""}${restingHrDelta.toFixed(1)} bpm`,
+        detail: restingHrDelta > 0 ? "above usual" : "below usual",
+        salience: Math.max(0, Math.min(1, Math.abs(restingHrDelta) / 8)),
+      });
+    } else if (Number.isFinite(asNumber(featureValue(features, "resting_hr_avg", "restingHrAvg")))) {
+      const restingHrAvg = asNumber(featureValue(features, "resting_hr_avg", "restingHrAvg"));
+      cards.push({
+        key: "resting_hr",
+        label: "Resting HR",
+        value: `${Math.round(restingHrAvg)} bpm`,
+        detail: "daily average",
+        salience: 0.16,
+      });
     }
     if (Number.isFinite(respiratoryDelta)) {
-      cards.push({ label: "Respiratory Δ", value: `${respiratoryDelta > 0 ? "+" : ""}${respiratoryDelta.toFixed(1)} br/min`, detail: respiratoryDelta > 0 ? "above usual" : "below usual" });
+      cards.push({
+        key: "respiratory",
+        label: "Respiratory Δ",
+        value: `${respiratoryDelta > 0 ? "+" : ""}${respiratoryDelta.toFixed(1)} br/min`,
+        detail: respiratoryDelta > 0 ? "above usual" : "below usual",
+        salience: Math.max(0, Math.min(1, Math.abs(respiratoryDelta) / 3)),
+      });
     } else if (Number.isFinite(respiratoryAvg)) {
-      cards.push({ label: "Respiratory", value: `${respiratoryAvg.toFixed(1)} br/min`, detail: "daily average" });
+      cards.push({ key: "respiratory", label: "Respiratory", value: `${respiratoryAvg.toFixed(1)} br/min`, detail: "daily average", salience: 0.16 });
     }
     if (Number.isFinite(spo2)) {
-      cards.push({ label: "SpO₂", value: `${Math.round(spo2)}%`, detail: "daily average" });
+      cards.push({
+        key: "spo2",
+        label: "SpO₂",
+        value: `${Math.round(spo2)}%`,
+        detail: "daily average",
+        salience: Math.max(0, Math.min(1, (96 - spo2) / 4)),
+      });
     }
     if (Number.isFinite(hrv)) {
-      cards.push({ label: "HRV", value: `${Math.round(hrv)} ms`, detail: "daily average" });
+      cards.push({ key: "hrv", label: "HRV", value: `${Math.round(hrv)} ms`, detail: "daily average", salience: 0.12 });
     }
     if (Number.isFinite(tempDeviation)) {
-      cards.push({ label: "Temp Δ", value: `${tempDeviation > 0 ? "+" : ""}${tempDeviation.toFixed(1)}°`, detail: tempDeviation > 0 ? "above usual" : "below usual" });
+      cards.push({
+        key: "temperature",
+        label: "Temp Δ",
+        value: `${tempDeviation > 0 ? "+" : ""}${tempDeviation.toFixed(1)}°`,
+        detail: tempDeviation > 0 ? "above usual" : "below usual",
+        salience: Math.max(0, Math.min(1, Math.abs(tempDeviation) / 3)),
+      });
     }
     if (Number.isFinite(steps)) {
-      cards.push({ label: "Steps", value: `${Math.round(steps)}`, detail: "today" });
+      cards.push({ key: "steps", label: "Steps", value: `${Math.round(steps)}`, detail: "today", salience: 0.08 });
     }
     if (Number.isFinite(hrMin) || Number.isFinite(hrMax)) {
       cards.push({
+        key: "heart_range",
         label: "Heart range",
         value: `${Number.isFinite(hrMin) ? Math.round(hrMin) : "—"}-${Number.isFinite(hrMax) ? Math.round(hrMax) : "—"} bpm`,
         detail: "today",
+        salience: 0.06,
       });
     }
     if (Number.isFinite(bpSys) || Number.isFinite(bpDia)) {
       cards.push({
+        key: "blood_pressure",
         label: "Blood pressure",
         value: `${Number.isFinite(bpSys) ? Math.round(bpSys) : "—"}/${Number.isFinite(bpDia) ? Math.round(bpDia) : "—"}`,
         detail: "average",
+        salience: 0.06,
       });
     }
-    return cards;
+
+    const cardsByKey = new Map(cards.map((card) => [card.key, card]));
+    const preferredOrder = [
+      ...profileTrackedStatKeys(profilePreferences),
+      ...DEFAULT_TRACKED_STAT_KEYS.filter((key) => !profileTrackedStatKeys(profilePreferences).includes(key)),
+      ...TRACKED_STAT_OPTIONS.map((option) => option.key).filter((key) => !profileTrackedStatKeys(profilePreferences).includes(key)),
+    ].filter((key, index, source) => source.indexOf(key) === index);
+    const availableOrder = preferredOrder.filter((key) => cardsByKey.has(key));
+    if (!availableOrder.length) return cards;
+
+    const selectedKeys = availableOrder.slice(0, 4);
+    const fifthPinned = availableOrder.slice(4, 5)[0];
+    if (profileSmartSwapEnabled(profilePreferences)) {
+      const dynamic = cards
+        .filter((card) => !selectedKeys.includes(card.key) && Number(card.salience || 0) >= 0.55)
+        .sort((left, right) => {
+          if (left.salience === right.salience) {
+            return preferredOrder.indexOf(left.key) - preferredOrder.indexOf(right.key);
+          }
+          return right.salience - left.salience;
+        })[0];
+      if (dynamic) {
+        selectedKeys.push(dynamic.key);
+      } else if (fifthPinned) {
+        selectedKeys.push(fifthPinned);
+      }
+    } else if (fifthPinned) {
+      selectedKeys.push(fifthPinned);
+    }
+    for (const key of availableOrder) {
+      if (!selectedKeys.includes(key) && selectedKeys.length < 5) selectedKeys.push(key);
+    }
+    return selectedKeys.map((key) => cardsByKey.get(key)).filter(Boolean);
   };
 
   const sleepStageCards = (features) => {
@@ -2082,8 +2318,11 @@
   };
 
   const missionNavCard = (state, key, title, body) => `
-    <button class="gaia-dashboard__nav-card${state.ui.activeTab === key ? " is-active" : ""}" type="button" data-tab-target="${esc(key)}">
-      <strong>${esc(title)}</strong>
+    <button class="gaia-dashboard__nav-card${state.ui.activeTab === key ? " is-active" : ""}${key === "guide" && guideHasUnseen(state) ? " gaia-dashboard__nav-card--unseen" : ""}" type="button" data-tab-target="${esc(key)}">
+      <div class="gaia-dashboard__nav-card-head">
+        <strong>${esc(title)}</strong>
+        ${key === "guide" && guideHasUnseen(state) ? '<span class="gaia-dashboard__nav-badge">New</span>' : ""}
+      </div>
       <span>${esc(body)}</span>
     </button>
   `;
@@ -2529,6 +2768,7 @@
   const renderBodySection = (state) => {
     const currentSymptoms = extractCurrentSymptoms(state.member.currentSymptoms);
     const features = extractFeatures(state.member.features);
+    const profilePreferences = extractProfilePreferences(state.member.profilePreferences);
     const lunar = state.member.lunar && typeof state.member.lunar === "object" ? state.member.lunar : null;
     const currentSymptomsLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.currentSymptoms);
     const featuresLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.features);
@@ -2538,7 +2778,7 @@
     const lunarError = textOrEmpty(state.member.errors && state.member.errors.lunar);
     const symptomItems = maybeArray(currentSymptoms && currentSymptoms.items).slice(0, 4);
     const summary = currentSymptoms && currentSymptoms.summary ? currentSymptoms.summary : {};
-    const healthCards = healthStatCards(features).slice(0, 8);
+    const healthCards = healthStatCards(features, profilePreferences).slice(0, 5);
     const sleepCards = sleepStageCards(features);
     const topDriver = maybeArray(currentSymptoms && currentSymptoms.contributing_drivers)[0];
 
@@ -2662,6 +2902,9 @@
                       : '<div class="gaia-dashboard__empty">Health stats appear here once the app has synced body data to your account.</div>'
                     : ""
               }
+              <div class="gaia-dashboard__section-actions">
+                <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="settings">Edit tracked stats</button>
+              </div>
             </article>
             <article class="gaia-dashboard__card">
               <div class="gaia-dashboard__card-title-row">
@@ -2899,9 +3142,39 @@
     `;
   };
 
+  const saveProfilePreferences = async (root, state, partial) => {
+    const token = state && state.authCtx ? state.authCtx.token : "";
+    const url = routeFor("profilePreferences");
+    if (!token || !url) return;
+    const previous = extractProfilePreferences(state.member.profilePreferences) || {};
+    const optimistic = { ...previous, ...partial };
+    state.member.profilePreferences = optimistic;
+    state.ui.profilePreferencesSaving = true;
+    state.ui.profilePreferencesStatus = "Saving tracked stats…";
+    renderMemberHub(root, state);
+    try {
+      const payload = await putJson(url, token, partial);
+      state.member.profilePreferences = extractProfilePreferences(payload) || optimistic;
+      delete state.member.errors.profilePreferences;
+      state.ui.profilePreferencesStatus = "Tracked stats updated.";
+    } catch (err) {
+      state.member.profilePreferences = previous;
+      state.member.errors.profilePreferences = err && err.message ? err.message : String(err);
+      state.ui.profilePreferencesStatus = state.member.errors.profilePreferences;
+    } finally {
+      state.ui.profilePreferencesSaving = false;
+      renderMemberHub(root, state);
+    }
+  };
+
   const renderSettingsSection = (state) => {
     const authCtx = state.authCtx || {};
     const isMember = state.dashboard.entitled === true || !!state.dashboard.memberPost;
+    const profilePreferences = extractProfilePreferences(state.member.profilePreferences) || {};
+    const selectedTrackedStats = profileTrackedStatKeys(profilePreferences);
+    const smartSwapEnabled = profileSmartSwapEnabled(profilePreferences);
+    const profilePreferencesLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.profilePreferences);
+    const profilePreferencesStatus = textOrEmpty(state.ui.profilePreferencesStatus || state.member.errors.profilePreferences);
     return `
       <section class="gaia-dashboard__section${state.ui.activeTab === "settings" ? " is-active" : ""}" data-section="settings">
         <div class="gaia-dashboard__section-head">
@@ -2947,6 +3220,44 @@
             </div>
           </article>
         </div>
+        <article class="gaia-dashboard__card">
+          <div class="gaia-dashboard__card-title-row">
+            <div>
+              <span class="gaia-dashboard__eyebrow">Body stats</span>
+              <h4 class="gaia-dashboard__card-title">Tracked stat bar</h4>
+            </div>
+          </div>
+          <p class="gaia-dashboard__card-copy">Choose up to five default body stats. When smart swap is on, Gaia can rotate a more relevant stat into the last slot when something stands out.</p>
+          ${
+            profilePreferencesLoading && !state.member.profilePreferences
+              ? '<div class="gaia-dashboard__empty">Loading your stat preferences…</div>'
+              : `
+                <div class="gaia-dashboard__symptom-grid">
+                  ${TRACKED_STAT_OPTIONS.map(
+                    (option) => `
+                      <button
+                        class="gaia-dashboard__symptom-pill${selectedTrackedStats.includes(option.key) ? " is-selected" : ""}"
+                        type="button"
+                        data-tracked-stat-toggle="${esc(option.key)}"
+                        ${!selectedTrackedStats.includes(option.key) && selectedTrackedStats.length >= 5 ? "disabled" : ""}
+                      >
+                        <span class="gaia-dashboard__symptom-pill-title">${esc(option.label)}</span>
+                        <span class="gaia-dashboard__symptom-pill-copy">${esc(option.detail)}</span>
+                      </button>
+                    `
+                  ).join("")}
+                </div>
+                <label class="gaia-dashboard__toggle-chip">
+                  <input type="checkbox" data-smart-swap-toggle="1" ${smartSwapEnabled ? "checked" : ""} />
+                  <span>
+                    <strong>Smart swap the last slot</strong>
+                    <span class="gaia-dashboard__helper">Keeps four pinned stats stable and lets one slot rotate when another body stat matters more.</span>
+                  </span>
+                </label>
+              `
+          }
+          ${profilePreferencesStatus ? `<div class="gaia-dashboard__status-note">${esc(profilePreferencesStatus)}</div>` : ""}
+        </article>
         <article class="gaia-dashboard__card">
           <div class="gaia-dashboard__card-title-row">
             <div>
@@ -3147,6 +3458,7 @@
       const state = {
         dashboard: payload,
         member: {
+          profilePreferences: null,
           features: null,
           currentSymptoms: null,
           dailyCheckIn: null,
@@ -3197,10 +3509,16 @@
           loadingKeys: defaultLoadingKeys(),
         },
       };
+      if (state.ui.activeTab === "guide") {
+        writeGuideSeenSignature(state);
+      }
       renderMemberHub(root, state);
       if (!root.dataset.gaiaHashBound) {
         window.addEventListener("hashchange", () => {
           state.ui.activeTab = currentTabFromHash();
+          if (state.ui.activeTab === "guide") {
+            writeGuideSeenSignature(state);
+          }
           hydrateTabData(root, state, state.ui.activeTab);
           renderMemberHub(root, state);
         });

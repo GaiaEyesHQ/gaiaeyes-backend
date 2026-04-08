@@ -41,6 +41,7 @@ add_action('wp_enqueue_scripts', function () {
         'dailyCheckIn' => esc_url_raw(rest_url('gaia/v1/member/daily-checkin')),
         'lunar' => esc_url_raw(rest_url('gaia/v1/member/lunar')),
         'localCheck' => esc_url_raw(rest_url('gaia/v1/member/local-check')),
+        'profilePreferences' => esc_url_raw(rest_url('gaia/v1/member/profile-preferences')),
     ];
 
     wp_localize_script('gaia-dashboard', 'GAIA_DASHBOARD_CFG', [
@@ -158,10 +159,13 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__nav-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
         @media(min-width:900px){.gaia-dashboard__nav-grid{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));}}
         .gaia-dashboard__nav-grid--hub{margin-top:2px}
-        .gaia-dashboard__nav-card{padding:14px;border-radius:14px;background:#151c28;border:1px solid rgba(255,255,255,.08);cursor:pointer;text-align:left;color:#e8edf7}
+        .gaia-dashboard__nav-card{padding:14px;border-radius:14px;background:#151c28;border:1px solid rgba(255,255,255,.08);cursor:pointer;text-align:left;color:#e8edf7;position:relative}
         .gaia-dashboard__nav-card.is-active{background:#1e314c;border-color:rgba(156,192,255,.38);box-shadow:0 0 0 1px rgba(156,192,255,.12) inset}
+        .gaia-dashboard__nav-card--unseen{border-color:rgba(84,201,255,.34);box-shadow:0 0 0 1px rgba(84,201,255,.10) inset,0 0 18px rgba(84,201,255,.14)}
+        .gaia-dashboard__nav-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
         .gaia-dashboard__nav-card strong{display:block;font-size:14px}
         .gaia-dashboard__nav-card span{display:block;margin-top:5px;font-size:12px;color:#9da9c1;line-height:1.45}
+        .gaia-dashboard__nav-badge{display:inline-flex;align-items:center;justify-content:center;padding:4px 9px;border-radius:999px;background:rgba(43,140,255,.16);border:1px solid rgba(84,201,255,.28);color:#8fdcff;font-size:11px;font-weight:700;letter-spacing:.03em;white-space:nowrap}
         .gaia-dashboard__grid{display:grid;grid-template-columns:1fr;gap:14px}
         @media(min-width:900px){.gaia-dashboard__grid--2{grid-template-columns:repeat(2,minmax(0,1fr));}}
         @media(min-width:1200px){.gaia-dashboard__grid--3{grid-template-columns:repeat(3,minmax(0,1fr));}}
@@ -253,6 +257,7 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__symptom-search{width:100%;border-radius:12px;border:1px solid rgba(255,255,255,.10);background:#101826;color:#e8edf7;padding:11px 12px;font-size:14px}
         .gaia-dashboard__symptom-pill{display:flex;flex-direction:column;align-items:flex-start;gap:4px;border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:12px 14px;background:#172130;color:#e8edf7;cursor:pointer;text-align:left;transition:border-color .15s ease,background .15s ease,transform .15s ease}
         .gaia-dashboard__symptom-pill:hover{transform:translateY(-1px);border-color:rgba(156,192,255,.28)}
+        .gaia-dashboard__symptom-pill[disabled]{opacity:.48;cursor:not-allowed;transform:none}
         .gaia-dashboard__symptom-pill.is-selected{border-color:#67a7ff;background:#213150;box-shadow:0 0 0 1px rgba(103,167,255,.16) inset}
         .gaia-dashboard__symptom-pill-title{font-size:14px;font-weight:700;line-height:1.25}
         .gaia-dashboard__symptom-pill-copy{font-size:12px;line-height:1.45;color:#a9b8d4}
@@ -579,6 +584,23 @@ add_action('rest_api_init', function () {
                 'required' => false,
                 'sanitize_callback' => 'sanitize_text_field',
             ],
+        ],
+    ]);
+
+    register_rest_route('gaia/v1', '/member/profile-preferences', [
+        [
+            'methods' => WP_REST_Server::READABLE,
+            'permission_callback' => '__return_true',
+            'callback' => function (WP_REST_Request $request) {
+                return gaia_dashboard_proxy_json($request, '/v1/profile/preferences');
+            },
+        ],
+        [
+            'methods' => WP_REST_Server::EDITABLE,
+            'permission_callback' => '__return_true',
+            'callback' => function (WP_REST_Request $request) {
+                return gaia_dashboard_proxy_json($request, '/v1/profile/preferences', [], 'PUT');
+            },
         ],
     ]);
 });

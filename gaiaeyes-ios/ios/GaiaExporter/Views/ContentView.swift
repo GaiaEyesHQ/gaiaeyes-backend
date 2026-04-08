@@ -2780,6 +2780,7 @@ struct ContentView: View {
     }
 
     private func openGuideHub(focus: GuideHubFocus = .overview) {
+        markGuideStateSeen()
         guideHubFocus = focus
         showGuideSheet = true
     }
@@ -2904,8 +2905,52 @@ struct ContentView: View {
     }
 
     private var guideToolbarButton: some View {
-        GuideEntryButton(guideType: experienceProfile.guide) {
+        GuideEntryButton(guideType: experienceProfile.guide, hasUnseen: hasGuideUpdatesWaiting) {
             openGuideHub()
+        }
+    }
+
+    private var guideUnseenStorageKey: String {
+        let user = (auth.supabaseUserId ?? state.userId)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if user.isEmpty {
+            return "gaia.guide.last_seen_signature"
+        }
+        return "gaia.guide.last_seen_signature.\(user)"
+    }
+
+    private var currentGuideStateSignature: String {
+        var parts: [String] = []
+        if let prompt = dailyCheckInStatus?.prompt,
+           prompt.status != "answered" {
+            parts.append("checkin:\(prompt.id):\(prompt.day):\(prompt.status ?? "ready")")
+        }
+        if let followUp = currentSymptomsSnapshot?.items.first(where: { $0.pendingFollowUp != nil })?.pendingFollowUp {
+            parts.append("followup:\(followUp.id):\(followUp.episodeId):\(followUp.status ?? "pending")")
+        }
+        if let updatedAt = guideEarthscopeUpdatedAt?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !updatedAt.isEmpty {
+            parts.append("summary:\(updatedAt)")
+        } else if let summary = guideEarthscopeSummary?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !summary.isEmpty {
+            parts.append("summary:\(summary)")
+        }
+        return parts.joined(separator: "|")
+    }
+
+    private var hasGuideUpdatesWaiting: Bool {
+        let signature = currentGuideStateSignature
+        guard !signature.isEmpty else { return false }
+        return UserDefaults.standard.string(forKey: guideUnseenStorageKey) != signature
+    }
+
+    private func markGuideStateSeen() {
+        let defaults = UserDefaults.standard
+        let signature = currentGuideStateSignature
+        if signature.isEmpty {
+            defaults.removeObject(forKey: guideUnseenStorageKey)
+        } else {
+            defaults.set(signature, forKey: guideUnseenStorageKey)
         }
     }
 
@@ -11977,14 +12022,18 @@ struct ContentView: View {
         let current: FeaturesToday?
         let updatedText: String?
         let tempUnit: TemperatureUnit
+        let trackedStatKeys: [TrackedStatKey]
+        let smartStatSwapEnabled: Bool
+        let onEditTrackedStats: () -> Void
 
         private struct HighlightStat: Identifiable, Hashable {
-            let id: String
+            let id: TrackedStatKey
             let title: String
             let value: String
             let detail: String
             let progress: Double
             let tint: Color
+            let salience: Double
         }
 
         private struct HighlightTile: View {
@@ -12017,7 +12066,7 @@ struct ContentView: View {
         }
 
         private struct SupportingStat: Identifiable, Hashable {
-            let id: String
+            let id: TrackedStatKey
             let label: String
             let value: String
             let tint: Color
@@ -12066,30 +12115,32 @@ struct ContentView: View {
             return "\(Int(sys.rounded()))/\(Int(dia.rounded()))"
         }
 
-        private var highlightStats: [HighlightStat] {
+        private var allStatCandidates: [HighlightStat] {
             guard let current else { return [] }
             var items: [HighlightStat] = []
 
             if let delta = current.restingHrBaselineDelta?.value {
                 items.append(
                     HighlightStat(
-                        id: "resting_hr_delta",
+                        id: .restingHr,
                         title: "Resting HR Δ",
                         value: signedValue(delta, suffix: " bpm"),
                         detail: deltaDetail(delta),
                         progress: deltaProgress(delta, maxAbs: 8),
-                        tint: GaugePalette.mild
+                        tint: GaugePalette.mild,
+                        salience: deltaProgress(delta, maxAbs: 8)
                     )
                 )
             } else if let resting = current.restingHrAvg?.value {
                 items.append(
                     HighlightStat(
-                        id: "resting_hr_avg",
+                        id: .restingHr,
                         title: "Resting HR",
                         value: "\(Int(resting.rounded())) bpm",
                         detail: "daily average",
                         progress: absoluteProgress(resting, max: 90),
-                        tint: GaugePalette.mild
+                        tint: GaugePalette.mild,
+                        salience: 0.16
                     )
                 )
             }
@@ -12097,23 +12148,25 @@ struct ContentView: View {
             if let delta = current.respiratoryRateBaselineDelta?.value {
                 items.append(
                     HighlightStat(
-                        id: "respiratory_delta",
+                        id: .respiratory,
                         title: "Respiratory Δ",
                         value: signedValue(delta, suffix: " br/min"),
                         detail: deltaDetail(delta, threshold: 0.2),
                         progress: deltaProgress(delta, maxAbs: 3),
-                        tint: GaugePalette.low
+                        tint: GaugePalette.low,
+                        salience: deltaProgress(delta, maxAbs: 3)
                     )
                 )
             } else if let rate = current.respiratoryRateSleepAvg?.value ?? current.respiratoryRateAvg?.value {
                 items.append(
                     HighlightStat(
-                        id: "respiratory_avg",
+                        id: .respiratory,
                         title: "Respiratory",
                         value: plainValue(rate, suffix: " br/min"),
                         detail: current.respiratoryRateSleepAvg?.value != nil ? "sleep average" : "daily average",
                         progress: absoluteProgress(rate, max: 20),
-                        tint: GaugePalette.low
+                        tint: GaugePalette.low,
+                        salience: 0.16
                     )
                 )
             }
@@ -12122,12 +12175,13 @@ struct ContentView: View {
                 let converted = LocalConditionsFormatting.convertTempDelta(rawDelta, unit: tempUnit)
                 items.append(
                     HighlightStat(
-                        id: "temperature_delta",
+                        id: .temperature,
                         title: "Temp Δ",
                         value: LocalConditionsFormatting.formatTemperatureDelta(rawDelta, unit: tempUnit),
                         detail: deltaDetail(converted, threshold: tempUnit == .fahrenheit ? 0.35 : 0.2),
                         progress: deltaProgress(converted, maxAbs: tempUnit == .fahrenheit ? 3.0 : 1.7),
-                        tint: GaugePalette.elevated
+                        tint: GaugePalette.elevated,
+                        salience: deltaProgress(converted, maxAbs: tempUnit == .fahrenheit ? 3.0 : 1.7)
                     )
                 )
             }
@@ -12135,12 +12189,13 @@ struct ContentView: View {
             if let hrv = current.hrvAvg?.value {
                 items.append(
                     HighlightStat(
-                        id: "hrv",
+                        id: .hrv,
                         title: "HRV",
                         value: "\(Int(hrv.rounded()))",
                         detail: "daily average",
                         progress: absoluteProgress(hrv, max: 70),
-                        tint: GaugePalette.low
+                        tint: GaugePalette.low,
+                        salience: 0.12
                     )
                 )
             }
@@ -12148,12 +12203,13 @@ struct ContentView: View {
             if let spo2 = current.spo2AvgDisplay {
                 items.append(
                     HighlightStat(
-                        id: "spo2",
+                        id: .spo2,
                         title: "SpO₂",
                         value: String(format: "%.0f%%", spo2),
                         detail: "daily average",
                         progress: LocalConditionsFormatting.clamped((spo2 - 90.0) / 10.0),
-                        tint: GaugePalette.mild
+                        tint: GaugePalette.mild,
+                        salience: LocalConditionsFormatting.clamped((96.0 - spo2) / 4.0)
                     )
                 )
             }
@@ -12161,17 +12217,92 @@ struct ContentView: View {
             if let steps = current.stepsTotal?.value {
                 items.append(
                     HighlightStat(
-                        id: "steps",
+                        id: .steps,
                         title: "Steps",
                         value: "\(Int(steps.rounded()))",
                         detail: "today so far",
                         progress: absoluteProgress(steps, max: 10000),
-                        tint: GaugePalette.low
+                        tint: GaugePalette.low,
+                        salience: 0.08
                     )
                 )
             }
 
-            return Array(items.prefix(3))
+            if let heartRateRangeText {
+                items.append(
+                    HighlightStat(
+                        id: .heartRange,
+                        title: "Heart range",
+                        value: heartRateRangeText,
+                        detail: "today",
+                        progress: 0.2,
+                        tint: GaugePalette.low,
+                        salience: 0.06
+                    )
+                )
+            }
+
+            if let bloodPressureText {
+                items.append(
+                    HighlightStat(
+                        id: .bloodPressure,
+                        title: "Blood pressure",
+                        value: bloodPressureText,
+                        detail: "average",
+                        progress: 0.2,
+                        tint: GaugePalette.mild,
+                        salience: 0.06
+                    )
+                )
+            }
+
+            return items
+        }
+
+        private var preferredKeyOrder: [TrackedStatKey] {
+            var order: [TrackedStatKey] = []
+            for key in trackedStatKeys where !order.contains(key) {
+                order.append(key)
+            }
+            for key in TrackedStatKey.defaultSelection where !order.contains(key) {
+                order.append(key)
+            }
+            for key in TrackedStatKey.allCases where !order.contains(key) {
+                order.append(key)
+            }
+            return order
+        }
+
+        private var highlightStats: [HighlightStat] {
+            let candidatesByKey = Dictionary(uniqueKeysWithValues: allStatCandidates.map { ($0.id, $0) })
+            let availableOrder = preferredKeyOrder.filter { candidatesByKey[$0] != nil }
+            guard !availableOrder.isEmpty else { return [] }
+
+            var selectedKeys = Array(availableOrder.prefix(4))
+            let fifthPinned = availableOrder.dropFirst(4).first
+
+            if smartStatSwapEnabled,
+               let dynamic = allStatCandidates
+                .filter({ !selectedKeys.contains($0.id) && $0.salience >= 0.55 })
+                .sorted(by: { lhs, rhs in
+                    if lhs.salience == rhs.salience {
+                        return preferredKeyOrder.firstIndex(of: lhs.id) ?? .max < preferredKeyOrder.firstIndex(of: rhs.id) ?? .max
+                    }
+                    return lhs.salience > rhs.salience
+                })
+                .first
+            {
+                selectedKeys.append(dynamic.id)
+            } else if let fifthPinned {
+                selectedKeys.append(fifthPinned)
+            }
+
+            for key in availableOrder where !selectedKeys.contains(key) {
+                guard selectedKeys.count < min(TrackedStatKey.maxPinnedCount, availableOrder.count) else { break }
+                selectedKeys.append(key)
+            }
+
+            return selectedKeys.compactMap { candidatesByKey[$0] }
         }
 
         private var supportingStats: [SupportingStat] {
@@ -12179,23 +12310,37 @@ struct ContentView: View {
             let usedIDs = Set(highlightStats.map(\.id))
             var items: [SupportingStat] = []
 
-            if !usedIDs.contains("steps"), let steps = current.stepsTotal?.value {
-                items.append(SupportingStat(id: "steps", label: "Steps", value: "\(Int(steps.rounded()))", tint: GaugePalette.low))
+            if !usedIDs.contains(.steps), let steps = current.stepsTotal?.value {
+                items.append(SupportingStat(id: .steps, label: "Steps", value: "\(Int(steps.rounded()))", tint: GaugePalette.low))
             }
-            if !usedIDs.contains("hrv"), let hrv = current.hrvAvg?.value {
-                items.append(SupportingStat(id: "hrv", label: "HRV", value: "\(Int(hrv.rounded()))", tint: GaugePalette.low))
+            if !usedIDs.contains(.hrv), let hrv = current.hrvAvg?.value {
+                items.append(SupportingStat(id: .hrv, label: "HRV", value: "\(Int(hrv.rounded()))", tint: GaugePalette.low))
             }
-            if !usedIDs.contains("spo2"), let spo2 = current.spo2AvgDisplay {
-                items.append(SupportingStat(id: "spo2", label: "SpO₂", value: String(format: "%.0f%%", spo2), tint: GaugePalette.mild))
+            if !usedIDs.contains(.spo2), let spo2 = current.spo2AvgDisplay {
+                items.append(SupportingStat(id: .spo2, label: "SpO₂", value: String(format: "%.0f%%", spo2), tint: GaugePalette.mild))
             }
-            if let heartRateRangeText {
-                items.append(SupportingStat(id: "heart_range", label: "Heart range", value: heartRateRangeText, tint: GaugePalette.low))
+            if !usedIDs.contains(.heartRange), let heartRateRangeText {
+                items.append(SupportingStat(id: .heartRange, label: "Heart range", value: heartRateRangeText, tint: GaugePalette.low))
             }
-            if let bloodPressureText {
-                items.append(SupportingStat(id: "blood_pressure", label: "Blood pressure", value: bloodPressureText, tint: GaugePalette.mild))
+            if !usedIDs.contains(.bloodPressure), let bloodPressureText {
+                items.append(SupportingStat(id: .bloodPressure, label: "Blood pressure", value: bloodPressureText, tint: GaugePalette.mild))
             }
-            if !usedIDs.contains("respiratory_avg"), let rate = current.respiratoryRateSleepAvg?.value ?? current.respiratoryRateAvg?.value {
-                items.append(SupportingStat(id: "respiratory_avg", label: "Respiratory", value: plainValue(rate, suffix: " br/min"), tint: GaugePalette.low))
+            if !usedIDs.contains(.respiratory), let rate = current.respiratoryRateSleepAvg?.value ?? current.respiratoryRateAvg?.value {
+                items.append(SupportingStat(id: .respiratory, label: "Respiratory", value: plainValue(rate, suffix: " br/min"), tint: GaugePalette.low))
+            }
+            if !usedIDs.contains(.restingHr), let resting = current.restingHrAvg?.value {
+                items.append(SupportingStat(id: .restingHr, label: "Resting HR", value: "\(Int(resting.rounded())) bpm", tint: GaugePalette.mild))
+            }
+            if !usedIDs.contains(.temperature),
+               let rawDelta = current.temperatureDeviationBaselineDelta?.value ?? current.temperatureDeviation?.value {
+                items.append(
+                    SupportingStat(
+                        id: .temperature,
+                        label: "Temp Δ",
+                        value: LocalConditionsFormatting.formatTemperatureDelta(rawDelta, unit: tempUnit),
+                        tint: GaugePalette.elevated
+                    )
+                )
             }
 
             return items
@@ -12208,6 +12353,13 @@ struct ContentView: View {
             }
         }
 
+        private var highlightRows: [[HighlightStat]] {
+            stride(from: 0, to: highlightStats.count, by: 3).map { start in
+                let end = min(start + 3, highlightStats.count)
+                return Array(highlightStats[start..<end])
+            }
+        }
+
         var body: some View {
             LocalConditionsSurfaceCard(title: "Health Stats", icon: "heart.fill") {
                 VStack(alignment: .leading, spacing: 12) {
@@ -12216,9 +12368,11 @@ struct ContentView: View {
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     } else if !highlightStats.isEmpty {
-                        HStack(spacing: 10) {
-                            ForEach(highlightStats) { stat in
-                                HighlightTile(stat: stat)
+                        ForEach(highlightRows.indices, id: \.self) { index in
+                            HStack(spacing: 10) {
+                                ForEach(highlightRows[index]) { stat in
+                                    HighlightTile(stat: stat)
+                                }
                             }
                         }
                     }
@@ -12236,6 +12390,13 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+
+                    Button(action: onEditTrackedStats) {
+                        Text("Edit tracked stats")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -12617,7 +12778,10 @@ struct ContentView: View {
                         InsightsHealthStatsCard(
                             current: current,
                             updatedText: updatedText,
-                            tempUnit: tempUnit
+                            tempUnit: tempUnit,
+                            trackedStatKeys: experienceProfile.trackedStatKeys,
+                            smartStatSwapEnabled: experienceProfile.smartStatSwapEnabled,
+                            onEditTrackedStats: { showSettingsSheet() }
                         )
 
                         Button(action: onOpenDailyCheckIn) {
@@ -14312,6 +14476,55 @@ struct ContentView: View {
                                         .foregroundColor(.secondary)
                                 }
 
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("Tracked body stats")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("Choose up to five default body stats. When smart swap is on, Gaia can rotate a more relevant stat into the last slot when something stands out.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+
+                                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                                        ForEach(TrackedStatKey.allCases) { key in
+                                            let isSelected = experienceProfile.trackedStatKeys.contains(key)
+                                            Button {
+                                                var updated = experienceProfile.trackedStatKeys
+                                                if isSelected {
+                                                    updated.removeAll { $0 == key }
+                                                } else if updated.count < TrackedStatKey.maxPinnedCount {
+                                                    updated.append(key)
+                                                }
+                                                experienceProfile.trackedStatKeys = updated.isEmpty ? TrackedStatKey.defaultSelection : updated
+                                            } label: {
+                                                VStack(alignment: .leading, spacing: 4) {
+                                                    HStack(spacing: 6) {
+                                                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                                            .foregroundColor(isSelected ? .accentColor : .secondary)
+                                                        Text(key.title)
+                                                            .font(.subheadline.weight(.semibold))
+                                                            .foregroundColor(.primary)
+                                                    }
+                                                    Text(key.subtitle)
+                                                        .font(.caption2)
+                                                        .foregroundColor(.secondary)
+                                                        .fixedSize(horizontal: false, vertical: true)
+                                                }
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(12)
+                                                .background(Color.black.opacity(0.16))
+                                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                        .stroke(isSelected ? Color.accentColor.opacity(0.44) : Color.white.opacity(0.08), lineWidth: 1)
+                                                )
+                                            }
+                                            .buttonStyle(.plain)
+                                            .disabled(!isSelected && experienceProfile.trackedStatKeys.count >= TrackedStatKey.maxPinnedCount)
+                                        }
+                                    }
+
+                                    Toggle("Smartly swap the last slot when another stat matters more", isOn: $experienceProfile.smartStatSwapEnabled)
+                                }
+
                                 Toggle(isOn: $experienceProfile.lunarSensitivityDeclared) {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("Prioritize lunar overlays")
@@ -14337,6 +14550,12 @@ struct ContentView: View {
                         }
                         .onChange(of: experienceProfile.tempUnit, initial: false) { _, newValue in
                             Task { await saveProfilePreferences(UserExperienceProfileUpdate(tempUnit: newValue)) }
+                        }
+                        .onChange(of: experienceProfile.trackedStatKeys, initial: false) { _, newValue in
+                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(trackedStatKeys: newValue)) }
+                        }
+                        .onChange(of: experienceProfile.smartStatSwapEnabled, initial: false) { _, newValue in
+                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(smartStatSwapEnabled: newValue)) }
                         }
                         .onChange(of: experienceProfile.lunarSensitivityDeclared, initial: false) { _, newValue in
                             Task { await saveProfilePreferences(UserExperienceProfileUpdate(lunarSensitivityDeclared: newValue)) }

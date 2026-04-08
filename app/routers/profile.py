@@ -36,6 +36,17 @@ _GUIDE_TYPES = {"cat", "robot", "dog"}
 _TONE_STYLES = {"straight", "balanced", "humorous"}
 _TEMP_UNITS = {"F", "C"}
 _DEFAULT_TEMP_UNIT = "F"
+_TRACKED_STAT_KEYS = {
+    "resting_hr",
+    "respiratory",
+    "spo2",
+    "hrv",
+    "temperature",
+    "steps",
+    "heart_range",
+    "blood_pressure",
+}
+_DEFAULT_TRACKED_STAT_KEYS = ["resting_hr", "respiratory", "hrv", "spo2", "steps"]
 _ONBOARDING_STEPS = {
     "welcome",
     "mode",
@@ -98,6 +109,8 @@ class ProfilePreferencesIn(BaseModel):
     guide: Optional[str] = Field(default=None)
     tone: Optional[str] = Field(default=None)
     temp_unit: Optional[str] = Field(default=None)
+    tracked_stat_keys: Optional[List[str]] = Field(default=None)
+    smart_stat_swap_enabled: Optional[bool] = Field(default=None)
     lunar_sensitivity_declared: Optional[bool] = Field(default=None)
     onboarding_step: Optional[str] = Field(default=None)
     onboarding_completed: Optional[bool] = Field(default=None)
@@ -147,6 +160,27 @@ def _normalize_onboarding_step(value: Optional[str], *, fallback: str) -> str:
     if candidate not in _ONBOARDING_STEPS:
         raise HTTPException(status_code=400, detail="invalid onboarding step")
     return candidate
+
+
+def _normalize_tracked_stat_keys(value: Any) -> List[str]:
+    if value is None:
+        return list(_DEFAULT_TRACKED_STAT_KEYS)
+    if isinstance(value, str):
+        value = [part.strip() for part in value.split(",")]
+    if not isinstance(value, list):
+        raise HTTPException(status_code=400, detail="invalid tracked stat keys")
+    normalized: List[str] = []
+    for item in value:
+        token = str(item or "").strip().lower().replace("-", "_").replace(" ", "_")
+        if not token:
+            continue
+        if token not in _TRACKED_STAT_KEYS:
+            raise HTTPException(status_code=400, detail="invalid tracked stat keys")
+        if token not in normalized:
+            normalized.append(token)
+        if len(normalized) >= 5:
+            break
+    return normalized or list(_DEFAULT_TRACKED_STAT_KEYS)
 
 
 def _normalize_clock_hhmm(value: Optional[str], *, fallback: str) -> str:
@@ -277,6 +311,8 @@ def _default_profile_preferences() -> Dict[str, Any]:
         "guide": "cat",
         "tone": "balanced",
         "temp_unit": None,
+        "tracked_stat_keys": list(_DEFAULT_TRACKED_STAT_KEYS),
+        "smart_stat_swap_enabled": True,
         "lunar_sensitivity_declared": False,
         "onboarding_step": "welcome",
         "onboarding_completed": False,
@@ -374,6 +410,8 @@ async def _fetch_profile_preferences(conn, user_id: str) -> Dict[str, Any]:
         "guide",
         "tone",
         "temp_unit",
+        "tracked_stat_keys",
+        "smart_stat_swap_enabled",
         "lunar_sensitivity_declared",
         "onboarding_step",
         "onboarding_completed",
@@ -403,6 +441,12 @@ async def _fetch_profile_preferences(conn, user_id: str) -> Dict[str, Any]:
         "guide": _normalize_guide_type(row.get("guide"), fallback=defaults["guide"]),
         "tone": _normalize_tone_style(row.get("tone"), fallback=defaults["tone"]),
         "temp_unit": _normalize_temp_unit(row.get("temp_unit"), fallback=_DEFAULT_TEMP_UNIT) if row.get("temp_unit") else None,
+        "tracked_stat_keys": _normalize_tracked_stat_keys(row.get("tracked_stat_keys")),
+        "smart_stat_swap_enabled": (
+            bool(row.get("smart_stat_swap_enabled"))
+            if row.get("smart_stat_swap_enabled") is not None
+            else bool(defaults["smart_stat_swap_enabled"])
+        ),
         "lunar_sensitivity_declared": bool(row.get("lunar_sensitivity_declared")),
         "onboarding_step": _normalize_onboarding_step(row.get("onboarding_step"), fallback=defaults["onboarding_step"]),
         "onboarding_completed": bool(row.get("onboarding_completed")),
@@ -536,6 +580,14 @@ async def profile_preferences_upsert(
         "guide": _normalize_guide_type(payload.guide, fallback=str(current.get("guide") or defaults["guide"])),
         "tone": _normalize_tone_style(payload.tone, fallback=str(current.get("tone") or defaults["tone"])),
         "temp_unit": _normalize_temp_unit(payload.temp_unit, fallback=str(current.get("temp_unit") or _DEFAULT_TEMP_UNIT)),
+        "tracked_stat_keys": _normalize_tracked_stat_keys(
+            payload.tracked_stat_keys if payload.tracked_stat_keys is not None else current.get("tracked_stat_keys")
+        ),
+        "smart_stat_swap_enabled": (
+            bool(payload.smart_stat_swap_enabled)
+            if payload.smart_stat_swap_enabled is not None
+            else bool(current.get("smart_stat_swap_enabled", defaults["smart_stat_swap_enabled"]))
+        ),
         "lunar_sensitivity_declared": (
             bool(payload.lunar_sensitivity_declared)
             if payload.lunar_sensitivity_declared is not None

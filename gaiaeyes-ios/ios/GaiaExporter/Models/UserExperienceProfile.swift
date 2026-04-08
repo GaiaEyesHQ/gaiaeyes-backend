@@ -106,6 +106,64 @@ enum TemperatureUnit: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum TrackedStatKey: String, CaseIterable, Codable, Identifiable {
+    case restingHr = "resting_hr"
+    case respiratory
+    case spo2
+    case hrv
+    case temperature
+    case steps
+    case heartRange = "heart_range"
+    case bloodPressure = "blood_pressure"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .restingHr:
+            return "Resting HR"
+        case .respiratory:
+            return "Respiratory"
+        case .spo2:
+            return "SpO2"
+        case .hrv:
+            return "HRV"
+        case .temperature:
+            return "Temperature"
+        case .steps:
+            return "Steps"
+        case .heartRange:
+            return "Heart range"
+        case .bloodPressure:
+            return "Blood pressure"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .restingHr:
+            return "Baseline shift or daily average"
+        case .respiratory:
+            return "Breathing-rate shift or average"
+        case .spo2:
+            return "Oxygen average"
+        case .hrv:
+            return "Recovery average"
+        case .temperature:
+            return "Temperature deviation"
+        case .steps:
+            return "Today’s activity"
+        case .heartRange:
+            return "Min and max heart rate"
+        case .bloodPressure:
+            return "Average blood pressure"
+        }
+    }
+
+    static let defaultSelection: [TrackedStatKey] = [.restingHr, .respiratory, .hrv, .spo2, .steps]
+    static let maxPinnedCount = 5
+}
+
 enum OnboardingStep: String, CaseIterable, Codable, Identifiable {
     case welcome
     case mode
@@ -230,6 +288,8 @@ struct UserExperienceProfile: Codable, Equatable {
     var guide: GuideType = .cat
     var tone: ToneStyle = .balanced
     var tempUnit: TemperatureUnit = .localeDefault
+    var trackedStatKeys: [TrackedStatKey] = TrackedStatKey.defaultSelection
+    var smartStatSwapEnabled: Bool = true
     var lunarSensitivityDeclared: Bool = false
     var onboardingStep: OnboardingStep = .welcome
     var onboardingCompleted: Bool = false
@@ -244,6 +304,8 @@ struct UserExperienceProfile: Codable, Equatable {
         case guide
         case tone
         case tempUnit
+        case trackedStatKeys
+        case smartStatSwapEnabled
         case lunarSensitivityDeclared
         case onboardingStep
         case onboardingCompleted
@@ -258,6 +320,8 @@ struct UserExperienceProfile: Codable, Equatable {
         guide = try container.decodeIfPresent(GuideType.self, forKey: .guide) ?? .cat
         tone = try container.decodeIfPresent(ToneStyle.self, forKey: .tone) ?? .balanced
         tempUnit = try container.decodeIfPresent(TemperatureUnit.self, forKey: .tempUnit) ?? .localeDefault
+        trackedStatKeys = try container.decodeIfPresent([TrackedStatKey].self, forKey: .trackedStatKeys) ?? TrackedStatKey.defaultSelection
+        smartStatSwapEnabled = try container.decodeIfPresent(Bool.self, forKey: .smartStatSwapEnabled) ?? true
         lunarSensitivityDeclared = try container.decodeIfPresent(Bool.self, forKey: .lunarSensitivityDeclared) ?? false
         onboardingStep = try container.decodeIfPresent(OnboardingStep.self, forKey: .onboardingStep) ?? .welcome
         onboardingCompleted = try container.decodeIfPresent(Bool.self, forKey: .onboardingCompleted) ?? false
@@ -281,6 +345,8 @@ struct UserExperienceProfileUpdate: Encodable {
     var guide: GuideType? = nil
     var tone: ToneStyle? = nil
     var tempUnit: TemperatureUnit? = nil
+    var trackedStatKeys: [TrackedStatKey]? = nil
+    var smartStatSwapEnabled: Bool? = nil
     var lunarSensitivityDeclared: Bool? = nil
     var onboardingStep: OnboardingStep? = nil
     var onboardingCompleted: Bool? = nil
@@ -292,6 +358,8 @@ struct UserExperienceProfileUpdate: Encodable {
         case guide
         case tone
         case tempUnit = "temp_unit"
+        case trackedStatKeys = "tracked_stat_keys"
+        case smartStatSwapEnabled = "smart_stat_swap_enabled"
         case lunarSensitivityDeclared = "lunar_sensitivity_declared"
         case onboardingStep = "onboarding_step"
         case onboardingCompleted = "onboarding_completed"
