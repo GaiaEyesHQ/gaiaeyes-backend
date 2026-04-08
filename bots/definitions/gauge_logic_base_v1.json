@@ -88,15 +88,15 @@
       {
         "key": "energy",
         "label": "Energy",
-        "description": "Estimated day energy stability and 'wired/tired' likelihood.",
+        "description": "Estimated usable day energy under current conditions.",
         "direction": "higher_is_more_risk",
         "primary_effect_tags": ["fatigue", "sleep_quality", "mood_swings", "irritability"],
         "support_effect_tags": ["anxiety", "autonomic_load"],
         "zone_labels": {
-          "low": "Smooth",
-          "mild": "Variable",
-          "elevated": "Wired/tired",
-          "high": "Volatile"
+          "low": "High",
+          "mild": "Normal",
+          "elevated": "Variable",
+          "high": "Low"
         }
       },
       {

@@ -6901,6 +6901,9 @@ struct ContentView: View {
                 gaugeRecentLogBoosts: dashboardGaugeRecentLogBoosts,
                 lastSymptomUpdateAt: dashboardLastSymptomUpdateAt,
                 healthStatusExplainer: dashboardHealthStatusExplainer,
+                userOutlook: resolvedUserOutlookPayload,
+                userOutlookLoading: userOutlookLoading,
+                userOutlookError: userOutlookError,
                 drivers: dashboardDrivers,
                 driversCompact: dashboardDriversCompact,
                 whatMattersSummary: dashboardPayload?.todayRelevanceExplanations?.dailyBrief,
@@ -6952,6 +6955,9 @@ struct ContentView: View {
         let gaugeRecentLogBoosts: [String: Double]
         let lastSymptomUpdateAt: String?
         let healthStatusExplainer: DashboardHealthStatusExplainer?
+        let userOutlook: UserForecastOutlook?
+        let userOutlookLoading: Bool
+        let userOutlookError: String?
         let drivers: [DashboardDriverItem]
         let driversCompact: [String]
         let whatMattersSummary: String?
@@ -8568,6 +8574,99 @@ struct ContentView: View {
             return "The signals standing out most right now."
         }
 
+        private func missionOutlookDrivers(for window: UserOutlookWindow?) -> [UserOutlookDriver] {
+            (window?.topDrivers ?? []).filter { driver in
+                let key = driver.key.lowercased()
+                if key == "radio" || key == "radio_blackout" || key == "radio-blackout" {
+                    return false
+                }
+                let label = (driver.label ?? "").lowercased()
+                let detail = (driver.detail ?? "").lowercased()
+                return !label.contains("radio blackout") && !detail.contains("radio blackout")
+            }
+        }
+
+        @ViewBuilder
+        private var missionCurrentOutlookCard: some View {
+            let window = userOutlook?.next24h ?? userOutlook?.next72h ?? userOutlook?.next7d
+            let primary = missionOutlookDrivers(for: window).first
+            let supportLine = window?.semanticSupportSummary?.nilIfTrimmedEmpty
+            let cleanError = ContentView.scrubError(userOutlookError)
+            let summary = (CopyRefiner.refine(window?.semanticSummary ?? window?.summary) ?? window?.semanticSummary ?? window?.summary)?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            NavigationLink(value: InsightsRoute.yourOutlook) {
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .top, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Here’s what’s affecting you")
+                                    .font(.headline)
+                                if userOutlookLoading && window == nil {
+                                    Text("Loading the latest personal outlook.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                } else if let summary, !summary.isEmpty {
+                                    Text(summary)
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                } else {
+                                    Text("Your near-future read is still filling in.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            Spacer()
+                            if let primary {
+                                StatusPill((primary.severity ?? "watch").capitalized, severity: LocalConditionsStyle.pillSeverity(primary.severity))
+                            } else if userOutlookLoading {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+
+                        if let primary {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Main thing to watch")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundColor(.secondary)
+                                Text((CopyRefiner.refine(primary.detail) ?? primary.detail)?.nilIfTrimmedEmpty ?? "This looks most relevant in the current window.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.primary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            if let supportLine, !supportLine.isEmpty {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("A steadier way through it")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundColor(.secondary)
+                                    Text(supportLine)
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .padding(10)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            }
+                        } else if let cleanError, !cleanError.isEmpty {
+                            Text("Current outlook is temporarily unavailable. Mission Control can keep using the last-good dashboard state.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } label: {
+                    Label("Current Outlook", systemImage: "calendar.badge.clock")
+                }
+            }
+            .buttonStyle(.plain)
+        }
+
         @ViewBuilder
         private var currentSymptomsButton: some View {
             Button(action: onOpenCurrentSymptoms) {
@@ -8795,13 +8894,7 @@ struct ContentView: View {
                         }
                     }
 
-                    EarthscopeCardV2(
-                        post: earthscope,
-                        fallbackTitle: fallbackTitle,
-                        fallbackBody: fallbackBody,
-                        summaryText: earthscopeSummary,
-                        driversCompact: driversCompact
-                    )
+                    missionCurrentOutlookCard
 
                     if ContentView.cameraHealthCheckVisible {
                         CameraCheckCard(

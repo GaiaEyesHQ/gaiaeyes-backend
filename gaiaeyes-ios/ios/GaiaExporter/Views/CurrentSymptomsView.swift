@@ -98,12 +98,31 @@ private struct SymptomFollowUpComposerState: Identifiable {
     }
 }
 
+private struct CurrentSymptomRowFeedback: Equatable {
+    let message: String
+    let isError: Bool
+}
+
 private func isCurrentSymptomsCancellation(_ error: Error) -> Bool {
     if error is CancellationError {
         return true
     }
     let nsError = error as NSError
     return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
+}
+
+private func isRecoverableCurrentSymptomsMutationError(_ error: Error) -> Bool {
+    let nsError = error as NSError
+    guard nsError.domain == NSURLErrorDomain else {
+        return false
+    }
+    let code = URLError.Code(rawValue: nsError.code)
+    switch code {
+    case .timedOut, .networkConnectionLost, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
+        return true
+    default:
+        return false
+    }
 }
 
 struct CurrentSymptomsView: View {
@@ -123,7 +142,9 @@ struct CurrentSymptomsView: View {
     @State private var selectedEpisodeId: String?
     @State private var noteDraft: String = ""
     @State private var severityDraft: Int = 5
-    @State private var updatingEpisodeId: String?
+    @State private var updatingEpisodeIds: Set<String> = []
+    @State private var optimisticStates: [String: CurrentSymptomState] = [:]
+    @State private var rowFeedback: [String: CurrentSymptomRowFeedback] = [:]
     @State private var journalStatus: String?
     @State private var editingItem: CurrentSymptomItem?
     @State private var followUpComposer: SymptomFollowUpComposerState?
@@ -274,7 +295,7 @@ struct CurrentSymptomsView: View {
         .sheet(item: $editingItem) { item in
             CurrentSymptomEditorSheet(
                 item: item,
-                isBusy: updatingEpisodeId == item.id,
+                isBusy: isUpdating(item.id),
                 onSave: { severity, noteText in
                     await saveEditorChanges(for: item, severity: severity, noteText: noteText)
                 },
@@ -288,7 +309,7 @@ struct CurrentSymptomsView: View {
                 item: composer.item,
                 prompt: composer.prompt,
                 responseState: composer.responseState,
-                isBusy: updatingEpisodeId == composer.item.id,
+                isBusy: isUpdating(composer.item.id),
                 onSubmit: { detailChoice, noteText, timeBucket in
                     await submitFollowUpResponse(
                         prompt: composer.prompt,
@@ -315,46 +336,101 @@ struct CurrentSymptomsView: View {
         )
     }
 
-    private func loadSnapshot() async {
-        await MainActor.run {
-            isLoading = true
-            errorMessage = nil
+    private func payload(from envelope: Envelope<CurrentSymptomsSnapshot>) throws -> CurrentSymptomsSnapshot {
+        if envelope.ok == false, envelope.data == nil {
+            throw NSError(
+                domain: "CurrentSymptoms",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: envelope.error ?? "Current symptoms unavailable"]
+            )
+        }
+        return envelope.payload ?? CurrentSymptomsSnapshot(
+            generatedAt: "",
+            windowHours: 12,
+            summary: CurrentSymptomsSummary(activeCount: 0, newCount: 0, ongoingCount: 0, improvingCount: 0, worseCount: 0, lastUpdatedAt: nil, followUpAvailable: false),
+            items: [],
+            contributingDrivers: [],
+            patternContext: [],
+            followUpSettings: CurrentSymptomsFollowUpSettings(notificationsEnabled: false, enabled: false, notificationFamilyEnabled: false, pushEnabled: false, cadence: "balanced", states: ["new", "ongoing", "improving", "worse"], symptomCodes: []),
+            voiceSemantic: nil
+        )
+    }
+
+    private func loadSnapshot(showLoading: Bool = true, surfaceErrors: Bool = true) async {
+        if showLoading {
+            await MainActor.run {
+                isLoading = true
+                if surfaceErrors {
+                    errorMessage = nil
+                }
+            }
+        } else if surfaceErrors {
+            await MainActor.run {
+                errorMessage = nil
+            }
         }
         do {
-            let envelope = try await api.fetchCurrentSymptoms()
-            if envelope.ok == false, envelope.data == nil {
-                throw NSError(domain: "CurrentSymptoms", code: 1, userInfo: [NSLocalizedDescriptionKey: envelope.error ?? "Current symptoms unavailable"])
-            }
-            let payload = envelope.payload ?? CurrentSymptomsSnapshot(
-                generatedAt: "",
-                windowHours: 12,
-                summary: CurrentSymptomsSummary(activeCount: 0, newCount: 0, ongoingCount: 0, improvingCount: 0, worseCount: 0, lastUpdatedAt: nil, followUpAvailable: false),
-                items: [],
-                contributingDrivers: [],
-                patternContext: [],
-                followUpSettings: CurrentSymptomsFollowUpSettings(notificationsEnabled: false, enabled: false, notificationFamilyEnabled: false, pushEnabled: false, cadence: "balanced", states: ["new", "ongoing", "improving", "worse"], symptomCodes: []),
-                voiceSemantic: nil
-            )
+            let payload = try payload(from: try await api.fetchCurrentSymptoms())
             await MainActor.run {
-                snapshot = payload
-                syncSelection(with: payload)
-                onSnapshotChanged(payload)
-                isLoading = false
+                applySnapshot(payload)
+                if showLoading {
+                    isLoading = false
+                }
             }
             appLog("[CurrentSymptoms] snapshot ok active=\(payload.summary.activeCount)")
         } catch {
             if isCurrentSymptomsCancellation(error) {
-                await MainActor.run {
-                    isLoading = false
+                if showLoading {
+                    await MainActor.run {
+                        isLoading = false
+                    }
                 }
                 return
             }
             await MainActor.run {
-                errorMessage = error.localizedDescription
-                isLoading = false
+                if surfaceErrors {
+                    errorMessage = error.localizedDescription
+                }
+                if showLoading {
+                    isLoading = false
+                }
             }
             appLog("[CurrentSymptoms] snapshot error: \(error.localizedDescription)")
         }
+    }
+
+    private func refreshSnapshotSilently() async -> CurrentSymptomsSnapshot? {
+        do {
+            let refreshed = try payload(from: try await api.fetchCurrentSymptoms())
+            await MainActor.run {
+                applySnapshot(refreshed)
+            }
+            appLog("[CurrentSymptoms] snapshot ok active=\(refreshed.summary.activeCount)")
+            return refreshed
+        } catch {
+            if !isCurrentSymptomsCancellation(error) {
+                appLog("[CurrentSymptoms] snapshot error: \(error.localizedDescription)")
+            }
+            return nil
+        }
+    }
+
+    private func confirmRecoveredState(episodeId: String, expectedState: CurrentSymptomState, removeOnSuccess: Bool = false) async -> Bool {
+        for attempt in 0..<3 {
+            if let refreshed = await refreshSnapshotSilently() {
+                if removeOnSuccess {
+                    if !refreshed.items.contains(where: { $0.id == episodeId }) {
+                        return true
+                    }
+                } else if refreshed.items.first(where: { $0.id == episodeId })?.currentState == expectedState {
+                    return true
+                }
+            }
+            if attempt < 2 {
+                try? await Task.sleep(nanoseconds: 450_000_000)
+            }
+        }
+        return false
     }
 
     private func syncSelection(with payload: CurrentSymptomsSnapshot) {
@@ -375,14 +451,157 @@ struct CurrentSymptomsView: View {
         severityDraft = first.severity ?? first.originalSeverity ?? 5
     }
 
+    private func isUpdating(_ episodeId: String) -> Bool {
+        updatingEpisodeIds.contains(episodeId)
+    }
+
+    private func displayedState(for item: CurrentSymptomItem) -> CurrentSymptomState {
+        optimisticStates[item.id] ?? item.currentState
+    }
+
+    @MainActor
+    private func applySnapshot(_ payload: CurrentSymptomsSnapshot) {
+        snapshot = payload
+        syncSelection(with: payload)
+        onSnapshotChanged(payload)
+        let itemIds = Set(payload.items.map(\.id))
+        optimisticStates = optimisticStates.filter { itemIds.contains($0.key) }
+        rowFeedback = rowFeedback.filter { itemIds.contains($0.key) }
+    }
+
+    @MainActor
+    private func replaceSnapshotItems(_ mutate: (inout [CurrentSymptomItem]) -> Void) {
+        guard let current = snapshot else { return }
+        var items = current.items
+        mutate(&items)
+        applySnapshot(
+            CurrentSymptomsSnapshot(
+                generatedAt: ISO8601DateFormatter().string(from: Date()),
+                windowHours: current.windowHours,
+                summary: CurrentSymptomsSummary(
+                    activeCount: items.count,
+                    newCount: items.filter { $0.currentState == .new }.count,
+                    ongoingCount: items.filter { $0.currentState == .ongoing }.count,
+                    improvingCount: items.filter { $0.currentState == .improving }.count,
+                    worseCount: items.filter { $0.currentState == .worse }.count,
+                    lastUpdatedAt: ISO8601DateFormatter().string(from: Date()),
+                    followUpAvailable: items.contains { $0.pendingFollowUp != nil }
+                ),
+                items: items,
+                contributingDrivers: current.contributingDrivers,
+                patternContext: current.patternContext,
+                followUpSettings: current.followUpSettings,
+                voiceSemantic: current.voiceSemantic
+            )
+        )
+    }
+
+    @MainActor
+    private func upsertItem(_ updatedItem: CurrentSymptomItem) {
+        replaceSnapshotItems { items in
+            if let index = items.firstIndex(where: { $0.id == updatedItem.id }) {
+                items[index] = updatedItem
+            } else {
+                items.insert(updatedItem, at: 0)
+            }
+        }
+    }
+
+    @MainActor
+    private func removeItem(_ episodeId: String) {
+        replaceSnapshotItems { items in
+            items.removeAll { $0.id == episodeId }
+        }
+    }
+
+    @MainActor
+    private func clearFollowUpPrompt(for episodeId: String) {
+        replaceSnapshotItems { items in
+            guard let index = items.firstIndex(where: { $0.id == episodeId }) else { return }
+            let item = items[index]
+            items[index] = CurrentSymptomItem(
+                id: item.id,
+                symptomCode: item.symptomCode,
+                label: item.label,
+                severity: item.severity,
+                originalSeverity: item.originalSeverity,
+                loggedAt: item.loggedAt,
+                lastInteractionAt: item.lastInteractionAt,
+                currentState: item.currentState,
+                notePreview: item.notePreview,
+                noteCount: item.noteCount,
+                likelyDrivers: item.likelyDrivers,
+                patternHint: item.patternHint,
+                gaugeKeys: item.gaugeKeys,
+                currentContextBadge: item.currentContextBadge,
+                pendingFollowUp: nil
+            )
+        }
+    }
+
+    @MainActor
+    private func updateJournalFields(for episodeId: String, severity: Int, noteText: String?) {
+        replaceSnapshotItems { items in
+            guard let index = items.firstIndex(where: { $0.id == episodeId }) else { return }
+            let item = items[index]
+            items[index] = CurrentSymptomItem(
+                id: item.id,
+                symptomCode: item.symptomCode,
+                label: item.label,
+                severity: severity,
+                originalSeverity: item.originalSeverity,
+                loggedAt: item.loggedAt,
+                lastInteractionAt: item.lastInteractionAt,
+                currentState: item.currentState,
+                notePreview: noteText,
+                noteCount: noteText == nil ? 0 : max(item.noteCount, 1),
+                likelyDrivers: item.likelyDrivers,
+                patternHint: item.patternHint,
+                gaugeKeys: item.gaugeKeys,
+                currentContextBadge: item.currentContextBadge,
+                pendingFollowUp: item.pendingFollowUp
+            )
+        }
+    }
+
+    private func locallyUpdatedItem(
+        from item: CurrentSymptomItem,
+        state: CurrentSymptomState? = nil,
+        severity: Int? = nil,
+        noteText: String? = nil,
+        useProvidedNote: Bool = false,
+        pendingFollowUp: CurrentSymptomFollowUpPrompt? = nil,
+        useProvidedPrompt: Bool = false
+    ) -> CurrentSymptomItem {
+        CurrentSymptomItem(
+            id: item.id,
+            symptomCode: item.symptomCode,
+            label: item.label,
+            severity: severity ?? item.severity,
+            originalSeverity: item.originalSeverity,
+            loggedAt: item.loggedAt,
+            lastInteractionAt: ISO8601DateFormatter().string(from: Date()),
+            currentState: state ?? item.currentState,
+            notePreview: useProvidedNote ? noteText : item.notePreview,
+            noteCount: useProvidedNote ? (noteText == nil ? 0 : max(item.noteCount, 1)) : item.noteCount,
+            likelyDrivers: item.likelyDrivers,
+            patternHint: item.patternHint,
+            gaugeKeys: item.gaugeKeys,
+            currentContextBadge: item.currentContextBadge,
+            pendingFollowUp: useProvidedPrompt ? pendingFollowUp : item.pendingFollowUp
+        )
+    }
+
     private func updateState(_ item: CurrentSymptomItem, to state: CurrentSymptomState) {
-        guard updatingEpisodeId == nil else { return }
-        updatingEpisodeId = item.id
+        guard !isUpdating(item.id) else { return }
+        updatingEpisodeIds.insert(item.id)
+        optimisticStates[item.id] = state
+        rowFeedback[item.id] = nil
         journalStatus = nil
         appLog("[CurrentSymptoms] state_change episode=\(item.id) state=\(state.rawValue)")
         Task {
             defer {
-                Task { @MainActor in updatingEpisodeId = nil }
+                Task { @MainActor in updatingEpisodeIds.remove(item.id) }
             }
             do {
                 let response = try await api.updateCurrentSymptom(episodeId: item.id, state: state)
@@ -390,12 +609,31 @@ struct CurrentSymptomsView: View {
                     throw NSError(domain: "CurrentSymptoms", code: 2, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Could not update symptom"])
                 }
                 await MainActor.run {
-                    journalStatus = state == .resolved ? "\(item.label) marked resolved." : "\(item.label) updated."
+                    optimisticStates.removeValue(forKey: item.id)
+                    if state == .resolved {
+                        removeItem(item.id)
+                        journalStatus = "\(item.label) marked resolved."
+                    } else {
+                        upsertItem(response.payload ?? locallyUpdatedItem(from: item, state: state))
+                        rowFeedback[item.id] = CurrentSymptomRowFeedback(message: "\(item.label) updated.", isError: false)
+                    }
                 }
-                await loadSnapshot()
+                await loadSnapshot(showLoading: false, surfaceErrors: false)
             } catch {
+                let recovered = isRecoverableCurrentSymptomsMutationError(error)
+                    ? await confirmRecoveredState(episodeId: item.id, expectedState: state, removeOnSuccess: state == .resolved)
+                    : false
                 await MainActor.run {
-                    journalStatus = error.localizedDescription
+                    optimisticStates.removeValue(forKey: item.id)
+                    if recovered {
+                        if state == .resolved {
+                            journalStatus = "\(item.label) marked resolved."
+                        } else {
+                            rowFeedback[item.id] = CurrentSymptomRowFeedback(message: "\(item.label) updated.", isError: false)
+                        }
+                    } else {
+                        rowFeedback[item.id] = CurrentSymptomRowFeedback(message: error.localizedDescription, isError: true)
+                    }
                 }
                 appLog("[CurrentSymptoms] state_change error: \(error.localizedDescription)")
             }
@@ -411,7 +649,7 @@ struct CurrentSymptomsView: View {
     }
 
     private func startFollowUpResponse(for item: CurrentSymptomItem, prompt: CurrentSymptomFollowUpPrompt, state: CurrentSymptomState) {
-        guard updatingEpisodeId == nil else { return }
+        guard !isUpdating(item.id) else { return }
         selectedEpisodeId = item.id
         if state == .improving {
             Task {
@@ -434,12 +672,13 @@ struct CurrentSymptomsView: View {
     }
 
     private func snoozeFollowUp(_ prompt: CurrentSymptomFollowUpPrompt, for item: CurrentSymptomItem) {
-        guard updatingEpisodeId == nil else { return }
-        updatingEpisodeId = item.id
+        guard !isUpdating(item.id) else { return }
+        updatingEpisodeIds.insert(item.id)
+        rowFeedback[item.id] = nil
         journalStatus = nil
         Task {
             defer {
-                Task { @MainActor in updatingEpisodeId = nil }
+                Task { @MainActor in updatingEpisodeIds.remove(item.id) }
             }
             do {
                 let response = try await api.dismissSymptomFollowUp(
@@ -452,24 +691,26 @@ struct CurrentSymptomsView: View {
                 }
                 AppAnalytics.track("symptom_followup_dismissed", properties: ["action": "snooze", "symptom_code": item.symptomCode])
                 await MainActor.run {
-                    journalStatus = "Follow-up moved later."
+                    clearFollowUpPrompt(for: item.id)
+                    rowFeedback[item.id] = CurrentSymptomRowFeedback(message: "Follow-up moved later.", isError: false)
                 }
-                await loadSnapshot()
+                await loadSnapshot(showLoading: false, surfaceErrors: false)
             } catch {
                 await MainActor.run {
-                    journalStatus = error.localizedDescription
+                    rowFeedback[item.id] = CurrentSymptomRowFeedback(message: error.localizedDescription, isError: true)
                 }
             }
         }
     }
 
     private func dismissFollowUp(_ prompt: CurrentSymptomFollowUpPrompt, for item: CurrentSymptomItem) {
-        guard updatingEpisodeId == nil else { return }
-        updatingEpisodeId = item.id
+        guard !isUpdating(item.id) else { return }
+        updatingEpisodeIds.insert(item.id)
+        rowFeedback[item.id] = nil
         journalStatus = nil
         Task {
             defer {
-                Task { @MainActor in updatingEpisodeId = nil }
+                Task { @MainActor in updatingEpisodeIds.remove(item.id) }
             }
             do {
                 let response = try await api.dismissSymptomFollowUp(promptId: prompt.id, action: "dismiss", snoozeHours: nil)
@@ -478,12 +719,13 @@ struct CurrentSymptomsView: View {
                 }
                 AppAnalytics.track("symptom_followup_dismissed", properties: ["action": "dismiss", "symptom_code": item.symptomCode])
                 await MainActor.run {
-                    journalStatus = "Follow-up dismissed."
+                    clearFollowUpPrompt(for: item.id)
+                    rowFeedback[item.id] = CurrentSymptomRowFeedback(message: "Follow-up dismissed.", isError: false)
                 }
-                await loadSnapshot()
+                await loadSnapshot(showLoading: false, surfaceErrors: false)
             } catch {
                 await MainActor.run {
-                    journalStatus = error.localizedDescription
+                    rowFeedback[item.id] = CurrentSymptomRowFeedback(message: error.localizedDescription, isError: true)
                 }
             }
         }
@@ -497,13 +739,15 @@ struct CurrentSymptomsView: View {
         noteText: String?,
         timeBucket: String?
     ) async -> Bool {
-        guard updatingEpisodeId == nil else { return false }
+        guard !isUpdating(item.id) else { return false }
         await MainActor.run {
-            updatingEpisodeId = item.id
+            updatingEpisodeIds.insert(item.id)
+            rowFeedback[item.id] = nil
             journalStatus = nil
+            optimisticStates[item.id] = state
         }
         defer {
-            Task { @MainActor in updatingEpisodeId = nil }
+            Task { @MainActor in updatingEpisodeIds.remove(item.id) }
         }
         do {
             let response = try await api.respondSymptomFollowUp(
@@ -527,13 +771,42 @@ struct CurrentSymptomsView: View {
             )
             await MainActor.run {
                 followUpComposer = nil
-                journalStatus = state == .resolved ? "\(item.label) marked resolved." : "\(item.label) updated from follow-up."
+                optimisticStates.removeValue(forKey: item.id)
+                if state == .resolved {
+                    removeItem(item.id)
+                    journalStatus = "\(item.label) marked resolved."
+                } else {
+                    upsertItem(
+                        response.payload?.episode
+                        ?? locallyUpdatedItem(
+                            from: item,
+                            state: state,
+                            noteText: noteText,
+                            useProvidedNote: noteText != nil,
+                            pendingFollowUp: nil,
+                            useProvidedPrompt: true
+                        )
+                    )
+                    rowFeedback[item.id] = CurrentSymptomRowFeedback(message: "\(item.label) updated from follow-up.", isError: false)
+                }
             }
-            await loadSnapshot()
+            await loadSnapshot(showLoading: false, surfaceErrors: false)
             return true
         } catch {
+            let recovered = isRecoverableCurrentSymptomsMutationError(error)
+                ? await confirmRecoveredState(episodeId: item.id, expectedState: state, removeOnSuccess: state == .resolved)
+                : false
             await MainActor.run {
-                journalStatus = error.localizedDescription
+                optimisticStates.removeValue(forKey: item.id)
+                if recovered {
+                    if state == .resolved {
+                        journalStatus = "\(item.label) marked resolved."
+                    } else {
+                        rowFeedback[item.id] = CurrentSymptomRowFeedback(message: "\(item.label) updated from follow-up.", isError: false)
+                    }
+                } else {
+                    rowFeedback[item.id] = CurrentSymptomRowFeedback(message: error.localizedDescription, isError: true)
+                }
             }
             return false
         }
@@ -548,13 +821,13 @@ struct CurrentSymptomsView: View {
 
     private func saveJournalEntry() {
         guard let selectedItem else { return }
-        guard updatingEpisodeId == nil else { return }
-        updatingEpisodeId = selectedItem.id
+        guard !isUpdating(selectedItem.id) else { return }
+        updatingEpisodeIds.insert(selectedItem.id)
         journalStatus = nil
         appLog("[CurrentSymptoms] note_save episode=\(selectedItem.id)")
         Task {
             defer {
-                Task { @MainActor in updatingEpisodeId = nil }
+                Task { @MainActor in updatingEpisodeIds.remove(selectedItem.id) }
             }
             do {
                 let response = try await api.updateCurrentSymptom(
@@ -566,9 +839,14 @@ struct CurrentSymptomsView: View {
                     throw NSError(domain: "CurrentSymptoms", code: 3, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Could not save note"])
                 }
                 await MainActor.run {
+                    if let updatedItem = response.payload {
+                        upsertItem(updatedItem)
+                    } else {
+                        updateJournalFields(for: selectedItem.id, severity: severityDraft, noteText: noteDraft.nilIfBlank)
+                    }
                     journalStatus = noteDraft.nilIfBlank == nil ? "Severity updated." : "Note saved."
                 }
-                await loadSnapshot()
+                await loadSnapshot(showLoading: false, surfaceErrors: false)
             } catch {
                 await MainActor.run {
                     journalStatus = error.localizedDescription
@@ -579,14 +857,14 @@ struct CurrentSymptomsView: View {
     }
 
     private func saveEditorChanges(for item: CurrentSymptomItem, severity: Int, noteText: String?) async -> Bool {
-        guard updatingEpisodeId == nil else { return false }
+        guard !isUpdating(item.id) else { return false }
         await MainActor.run {
-            updatingEpisodeId = item.id
+            updatingEpisodeIds.insert(item.id)
             journalStatus = nil
         }
         appLog("[CurrentSymptoms] editor_save episode=\(item.id)")
         defer {
-            Task { @MainActor in updatingEpisodeId = nil }
+            Task { @MainActor in updatingEpisodeIds.remove(item.id) }
         }
         do {
             let response = try await api.updateCurrentSymptom(
@@ -598,10 +876,15 @@ struct CurrentSymptomsView: View {
                 throw NSError(domain: "CurrentSymptoms", code: 4, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Could not save symptom changes"])
             }
             await MainActor.run {
+                if let updatedItem = response.payload {
+                    upsertItem(updatedItem)
+                } else {
+                    updateJournalFields(for: item.id, severity: severity, noteText: noteText)
+                }
                 journalStatus = noteText == nil ? "\(item.label) severity updated." : "\(item.label) updated."
                 editingItem = nil
             }
-            await loadSnapshot()
+            await loadSnapshot(showLoading: false, surfaceErrors: false)
             return true
         } catch {
             await MainActor.run {
@@ -613,14 +896,14 @@ struct CurrentSymptomsView: View {
     }
 
     private func deleteSymptom(_ item: CurrentSymptomItem) async -> Bool {
-        guard updatingEpisodeId == nil else { return false }
+        guard !isUpdating(item.id) else { return false }
         await MainActor.run {
-            updatingEpisodeId = item.id
+            updatingEpisodeIds.insert(item.id)
             journalStatus = nil
         }
         appLog("[CurrentSymptoms] delete episode=\(item.id)")
         defer {
-            Task { @MainActor in updatingEpisodeId = nil }
+            Task { @MainActor in updatingEpisodeIds.remove(item.id) }
         }
         do {
             let response = try await api.deleteCurrentSymptom(episodeId: item.id)
@@ -628,10 +911,11 @@ struct CurrentSymptomsView: View {
                 throw NSError(domain: "CurrentSymptoms", code: 5, userInfo: [NSLocalizedDescriptionKey: response.error ?? "Could not delete symptom"])
             }
             await MainActor.run {
+                removeItem(item.id)
                 journalStatus = "\(item.label) removed."
                 editingItem = nil
             }
-            await loadSnapshot()
+            await loadSnapshot(showLoading: false, surfaceErrors: false)
             return true
         } catch {
             await MainActor.run {
@@ -739,7 +1023,9 @@ struct CurrentSymptomsView: View {
     }
 
     private func symptomCard(_ item: CurrentSymptomItem) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let currentState = displayedState(for: item)
+        let isSaving = isUpdating(item.id)
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.label)
@@ -750,7 +1036,12 @@ struct CurrentSymptomsView: View {
                         .foregroundColor(.white.opacity(0.65))
                 }
                 Spacer()
-                statePill(item.currentState)
+                if isSaving {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.white.opacity(0.7))
+                }
+                statePill(currentState)
             }
 
             if let notePreview = item.notePreview, !notePreview.isEmpty {
@@ -781,6 +1072,13 @@ struct CurrentSymptomsView: View {
                 actionButton(title: "Improving", state: .improving, item: item)
                 actionButton(title: "Worse", state: .worse, item: item)
                 actionButton(title: "Resolved", state: .resolved, item: item)
+            }
+
+            if let feedback = rowFeedback[item.id] {
+                Text(feedback.message)
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(feedback.isError ? .orange : Color(red: 0.66, green: 0.84, blue: 0.72))
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Button {
@@ -832,7 +1130,7 @@ struct CurrentSymptomsView: View {
     }
 
     private func actionButton(title: String, state: CurrentSymptomState, item: CurrentSymptomItem) -> some View {
-        let isSelected = item.currentState == state
+        let isSelected = displayedState(for: item) == state
         return Button(title) {
             handlePrimaryStateAction(item, state: state)
         }
@@ -850,8 +1148,6 @@ struct CurrentSymptomsView: View {
                 .stroke(isSelected ? stateColor(state).opacity(0.95) : Color.white.opacity(0.08), lineWidth: 1)
         )
         .foregroundColor(.white)
-        .opacity(updatingEpisodeId == item.id ? 0.6 : 1)
-        .disabled(updatingEpisodeId == item.id)
     }
 
     private var contributingCard: some View {
@@ -1017,7 +1313,7 @@ struct CurrentSymptomsView: View {
                             saveJournalEntry()
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(updatingEpisodeId == selectedEpisodeId)
+                        .disabled(selectedEpisodeId.map(isUpdating) ?? false)
 
                         if let selectedItem {
                             Text("For \(selectedItem.label)")

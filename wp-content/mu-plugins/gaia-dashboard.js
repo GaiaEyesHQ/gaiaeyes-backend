@@ -1860,6 +1860,14 @@
       .replace(/[_-]+/g, " ")
       .replace(/\b\w/g, (match) => match.toUpperCase());
 
+  const isOutlookHealthRelevantDriver = (driver) => {
+    const key = textOrEmpty(driver && driver.key).toLowerCase();
+    const label = textOrEmpty(driver && driver.label).toLowerCase();
+    const detail = textOrEmpty(driver && driver.detail).toLowerCase();
+    if (key === "radio" || key === "radio_blackout" || key === "radio-blackout") return false;
+    return !label.includes("radio blackout") && !detail.includes("radio blackout");
+  };
+
   const asNumber = (value) => {
     if (value == null) return null;
     if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -2116,9 +2124,9 @@
       `;
     }
 
-    const drivers = maybeArray(window.topDrivers || window.top_drivers).filter((driver) => !/radio blackout/i.test(textOrEmpty(driver && driver.label)));
+    const drivers = maybeArray(window.topDrivers || window.top_drivers).filter(isOutlookHealthRelevantDriver);
     const primary = drivers[0] || null;
-    const supporting = drivers.slice(1, 4).filter((driver) => !/radio blackout/i.test(textOrEmpty(driver && driver.label)));
+    const supporting = drivers.slice(1, 4).filter(isOutlookHealthRelevantDriver);
     const domains = maybeArray(window.likelyElevatedDomains || window.likely_elevated_domains).slice(0, 3);
 
     return `
@@ -2376,16 +2384,29 @@
     `;
   };
 
+  const missionOutlookFallbackSummary = (state, fallbackSummary) => {
+    const trimmedFallback = textOrEmpty(fallbackSummary);
+    const drivers = maybeArray(state && state.dashboard && state.dashboard.drivers).filter(isOutlookHealthRelevantDriver);
+    const primary = drivers[0] || null;
+    const secondary = drivers[1] || null;
+    if (primary && secondary) {
+      return `${primary.label || titleFromKey(primary.key)} looks most active right now, with ${secondary.label || titleFromKey(secondary.key)} also in the mix.`;
+    }
+    if (primary) {
+      return `${primary.label || titleFromKey(primary.key)} looks most active right now.`;
+    }
+    return trimmedFallback || "Your near-future read is still filling in.";
+  };
+
   const renderMissionOutlookCard = (state, fallbackSummary) => {
     const outlook = state.member.outlook && typeof state.member.outlook === "object" ? state.member.outlook : {};
     const window24 = maybeObject(outlook.next24h || outlook.next_24h);
     const outlookLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.outlook);
     const outlookError = textOrEmpty(state.member.errors && state.member.errors.outlook);
-    const drivers = maybeArray(window24 && (window24.topDrivers || window24.top_drivers))
-      .filter((driver) => !/radio blackout/i.test(textOrEmpty(driver && driver.label)));
+    const drivers = maybeArray(window24 && (window24.topDrivers || window24.top_drivers)).filter(isOutlookHealthRelevantDriver);
     const primary = drivers[0] || null;
     const supportLine = textOrEmpty(window24 && (window24.supportLine || window24.support_line));
-    const summary = textOrEmpty(window24 && window24.summary) || fallbackSummary;
+    const summary = textOrEmpty(window24 && window24.summary) || missionOutlookFallbackSummary(state, fallbackSummary);
 
     return `
       <div class="gaia-dashboard__earthscope gaia-dashboard__earthscope--outlook">
@@ -2398,12 +2419,12 @@
                 : "Here's what's affecting you"
             )}</h4>
           </div>
-          ${primary ? `<span class="${pillClass(primary.severity || "watch")}">${esc(primary.label || primary.key || "Watch")}</span>` : ""}
+          ${primary ? `<span class="${pillClass(primary.severity || "watch")}">${esc(primary.severity || "Watch")}</span>` : ""}
         </div>
         <p class="gaia-dashboard__earthscope-summary">${
           outlookLoading && !window24
             ? "Loading the latest personal outlook."
-            : esc(summary || "Your near-future read is still filling in.")
+            : esc(summary)
         }</p>
         ${
           primary
@@ -2951,7 +2972,7 @@
           </div>
         </div>
         <div class="gaia-dashboard__nav-grid gaia-dashboard__nav-grid--hub">
-          ${missionNavCard(state, "mission", "Mission Control", "Gauges, drivers, and EarthScope live here.")}
+          ${missionNavCard(state, "mission", "Mission Control", "Gauges, drivers, and your current outlook live here.")}
           ${missionNavCard(state, "body", "Body", "Current symptoms, check-in, sleep, health stats, and lunar watch.")}
           ${missionNavCard(state, "patterns", "Patterns", "The clearest repeats in your logs and wearable history.")}
           ${missionNavCard(state, "outlook", "Outlook", "Your 24h, 72h, and 7-day personal forecast windows.")}
