@@ -12551,11 +12551,73 @@ struct ContentView: View {
         }
     }
 
+    private struct TrackedStatsSettingsSection: View {
+        @Binding var trackedStatKeys: [TrackedStatKey]
+        @Binding var smartStatSwapEnabled: Bool
+
+        private func toggle(_ key: TrackedStatKey) {
+            var updated = trackedStatKeys
+            if updated.contains(key) {
+                updated.removeAll { $0 == key }
+            } else if updated.count < TrackedStatKey.maxPinnedCount {
+                updated.append(key)
+            }
+            trackedStatKeys = updated.isEmpty ? TrackedStatKey.defaultSelection : updated
+        }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Tracked body stats")
+                    .font(.subheadline.weight(.semibold))
+                Text("Choose up to five default body stats. When smart swap is on, Gaia can rotate a more relevant stat into the last slot when something stands out.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    ForEach(TrackedStatKey.allCases) { key in
+                        let isSelected = trackedStatKeys.contains(key)
+                        Button {
+                            toggle(key)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                        .foregroundColor(isSelected ? .accentColor : .secondary)
+                                    Text(key.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundColor(.primary)
+                                }
+                                Text(key.subtitle)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(Color.black.opacity(0.16))
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(isSelected ? Color.accentColor.opacity(0.44) : Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!isSelected && trackedStatKeys.count >= TrackedStatKey.maxPinnedCount)
+                    }
+                }
+
+                Toggle("Smartly swap the last slot when another stat matters more", isOn: $smartStatSwapEnabled)
+            }
+        }
+    }
+
     private struct InsightsHealthSymptomsView: View {
         let current: FeaturesToday?
         let todayString: String
         let updatedText: String?
         let tempUnit: TemperatureUnit
+        let trackedStatKeys: [TrackedStatKey]
+        let smartStatSwapEnabled: Bool
         let bannerText: String?
         let usingYesterdayFallback: Bool
         let todayCount: Int
@@ -12576,6 +12638,7 @@ struct ContentView: View {
         let dailyCheckInLoading: Bool
         let dailyCheckInError: String?
         let onOpenDailyCheckIn: () -> Void
+        let onEditTrackedStats: () -> Void
         @Binding var showSymptomSheet: Bool
         let onOpenQuickCheck: () -> Void
         let onLoadLunarInsights: () async -> Void
@@ -12779,9 +12842,9 @@ struct ContentView: View {
                             current: current,
                             updatedText: updatedText,
                             tempUnit: tempUnit,
-                            trackedStatKeys: experienceProfile.trackedStatKeys,
-                            smartStatSwapEnabled: experienceProfile.smartStatSwapEnabled,
-                            onEditTrackedStats: { showSettingsSheet() }
+                            trackedStatKeys: trackedStatKeys,
+                            smartStatSwapEnabled: smartStatSwapEnabled,
+                            onEditTrackedStats: onEditTrackedStats
                         )
 
                         Button(action: onOpenDailyCheckIn) {
@@ -13729,6 +13792,8 @@ struct ContentView: View {
                 todayString: chicagoTodayString(),
                 updatedText: selection.updatedText,
                 tempUnit: experienceProfile.tempUnit,
+                trackedStatKeys: experienceProfile.trackedStatKeys,
+                smartStatSwapEnabled: experienceProfile.smartStatSwapEnabled,
                 bannerText: featuresCachedBannerText,
                 usingYesterdayFallback: selection.usingYesterdayFallback,
                 todayCount: symptomsToday.count,
@@ -13751,6 +13816,7 @@ struct ContentView: View {
                 onOpenDailyCheckIn: {
                     bodyPath = [.dailyCheckIn]
                 },
+                onEditTrackedStats: { showSettingsSheet() },
                 showSymptomSheet: $showSymptomSheet,
                 onOpenQuickCheck: { showCameraHealthCheckSheet = true },
                 onLoadLunarInsights: {
@@ -13977,6 +14043,8 @@ struct ContentView: View {
                 todayString: chicagoTodayString(),
                 updatedText: selection.updatedText,
                 tempUnit: experienceProfile.tempUnit,
+                trackedStatKeys: experienceProfile.trackedStatKeys,
+                smartStatSwapEnabled: experienceProfile.smartStatSwapEnabled,
                 bannerText: featuresCachedBannerText,
                 usingYesterdayFallback: selection.usingYesterdayFallback,
                 todayCount: symptomsToday.count,
@@ -14002,6 +14070,7 @@ struct ContentView: View {
                     }
                     bodyPath = [.dailyCheckIn]
                 },
+                onEditTrackedStats: { showSettingsSheet() },
                 showSymptomSheet: $showSymptomSheet,
                 onOpenQuickCheck: { showCameraHealthCheckSheet = true },
                 onLoadLunarInsights: {
@@ -14267,6 +14336,8 @@ struct ContentView: View {
                             todayString: chicagoTodayString(),
                             updatedText: updatedText,
                             tempUnit: experienceProfile.tempUnit,
+                            trackedStatKeys: experienceProfile.trackedStatKeys,
+                            smartStatSwapEnabled: experienceProfile.smartStatSwapEnabled,
                             bannerText: featuresCachedBannerText,
                             usingYesterdayFallback: usingYesterdayFallback,
                             todayCount: symptomsToday.count,
@@ -14287,6 +14358,7 @@ struct ContentView: View {
                             dailyCheckInLoading: dailyCheckInLoading,
                             dailyCheckInError: dailyCheckInError,
                             onOpenDailyCheckIn: { missionInsightsPath = [.dailyCheckIn] },
+                            onEditTrackedStats: { showSettingsSheet() },
                             showSymptomSheet: $showInsightsSymptomSheet,
                             onOpenQuickCheck: { showCameraHealthCheckSheet = true },
                             onLoadLunarInsights: {
@@ -14476,54 +14548,10 @@ struct ContentView: View {
                                         .foregroundColor(.secondary)
                                 }
 
-                                VStack(alignment: .leading, spacing: 10) {
-                                    Text("Tracked body stats")
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("Choose up to five default body stats. When smart swap is on, Gaia can rotate a more relevant stat into the last slot when something stands out.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-
-                                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                                        ForEach(TrackedStatKey.allCases) { key in
-                                            let isSelected = experienceProfile.trackedStatKeys.contains(key)
-                                            Button {
-                                                var updated = experienceProfile.trackedStatKeys
-                                                if isSelected {
-                                                    updated.removeAll { $0 == key }
-                                                } else if updated.count < TrackedStatKey.maxPinnedCount {
-                                                    updated.append(key)
-                                                }
-                                                experienceProfile.trackedStatKeys = updated.isEmpty ? TrackedStatKey.defaultSelection : updated
-                                            } label: {
-                                                VStack(alignment: .leading, spacing: 4) {
-                                                    HStack(spacing: 6) {
-                                                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                                                            .foregroundColor(isSelected ? .accentColor : .secondary)
-                                                        Text(key.title)
-                                                            .font(.subheadline.weight(.semibold))
-                                                            .foregroundColor(.primary)
-                                                    }
-                                                    Text(key.subtitle)
-                                                        .font(.caption2)
-                                                        .foregroundColor(.secondary)
-                                                        .fixedSize(horizontal: false, vertical: true)
-                                                }
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .padding(12)
-                                                .background(Color.black.opacity(0.16))
-                                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                                        .stroke(isSelected ? Color.accentColor.opacity(0.44) : Color.white.opacity(0.08), lineWidth: 1)
-                                                )
-                                            }
-                                            .buttonStyle(.plain)
-                                            .disabled(!isSelected && experienceProfile.trackedStatKeys.count >= TrackedStatKey.maxPinnedCount)
-                                        }
-                                    }
-
-                                    Toggle("Smartly swap the last slot when another stat matters more", isOn: $experienceProfile.smartStatSwapEnabled)
-                                }
+                                TrackedStatsSettingsSection(
+                                    trackedStatKeys: $experienceProfile.trackedStatKeys,
+                                    smartStatSwapEnabled: $experienceProfile.smartStatSwapEnabled
+                                )
 
                                 Toggle(isOn: $experienceProfile.lunarSensitivityDeclared) {
                                     VStack(alignment: .leading, spacing: 4) {
