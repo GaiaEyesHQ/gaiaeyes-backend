@@ -14692,146 +14692,175 @@ struct ContentView: View {
     }
 
     private var missionSettingsExperienceSection: some View {
+        missionSettingsExperienceLunarObservedSection
+    }
+
+    private var missionSettingsExperienceLunarObservedSection: some View {
+        missionSettingsExperiencePreferenceObservedSection
+            .onChange(of: experienceProfile.lunarSensitivityDeclared, initial: false) { _, newValue in
+                Task { await saveProfilePreferences(UserExperienceProfileUpdate(lunarSensitivityDeclared: newValue)) }
+            }
+    }
+
+    private var missionSettingsExperiencePreferenceObservedSection: some View {
+        missionSettingsExperienceBasicObservedSection
+            .onChange(of: experienceProfile.trackedStatKeys, initial: false) { _, newValue in
+                Task { await saveProfilePreferences(UserExperienceProfileUpdate(trackedStatKeys: newValue)) }
+            }
+            .onChange(of: experienceProfile.smartStatSwapEnabled, initial: false) { _, newValue in
+                Task { await saveProfilePreferences(UserExperienceProfileUpdate(smartStatSwapEnabled: newValue)) }
+            }
+            .onChange(of: experienceProfile.favoriteSymptomCodes, initial: false) { _, newValue in
+                Task { await saveProfilePreferences(UserExperienceProfileUpdate(favoriteSymptomCodes: newValue.map(normalize))) }
+            }
+    }
+
+    private var missionSettingsExperienceBasicObservedSection: some View {
+        missionSettingsExperienceCard
+            .padding(.horizontal)
+            .onChange(of: experienceProfile.mode, initial: false) { _, newValue in
+                Task { await saveProfilePreferences(UserExperienceProfileUpdate(mode: newValue)) }
+            }
+            .onChange(of: experienceProfile.guide, initial: false) { _, newValue in
+                Task { await saveProfilePreferences(UserExperienceProfileUpdate(guide: newValue)) }
+            }
+            .onChange(of: experienceProfile.tone, initial: false) { _, newValue in
+                Task { await saveProfilePreferences(UserExperienceProfileUpdate(tone: newValue)) }
+            }
+            .onChange(of: experienceProfile.tempUnit, initial: false) { _, newValue in
+                Task { await saveProfilePreferences(UserExperienceProfileUpdate(tempUnit: newValue)) }
+            }
+    }
+
+    private var missionSettingsExperienceCard: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Changes save automatically.")
                     .font(.caption)
                     .foregroundColor(.secondary)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Mode")
-                        .font(.subheadline.weight(.semibold))
-                    Picker("Mode", selection: $experienceProfile.mode) {
-                        ForEach(ExperienceMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    Text(experienceProfile.mode.subtitle)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Guide")
-                        .font(.subheadline.weight(.semibold))
-                    HStack(alignment: .center, spacing: 12) {
-                        GuideAvatarView(
-                            guide: experienceProfile.guide,
-                            expression: .guide,
-                            size: .medium,
-                            emphasis: .standard,
-                            tintMode: .softened,
-                            showBackingPlate: true
-                        )
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(experienceProfile.guide.title)
-                                .font(.headline)
-                            Text("Guide Hub, prompts, and the top-left entry use the same shared avatar system.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    Picker("Guide", selection: $experienceProfile.guide) {
-                        ForEach(GuideType.allCases) { guide in
-                            Text(guide.title).tag(guide)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    Text(experienceProfile.guide.subtitle)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Toggle(
-                        "Use guide as app icon",
-                        isOn: Binding(
-                            get: { guideProfileStore.profile.useGuideAppIcon },
-                            set: { guideProfileStore.setUseGuideAppIcon($0) }
-                        )
-                    )
-                    .disabled(!guideProfileStore.supportsAlternateIcons)
-
-                    Text(guideProfileStore.iconPreferenceFootnote)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Tone")
-                        .font(.subheadline.weight(.semibold))
-                    Picker("Tone", selection: $experienceProfile.tone) {
-                        ForEach(ToneStyle.allCases) { tone in
-                            Text(tone.title).tag(tone)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    Text(experienceProfile.tone.subtitle)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Temperature Units")
-                        .font(.subheadline.weight(.semibold))
-                    Picker("Temperature Units", selection: $experienceProfile.tempUnit) {
-                        ForEach(TemperatureUnit.allCases) { unit in
-                            Text(unit.rawValue == "F" ? "\u{00B0}F" : "\u{00B0}C").tag(unit)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    Text("Current weather, forecast, drivers, and alerts switch instantly.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
+                missionSettingsModeControl
+                missionSettingsGuideControl
+                missionSettingsToneControl
+                missionSettingsTemperatureControl
                 TrackedStatsSettingsSection(
                     trackedStatKeys: $experienceProfile.trackedStatKeys,
                     smartStatSwapEnabled: $experienceProfile.smartStatSwapEnabled
                 )
-
                 FavoriteSymptomsSettingsSection(
                     presets: preferredSymptomPresets(symptomPresets, favoriteCodes: experienceProfile.favoriteSymptomCodes),
                     favoriteSymptomCodes: $experienceProfile.favoriteSymptomCodes
                 )
-
-                Toggle(isOn: $experienceProfile.lunarSensitivityDeclared) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Prioritize lunar overlays")
-                            .font(.subheadline.weight(.semibold))
-                        Text("Keeps lunar markers and pattern summaries more prominent. Observational only.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
+                missionSettingsLunarPriorityControl
             }
         } label: {
             Label("Experience", systemImage: "sparkles")
         }
-        .padding(.horizontal)
-        .onChange(of: experienceProfile.mode, initial: false) { _, newValue in
-            Task { await saveProfilePreferences(UserExperienceProfileUpdate(mode: newValue)) }
+    }
+
+    private var missionSettingsModeControl: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Mode")
+                .font(.subheadline.weight(.semibold))
+            Picker("Mode", selection: $experienceProfile.mode) {
+                ForEach(ExperienceMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            Text(experienceProfile.mode.subtitle)
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
-        .onChange(of: experienceProfile.guide, initial: false) { _, newValue in
-            Task { await saveProfilePreferences(UserExperienceProfileUpdate(guide: newValue)) }
+    }
+
+    private var missionSettingsGuideControl: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Guide")
+                .font(.subheadline.weight(.semibold))
+            HStack(alignment: .center, spacing: 12) {
+                GuideAvatarView(
+                    guide: experienceProfile.guide,
+                    expression: .guide,
+                    size: .medium,
+                    emphasis: .standard,
+                    tintMode: .softened,
+                    showBackingPlate: true
+                )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(experienceProfile.guide.title)
+                        .font(.headline)
+                    Text("Guide Hub, prompts, and the top-left entry use the same shared avatar system.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            Picker("Guide", selection: $experienceProfile.guide) {
+                ForEach(GuideType.allCases) { guide in
+                    Text(guide.title).tag(guide)
+                }
+            }
+            .pickerStyle(.segmented)
+            Text(experienceProfile.guide.subtitle)
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Toggle(
+                "Use guide as app icon",
+                isOn: Binding(
+                    get: { guideProfileStore.profile.useGuideAppIcon },
+                    set: { guideProfileStore.setUseGuideAppIcon($0) }
+                )
+            )
+            .disabled(!guideProfileStore.supportsAlternateIcons)
+
+            Text(guideProfileStore.iconPreferenceFootnote)
+                .font(.caption2)
+                .foregroundColor(.secondary)
         }
-        .onChange(of: experienceProfile.tone, initial: false) { _, newValue in
-            Task { await saveProfilePreferences(UserExperienceProfileUpdate(tone: newValue)) }
+    }
+
+    private var missionSettingsToneControl: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Tone")
+                .font(.subheadline.weight(.semibold))
+            Picker("Tone", selection: $experienceProfile.tone) {
+                ForEach(ToneStyle.allCases) { tone in
+                    Text(tone.title).tag(tone)
+                }
+            }
+            .pickerStyle(.segmented)
+            Text(experienceProfile.tone.subtitle)
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
-        .onChange(of: experienceProfile.tempUnit, initial: false) { _, newValue in
-            Task { await saveProfilePreferences(UserExperienceProfileUpdate(tempUnit: newValue)) }
+    }
+
+    private var missionSettingsTemperatureControl: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Temperature Units")
+                .font(.subheadline.weight(.semibold))
+            Picker("Temperature Units", selection: $experienceProfile.tempUnit) {
+                ForEach(TemperatureUnit.allCases) { unit in
+                    Text(unit.rawValue == "F" ? "\u{00B0}F" : "\u{00B0}C").tag(unit)
+                }
+            }
+            .pickerStyle(.segmented)
+            Text("Current weather, forecast, drivers, and alerts switch instantly.")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
-        .onChange(of: experienceProfile.trackedStatKeys, initial: false) { _, newValue in
-            Task { await saveProfilePreferences(UserExperienceProfileUpdate(trackedStatKeys: newValue)) }
-        }
-        .onChange(of: experienceProfile.smartStatSwapEnabled, initial: false) { _, newValue in
-            Task { await saveProfilePreferences(UserExperienceProfileUpdate(smartStatSwapEnabled: newValue)) }
-        }
-        .onChange(of: experienceProfile.favoriteSymptomCodes, initial: false) { _, newValue in
-            Task { await saveProfilePreferences(UserExperienceProfileUpdate(favoriteSymptomCodes: newValue.map(normalize))) }
-        }
-        .onChange(of: experienceProfile.lunarSensitivityDeclared, initial: false) { _, newValue in
-            Task { await saveProfilePreferences(UserExperienceProfileUpdate(lunarSensitivityDeclared: newValue)) }
+    }
+
+    private var missionSettingsLunarPriorityControl: some View {
+        Toggle(isOn: $experienceProfile.lunarSensitivityDeclared) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Prioritize lunar overlays")
+                    .font(.subheadline.weight(.semibold))
+                Text("Keeps lunar markers and pattern summaries more prominent. Observational only.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
     }
 
