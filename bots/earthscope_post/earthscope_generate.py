@@ -1900,7 +1900,11 @@ def _apply_intro_guard(caption: str, ctx: Dict[str, Any]) -> str:
         return f"{intro} {body}".strip()
     return f"{intro} {cap}".strip()
 
-def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
+def generate_short_caption(
+    ctx: Dict[str, Any],
+    live_sections: Optional[Dict[str, str]] = None,
+    hashtags_seed: Optional[str] = None,
+) -> (str, str):
     client = openai_client()
     _trace_mark("client_available", bool(client))
     if EARTHSCOPE_FORCE_RULES or not client:
@@ -1912,6 +1916,19 @@ def generate_short_caption(ctx: Dict[str, Any]) -> (str, str):
     rc = _rule_copy(ctx)
     try_rewrite = _hybrid_rewrite_enabled()
     if try_rewrite:
+        if live_sections:
+            legacy_draft = _legacy_public_rule_copy(ctx)
+            rewritten, _ = _rewrite_shadow_caption_minimal(
+                seed_caption=legacy_draft["caption"].strip(),
+                hashtags=(hashtags_seed or rc.get("hashtags") or legacy_draft["hashtags"]).strip(),
+                ctx=ctx,
+                sections=live_sections,
+            )
+            if rewritten and rewritten.get("caption"):
+                _trace_mark("caption_path", "minimal_caption_rewrite_live")
+                caption = _sanitize_caption(str(rewritten.get("caption") or ""))
+                hashtags = str(rewritten.get("hashtags") or rc.get("hashtags") or legacy_draft["hashtags"]).strip()
+                return caption.strip(), hashtags
         # New: interpretive, number-free JSON rewrite (cached single-call reuse)
         out = _get_cached_rewrite(client, ctx)
         if out and out.get("caption"):
@@ -2609,8 +2626,16 @@ def main():
 
     # 2) Generate copy
     _reset_runtime_trace()
-    short_caption, short_tags = generate_short_caption(ctx)
     snapshot, affects, playbook, long_tags = generate_long_sections(ctx)
+    short_caption, short_tags = generate_short_caption(
+        ctx,
+        live_sections={
+            "snapshot": snapshot,
+            "affects": affects,
+            "playbook": playbook,
+        },
+        hashtags_seed=long_tags,
+    )
     _, dbg_key_short = _rewrite_cache_key(ctx)
     opener = _first_nonempty_line(short_caption)
     _dbg(f"opener={opener[:120]} day={day} platform={args.platform} cache_key={dbg_key_short}")

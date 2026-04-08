@@ -31,7 +31,11 @@ from services.drivers.driver_normalize import normalize_environmental_drivers
 from services.gauges.alerts import dedupe_alert_pills
 from services.gauges.zones import decorate_gauge
 from services.geomagnetic_context import build_ulf_payload
-from services.mc_modals.modal_builder import build_earthscope_summary, build_modal_models
+from services.mc_modals.modal_builder import (
+    build_earthscope_summary,
+    build_modal_models,
+    build_support_items,
+)
 from services.patterns.personal_relevance import (
     compute_personal_relevance,
     fetch_best_pattern_rows,
@@ -593,6 +597,13 @@ async def dashboard(
         gauge_labels=gauge_labels_payload,
         drivers=ranked_drivers,
         user_tags=user_tags,
+        personal_relevance=personal_relevance,
+    )
+    out["support_items"] = build_support_items(
+        day=day,
+        drivers=ranked_drivers,
+        user_tags=user_tags,
+        symptoms=symptom_summary if isinstance(symptom_summary, dict) else {},
         personal_relevance=personal_relevance,
     )
 

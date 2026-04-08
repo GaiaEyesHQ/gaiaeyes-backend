@@ -26,6 +26,15 @@ if (!defined('GAIAEYES_SCHUMANN_APP_LINK')) {
 if (!defined('GAIAEYES_SCHUMANN_DETAIL_TTL')) {
     define('GAIAEYES_SCHUMANN_DETAIL_TTL', 300);
 }
+if (!defined('GAIAEYES_SCHUMANN_PAYLOAD_STALE_MULTIPLIER')) {
+    define('GAIAEYES_SCHUMANN_PAYLOAD_STALE_MULTIPLIER', 12);
+}
+if (!defined('GAIAEYES_SCHUMANN_REFRESH_HOOK')) {
+    define('GAIAEYES_SCHUMANN_REFRESH_HOOK', 'gaiaeyes_schumann_refresh_payload');
+}
+if (!defined('GAIAEYES_SCHUMANN_CRON_HOOK')) {
+    define('GAIAEYES_SCHUMANN_CRON_HOOK', 'gaiaeyes_schumann_refresh_payload_cron');
+}
 if (!defined('GAIAEYES_SCH_COMBINED_URL')) {
     define('GAIAEYES_SCH_COMBINED_URL', 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/schumann_combined.json');
 }
@@ -75,6 +84,70 @@ if (!function_exists('gaiaeyes_schumann_dashboard_ttl')) {
             default:
                 return 60;
         }
+    }
+}
+
+if (!function_exists('gaiaeyes_schumann_payload_cache_ttl')) {
+    function gaiaeyes_schumann_payload_cache_ttl($ttl) {
+        $fresh_ttl = max(30, (int) $ttl);
+        return max($fresh_ttl + 300, $fresh_ttl * (int) GAIAEYES_SCHUMANN_PAYLOAD_STALE_MULTIPLIER);
+    }
+}
+
+if (!function_exists('gaiaeyes_schumann_cache_record')) {
+    function gaiaeyes_schumann_cache_record($cache_key) {
+        $cached = get_transient($cache_key);
+        if ($cached === false) {
+            return null;
+        }
+        if (is_array($cached) && array_key_exists('payload', $cached) && array_key_exists('fetched_at', $cached)) {
+            return $cached;
+        }
+        if (is_array($cached)) {
+            return [
+                'payload' => $cached,
+                'fetched_at' => 0,
+            ];
+        }
+        return null;
+    }
+}
+
+if (!function_exists('gaiaeyes_schumann_cache_write')) {
+    function gaiaeyes_schumann_cache_write($cache_key, $payload, $ttl) {
+        set_transient($cache_key, [
+            'payload' => $payload,
+            'fetched_at' => time(),
+        ], gaiaeyes_schumann_payload_cache_ttl($ttl));
+        return $payload;
+    }
+}
+
+if (!function_exists('gaiaeyes_schumann_cache_is_fresh')) {
+    function gaiaeyes_schumann_cache_is_fresh($record, $ttl) {
+        if (!is_array($record)) {
+            return false;
+        }
+        $fetched_at = isset($record['fetched_at']) ? (int) $record['fetched_at'] : 0;
+        if ($fetched_at <= 0) {
+            return false;
+        }
+        return (time() - $fetched_at) < max(30, (int) $ttl);
+    }
+}
+
+if (!function_exists('gaiaeyes_schumann_schedule_payload_refresh')) {
+    function gaiaeyes_schumann_schedule_payload_refresh($target) {
+        $target = sanitize_key((string) $target);
+        if ($target === '') {
+            return;
+        }
+        $lock_key = 'ge_sch_refresh_lock_' . $target;
+        if (get_transient($lock_key) !== false) {
+            return;
+        }
+        set_transient($lock_key, 1, 90);
+        wp_schedule_single_event(time() + 5, GAIAEYES_SCHUMANN_REFRESH_HOOK, [$target]);
     }
 }
 
@@ -177,16 +250,13 @@ if (!function_exists('gaiaeyes_schumann_remote_json_fallback')) {
 
 if (!function_exists('gaiaeyes_schumann_detail_payload')) {
     function gaiaeyes_schumann_detail_payload($force_refresh = false) {
-        if ($force_refresh) {
-            gaiaeyes_schumann_dashboard_clear_cache();
-        }
-
         $cache_key = 'ge_sch_detail_payload';
-        if (!$force_refresh) {
-            $cached = get_transient($cache_key);
-            if ($cached !== false) {
-                return $cached;
+        $cached_record = gaiaeyes_schumann_cache_record($cache_key);
+        if (!$force_refresh && is_array($cached_record) && is_array($cached_record['payload'] ?? null)) {
+            if (!gaiaeyes_schumann_cache_is_fresh($cached_record, GAIAEYES_SCHUMANN_DETAIL_TTL)) {
+                gaiaeyes_schumann_schedule_payload_refresh('detail');
             }
+            return $cached_record['payload'];
         }
 
         $latest_api = gaiaeyes_schumann_dashboard_fetch_json(
@@ -225,15 +295,24 @@ if (!function_exists('gaiaeyes_schumann_detail_payload')) {
                 : 'https://gaiaeyes-backend.onrender.com/v1/earth/schumann/series?hours=24&station=cumiana',
         ];
 
-        set_transient($cache_key, $payload, GAIAEYES_SCHUMANN_DETAIL_TTL);
-        return $payload;
+        return gaiaeyes_schumann_cache_write($cache_key, $payload, GAIAEYES_SCHUMANN_DETAIL_TTL);
     }
 }
 
 if (!function_exists('gaiaeyes_schumann_dashboard_payload')) {
     function gaiaeyes_schumann_dashboard_payload($force_refresh = false) {
-        if ($force_refresh) {
-            gaiaeyes_schumann_dashboard_clear_cache();
+        $cache_key = 'ge_sch_dashboard_payload';
+        $cache_ttl = max(
+            gaiaeyes_schumann_dashboard_ttl('latest'),
+            gaiaeyes_schumann_dashboard_ttl('series'),
+            gaiaeyes_schumann_dashboard_ttl('heatmap')
+        );
+        $cached_record = gaiaeyes_schumann_cache_record($cache_key);
+        if (!$force_refresh && is_array($cached_record) && is_array($cached_record['payload'] ?? null)) {
+            if (!gaiaeyes_schumann_cache_is_fresh($cached_record, $cache_ttl)) {
+                gaiaeyes_schumann_schedule_payload_refresh('dashboard');
+            }
+            return $cached_record['payload'];
         }
 
         $latest = gaiaeyes_schumann_dashboard_fetch_json(
@@ -260,7 +339,7 @@ if (!function_exists('gaiaeyes_schumann_dashboard_payload')) {
             gaiaeyes_schumann_dashboard_ttl('latest')
         );
 
-        return [
+        $payload = [
             'ok' => true,
             'fetched_at' => gmdate('c'),
             'api_base' => gaiaeyes_schumann_dashboard_api_base(),
@@ -275,6 +354,7 @@ if (!function_exists('gaiaeyes_schumann_dashboard_payload')) {
                 'tomsk_latest_ok' => is_array($tomsk_latest) && !empty($tomsk_latest['ok']),
             ],
         ];
+        return gaiaeyes_schumann_cache_write($cache_key, $payload, $cache_ttl);
     }
 }
 
@@ -415,6 +495,33 @@ if (!function_exists('gaiaeyes_schumann_dashboard_rest_proxy')) {
     }
 }
 
+add_filter('cron_schedules', function ($schedules) {
+    if (!isset($schedules['gaiaeyes_schumann_five_minutes'])) {
+        $schedules['gaiaeyes_schumann_five_minutes'] = [
+            'interval' => 5 * MINUTE_IN_SECONDS,
+            'display' => __('Every Five Minutes (GaiaEyes Schumann)', 'gaiaeyes'),
+        ];
+    }
+    return $schedules;
+});
+
+add_action(GAIAEYES_SCHUMANN_REFRESH_HOOK, function ($target = '') {
+    delete_transient('ge_sch_refresh_lock_' . sanitize_key((string) $target));
+    switch (sanitize_key((string) $target)) {
+        case 'detail':
+            gaiaeyes_schumann_detail_payload(true);
+            break;
+        case 'dashboard':
+            gaiaeyes_schumann_dashboard_payload(true);
+            break;
+    }
+}, 10, 1);
+
+add_action(GAIAEYES_SCHUMANN_CRON_HOOK, function () {
+    gaiaeyes_schumann_dashboard_payload(true);
+    gaiaeyes_schumann_detail_payload(true);
+});
+
 add_action('rest_api_init', function () {
     register_rest_route('gaia/v1', '/schumann/dashboard', [
         'methods' => WP_REST_Server::READABLE,
@@ -462,6 +569,10 @@ add_action('rest_api_init', function () {
 });
 
 add_action('init', function () {
+    if (!wp_next_scheduled(GAIAEYES_SCHUMANN_CRON_HOOK)) {
+        wp_schedule_event(time() + 60, 'gaiaeyes_schumann_five_minutes', GAIAEYES_SCHUMANN_CRON_HOOK);
+    }
+
     if (!shortcode_exists('gaiaeyes_schumann_dashboard')) {
         add_shortcode('gaiaeyes_schumann_dashboard', 'gaiaeyes_schumann_dashboard_shortcode');
     }

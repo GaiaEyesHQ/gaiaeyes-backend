@@ -18,6 +18,7 @@ struct GuideHubView: View {
     let currentSymptomsSnapshot: CurrentSymptomsSnapshot?
     let earthscopeSummary: String?
     let earthscopeUpdatedAt: String?
+    let supportItems: [DashboardSupportItem]
     let whatMattersNow: [String]
     let whatMattersSummary: String?
     var initialFocus: GuideHubFocus = .overview
@@ -295,6 +296,10 @@ struct GuideHubView: View {
             earthscopeCard
                 .id(GuideHubFocus.earthScope)
 
+            if !supportItems.isEmpty {
+                supportCard
+            }
+
             followUpCard
 
             understandingCard
@@ -391,6 +396,60 @@ struct GuideHubView: View {
         )
     }
 
+    private var supportCard: some View {
+        let primary = supportItems.first
+        let additional = Array(supportItems.dropFirst())
+
+        return GuideHubSectionCard(
+            guideType: profile.guideType,
+            expression: guideSupportExpression(for: primary?.tone),
+            emphasis: guideSupportEmphasis(for: primary?.tone),
+            eyebrow: "Support right now",
+            title: primary?.title ?? "A steadier lane for today",
+            message: primary?.message ?? "Keep the basics steady and use a gentler pace if your body is asking for more margin.",
+            badgeText: primary?.badge,
+            primaryActionTitle: "Open Body context",
+            primaryAction: onOpenCurrentSymptoms,
+            secondaryActionTitle: "All drivers",
+            secondaryAction: onOpenAllDrivers
+        ) {
+            VStack(alignment: .leading, spacing: 10) {
+                if let primary, let actions = primary.actions, !actions.isEmpty {
+                    chipRow(actions)
+                }
+                if !additional.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(additional) { item in
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(spacing: 8) {
+                                    Text(item.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(style.primaryText)
+                                    if let badge = item.badge, !badge.isEmpty {
+                                        Text(badge)
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(style.primaryText)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(style.accent.opacity(0.18))
+                                            .clipShape(Capsule())
+                                    }
+                                }
+                                Text(item.message)
+                                    .font(.caption)
+                                    .foregroundStyle(style.secondaryText)
+                                if let actions = item.actions, !actions.isEmpty {
+                                    chipRow(Array(actions.prefix(2)))
+                                }
+                            }
+                            .padding(.top, 2)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private var understandingCard: some View {
         GuideHubSectionCard(
             guideType: profile.guideType,
@@ -404,6 +463,28 @@ struct GuideHubView: View {
             secondaryActionTitle: "Deep dive",
             secondaryAction: { navigationPath.append(.understanding) }
         )
+    }
+
+    private func guideSupportExpression(for tone: String?) -> GuideExpression {
+        switch tone?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "high", "watch":
+            return .alert
+        case "mild":
+            return .helpful
+        default:
+            return .calm
+        }
+    }
+
+    private func guideSupportEmphasis(for tone: String?) -> GuideAvatarEmphasis {
+        switch tone?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "high", "watch":
+            return .elevated
+        case "mild":
+            return .standard
+        default:
+            return .quiet
+        }
     }
 
     private var headerCard: some View {

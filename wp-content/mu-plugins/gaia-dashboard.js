@@ -319,6 +319,38 @@
       ...maybeArray(payload && payload.drivers),
     ]);
 
+  const dashboardDriverFromDetail = (driver) => ({
+    key: textOrEmpty(driver && driver.key),
+    label: textOrEmpty(driver && driver.label),
+    severity: textOrEmpty(driver && (driver.severity || driver.state)),
+    state: textOrEmpty(driver && (driver.stateLabel || driver.state)),
+    value: Number.isFinite(Number(driver && driver.readingValue)) ? Number(driver && driver.readingValue) : null,
+    unit: textOrEmpty(driver && driver.readingUnit),
+    display: textOrEmpty(driver && driver.reading),
+    role: textOrEmpty(driver && driver.role),
+    roleLabel: textOrEmpty(driver && (driver.roleLabel || driver.role_label)),
+    personalReason: textOrEmpty(
+      driver &&
+      (
+        driver.personalReason ||
+        driver.personal_reason ||
+        driver.shortReason ||
+        driver.short_reason ||
+        driver.outlookSummary ||
+        driver.outlook_summary
+      )
+    ),
+  });
+
+  const combinedMissionDrivers = (payload, memberDriversSnapshot = null) => {
+    const dashboardDrivers = combinedDashboardDrivers(payload);
+    if (dashboardDrivers.length >= 3) {
+      return dashboardDrivers;
+    }
+    const previewDrivers = maybeArray(memberDriversSnapshot && memberDriversSnapshot.drivers).map(dashboardDriverFromDetail);
+    return dedupeDriverItems([...dashboardDrivers, ...previewDrivers]);
+  };
+
   const renderDriversSection = (drivers, modalModels, limit = 6) => {
     if (!Array.isArray(drivers) || !drivers.length) {
       return `
@@ -393,9 +425,9 @@
     `;
   };
 
-  const renderAllDriversModal = (payload) => `
+  const renderAllDriversModal = (payload, memberDriversSnapshot = null) => `
     <h3 class="gaia-dashboard__modal-title">All Drivers</h3>
-    ${renderDriversSection(combinedDashboardDrivers(payload), payload && payload.modalModels ? payload.modalModels : {}, 12)}
+    ${renderDriversSection(combinedMissionDrivers(payload, memberDriversSnapshot), payload && payload.modalModels ? payload.modalModels : {}, 12)}
     <div class="gaia-dashboard__modal-actions">
       <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-modal-close="1">Close</button>
     </div>
@@ -914,7 +946,8 @@
       .toLowerCase();
 
   const dedupeSymptomCatalog = (items) => {
-    const seen = new Set();
+    const seenCodes = new Set();
+    const seenLabels = new Set();
     return maybeArray(items).filter((item) => {
       if (!item || typeof item !== "object") return false;
       const normalizedCode = normalizeSymptomCode(item.symptom_code || item.symptomCode);
@@ -922,9 +955,11 @@
         textOrEmpty(item.label) ||
         (normalizedCode ? titleFromKey(normalizedCode) : "");
       const normalizedLabel = normalizeSymptomLabel(displayLabel);
-      const dedupeKey = normalizedLabel || normalizedCode;
-      if (!dedupeKey || seen.has(dedupeKey)) return false;
-      seen.add(dedupeKey);
+      if (!normalizedCode && !normalizedLabel) return false;
+      if (normalizedCode && seenCodes.has(normalizedCode)) return false;
+      if (normalizedLabel && seenLabels.has(normalizedLabel)) return false;
+      if (normalizedCode) seenCodes.add(normalizedCode);
+      if (normalizedLabel) seenLabels.add(normalizedLabel);
       return true;
     });
   };
@@ -1117,11 +1152,48 @@
 
   const routeFor = (key, fallback = "") => normalizeBase(memberRoutes[key] || fallback);
 
+  const currentSymptomUpdateRoute = (episodeId) => {
+    const base = routeFor("currentSymptomUpdatesBase");
+    if (!base || !episodeId) return "";
+    return `${base}/${encodeURIComponent(episodeId)}/updates`;
+  };
+
+  const followUpRespondRoute = (promptId) => {
+    const base = routeFor("followUpBase");
+    if (!base || !promptId) return "";
+    return `${base}/${encodeURIComponent(promptId)}/respond`;
+  };
+
+  const followUpDismissRoute = (promptId) => {
+    const base = routeFor("followUpBase");
+    if (!base || !promptId) return "";
+    return `${base}/${encodeURIComponent(promptId)}/dismiss`;
+  };
+
+  const updateCurrentSymptomState = async (token, episodeId, body) => {
+    const url = currentSymptomUpdateRoute(episodeId);
+    if (!url) throw new Error("Current symptom update route is not configured.");
+    return postJson(url, token, body || {});
+  };
+
+  const respondCurrentSymptomFollowUp = async (token, promptId, body) => {
+    const url = followUpRespondRoute(promptId);
+    if (!url) throw new Error("Symptom follow-up route is not configured.");
+    return postJson(url, token, body || {});
+  };
+
+  const dismissCurrentSymptomFollowUp = async (token, promptId, body) => {
+    const url = followUpDismissRoute(promptId);
+    if (!url) throw new Error("Symptom follow-up dismiss route is not configured.");
+    return postJson(url, token, body || {});
+  };
+
   const memberHubLoaders = (token) => {
     const timezone = (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || "America/Chicago";
     return {
       profilePreferences: () =>
         fetchJson(routeFor("profilePreferences"), token).then((payload) => extractProfilePreferences(payload) || {}),
+      drivers: () => fetchJson(routeFor("drivers"), token),
       features: () => fetchJsonWithParams(routeFor("features"), token, { tz: timezone }),
       currentSymptoms: () => fetchJsonWithParams(routeFor("currentSymptoms"), token, { window_hours: 12 }),
       dailyCheckIn: () => fetchJson(routeFor("dailyCheckIn"), token),
@@ -1139,6 +1211,7 @@
 
   const defaultLoadingKeys = () => ({
     profilePreferences: false,
+    drivers: false,
     features: false,
     currentSymptoms: false,
     dailyCheckIn: false,
@@ -1223,7 +1296,7 @@
   const hydrateTabData = (root, state, tab) => {
     const key = normalizeTabKey(tab);
     if (key === "mission") {
-      hydrateMemberKeys(root, state, ["outlook", "currentSymptoms", "dailyCheckIn"]);
+      hydrateMemberKeys(root, state, ["drivers", "outlook", "currentSymptoms", "dailyCheckIn"]);
       return;
     }
     if (key === "body") {
@@ -1253,7 +1326,7 @@
     idle(() => {
       hydrateMemberKeys(root, state, ["profilePreferences", "currentSymptoms", "dailyCheckIn", "lunar", "patternsSummary"]);
       idle(() => {
-        hydrateMemberKeys(root, state, ["features", "outlook"]);
+        hydrateMemberKeys(root, state, ["drivers", "features", "outlook"]);
       });
     });
   };
@@ -1493,6 +1566,158 @@
     }
   };
 
+  const refreshCurrentSymptomsInBackground = async (root, state) => {
+    try {
+      state.member.currentSymptoms = await fetchJsonWithParams(
+        routeFor("currentSymptoms"),
+        state.authCtx && state.authCtx.token ? state.authCtx.token : "",
+        { window_hours: 12 }
+      );
+      delete state.member.errors.currentSymptoms;
+    } catch (err) {
+      state.member.errors.currentSymptoms = err && err.message ? err.message : String(err);
+    } finally {
+      renderMemberHub(root, state);
+    }
+  };
+
+  const commitCurrentSymptomStateChange = async (root, state, item, nextState) => {
+    const episodeId = textOrEmpty(item && item.id);
+    if (!episodeId || isCurrentSymptomPending(state, episodeId)) return;
+    const normalizedState = normalizeCurrentSymptomState(nextState);
+    const prompt = maybeObject(item && item.pending_follow_up);
+    const previousSnapshot = cloneJson(state.member.currentSymptoms);
+    const previousStatus = currentSymptomRowStatus(state, episodeId);
+    setCurrentSymptomPending(state, episodeId, true);
+    setCurrentSymptomRowStatus(state, episodeId, normalizedState === "resolved" ? "Saving resolution…" : "Saving update…", false);
+    updateCurrentSymptomsSnapshot(state, (snapshot) => {
+      const items = maybeArray(snapshot.items);
+      const index = items.findIndex((row) => textOrEmpty(row && row.id) === episodeId);
+      if (index < 0) return;
+      if (normalizedState === "resolved") {
+        items.splice(index, 1);
+      } else {
+        items[index] = {
+          ...items[index],
+          current_state: normalizedState,
+          current_context_badge: normalizedState === "improving" ? "Trending better" : items[index].current_context_badge,
+          pending_follow_up: null,
+          last_interaction_at: new Date().toISOString(),
+        };
+      }
+      snapshot.items = items;
+    });
+    renderMemberHub(root, state);
+    try {
+      const token = state.authCtx && state.authCtx.token ? state.authCtx.token : "";
+      let response;
+      if (prompt && textOrEmpty(prompt.id)) {
+        response = await respondCurrentSymptomFollowUp(token, prompt.id, {
+          state: normalizedState,
+          ts_utc: new Date().toISOString(),
+        });
+      } else {
+        response = await updateCurrentSymptomState(token, episodeId, {
+          state: normalizedState,
+          ts_utc: new Date().toISOString(),
+        });
+      }
+      if (response && response.ok === false) {
+        throw new Error(response.friendly_error || response.error || "Could not update symptom.");
+      }
+      const payload = extractEnvelopeData(response);
+      if (prompt && payload && typeof payload === "object" && payload.episode) {
+        upsertCurrentSymptomItem(state, payload.episode);
+      } else if (payload && typeof payload === "object") {
+        upsertCurrentSymptomItem(state, payload);
+      }
+      setCurrentSymptomRowStatus(
+        state,
+        episodeId,
+        normalizedState === "resolved"
+          ? `${textOrEmpty(item && item.label) || "Symptom"} resolved.`
+          : `${textOrEmpty(item && item.label) || "Symptom"} updated.`,
+        false
+      );
+      delete state.member.errors.currentSymptoms;
+      renderMemberHub(root, state);
+      refreshCurrentSymptomsInBackground(root, state);
+    } catch (err) {
+      state.member.currentSymptoms = previousSnapshot;
+      if (previousStatus && previousStatus.message) {
+        setCurrentSymptomRowStatus(state, episodeId, previousStatus.message, !!previousStatus.isError);
+      } else {
+        setCurrentSymptomRowStatus(
+          state,
+          episodeId,
+          err && err.message ? err.message : "Could not update symptom.",
+          true
+        );
+      }
+      renderMemberHub(root, state);
+    } finally {
+      setCurrentSymptomPending(state, episodeId, false);
+      renderMemberHub(root, state);
+    }
+  };
+
+  const moveCurrentSymptomFollowUp = async (root, state, item, action) => {
+    const episodeId = textOrEmpty(item && item.id);
+    const prompt = maybeObject(item && item.pending_follow_up);
+    if (!episodeId || !prompt || !textOrEmpty(prompt.id) || isCurrentSymptomPending(state, episodeId)) return;
+    const previousSnapshot = cloneJson(state.member.currentSymptoms);
+    setCurrentSymptomPending(state, episodeId, true);
+    setCurrentSymptomRowStatus(
+      state,
+      episodeId,
+      action === "dismiss" ? "Dismissing follow-up…" : "Moving follow-up later…",
+      false
+    );
+    updateCurrentSymptomsSnapshot(state, (snapshot) => {
+      const items = maybeArray(snapshot.items);
+      const index = items.findIndex((row) => textOrEmpty(row && row.id) === episodeId);
+      if (index < 0) return;
+      items[index] = {
+        ...items[index],
+        pending_follow_up: null,
+        last_interaction_at: new Date().toISOString(),
+      };
+      snapshot.items = items;
+    });
+    renderMemberHub(root, state);
+    try {
+      const response = await dismissCurrentSymptomFollowUp(
+        state.authCtx && state.authCtx.token ? state.authCtx.token : "",
+        prompt.id,
+        action === "dismiss" ? { action: "dismiss" } : { action: "snooze", snooze_hours: 12 }
+      );
+      if (response && response.ok === false) {
+        throw new Error(response.friendly_error || response.error || "Could not update follow-up.");
+      }
+      setCurrentSymptomRowStatus(
+        state,
+        episodeId,
+        action === "dismiss" ? "Follow-up dismissed." : "Follow-up moved later.",
+        false
+      );
+      delete state.member.errors.currentSymptoms;
+      renderMemberHub(root, state);
+      refreshCurrentSymptomsInBackground(root, state);
+    } catch (err) {
+      state.member.currentSymptoms = previousSnapshot;
+      setCurrentSymptomRowStatus(
+        state,
+        episodeId,
+        err && err.message ? err.message : "Could not update follow-up.",
+        true
+      );
+      renderMemberHub(root, state);
+    } finally {
+      setCurrentSymptomPending(state, episodeId, false);
+      renderMemberHub(root, state);
+    }
+  };
+
   const renderMemberHub = (root, state) => {
     renderMissionControlApp(root, state);
     const payload = state.dashboard || {};
@@ -1552,7 +1777,7 @@
         }
         const allDriversBtn = target.closest("[data-open-all-drivers-modal]");
         if (allDriversBtn) {
-          openModal(root, renderAllDriversModal(payload));
+          openModal(root, renderAllDriversModal(payload, state.member && state.member.drivers));
           return;
         }
       });
@@ -1631,6 +1856,34 @@
           title: node.getAttribute("data-picker-title") || "Log symptoms",
           suggestedCodes: prefill,
         });
+      });
+    });
+
+    root.querySelectorAll("[data-current-symptom-action]").forEach((node) => {
+      node.addEventListener("click", async () => {
+        const episodeId = textOrEmpty(node.getAttribute("data-current-symptom-episode"));
+        const nextState = textOrEmpty(node.getAttribute("data-current-symptom-action"));
+        const item = currentSymptomItemById(state, episodeId);
+        if (!item) return;
+        await commitCurrentSymptomStateChange(root, state, item, nextState);
+      });
+    });
+
+    root.querySelectorAll("[data-current-symptom-followup-later]").forEach((node) => {
+      node.addEventListener("click", async () => {
+        const episodeId = textOrEmpty(node.getAttribute("data-current-symptom-followup-later"));
+        const item = currentSymptomItemById(state, episodeId);
+        if (!item) return;
+        await moveCurrentSymptomFollowUp(root, state, item, "later");
+      });
+    });
+
+    root.querySelectorAll("[data-current-symptom-followup-dismiss]").forEach((node) => {
+      node.addEventListener("click", async () => {
+        const episodeId = textOrEmpty(node.getAttribute("data-current-symptom-followup-dismiss"));
+        const item = currentSymptomItemById(state, episodeId);
+        if (!item) return;
+        await moveCurrentSymptomFollowUp(root, state, item, "dismiss");
       });
     });
 
@@ -2144,6 +2397,23 @@
     if (earthscopeSummary) {
       parts.push(`summary:${earthscopeSummary}`);
     }
+    const supportItems = supportItemsFromDashboard(state && state.dashboard);
+    if (supportItems.length) {
+      parts.push(
+        `support:${supportItems
+          .map((item) =>
+            [
+              textOrEmpty(item && item.key),
+              textOrEmpty(item && item.badge),
+              textOrEmpty(item && item.title),
+              textOrEmpty(item && item.message),
+            ]
+              .filter(Boolean)
+              .join(":")
+          )
+          .join("~")}`
+      );
+    }
     return parts.join("|");
   };
 
@@ -2302,6 +2572,261 @@
     maybeArray(currentSymptoms && currentSymptoms.items).find(
       (item) => item && item.pending_follow_up && typeof item.pending_follow_up === "object"
     ) || null;
+
+  const supportItemsFromDashboard = (dashboard) =>
+    maybeArray(dashboard && (dashboard.support_items || dashboard.supportItems))
+      .filter((item) => item && typeof item === "object")
+      .slice(0, 3);
+
+  const cloneJson = (value) => {
+    if (value == null) return value;
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+      return value;
+    }
+  };
+
+  const normalizeCurrentSymptomState = (value) => {
+    const token = textOrEmpty(value).toLowerCase();
+    return ["new", "ongoing", "improving", "worse", "resolved"].includes(token) ? token : "new";
+  };
+
+  const currentSymptomRowStatus = (state, episodeId) =>
+    state &&
+    state.ui &&
+    state.ui.currentSymptomStatusById &&
+    state.ui.currentSymptomStatusById[episodeId]
+      ? state.ui.currentSymptomStatusById[episodeId]
+      : null;
+
+  const setCurrentSymptomRowStatus = (state, episodeId, message, isError = false) => {
+    if (!state.ui.currentSymptomStatusById) state.ui.currentSymptomStatusById = {};
+    if (!message) {
+      delete state.ui.currentSymptomStatusById[episodeId];
+      return;
+    }
+    state.ui.currentSymptomStatusById[episodeId] = { message, isError: !!isError };
+  };
+
+  const setCurrentSymptomPending = (state, episodeId, pending) => {
+    if (!state.ui.currentSymptomPendingById) state.ui.currentSymptomPendingById = {};
+    if (pending) {
+      state.ui.currentSymptomPendingById[episodeId] = true;
+    } else {
+      delete state.ui.currentSymptomPendingById[episodeId];
+    }
+  };
+
+  const isCurrentSymptomPending = (state, episodeId) =>
+    !!(state && state.ui && state.ui.currentSymptomPendingById && state.ui.currentSymptomPendingById[episodeId]);
+
+  const currentSymptomItemById = (state, episodeId) =>
+    maybeArray(extractCurrentSymptoms(state && state.member && state.member.currentSymptoms)?.items).find(
+      (item) => textOrEmpty(item && item.id) === textOrEmpty(episodeId)
+    ) || null;
+
+  const currentSymptomStateLabel = (value) => {
+    const normalized = normalizeCurrentSymptomState(value);
+    if (normalized === "improving") return "Improving";
+    if (normalized === "worse") return "Worse";
+    if (normalized === "resolved") return "Resolved";
+    return "Ongoing";
+  };
+
+  const currentSymptomToneClass = (value) => {
+    const normalized = normalizeCurrentSymptomState(value);
+    if (normalized === "improving") return "is-positive";
+    if (normalized === "worse") return "is-warning";
+    if (normalized === "resolved") return "is-danger";
+    return "";
+  };
+
+  const renderCurrentSymptomRow = (state, item) => {
+    const episodeId = textOrEmpty(item && item.id);
+    const normalizedState = normalizeCurrentSymptomState(item && item.current_state);
+    const status = currentSymptomRowStatus(state, episodeId);
+    const pending = isCurrentSymptomPending(state, episodeId);
+    const prompt = maybeObject(item && item.pending_follow_up);
+    const primaryDriver = maybeArray(item && item.likely_drivers)[0];
+    const contextLine =
+      textOrEmpty(prompt && prompt.question_text) ||
+      textOrEmpty(item && item.note_preview) ||
+      textOrEmpty(primaryDriver && (primaryDriver.pattern_hint || primaryDriver.relation || primaryDriver.display)) ||
+      "Mark whether this is holding steady, easing, or getting heavier.";
+    const severity = Number(item && (item.severity ?? item.original_severity));
+    const severityLine = Number.isFinite(severity) ? `Severity ${Math.round(severity)}/10` : "Recently logged";
+    const timestampLine = formatIsoDate(
+      textOrEmpty(item && item.last_interaction_at) || textOrEmpty(item && item.logged_at)
+    );
+    const renderAction = (nextState, label) => {
+      const selected =
+        nextState === "ongoing"
+          ? normalizedState === "ongoing" || normalizedState === "new"
+          : normalizedState === nextState;
+      const toneClass = currentSymptomToneClass(nextState);
+      return `
+        <button
+          class="gaia-dashboard__current-symptom-btn${selected ? " is-selected" : ""}${toneClass ? ` ${toneClass}` : ""}"
+          type="button"
+          data-current-symptom-action="${esc(nextState)}"
+          data-current-symptom-episode="${esc(episodeId)}"
+          ${pending ? " disabled" : ""}
+        >
+          ${esc(label)}
+        </button>
+      `;
+    };
+
+    return `
+      <article class="gaia-dashboard__current-symptom-row${pending ? " is-pending" : ""}">
+        <div class="gaia-dashboard__current-symptom-head">
+          <div class="gaia-dashboard__current-symptom-copy">
+            <strong>${esc(textOrEmpty(item && item.label) || "Symptom")}</strong>
+            <span>${esc(`${severityLine} • ${timestampLine}`)}</span>
+            <span>${esc(contextLine)}</span>
+          </div>
+          <span class="${pillClass(normalizedState === "new" ? "watch" : normalizedState === "ongoing" ? "watch" : normalizedState)}">
+            ${esc(currentSymptomStateLabel(normalizedState))}
+          </span>
+        </div>
+        <div class="gaia-dashboard__current-symptom-actions">
+          ${renderAction("ongoing", "Still active")}
+          ${renderAction("improving", "Improving")}
+          ${renderAction("worse", "Worse")}
+          ${renderAction("resolved", "Resolved")}
+        </div>
+        ${
+          prompt && textOrEmpty(prompt.id)
+            ? `
+              <div class="gaia-dashboard__current-symptom-subactions">
+                <button
+                  class="gaia-dashboard__current-symptom-btn"
+                  type="button"
+                  data-current-symptom-followup-later="${esc(episodeId)}"
+                  ${pending ? " disabled" : ""}
+                >
+                  Later
+                </button>
+                <button
+                  class="gaia-dashboard__current-symptom-btn"
+                  type="button"
+                  data-current-symptom-followup-dismiss="${esc(episodeId)}"
+                  ${pending ? " disabled" : ""}
+                >
+                  Dismiss
+                </button>
+              </div>
+            `
+            : ""
+        }
+        ${
+          status && textOrEmpty(status.message)
+            ? `<div class="gaia-dashboard__current-symptom-feedback${status.isError ? " is-error" : ""}">${esc(status.message)}</div>`
+            : ""
+        }
+      </article>
+    `;
+  };
+
+  const renderGuideSupportCard = (state) => {
+    const items = supportItemsFromDashboard(state && state.dashboard);
+    if (!items.length) return "";
+    return `
+      <article class="gaia-dashboard__card">
+        <div class="gaia-dashboard__card-title-row">
+          <div>
+            <span class="gaia-dashboard__eyebrow">Support right now</span>
+            <h4 class="gaia-dashboard__card-title">${esc(textOrEmpty(items[0].title) || "A steadier way through it")}</h4>
+          </div>
+          ${
+            textOrEmpty(items[0].badge)
+              ? `<span class="${pillClass(textOrEmpty(items[0].tone) || "watch")}">${esc(items[0].badge)}</span>`
+              : ""
+          }
+        </div>
+        <div class="gaia-dashboard__support-list">
+          ${items
+            .map(
+              (item, index) => `
+                <div class="gaia-dashboard__support-card">
+                  <div class="gaia-dashboard__support-card-head">
+                    <div class="gaia-dashboard__support-card-title">${esc(textOrEmpty(item && item.title) || `Support note ${index + 1}`)}</div>
+                    ${
+                      textOrEmpty(item && item.badge)
+                        ? `<span class="${pillClass(textOrEmpty(item && item.tone) || "watch")}">${esc(item.badge)}</span>`
+                        : ""
+                    }
+                  </div>
+                  <div class="gaia-dashboard__support-card-copy">${esc(textOrEmpty(item && item.message) || "Keep following the body read and the current driver stack.")}</div>
+                  ${
+                    maybeArray(item && item.actions).length
+                      ? `<div class="gaia-dashboard__support-actions">${maybeArray(item.actions)
+                          .map((action) => `<span class="gaia-dashboard__meta-chip">${esc(action)}</span>`)
+                          .join("")}</div>`
+                      : ""
+                  }
+                </div>
+              `
+            )
+            .join("")}
+        </div>
+        <div class="gaia-dashboard__section-actions">
+          <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="body">Open Body</button>
+          <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="mission">Open Drivers</button>
+        </div>
+      </article>
+    `;
+  };
+
+  const rebuildCurrentSymptomsSummary = (snapshot) => {
+    if (!snapshot || typeof snapshot !== "object") return snapshot;
+    const items = maybeArray(snapshot.items).filter(Boolean);
+    const summary = {
+      ...(maybeObject(snapshot.summary) || {}),
+      active_count: items.length,
+      new_count: items.filter((item) => normalizeCurrentSymptomState(item && item.current_state) === "new").length,
+      ongoing_count: items.filter((item) => normalizeCurrentSymptomState(item && item.current_state) === "ongoing").length,
+      improving_count: items.filter((item) => normalizeCurrentSymptomState(item && item.current_state) === "improving").length,
+      worse_count: items.filter((item) => normalizeCurrentSymptomState(item && item.current_state) === "worse").length,
+      follow_up_available: items.some((item) => item && item.pending_follow_up),
+      last_updated_at: new Date().toISOString(),
+    };
+    snapshot.summary = summary;
+    return snapshot;
+  };
+
+  const updateCurrentSymptomsSnapshot = (state, updater) => {
+    const current = extractCurrentSymptoms(state && state.member && state.member.currentSymptoms);
+    if (!current || typeof updater !== "function") return;
+    const snapshot = cloneJson(current);
+    updater(snapshot);
+    rebuildCurrentSymptomsSummary(snapshot);
+    if (state.member.currentSymptoms && typeof state.member.currentSymptoms === "object" && "data" in state.member.currentSymptoms) {
+      state.member.currentSymptoms = {
+        ...state.member.currentSymptoms,
+        data: snapshot,
+      };
+    } else {
+      state.member.currentSymptoms = snapshot;
+    }
+  };
+
+  const upsertCurrentSymptomItem = (state, item) => {
+    if (!item || typeof item !== "object") return;
+    updateCurrentSymptomsSnapshot(state, (snapshot) => {
+      const items = maybeArray(snapshot.items);
+      const index = items.findIndex((row) => textOrEmpty(row && row.id) === textOrEmpty(item.id));
+      if (normalizeCurrentSymptomState(item.current_state) === "resolved") {
+        if (index >= 0) items.splice(index, 1);
+      } else if (index >= 0) {
+        items[index] = item;
+      } else {
+        items.unshift(item);
+      }
+      snapshot.items = items;
+    });
+  };
 
   const currentSymptomLabels = (currentSymptoms) =>
     maybeArray(currentSymptoms && currentSymptoms.items)
@@ -2834,7 +3359,7 @@
     const gaugesDelta = payload.gaugesDelta && typeof payload.gaugesDelta === "object" ? payload.gaugesDelta : {};
     const gaugeZones = normalizeGaugeZones(payload.gaugeZones);
     const gaugeLabels = payload.gaugeLabels && typeof payload.gaugeLabels === "object" ? payload.gaugeLabels : {};
-    const drivers = combinedDashboardDrivers(payload);
+    const drivers = combinedMissionDrivers(payload, state.member && state.member.drivers);
     const fallbackLabels = {
       pain: "Pain",
       focus: "Focus",
@@ -2894,7 +3419,7 @@
         ${renderMissionBodyContext(state)}
         ${renderDriversSection(drivers, payload.modalModels || {}, 3)}
         ${
-          drivers.length > 3
+          drivers.length
             ? `<div class="gaia-dashboard__section-actions"><button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-open-all-drivers-modal="1">View all drivers</button></div>`
             : ""
         }
@@ -2965,11 +3490,13 @@
               }</p>
               ${
                 symptomItems.length
-                  ? `<div class="gaia-dashboard__meta-row">${symptomItems.map((item) => `<span class="gaia-dashboard__meta-chip">${esc(item.label || item.symptom_code || "Symptom")}</span>`).join("")}</div>`
+                  ? `<div class="gaia-dashboard__current-symptom-list">${symptomItems
+                      .map((item) => renderCurrentSymptomRow(state, item))
+                      .join("")}</div>`
                   : `<div class="gaia-dashboard__helper">${
                       currentSymptomsLoading && !currentSymptoms
                         ? "Recent symptoms will appear here as soon as the current state loads."
-                        : currentSymptomsError
+                      : currentSymptomsError
                           ? "Once the feed reconnects, the current symptom list will return here."
                           : "As symptoms are logged or updated, they will show here with the most likely context."
                     }</div>`
@@ -3227,6 +3754,7 @@
             </div>
           </article>
           ${renderDailyCheckInCard(state, "guide")}
+          ${renderGuideSupportCard(state)}
           <article class="gaia-dashboard__card">
             <div class="gaia-dashboard__card-title-row">
               <div>
@@ -3256,7 +3784,7 @@
             </div>
             <p class="gaia-dashboard__card-copy">${
               followUp
-                ? esc(`${textOrEmpty(followUp.pending_follow_up && followUp.pending_follow_up.question_text) || "A follow-up is ready."} Open Body to respond in the real symptom workflow.`)
+                ? esc(`${textOrEmpty(followUp.pending_follow_up && followUp.pending_follow_up.question_text) || "A follow-up is ready."} Open Body to respond in the current symptom workflow.`)
                 : "If Gaia wants one more body detail, the follow-up will appear here and in Body."
             }</p>
             ${followUp ? `<button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="body">Open Body</button>` : ""}
@@ -3589,6 +4117,8 @@
           (dashboard && (dashboard.modal_models || dashboard.modalModels)) || {},
         earthscopeSummary:
           (dashboard && (dashboard.earthscope_summary || dashboard.earthscopeSummary)) || "",
+        supportItems:
+          (dashboard && (dashboard.support_items || dashboard.supportItems)) || [],
         geomagneticContext:
           (dashboard && (dashboard.geomagnetic_context || dashboard.geomagneticContext)) || null,
         alerts: dashboard && Array.isArray(dashboard.alerts) ? dashboard.alerts : [],
@@ -3602,6 +4132,7 @@
         dashboard: payload,
         member: {
           profilePreferences: null,
+          drivers: null,
           features: null,
           currentSymptoms: null,
           dailyCheckIn: null,
@@ -3650,6 +4181,8 @@
           checkInForm: null,
           patternsLoading: false,
           loadingKeys: defaultLoadingKeys(),
+          currentSymptomPendingById: {},
+          currentSymptomStatusById: {},
         },
       };
       if (state.ui.activeTab === "guide") {

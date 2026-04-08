@@ -731,6 +731,18 @@ private struct DashboardVoiceSemantic: Codable, Hashable {
     let actions: DashboardVoiceSemanticActions?
 }
 
+struct DashboardSupportItem: Codable, Hashable, Identifiable {
+    let key: String
+    let title: String
+    let message: String
+    let tone: String?
+    let badge: String?
+    let actions: [String]?
+    let visualKey: String?
+
+    var id: String { key }
+}
+
 private struct DashboardPayload: Codable {
     let day: String?
     let gauges: DashboardGaugeSet?
@@ -752,6 +764,7 @@ private struct DashboardPayload: Codable {
     let lastSymptomUpdateAt: String?
     let modalModels: DashboardModalModels?
     let earthscopeSummary: String?
+    let supportItems: [DashboardSupportItem]?
     let alerts: [DashboardAlertItem]?
     let entitled: Bool?
     let memberPost: DashboardEarthscopePost?
@@ -759,7 +772,7 @@ private struct DashboardPayload: Codable {
     let personalPost: DashboardEarthscopePost?
 
     private enum CodingKeys: String, CodingKey {
-        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, gaugesDelta, drivers, signalBar, driversCompact, primaryDriver, supportingDrivers, patternRelevantGauges, activePatternRefs, todayPersonalThemes, todayRelevanceExplanations, healthStatusExplainer, gaugeRecentLogBoosts, lastSymptomUpdateAt, modalModels, earthscopeSummary, alerts, entitled
+        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, gaugesDelta, drivers, signalBar, driversCompact, primaryDriver, supportingDrivers, patternRelevantGauges, activePatternRefs, todayPersonalThemes, todayRelevanceExplanations, healthStatusExplainer, gaugeRecentLogBoosts, lastSymptomUpdateAt, modalModels, earthscopeSummary, supportItems, alerts, entitled
         case memberPost
         case publicPost
         case personalPost
@@ -2076,6 +2089,7 @@ private func mergedDashboardPayload(
         lastSymptomUpdateAt: preferred.lastSymptomUpdateAt ?? fallback.lastSymptomUpdateAt,
         modalModels: preferred.modalModels ?? fallback.modalModels,
         earthscopeSummary: preferred.earthscopeSummary ?? fallback.earthscopeSummary,
+        supportItems: preferLongerArray(preferred.supportItems, fallback: fallback.supportItems),
         alerts: (preferred.alerts?.isEmpty == false) ? preferred.alerts : fallback.alerts,
         entitled: preferred.entitled ?? fallback.entitled,
         memberPost: preferred.memberPost ?? fallback.memberPost,
@@ -2824,6 +2838,8 @@ struct ContentView: View {
     @State private var dailyCheckInError: String? = nil
     @State private var showDailyCheckInSheet: Bool = false
     @State private var allDriversFocusKey: String? = nil
+    @State private var missionDriversPreview: AllDriversSnapshot? = nil
+    @State private var missionDriversPreviewLastFetchAt: Date = .distantPast
     @State private var isSubmittingSymptom: Bool = false
     @State private var symptomToast: SymptomToastState? = nil
     @State private var symptomSheetPrefill: SymptomQueuedEvent? = nil
@@ -2857,6 +2873,35 @@ struct ContentView: View {
     private struct MissionControlQuickLogRequest {
         let summary: String
         let events: [SymptomQueuedEvent]
+    }
+
+    private func missionDashboardDriverItem(from detail: DriverDetailItem) -> DashboardDriverItem {
+        DashboardDriverItem(
+            key: detail.key,
+            label: detail.label,
+            severity: detail.severity ?? detail.state,
+            state: detail.stateLabel ?? detail.state.capitalized,
+            value: detail.readingValue,
+            unit: detail.readingUnit,
+            display: detail.reading,
+            role: detail.role.rawValue,
+            roleLabel: detail.roleLabel,
+            rawSeverityScore: detail.displayScore,
+            personalRelevanceScore: detail.personalRelevanceScore,
+            personalReason: detail.semanticPersonalReason ?? detail.personalReason ?? detail.semanticShortReason ?? detail.shortReason,
+            activePatternRefs: nil
+        )
+    }
+
+    private var missionDriverPreviewItems: [DashboardDriverItem] {
+        let items = missionDriversPreview?.drivers ?? []
+        return items.map(missionDashboardDriverItem(from:))
+    }
+
+    private func missionDriverPreviewNeedsRefresh(force: Bool = false) -> Bool {
+        if force { return true }
+        if missionDriversPreview == nil { return true }
+        return Date().timeIntervalSince(missionDriversPreviewLastFetchAt) >= 180
     }
 
     private enum AppTab: Hashable {
@@ -3153,6 +3198,22 @@ struct ContentView: View {
         } else if let summary = guideEarthscopeSummary?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !summary.isEmpty {
             parts.append("summary:\(summary)")
+        }
+        let supportItems = dashboardPayload?.supportItems ?? []
+        if !supportItems.isEmpty {
+            let supportSignature = supportItems.prefix(3).map {
+                [
+                    $0.key,
+                    $0.badge?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+                    $0.title.trimmingCharacters(in: .whitespacesAndNewlines),
+                    $0.message.trimmingCharacters(in: .whitespacesAndNewlines),
+                ]
+                .filter { !$0.isEmpty }
+                .joined(separator: ":")
+            }.joined(separator: "~")
+            if !supportSignature.isEmpty {
+                parts.append("support:\(supportSignature)")
+            }
         }
         return parts.joined(separator: "|")
     }
@@ -4805,6 +4866,7 @@ struct ContentView: View {
                             lastSymptomUpdateAt: resolvedPayload.lastSymptomUpdateAt,
                             modalModels: resolvedPayload.modalModels,
                             earthscopeSummary: resolvedPayload.earthscopeSummary,
+                            supportItems: resolvedPayload.supportItems,
                             alerts: resolvedPayload.alerts,
                             entitled: resolvedPayload.entitled,
                             memberPost: currentMemberPost ?? currentPersonalPost ?? normalizedMember,
@@ -4857,6 +4919,7 @@ struct ContentView: View {
                             lastSymptomUpdateAt: resolvedPayload.lastSymptomUpdateAt ?? older.lastSymptomUpdateAt,
                             modalModels: resolvedPayload.modalModels ?? older.modalModels,
                             earthscopeSummary: resolvedPayload.earthscopeSummary,
+                            supportItems: preferLongerArray(resolvedPayload.supportItems, fallback: older.supportItems),
                             alerts: (resolvedPayload.alerts?.isEmpty == false) ? resolvedPayload.alerts : older.alerts,
                             entitled: resolvedPayload.entitled ?? older.entitled,
                             memberPost: resolvedPayload.memberPost ?? resolvedPayload.personalPost ?? older.memberPost ?? older.personalPost,
@@ -4913,6 +4976,7 @@ struct ContentView: View {
                             lastSymptomUpdateAt: resolvedPayload.lastSymptomUpdateAt,
                             modalModels: resolvedPayload.modalModels,
                             earthscopeSummary: resolvedPayload.earthscopeSummary,
+                            supportItems: resolvedPayload.supportItems,
                             alerts: resolvedPayload.alerts,
                             entitled: resolvedPayload.entitled,
                             memberPost: preferredMemberPost,
@@ -4958,6 +5022,7 @@ struct ContentView: View {
                         lastSymptomUpdateAt: resolvedPayload.lastSymptomUpdateAt,
                         modalModels: resolvedPayload.modalModels,
                         earthscopeSummary: resolvedPayload.earthscopeSummary,
+                        supportItems: resolvedPayload.supportItems,
                         alerts: resolvedPayload.alerts,
                         entitled: resolvedPayload.entitled,
                         memberPost: preferredEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay),
@@ -6793,6 +6858,26 @@ struct ContentView: View {
         }
     }
 
+    private func fetchMissionDriversPreview(
+        api override: APIClient? = nil,
+        force: Bool = false
+    ) async {
+        guard missionDriverPreviewNeedsRefresh(force: force) else { return }
+        let api = override ?? state.apiWithAuth()
+        do {
+            let payload = try await api.fetchAllDrivers()
+            await MainActor.run {
+                missionDriversPreview = payload
+                missionDriversPreviewLastFetchAt = Date()
+            }
+            appLog("[UI] mission drivers preview ok: count=\(payload.drivers.count)")
+        } catch is CancellationError {
+            return
+        } catch {
+            appLog("[UI] mission drivers preview error: \(error.localizedDescription)")
+        }
+    }
+
     private func fetchInsightsHubData(trigger: FeaturesFetchTrigger = .initial) async {
         let api = state.apiWithAuth()
         let shouldFetchHazards = await MainActor.run { hazardsBrief == nil && !hazardsLoading }
@@ -6803,6 +6888,7 @@ struct ContentView: View {
         async let userOutlookTask: Void = fetchUserOutlook()
         async let symptomsTask: Void = fetchSymptoms(api: api)
         async let currentSymptomsTask: Void = fetchCurrentSymptomsSummary(api: api)
+        async let missionDriversTask: Void = fetchMissionDriversPreview(api: api, force: trigger == .refresh)
         async let localTask: Void = fetchLocalHealth()
         async let magnetosphereTask: Void = fetchMagnetosphere(force: trigger == .refresh)
         async let hazardsTask: Void = {
@@ -6815,7 +6901,7 @@ struct ContentView: View {
                 await fetchQuakes()
             }
         }()
-        _ = await (featuresTask, forecastTask, outlookTask, userOutlookTask, symptomsTask, currentSymptomsTask, localTask, magnetosphereTask, hazardsTask, quakesTask)
+        _ = await (featuresTask, forecastTask, outlookTask, userOutlookTask, symptomsTask, currentSymptomsTask, missionDriversTask, localTask, magnetosphereTask, hazardsTask, quakesTask)
     }
 
     private func fetchSpaceWeatherDetailData(force: Bool = false) async {
@@ -7192,6 +7278,7 @@ struct ContentView: View {
                 userOutlookLoading: userOutlookLoading,
                 userOutlookError: userOutlookError,
                 drivers: dashboardDrivers,
+                previewDrivers: missionDriverPreviewItems,
                 driversCompact: dashboardDriversCompact,
                 whatMattersSummary: dashboardPayload?.todayRelevanceExplanations?.dailyBrief,
                 primaryDriver: dashboardPrimaryDriver,
@@ -7246,6 +7333,7 @@ struct ContentView: View {
         let userOutlookLoading: Bool
         let userOutlookError: String?
         let drivers: [DashboardDriverItem]
+        let previewDrivers: [DashboardDriverItem]
         let driversCompact: [String]
         let whatMattersSummary: String?
         let primaryDriver: DashboardDriverItem?
@@ -8759,7 +8847,7 @@ struct ContentView: View {
         }
 
         private func groupedDrivers() -> [DriverSectionGroup] {
-            let ordered = dedupedDrivers(([primaryDriver].compactMap { $0 }) + supportingDrivers + drivers)
+            let ordered = combinedWhatMattersDrivers()
             let fallbackLeadingKey = drivers.first.map { normalizedDriverKey($0.key) }
             let leadingKey = normalizedDriverKey(primaryDriver?.key).isEmpty ? fallbackLeadingKey : normalizedDriverKey(primaryDriver?.key)
             let supportingKeys = Set(supportingDrivers.map { normalizedDriverKey($0.key) }.filter { !$0.isEmpty })
@@ -8788,8 +8876,14 @@ struct ContentView: View {
             var id: String { driver.id }
         }
 
+        private func combinedWhatMattersDrivers() -> [DashboardDriverItem] {
+            let primaryStack = dedupedDrivers(([primaryDriver].compactMap { $0 }) + supportingDrivers + drivers)
+            guard primaryStack.count < 3 else { return primaryStack }
+            return dedupedDrivers(primaryStack + previewDrivers)
+        }
+
         private func topWhatMattersDrivers() -> [WhatMattersCardItem] {
-            let ordered = dedupedDrivers(([primaryDriver].compactMap { $0 }) + supportingDrivers + drivers)
+            let ordered = combinedWhatMattersDrivers()
             let fallbackLeadingKey = drivers.first.map { normalizedDriverKey($0.key) }
             let leadingKey = normalizedDriverKey(primaryDriver?.key).isEmpty ? fallbackLeadingKey : normalizedDriverKey(primaryDriver?.key)
             let supportingKeys = Set(supportingDrivers.map { normalizedDriverKey($0.key) }.filter { !$0.isEmpty })
@@ -14393,6 +14487,7 @@ struct ContentView: View {
                 currentSymptomsSnapshot: currentSymptomsSnapshot,
                 earthscopeSummary: guideEarthscopeSummary,
                 earthscopeUpdatedAt: guideEarthscopeUpdatedAt,
+                supportItems: dashboardPayload?.supportItems ?? [],
                 whatMattersNow: dashboardPayload?.driversCompact ?? [],
                 whatMattersSummary: dashboardPayload?.todayRelevanceExplanations?.dailyBrief,
                 initialFocus: guideHubFocus,

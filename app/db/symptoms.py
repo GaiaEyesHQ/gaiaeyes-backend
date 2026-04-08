@@ -60,6 +60,14 @@ def _normalize_note(value: Optional[str]) -> Optional[str]:
     return trimmed or None
 
 
+def _normalize_catalog_code(value: Optional[str]) -> str:
+    return str(value or "").strip().replace("-", "_").replace(" ", "_").upper()
+
+
+def _normalize_catalog_label(value: Optional[str]) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
 def _serialize_json(value: Any) -> Any:
     if isinstance(value, str):
         try:
@@ -469,7 +477,7 @@ async def fetch_symptom_codes(conn, *, include_inactive: bool = True) -> List[di
         is_active
     from dim.symptom_codes
     {where_clause}
-    order by label
+    order by is_active desc, label, symptom_code
     """
 
     where_clause = ""
@@ -482,8 +490,20 @@ async def fetch_symptom_codes(conn, *, include_inactive: bool = True) -> List[di
         await cur.execute(query)
         rows = await cur.fetchall()
 
+    seen_codes: set[str] = set()
+    seen_labels: set[str] = set()
     result: List[dict] = []
     for row in rows or []:
+        normalized_code = _normalize_catalog_code(row.get("symptom_code"))
+        normalized_label = _normalize_catalog_label(row.get("label"))
+        if normalized_code and normalized_code in seen_codes:
+            continue
+        if normalized_label and normalized_label in seen_labels:
+            continue
+        if normalized_code:
+            seen_codes.add(normalized_code)
+        if normalized_label:
+            seen_labels.add(normalized_label)
         result.append(
             {
                 "symptom_code": row.get("symptom_code"),

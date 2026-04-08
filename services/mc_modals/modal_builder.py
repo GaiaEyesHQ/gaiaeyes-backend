@@ -717,6 +717,33 @@ _SYMPTOM_DISPLAY_LABELS = {
     "WIRED": "a wired stretch",
 }
 
+_SUPPORT_PAIN_CODES = {
+    "HEADACHE",
+    "MIGRAINE",
+    "PAIN",
+    "NERVE_PAIN",
+    "JOINT_PAIN",
+    "STIFFNESS",
+    "SINUS_PRESSURE",
+}
+
+_SUPPORT_CALM_CODES = {
+    "ANXIOUS",
+    "WIRED",
+    "PALPITATIONS",
+    "CHEST_TIGHTNESS",
+    "RESP_IRRITATION",
+}
+
+_SUPPORT_FATIGUE_CODES = {
+    "DRAINED",
+    "FATIGUE",
+    "BRAIN_FOG",
+    "FOCUS_DRIFT",
+    "RESTLESS_SLEEP",
+    "INSOMNIA",
+}
+
 _EXPOSURE_DISPLAY_LABELS = {
     "allergen_exposure": "allergen exposure",
     "overexertion": "heavy activity",
@@ -2560,6 +2587,162 @@ def build_modal_models(
         "gauges": gauge_models,
         "drivers": driver_models,
     }
+
+
+def _support_item(
+    *,
+    key: str,
+    title: str,
+    message: str,
+    tone: str = "watch",
+    badge: Optional[str] = None,
+    actions: Optional[Iterable[str]] = None,
+    visual_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    return {
+        "key": key,
+        "title": title,
+        "message": _sentence(message),
+        "tone": tone or "watch",
+        "badge": str(badge or "").strip() or None,
+        "actions": _unique_lines([_sentence(line) for line in (actions or []) if str(line or "").strip()])[:3],
+        "visual_key": str(visual_key or "").strip() or None,
+    }
+
+
+def _driver_support_item(
+    *,
+    day: date,
+    driver: Optional[Dict[str, Any]],
+    profile: PersonalizationProfile,
+) -> Optional[Dict[str, Any]]:
+    if not isinstance(driver, dict):
+        return None
+    key = str(driver.get("key") or "").strip()
+    if not key:
+        return None
+    label = str(driver.get("label") or key.replace("_", " ").title()).strip() or key.replace("_", " ").title()
+    message = _sentence(str(driver.get("personal_reason") or "").strip())
+    if not message:
+        notices = _driver_notice_lines(day, key, profile)
+        message = _sentence(notices[0] if notices else f"{label} looks worth keeping an eye on.")
+    actions = _driver_action_lines(day, key, profile)
+    return _support_item(
+        key=f"driver:{key}",
+        title=f"What may help with {label}",
+        message=message,
+        tone=_driver_zone_key(driver),
+        badge=str(driver.get("severity") or driver.get("state") or "").strip() or None,
+        actions=actions[:2],
+        visual_key="driver",
+    )
+
+
+def _symptom_support_item(symptoms: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    rows = [dict(item) for item in (symptoms or {}).get("top_symptoms") or [] if isinstance(item, dict)]
+    codes = [
+        str(row.get("symptom_code") or "").strip().upper()
+        for row in rows
+        if str(row.get("symptom_code") or "").strip()
+    ]
+    if not codes:
+        return None
+
+    if any(code in _SUPPORT_PAIN_CODES for code in codes):
+        return _support_item(
+            key="symptom:pain_support",
+            title="Give yourself a gentler lane",
+            message="Pain, pressure, or stiffness looks closer to the surface right now.",
+            tone="watch",
+            badge="Body load",
+            actions=[
+                "Use warmth, hydration, or gentler pacing if those usually help.",
+                "Trim one heavier task if your body is asking for more margin.",
+            ],
+            visual_key="comfort",
+        )
+
+    if any(code in _SUPPORT_CALM_CODES for code in codes):
+        return _support_item(
+            key="symptom:calm_support",
+            title="Lower the nervous-system load",
+            message="A restless or more reactive edge looks easier to notice right now.",
+            tone="watch",
+            badge="Regulate",
+            actions=[
+                "Try a slower breathing break or a quieter environment before the edge stacks up.",
+                "Reduce extra stimulation for a bit if your system feels buzzy.",
+            ],
+            visual_key="calm",
+        )
+
+    if any(code in _SUPPORT_FATIGUE_CODES for code in codes):
+        return _support_item(
+            key="symptom:recovery_support",
+            title="Protect your recovery margin",
+            message="Fatigue, fog, or lighter recovery looks easier to notice right now.",
+            tone="mild",
+            badge="Pace",
+            actions=[
+                "Use shorter effort blocks and leave more room between demanding tasks.",
+                "Keep hydration, food, and wind-down timing steadier than usual.",
+            ],
+            visual_key="recovery",
+        )
+
+    return None
+
+
+def build_support_items(
+    *,
+    day: date,
+    drivers: Optional[Iterable[Dict[str, Any]]] = None,
+    user_tags: Optional[Iterable[Any]] = None,
+    symptoms: Optional[Dict[str, Any]] = None,
+    personal_relevance: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    profile = build_personalization_profile(user_tags)
+    ranked_drivers = [dict(item) for item in (drivers or []) if isinstance(item, dict)]
+    primary_driver = None
+    if isinstance(personal_relevance, dict) and isinstance(personal_relevance.get("primary_driver"), dict):
+        primary_driver = dict(personal_relevance.get("primary_driver") or {})
+    elif ranked_drivers:
+        primary_driver = ranked_drivers[0]
+
+    items: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for candidate in (
+        _driver_support_item(day=day, driver=primary_driver, profile=profile),
+        _symptom_support_item(symptoms),
+    ):
+        if not isinstance(candidate, dict):
+            continue
+        key = str(candidate.get("key") or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        items.append(candidate)
+
+    theme_line = None
+    if isinstance(personal_relevance, dict):
+        themes = personal_relevance.get("today_personal_themes") or []
+        if themes:
+            theme_line = _summary_theme_sentence(themes[0] if isinstance(themes[0], dict) else None)
+    if theme_line:
+        items.append(
+            _support_item(
+                key="theme:watch",
+                title="Pattern watch",
+                message=theme_line,
+                tone="mild",
+                badge="Patterns",
+                actions=["Keep logging what stands out so this watch can sharpen."],
+                visual_key="patterns",
+            )
+        )
+
+    return items[:3]
 
 
 def build_earthscope_summary(

@@ -38,6 +38,8 @@ add_action('wp_enqueue_scripts', function () {
         'symptomCodes' => esc_url_raw(rest_url('gaia/v1/member/symptom-codes')),
         'symptomLog' => esc_url_raw(rest_url('gaia/v1/member/symptoms')),
         'currentSymptoms' => esc_url_raw(rest_url('gaia/v1/member/current-symptoms')),
+        'currentSymptomUpdatesBase' => esc_url_raw(rest_url('gaia/v1/member/current-symptoms')),
+        'followUpBase' => esc_url_raw(rest_url('gaia/v1/member/follow-ups')),
         'dailyCheckIn' => esc_url_raw(rest_url('gaia/v1/member/daily-checkin')),
         'lunar' => esc_url_raw(rest_url('gaia/v1/member/lunar')),
         'localCheck' => esc_url_raw(rest_url('gaia/v1/member/local-check')),
@@ -201,18 +203,15 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__field label{font-size:12px;color:#9da9c1}
         .gaia-dashboard__field input,.gaia-dashboard__field select,.gaia-dashboard__field textarea{width:100%;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:#101826;color:#e8edf7;padding:10px 12px}
         .gaia-dashboard__field textarea{min-height:84px;resize:vertical}
-        .gaia-dashboard__exposure-grid{display:grid;grid-template-columns:1fr;gap:10px}
-        @media(min-width:700px){.gaia-dashboard__exposure-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-        .gaia-dashboard__toggle-chip{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:14px;background:#172130;border:1px solid rgba(255,255,255,.08);color:#d6e3fa;font-size:14px;line-height:1.45}
+        .gaia-dashboard__exposure-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}
+        .gaia-dashboard__toggle-chip{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:#172130;border:1px solid rgba(255,255,255,.08);color:#d6e3fa;font-size:14px;line-height:1.45;min-height:72px}
         .gaia-dashboard__toggle-chip input{accent-color:#2b8cff;flex:0 0 auto;margin-top:3px}
-        .gaia-dashboard__toggle-chip span{display:block}
+        .gaia-dashboard__toggle-chip span{display:block;flex:1 1 auto;min-width:0;white-space:normal;overflow-wrap:break-word;word-break:normal}
         .gaia-dashboard__helper{font-size:12px;color:#9da9c1;line-height:1.45}
         .gaia-dashboard__status-note{font-size:12px;color:#d8b176}
-        .gaia-dashboard__link-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-        @media(min-width:900px){.gaia-dashboard__link-grid{grid-template-columns:repeat(5,minmax(0,1fr));}}
-        .gaia-dashboard__link-grid--settings{grid-template-columns:repeat(2,minmax(0,1fr))}
-        @media(min-width:900px){.gaia-dashboard__link-grid--settings{grid-template-columns:repeat(3,minmax(0,1fr));}}
-        .gaia-dashboard__link-card{display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:14px;background:#151c28;border:1px solid rgba(255,255,255,.08);text-decoration:none;color:#e8edf7}
+        .gaia-dashboard__link-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:start}
+        .gaia-dashboard__link-grid--settings{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+        .gaia-dashboard__link-card{display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:14px;background:#151c28;border:1px solid rgba(255,255,255,.08);text-decoration:none;color:#e8edf7;min-height:0}
         .gaia-dashboard__link-card small{color:#9da9c1;line-height:1.45}
         .gaia-dashboard__empty{padding:16px;border-radius:14px;background:#121925;border:1px dashed rgba(255,255,255,.08);font-size:13px;color:#9da9c1;line-height:1.5}
         .gaia-dashboard__pill-row{display:flex;flex-wrap:wrap;gap:8px}
@@ -265,6 +264,30 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__symptom-selected-chip{display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border-radius:999px;background:#213150;border:1px solid rgba(103,167,255,.26);color:#e8f2ff;font-size:12px;font-weight:650}
         .gaia-dashboard__symptom-selected-chip button{border:0;background:transparent;color:inherit;cursor:pointer;padding:0;font-size:14px;line-height:1}
         .gaia-dashboard__symptom-empty{padding:12px;border-radius:12px;background:#121925;border:1px dashed rgba(255,255,255,.08);font-size:13px;color:#9da9c1;line-height:1.5}
+        .gaia-dashboard__current-symptom-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+        .gaia-dashboard__current-symptom-row{padding:12px;border-radius:14px;background:#151d2a;border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:10px}
+        .gaia-dashboard__current-symptom-row.is-pending{border-color:rgba(103,167,255,.28);box-shadow:0 0 0 1px rgba(103,167,255,.14) inset}
+        .gaia-dashboard__current-symptom-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+        .gaia-dashboard__current-symptom-copy{display:flex;flex-direction:column;gap:4px;min-width:0}
+        .gaia-dashboard__current-symptom-copy strong{font-size:15px;line-height:1.25}
+        .gaia-dashboard__current-symptom-copy span{font-size:12px;color:#9da9c1;line-height:1.45}
+        .gaia-dashboard__current-symptom-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+        .gaia-dashboard__current-symptom-subactions{display:flex;flex-wrap:wrap;gap:8px}
+        .gaia-dashboard__current-symptom-btn{border:1px solid rgba(255,255,255,.08);border-radius:999px;background:#172130;color:#e8edf7;padding:8px 12px;font-weight:650;cursor:pointer;transition:border-color .15s ease,background .15s ease}
+        .gaia-dashboard__current-symptom-btn:hover{border-color:rgba(156,192,255,.28)}
+        .gaia-dashboard__current-symptom-btn.is-selected{background:#213150;border-color:#67a7ff}
+        .gaia-dashboard__current-symptom-btn.is-positive{background:rgba(79,154,123,.16);border-color:rgba(120,210,169,.34)}
+        .gaia-dashboard__current-symptom-btn.is-warning{background:rgba(208,134,85,.16);border-color:rgba(224,171,118,.34)}
+        .gaia-dashboard__current-symptom-btn.is-danger{background:rgba(187,92,97,.14);border-color:rgba(230,122,126,.32)}
+        .gaia-dashboard__current-symptom-btn[disabled]{opacity:.55;cursor:not-allowed}
+        .gaia-dashboard__current-symptom-feedback{font-size:12px;line-height:1.45;color:#a9b8d4}
+        .gaia-dashboard__current-symptom-feedback.is-error{color:#ffb26c}
+        .gaia-dashboard__support-list{display:flex;flex-direction:column;gap:10px}
+        .gaia-dashboard__support-card{padding:12px;border-radius:14px;background:#151d2a;border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:8px}
+        .gaia-dashboard__support-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+        .gaia-dashboard__support-card-title{font-size:15px;font-weight:700;line-height:1.3}
+        .gaia-dashboard__support-card-copy{font-size:14px;line-height:1.55;color:#d5deef}
+        .gaia-dashboard__support-actions{display:flex;flex-wrap:wrap;gap:8px}
         .gaia-dashboard__modal-status-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;flex-wrap:wrap}
         .gaia-dashboard__modal-actions{display:flex;justify-content:space-between;gap:10px;margin-top:16px;flex-wrap:wrap}
         body.gaia-modal-open{overflow:hidden}
@@ -532,6 +555,48 @@ add_action('rest_api_init', function () {
                 'sanitize_callback' => 'absint',
             ],
         ],
+    ]);
+
+    register_rest_route('gaia/v1', '/member/current-symptoms/(?P<episode_id>[^/]+)/updates', [
+        'methods' => WP_REST_Server::CREATABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            $episode_id = sanitize_text_field((string) $request['episode_id']);
+            return gaia_dashboard_proxy_json(
+                $request,
+                '/v1/symptoms/current/' . rawurlencode($episode_id) . '/updates',
+                [],
+                WP_REST_Server::CREATABLE
+            );
+        },
+    ]);
+
+    register_rest_route('gaia/v1', '/member/follow-ups/(?P<prompt_id>[^/]+)/respond', [
+        'methods' => WP_REST_Server::CREATABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            $prompt_id = sanitize_text_field((string) $request['prompt_id']);
+            return gaia_dashboard_proxy_json(
+                $request,
+                '/v1/symptoms/follow-ups/' . rawurlencode($prompt_id) . '/respond',
+                [],
+                WP_REST_Server::CREATABLE
+            );
+        },
+    ]);
+
+    register_rest_route('gaia/v1', '/member/follow-ups/(?P<prompt_id>[^/]+)/dismiss', [
+        'methods' => WP_REST_Server::CREATABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function (WP_REST_Request $request) {
+            $prompt_id = sanitize_text_field((string) $request['prompt_id']);
+            return gaia_dashboard_proxy_json(
+                $request,
+                '/v1/symptoms/follow-ups/' . rawurlencode($prompt_id) . '/dismiss',
+                [],
+                WP_REST_Server::CREATABLE
+            );
+        },
     ]);
 
     register_rest_route('gaia/v1', '/member/daily-checkin', [

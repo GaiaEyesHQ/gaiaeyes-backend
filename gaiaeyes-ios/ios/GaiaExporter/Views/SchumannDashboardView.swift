@@ -552,6 +552,7 @@ private final class SchumannDashboardViewModel: ObservableObject {
     func loadIfNeeded(using state: AppState) async {
         guard !didInitialLoad else { return }
         didInitialLoad = true
+        await primeCachedData()
         await refresh(using: state, force: false)
     }
 
@@ -833,6 +834,24 @@ private final class SchumannDashboardViewModel: ObservableObject {
             return .success(try await block())
         } catch {
             return .failure(error)
+        }
+    }
+
+    private func primeCachedData() async {
+        if latest == nil, let cached: SchumannLatestResponse = await cache.readAny("sch_latest", as: SchumannLatestResponse.self) {
+            latest = cached
+        }
+        if seriesRows.isEmpty, let cached: SchumannSeriesResponse = await cache.readAny("sch_series_48h", as: SchumannSeriesResponse.self) {
+            seriesRows = cached.rows ?? []
+        }
+        if heatmap == nil, let cached: SchumannHeatmapResponse = await cache.readAny("sch_heatmap_48h", as: SchumannHeatmapResponse.self) {
+            heatmap = cached
+        }
+        if tomskLatest == nil, let cached: TomskParamsLatestResponse = await cache.readAny("sch_tomsk_latest", as: TomskParamsLatestResponse.self) {
+            tomskLatest = cached
+        }
+        if tomskSeries.isEmpty, let cached: TomskParamsSeriesResponse = await cache.readAny("sch_tomsk_series_48h", as: TomskParamsSeriesResponse.self) {
+            tomskSeries = cached.points ?? []
         }
     }
 
