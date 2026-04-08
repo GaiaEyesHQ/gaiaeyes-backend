@@ -3259,6 +3259,19 @@ struct ContentView: View {
         return false
     }
 
+    private func isTransientNetworkError(_ error: Error) -> Bool {
+        guard let uerr = error as? URLError else { return false }
+        let retryable: Set<URLError.Code> = [
+            .timedOut,
+            .networkConnectionLost,
+            .cannotFindHost,
+            .cannotConnectToHost,
+            .dnsLookupFailed,
+            .notConnectedToInternet
+        ]
+        return retryable.contains(uerr.code)
+    }
+
     private static func scrubError(_ error: String?) -> String? {
         guard let raw = error?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
         if raw.lowercased() == "cancelled" { return nil }
@@ -4806,14 +4819,20 @@ struct ContentView: View {
         let backoffs: [UInt64] = [500_000_000, 1_500_000_000]
         var lastError: Error?
         let cachedDashboardPayload = decodeDashboardPayload(from: dashboardPayloadCacheJSON)
+        let hadUsableDashboardAtStart = await MainActor.run {
+            dashboardPayload != nil || lastNonNilDashboardGauges != nil
+        }
+        let hasFallbackDashboard = hadUsableDashboardAtStart || cachedDashboardPayload != nil
+        let attemptCount = (!force && hasFallbackDashboard) ? 1 : 3
+        let requestTimeout: TimeInterval = hasFallbackDashboard ? 10 : 15
 
-        for attempt in 0..<3 {
+        for attempt in 0..<attemptCount {
             do {
                 let payload: DashboardPayload = try await api.getJSON(
                     endpoint,
                     as: DashboardPayload.self,
                     retries: 0,
-                    perRequestTimeout: 15
+                    perRequestTimeout: requestTimeout
                 )
                 var resolvedPayload = payload
                 var fallbackUsed = false
@@ -5050,7 +5069,7 @@ struct ContentView: View {
             } catch {
                 if isCancellationError(error) { return }
                 lastError = error
-                if attempt < backoffs.count {
+                if attempt < min(backoffs.count, attemptCount - 1) {
                     try? await Task.sleep(nanoseconds: backoffs[attempt])
                 }
             }
@@ -5058,14 +5077,23 @@ struct ContentView: View {
 
         let liveSchumannSignalBarItem = await fetchLiveSchumannSignalBarItem(api: api)
         await MainActor.run {
-            dashboardError = lastError?.localizedDescription ?? "dashboard fetch failed"
-            if let liveSchumannSignalBarItem {
-                self.liveSchumannSignalBarItem = liveSchumannSignalBarItem
-            }
-            if dashboardPayload == nil, let cached = decodeDashboardPayload(from: dashboardPayloadCacheJSON) {
+            if dashboardPayload == nil, let cached = cachedDashboardPayload {
                 dashboardPayload = cached
                 dashboardLastUpdatedText = "cached"
             }
+            let hasUsableDashboard = dashboardPayload != nil || lastNonNilDashboardGauges != nil
+            let shouldSuppressTransientRefreshError =
+                hasUsableDashboard && lastError.map(isTransientNetworkError) == true
+            dashboardError = shouldSuppressTransientRefreshError
+                ? nil
+                : (lastError?.localizedDescription ?? "dashboard fetch failed")
+            if let liveSchumannSignalBarItem {
+                self.liveSchumannSignalBarItem = liveSchumannSignalBarItem
+            }
+        }
+        if hasFallbackDashboard, lastError.map(isTransientNetworkError) == true {
+            appLog("[UI] dashboard refresh suppressed transient error: \(lastError?.localizedDescription ?? "unknown")")
+            return
         }
         appLog("[UI] dashboard payload error: \(lastError?.localizedDescription ?? "unknown")")
     }
@@ -5477,8 +5505,17 @@ struct ContentView: View {
         }
     }
 
+    private func preferredSymptomPresets(_ presets: [SymptomPreset], favoriteCodes: [String]) -> [SymptomPreset] {
+        let favoriteSet = Set(favoriteCodes.map(normalize))
+        guard !favoriteSet.isEmpty else { return presets }
+        let favorites = presets.filter { favoriteSet.contains(normalize($0.code)) }
+        let remaining = presets.filter { !favoriteSet.contains(normalize($0.code)) }
+        return favorites + remaining
+    }
+
     private var followUpFilterPresets: [SymptomPreset] {
-        Array(symptomPresets.filter { $0.code != SymptomCodeHelper.fallbackCode }.prefix(8))
+        let filtered = symptomPresets.filter { $0.code != SymptomCodeHelper.fallbackCode }
+        return Array(preferredSymptomPresets(filtered, favoriteCodes: experienceProfile.favoriteSymptomCodes).prefix(8))
     }
 
     private func followUpSymptomCodeBinding(_ code: String) -> Binding<Bool> {
@@ -7151,12 +7188,13 @@ struct ContentView: View {
     private func symptomLogSheet(isPresented: Binding<Bool>) -> some View {
         NavigationStack {
             SymptomsLogPage(
-                presets: symptomPresets,
+                presets: preferredSymptomPresets(symptomPresets, favoriteCodes: experienceProfile.favoriteSymptomCodes),
                 queuedCount: state.symptomQueueCount,
                 isOffline: isSymptomServiceOffline,
                 isSubmitting: $isSubmittingSymptom,
                 prefill: symptomSheetPrefill,
                 suggestionContext: currentSymptomSuggestionContext(prefill: symptomSheetPrefill),
+                favoriteSymptomCodes: experienceProfile.favoriteSymptomCodes,
                 showsCloseButton: true,
                 onSubmit: { events in
                     submitSymptomSheetEvents(events) {
@@ -9168,17 +9206,17 @@ struct ContentView: View {
         }
 
         var body: some View {
+            let rows = gaugeRows(gauges)
             GroupBox {
                 VStack(alignment: .leading, spacing: 12) {
                     if isLoading {
                         ProgressView("Loading dashboard…")
                             .font(.caption)
-                    } else if let errorMessage, !errorMessage.isEmpty {
+                    } else if rows.isEmpty, let errorMessage, !errorMessage.isEmpty {
                         Text("Dashboard refresh issue: \(errorMessage)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    let rows = gaugeRows(gauges)
                     if rows.isEmpty {
                         Text("Gauges are calibrating.")
                             .font(.caption)
@@ -12947,6 +12985,65 @@ struct ContentView: View {
         }
     }
 
+    private struct FavoriteSymptomsSettingsSection: View {
+        let presets: [SymptomPreset]
+        @Binding var favoriteSymptomCodes: [String]
+
+        private var availablePresets: [SymptomPreset] {
+            presets.filter { normalize($0.code) != SymptomCodeHelper.fallbackCode }
+        }
+
+        private func toggle(_ preset: SymptomPreset) {
+            let normalizedCode = normalize(preset.code)
+            var updated = favoriteSymptomCodes.map(normalize)
+            if updated.contains(normalizedCode) {
+                updated.removeAll { $0 == normalizedCode }
+            } else if updated.count < FavoriteSymptomPreference.maxCount {
+                updated.append(normalizedCode)
+            }
+            favoriteSymptomCodes = updated
+        }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Favorite symptoms")
+                    .font(.subheadline.weight(.semibold))
+                Text("Choose up to \(FavoriteSymptomPreference.maxCount) symptoms you log often. Gaia shows these first in the app and website symptom pickers.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    ForEach(availablePresets, id: \.id) { preset in
+                        let isSelected = favoriteSymptomCodes.map(normalize).contains(normalize(preset.code))
+                        Button {
+                            toggle(preset)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: isSelected ? "star.fill" : "star")
+                                    .foregroundColor(isSelected ? GaugePalette.elevated : .secondary)
+                                Text(preset.label)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundColor(.primary)
+                                    .multilineTextAlignment(.leading)
+                                Spacer(minLength: 0)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(Color.black.opacity(0.16))
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(isSelected ? GaugePalette.elevated.opacity(0.44) : Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!isSelected && favoriteSymptomCodes.count >= FavoriteSymptomPreference.maxCount)
+                    }
+                }
+            }
+        }
+    }
+
     private struct InsightsHealthSymptomsView: View {
         let current: FeaturesToday?
         let todayString: String
@@ -14890,6 +14987,11 @@ struct ContentView: View {
                                     smartStatSwapEnabled: $experienceProfile.smartStatSwapEnabled
                                 )
 
+                                FavoriteSymptomsSettingsSection(
+                                    presets: preferredSymptomPresets(symptomPresets, favoriteCodes: experienceProfile.favoriteSymptomCodes),
+                                    favoriteSymptomCodes: $experienceProfile.favoriteSymptomCodes
+                                )
+
                                 Toggle(isOn: $experienceProfile.lunarSensitivityDeclared) {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("Prioritize lunar overlays")
@@ -14921,6 +15023,9 @@ struct ContentView: View {
                         }
                         .onChange(of: experienceProfile.smartStatSwapEnabled, initial: false) { _, newValue in
                             Task { await saveProfilePreferences(UserExperienceProfileUpdate(smartStatSwapEnabled: newValue)) }
+                        }
+                        .onChange(of: experienceProfile.favoriteSymptomCodes, initial: false) { _, newValue in
+                            Task { await saveProfilePreferences(UserExperienceProfileUpdate(favoriteSymptomCodes: newValue.map(normalize))) }
                         }
                         .onChange(of: experienceProfile.lunarSensitivityDeclared, initial: false) { _, newValue in
                             Task { await saveProfilePreferences(UserExperienceProfileUpdate(lunarSensitivityDeclared: newValue)) }

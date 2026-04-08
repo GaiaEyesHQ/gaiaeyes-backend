@@ -164,6 +164,10 @@ enum TrackedStatKey: String, CaseIterable, Codable, Identifiable {
     static let maxPinnedCount = 5
 }
 
+enum FavoriteSymptomPreference {
+    static let maxCount = 6
+}
+
 enum OnboardingStep: String, CaseIterable, Codable, Identifiable {
     case welcome
     case mode
@@ -290,6 +294,7 @@ struct UserExperienceProfile: Codable, Equatable {
     var tempUnit: TemperatureUnit = .localeDefault
     var trackedStatKeys: [TrackedStatKey] = TrackedStatKey.defaultSelection
     var smartStatSwapEnabled: Bool = true
+    var favoriteSymptomCodes: [String] = []
     var lunarSensitivityDeclared: Bool = false
     var onboardingStep: OnboardingStep = .welcome
     var onboardingCompleted: Bool = false
@@ -306,6 +311,7 @@ struct UserExperienceProfile: Codable, Equatable {
         case tempUnit
         case trackedStatKeys
         case smartStatSwapEnabled
+        case favoriteSymptomCodes
         case lunarSensitivityDeclared
         case onboardingStep
         case onboardingCompleted
@@ -322,6 +328,7 @@ struct UserExperienceProfile: Codable, Equatable {
         tempUnit = try container.decodeIfPresent(TemperatureUnit.self, forKey: .tempUnit) ?? .localeDefault
         trackedStatKeys = try container.decodeIfPresent([TrackedStatKey].self, forKey: .trackedStatKeys) ?? TrackedStatKey.defaultSelection
         smartStatSwapEnabled = try container.decodeIfPresent(Bool.self, forKey: .smartStatSwapEnabled) ?? true
+        favoriteSymptomCodes = try container.decodeIfPresent([String].self, forKey: .favoriteSymptomCodes) ?? []
         lunarSensitivityDeclared = try container.decodeIfPresent(Bool.self, forKey: .lunarSensitivityDeclared) ?? false
         onboardingStep = try container.decodeIfPresent(OnboardingStep.self, forKey: .onboardingStep) ?? .welcome
         onboardingCompleted = try container.decodeIfPresent(Bool.self, forKey: .onboardingCompleted) ?? false
@@ -347,6 +354,7 @@ struct UserExperienceProfileUpdate: Encodable {
     var tempUnit: TemperatureUnit? = nil
     var trackedStatKeys: [TrackedStatKey]? = nil
     var smartStatSwapEnabled: Bool? = nil
+    var favoriteSymptomCodes: [String]? = nil
     var lunarSensitivityDeclared: Bool? = nil
     var onboardingStep: OnboardingStep? = nil
     var onboardingCompleted: Bool? = nil
@@ -360,6 +368,7 @@ struct UserExperienceProfileUpdate: Encodable {
         case tempUnit = "temp_unit"
         case trackedStatKeys = "tracked_stat_keys"
         case smartStatSwapEnabled = "smart_stat_swap_enabled"
+        case favoriteSymptomCodes = "favorite_symptom_codes"
         case lunarSensitivityDeclared = "lunar_sensitivity_declared"
         case onboardingStep = "onboarding_step"
         case onboardingCompleted = "onboarding_completed"

@@ -47,6 +47,7 @@ _TRACKED_STAT_KEYS = {
     "blood_pressure",
 }
 _DEFAULT_TRACKED_STAT_KEYS = ["resting_hr", "respiratory", "hrv", "spo2", "steps"]
+_MAX_FAVORITE_SYMPTOM_CODES = 6
 _ONBOARDING_STEPS = {
     "welcome",
     "mode",
@@ -111,6 +112,7 @@ class ProfilePreferencesIn(BaseModel):
     temp_unit: Optional[str] = Field(default=None)
     tracked_stat_keys: Optional[List[str]] = Field(default=None)
     smart_stat_swap_enabled: Optional[bool] = Field(default=None)
+    favorite_symptom_codes: Optional[List[str]] = Field(default=None)
     lunar_sensitivity_declared: Optional[bool] = Field(default=None)
     onboarding_step: Optional[str] = Field(default=None)
     onboarding_completed: Optional[bool] = Field(default=None)
@@ -181,6 +183,25 @@ def _normalize_tracked_stat_keys(value: Any) -> List[str]:
         if len(normalized) >= 5:
             break
     return normalized or list(_DEFAULT_TRACKED_STAT_KEYS)
+
+
+def _normalize_favorite_symptom_codes(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [part.strip() for part in value.split(",")]
+    if not isinstance(value, list):
+        raise HTTPException(status_code=400, detail="invalid favorite symptom codes")
+    normalized: List[str] = []
+    for item in value:
+        token = str(item or "").strip().upper().replace("-", "_").replace(" ", "_")
+        if not token:
+            continue
+        if token not in normalized:
+            normalized.append(token)
+        if len(normalized) >= _MAX_FAVORITE_SYMPTOM_CODES:
+            break
+    return normalized
 
 
 def _normalize_clock_hhmm(value: Optional[str], *, fallback: str) -> str:
@@ -313,6 +334,7 @@ def _default_profile_preferences() -> Dict[str, Any]:
         "temp_unit": None,
         "tracked_stat_keys": list(_DEFAULT_TRACKED_STAT_KEYS),
         "smart_stat_swap_enabled": True,
+        "favorite_symptom_codes": [],
         "lunar_sensitivity_declared": False,
         "onboarding_step": "welcome",
         "onboarding_completed": False,
@@ -412,6 +434,7 @@ async def _fetch_profile_preferences(conn, user_id: str) -> Dict[str, Any]:
         "temp_unit",
         "tracked_stat_keys",
         "smart_stat_swap_enabled",
+        "favorite_symptom_codes",
         "lunar_sensitivity_declared",
         "onboarding_step",
         "onboarding_completed",
@@ -447,6 +470,7 @@ async def _fetch_profile_preferences(conn, user_id: str) -> Dict[str, Any]:
             if row.get("smart_stat_swap_enabled") is not None
             else bool(defaults["smart_stat_swap_enabled"])
         ),
+        "favorite_symptom_codes": _normalize_favorite_symptom_codes(row.get("favorite_symptom_codes")),
         "lunar_sensitivity_declared": bool(row.get("lunar_sensitivity_declared")),
         "onboarding_step": _normalize_onboarding_step(row.get("onboarding_step"), fallback=defaults["onboarding_step"]),
         "onboarding_completed": bool(row.get("onboarding_completed")),
@@ -587,6 +611,11 @@ async def profile_preferences_upsert(
             bool(payload.smart_stat_swap_enabled)
             if payload.smart_stat_swap_enabled is not None
             else bool(current.get("smart_stat_swap_enabled", defaults["smart_stat_swap_enabled"]))
+        ),
+        "favorite_symptom_codes": _normalize_favorite_symptom_codes(
+            payload.favorite_symptom_codes
+            if payload.favorite_symptom_codes is not None
+            else current.get("favorite_symptom_codes")
         ),
         "lunar_sensitivity_declared": (
             bool(payload.lunar_sensitivity_declared)

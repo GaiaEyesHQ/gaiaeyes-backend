@@ -17,7 +17,6 @@ This file tracks the website-specific work that remains after the current Missio
 ## Settings / personalization
 
 - Add timezone controls to web Settings and wire them to the existing backend preference model.
-- Add favorite symptom preferences so the web picker can surface user-priority symptoms first.
 - Add notification / follow-up preferences to web Settings.
 
 ## Body / symptom workflow
@@ -25,7 +24,7 @@ This file tracks the website-specific work that remains after the current Missio
 - Add optimistic UI for active symptom feedback actions on the website.
 - Add a small saved / retry state on each symptom action.
 - Expand the symptom catalog with the first GI symptom set once backend/app parity is ready.
-- Add favorite symptom shortcuts before any freeform custom symptom system.
+- Add favorite symptom shortcuts beyond Settings before any freeform custom symptom system.
 
 ## Outlook / drivers / copy
 

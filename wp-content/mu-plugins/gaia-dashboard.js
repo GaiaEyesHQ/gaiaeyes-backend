@@ -7,6 +7,7 @@
   const supportUrl = cfg.supportUrl || "/support/";
   const publicLinks = cfg.publicLinks && typeof cfg.publicLinks === "object" ? cfg.publicLinks : {};
   const DEFAULT_TRACKED_STAT_KEYS = ["resting_hr", "respiratory", "hrv", "spo2", "steps"];
+  const MAX_FAVORITE_SYMPTOM_CODES = 6;
   const TRACKED_STAT_OPTIONS = [
     { key: "resting_hr", label: "Resting HR", detail: "Baseline shift or daily average" },
     { key: "respiratory", label: "Respiratory", detail: "Breathing-rate shift or average" },
@@ -48,6 +49,22 @@
       if (normalized.length < 5) normalized.push(key);
     });
     return normalized.length ? normalized : [...DEFAULT_TRACKED_STAT_KEYS];
+  };
+
+  const normalizeFavoriteSymptomCodes = (value) => {
+    const source = Array.isArray(value)
+      ? value
+      : typeof value === "string"
+        ? value.split(",")
+        : [];
+    const normalized = [];
+    source.forEach((item) => {
+      const code = normalizeSymptomCode(item);
+      if (!code) return;
+      if (normalized.includes(code)) return;
+      if (normalized.length < MAX_FAVORITE_SYMPTOM_CODES) normalized.push(code);
+    });
+    return normalized;
   };
 
   const pillClass = (severity) => {
@@ -1193,6 +1210,7 @@
     return {
       profilePreferences: () =>
         fetchJson(routeFor("profilePreferences"), token).then((payload) => extractProfilePreferences(payload) || {}),
+      symptomCodes: () => fetchJson(routeFor("symptomCodes"), token),
       drivers: () => fetchJson(routeFor("drivers"), token),
       features: () => fetchJsonWithParams(routeFor("features"), token, { tz: timezone }),
       currentSymptoms: () => fetchJsonWithParams(routeFor("currentSymptoms"), token, { window_hours: 12 }),
@@ -1211,6 +1229,7 @@
 
   const defaultLoadingKeys = () => ({
     profilePreferences: false,
+    symptomCodes: false,
     drivers: false,
     features: false,
     currentSymptoms: false,
@@ -1317,7 +1336,7 @@
       return;
     }
     if (key === "settings") {
-      hydrateMemberKeys(root, state, ["profilePreferences"]);
+      hydrateMemberKeys(root, state, ["profilePreferences", "symptomCodes"]);
     }
   };
 
@@ -1333,6 +1352,9 @@
 
   const renderSymptomPickerModal = (state) => {
     const picker = state && state.ui ? state.ui.symptomPicker : null;
+    const profilePreferences = extractProfilePreferences(state && state.member ? state.member.profilePreferences : null);
+    const favoriteCodes = profileFavoriteSymptomCodes(profilePreferences);
+    const favoriteSet = new Set(favoriteCodes);
     const catalog = dedupeSymptomCatalog(extractSymptomCodeCatalog(state && state.member ? state.member.symptomCodes : null))
       .filter((item) => item.is_active !== false && item.isActive !== false)
       .sort((a, b) =>
@@ -1348,10 +1370,22 @@
     const selectedItems = catalog.filter((item) =>
       selected.has(normalizeSymptomCode(item && (item.symptom_code || item.symptomCode)))
     );
+    const favoriteItems = catalog.filter((item) => {
+      const normalized = normalizeSymptomCode(item && (item.symptom_code || item.symptomCode));
+      if (!favoriteSet.has(normalized)) return false;
+      if (suggested.includes(normalized)) return false;
+      if (selected.has(normalized)) return false;
+      if (!query) return true;
+      const label = textOrEmpty(item && item.label).toLowerCase();
+      const description = textOrEmpty(item && item.description).toLowerCase();
+      const code = normalized.toLowerCase();
+      return label.includes(query) || description.includes(query) || code.includes(query);
+    });
     const remaining = catalog.filter((item) => {
       const normalized = normalizeSymptomCode(item && (item.symptom_code || item.symptomCode));
       if (suggested.includes(normalized)) return false;
       if (selected.has(normalized)) return false;
+      if (favoriteSet.has(normalized)) return false;
       if (!query) return true;
       const label = textOrEmpty(item && item.label).toLowerCase();
       const description = textOrEmpty(item && item.description).toLowerCase();
@@ -1408,6 +1442,31 @@
                 <div class="gaia-dashboard__symptom-grid">
                   ${suggested
                     .map((code) => renderOptionButton(code, symptomOptionLabel(code, catalog), ""))
+                    .join("")}
+                </div>
+              </section>
+            `
+            : ""
+        }
+        ${
+          favoriteItems.length
+            ? `
+              <section class="gaia-dashboard__symptom-section">
+                <div class="gaia-dashboard__symptom-section-head">
+                  <div class="gaia-dashboard__symptom-section-copy">
+                    <h5 class="gaia-dashboard__symptom-section-title">Favorite symptoms</h5>
+                    <span class="gaia-dashboard__helper">Your go-to symptoms appear first on app and web.</span>
+                  </div>
+                </div>
+                <div class="gaia-dashboard__symptom-grid">
+                  ${favoriteItems
+                    .map((item) =>
+                      renderOptionButton(
+                        normalizeSymptomCode(item && (item.symptom_code || item.symptomCode)),
+                        textOrEmpty(item && item.label) || titleFromKey(item && (item.symptom_code || item.symptomCode)),
+                        textOrEmpty(item && item.description)
+                      )
+                    )
                     .join("")}
                 </div>
               </section>
@@ -1494,6 +1553,15 @@
     return extractSymptomCodeCatalog(state.member.symptomCodes);
   };
 
+  const ensureProfilePreferencesLoaded = async (state) => {
+    const existing = extractProfilePreferences(state && state.member ? state.member.profilePreferences : null);
+    if (existing && typeof existing === "object") return existing;
+    const token = state && state.authCtx ? state.authCtx.token : "";
+    if (!token) throw new Error("Sign in again to load your settings.");
+    state.member.profilePreferences = await fetchJson(routeFor("profilePreferences"), token);
+    return extractProfilePreferences(state.member.profilePreferences) || {};
+  };
+
   const openSymptomPicker = async (root, state, options = {}) => {
     state.ui.symptomPicker = {
       title: textOrEmpty(options.title) || "Log symptoms",
@@ -1505,7 +1573,10 @@
     };
     openModal(root, renderSymptomPickerModal(state));
     try {
-      await ensureSymptomCodesLoaded(state);
+      await Promise.all([
+        ensureSymptomCodesLoaded(state),
+        ensureProfilePreferencesLoaded(state).catch(() => ({})),
+      ]);
       state.ui.symptomPicker.status = "";
       openModal(root, renderSymptomPickerModal(state));
     } catch (err) {
@@ -1834,6 +1905,21 @@
         await saveProfilePreferences(root, state, {
           smart_stat_swap_enabled: !!node.checked,
         });
+      });
+    });
+
+    root.querySelectorAll("[data-favorite-symptom-toggle]").forEach((node) => {
+      node.addEventListener("click", async () => {
+        const code = normalizeSymptomCode(node.getAttribute("data-favorite-symptom-toggle"));
+        if (!code) return;
+        const current = profileFavoriteSymptomCodes(extractProfilePreferences(state.member.profilePreferences));
+        let next = current.slice();
+        if (next.includes(code)) {
+          next = next.filter((item) => item !== code);
+        } else if (next.length < MAX_FAVORITE_SYMPTOM_CODES) {
+          next.push(code);
+        }
+        await saveProfilePreferences(root, state, { favorite_symptom_codes: next });
       });
     });
 
@@ -2836,6 +2922,9 @@
   const profileTrackedStatKeys = (profilePreferences) =>
     normalizeTrackedStatKeys(profilePreferences && profilePreferences.tracked_stat_keys);
 
+  const profileFavoriteSymptomCodes = (profilePreferences) =>
+    normalizeFavoriteSymptomCodes(profilePreferences && profilePreferences.favorite_symptom_codes);
+
   const profileSmartSwapEnabled = (profilePreferences) =>
     profilePreferences && typeof profilePreferences.smart_stat_swap_enabled === "boolean"
       ? profilePreferences.smart_stat_swap_enabled
@@ -3817,13 +3906,13 @@
     const optimistic = { ...previous, ...partial };
     state.member.profilePreferences = optimistic;
     state.ui.profilePreferencesSaving = true;
-    state.ui.profilePreferencesStatus = "Saving tracked stats…";
+    state.ui.profilePreferencesStatus = "Saving settings…";
     renderMemberHub(root, state);
     try {
       const payload = await putJson(url, token, partial);
       state.member.profilePreferences = extractProfilePreferences(payload) || optimistic;
       delete state.member.errors.profilePreferences;
-      state.ui.profilePreferencesStatus = "Tracked stats updated.";
+      state.ui.profilePreferencesStatus = "Settings updated.";
     } catch (err) {
       state.member.profilePreferences = previous;
       state.member.errors.profilePreferences = err && err.message ? err.message : String(err);
@@ -3840,7 +3929,13 @@
     const profilePreferences = extractProfilePreferences(state.member.profilePreferences) || {};
     const selectedTrackedStats = profileTrackedStatKeys(profilePreferences);
     const smartSwapEnabled = profileSmartSwapEnabled(profilePreferences);
+    const favoriteSymptomCodes = profileFavoriteSymptomCodes(profilePreferences);
+    const favoriteSymptomSet = new Set(favoriteSymptomCodes);
+    const symptomCatalog = dedupeSymptomCatalog(extractSymptomCodeCatalog(state.member.symptomCodes))
+      .filter((item) => item && item.is_active !== false && item.isActive !== false)
+      .filter((item) => normalizeSymptomCode(item && (item.symptom_code || item.symptomCode)) !== "OTHER");
     const profilePreferencesLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.profilePreferences);
+    const symptomCodesLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.symptomCodes);
     const profilePreferencesStatus = textOrEmpty(state.ui.profilePreferencesStatus || state.member.errors.profilePreferences);
     return `
       <section class="gaia-dashboard__section${state.ui.activeTab === "settings" ? " is-active" : ""}" data-section="settings">
@@ -3924,6 +4019,44 @@
               `
           }
           ${profilePreferencesStatus ? `<div class="gaia-dashboard__status-note">${esc(profilePreferencesStatus)}</div>` : ""}
+        </article>
+        <article class="gaia-dashboard__card">
+          <div class="gaia-dashboard__card-title-row">
+            <div>
+              <span class="gaia-dashboard__eyebrow">Symptoms</span>
+              <h4 class="gaia-dashboard__card-title">Favorite symptoms</h4>
+            </div>
+          </div>
+          <p class="gaia-dashboard__card-copy">Choose up to ${MAX_FAVORITE_SYMPTOM_CODES} symptoms you log often. Gaia shows these first in the app and website symptom pickers.</p>
+          ${
+            symptomCodesLoading && !state.member.symptomCodes
+              ? '<div class="gaia-dashboard__empty">Loading symptom options…</div>'
+              : symptomCatalog.length
+                ? `
+                  <div class="gaia-dashboard__symptom-grid">
+                    ${symptomCatalog
+                      .map((item) => {
+                        const code = normalizeSymptomCode(item && (item.symptom_code || item.symptomCode));
+                        const isSelected = favoriteSymptomSet.has(code);
+                        const label = textOrEmpty(item && item.label) || titleFromKey(code);
+                        const description = textOrEmpty(item && item.description);
+                        return `
+                          <button
+                            class="gaia-dashboard__symptom-pill${isSelected ? " is-selected" : ""}"
+                            type="button"
+                            data-favorite-symptom-toggle="${esc(code)}"
+                            ${!isSelected && favoriteSymptomCodes.length >= MAX_FAVORITE_SYMPTOM_CODES ? "disabled" : ""}
+                          >
+                            <span class="gaia-dashboard__symptom-pill-title">${esc(label)}</span>
+                            ${description ? `<span class="gaia-dashboard__symptom-pill-copy">${esc(description)}</span>` : ""}
+                          </button>
+                        `;
+                      })
+                      .join("")}
+                  </div>
+                `
+                : '<div class="gaia-dashboard__empty">Symptom options will appear here once the catalog loads.</div>'
+          }
         </article>
         <article class="gaia-dashboard__card">
           <div class="gaia-dashboard__card-title-row">

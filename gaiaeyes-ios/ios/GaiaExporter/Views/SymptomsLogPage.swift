@@ -415,6 +415,7 @@ struct SymptomsLogPage: View {
     @FocusState private var notesFocused: Bool
 
     private let symptomItems: [SymptomItem]
+    private let favoriteSymptoms: [SymptomItem]
     private let symptomsByCategory: [SymptomCategory: [SymptomItem]]
 
     init(
@@ -424,6 +425,7 @@ struct SymptomsLogPage: View {
         isSubmitting: Binding<Bool>,
         prefill: SymptomQueuedEvent? = nil,
         suggestionContext: SymptomSuggestionContext = .empty,
+        favoriteSymptomCodes: [String] = [],
         showsCloseButton: Bool = false,
         onSubmit: @escaping ([SymptomQueuedEvent]) -> Void
     ) {
@@ -435,9 +437,14 @@ struct SymptomsLogPage: View {
 
         let catalogItems = SymptomCatalog.sortedItems(from: presets)
         symptomItems = catalogItems
+        let favoriteSet = Set(favoriteSymptomCodes.map(normalize))
+        favoriteSymptoms = catalogItems.filter { favoriteSet.contains($0.id) && $0.id != SymptomCodeHelper.fallbackCode }
 
         var grouped: [SymptomCategory: [SymptomItem]] = [:]
         for item in catalogItems {
+            if favoriteSet.contains(item.id) && item.id != SymptomCodeHelper.fallbackCode {
+                continue
+            }
             grouped[item.category, default: []].append(item)
         }
         symptomsByCategory = grouped
@@ -587,6 +594,23 @@ struct SymptomsLogPage: View {
                         FlowChipGrid(items: selectedSymptomItems) { item in
                             SymptomChip(label: item.label, isSelected: true) {
                                 selectedSymptoms.remove(item)
+                            }
+                        }
+                    }
+                }
+
+                if !favoriteSymptoms.isEmpty {
+                    SymptomSectionCard(title: "Favorites", icon: "star.fill") {
+                        Text("These stay at the top because you marked them as go-to symptoms in Settings.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        FlowChipGrid(items: favoriteSymptoms) { item in
+                            SymptomChip(
+                                label: item.label,
+                                isSelected: selectedSymptoms.contains(item)
+                            ) {
+                                toggleSelection(item)
                             }
                         }
                     }
