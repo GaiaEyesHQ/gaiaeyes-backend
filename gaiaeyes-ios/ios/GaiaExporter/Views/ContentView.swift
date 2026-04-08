@@ -1520,6 +1520,48 @@ private struct SpaceForecastOutlook: Codable {
     }
 }
 
+private extension SpaceForecastOutlook {
+    init(
+        issuedAt: String?,
+        sections: [SpaceOutlookSection],
+        notes: [String]?,
+        kp: OutlookKp?,
+        bzNow: Double?,
+        swSpeedNowKms: Double?,
+        swDensityNowCm3: Double?,
+        headline: String?,
+        confidence: String?,
+        summary: String?,
+        alerts: [String]?,
+        impacts: OutlookImpacts?,
+        flares: OutlookFlares?,
+        cmes: OutlookCmes?,
+        bulletins: [String: SwpcBulletin]?,
+        swpcTextAlerts: [SwpcTextAlert]?,
+        forecastDaily: [SpaceForecastDay]?,
+        data: OutlookData?
+    ) {
+        self.issuedAt = issuedAt
+        self.sections = sections
+        self.notes = notes
+        self.kp = kp
+        self.bzNow = bzNow
+        self.swSpeedNowKms = swSpeedNowKms
+        self.swDensityNowCm3 = swDensityNowCm3
+        self.headline = headline
+        self.confidence = confidence
+        self.summary = summary
+        self.alerts = alerts
+        self.impacts = impacts
+        self.flares = flares
+        self.cmes = cmes
+        self.bulletins = bulletins
+        self.swpcTextAlerts = swpcTextAlerts
+        self.forecastDaily = forecastDaily
+        self.data = data
+    }
+}
+
 private struct SpaceForecastDay: Codable, Hashable, Identifiable {
     let forecastDay: String?
     let issuedAt: String?
@@ -1652,6 +1694,24 @@ private struct UserOutlookWindow: Codable, Hashable {
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
         supportLine = try container.decodeIfPresent(String.self, forKey: .supportLine)
         voiceSemantic = try container.decodeIfPresent(UserOutlookWindowVoiceSemantic.self, forKey: .voiceSemantic)
+    }
+}
+
+private extension UserOutlookWindow {
+    init(
+        windowHours: Int?,
+        likelyElevatedDomains: [UserOutlookDomain]?,
+        topDrivers: [UserOutlookDriver]?,
+        summary: String?,
+        supportLine: String?,
+        voiceSemantic: UserOutlookWindowVoiceSemantic?
+    ) {
+        self.windowHours = windowHours
+        self.likelyElevatedDomains = likelyElevatedDomains
+        self.topDrivers = topDrivers
+        self.summary = summary
+        self.supportLine = supportLine
+        self.voiceSemantic = voiceSemantic
     }
 }
 
@@ -1797,6 +1857,30 @@ private struct UserForecastOutlook: Codable {
     }
 }
 
+private extension UserForecastOutlook {
+    init(
+        ok: Bool?,
+        generatedAt: String?,
+        availableWindows: [String]?,
+        forecastDataReady: UserOutlookDataReady?,
+        next24h: UserOutlookWindow?,
+        next72h: UserOutlookWindow?,
+        next7d: UserOutlookWindow?,
+        error: String?,
+        voiceSemantics: UserOutlookVoiceSemantics?
+    ) {
+        self.ok = ok
+        self.generatedAt = generatedAt
+        self.availableWindows = availableWindows
+        self.forecastDataReady = forecastDataReady
+        self.next24h = next24h
+        self.next72h = next72h
+        self.next7d = next7d
+        self.error = error
+        self.voiceSemantics = voiceSemantics
+    }
+}
+
 private struct UserOutlookOverviewVoiceInterpretation: Codable, Hashable {
     let headerSummary: String?
     let availabilitySummary: String?
@@ -1865,6 +1949,139 @@ private func userOutlookNeedsRefresh(_ payload: UserForecastOutlook?) -> Bool {
     return !userOutlookWindowHasContent(payload.next24h)
         || !userOutlookWindowHasContent(payload.next72h)
         || !userOutlookWindowHasContent(payload.next7d)
+}
+
+private func preferLongerArray<T>(_ preferred: [T]?, fallback: [T]?) -> [T]? {
+    let preferredCount = preferred?.count ?? 0
+    let fallbackCount = fallback?.count ?? 0
+    if preferredCount == 0 {
+        return fallbackCount == 0 ? nil : fallback
+    }
+    if fallbackCount > preferredCount {
+        return fallback
+    }
+    return preferred
+}
+
+private func preferLongerDictionary<K: Hashable, V>(_ preferred: [K: V]?, fallback: [K: V]?) -> [K: V]? {
+    let preferredCount = preferred?.count ?? 0
+    let fallbackCount = fallback?.count ?? 0
+    if preferredCount == 0 {
+        return fallbackCount == 0 ? nil : fallback
+    }
+    if fallbackCount > preferredCount {
+        return fallback
+    }
+    return preferred
+}
+
+private func mergedUserOutlookWindow(_ preferred: UserOutlookWindow?, fallback: UserOutlookWindow?) -> UserOutlookWindow? {
+    guard let preferred else { return fallback }
+    guard let fallback else { return preferred }
+    return UserOutlookWindow(
+        windowHours: preferred.windowHours ?? fallback.windowHours,
+        likelyElevatedDomains: preferLongerArray(preferred.likelyElevatedDomains, fallback: fallback.likelyElevatedDomains),
+        topDrivers: preferLongerArray(preferred.topDrivers, fallback: fallback.topDrivers),
+        summary: preferred.summary?.nilIfTrimmedEmpty ?? fallback.summary?.nilIfTrimmedEmpty,
+        supportLine: preferred.supportLine?.nilIfTrimmedEmpty ?? fallback.supportLine?.nilIfTrimmedEmpty,
+        voiceSemantic: preferred.voiceSemantic ?? fallback.voiceSemantic
+    )
+}
+
+private func mergedUserOutlook(_ preferred: UserForecastOutlook?, fallback: UserForecastOutlook?) -> UserForecastOutlook? {
+    guard let preferred else { return fallback }
+    guard let fallback else { return preferred }
+    return UserForecastOutlook(
+        ok: preferred.ok ?? fallback.ok,
+        generatedAt: preferred.generatedAt ?? fallback.generatedAt,
+        availableWindows: preferLongerArray(preferred.availableWindows, fallback: fallback.availableWindows),
+        forecastDataReady: preferred.forecastDataReady ?? fallback.forecastDataReady,
+        next24h: mergedUserOutlookWindow(preferred.next24h, fallback: fallback.next24h),
+        next72h: mergedUserOutlookWindow(preferred.next72h, fallback: fallback.next72h),
+        next7d: mergedUserOutlookWindow(preferred.next7d, fallback: fallback.next7d),
+        error: preferred.error ?? fallback.error,
+        voiceSemantics: preferred.voiceSemantics ?? fallback.voiceSemantics
+    )
+}
+
+private func mergedSpaceOutlook(_ preferred: SpaceForecastOutlook?, fallback: SpaceForecastOutlook?) -> SpaceForecastOutlook? {
+    guard let preferred else { return fallback }
+    guard let fallback else { return preferred }
+    return SpaceForecastOutlook(
+        issuedAt: preferred.issuedAt ?? fallback.issuedAt,
+        sections: preferLongerArray(preferred.sections, fallback: fallback.sections) ?? [],
+        notes: preferLongerArray(preferred.notes, fallback: fallback.notes),
+        kp: preferred.kp ?? fallback.kp,
+        bzNow: preferred.bzNow ?? fallback.bzNow,
+        swSpeedNowKms: preferred.swSpeedNowKms ?? fallback.swSpeedNowKms,
+        swDensityNowCm3: preferred.swDensityNowCm3 ?? fallback.swDensityNowCm3,
+        headline: preferred.headline?.nilIfTrimmedEmpty ?? fallback.headline?.nilIfTrimmedEmpty,
+        confidence: preferred.confidence?.nilIfTrimmedEmpty ?? fallback.confidence?.nilIfTrimmedEmpty,
+        summary: preferred.summary?.nilIfTrimmedEmpty ?? fallback.summary?.nilIfTrimmedEmpty,
+        alerts: preferLongerArray(preferred.alerts, fallback: fallback.alerts),
+        impacts: preferred.impacts ?? fallback.impacts,
+        flares: preferred.flares ?? fallback.flares,
+        cmes: preferred.cmes ?? fallback.cmes,
+        bulletins: preferLongerDictionary(preferred.bulletins, fallback: fallback.bulletins),
+        swpcTextAlerts: preferLongerArray(preferred.swpcTextAlerts, fallback: fallback.swpcTextAlerts),
+        forecastDaily: preferLongerArray(preferred.forecastDaily, fallback: fallback.forecastDaily),
+        data: preferred.data ?? fallback.data
+    )
+}
+
+private func mergedDashboardPayload(
+    _ preferred: DashboardPayload,
+    fallback: DashboardPayload?,
+    requestedDay: String
+) -> DashboardPayload {
+    guard let fallback else { return preferred }
+    let fallbackDay = (fallback.day ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    guard fallbackDay.isEmpty || fallbackDay == requestedDay else { return preferred }
+
+    let preferredDrivers = preferred.drivers ?? []
+    let fallbackDrivers = fallback.drivers ?? []
+    let preferredSupporting = preferred.supportingDrivers ?? []
+    let fallbackSupporting = fallback.supportingDrivers ?? []
+    let preferredCompact = preferred.driversCompact ?? []
+    let fallbackCompact = fallback.driversCompact ?? []
+
+    let drivers = (preferredDrivers.count >= 3 || fallbackDrivers.count <= preferredDrivers.count)
+        ? preferred.drivers
+        : fallback.drivers
+    let driversCompact = (preferredCompact.count >= 3 || fallbackCompact.count <= preferredCompact.count)
+        ? preferred.driversCompact
+        : fallback.driversCompact
+    let supportingDrivers = (preferredSupporting.count >= 2 || fallbackSupporting.count <= preferredSupporting.count)
+        ? preferred.supportingDrivers
+        : fallback.supportingDrivers
+
+    return DashboardPayload(
+        day: preferred.day,
+        gauges: preferred.gauges,
+        gaugesMeta: preferred.gaugesMeta,
+        gaugeZones: preferred.gaugeZones,
+        gaugeLabels: preferred.gaugeLabels,
+        gaugesDelta: preferred.gaugesDelta,
+        drivers: drivers,
+        signalBar: preferred.signalBar ?? fallback.signalBar,
+        driversCompact: driversCompact,
+        primaryDriver: preferred.primaryDriver ?? fallback.primaryDriver,
+        supportingDrivers: supportingDrivers,
+        patternRelevantGauges: preferred.patternRelevantGauges ?? fallback.patternRelevantGauges,
+        activePatternRefs: preferred.activePatternRefs ?? fallback.activePatternRefs,
+        todayPersonalThemes: preferred.todayPersonalThemes ?? fallback.todayPersonalThemes,
+        todayRelevanceExplanations: preferred.todayRelevanceExplanations ?? fallback.todayRelevanceExplanations,
+        healthStatusExplainer: preferred.healthStatusExplainer ?? fallback.healthStatusExplainer,
+        gaugeRecentLogBoosts: preferred.gaugeRecentLogBoosts ?? fallback.gaugeRecentLogBoosts,
+        lastSymptomUpdateAt: preferred.lastSymptomUpdateAt ?? fallback.lastSymptomUpdateAt,
+        modalModels: preferred.modalModels ?? fallback.modalModels,
+        earthscopeSummary: preferred.earthscopeSummary ?? fallback.earthscopeSummary,
+        alerts: (preferred.alerts?.isEmpty == false) ? preferred.alerts : fallback.alerts,
+        entitled: preferred.entitled ?? fallback.entitled,
+        memberPost: preferred.memberPost ?? fallback.memberPost,
+        publicPost: preferred.publicPost ?? fallback.publicPost,
+        personalPost: preferred.personalPost ?? fallback.personalPost
+    )
 }
 
 private enum SpaceDetailSection: Hashable {
@@ -2492,6 +2709,8 @@ struct ContentView: View {
     @State private var spaceOutlookFetchInFlight: Bool = false
     @State private var spaceOutlookLastFetchAt: Date = .distantPast
     @State private var spaceOutlookLastFetchedDays: Int = 0
+    @State private var spaceOutlookRequestedDays: Int = 0
+    @State private var pendingSpaceOutlookFetchDays: Int = 0
     @State private var userOutlook: UserForecastOutlook? = nil
     @State private var lastKnownUserOutlook: UserForecastOutlook? = nil
     @State private var userOutlookLoading: Bool = false
@@ -4159,8 +4378,9 @@ struct ContentView: View {
     @MainActor
     private func applySpaceOutlook(_ payload: SpaceForecastOutlook) {
         spaceOutlook = payload
-        lastKnownSpaceOutlook = payload
-        if let encoded = try? JSONEncoder().encode(payload), let json = String(data: encoded, encoding: .utf8) {
+        let preserved = mergedSpaceOutlook(payload, fallback: lastKnownSpaceOutlook)
+        lastKnownSpaceOutlook = preserved
+        if let encoded = try? JSONEncoder().encode(preserved), let json = String(data: encoded, encoding: .utf8) {
             spaceOutlookCacheJSON = json
         }
     }
@@ -4168,8 +4388,9 @@ struct ContentView: View {
     @MainActor
     private func applyUserOutlook(_ payload: UserForecastOutlook) {
         userOutlook = payload
-        lastKnownUserOutlook = payload
-        if let encoded = try? JSONEncoder().encode(payload), let json = String(data: encoded, encoding: .utf8) {
+        let preserved = mergedUserOutlook(payload, fallback: lastKnownUserOutlook)
+        lastKnownUserOutlook = preserved
+        if let encoded = try? JSONEncoder().encode(preserved), let json = String(data: encoded, encoding: .utf8) {
             userOutlookCacheJSON = json
         }
     }
@@ -4190,6 +4411,7 @@ struct ContentView: View {
                 lastKnownSpaceOutlook?.forecastDaily?.count ?? 0
             )
             if spaceOutlookFetchInFlight {
+                pendingSpaceOutlookFetchDays = max(pendingSpaceOutlookFetchDays, normalizedDays)
                 return false
             }
             if !force &&
@@ -4199,13 +4421,21 @@ struct ContentView: View {
                 return false
             }
             spaceOutlookFetchInFlight = true
+            spaceOutlookRequestedDays = normalizedDays
             return true
         }
         guard shouldStart else { return }
         defer {
             Task { @MainActor in
+                let followUpDays = pendingSpaceOutlookFetchDays
+                let requestedDays = spaceOutlookRequestedDays
+                pendingSpaceOutlookFetchDays = 0
+                spaceOutlookRequestedDays = 0
                 spaceOutlookFetchInFlight = false
                 spaceOutlookLastFetchAt = Date()
+                if followUpDays > requestedDays {
+                    Task { await fetchSpaceOutlook(days: followUpDays, force: true) }
+                }
             }
         }
         let api = state.apiWithAuth()
@@ -4514,6 +4744,7 @@ struct ContentView: View {
         let startedAt = Date()
         let backoffs: [UInt64] = [500_000_000, 1_500_000_000]
         var lastError: Error?
+        let cachedDashboardPayload = decodeDashboardPayload(from: dashboardPayloadCacheJSON)
 
         for attempt in 0..<3 {
             do {
@@ -4690,6 +4921,12 @@ struct ContentView: View {
                         )
                     }
                 }
+
+                resolvedPayload = mergedDashboardPayload(
+                    resolvedPayload,
+                    fallback: cachedDashboardPayload,
+                    requestedDay: dashboardDay
+                )
 
                 let encoded = try? JSONEncoder().encode(resolvedPayload)
                 let json = encoded.flatMap { String(data: $0, encoding: .utf8) }
@@ -6558,6 +6795,8 @@ struct ContentView: View {
 
     private func fetchInsightsHubData(trigger: FeaturesFetchTrigger = .initial) async {
         let api = state.apiWithAuth()
+        let shouldFetchHazards = await MainActor.run { hazardsBrief == nil && !hazardsLoading }
+        let shouldFetchQuakes = await MainActor.run { quakeLatest == nil && quakeEvents.isEmpty && !quakeLoading }
         async let featuresTask: Void = fetchFeaturesToday(trigger: trigger, bypassGuard: trigger == .refresh)
         async let forecastTask: Void = fetchForecastSummary(force: trigger == .refresh)
         async let outlookTask: Void = fetchSpaceOutlook(days: 3, force: trigger == .refresh)
@@ -6566,14 +6805,17 @@ struct ContentView: View {
         async let currentSymptomsTask: Void = fetchCurrentSymptomsSummary(api: api)
         async let localTask: Void = fetchLocalHealth()
         async let magnetosphereTask: Void = fetchMagnetosphere(force: trigger == .refresh)
-        _ = await (featuresTask, forecastTask, outlookTask, userOutlookTask, symptomsTask, currentSymptomsTask, localTask, magnetosphereTask)
-
-        if hazardsBrief == nil {
-            await fetchHazardsBrief()
-        }
-        if quakeLatest == nil && quakeEvents.isEmpty {
-            await fetchQuakes()
-        }
+        async let hazardsTask: Void = {
+            if shouldFetchHazards {
+                await fetchHazardsBrief()
+            }
+        }()
+        async let quakesTask: Void = {
+            if shouldFetchQuakes {
+                await fetchQuakes()
+            }
+        }()
+        _ = await (featuresTask, forecastTask, outlookTask, userOutlookTask, symptomsTask, currentSymptomsTask, localTask, magnetosphereTask, hazardsTask, quakesTask)
     }
 
     private func fetchSpaceWeatherDetailData(force: Bool = false) async {
@@ -8564,7 +8806,7 @@ struct ContentView: View {
                         )
                     )
                 }
-                .prefix(2)
+                .prefix(3)
             )
         }
 
@@ -13760,11 +14002,11 @@ struct ContentView: View {
     }
 
     private var resolvedSpaceOutlookPayload: SpaceForecastOutlook? {
-        spaceOutlook ?? lastKnownSpaceOutlook
+        mergedSpaceOutlook(spaceOutlook, fallback: lastKnownSpaceOutlook)
     }
 
     private var resolvedUserOutlookPayload: UserForecastOutlook? {
-        userOutlook ?? lastKnownUserOutlook
+        mergedUserOutlook(userOutlook, fallback: lastKnownUserOutlook)
     }
 
     private var resolvedSeriesPayload: SpaceSeries? {

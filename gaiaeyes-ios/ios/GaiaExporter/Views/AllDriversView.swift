@@ -504,11 +504,6 @@ struct AllDriversView: View {
                         SummaryMetric(title: copy.categoryMetricTitle, value: summary.strongestCategory ?? "—")
                         SummaryMetric(title: copy.stateMetricTitle, value: summary.primaryState ?? "—")
                     }
-                    if let note = translatedText(snapshot?.semanticDailyBrief) ?? snapshot?.semanticDailyBrief, !note.isEmpty {
-                        Text(note)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.white.opacity(0.86))
-                    }
                 }
             }
         }

@@ -299,6 +299,26 @@
     return "background";
   };
 
+  const normalizeDriverKey = (driver) =>
+    textOrEmpty(driver && driver.key).trim().toLowerCase();
+
+  const dedupeDriverItems = (items) => {
+    const seen = new Set();
+    return maybeArray(items).filter((driver) => {
+      const key = normalizeDriverKey(driver);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
+  const combinedDashboardDrivers = (payload) =>
+    dedupeDriverItems([
+      payload && payload.primaryDriver ? payload.primaryDriver : null,
+      ...maybeArray(payload && payload.supportingDrivers),
+      ...maybeArray(payload && payload.drivers),
+    ]);
+
   const renderDriversSection = (drivers, modalModels, limit = 6) => {
     if (!Array.isArray(drivers) || !drivers.length) {
       return `
@@ -369,6 +389,103 @@
       <div class="gaia-dashboard__drivers">
         <h4>What Matters Now</h4>
         ${groups}
+      </div>
+    `;
+  };
+
+  const renderAllDriversModal = (payload) => `
+    <h3 class="gaia-dashboard__modal-title">All Drivers</h3>
+    ${renderDriversSection(combinedDashboardDrivers(payload), payload && payload.modalModels ? payload.modalModels : {}, 12)}
+    <div class="gaia-dashboard__modal-actions">
+      <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-modal-close="1">Close</button>
+    </div>
+  `;
+
+  const renderMissionBodyContext = (state) => {
+    const currentSymptoms = extractCurrentSymptoms(state.member.currentSymptoms);
+    const dailyCheckIn = extractDailyCheckIn(state.member.dailyCheckIn);
+    const currentSymptomsLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.currentSymptoms);
+    const dailyCheckInLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.dailyCheckIn);
+    const currentSymptomsError = textOrEmpty(state.member.errors && state.member.errors.currentSymptoms);
+    const dailyCheckInError = textOrEmpty(state.member.errors && state.member.errors.dailyCheckIn);
+    const summary = currentSymptoms && currentSymptoms.summary ? currentSymptoms.summary : {};
+    const symptomCount = Math.round(Number(summary.active_count || summary.activeCount || 0));
+    const symptomDriver = maybeArray(
+      currentSymptoms && (currentSymptoms.contributing_drivers || currentSymptoms.contributingDrivers)
+    )[0];
+    const dailyEntry = dailyCheckIn && dailyCheckIn.latest_entry ? dailyCheckIn.latest_entry : null;
+    const targetDay = textOrEmpty(dailyCheckIn && dailyCheckIn.target_day) || localDayISO();
+    const completedToday = !!(dailyEntry && textOrEmpty(dailyEntry.day) === targetDay);
+    const prompt = dailyCheckIn && dailyCheckIn.prompt ? dailyCheckIn.prompt : null;
+    const symptomTitle = currentSymptomsLoading && !currentSymptoms
+      ? "Loading current symptoms"
+      : symptomCount > 0
+        ? `${symptomCount} active right now`
+        : currentSymptomsError
+          ? "Current symptoms unavailable"
+          : "Nothing active right now";
+    const symptomCopy = currentSymptomsLoading && !currentSymptoms
+      ? "Checking the latest symptom timeline."
+      : symptomCount > 0
+        ? sentence(
+            currentSymptoms.current_context_summary || currentSymptoms.currentContextSummary || "",
+            "Follow-up check-ins can keep the timeline current."
+          )
+        : currentSymptomsError
+          ? "The current-symptoms service is having trouble right now."
+          : "Open Body to log symptoms or update the current timeline.";
+    const checkInTitle = dailyCheckInLoading && !dailyCheckIn
+      ? "Checking for today's prompt"
+      : completedToday
+        ? "Completed for today"
+        : prompt
+          ? "Today's quick check-in is ready"
+          : dailyCheckInError
+            ? "Check-in unavailable"
+            : "Nothing waiting right now";
+    const checkInCopy = dailyCheckInLoading && !dailyCheckIn
+      ? "Loading your daily check-in state."
+      : completedToday
+        ? `Completed for ${formatDayLabel(targetDay)}.`
+        : dailyCheckInError && !prompt
+          ? "The daily check-in service is having trouble right now."
+          : sentence(prompt && prompt.question_text, "Open Body to update the day read.");
+
+    return `
+      <div class="gaia-dashboard__drivers gaia-dashboard__drivers--body-context">
+        <h4>Body Context</h4>
+        <div class="gaia-dashboard__nav-grid">
+          <button class="gaia-dashboard__nav-card" type="button" data-tab-target="body">
+            <div class="gaia-dashboard__nav-card-head">
+              <strong>Current Symptoms</strong>
+              ${
+                symptomDriver
+                  ? `<span class="${pillClass(symptomDriver.severity || "watch")}">${esc(
+                      symptomDriver.label || symptomDriver.key || "Context"
+                    )}</span>`
+                  : symptomCount > 0
+                    ? `<span class="${pillClass("watch")}">${esc(`${symptomCount} active`)}</span>`
+                    : ""
+              }
+            </div>
+            <span>${esc(symptomTitle)}</span>
+            <span class="gaia-dashboard__helper">${esc(symptomCopy)}</span>
+          </button>
+          <button class="gaia-dashboard__nav-card" type="button" data-tab-target="body">
+            <div class="gaia-dashboard__nav-card-head">
+              <strong>Daily Check-In</strong>
+              ${
+                completedToday
+                  ? `<span class="${pillClass("low")}">Done</span>`
+                  : prompt
+                    ? `<span class="${pillClass("watch")}">Ready</span>`
+                    : ""
+              }
+            </div>
+            <span>${esc(checkInTitle)}</span>
+            <span class="gaia-dashboard__helper">${esc(checkInCopy)}</span>
+          </button>
+        </div>
       </div>
     `;
   };
@@ -1106,7 +1223,7 @@
   const hydrateTabData = (root, state, tab) => {
     const key = normalizeTabKey(tab);
     if (key === "mission") {
-      hydrateMemberKeys(root, state, ["outlook"]);
+      hydrateMemberKeys(root, state, ["outlook", "currentSymptoms", "dailyCheckIn"]);
       return;
     }
     if (key === "body") {
@@ -1161,6 +1278,7 @@
     const remaining = catalog.filter((item) => {
       const normalized = normalizeSymptomCode(item && (item.symptom_code || item.symptomCode));
       if (suggested.includes(normalized)) return false;
+      if (selected.has(normalized)) return false;
       if (!query) return true;
       const label = textOrEmpty(item && item.label).toLowerCase();
       const description = textOrEmpty(item && item.description).toLowerCase();
@@ -1421,6 +1539,21 @@
         const symptomSubmit = target.closest("[data-symptom-submit]");
         if (symptomSubmit) {
           await submitSymptomPicker(root, state);
+          return;
+        }
+        const modalDriver = target.closest("[data-driver-key]");
+        if (modalDriver) {
+          const key = modalDriver.getAttribute("data-driver-key");
+          const entry = key ? modalDrivers[key] : null;
+          if (entry) {
+            openModal(root, renderContextModal(entry));
+          }
+          return;
+        }
+        const allDriversBtn = target.closest("[data-open-all-drivers-modal]");
+        if (allDriversBtn) {
+          openModal(root, renderAllDriversModal(payload));
+          return;
         }
       });
       modalNode.addEventListener("input", (event) => {
@@ -2701,7 +2834,7 @@
     const gaugesDelta = payload.gaugesDelta && typeof payload.gaugesDelta === "object" ? payload.gaugesDelta : {};
     const gaugeZones = normalizeGaugeZones(payload.gaugeZones);
     const gaugeLabels = payload.gaugeLabels && typeof payload.gaugeLabels === "object" ? payload.gaugeLabels : {};
-    const drivers = Array.isArray(payload.drivers) ? payload.drivers : [];
+    const drivers = combinedDashboardDrivers(payload);
     const fallbackLabels = {
       pain: "Pain",
       focus: "Focus",
@@ -2758,7 +2891,13 @@
                 .join("")}</div>`
             : '<div class="gaia-dashboard__muted">No active alerts.</div>'
         }
-        ${renderDriversSection(drivers, payload.modalModels || {})}
+        ${renderMissionBodyContext(state)}
+        ${renderDriversSection(drivers, payload.modalModels || {}, 3)}
+        ${
+          drivers.length > 3
+            ? `<div class="gaia-dashboard__section-actions"><button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-open-all-drivers-modal="1">View all drivers</button></div>`
+            : ""
+        }
         ${renderGeomagneticContext(geomagneticContext)}
         ${renderMissionOutlookCard(state, earthscopeSummary)}
       </section>
@@ -3440,6 +3579,10 @@
           (dashboard && (dashboard.gauge_labels || dashboard.gaugeLabels)) || {},
         drivers:
           (dashboard && (dashboard.drivers || dashboard.driverModels)) || [],
+        primaryDriver:
+          (dashboard && (dashboard.primary_driver || dashboard.primaryDriver)) || null,
+        supportingDrivers:
+          (dashboard && (dashboard.supporting_drivers || dashboard.supportingDrivers)) || [],
         driversCompact:
           (dashboard && (dashboard.drivers_compact || dashboard.driversCompact)) || [],
         modalModels:
