@@ -44,6 +44,7 @@ add_action('wp_enqueue_scripts', function () {
         'lunar' => esc_url_raw(rest_url('gaia/v1/member/lunar')),
         'localCheck' => esc_url_raw(rest_url('gaia/v1/member/local-check')),
         'profilePreferences' => esc_url_raw(rest_url('gaia/v1/member/profile-preferences')),
+        'notifications' => esc_url_raw(rest_url('gaia/v1/member/notifications')),
     ];
 
     wp_localize_script('gaia-dashboard', 'GAIA_DASHBOARD_CFG', [
@@ -665,6 +666,23 @@ add_action('rest_api_init', function () {
             'permission_callback' => '__return_true',
             'callback' => function (WP_REST_Request $request) {
                 return gaia_dashboard_proxy_json($request, '/v1/profile/preferences', [], 'PUT');
+            },
+        ],
+    ]);
+
+    register_rest_route('gaia/v1', '/member/notifications', [
+        [
+            'methods' => WP_REST_Server::READABLE,
+            'permission_callback' => '__return_true',
+            'callback' => function (WP_REST_Request $request) {
+                return gaia_dashboard_proxy_json($request, '/v1/profile/notifications');
+            },
+        ],
+        [
+            'methods' => WP_REST_Server::EDITABLE,
+            'permission_callback' => '__return_true',
+            'callback' => function (WP_REST_Request $request) {
+                return gaia_dashboard_proxy_json($request, '/v1/profile/notifications', [], WP_REST_Server::EDITABLE);
             },
         ],
     ]);

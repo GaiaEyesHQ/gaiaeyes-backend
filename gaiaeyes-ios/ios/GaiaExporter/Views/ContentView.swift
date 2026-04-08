@@ -3277,6 +3277,16 @@ struct ContentView: View {
         if raw.lowercased() == "cancelled" { return nil }
         return raw
     }
+
+    private var preferredTimeZoneIdentifier: String {
+        let trimmed = notificationPreferences.timeZone.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? TimeZone.current.identifier : trimmed
+    }
+
+    private var featuresTodayPath: String {
+        let encoded = preferredTimeZoneIdentifier.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? preferredTimeZoneIdentifier
+        return "v1/features/today?tz=\(encoded)"
+    }
     
     private static let symptomDayFormatter: DateFormatter = {
         let df = DateFormatter()
@@ -3466,7 +3476,7 @@ struct ContentView: View {
 
         let api = state.apiWithAuth()
         do {
-            let envelope = try await api.fetchFeaturesDiagnostics(tz: "America/Chicago")
+            let envelope = try await api.fetchFeaturesDiagnostics(tz: preferredTimeZoneIdentifier)
             if let diagnostics = envelope.diagnostics {
                 featuresDiagnostics = diagnostics
                 let src = diagnostics.source ?? "-"
@@ -5443,7 +5453,9 @@ struct ContentView: View {
             }
         } catch {
             await MainActor.run {
-                notificationPreferences.timeZone = TimeZone.current.identifier
+                if notificationPreferences.timeZone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    notificationPreferences.timeZone = TimeZone.current.identifier
+                }
                 pushPermissionGranted = PushNotificationService.storedPermissionGranted()
                 pushDeviceToken = PushNotificationService.storedDeviceToken()
             }
@@ -5455,7 +5467,9 @@ struct ContentView: View {
         await MainActor.run {
             notificationSettingsSaving = true
             notificationSettingsMessage = nil
-            notificationPreferences.timeZone = TimeZone.current.identifier
+            if notificationPreferences.timeZone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                notificationPreferences.timeZone = TimeZone.current.identifier
+            }
         }
 
         var payload = await MainActor.run { notificationPreferences }
@@ -5494,6 +5508,7 @@ struct ContentView: View {
                     notificationSettingsMessage = "Notification settings saved"
                 }
             }
+            await fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
             AppAnalytics.track(saved.enabled ? "notifications_enabled" : "notifications_disabled")
         } catch {
             await MainActor.run {
@@ -6431,7 +6446,7 @@ struct ContentView: View {
         while attempt < maxAttempts {
             attempt += 1
             do {
-                let env: Envelope<FeaturesToday> = try await api.getJSON("v1/features/today", as: Envelope<FeaturesToday>.self)
+                let env: Envelope<FeaturesToday> = try await api.getJSON(featuresTodayPath, as: Envelope<FeaturesToday>.self)
                 lastEnvelope = env
 
                 let diagFlags = diagnosticsFlags(from: env.diagnostics)
@@ -13044,6 +13059,66 @@ struct ContentView: View {
         }
     }
 
+    private struct NotificationTimeZoneSettingsSection: View {
+        @Binding var timeZone: String
+
+        private var selectedTimeZone: String {
+            let trimmed = timeZone.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? TimeZone.current.identifier : trimmed
+        }
+
+        private var availableTimeZones: [String] {
+            var ordered: [String] = []
+            let preferred = [
+                selectedTimeZone,
+                TimeZone.current.identifier,
+                "America/Chicago",
+                "America/New_York",
+                "America/Denver",
+                "America/Los_Angeles",
+                "UTC",
+            ]
+            for identifier in preferred where !identifier.isEmpty && !ordered.contains(identifier) {
+                ordered.append(identifier)
+            }
+            for identifier in TimeZone.knownTimeZoneIdentifiers.sorted() where !ordered.contains(identifier) {
+                ordered.append(identifier)
+            }
+            return ordered
+        }
+
+        private func displayName(for identifier: String) -> String {
+            let normalized = identifier.replacingOccurrences(of: "_", with: " ")
+            if identifier == TimeZone.current.identifier {
+                return "\(normalized) (device)"
+            }
+            return normalized
+        }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Time zone")
+                    .font(.subheadline.weight(.semibold))
+                Text("Used for daily windows, check-in timing, reminders, and the member day boundary.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Picker("Time zone", selection: $timeZone) {
+                    ForEach(availableTimeZones, id: \.self) { identifier in
+                        Text(displayName(for: identifier)).tag(identifier)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Button("Use device time zone (\(TimeZone.current.identifier))") {
+                    timeZone = TimeZone.current.identifier
+                }
+                .buttonStyle(.borderless)
+                .font(.caption.weight(.semibold))
+            }
+        }
+    }
+
     private struct InsightsHealthSymptomsView: View {
         let current: FeaturesToday?
         let todayString: String
@@ -13876,12 +13951,14 @@ struct ContentView: View {
                 await state.updateBackendDBFlag()
                 let api = state.apiWithAuth()
                 async let a: Void = fetchDashboardPayload(force: true)
-                async let h: Void = fetchFeaturesToday(trigger: .initial, bypassGuard: true)
                 async let b: Void = fetchProfileSettings()
+                async let n: Void = fetchNotificationPreferences()
                 async let e: Void = fetchLatestCameraCheck()
                 async let f: Void = fetchCurrentSymptomsSummary(api: api)
                 async let g: Void = fetchDailyCheckInStatus(api: api)
-                _ = await (a, h, b, e, f, g)
+                _ = await (n, e, f, g)
+                async let h: Void = fetchFeaturesToday(trigger: .initial, bypassGuard: true)
+                _ = await (a, b, h)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
                 async let d: Void = refreshSymptomPresets(api: api)
                 _ = await (c, d)
@@ -13890,12 +13967,14 @@ struct ContentView: View {
                 await state.updateBackendDBFlag()
                 let api = state.apiWithAuth()
                 async let a: Void = fetchDashboardPayload(force: true)
-                async let h: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
                 async let b: Void = fetchProfileSettings()
+                async let n: Void = fetchNotificationPreferences()
                 async let e: Void = fetchLatestCameraCheck()
                 async let f: Void = fetchCurrentSymptomsSummary(api: api)
                 async let g: Void = fetchDailyCheckInStatus(api: api)
-                _ = await (a, h, b, e, f, g)
+                _ = await (n, e, f, g)
+                async let h: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
+                _ = await (a, b, h)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
                 async let d: Void = refreshSymptomPresets(api: api)
                 _ = await (c, d)
@@ -14570,308 +14649,7 @@ struct ContentView: View {
         }
     }
 
-    private var contentViewBody: some View {
-        let primaryModalShell = AnyView(
-            mainTabView
-        .sheet(isPresented: $showGuideSheet) {
-            GuideHubView(
-                profileStore: guideProfileStore,
-                api: state.apiWithAuth(),
-                helpContext: helpCenterContext,
-                dailyCheckInStatus: dailyCheckInStatus,
-                dailyCheckInLoading: dailyCheckInLoading,
-                dailyCheckInError: dailyCheckInError,
-                currentSymptomsSnapshot: currentSymptomsSnapshot,
-                earthscopeSummary: guideEarthscopeSummary,
-                earthscopeUpdatedAt: guideEarthscopeUpdatedAt,
-                supportItems: dashboardPayload?.supportItems ?? [],
-                whatMattersNow: dashboardPayload?.driversCompact ?? [],
-                whatMattersSummary: dashboardPayload?.todayRelevanceExplanations?.dailyBrief,
-                initialFocus: guideHubFocus,
-                onRefreshDailyCheckIn: {
-                    Task { await fetchDailyCheckInStatus(api: state.apiWithAuth()) }
-                },
-                onOpenEarthScope: {
-                    closeGuideHubThen {
-                        selectedTab = .home
-                    }
-                },
-                onOpenCurrentSymptoms: {
-                    closeGuideHubThen {
-                        openBody(route: .currentSymptoms)
-                    }
-                },
-                onOpenSettings: {
-                    closeGuideHubThen {
-                        showSettingsSheet()
-                    }
-                },
-                onOpenNotifications: {
-                    closeGuideHubThen {
-                        showNotificationSettingsSection = true
-                        showSettingsSheet()
-                    }
-                },
-                onOpenAllDrivers: {
-                    closeGuideHubThen {
-                        selectedTab = .explore
-                        openAllDrivers()
-                    }
-                },
-                onDailyCheckInStatusChanged: { status in
-                    dailyCheckInStatus = status
-                }
-            )
-        }
-        .onChange(of: experienceProfile, initial: true) { _, newValue in
-            guideProfileStore.sync(from: newValue)
-        }
-        .sheet(isPresented: $showMissionInsightsSheet) {
-            let baseFeatures = features ?? lastKnownFeatures
-            let selected: (FeaturesToday, Bool)? = baseFeatures.map { selectDisplayFeatures(for: $0) }
-            let current = selected?.0
-            let usingYesterdayFallback = selected?.1 ?? false
-            let updatedText = current?.updatedAt.flatMap { formatUpdated($0) }
-            let resolvedOutlook = spaceOutlook ?? lastKnownSpaceOutlook
-            let resolvedUserOutlook = userOutlook ?? lastKnownUserOutlook
-            let symptomPoints = symptomSparkPoints()
-            let symptomSummary = topSymptomSummary()
-
-            NavigationStack(path: $missionInsightsPath) {
-                InsightsHubView(
-                    current: current,
-                    outlook: resolvedOutlook,
-                    userOutlook: resolvedUserOutlook,
-                    tempUnit: experienceProfile.tempUnit,
-                    updatedText: updatedText,
-                    usingYesterdayFallback: usingYesterdayFallback,
-                    localHealthZip: localHealthZip,
-                    localHealth: localHealth,
-                    localHealthLoading: localHealthLoading,
-                    localHealthError: localHealthError,
-                    userOutlookLoading: userOutlookLoading,
-                    userOutlookError: userOutlookError,
-                    useGPS: profileUseGPS,
-                    localInsightsEnabled: profileLocalInsightsEnabled,
-                    dashboardDrivers: dashboardPayload?.drivers ?? [],
-                    magnetosphere: magnetosphere,
-                    magnetosphereLoading: magnetosphereLoading,
-                    magnetosphereError: magnetosphereError,
-                    symptomsTodayCount: symptomsToday.count,
-                    queuedSymptomsCount: state.symptomQueueCount,
-                    topSymptomSummary: symptomSummary,
-                    currentSymptomsSnapshot: currentSymptomsSnapshot,
-                    latestCameraCheck: latestCameraCheck,
-                    latestCameraCheckLoading: latestCameraCheckLoading,
-                    latestCameraCheckError: latestCameraCheckError,
-                    quakeLatest: quakeLatest,
-                    quakeEvents: quakeEvents,
-                    quakeLoading: quakeLoading,
-                    quakeError: quakeError,
-                    hazardsBrief: hazardsBrief,
-                    hazardsLoading: hazardsLoading,
-                    hazardsError: hazardsError,
-                    showsPersonalCards: true,
-                    navigationTitle: "Insights",
-                    onOpenAllDrivers: nil,
-                    onRefresh: { await fetchInsightsHubData(trigger: .refresh) }
-                )
-                .navigationDestination(for: InsightsRoute.self) { route in
-                    switch route {
-                    case .dailyCheckIn:
-                        DailyCheckInView(
-                            api: state.apiWithAuth(),
-                            mode: experienceProfile.mode,
-                            tone: experienceProfile.tone,
-                            initialStatus: dailyCheckInStatus,
-                            onStatusChanged: { status in
-                                dailyCheckInStatus = status
-                            }
-                        )
-                    case .understandingGaiaEyes:
-                        UnderstandingGaiaEyesView(
-                            profile: GuideProfile(
-                                experienceProfile: experienceProfile,
-                                useGuideAppIcon: guideProfileStore.profile.useGuideAppIcon
-                            )
-                        )
-                    case .yourOutlook:
-                        YourOutlookView(
-                            mode: experienceProfile.mode,
-                            payload: resolvedUserOutlook,
-                            isLoading: userOutlookLoading,
-                            error: userOutlookError,
-                            onRefresh: { Task { await fetchUserOutlook() } },
-                            onOpenAllDrivers: { openAllDriversAfterClosingInsights() }
-                        )
-                        .task {
-                            if !userOutlookLoading && userOutlookNeedsRefresh(resolvedUserOutlookPayload) {
-                                await fetchUserOutlook()
-                            }
-                        }
-                    case .spaceWeather:
-                        InsightsSpaceWeatherView(
-                            current: current,
-                            updatedText: updatedText,
-                            usingYesterdayFallback: usingYesterdayFallback,
-                            forecast: forecast,
-                            outlook: resolvedOutlook,
-                            magnetosphere: magnetosphere,
-                            onRefresh: { await fetchSpaceWeatherDetailData(force: true) },
-                            onLoadFullForecast: { await fetchSpaceOutlook(days: 7) }
-                        )
-                    case .localConditions:
-                        LocalConditionsView(
-                            zip: localHealthZip,
-                            snapshot: localHealth,
-                            drivers: dashboardPayload?.drivers ?? [],
-                            mode: experienceProfile.mode,
-                            tone: experienceProfile.tone,
-                            tempUnit: experienceProfile.tempUnit,
-                            isLoading: localHealthLoading,
-                            error: localHealthError,
-                            useGPS: profileUseGPS,
-                            onRefresh: { Task { await fetchLocalHealth() } }
-                        )
-                        .task {
-                            if localHealth == nil && !localHealthLoading {
-                                await fetchLocalHealth()
-                            }
-                            if dashboardPayload == nil {
-                                await fetchDashboardPayload()
-                            }
-                        }
-                    case .yourPatterns:
-                        YourPatternsView(
-                            experienceMode: experienceProfile.mode,
-                            lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared
-                        )
-                    case .magnetosphere:
-                        InsightsMagnetosphereView(
-                            data: magnetosphere,
-                            isLoading: magnetosphereLoading,
-                            error: magnetosphereError,
-                            onRefresh: { await fetchMagnetosphere(force: true) }
-                        )
-                        .task {
-                            if magnetosphere == nil && !magnetosphereLoading {
-                                await fetchMagnetosphere()
-                            }
-                        }
-                    case .schumann:
-                        SchumannDashboardView(
-                            state: state,
-                            mode: experienceProfile.mode,
-                            tone: experienceProfile.tone
-                        )
-                    case .healthSymptoms:
-                        InsightsHealthSymptomsView(
-                            current: current,
-                            todayString: chicagoTodayString(),
-                            updatedText: updatedText,
-                            tempUnit: experienceProfile.tempUnit,
-                            trackedStatKeys: experienceProfile.trackedStatKeys,
-                            smartStatSwapEnabled: experienceProfile.smartStatSwapEnabled,
-                            bannerText: featuresCachedBannerText,
-                            usingYesterdayFallback: usingYesterdayFallback,
-                            todayCount: symptomsToday.count,
-                            queuedCount: state.symptomQueueCount,
-                            sparklinePoints: symptomPoints,
-                            topSummary: symptomSummary,
-                            diagnostics: symptomDiagnostics,
-                            currentSymptomsSnapshot: currentSymptomsSnapshot,
-                            lunarInsights: lunarInsights,
-                            lunarInsightsLoading: lunarInsightsLoading,
-                            lunarInsightsError: lunarInsightsError,
-                            experienceMode: experienceProfile.mode,
-                            lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared,
-                            latestCameraCheck: latestCameraCheck,
-                            latestCameraCheckLoading: latestCameraCheckLoading,
-                            latestCameraCheckError: latestCameraCheckError,
-                            dailyCheckInStatus: dailyCheckInStatus,
-                            dailyCheckInLoading: dailyCheckInLoading,
-                            dailyCheckInError: dailyCheckInError,
-                            onOpenDailyCheckIn: { missionInsightsPath = [.dailyCheckIn] },
-                            onEditTrackedStats: { showSettingsSheet() },
-                            showSymptomSheet: $showInsightsSymptomSheet,
-                            onOpenQuickCheck: { showCameraHealthCheckSheet = true },
-                            onLoadLunarInsights: {
-                                await fetchLunarInsights()
-                            }
-                        )
-                        .task {
-                            if symptomDaily.isEmpty && symptomsToday.isEmpty {
-                                await fetchSymptoms(api: state.apiWithAuth())
-                            }
-                        }
-                    case .currentSymptoms:
-                        CurrentSymptomsView(
-                            api: state.apiWithAuth(),
-                            mode: experienceProfile.mode,
-                            tone: experienceProfile.tone,
-                            initialSnapshot: currentSymptomsSnapshot,
-                            onLogMore: { showInsightsSymptomSheet = true },
-                            onOpenAllDrivers: { focusKey in
-                                openAllDriversAfterClosingInsights(focus: focusKey)
-                            },
-                            onSnapshotChanged: { snapshot in
-                                currentSymptomsSnapshot = snapshot
-                            }
-                        )
-                    case .earthquakes:
-                        EarthquakesDetailView(
-                            latest: quakeLatest,
-                            events: quakeEvents,
-                            error: quakeError
-                        )
-                        .task {
-                            if quakeLatest == nil && quakeEvents.isEmpty && !quakeLoading {
-                                await fetchQuakes()
-                            }
-                        }
-                    case .hazards:
-                        InsightsHazardsView(
-                            payload: hazardsBrief,
-                            isLoading: hazardsLoading,
-                            error: hazardsError
-                        )
-                        .task {
-                            if hazardsBrief == nil && !hazardsLoading {
-                                await fetchHazardsBrief()
-                            }
-                        }
-                    case .allDrivers:
-                        AllDriversView(
-                            api: state.apiWithAuth(),
-                            mode: experienceProfile.mode,
-                            tone: experienceProfile.tone,
-                            tempUnit: experienceProfile.tempUnit,
-                            showsCloseButton: false,
-                            initialFocusKey: allDriversFocusKey,
-                            signalBar: persistentSignalBarItems,
-                            onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },
-                            onLogSymptoms: { openSymptomLogFromAllDrivers() },
-                            onOpenPatterns: { openInsightsFromAllDrivers(route: .yourPatterns) },
-                            onOpenOutlook: { openInsightsFromAllDrivers(route: .yourOutlook) },
-                            onOpenSetup: { openSettingsFromAllDrivers() }
-                        )
-                    }
-                }
-                .sheet(isPresented: $showInsightsSymptomSheet, onDismiss: {
-                    symptomSheetPrefill = nil
-                }) {
-                    symptomLogSheet(isPresented: $showInsightsSymptomSheet)
-                }
-            }
-            .safeAreaInset(edge: .top) {
-                persistentSignalBar(onTap: handleInsightsSignalTap)
-            }
-        }
-        )
-
-        let settingsModalShell = AnyView(
-            primaryModalShell
-        .sheet(isPresented: $showMissionSettingsSheet) {
+    private var missionSettingsSheetContent: some View {
             let sectionForTag: (TagCatalogItem) -> Bool = { item in
                 let canonicalKey = canonicalProfileTagKey(item.tagKey)
                 if healthContextTagKeys.contains(canonicalKey) {
@@ -15392,6 +15170,10 @@ struct ContentView: View {
 
                                     Divider()
 
+                                    NotificationTimeZoneSettingsSection(timeZone: $notificationPreferences.timeZone)
+
+                                    Divider()
+
                                     VStack(alignment: .leading, spacing: 8) {
                                         Text("Quiet Hours")
                                             .font(.subheadline.weight(.semibold))
@@ -15407,7 +15189,7 @@ struct ContentView: View {
                                                     .textInputAutocapitalization(.never)
                                                     .autocorrectionDisabled()
                                             }
-                                            Text("Quiet hours use your current time zone: \(TimeZone.current.identifier)")
+                                            Text("Quiet hours use your saved time zone: \(preferredTimeZoneIdentifier)")
                                                 .font(.caption2)
                                                 .foregroundColor(.secondary)
                                         }
@@ -15655,6 +15437,311 @@ struct ContentView: View {
                 .navigationTitle("Settings")
                 .navigationBarTitleDisplayMode(.inline)
             }
+    }
+
+    private var contentViewBody: some View {
+        let primaryModalShell = AnyView(
+            mainTabView
+        .sheet(isPresented: $showGuideSheet) {
+            GuideHubView(
+                profileStore: guideProfileStore,
+                api: state.apiWithAuth(),
+                helpContext: helpCenterContext,
+                dailyCheckInStatus: dailyCheckInStatus,
+                dailyCheckInLoading: dailyCheckInLoading,
+                dailyCheckInError: dailyCheckInError,
+                currentSymptomsSnapshot: currentSymptomsSnapshot,
+                earthscopeSummary: guideEarthscopeSummary,
+                earthscopeUpdatedAt: guideEarthscopeUpdatedAt,
+                supportItems: dashboardPayload?.supportItems ?? [],
+                whatMattersNow: dashboardPayload?.driversCompact ?? [],
+                whatMattersSummary: dashboardPayload?.todayRelevanceExplanations?.dailyBrief,
+                initialFocus: guideHubFocus,
+                onRefreshDailyCheckIn: {
+                    Task { await fetchDailyCheckInStatus(api: state.apiWithAuth()) }
+                },
+                onOpenEarthScope: {
+                    closeGuideHubThen {
+                        selectedTab = .home
+                    }
+                },
+                onOpenCurrentSymptoms: {
+                    closeGuideHubThen {
+                        openBody(route: .currentSymptoms)
+                    }
+                },
+                onOpenSettings: {
+                    closeGuideHubThen {
+                        showSettingsSheet()
+                    }
+                },
+                onOpenNotifications: {
+                    closeGuideHubThen {
+                        showNotificationSettingsSection = true
+                        showSettingsSheet()
+                    }
+                },
+                onOpenAllDrivers: {
+                    closeGuideHubThen {
+                        selectedTab = .explore
+                        openAllDrivers()
+                    }
+                },
+                onDailyCheckInStatusChanged: { status in
+                    dailyCheckInStatus = status
+                }
+            )
+        }
+        .onChange(of: experienceProfile, initial: true) { _, newValue in
+            guideProfileStore.sync(from: newValue)
+        }
+        .sheet(isPresented: $showMissionInsightsSheet) {
+            let baseFeatures = features ?? lastKnownFeatures
+            let selected: (FeaturesToday, Bool)? = baseFeatures.map { selectDisplayFeatures(for: $0) }
+            let current = selected?.0
+            let usingYesterdayFallback = selected?.1 ?? false
+            let updatedText = current?.updatedAt.flatMap { formatUpdated($0) }
+            let resolvedOutlook = spaceOutlook ?? lastKnownSpaceOutlook
+            let resolvedUserOutlook = userOutlook ?? lastKnownUserOutlook
+            let symptomPoints = symptomSparkPoints()
+            let symptomSummary = topSymptomSummary()
+
+            NavigationStack(path: $missionInsightsPath) {
+                InsightsHubView(
+                    current: current,
+                    outlook: resolvedOutlook,
+                    userOutlook: resolvedUserOutlook,
+                    tempUnit: experienceProfile.tempUnit,
+                    updatedText: updatedText,
+                    usingYesterdayFallback: usingYesterdayFallback,
+                    localHealthZip: localHealthZip,
+                    localHealth: localHealth,
+                    localHealthLoading: localHealthLoading,
+                    localHealthError: localHealthError,
+                    userOutlookLoading: userOutlookLoading,
+                    userOutlookError: userOutlookError,
+                    useGPS: profileUseGPS,
+                    localInsightsEnabled: profileLocalInsightsEnabled,
+                    dashboardDrivers: dashboardPayload?.drivers ?? [],
+                    magnetosphere: magnetosphere,
+                    magnetosphereLoading: magnetosphereLoading,
+                    magnetosphereError: magnetosphereError,
+                    symptomsTodayCount: symptomsToday.count,
+                    queuedSymptomsCount: state.symptomQueueCount,
+                    topSymptomSummary: symptomSummary,
+                    currentSymptomsSnapshot: currentSymptomsSnapshot,
+                    latestCameraCheck: latestCameraCheck,
+                    latestCameraCheckLoading: latestCameraCheckLoading,
+                    latestCameraCheckError: latestCameraCheckError,
+                    quakeLatest: quakeLatest,
+                    quakeEvents: quakeEvents,
+                    quakeLoading: quakeLoading,
+                    quakeError: quakeError,
+                    hazardsBrief: hazardsBrief,
+                    hazardsLoading: hazardsLoading,
+                    hazardsError: hazardsError,
+                    showsPersonalCards: true,
+                    navigationTitle: "Insights",
+                    onOpenAllDrivers: nil,
+                    onRefresh: { await fetchInsightsHubData(trigger: .refresh) }
+                )
+                .navigationDestination(for: InsightsRoute.self) { route in
+                    switch route {
+                    case .dailyCheckIn:
+                        DailyCheckInView(
+                            api: state.apiWithAuth(),
+                            mode: experienceProfile.mode,
+                            tone: experienceProfile.tone,
+                            initialStatus: dailyCheckInStatus,
+                            onStatusChanged: { status in
+                                dailyCheckInStatus = status
+                            }
+                        )
+                    case .understandingGaiaEyes:
+                        UnderstandingGaiaEyesView(
+                            profile: GuideProfile(
+                                experienceProfile: experienceProfile,
+                                useGuideAppIcon: guideProfileStore.profile.useGuideAppIcon
+                            )
+                        )
+                    case .yourOutlook:
+                        YourOutlookView(
+                            mode: experienceProfile.mode,
+                            payload: resolvedUserOutlook,
+                            isLoading: userOutlookLoading,
+                            error: userOutlookError,
+                            onRefresh: { Task { await fetchUserOutlook() } },
+                            onOpenAllDrivers: { openAllDriversAfterClosingInsights() }
+                        )
+                        .task {
+                            if !userOutlookLoading && userOutlookNeedsRefresh(resolvedUserOutlookPayload) {
+                                await fetchUserOutlook()
+                            }
+                        }
+                    case .spaceWeather:
+                        InsightsSpaceWeatherView(
+                            current: current,
+                            updatedText: updatedText,
+                            usingYesterdayFallback: usingYesterdayFallback,
+                            forecast: forecast,
+                            outlook: resolvedOutlook,
+                            magnetosphere: magnetosphere,
+                            onRefresh: { await fetchSpaceWeatherDetailData(force: true) },
+                            onLoadFullForecast: { await fetchSpaceOutlook(days: 7) }
+                        )
+                    case .localConditions:
+                        LocalConditionsView(
+                            zip: localHealthZip,
+                            snapshot: localHealth,
+                            drivers: dashboardPayload?.drivers ?? [],
+                            mode: experienceProfile.mode,
+                            tone: experienceProfile.tone,
+                            tempUnit: experienceProfile.tempUnit,
+                            isLoading: localHealthLoading,
+                            error: localHealthError,
+                            useGPS: profileUseGPS,
+                            onRefresh: { Task { await fetchLocalHealth() } }
+                        )
+                        .task {
+                            if localHealth == nil && !localHealthLoading {
+                                await fetchLocalHealth()
+                            }
+                            if dashboardPayload == nil {
+                                await fetchDashboardPayload()
+                            }
+                        }
+                    case .yourPatterns:
+                        YourPatternsView(
+                            experienceMode: experienceProfile.mode,
+                            lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared
+                        )
+                    case .magnetosphere:
+                        InsightsMagnetosphereView(
+                            data: magnetosphere,
+                            isLoading: magnetosphereLoading,
+                            error: magnetosphereError,
+                            onRefresh: { await fetchMagnetosphere(force: true) }
+                        )
+                        .task {
+                            if magnetosphere == nil && !magnetosphereLoading {
+                                await fetchMagnetosphere()
+                            }
+                        }
+                    case .schumann:
+                        SchumannDashboardView(
+                            state: state,
+                            mode: experienceProfile.mode,
+                            tone: experienceProfile.tone
+                        )
+                    case .healthSymptoms:
+                        InsightsHealthSymptomsView(
+                            current: current,
+                            todayString: chicagoTodayString(),
+                            updatedText: updatedText,
+                            tempUnit: experienceProfile.tempUnit,
+                            trackedStatKeys: experienceProfile.trackedStatKeys,
+                            smartStatSwapEnabled: experienceProfile.smartStatSwapEnabled,
+                            bannerText: featuresCachedBannerText,
+                            usingYesterdayFallback: usingYesterdayFallback,
+                            todayCount: symptomsToday.count,
+                            queuedCount: state.symptomQueueCount,
+                            sparklinePoints: symptomPoints,
+                            topSummary: symptomSummary,
+                            diagnostics: symptomDiagnostics,
+                            currentSymptomsSnapshot: currentSymptomsSnapshot,
+                            lunarInsights: lunarInsights,
+                            lunarInsightsLoading: lunarInsightsLoading,
+                            lunarInsightsError: lunarInsightsError,
+                            experienceMode: experienceProfile.mode,
+                            lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared,
+                            latestCameraCheck: latestCameraCheck,
+                            latestCameraCheckLoading: latestCameraCheckLoading,
+                            latestCameraCheckError: latestCameraCheckError,
+                            dailyCheckInStatus: dailyCheckInStatus,
+                            dailyCheckInLoading: dailyCheckInLoading,
+                            dailyCheckInError: dailyCheckInError,
+                            onOpenDailyCheckIn: { missionInsightsPath = [.dailyCheckIn] },
+                            onEditTrackedStats: { showSettingsSheet() },
+                            showSymptomSheet: $showInsightsSymptomSheet,
+                            onOpenQuickCheck: { showCameraHealthCheckSheet = true },
+                            onLoadLunarInsights: {
+                                await fetchLunarInsights()
+                            }
+                        )
+                        .task {
+                            if symptomDaily.isEmpty && symptomsToday.isEmpty {
+                                await fetchSymptoms(api: state.apiWithAuth())
+                            }
+                        }
+                    case .currentSymptoms:
+                        CurrentSymptomsView(
+                            api: state.apiWithAuth(),
+                            mode: experienceProfile.mode,
+                            tone: experienceProfile.tone,
+                            initialSnapshot: currentSymptomsSnapshot,
+                            onLogMore: { showInsightsSymptomSheet = true },
+                            onOpenAllDrivers: { focusKey in
+                                openAllDriversAfterClosingInsights(focus: focusKey)
+                            },
+                            onSnapshotChanged: { snapshot in
+                                currentSymptomsSnapshot = snapshot
+                            }
+                        )
+                    case .earthquakes:
+                        EarthquakesDetailView(
+                            latest: quakeLatest,
+                            events: quakeEvents,
+                            error: quakeError
+                        )
+                        .task {
+                            if quakeLatest == nil && quakeEvents.isEmpty && !quakeLoading {
+                                await fetchQuakes()
+                            }
+                        }
+                    case .hazards:
+                        InsightsHazardsView(
+                            payload: hazardsBrief,
+                            isLoading: hazardsLoading,
+                            error: hazardsError
+                        )
+                        .task {
+                            if hazardsBrief == nil && !hazardsLoading {
+                                await fetchHazardsBrief()
+                            }
+                        }
+                    case .allDrivers:
+                        AllDriversView(
+                            api: state.apiWithAuth(),
+                            mode: experienceProfile.mode,
+                            tone: experienceProfile.tone,
+                            tempUnit: experienceProfile.tempUnit,
+                            showsCloseButton: false,
+                            initialFocusKey: allDriversFocusKey,
+                            signalBar: persistentSignalBarItems,
+                            onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },
+                            onLogSymptoms: { openSymptomLogFromAllDrivers() },
+                            onOpenPatterns: { openInsightsFromAllDrivers(route: .yourPatterns) },
+                            onOpenOutlook: { openInsightsFromAllDrivers(route: .yourOutlook) },
+                            onOpenSetup: { openSettingsFromAllDrivers() }
+                        )
+                    }
+                }
+                .sheet(isPresented: $showInsightsSymptomSheet, onDismiss: {
+                    symptomSheetPrefill = nil
+                }) {
+                    symptomLogSheet(isPresented: $showInsightsSymptomSheet)
+                }
+            }
+            .safeAreaInset(edge: .top) {
+                persistentSignalBar(onTap: handleInsightsSignalTap)
+            }
+        }
+        )
+
+        let settingsModalShell = AnyView(
+            primaryModalShell
+        .sheet(isPresented: $showMissionSettingsSheet) {
+            missionSettingsSheetContent
         }
         )
 

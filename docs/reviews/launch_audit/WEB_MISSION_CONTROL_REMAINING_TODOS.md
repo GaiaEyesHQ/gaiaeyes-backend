@@ -16,7 +16,6 @@ This file tracks the website-specific work that remains after the current Missio
 
 ## Settings / personalization
 
-- Add timezone controls to web Settings and wire them to the existing backend preference model.
 - Add notification / follow-up preferences to web Settings.
 
 ## Body / symptom workflow

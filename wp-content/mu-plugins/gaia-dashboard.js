@@ -8,6 +8,13 @@
   const publicLinks = cfg.publicLinks && typeof cfg.publicLinks === "object" ? cfg.publicLinks : {};
   const DEFAULT_TRACKED_STAT_KEYS = ["resting_hr", "respiratory", "hrv", "spo2", "steps"];
   const MAX_FAVORITE_SYMPTOM_CODES = 6;
+  const DEFAULT_TIME_ZONE_OPTIONS = [
+    "America/Chicago",
+    "America/New_York",
+    "America/Denver",
+    "America/Los_Angeles",
+    "UTC",
+  ];
   const TRACKED_STAT_OPTIONS = [
     { key: "resting_hr", label: "Resting HR", detail: "Baseline shift or daily average" },
     { key: "respiratory", label: "Respiratory", detail: "Breathing-rate shift or average" },
@@ -64,6 +71,38 @@
       if (normalized.includes(code)) return;
       if (normalized.length < MAX_FAVORITE_SYMPTOM_CODES) normalized.push(code);
     });
+    return normalized;
+  };
+
+  const browserTimeZoneIdentifier = () =>
+    ((Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || "America/Chicago").trim() || "America/Chicago";
+
+  const normalizeTimeZoneIdentifier = (value) =>
+    String(value || "").trim() || browserTimeZoneIdentifier();
+
+  const timeZoneOptions = (selected) => {
+    const normalizedSelected = normalizeTimeZoneIdentifier(selected);
+    const ordered = [];
+    [
+      normalizedSelected,
+      browserTimeZoneIdentifier(),
+      ...DEFAULT_TIME_ZONE_OPTIONS,
+    ].forEach((identifier) => {
+      if (identifier && !ordered.includes(identifier)) ordered.push(identifier);
+    });
+    if (typeof Intl !== "undefined" && typeof Intl.supportedValuesOf === "function") {
+      Intl.supportedValuesOf("timeZone").forEach((identifier) => {
+        if (identifier && !ordered.includes(identifier)) ordered.push(identifier);
+      });
+    }
+    return ordered;
+  };
+
+  const timeZoneLabel = (identifier) => {
+    const normalized = normalizeTimeZoneIdentifier(identifier).replace(/_/g, " ");
+    if (normalizeTimeZoneIdentifier(identifier) === browserTimeZoneIdentifier()) {
+      return `${normalized} (browser)`;
+    }
     return normalized;
   };
 
@@ -1205,11 +1244,18 @@
     return postJson(url, token, body || {});
   };
 
-  const memberHubLoaders = (token) => {
-    const timezone = (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || "America/Chicago";
+  const memberPreferredTimeZone = (state) => {
+    const notifications = extractNotificationPreferences(state && state.member ? state.member.notifications : null);
+    return normalizeTimeZoneIdentifier(notifications && (notifications.time_zone || notifications.timeZone));
+  };
+
+  const memberHubLoaders = (token, state) => {
+    const timezone = memberPreferredTimeZone(state);
     return {
       profilePreferences: () =>
         fetchJson(routeFor("profilePreferences"), token).then((payload) => extractProfilePreferences(payload) || {}),
+      notifications: () =>
+        fetchJson(routeFor("notifications"), token).then((payload) => extractNotificationPreferences(payload) || {}),
       symptomCodes: () => fetchJson(routeFor("symptomCodes"), token),
       drivers: () => fetchJson(routeFor("drivers"), token),
       features: () => fetchJsonWithParams(routeFor("features"), token, { tz: timezone }),
@@ -1229,6 +1275,7 @@
 
   const defaultLoadingKeys = () => ({
     profilePreferences: false,
+    notifications: false,
     symptomCodes: false,
     drivers: false,
     features: false,
@@ -1266,7 +1313,7 @@
     const token = state && state.authCtx ? state.authCtx.token : "";
     if (!token) return;
     ensureLoadingKeys(state);
-    const loaders = memberHubLoaders(token);
+    const loaders = memberHubLoaders(token, state);
     maybeArray(keys).forEach((key) => {
       const loader = loaders[key];
       if (typeof loader !== "function") return;
@@ -1315,11 +1362,11 @@
   const hydrateTabData = (root, state, tab) => {
     const key = normalizeTabKey(tab);
     if (key === "mission") {
-      hydrateMemberKeys(root, state, ["drivers", "outlook", "currentSymptoms", "dailyCheckIn"]);
+      hydrateMemberKeys(root, state, ["drivers", "outlook", "currentSymptoms", "dailyCheckIn", "notifications"]);
       return;
     }
     if (key === "body") {
-      hydrateMemberKeys(root, state, ["profilePreferences", "currentSymptoms", "dailyCheckIn", "lunar", "features"]);
+      hydrateMemberKeys(root, state, ["profilePreferences", "notifications", "currentSymptoms", "dailyCheckIn", "lunar", "features"]);
       return;
     }
     if (key === "patterns") {
@@ -1332,18 +1379,18 @@
       return;
     }
     if (key === "guide") {
-      hydrateMemberKeys(root, state, ["currentSymptoms", "dailyCheckIn", "outlook"]);
+      hydrateMemberKeys(root, state, ["currentSymptoms", "dailyCheckIn", "outlook", "notifications"]);
       return;
     }
     if (key === "settings") {
-      hydrateMemberKeys(root, state, ["profilePreferences", "symptomCodes"]);
+      hydrateMemberKeys(root, state, ["profilePreferences", "notifications", "symptomCodes"]);
     }
   };
 
   const scheduleIdleHydration = (root, state) => {
     const idle = window.requestIdleCallback || ((callback) => window.setTimeout(callback, 180));
     idle(() => {
-      hydrateMemberKeys(root, state, ["profilePreferences", "currentSymptoms", "dailyCheckIn", "lunar", "patternsSummary"]);
+      hydrateMemberKeys(root, state, ["profilePreferences", "notifications", "currentSymptoms", "dailyCheckIn", "lunar", "patternsSummary"]);
       idle(() => {
         hydrateMemberKeys(root, state, ["drivers", "features", "outlook"]);
       });
@@ -1560,6 +1607,15 @@
     if (!token) throw new Error("Sign in again to load your settings.");
     state.member.profilePreferences = await fetchJson(routeFor("profilePreferences"), token);
     return extractProfilePreferences(state.member.profilePreferences) || {};
+  };
+
+  const ensureNotificationPreferencesLoaded = async (state) => {
+    const existing = extractNotificationPreferences(state && state.member ? state.member.notifications : null);
+    if (existing && typeof existing === "object") return existing;
+    const token = state && state.authCtx ? state.authCtx.token : "";
+    if (!token) throw new Error("Sign in again to load your notification settings.");
+    state.member.notifications = await fetchJson(routeFor("notifications"), token);
+    return extractNotificationPreferences(state.member.notifications) || {};
   };
 
   const openSymptomPicker = async (root, state, options = {}) => {
@@ -1920,6 +1976,22 @@
           next.push(code);
         }
         await saveProfilePreferences(root, state, { favorite_symptom_codes: next });
+      });
+    });
+
+    root.querySelectorAll("[data-notification-timezone]").forEach((node) => {
+      node.addEventListener("change", async () => {
+        await saveNotificationPreferences(root, state, {
+          time_zone: normalizeTimeZoneIdentifier(node.value),
+        });
+      });
+    });
+
+    root.querySelectorAll("[data-notification-timezone-use-browser]").forEach((node) => {
+      node.addEventListener("click", async () => {
+        await saveNotificationPreferences(root, state, {
+          time_zone: browserTimeZoneIdentifier(),
+        });
       });
     });
 
@@ -2633,6 +2705,13 @@
   const extractFeatures = (payload) => extractEnvelopeData(payload);
 
   const extractProfilePreferences = (payload) => {
+    const direct = maybeObject(payload);
+    if (!direct) return null;
+    if (maybeObject(direct.preferences)) return direct.preferences;
+    return extractEnvelopeData(payload);
+  };
+
+  const extractNotificationPreferences = (payload) => {
     const direct = maybeObject(payload);
     if (!direct) return null;
     if (maybeObject(direct.preferences)) return direct.preferences;
@@ -3923,20 +4002,55 @@
     }
   };
 
+  const saveNotificationPreferences = async (root, state, partial) => {
+    const token = state && state.authCtx ? state.authCtx.token : "";
+    const url = routeFor("notifications");
+    if (!token || !url) return;
+    const previous = (await ensureNotificationPreferencesLoaded(state).catch(() => ({}))) || {};
+    const optimistic = {
+      ...previous,
+      ...partial,
+      time_zone: normalizeTimeZoneIdentifier((partial && partial.time_zone) || previous.time_zone || previous.timeZone),
+    };
+    state.member.notifications = { ok: true, preferences: optimistic };
+    state.ui.notificationPreferencesSaving = true;
+    state.ui.notificationPreferencesStatus = "Saving timing settings…";
+    renderMemberHub(root, state);
+    try {
+      const payload = await putJson(url, token, optimistic);
+      state.member.notifications = payload;
+      delete state.member.errors.notifications;
+      state.ui.notificationPreferencesStatus = "Timing settings updated.";
+      hydrateMemberKeys(root, state, ["features", "dailyCheckIn"], { force: true });
+    } catch (err) {
+      state.member.notifications = previous;
+      state.member.errors.notifications = err && err.message ? err.message : String(err);
+      state.ui.notificationPreferencesStatus = state.member.errors.notifications;
+    } finally {
+      state.ui.notificationPreferencesSaving = false;
+      renderMemberHub(root, state);
+    }
+  };
+
   const renderSettingsSection = (state) => {
     const authCtx = state.authCtx || {};
     const isMember = state.dashboard.entitled === true || !!state.dashboard.memberPost;
     const profilePreferences = extractProfilePreferences(state.member.profilePreferences) || {};
+    const notificationPreferences = extractNotificationPreferences(state.member.notifications) || {};
     const selectedTrackedStats = profileTrackedStatKeys(profilePreferences);
     const smartSwapEnabled = profileSmartSwapEnabled(profilePreferences);
     const favoriteSymptomCodes = profileFavoriteSymptomCodes(profilePreferences);
     const favoriteSymptomSet = new Set(favoriteSymptomCodes);
+    const selectedTimeZone = normalizeTimeZoneIdentifier(notificationPreferences.time_zone || notificationPreferences.timeZone);
+    const notificationOptions = timeZoneOptions(selectedTimeZone);
     const symptomCatalog = dedupeSymptomCatalog(extractSymptomCodeCatalog(state.member.symptomCodes))
       .filter((item) => item && item.is_active !== false && item.isActive !== false)
       .filter((item) => normalizeSymptomCode(item && (item.symptom_code || item.symptomCode)) !== "OTHER");
     const profilePreferencesLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.profilePreferences);
+    const notificationPreferencesLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.notifications);
     const symptomCodesLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.symptomCodes);
     const profilePreferencesStatus = textOrEmpty(state.ui.profilePreferencesStatus || state.member.errors.profilePreferences);
+    const notificationPreferencesStatus = textOrEmpty(state.ui.notificationPreferencesStatus || state.member.errors.notifications);
     return `
       <section class="gaia-dashboard__section${state.ui.activeTab === "settings" ? " is-active" : ""}" data-section="settings">
         <div class="gaia-dashboard__section-head">
@@ -3964,6 +4078,38 @@
               <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-switch>Email link</button>
               <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-signout>Sign out</button>
             </div>
+          </article>
+          <article class="gaia-dashboard__card">
+            <div class="gaia-dashboard__card-title-row">
+              <div>
+                <span class="gaia-dashboard__eyebrow">Timing</span>
+                <h4 class="gaia-dashboard__card-title">Time zone</h4>
+              </div>
+            </div>
+            <p class="gaia-dashboard__card-copy">Used for daily windows, check-in timing, reminders, and the member day boundary.</p>
+            ${
+              notificationPreferencesLoading && !state.member.notifications
+                ? '<div class="gaia-dashboard__empty">Loading your timing settings…</div>'
+                : `
+                  <div class="gaia-dashboard__field">
+                    <label for="gaia-settings-time-zone">Time zone</label>
+                    <select id="gaia-settings-time-zone" data-notification-timezone>
+                      ${notificationOptions
+                        .map(
+                          (identifier) => `
+                            <option value="${esc(identifier)}"${identifier === selectedTimeZone ? " selected" : ""}>${esc(timeZoneLabel(identifier))}</option>
+                          `
+                        )
+                        .join("")}
+                    </select>
+                  </div>
+                  <div class="gaia-dashboard__section-actions">
+                    <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-notification-timezone-use-browser="1">Use browser time zone</button>
+                    <span class="gaia-dashboard__helper">Current browser zone: ${esc(browserTimeZoneIdentifier())}</span>
+                  </div>
+                `
+            }
+            ${notificationPreferencesStatus ? `<div class="gaia-dashboard__status-note">${esc(notificationPreferencesStatus)}</div>` : ""}
           </article>
           <article class="gaia-dashboard__card">
             <div class="gaia-dashboard__card-title-row">
@@ -4265,6 +4411,7 @@
         dashboard: payload,
         member: {
           profilePreferences: null,
+          notifications: null,
           drivers: null,
           features: null,
           currentSymptoms: null,
