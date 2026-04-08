@@ -3550,6 +3550,18 @@ struct ContentView: View {
         return dayFormatter.date(from: raw)
     }
 
+    private func dashboardSnapshotReferenceDate(from payload: DashboardPayload?) -> Date? {
+        guard let payload else { return nil }
+        return [
+            parseDebugDate(payload.lastSymptomUpdateAt),
+            parseDebugDate(payload.memberPost?.updatedAt),
+            parseDebugDate(payload.personalPost?.updatedAt),
+            parseDebugDate(payload.publicPost?.updatedAt),
+        ]
+        .compactMap { $0 }
+        .max()
+    }
+
     private func debugFormattedDate(_ date: Date?) -> String {
         guard let date else { return "—" }
         let formatter = DateFormatter()
@@ -3809,11 +3821,15 @@ struct ContentView: View {
         let patternsDate = parseDebugDate(patternsPayload?.generatedAt) ?? dashboardLastFetchAt
         let schumannDate = parseDebugDate(selected?.updatedAt) ?? dashboardLastFetchAt
 
+        let dashboardSnapshotDate = dashboardLastFetchAt == .distantPast
+            ? dashboardSnapshotReferenceDate(from: dashboardPayload ?? decodeDashboardPayload(from: dashboardPayloadCacheJSON))
+            : dashboardLastFetchAt
+
         return [
             makeFreshnessItem(
                 id: "dashboard",
                 title: "Dashboard snapshot",
-                date: dashboardLastFetchAt == .distantPast ? nil : dashboardLastFetchAt,
+                date: dashboardSnapshotDate,
                 staleAfter: 30 * 60,
                 endpoint: "v1/dashboard?day=\(chicagoTodayString())",
                 sourceKind: dashboardLastUpdatedText == "cached" ? "cache" : "api",
@@ -4834,7 +4850,7 @@ struct ContentView: View {
         }
         let hasFallbackDashboard = hadUsableDashboardAtStart || cachedDashboardPayload != nil
         let attemptCount = (!force && hasFallbackDashboard) ? 1 : 3
-        let requestTimeout: TimeInterval = hasFallbackDashboard ? 10 : 15
+        let requestTimeout: TimeInterval = hasFallbackDashboard ? 60 : 20
 
         for attempt in 0..<attemptCount {
             do {
@@ -5200,6 +5216,35 @@ struct ContentView: View {
         }
     }
 
+    private func resolvedProfileAfterSave(_ saved: UserExperienceProfile, applying update: UserExperienceProfileUpdate) -> UserExperienceProfile {
+        var resolved = saved
+        if let trackedStatKeys = update.trackedStatKeys {
+            resolved.trackedStatKeys = trackedStatKeys
+        }
+        if let smartStatSwapEnabled = update.smartStatSwapEnabled {
+            resolved.smartStatSwapEnabled = smartStatSwapEnabled
+        }
+        if let favoriteSymptomCodes = update.favoriteSymptomCodes {
+            resolved.favoriteSymptomCodes = _normalizeFavoriteSymptomCodesForUI(favoriteSymptomCodes)
+        }
+        return resolved
+    }
+
+    private func _normalizeFavoriteSymptomCodesForUI(_ codes: [String]) -> [String] {
+        var normalized: [String] = []
+        for code in codes {
+            let token = normalize(code)
+            if token.isEmpty || normalized.contains(token) {
+                continue
+            }
+            normalized.append(token)
+            if normalized.count >= FavoriteSymptomPreference.maxCount {
+                break
+            }
+        }
+        return normalized
+    }
+
     private func putProfilePreferences(_ body: UserExperienceProfileUpdate) async throws -> UserExperienceProfile {
         guard var url = URL(string: state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             throw URLError(.badURL)
@@ -5321,7 +5366,7 @@ struct ContentView: View {
         do {
             let saved = try await putProfilePreferences(update)
             await MainActor.run {
-                applyExperienceProfile(saved)
+                applyExperienceProfile(resolvedProfileAfterSave(saved, applying: update))
             }
         } catch {
             appLog("[UI] save profile preferences error: \(error.localizedDescription)")
@@ -14012,6 +14057,10 @@ struct ContentView: View {
                     if let g = cached.gauges {
                         lastNonNilDashboardGauges = g
                     }
+                    if dashboardLastFetchAt == .distantPast,
+                       let cachedDate = dashboardSnapshotReferenceDate(from: cached) {
+                        dashboardLastFetchAt = cachedDate
+                    }
                     dashboardLastUpdatedText = "cached"
                     appLog("[UI] preloaded dashboard payload from persisted snapshot")
                 }
@@ -14023,6 +14072,7 @@ struct ContentView: View {
                     state.refreshStatus()
                     Task {
                         await HealthKitBackgroundSync.shared.kickOnce(reason: "became active")
+                        await fetchDashboardPayload()
                         await refreshLiveSchumannSignalBar(api: state.apiWithAuth())
                     }
                 }
@@ -14070,6 +14120,10 @@ struct ContentView: View {
                 }
                 if dashboardPayload == nil {
                     dashboardPayload = decoded
+                    if dashboardLastFetchAt == .distantPast,
+                       let cachedDate = dashboardSnapshotReferenceDate(from: decoded) {
+                        dashboardLastFetchAt = cachedDate
+                    }
                     dashboardLastUpdatedText = "cached"
                     appLog("[UI] dashboard payload updated from cache change")
                 }

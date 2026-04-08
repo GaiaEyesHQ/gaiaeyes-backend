@@ -582,6 +582,25 @@ async def profile_preferences_upsert(
     if not columns or "user_id" not in columns:
         return {"ok": False, "error": "app.user_experience_profiles table unavailable"}
 
+    required_columns_for_payload = {
+        "temp_unit": payload.temp_unit is not None,
+        "tracked_stat_keys": payload.tracked_stat_keys is not None,
+        "smart_stat_swap_enabled": payload.smart_stat_swap_enabled is not None,
+        "favorite_symptom_codes": payload.favorite_symptom_codes is not None,
+        "lunar_sensitivity_declared": payload.lunar_sensitivity_declared is not None,
+    }
+    missing_columns = [
+        column
+        for column, requested in required_columns_for_payload.items()
+        if requested and column not in columns
+    ]
+    if missing_columns:
+        return {
+            "ok": False,
+            "error": "missing_profile_preference_columns",
+            "missing_columns": missing_columns,
+        }
+
     now = datetime.now(timezone.utc)
     onboarding_completed = (
         bool(payload.onboarding_completed)
