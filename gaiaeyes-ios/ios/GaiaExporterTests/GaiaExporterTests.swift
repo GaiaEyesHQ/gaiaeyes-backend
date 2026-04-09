@@ -133,7 +133,7 @@ struct SymptomEnvelopeTests {
                             "episode_id": "ep-1",
                             "symptom_code": "HEADACHE",
                             "symptom_label": "Headache",
-                            "question_text": "Still feeling that headache?",
+                            "question_text": "Still feeling headache?",
                             "detail_focus": "pain",
                             "trigger": "logged",
                             "scheduled_for": "2026-03-23T12:00:00Z",
@@ -167,7 +167,7 @@ struct SymptomEnvelopeTests {
         #expect(snapshot.summary.activeCount == 1)
         #expect(snapshot.summary.worseCount == 0)
         #expect(snapshot.items.first?.currentState == .ongoing)
-        #expect(snapshot.items.first?.pendingFollowUp?.questionText == "Still feeling that headache?")
+        #expect(snapshot.items.first?.pendingFollowUp?.questionText == "Still feeling headache?")
         #expect(snapshot.items.first?.likelyDrivers.first?.key == "pressure")
         #expect(snapshot.followUpSettings.enabled == true)
         #expect(snapshot.followUpSettings.pushEnabled == true)

@@ -2868,6 +2868,7 @@ struct ContentView: View {
     @State private var dailyCheckInError: String? = nil
     @State private var showDailyCheckInSheet: Bool = false
     @State private var allDriversFocusKey: String? = nil
+    @AppStorage("all_drivers_cache_json") private var allDriversCacheJSON: String = ""
     @State private var missionDriversPreview: AllDriversSnapshot? = nil
     @State private var missionDriversPreviewLastFetchAt: Date = .distantPast
     @State private var isSubmittingSymptom: Bool = false
@@ -2923,8 +2924,24 @@ struct ContentView: View {
         )
     }
 
+    private func decodeCachedAllDriversSnapshot() -> AllDriversSnapshot? {
+        guard !allDriversCacheJSON.isEmpty,
+              let data = allDriversCacheJSON.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(AllDriversSnapshot.self, from: data)
+    }
+
+    private func persistCachedAllDriversSnapshot(_ snapshot: AllDriversSnapshot) {
+        guard let data = try? JSONEncoder().encode(snapshot),
+              let json = String(data: data, encoding: .utf8) else { return }
+        allDriversCacheJSON = json
+    }
+
+    private var effectiveMissionDriversPreview: AllDriversSnapshot? {
+        missionDriversPreview ?? decodeCachedAllDriversSnapshot()
+    }
+
     private var missionDriverPreviewItems: [DashboardDriverItem] {
-        let items = missionDriversPreview?.drivers ?? []
+        let items = effectiveMissionDriversPreview?.drivers ?? []
         return items.map(missionDashboardDriverItem(from:))
     }
 
@@ -7097,6 +7114,7 @@ struct ContentView: View {
             await MainActor.run {
                 missionDriversPreview = payload
                 missionDriversPreviewLastFetchAt = Date()
+                persistCachedAllDriversSnapshot(payload)
             }
             appLog("[UI] mission drivers preview ok: count=\(payload.drivers.count)")
         } catch is CancellationError {
@@ -14194,6 +14212,15 @@ struct ContentView: View {
                     }
                     dashboardLastUpdatedText = "cached"
                     appLog("[UI] preloaded dashboard payload from persisted snapshot")
+                }
+                if missionDriversPreview == nil, let cached = decodeCachedAllDriversSnapshot() {
+                    missionDriversPreview = cached
+                    if missionDriversPreviewLastFetchAt == .distantPast,
+                       let raw = cached.asof ?? cached.generatedAt,
+                       let cachedDate = ISO8601DateFormatter().date(from: raw) {
+                        missionDriversPreviewLastFetchAt = cachedDate
+                    }
+                    appLog("[UI] preloaded mission drivers preview from persisted snapshot")
                 }
                 showOnboardingFlow = !onboardingCompleted
                 hydrateSymptomPresetsFromCache()

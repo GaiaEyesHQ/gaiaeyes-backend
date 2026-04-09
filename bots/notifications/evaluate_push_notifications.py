@@ -931,7 +931,7 @@ def _build_prompt_candidates(user_id: str) -> List[NotificationCandidate]:
         symptom_label = str(_feedback_payload_value(row, "symptom_label", symptom_code.replace("_", " ").title()) or "")
         episode_state = str(_feedback_payload_value(row, "episode_state", "") or "").strip().lower()
         severity = "high" if episode_state == "worse" else "watch"
-        title = f"Still feeling that {symptom_label.lower()}?"
+        title = f"Still feeling {symptom_label.lower()}?"
         body = "Still active, improving, worse, or resolved? Open Gaia Eyes for a quick follow-up."
         candidates.append(
             NotificationCandidate(

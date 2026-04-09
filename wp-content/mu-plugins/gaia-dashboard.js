@@ -407,11 +407,20 @@
     return dedupeDriverItems([...dashboardDrivers, ...previewDrivers]);
   };
 
-  const renderDriversSection = (drivers, modalModels, limit = 6) => {
+  const allMissionDrivers = (payload, memberDriversSnapshot = null) => {
+    const previewDrivers = maybeArray(memberDriversSnapshot && memberDriversSnapshot.drivers).map(dashboardDriverFromDetail);
+    if (previewDrivers.length) {
+      return dedupeDriverItems(previewDrivers);
+    }
+    return combinedMissionDrivers(payload, memberDriversSnapshot);
+  };
+
+  const renderDriversSection = (drivers, modalModels, limit = 6, options = {}) => {
+    const heading = textOrEmpty(options && options.heading) || "What Matters Now";
     if (!Array.isArray(drivers) || !drivers.length) {
       return `
         <div class="gaia-dashboard__drivers">
-          <h4>What Matters Now</h4>
+          <h4>${esc(heading)}</h4>
           <div class="gaia-dashboard__muted">Nothing is standing out strongly right now.</div>
         </div>
       `;
@@ -475,7 +484,7 @@
 
     return `
       <div class="gaia-dashboard__drivers">
-        <h4>What Matters Now</h4>
+        <h4>${esc(heading)}</h4>
         ${groups}
       </div>
     `;
@@ -483,7 +492,7 @@
 
   const renderAllDriversModal = (payload, memberDriversSnapshot = null) => `
     <h3 class="gaia-dashboard__modal-title">All Drivers</h3>
-    ${renderDriversSection(combinedMissionDrivers(payload, memberDriversSnapshot), payload && payload.modalModels ? payload.modalModels : {}, 12)}
+    ${renderDriversSection(allMissionDrivers(payload, memberDriversSnapshot), payload && payload.modalModels ? payload.modalModels : {}, 12, { heading: "Drivers" })}
     <div class="gaia-dashboard__modal-actions">
       <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-modal-close="1">Close</button>
     </div>
@@ -1363,6 +1372,10 @@
     const key = normalizeTabKey(tab);
     if (key === "mission") {
       hydrateMemberKeys(root, state, ["drivers", "outlook", "currentSymptoms", "dailyCheckIn", "notifications"]);
+      return;
+    }
+    if (key === "drivers") {
+      hydrateMemberKeys(root, state, ["drivers"]);
       return;
     }
     if (key === "body") {
@@ -2431,7 +2444,7 @@
     }
   };
 
-  const MEMBER_TAB_ORDER = ["mission", "body", "patterns", "outlook", "guide", "settings"];
+  const MEMBER_TAB_ORDER = ["mission", "drivers", "body", "patterns", "outlook", "guide", "settings"];
 
   const DAILY_CHECKIN_SELECTS = {
     compared_to_yesterday: [
@@ -2972,7 +2985,7 @@
         </div>
         <div class="gaia-dashboard__section-actions">
           <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="body">Open Body</button>
-          <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="mission">Open Drivers</button>
+          <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="drivers">Open Drivers</button>
         </div>
       </article>
     `;
@@ -3622,11 +3635,36 @@
         ${renderDriversSection(drivers, payload.modalModels || {}, 3)}
         ${
           drivers.length
-            ? `<div class="gaia-dashboard__section-actions"><button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-open-all-drivers-modal="1">View all drivers</button></div>`
+            ? `<div class="gaia-dashboard__section-actions"><button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="drivers">View all drivers</button></div>`
             : ""
         }
         ${renderGeomagneticContext(geomagneticContext)}
         ${renderMissionOutlookCard(state, earthscopeSummary)}
+      </section>
+    `;
+  };
+
+  const renderDriversHubSection = (state) => {
+    const payload = state.dashboard;
+    const drivers = allMissionDrivers(payload, state.member && state.member.drivers);
+    const driversLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.drivers);
+    const driversError = textOrEmpty(state.member.errors && state.member.errors.drivers);
+
+    return `
+      <section class="gaia-dashboard__section${state.ui.activeTab === "drivers" ? " is-active" : ""}" data-section="drivers">
+        <div class="gaia-dashboard__section-head">
+          <div class="gaia-dashboard__section-copy">
+            <h3 class="gaia-dashboard__section-title">Drivers</h3>
+            <p class="gaia-dashboard__section-subtitle">The full active driver stack, grouped by what is leading, also in play, and in the background.</p>
+          </div>
+        </div>
+        ${
+          driversLoading && !drivers.length
+            ? '<div class="gaia-dashboard__muted">Loading the full driver stack…</div>'
+            : driversError && !drivers.length
+              ? `<div class="gaia-dashboard__muted">${esc(driversError)}</div>`
+              : renderDriversSection(drivers, payload.modalModels || {}, 12, { heading: "Drivers" })
+        }
       </section>
     `;
   };
@@ -3951,7 +3989,7 @@
             </div>
             <p class="gaia-dashboard__card-copy">${esc(sentence(earthscopeSummary, "Guide is still shaping today’s summary."))}</p>
             <div class="gaia-dashboard__section-actions">
-              <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="mission">Open Drivers</button>
+              <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="drivers">Open Drivers</button>
               <a class="gaia-dashboard__btn gaia-dashboard__btn--quiet" href="${esc(supportUrl)}">Support</a>
             </div>
           </article>
@@ -4264,6 +4302,7 @@
         </div>
         <div class="gaia-dashboard__nav-grid gaia-dashboard__nav-grid--hub">
           ${missionNavCard(state, "mission", "Mission Control", "Gauges, drivers, and your current outlook live here.")}
+          ${missionNavCard(state, "drivers", "Drivers", "The full active stack Gaia is weighing right now.")}
           ${missionNavCard(state, "body", "Body", "Current symptoms, check-in, sleep, health stats, and lunar watch.")}
           ${missionNavCard(state, "patterns", "Patterns", "The clearest repeats in your logs and wearable history.")}
           ${missionNavCard(state, "outlook", "Outlook", "Your 24h, 72h, and 7-day personal forecast windows.")}
@@ -4271,6 +4310,7 @@
           ${missionNavCard(state, "settings", "Settings", "Account actions, support, and website shortcuts.")}
         </div>
         ${renderMissionSection(state)}
+        ${renderDriversHubSection(state)}
         ${renderBodySection(state)}
         ${renderPatternsSection(state)}
         ${renderOutlookSection(state)}

@@ -449,7 +449,7 @@ async def maybe_schedule_symptom_follow_up(
         scheduled_for = now_utc
 
     category = _symptom_category(episode.get("symptom_code"))
-    question_text = f"Still feeling that {str(episode.get('label') or _label_from_code(episode.get('symptom_code'))).lower()}?"
+    question_text = f"Still feeling {str(episode.get('label') or _label_from_code(episode.get('symptom_code'))).lower()}?"
     payload = {
         "trigger": trigger,
         "detail_focus": category,

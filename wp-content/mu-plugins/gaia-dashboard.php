@@ -205,14 +205,14 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__field label{font-size:12px;color:#9da9c1}
         .gaia-dashboard__field input,.gaia-dashboard__field select,.gaia-dashboard__field textarea{width:100%;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:#101826;color:#e8edf7;padding:10px 12px}
         .gaia-dashboard__field textarea{min-height:84px;resize:vertical}
-        .gaia-dashboard__exposure-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}
-        .gaia-dashboard__toggle-chip{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;background:#172130;border:1px solid rgba(255,255,255,.08);color:#d6e3fa;font-size:14px;line-height:1.45;min-height:72px}
+        .gaia-dashboard__exposure-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;align-items:start}
+        .gaia-dashboard__toggle-chip{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:14px;background:#172130;border:1px solid rgba(255,255,255,.08);color:#d6e3fa;font-size:14px;line-height:1.45;min-height:0}
         .gaia-dashboard__toggle-chip input{accent-color:#2b8cff;flex:0 0 auto;margin-top:3px}
         .gaia-dashboard__toggle-chip span{display:block;flex:1 1 auto;min-width:0;white-space:normal;overflow-wrap:break-word;word-break:normal}
         .gaia-dashboard__helper{font-size:12px;color:#9da9c1;line-height:1.45}
         .gaia-dashboard__status-note{font-size:12px;color:#d8b176}
-        .gaia-dashboard__link-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:start}
-        .gaia-dashboard__link-grid--settings{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+        .gaia-dashboard__link-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;align-items:start}
+        .gaia-dashboard__link-grid--settings{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
         .gaia-dashboard__link-card{display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:14px;background:#151c28;border:1px solid rgba(255,255,255,.08);text-decoration:none;color:#e8edf7;min-height:0}
         .gaia-dashboard__link-card small{color:#9da9c1;line-height:1.45}
         .gaia-dashboard__empty{padding:16px;border-radius:14px;background:#121925;border:1px dashed rgba(255,255,255,.08);font-size:13px;color:#9da9c1;line-height:1.5}
