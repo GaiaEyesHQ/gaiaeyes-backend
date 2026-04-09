@@ -1,7 +1,7 @@
 {
   "metadata": {
     "updated_at": "2026-04-01",
-    "support_email": "gaiaeyes7.83@gmail.com",
+    "support_email": "help@gaiaeyes.com",
     "web_support_url": "https://gaiaeyes.com/support"
   },
   "categories": [
@@ -1057,7 +1057,7 @@
           "id": "email-bug-report",
           "label": "Email Bug Report",
           "kind": "url",
-          "target": "mailto:gaiaeyes7.83@gmail.com?subject=Bug%20Report"
+          "target": "mailto:help@gaiaeyes.com?subject=Bug%20Report"
         }
       ]
     },
@@ -1086,7 +1086,7 @@
           "id": "email-general-feedback",
           "label": "Email General Feedback",
           "kind": "url",
-          "target": "mailto:gaiaeyes7.83@gmail.com?subject=General%20Feedback"
+          "target": "mailto:help@gaiaeyes.com?subject=General%20Feedback"
         }
       ]
     },
@@ -1115,7 +1115,7 @@
           "id": "email-billing-help",
           "label": "Email Billing Help",
           "kind": "url",
-          "target": "mailto:gaiaeyes7.83@gmail.com?subject=Billing%20Help"
+          "target": "mailto:help@gaiaeyes.com?subject=Billing%20Help"
         },
         {
           "id": "restore-purchases-contact-link",
@@ -1150,7 +1150,7 @@
           "id": "email-health-sync-help",
           "label": "Email Health Sync Help",
           "kind": "url",
-          "target": "mailto:gaiaeyes7.83@gmail.com?subject=Health%20Sync%20Help"
+          "target": "mailto:help@gaiaeyes.com?subject=Health%20Sync%20Help"
         },
         {
           "id": "background-sync-contact-link",

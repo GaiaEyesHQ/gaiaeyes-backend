@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 import httpx
 
 BASE = "https://api.weather.gov"
-WEATHER_UA = os.getenv("WEATHER_UA", "(gaiaeyes.com, gaiaeyes7.83@gmail.com)")
+WEATHER_UA = os.getenv("WEATHER_UA", "(gaiaeyes.com, help@gaiaeyes.com)")
 HEADERS = {
     "Accept": "application/geo+json, application/json",
     "User-Agent": WEATHER_UA,

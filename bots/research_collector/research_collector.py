@@ -60,7 +60,7 @@ RESEARCH_MAX_PER_RUN = int(os.getenv("RESEARCH_MAX_PER_RUN","1"))
 # after existing imports / dotenv loads
 HTTP_USER_AGENT = os.getenv(
     "HTTP_USER_AGENT",
-    "GaiaEyesBot/1.0 (+https://gaiaeyes.com; gaiaeyes7.83@gmail.com)"
+    "GaiaEyesBot/1.0 (+https://gaiaeyes.com; help@gaiaeyes.com)"
 )
 
 session = requests.Session()

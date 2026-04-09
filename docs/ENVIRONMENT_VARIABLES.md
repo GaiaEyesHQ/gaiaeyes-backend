@@ -19,7 +19,7 @@
 | `PUBLIC_READ_PATHS` | CSV allowlist additions for public GET paths; built-in defaults remain public | `/health,/v1/space/visuals` | `app/security/auth.py` |
 | `AIRNOW_API_KEY` | AirNow API access key | `airnow-key` | `services/external/airnow.py` |
 | `GOOGLE_POLLEN_API_KEY` | Google Pollen API key for current + 3-day allergen context | `google-pollen-key` | `services/external/pollen.py` |
-| `WEATHER_UA` | NWS user agent string | `(gaiaeyes.com, gaiaeyes7.83@gmail.com)` | `services/external/nws.py` |
+| `WEATHER_UA` | NWS user agent string | `(gaiaeyes.com, help@gaiaeyes.com)` | `services/external/nws.py` |
 | `GAIA_LOG_LEVEL` | Logging level for bots | `INFO` | `bots/local_health_poll.py` |
 | `LOCAL_SIGNALS_TTL_MINUTES` | Local signals cache TTL | `60` | `services/local_signals/cache.py` |
 | `LOCAL_SIGNALS_AIRNOW_RADIUS_MI` | AirNow search radius in miles | `25` | `services/external/airnow.py` |

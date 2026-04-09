@@ -24,7 +24,7 @@ HTTP_RETRY_TRIES = int(os.getenv("HTTP_RETRY_TRIES", "3"))
 HTTP_RETRY_BASE_SLEEP = float(os.getenv("HTTP_RETRY_BASE_SLEEP", "1.5"))
 HTTP_USER_AGENT = os.getenv(
     "HTTP_USER_AGENT",
-    "gaiaeyes.com contact: gaiaeyes7.83@gmail.com",
+    "gaiaeyes.com contact: help@gaiaeyes.com",
 )
 
 ULF_STATIONS = [item.strip().upper() for item in os.getenv("ULF_STATIONS", "BOU,CMO").split(",") if item.strip()]

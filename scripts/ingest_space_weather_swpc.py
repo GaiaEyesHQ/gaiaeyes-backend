@@ -62,7 +62,7 @@ URLS_LIST = {
 ALERTS_URL = "https://services.swpc.noaa.gov/products/alerts.json"
 FORECAST_URL = "https://services.swpc.noaa.gov/text/3-day-forecast.txt"
 
-UA = os.getenv("HTTP_USER_AGENT", "gaiaeyes.com contact: gaiaeyes7.83@gmail.com")
+UA = os.getenv("HTTP_USER_AGENT", "gaiaeyes.com contact: help@gaiaeyes.com")
 
 def _safe_mkdirs(path: str):
     p = pathlib.Path(path)

@@ -47,7 +47,7 @@ KP  = env("KP_URL",  "https://services.swpc.noaa.gov/json/planetary_k_index_1m.j
 SW  = env("SW_URL",  "https://services.swpc.noaa.gov/products/solar-wind/plasma-7-day.json")
 MAG = env("MAG_URL", "https://services.swpc.noaa.gov/products/solar-wind/mag-7-day.json")
 
-UA  = env("HTTP_USER_AGENT", "(gaiaeyes.com, gaiaeyes7.83@gmail.com)")
+UA  = env("HTTP_USER_AGENT", "(gaiaeyes.com, help@gaiaeyes.com)")
 SINCE_HOURS = int(env("SINCE_HOURS", "72"))
 
 SRC = "noaa-swpc"
