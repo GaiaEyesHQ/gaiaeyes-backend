@@ -35,6 +35,12 @@ struct SymptomPreset: Identifiable, Hashable {
         switch code {
         case "NERVE_PAIN": return "bolt.heart"
         case "ZAPS": return "bolt"
+        case "NAUSEA": return "mouth"
+        case "BLOATING": return "circle.dotted"
+        case "STOMACH_PAIN": return "cross.case"
+        case "REFLUX": return "flame"
+        case "DIGESTIVE_UPSET": return "cross.case.fill"
+        case "BOWEL_URGENCY": return "figure.walk.motion"
         case "DRAINED": return "battery.25"
         case "FATIGUE": return "battery.25"
         case "HEADACHE": return "brain.head.profile"
@@ -80,6 +86,12 @@ struct SymptomPreset: Identifiable, Hashable {
     static let defaults: [SymptomPreset] = ensureFallback(in: [
         SymptomPreset(code: "NERVE_PAIN", label: "Nerve pain", systemImage: "bolt.heart"),
         SymptomPreset(code: "ZAPS", label: "Zaps", systemImage: "bolt"),
+        SymptomPreset(code: "NAUSEA", label: "Nausea", systemImage: "mouth"),
+        SymptomPreset(code: "BLOATING", label: "Bloating", systemImage: "circle.dotted"),
+        SymptomPreset(code: "STOMACH_PAIN", label: "Stomach pain", systemImage: "cross.case"),
+        SymptomPreset(code: "REFLUX", label: "Reflux", systemImage: "flame"),
+        SymptomPreset(code: "DIGESTIVE_UPSET", label: "Digestive upset", systemImage: "cross.case.fill"),
+        SymptomPreset(code: "BOWEL_URGENCY", label: "Bowel urgency", systemImage: "figure.walk.motion"),
         SymptomPreset(code: "DRAINED", label: "Drained", systemImage: "battery.25"),
         SymptomPreset(code: "FATIGUE", label: "Fatigue", systemImage: "battery.25"),
         SymptomPreset(code: "HEADACHE", label: "Headache", systemImage: "brain.head.profile"),
@@ -110,6 +122,7 @@ struct SymptomItem: Identifiable, Hashable {
 enum SymptomCategory: String, CaseIterable, Identifiable {
     case head = "Head / Sensory"
     case pain = "Pain"
+    case digestive = "Digestive / GI"
     case energy = "Energy"
     case sleep = "Sleep"
     case autonomic = "Heart / Nervous System"
@@ -121,6 +134,7 @@ enum SymptomCategory: String, CaseIterable, Identifiable {
         switch self {
         case .head: return "brain.head.profile"
         case .pain: return "waveform.path.ecg"
+        case .digestive: return "cross.case.fill"
         case .energy: return "bolt.heart"
         case .sleep: return "moon.stars.fill"
         case .autonomic: return "heart.text.square.fill"
@@ -158,6 +172,12 @@ private enum SymptomCatalog {
         "JOINT_PAIN": .pain,
         "STIFFNESS": .pain,
         "ZAPS": .pain,
+        "NAUSEA": .digestive,
+        "BLOATING": .digestive,
+        "STOMACH_PAIN": .digestive,
+        "REFLUX": .digestive,
+        "DIGESTIVE_UPSET": .digestive,
+        "BOWEL_URGENCY": .digestive,
         "FATIGUE": .energy,
         "DRAINED": .energy,
         "WIRED": .energy,
@@ -180,16 +200,22 @@ private enum SymptomCatalog {
         "JOINT_PAIN": 12,
         "STIFFNESS": 13,
         "ZAPS": 14,
-        "FATIGUE": 20,
-        "DRAINED": 21,
-        "WIRED": 22,
-        "INSOMNIA": 30,
-        "RESTLESS_SLEEP": 31,
-        "PALPITATIONS": 40,
-        "CHEST_TIGHTNESS": 41,
-        "RESP_IRRITATION": 42,
-        "ANXIOUS": 43,
-        "OTHER": 50,
+        "NAUSEA": 20,
+        "BLOATING": 21,
+        "STOMACH_PAIN": 22,
+        "REFLUX": 23,
+        "DIGESTIVE_UPSET": 24,
+        "BOWEL_URGENCY": 25,
+        "FATIGUE": 30,
+        "DRAINED": 31,
+        "WIRED": 32,
+        "INSOMNIA": 40,
+        "RESTLESS_SLEEP": 41,
+        "PALPITATIONS": 50,
+        "CHEST_TIGHTNESS": 51,
+        "RESP_IRRITATION": 52,
+        "ANXIOUS": 53,
+        "OTHER": 60,
     ]
 
     static func item(from preset: SymptomPreset) -> SymptomItem {

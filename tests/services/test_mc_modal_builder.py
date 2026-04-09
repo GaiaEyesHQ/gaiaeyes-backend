@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from services.mc_modals.modal_builder import build_earthscope_summary, build_modal_models
+from services.mc_modals.modal_builder import build_earthscope_summary, build_modal_models, build_support_items
 
 
 def test_build_modal_models_returns_gauge_and_driver_models() -> None:
@@ -273,3 +273,59 @@ def test_build_earthscope_summary_mentions_top_drivers_and_gauges() -> None:
     assert "right now" in summary.lower()
     assert "Pain" in summary or "Sleep" in summary
     assert "today" not in summary.lower()
+
+
+def test_support_items_include_profile_aware_recovery_margin() -> None:
+    items = build_support_items(
+        day=date(2026, 4, 9),
+        drivers=[
+            {
+                "key": "allergens",
+                "label": "Allergens",
+                "severity": "high",
+                "state": "High",
+                "value": 4.0,
+                "unit": "index",
+            }
+        ],
+        user_tags=["fibromyalgia"],
+        symptoms={
+            "top_symptoms": [
+                {"symptom_code": "FATIGUE", "events": 1, "max_severity": 7},
+            ]
+        },
+    )
+
+    keys = [item["key"] for item in items]
+    assert "profile:recovery_margin" in keys
+    recovery_item = next(item for item in items if item["key"] == "profile:recovery_margin")
+    assert recovery_item["badge"] == "Pace"
+    assert recovery_item["visual_key"] == "recovery"
+
+
+def test_support_items_include_profile_aware_autonomic_support() -> None:
+    items = build_support_items(
+        day=date(2026, 4, 9),
+        drivers=[
+            {
+                "key": "sw",
+                "label": "Solar Wind",
+                "severity": "elevated",
+                "state": "Elevated",
+                "value": 615.0,
+                "unit": "km/s",
+            }
+        ],
+        user_tags=["pots_dysautonomia"],
+        symptoms={
+            "top_symptoms": [
+                {"symptom_code": "ANXIOUS", "events": 1, "max_severity": 6},
+            ]
+        },
+    )
+
+    keys = [item["key"] for item in items]
+    assert "profile:autonomic_support" in keys
+    autonomic_item = next(item for item in items if item["key"] == "profile:autonomic_support")
+    assert autonomic_item["badge"] == "Regulate"
+    assert any("breathing" in line.lower() for line in autonomic_item["actions"])

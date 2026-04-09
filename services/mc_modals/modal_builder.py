@@ -10,6 +10,7 @@ from services.personalization.health_context import (
     AUTONOMIC_KEYS,
     HEAD_PRESSURE_KEYS,
     PAIN_FLARE_KEYS,
+    RECOVERY_LOAD_KEYS,
     SINUS_KEYS,
     SLEEP_DISRUPTION_KEYS,
     PersonalizationProfile,
@@ -2693,6 +2694,89 @@ def _symptom_support_item(symptoms: Optional[Dict[str, Any]]) -> Optional[Dict[s
     return None
 
 
+def _profile_support_item(
+    *,
+    profile: PersonalizationProfile,
+    driver: Optional[Dict[str, Any]],
+    symptoms: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    rows = [dict(item) for item in (symptoms or {}).get("top_symptoms") or [] if isinstance(item, dict)]
+    codes = {
+        str(row.get("symptom_code") or "").strip().upper()
+        for row in rows
+        if str(row.get("symptom_code") or "").strip()
+    }
+    driver_key = str((driver or {}).get("key") or "").strip().lower()
+
+    if profile.includes_any(AUTONOMIC_KEYS) and (
+        codes & _SUPPORT_CALM_CODES or driver_key in {"kp", "bz", "sw", "schumann"}
+    ):
+        return _support_item(
+            key="profile:autonomic_support",
+            title="Settle the nervous-system load first",
+            message="Because you’ve marked autonomic or nervous-system sensitivity, a small regulation break may help before the edge stacks up.",
+            tone="watch",
+            badge="Regulate",
+            actions=[
+                "Try 5-10 minutes of slower breathing or a quieter environment before adding more input.",
+                "Keep effort steadier than spiky if your system feels buzzy or overreactive.",
+            ],
+            visual_key="calm",
+        )
+
+    if profile.includes_any(RECOVERY_LOAD_KEYS) and (
+        codes & _SUPPORT_FATIGUE_CODES or driver_key in {"temp", "allergens", "aqi", "sw", "pressure"}
+    ):
+        return _support_item(
+            key="profile:recovery_margin",
+            title="Keep a wider recovery margin",
+            message="Because you’ve marked recovery or exertion sensitivity, leaving more space around effort may help on heavier-load days.",
+            tone="mild",
+            badge="Pace",
+            actions=[
+                "Use shorter work blocks and leave more recovery between demanding tasks.",
+                "Keep hydration, food, and wind-down timing steadier than usual.",
+                "If your body feels behind, trim one heavier task instead of pushing through it.",
+            ],
+            visual_key="recovery",
+        )
+
+    if profile.includes_any(PAIN_FLARE_KEYS) and (
+        codes & _SUPPORT_PAIN_CODES or driver_key in {"pressure", "temp"}
+    ):
+        return _support_item(
+            key="profile:pain_support",
+            title="Use the gentlest version of the day",
+            message="Because you’ve marked pain or joint sensitivity, a little extra margin may help if pain or stiffness is closer to the surface today.",
+            tone="watch",
+            badge="Comfort",
+            actions=[
+                "Use warmth, gentler movement, or shorter effort blocks if those usually help.",
+                "Skip one nonessential heavier task if your body is asking for a slower lane.",
+            ],
+            visual_key="comfort",
+        )
+
+    if profile.includes_any(SLEEP_DISRUPTION_KEYS) and (
+        codes & {"INSOMNIA", "RESTLESS_SLEEP", "WIRED", "ANXIOUS", "DRAINED"}
+        or driver_key in {"kp", "bz", "sw", "schumann", "allergens"}
+    ):
+        return _support_item(
+            key="profile:sleep_support",
+            title="Protect tonight’s sleep window early",
+            message="Because you’ve marked sleep sensitivity, keeping your evening a little steadier may help before sleep gets lighter.",
+            tone="mild",
+            badge="Sleep",
+            actions=[
+                "Lower stimulation earlier than usual if tonight already looks a bit more fragile.",
+                "Keep bedtime timing, room conditions, and wind-down steps as consistent as you can.",
+            ],
+            visual_key="sleep",
+        )
+
+    return None
+
+
 def build_support_items(
     *,
     day: date,
@@ -2713,8 +2797,9 @@ def build_support_items(
     seen: set[str] = set()
 
     for candidate in (
-        _driver_support_item(day=day, driver=primary_driver, profile=profile),
         _symptom_support_item(symptoms),
+        _profile_support_item(profile=profile, driver=primary_driver, symptoms=symptoms),
+        _driver_support_item(day=day, driver=primary_driver, profile=profile),
     ):
         if not isinstance(candidate, dict):
             continue
