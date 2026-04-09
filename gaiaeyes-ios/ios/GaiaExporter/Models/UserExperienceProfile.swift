@@ -353,6 +353,21 @@ struct DeleteAccountResult: Decodable {
     let tablesTouched: Int?
 }
 
+struct DeleteAccountPreflightTableCount: Decodable {
+    let table: String
+    let rows: Int
+}
+
+struct DeleteAccountPreflightResult: Decodable {
+    let userId: String?
+    let deleteReady: Bool?
+    let authDeleteReady: Bool?
+    let rowsFound: Int?
+    let tablesWithRows: Int?
+    let largestTables: [DeleteAccountPreflightTableCount]?
+    let issues: [String]?
+}
+
 struct UserExperienceProfileUpdate: Encodable {
     var mode: ExperienceMode? = nil
     var guide: GuideType? = nil

@@ -2797,6 +2797,8 @@ struct ContentView: View {
     @State private var notificationSettingsMessage: String?
     @State private var accountDeletionInFlight: Bool = false
     @State private var accountDeletionMessage: String?
+    @State private var accountDeletionPreflightInFlight: Bool = false
+    @State private var accountDeletionPreflightMessage: String?
     @State private var showDeleteAccountConfirmation: Bool = false
     @State private var showNotificationSettingsSection: Bool = false
     @State private var pushPermissionGranted: Bool = PushNotificationService.storedPermissionGranted()
@@ -5524,10 +5526,91 @@ struct ContentView: View {
         }
     }
 
+    private func formatDeleteAccountPreflightMessage(_ result: DeleteAccountPreflightResult) -> String {
+        let rowsFound = max(0, result.rowsFound ?? 0)
+        let tablesWithRows = max(0, result.tablesWithRows ?? 0)
+        let largestSummary = (result.largestTables ?? [])
+            .prefix(3)
+            .map { "\($0.table) (\($0.rows))" }
+            .joined(separator: ", ")
+        let issueText = (result.issues ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+
+        var segments: [String] = []
+        if result.deleteReady == true {
+            segments.append("Ready. Would delete \(rowsFound) rows across \(tablesWithRows) areas.")
+        } else {
+            segments.append("Preflight found setup issues.")
+        }
+        if !largestSummary.isEmpty {
+            segments.append("Largest areas: \(largestSummary).")
+        }
+        if !issueText.isEmpty {
+            segments.append(issueText)
+        }
+        return segments.joined(separator: " ")
+    }
+
+    private func runDeleteAccountPreflight() async {
+        await MainActor.run {
+            accountDeletionPreflightInFlight = true
+            accountDeletionPreflightMessage = nil
+        }
+
+        let trimmedBase = state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let token = await auth.validAccessToken(), !token.isEmpty else {
+            await MainActor.run {
+                accountDeletionPreflightMessage = "Sign in again to run the delete preflight."
+                accountDeletionPreflightInFlight = false
+            }
+            return
+        }
+
+        let api = APIClient(
+            config: APIConfig(
+                baseURLString: trimmedBase.isEmpty ? DeveloperAuthDefaults.baseURL : trimmedBase,
+                bearer: token,
+                timeout: 45
+            )
+        )
+
+        do {
+            let envelope = try await api.deleteAccountPreflight()
+            if envelope.ok == false {
+                let message = envelope.error?.trimmingCharacters(in: .whitespacesAndNewlines)
+                throw NSError(
+                    domain: "GaiaEyes",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: (message?.isEmpty == false ? message! : "Could not run the delete preflight.")]
+                )
+            }
+            guard let result = envelope.payload else {
+                throw NSError(
+                    domain: "GaiaEyes",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Delete preflight returned no summary."]
+                )
+            }
+            await MainActor.run {
+                accountDeletionPreflightMessage = formatDeleteAccountPreflightMessage(result)
+                accountDeletionPreflightInFlight = false
+            }
+        } catch {
+            appLog("[UI] delete account preflight error: \(error.localizedDescription)")
+            await MainActor.run {
+                accountDeletionPreflightMessage = error.localizedDescription
+                accountDeletionPreflightInFlight = false
+            }
+        }
+    }
+
     private func deleteAccountFromSettings() async {
         await MainActor.run {
             accountDeletionInFlight = true
             accountDeletionMessage = nil
+            accountDeletionPreflightMessage = nil
         }
 
         let trimmedBase = state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -15307,6 +15390,41 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Safe delete preflight")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Checks whether account deletion is fully wired and shows what would be removed, without deleting anything.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Button {
+                        Task { await runDeleteAccountPreflight() }
+                    } label: {
+                        HStack {
+                            if accountDeletionPreflightInFlight {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            }
+                            Text(accountDeletionPreflightInFlight ? "Checking..." : "Run Safe Preflight")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(accountDeletionPreflightInFlight || accountDeletionInFlight)
+
+                    if let accountDeletionPreflightMessage, !accountDeletionPreflightMessage.isEmpty {
+                        Text(accountDeletionPreflightMessage)
+                            .font(.caption)
+                            .foregroundColor(
+                                accountDeletionPreflightMessage.lowercased().contains("ready.")
+                                ? .secondary
+                                : .orange
+                            )
+                    }
+                }
 
                 Divider()
 

@@ -643,6 +643,13 @@ final class APIClient {
         )
     }
 
+    func deleteAccountPreflight() async throws -> Envelope<DeleteAccountPreflightResult> {
+        try await getJSON(
+            "v1/profile/account/preflight",
+            as: Envelope<DeleteAccountPreflightResult>.self
+        )
+    }
+
     func respondSymptomFollowUp(
         promptId: String,
         state: CurrentSymptomState,

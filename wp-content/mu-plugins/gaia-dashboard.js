@@ -1964,6 +1964,12 @@
         void state.authCtx.onSignOut();
       });
     }
+    const accountPreflightBtn = root.querySelector("[data-gaia-account-preflight]");
+    if (accountPreflightBtn) {
+      accountPreflightBtn.addEventListener("click", () => {
+        void runAccountDeletePreflight(root, state);
+      });
+    }
     const deleteAccountBtn = root.querySelector("[data-gaia-delete-account]");
     if (deleteAccountBtn) {
       deleteAccountBtn.addEventListener("click", () => {
@@ -4140,6 +4146,58 @@
     }
   };
 
+  const formatAccountPreflightStatus = (payload) => {
+    const data = extractEnvelopeData(payload) || maybeObject(payload) || {};
+    const rowsFound = toNumber(data.rows_found ?? data.rowsFound, 0);
+    const tablesWithRows = toNumber(data.tables_with_rows ?? data.tablesWithRows, 0);
+    const issues = maybeArray(data.issues)
+      .map((item) => textOrEmpty(item))
+      .filter(Boolean);
+    const largest = maybeArray(data.largest_tables ?? data.largestTables)
+      .map((item) => {
+        const table = textOrEmpty(item && item.table);
+        const rows = toNumber(item && item.rows, 0);
+        return table ? `${table} (${rows})` : "";
+      })
+      .filter(Boolean)
+      .slice(0, 3)
+      .join(", ");
+    const segments = [];
+    if (data.delete_ready === true || data.deleteReady === true) {
+      segments.push(`Ready. Would delete ${rowsFound} rows across ${tablesWithRows} areas.`);
+    } else {
+      segments.push("Preflight found setup issues.");
+    }
+    if (largest) {
+      segments.push(`Largest areas: ${largest}.`);
+    }
+    if (issues.length) {
+      segments.push(issues.join(" "));
+    }
+    return segments.join(" ").trim();
+  };
+
+  const runAccountDeletePreflight = async (root, state) => {
+    const token = state && state.authCtx ? state.authCtx.token : "";
+    const url = routeFor("accountPreflight");
+    if (!token || !url || state.ui.accountPreflightPending) return;
+    state.ui.accountPreflightPending = true;
+    state.ui.accountPreflightStatus = "Checking safe preflight…";
+    renderMemberHub(root, state);
+    try {
+      const payload = await fetchJson(url, token);
+      if (payload && payload.ok === false) {
+        throw new Error(payload.error || "Could not run the delete preflight.");
+      }
+      state.ui.accountPreflightStatus = formatAccountPreflightStatus(payload);
+    } catch (err) {
+      state.ui.accountPreflightStatus = err && err.message ? err.message : "Could not run the delete preflight.";
+    } finally {
+      state.ui.accountPreflightPending = false;
+      renderMemberHub(root, state);
+    }
+  };
+
   const deleteMemberAccount = async (root, state) => {
     const token = state && state.authCtx ? state.authCtx.token : "";
     const url = routeFor("accountDelete");
@@ -4187,6 +4245,7 @@
     const symptomCodesLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.symptomCodes);
     const profilePreferencesStatus = textOrEmpty(state.ui.profilePreferencesStatus || state.member.errors.profilePreferences);
     const notificationPreferencesStatus = textOrEmpty(state.ui.notificationPreferencesStatus || state.member.errors.notifications);
+    const accountPreflightStatus = textOrEmpty(state.ui.accountPreflightStatus);
     const accountDeletionStatus = textOrEmpty(state.ui.accountDeletionStatus);
     return `
       <section class="gaia-dashboard__section${state.ui.activeTab === "settings" ? " is-active" : ""}" data-section="settings">
@@ -4214,6 +4273,14 @@
             <div class="gaia-dashboard__section-actions">
               <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-switch>Email link</button>
               <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-signout>Sign out</button>
+            </div>
+            <div class="gaia-dashboard__empty">
+              <strong>Safe delete preflight</strong>
+              <p>Checks whether account deletion is fully wired and shows what would be removed, without deleting anything.</p>
+              <div class="gaia-dashboard__section-actions">
+                <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-account-preflight${state.ui.accountPreflightPending ? " disabled" : ""}>${state.ui.accountPreflightPending ? "Checking..." : "Run safe preflight"}</button>
+              </div>
+              ${accountPreflightStatus ? `<div class="gaia-dashboard__status-note">${esc(accountPreflightStatus)}</div>` : ""}
             </div>
             <div class="gaia-dashboard__empty">
               <strong>Delete account</strong>
@@ -4610,6 +4677,8 @@
           loadingKeys: defaultLoadingKeys(),
           currentSymptomPendingById: {},
           currentSymptomStatusById: {},
+          accountPreflightPending: false,
+          accountPreflightStatus: "",
           accountDeletionPending: false,
           accountDeletionStatus: "",
         },

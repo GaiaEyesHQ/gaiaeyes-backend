@@ -46,6 +46,7 @@ add_action('wp_enqueue_scripts', function () {
         'profilePreferences' => esc_url_raw(rest_url('gaia/v1/member/profile-preferences')),
         'guideSeen' => esc_url_raw(rest_url('gaia/v1/member/guide-seen')),
         'notifications' => esc_url_raw(rest_url('gaia/v1/member/notifications')),
+        'accountPreflight' => esc_url_raw(rest_url('gaia/v1/member/account/preflight')),
         'accountDelete' => esc_url_raw(rest_url('gaia/v1/member/account')),
     ];
 
@@ -706,6 +707,16 @@ add_action('rest_api_init', function () {
             'permission_callback' => '__return_true',
             'callback' => function (WP_REST_Request $request) {
                 return gaia_dashboard_proxy_json($request, '/v1/profile/account', [], 'DELETE');
+            },
+        ],
+    ]);
+
+    register_rest_route('gaia/v1', '/member/account/preflight', [
+        [
+            'methods' => WP_REST_Server::READABLE,
+            'permission_callback' => '__return_true',
+            'callback' => function (WP_REST_Request $request) {
+                return gaia_dashboard_proxy_json($request, '/v1/profile/account/preflight');
             },
         ],
     ]);

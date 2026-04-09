@@ -216,6 +216,59 @@ async def _delete_supabase_auth_user(user_id: str) -> None:
     )
 
 
+def _supabase_admin_delete_issues() -> List[str]:
+    issues: List[str] = []
+    if not (settings.SUPABASE_URL or "").strip():
+        issues.append("SUPABASE_URL is not configured")
+    if not (settings.SUPABASE_SERVICE_ROLE_KEY or "").strip():
+        issues.append("SUPABASE_SERVICE_ROLE_KEY is not configured")
+    return issues
+
+
+async def _count_user_scoped_rows(conn, user_id: str) -> Dict[str, Any]:
+    counts: Dict[str, int] = {}
+    for schema, table in await _list_user_scoped_tables(conn):
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                sql.SQL("select count(*)::bigint as count from {}.{} where {} = %s").format(
+                    sql.Identifier(schema),
+                    sql.Identifier(table),
+                    sql.Identifier("user_id"),
+                ),
+                (user_id,),
+                prepare=False,
+            )
+            row = await cur.fetchone()
+            counts[f"{schema}.{table}"] = int((row or {}).get("count") or 0)
+
+    gaia_user_columns = await _table_columns(conn, "gaia", "users")
+    if "id" in gaia_user_columns:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                sql.SQL("select count(*)::bigint as count from {}.{} where {} = %s").format(
+                    sql.Identifier("gaia"),
+                    sql.Identifier("users"),
+                    sql.Identifier("id"),
+                ),
+                (user_id,),
+                prepare=False,
+            )
+            row = await cur.fetchone()
+            counts["gaia.users"] = int((row or {}).get("count") or 0)
+
+    nonzero_counts = {table: count for table, count in counts.items() if count > 0}
+    largest_tables = [
+        {"table": table, "rows": count}
+        for table, count in sorted(nonzero_counts.items(), key=lambda item: (-item[1], item[0]))[:5]
+    ]
+    return {
+        "rows_found": sum(nonzero_counts.values()),
+        "tables_with_rows": len(nonzero_counts),
+        "rows_by_table": counts,
+        "largest_tables": largest_tables,
+    }
+
+
 class ProfileLocationIn(BaseModel):
     zip: Optional[str] = Field(default=None)
     lat: Optional[float] = Field(default=None)
@@ -693,13 +746,35 @@ async def profile_preferences(request: Request, conn=Depends(get_db)):
     return {"ok": True, "preferences": await _fetch_profile_preferences(conn, user_id)}
 
 
+@router.get("/account/preflight", dependencies=[Depends(require_supabase_jwt)])
+async def profile_delete_account_preflight(
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    issues = _supabase_admin_delete_issues()
+    summary = await _count_user_scoped_rows(conn, user_id)
+    return {
+        "ok": True,
+        "data": {
+            "user_id": user_id,
+            "delete_ready": not issues,
+            "auth_delete_ready": not issues,
+            "rows_found": summary["rows_found"],
+            "tables_with_rows": summary["tables_with_rows"],
+            "largest_tables": summary["largest_tables"],
+            "issues": issues,
+        },
+    }
+
+
 @router.delete("/account", dependencies=[Depends(require_supabase_jwt)])
 async def profile_delete_account(
     request: Request,
     conn=Depends(get_db),
 ):
     user_id = _require_user_id(request)
-    if not (settings.SUPABASE_URL or "").strip() or not (settings.SUPABASE_SERVICE_ROLE_KEY or "").strip():
+    if _supabase_admin_delete_issues():
         raise HTTPException(status_code=500, detail="Supabase admin deletion is not configured")
     deletion_summary = await _delete_user_scoped_rows(conn, user_id)
     await conn.commit()
