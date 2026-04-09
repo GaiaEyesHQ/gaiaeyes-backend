@@ -69,6 +69,107 @@ if (!function_exists('gaiaeyes_support_articles_by_category')) {
     }
 }
 
+if (!function_exists('gaiaeyes_support_lower')) {
+    function gaiaeyes_support_lower($value) {
+        $value = (string) $value;
+        if (function_exists('mb_strtolower')) {
+            return mb_strtolower($value);
+        }
+        return strtolower($value);
+    }
+}
+
+if (!function_exists('gaiaeyes_support_article_search_blob')) {
+    function gaiaeyes_support_article_search_blob($article) {
+        $parts = [];
+        $parts[] = (string) ($article['title'] ?? '');
+        $parts[] = (string) ($article['summary'] ?? '');
+        $parts[] = (string) ($article['category'] ?? '');
+        foreach ((array) ($article['keywords'] ?? []) as $keyword) {
+            $parts[] = (string) $keyword;
+        }
+        foreach ((array) ($article['body_sections'] ?? []) as $section) {
+            $parts[] = (string) ($section['title'] ?? '');
+            foreach ((array) ($section['paragraphs'] ?? []) as $paragraph) {
+                $parts[] = (string) $paragraph;
+            }
+            foreach ((array) ($section['bullets'] ?? []) as $bullet) {
+                $parts[] = (string) $bullet;
+            }
+        }
+        return gaiaeyes_support_lower(implode("\n", $parts));
+    }
+}
+
+if (!function_exists('gaiaeyes_support_filter_articles')) {
+    function gaiaeyes_support_filter_articles($articles, $query) {
+        $query = trim((string) $query);
+        if ($query === '') {
+            return array_values((array) $articles);
+        }
+
+        $needles = array_values(array_filter(array_map('trim', preg_split('/\s+/', gaiaeyes_support_lower($query)))));
+        if (empty($needles)) {
+            return array_values((array) $articles);
+        }
+
+        $matches = [];
+        foreach ((array) $articles as $article) {
+            $blob = gaiaeyes_support_article_search_blob($article);
+            $hit = true;
+            foreach ($needles as $needle) {
+                if ($needle === '') {
+                    continue;
+                }
+                if (strpos($blob, $needle) === false) {
+                    $hit = false;
+                    break;
+                }
+            }
+            if ($hit) {
+                $matches[] = $article;
+            }
+        }
+        return $matches;
+    }
+}
+
+if (!function_exists('gaiaeyes_support_articles_by_ids')) {
+    function gaiaeyes_support_articles_by_ids($articles, $ids) {
+        $map = [];
+        foreach ((array) $articles as $article) {
+            $id = isset($article['id']) ? (string) $article['id'] : '';
+            if ($id !== '' && !isset($map[$id])) {
+                $map[$id] = $article;
+            }
+        }
+
+        $selected = [];
+        foreach ((array) $ids as $id) {
+            $id = (string) $id;
+            if ($id !== '' && isset($map[$id])) {
+                $selected[] = $map[$id];
+            }
+        }
+        return $selected;
+    }
+}
+
+if (!function_exists('gaiaeyes_support_popular_article_ids')) {
+    function gaiaeyes_support_popular_article_ids() {
+        return [
+            'what-gaia-eyes-does',
+            'how-background-health-sync-works',
+            'why-signals-update-at-different-speeds',
+            'restore-purchases',
+            'need-help-with-billing',
+            'what-health-data-is-used-for',
+            'report-a-bug',
+            'no-diagnosis-no-medical-advice',
+        ];
+    }
+}
+
 if (!function_exists('gaiaeyes_render_support_center')) {
     function gaiaeyes_render_support_center() {
         $data = gaiaeyes_help_center_data();
@@ -79,8 +180,18 @@ if (!function_exists('gaiaeyes_render_support_center')) {
         $metadata = isset($data['metadata']) && is_array($data['metadata']) ? $data['metadata'] : [];
         $categories = isset($data['categories']) && is_array($data['categories']) ? $data['categories'] : [];
         $articles = isset($data['articles']) && is_array($data['articles']) ? $data['articles'] : [];
-        $articles_by_category = gaiaeyes_support_articles_by_category($articles);
+        $search_query = isset($_GET['q']) ? trim(sanitize_text_field(wp_unslash((string) $_GET['q']))) : '';
+        $filtered_articles = gaiaeyes_support_filter_articles($articles, $search_query);
+        $articles_by_category = gaiaeyes_support_articles_by_category($filtered_articles);
+        $visible_categories = array_values(array_filter($categories, function ($category) use ($articles_by_category) {
+            $category_id = isset($category['id']) ? (string) $category['id'] : '';
+            return $category_id !== '' && !empty($articles_by_category[$category_id]);
+        }));
+        $popular_articles = gaiaeyes_support_articles_by_ids($articles, gaiaeyes_support_popular_article_ids());
         $support_email = isset($metadata['support_email']) ? (string) $metadata['support_email'] : '';
+        $updated_at = isset($metadata['updated_at']) ? (string) $metadata['updated_at'] : '';
+        $article_count = count($articles);
+        $filtered_count = count($filtered_articles);
 
         ob_start();
         ?>
@@ -118,6 +229,47 @@ if (!function_exists('gaiaeyes_render_support_center')) {
                     display: flex;
                     gap: 10px;
                     flex-wrap: wrap;
+                }
+                .ge-support-search {
+                    margin-top: 18px;
+                    display: grid;
+                    gap: 10px;
+                    padding: 16px;
+                    border-radius: 18px;
+                    background: rgba(255,255,255,0.04);
+                    border: 1px solid rgba(255,255,255,0.08);
+                }
+                .ge-support-search__row {
+                    display: flex;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                    align-items: center;
+                }
+                .ge-support-search label {
+                    font-weight: 700;
+                    color: #ffffff;
+                }
+                .ge-support-search input {
+                    flex: 1 1 280px;
+                    min-width: 220px;
+                    border-radius: 14px;
+                    border: 1px solid rgba(255,255,255,0.12);
+                    background: rgba(7,13,24,0.65);
+                    color: #ffffff;
+                    padding: 12px 14px;
+                    font-size: 0.98rem;
+                }
+                .ge-support-search button {
+                    border: 0;
+                    border-radius: 14px;
+                    padding: 12px 16px;
+                    background: #2cc6a0;
+                    color: #06211b;
+                    font-weight: 700;
+                    cursor: pointer;
+                }
+                .ge-support-search small {
+                    color: rgba(255,255,255,0.62);
                 }
                 .ge-support-chip,
                 .ge-support-link {
@@ -185,6 +337,27 @@ if (!function_exists('gaiaeyes_render_support_center')) {
                 .ge-support-actions {
                     margin-top: 14px;
                 }
+                .ge-support-overview-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                    gap: 12px;
+                }
+                .ge-support-overview-card {
+                    background: rgba(255,255,255,0.04);
+                    border: 1px solid rgba(255,255,255,0.08);
+                    border-radius: 18px;
+                    padding: 18px;
+                    color: #ffffff;
+                    text-decoration: none;
+                }
+                .ge-support-overview-card strong {
+                    display: block;
+                    margin-bottom: 8px;
+                    font-size: 1rem;
+                }
+                .ge-support-overview-card span {
+                    color: rgba(255,255,255,0.72);
+                }
                 .ge-support-anchor {
                     scroll-margin-top: 120px;
                 }
@@ -202,13 +375,44 @@ if (!function_exists('gaiaeyes_render_support_center')) {
                 <header class="ge-support-hero">
                     <p class="ge-support-article__eyebrow">Support</p>
                     <h1>Gaia Eyes Help Center</h1>
-                    <p>Clear answers for Health sync, permissions, billing, privacy, and the basics of how Gaia Eyes works. This launch version keeps the scope intentionally light and keeps the language plain.</p>
+                    <p>Clear answers for Health sync, permissions, billing, privacy, and the basics of how Gaia Eyes works. This page is public, requires no login, and is the right support link to share for app review or customer handoff.</p>
                     <div class="ge-support-chip-row">
+                        <span class="ge-support-chip">public support link</span>
+                        <span class="ge-support-chip"><?php echo esc_html($article_count); ?> help articles</span>
+                        <?php if ($updated_at !== ''): ?>
+                            <span class="ge-support-chip">updated <?php echo esc_html($updated_at); ?></span>
+                        <?php endif; ?>
                         <span class="ge-support-chip">patterns, not certainties</span>
                         <span class="ge-support-chip">optional Health data</span>
                         <span class="ge-support-chip">user stays in control</span>
                         <span class="ge-support-chip">no diagnosis / no medical advice</span>
                     </div>
+                    <div class="ge-support-actions">
+                        <?php if ($support_email !== ''): ?>
+                            <a class="ge-support-link" href="<?php echo esc_url('mailto:' . $support_email . '?subject=Gaia%20Eyes%20Support'); ?>">Email Support</a>
+                        <?php endif; ?>
+                        <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url(gaiaeyes_support_url('report-a-bug')); ?>">Report a bug</a>
+                        <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url(gaiaeyes_support_url('health-sync-help')); ?>">Health sync help</a>
+                        <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url(gaiaeyes_support_url('need-help-with-billing')); ?>">Billing help</a>
+                        <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url(gaiaeyes_support_url('what-health-data-is-used-for')); ?>">Privacy and Health data</a>
+                    </div>
+                    <form class="ge-support-search" method="get" action="<?php echo esc_url(gaiaeyes_support_url()); ?>">
+                        <label for="ge-support-search-input">Search the help center</label>
+                        <div class="ge-support-search__row">
+                            <input
+                                id="ge-support-search-input"
+                                type="search"
+                                name="q"
+                                value="<?php echo esc_attr($search_query); ?>"
+                                placeholder="Try: sleep sync, restore purchases, billing, privacy"
+                            />
+                            <button type="submit">Search</button>
+                            <?php if ($search_query !== ''): ?>
+                                <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url(gaiaeyes_support_url()); ?>">Clear</a>
+                            <?php endif; ?>
+                        </div>
+                        <small>Search across titles, summaries, keywords, and article content.</small>
+                    </form>
                 </header>
 
                 <section class="ge-support-contact">
@@ -224,8 +428,38 @@ if (!function_exists('gaiaeyes_render_support_center')) {
                     </div>
                 </section>
 
+                <?php if (!empty($popular_articles)): ?>
+                    <section class="ge-support-category">
+                        <p class="ge-support-article__eyebrow">Popular help</p>
+                        <h2>Start with the most common questions</h2>
+                        <p>These cover the main app-review and launch-support topics: what Gaia Eyes does, Health sync, billing, privacy, and direct contact.</p>
+                        <div class="ge-support-overview-grid">
+                            <?php foreach ($popular_articles as $article): ?>
+                                <a class="ge-support-overview-card" href="<?php echo esc_url(gaiaeyes_support_url((string) ($article['id'] ?? ''))); ?>">
+                                    <strong><?php echo esc_html((string) ($article['title'] ?? 'Support article')); ?></strong>
+                                    <span><?php echo esc_html((string) ($article['summary'] ?? '')); ?></span>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    </section>
+                <?php endif; ?>
+
+                <?php if ($search_query !== ''): ?>
+                    <section class="ge-support-category">
+                        <p class="ge-support-article__eyebrow">Search results</p>
+                        <h2><?php echo esc_html($filtered_count . ' matching article' . ($filtered_count === 1 ? '' : 's')); ?></h2>
+                        <p>
+                            Results for
+                            <strong><?php echo esc_html($search_query); ?></strong>.
+                            <?php if ($filtered_count === 0): ?>
+                                Try broader terms like sync, billing, sleep, privacy, or symptoms.
+                            <?php endif; ?>
+                        </p>
+                    </section>
+                <?php endif; ?>
+
                 <nav class="ge-support-category-grid" aria-label="Support categories">
-                    <?php foreach ($categories as $category): ?>
+                    <?php foreach ($visible_categories as $category): ?>
                         <?php
                         $category_id = isset($category['id']) ? (string) $category['id'] : '';
                         if ($category_id === '') {
@@ -239,7 +473,7 @@ if (!function_exists('gaiaeyes_render_support_center')) {
                     <?php endforeach; ?>
                 </nav>
 
-                <?php foreach ($categories as $category): ?>
+                <?php foreach ($visible_categories as $category): ?>
                     <?php
                     $category_id = isset($category['id']) ? (string) $category['id'] : '';
                     if ($category_id === '') {
@@ -334,7 +568,6 @@ add_action('template_redirect', function () {
     }
 
     status_header(200);
-    nocache_headers();
 
     add_filter('document_title_parts', function ($parts) {
         if (is_array($parts)) {
