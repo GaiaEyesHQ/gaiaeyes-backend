@@ -28,6 +28,7 @@ SIGNAL_LABELS = {
     "pressure_swing_exposed": "Pressure swings",
     "aqi_moderate_plus_exposed": "Air quality",
     "temp_swing_exposed": "Temperature swings",
+    "humidity_extreme_exposed": "Humidity extremes",
     "pollen_overall_exposed": "Allergen load",
     "pollen_tree_exposed": "Tree pollen",
     "pollen_grass_exposed": "Grass pollen",
@@ -71,6 +72,7 @@ THEME_LABELS = {
 DRIVER_TO_SIGNAL_KEY = {
     "pressure": "pressure_swing_exposed",
     "temp": "temp_swing_exposed",
+    "humidity": "humidity_extreme_exposed",
     "aqi": "aqi_moderate_plus_exposed",
     "allergens": "pollen_overall_exposed",
     "kp": "kp_g1_plus_exposed",
@@ -210,6 +212,81 @@ _PATTERN_MESSAGE_MAP = {
         "full": "Allergen load has lined up with more brain-fog days in your history.",
         "short": "Allergen load has lined up with more brain-fog days for you.",
         "clause": "it has lined up with more brain-fog days for you",
+    },
+    ("pollen_tree_exposed", "headache_day"): {
+        "full": "Tree pollen has lined up with more headache days in your history.",
+        "short": "Tree pollen has lined up with more headache days for you.",
+        "clause": "it has lined up with more headache days for you",
+    },
+    ("pollen_tree_exposed", "fatigue_day"): {
+        "full": "Tree pollen has lined up with more fatigue days in your history.",
+        "short": "Tree pollen has lined up with more fatigue days for you.",
+        "clause": "it has lined up with more fatigue days for you",
+    },
+    ("pollen_tree_exposed", "focus_fog_day"): {
+        "full": "Tree pollen has lined up with more brain-fog days in your history.",
+        "short": "Tree pollen has lined up with more brain-fog days for you.",
+        "clause": "it has lined up with more brain-fog days for you",
+    },
+    ("pollen_grass_exposed", "headache_day"): {
+        "full": "Grass pollen has lined up with more headache days in your history.",
+        "short": "Grass pollen has lined up with more headache days for you.",
+        "clause": "it has lined up with more headache days for you",
+    },
+    ("pollen_grass_exposed", "fatigue_day"): {
+        "full": "Grass pollen has lined up with more fatigue days in your history.",
+        "short": "Grass pollen has lined up with more fatigue days for you.",
+        "clause": "it has lined up with more fatigue days for you",
+    },
+    ("pollen_grass_exposed", "focus_fog_day"): {
+        "full": "Grass pollen has lined up with more brain-fog days in your history.",
+        "short": "Grass pollen has lined up with more brain-fog days for you.",
+        "clause": "it has lined up with more brain-fog days for you",
+    },
+    ("pollen_weed_exposed", "headache_day"): {
+        "full": "Weed pollen has lined up with more headache days in your history.",
+        "short": "Weed pollen has lined up with more headache days for you.",
+        "clause": "it has lined up with more headache days for you",
+    },
+    ("pollen_weed_exposed", "fatigue_day"): {
+        "full": "Weed pollen has lined up with more fatigue days in your history.",
+        "short": "Weed pollen has lined up with more fatigue days for you.",
+        "clause": "it has lined up with more fatigue days for you",
+    },
+    ("pollen_weed_exposed", "focus_fog_day"): {
+        "full": "Weed pollen has lined up with more brain-fog days in your history.",
+        "short": "Weed pollen has lined up with more brain-fog days for you.",
+        "clause": "it has lined up with more brain-fog days for you",
+    },
+    ("pollen_mold_exposed", "headache_day"): {
+        "full": "Mold has lined up with more headache days in your history.",
+        "short": "Mold has lined up with more headache days for you.",
+        "clause": "it has lined up with more headache days for you",
+    },
+    ("pollen_mold_exposed", "fatigue_day"): {
+        "full": "Mold has lined up with more fatigue days in your history.",
+        "short": "Mold has lined up with more fatigue days for you.",
+        "clause": "it has lined up with more fatigue days for you",
+    },
+    ("pollen_mold_exposed", "focus_fog_day"): {
+        "full": "Mold has lined up with more brain-fog days in your history.",
+        "short": "Mold has lined up with more brain-fog days for you.",
+        "clause": "it has lined up with more brain-fog days for you",
+    },
+    ("humidity_extreme_exposed", "headache_day"): {
+        "full": "Humidity extremes have lined up with more headache days in your history.",
+        "short": "Humidity extremes have lined up with more headache days for you.",
+        "clause": "they have lined up with more headache days for you",
+    },
+    ("humidity_extreme_exposed", "fatigue_day"): {
+        "full": "Humidity extremes have lined up with more fatigue days in your history.",
+        "short": "Humidity extremes have lined up with more fatigue days for you.",
+        "clause": "they have lined up with more fatigue days for you",
+    },
+    ("humidity_extreme_exposed", "poor_sleep_day"): {
+        "full": "Humidity extremes have lined up with more poor-sleep nights in your history.",
+        "short": "Humidity extremes have lined up with more poor-sleep nights for you.",
+        "clause": "they have lined up with more poor-sleep nights for you",
     },
     ("solar_wind_exposed", "high_hr_day"): {
         "full": "Elevated solar wind has lined up with more days of higher heart rate in your history.",
@@ -404,6 +481,11 @@ def _driver_sensitivity_boost(driver_key: str, profile: PersonalizationProfile) 
     if driver_key == "temp":
         if profile.has_any("temperature_sensitive") or profile.includes_any(PAIN_FLARE_KEYS):
             return 0.85
+    if driver_key == "humidity":
+        if profile.includes_any(SINUS_KEYS) or profile.includes_any(AIRWAY_KEYS):
+            return 1.0
+        if profile.has_any("migraine_history"):
+            return 0.8
     if driver_key == "aqi":
         if profile.includes_any(SINUS_KEYS) or profile.includes_any(AIRWAY_KEYS):
             return 1.0
@@ -527,6 +609,33 @@ def _serialize_pattern_ref(
     }
 
 
+def _driver_signal_keys(driver: Mapping[str, Any]) -> List[str]:
+    key = str(driver.get("key") or "").strip()
+    if not key:
+        return []
+    if key != "allergens":
+        signal_key = DRIVER_TO_SIGNAL_KEY.get(key)
+        return [signal_key] if signal_key else []
+
+    label = str(driver.get("label") or "").strip().lower()
+    specific_keys: List[str] = []
+    if "tree pollen" in label:
+        specific_keys.append("pollen_tree_exposed")
+    elif "grass pollen" in label:
+        specific_keys.append("pollen_grass_exposed")
+    elif "weed pollen" in label:
+        specific_keys.append("pollen_weed_exposed")
+    elif label == "mold" or " mold" in label:
+        specific_keys.append("pollen_mold_exposed")
+    return specific_keys + [
+        "pollen_overall_exposed",
+        "pollen_tree_exposed",
+        "pollen_grass_exposed",
+        "pollen_weed_exposed",
+        "pollen_mold_exposed",
+    ]
+
+
 def _dedupe_pattern_refs(rows: Iterable[Mapping[str, Any]]) -> List[Dict[str, Any]]:
     seen: set[str] = set()
     out: List[Dict[str, Any]] = []
@@ -585,15 +694,16 @@ def compute_personal_relevance(
         key = str(driver.get("key") or "").strip()
         if not key:
             continue
-        signal_key = DRIVER_TO_SIGNAL_KEY.get(key)
+        signal_keys = _driver_signal_keys(driver)
         signal_strength = _normalized_signal_strength(driver)
         severity_score = _severity_score(driver.get("severity"))
         sensitivity_boost = _driver_sensitivity_boost(key, profile)
         refs_with_score: List[tuple[float, Dict[str, Any]]] = []
 
-        if signal_key:
+        if signal_keys:
             for row in pattern_rows:
-                if str(row.get("signal_key") or "") != signal_key:
+                row_signal_key = str(row.get("signal_key") or "")
+                if row_signal_key not in signal_keys:
                     continue
                 outcome_key = str(row.get("outcome_key") or "")
                 score = (

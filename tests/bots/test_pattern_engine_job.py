@@ -59,6 +59,11 @@ class PatternEngineJobTests(unittest.TestCase):
         self.assertTrue(exposed)
         self.assertEqual(threshold, 6.0)
 
+        humidity_row = {"humidity": 74.0}
+        exposed, threshold = signal_exposure(humidity_row, "humidity_extreme_exposed")
+        self.assertTrue(exposed)
+        self.assertEqual(threshold, 35.0)
+
         schumann_row = {"schumann_variability_proxy": 0.35, "schumann_variability_p80": 0.30}
         exposed, threshold = signal_exposure(schumann_row, "schumann_exposed")
         self.assertTrue(exposed)
@@ -122,6 +127,29 @@ class PatternEngineJobTests(unittest.TestCase):
         self.assertEqual(rows[0]["cycle_phase"], "menstrual")
         self.assertTrue(rows[0]["cycle_tracking_enabled"])
         self.assertTrue(rows[0]["menstrual_active"])
+
+    def test_build_user_daily_features_sets_humidity_extreme_signal(self) -> None:
+        rows = build_user_daily_features(
+            base_rows=[
+                {
+                    "user_id": "user-1",
+                    "day": date(2026, 3, 17),
+                }
+            ],
+            gauges={},
+            gauge_deltas={},
+            symptom_stats={},
+            camera_rows={},
+            tag_flags={},
+            day_zip_map={("user-1", date(2026, 3, 17)): "78754"},
+            current_zip_map={},
+            local_signals_daily={("78754", date(2026, 3, 17)): {"humidity": 74.0}},
+            schumann_daily={},
+            updated_at=datetime(2026, 3, 17, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(rows[0]["humidity_extreme_exposed"])
 
     def test_build_user_daily_outcomes_derives_recovery_signal_flags(self) -> None:
         outcome_rows = build_user_daily_outcomes(

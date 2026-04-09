@@ -187,6 +187,12 @@ SIGNAL_DEFINITIONS = {
         "threshold": 6.0,
         "threshold_text": "abs(temp_delta_24h_c) >= 6.0",
     },
+    "humidity_extreme_exposed": {
+        "family": "humidity",
+        "operator": "outside",
+        "threshold": 35.0,
+        "threshold_text": "humidity <= 35 or humidity >= 70",
+    },
     "kp_g1_plus_exposed": {
         "family": "geomagnetic",
         "operator": ">=",
@@ -260,6 +266,9 @@ ASSOCIATION_PAIRS = [
     ("pollen_mold_exposed", "focus_fog_day"),
     ("temp_swing_exposed", "pain_flare_day"),
     ("temp_swing_exposed", "fatigue_day"),
+    ("humidity_extreme_exposed", "headache_day"),
+    ("humidity_extreme_exposed", "fatigue_day"),
+    ("humidity_extreme_exposed", "poor_sleep_day"),
     ("kp_g1_plus_exposed", "poor_sleep_day"),
     ("bz_south_exposed", "poor_sleep_day"),
     ("solar_wind_exposed", "fatigue_day"),
@@ -630,6 +639,9 @@ def signal_exposure(row: dict[str, Any], signal_key: str) -> tuple[bool | None, 
     if signal_key == "temp_swing_exposed":
         value = _safe_float(row.get("temp_delta_24h"))
         return (abs(value) >= 6.0, 6.0) if value is not None else (None, 6.0)
+    if signal_key == "humidity_extreme_exposed":
+        value = _safe_float(row.get("humidity"))
+        return (value >= 70.0 or value <= 35.0, 35.0) if value is not None else (None, 35.0)
     if signal_key == "kp_g1_plus_exposed":
         value = _safe_float(row.get("kp_max"))
         return (value >= 5.0, 5.0) if value is not None else (None, 5.0)
@@ -1797,6 +1809,7 @@ def _feature_insert_columns() -> list[str]:
         "pollen_weed_exposed",
         "pollen_mold_exposed",
         "temp_swing_exposed",
+        "humidity_extreme_exposed",
         "kp_g1_plus_exposed",
         "bz_south_exposed",
         "solar_wind_exposed",

@@ -140,6 +140,83 @@ class PatternPersonalRelevanceTests(unittest.TestCase):
         self.assertTrue(solar_wind["hard_visible"])
         self.assertGreaterEqual(solar_wind["display_score"], solar_wind["signal_strength"])
 
+    def test_allergen_driver_prefers_matching_specific_pollen_pattern(self) -> None:
+        relevance = compute_personal_relevance(
+            day=date(2026, 3, 17),
+            drivers=[
+                {
+                    "key": "allergens",
+                    "label": "Grass pollen",
+                    "severity": "watch",
+                    "state": "Watch",
+                    "value": 4.1,
+                    "unit": "index",
+                    "signal_strength": 0.82,
+                    "show_driver": True,
+                }
+            ],
+            pattern_rows=[
+                {
+                    "signal_key": "pollen_grass_exposed",
+                    "outcome_key": "fatigue_day",
+                    "confidence": "Strong",
+                    "lag_hours": 24,
+                    "relative_lift": 2.2,
+                },
+                {
+                    "signal_key": "pollen_overall_exposed",
+                    "outcome_key": "headache_day",
+                    "confidence": "Moderate",
+                    "lag_hours": 24,
+                    "relative_lift": 1.4,
+                },
+            ],
+            user_tags=["allergies_sinus"],
+            recent_outcomes={"counts": {"fatigue_day": 1}},
+        )
+
+        primary = relevance["primary_driver"]
+        self.assertIsNotNone(primary)
+        assert primary is not None
+        self.assertEqual(primary["key"], "allergens")
+        self.assertEqual(primary["active_pattern_refs"][0]["signal_key"], "pollen_grass_exposed")
+        self.assertIn("grass pollen", primary["personal_reason"].lower())
+
+    def test_humidity_driver_can_use_pattern_history(self) -> None:
+        relevance = compute_personal_relevance(
+            day=date(2026, 3, 17),
+            drivers=[
+                {
+                    "key": "humidity",
+                    "label": "Humidity",
+                    "severity": "watch",
+                    "state": "Watch",
+                    "value": 78.0,
+                    "unit": "%",
+                    "signal_strength": 0.72,
+                    "show_driver": True,
+                }
+            ],
+            pattern_rows=[
+                {
+                    "signal_key": "humidity_extreme_exposed",
+                    "outcome_key": "poor_sleep_day",
+                    "confidence": "Moderate",
+                    "lag_hours": 24,
+                    "relative_lift": 1.9,
+                }
+            ],
+            user_tags=["allergies_sinus"],
+            recent_outcomes={"counts": {"poor_sleep_day": 1}},
+        )
+
+        primary = relevance["primary_driver"]
+        self.assertIsNotNone(primary)
+        assert primary is not None
+        self.assertEqual(primary["key"], "humidity")
+        self.assertEqual(primary["active_pattern_refs"][0]["signal_key"], "humidity_extreme_exposed")
+        self.assertIn("humidity extremes", primary["personal_reason"].lower())
+
     def test_recent_pattern_row_stays_visible_as_emerging(self) -> None:
         row = _visible_pattern_row(
             {
