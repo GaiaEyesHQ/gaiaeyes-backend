@@ -11,6 +11,91 @@ if (!function_exists('gaiaeyes_privacy_policy_path')) {
     }
 }
 
+if (!function_exists('gaiaeyes_privacy_policy_fallback_html')) {
+    function gaiaeyes_privacy_policy_fallback_html() {
+        return <<<'HTML'
+<div class="ge-privacy-policy-content">
+  <section class="ge-privacy-section" id="overview">
+    <p class="ge-privacy-eyebrow">Last updated</p>
+    <h2>Overview</h2>
+    <p>Gaia Eyes helps people notice patterns between body context, optional health signals, and environmental conditions. This Privacy Policy explains how Gaia Eyes handles data across the mobile app and website.</p>
+    <p>Gaia Eyes is an observational context tool. It is not a medical device and does not diagnose, treat, cure, or prevent disease.</p>
+  </section>
+
+  <section class="ge-privacy-section" id="collect">
+    <p class="ge-privacy-eyebrow">What we collect</p>
+    <h2>Information we collect</h2>
+    <p>Depending on how you use Gaia Eyes, we may collect account information, subscription metadata, symptom logs, notes, check-ins, support requests, optional health data you authorize, and location context such as ZIP code or approximate local conditions.</p>
+    <ul>
+      <li>Account details such as email address and profile preferences.</li>
+      <li>Symptom logs, daily check-ins, notes, and in-app feedback.</li>
+      <li>Optional Apple Health or wearable data you explicitly authorize.</li>
+      <li>Approximate local context such as ZIP-based weather, air quality, allergens, and environmental conditions.</li>
+      <li>Technical diagnostics and usage information needed to keep the app and website working.</li>
+      <li>Subscription and billing metadata handled through platform billing and payment providers.</li>
+    </ul>
+  </section>
+
+  <section class="ge-privacy-section" id="use">
+    <p class="ge-privacy-eyebrow">How we use data</p>
+    <h2>How Gaia Eyes uses information</h2>
+    <p>We use information to provide current context, personal patterns, body summaries, support features, account access, troubleshooting, and subscription support.</p>
+    <ul>
+      <li>To build gauges, current outlook, drivers, patterns, and guide summaries.</li>
+      <li>To personalize symptom follow-ups, support prompts, and account settings.</li>
+      <li>To improve sync reliability, bug diagnosis, and product quality.</li>
+      <li>To operate subscriptions, account security, and support workflows.</li>
+    </ul>
+  </section>
+
+  <section class="ge-privacy-section" id="health">
+    <p class="ge-privacy-eyebrow">Optional health data</p>
+    <h2>Health and wearable data</h2>
+    <p>If you choose to connect Health or supported wearables, Gaia Eyes may use data such as heart rate, sleep, HRV, SpO₂, respiratory rate, and related body signals to build your personal context.</p>
+    <p>Health access is optional. You can revoke permissions at any time through Apple Health, device settings, or Gaia Eyes settings.</p>
+  </section>
+
+  <section class="ge-privacy-section" id="share">
+    <p class="ge-privacy-eyebrow">How we share data</p>
+    <h2>Service providers and sharing</h2>
+    <p>We share data only as needed to operate Gaia Eyes and its infrastructure. That may include service providers for authentication, database/storage, billing, hosting, and environmental data delivery.</p>
+    <ul>
+      <li>Supabase for authentication, database, and storage.</li>
+      <li>Stripe or platform billing providers for subscription support where applicable.</li>
+      <li>Environmental and public data providers for local, space, and earth-system context.</li>
+      <li>Hosting, logging, and reliability infrastructure used to keep Gaia Eyes available.</li>
+    </ul>
+    <p>We do not sell personal information.</p>
+  </section>
+
+  <section class="ge-privacy-section" id="choices">
+    <p class="ge-privacy-eyebrow">Your choices</p>
+    <h2>Your controls</h2>
+    <p>You can control permissions, adjust settings, update symptom and notification preferences, and contact us about privacy or support questions.</p>
+    <ul>
+      <li>Disconnect optional health permissions at any time.</li>
+      <li>Change timezone, notification timing, and symptom preferences in settings.</li>
+      <li>Use support channels to request help with access, sync, or data questions.</li>
+      <li>Delete the app or stop using the website at any time.</li>
+    </ul>
+  </section>
+
+  <section class="ge-privacy-section" id="retention">
+    <p class="ge-privacy-eyebrow">Retention and security</p>
+    <h2>Retention and protection</h2>
+    <p>We keep data only as long as reasonably needed to operate Gaia Eyes, support your account, meet legal obligations, and resolve reliability or billing issues. We use technical and organizational safeguards to protect stored data, but no system can guarantee absolute security.</p>
+  </section>
+
+  <section class="ge-privacy-section" id="contact">
+    <p class="ge-privacy-eyebrow">Contact</p>
+    <h2>Contact us</h2>
+    <p>If you have privacy, support, or data questions, email <a href="mailto:help@gaiaeyes.com">help@gaiaeyes.com</a>.</p>
+  </section>
+</div>
+HTML;
+    }
+}
+
 if (!function_exists('gaiaeyes_privacy_policy_html')) {
     function gaiaeyes_privacy_policy_html() {
         static $cached = null;
@@ -19,13 +104,12 @@ if (!function_exists('gaiaeyes_privacy_policy_html')) {
         }
 
         $path = gaiaeyes_privacy_policy_path();
-        if (!file_exists($path)) {
-            $cached = '';
-            return $cached;
+        if (file_exists($path)) {
+            $raw = file_get_contents($path);
+            $cached = is_string($raw) && trim($raw) !== '' ? $raw : gaiaeyes_privacy_policy_fallback_html();
+        } else {
+            $cached = gaiaeyes_privacy_policy_fallback_html();
         }
-
-        $raw = file_get_contents($path);
-        $cached = is_string($raw) ? $raw : '';
         return $cached;
     }
 }

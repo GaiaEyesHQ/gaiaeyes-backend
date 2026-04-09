@@ -11,6 +11,191 @@ if (!function_exists('gaiaeyes_help_center_json_path')) {
     }
 }
 
+if (!function_exists('gaiaeyes_help_center_fallback_data')) {
+    function gaiaeyes_help_center_fallback_data() {
+        return [
+            'metadata' => [
+                'support_email' => 'help@gaiaeyes.com',
+                'updated_at' => '2026-04-08',
+                'web_support_url' => home_url('/support/'),
+                'privacy_policy_url' => home_url('/privacy/'),
+            ],
+            'categories' => [
+                ['id' => 'getting-started', 'title' => 'Getting started', 'summary' => 'What Gaia Eyes does and how to read it.'],
+                ['id' => 'health-sync', 'title' => 'Health sync', 'summary' => 'How optional Apple Health and wearable data gets into Gaia Eyes.'],
+                ['id' => 'billing', 'title' => 'Billing', 'summary' => 'Subscriptions, renewals, and restore access.'],
+                ['id' => 'privacy', 'title' => 'Privacy', 'summary' => 'How Gaia Eyes handles account, health, and location data.'],
+                ['id' => 'troubleshooting', 'title' => 'Troubleshooting', 'summary' => 'Fix common refresh, sync, and app behavior problems.'],
+            ],
+            'articles' => [
+                [
+                    'id' => 'what-gaia-eyes-does',
+                    'category' => 'getting-started',
+                    'title' => 'What Gaia Eyes does',
+                    'summary' => 'Gaia Eyes helps you notice patterns between your body context, optional health signals, and environmental conditions.',
+                    'keywords' => ['what is gaia eyes', 'getting started', 'patterns'],
+                    'body_sections' => [
+                        [
+                            'title' => 'What to expect',
+                            'paragraphs' => [
+                                'Gaia Eyes surfaces patterns, context, and suggestions. It does not diagnose medical conditions or replace professional care.',
+                                'The app and website combine environmental context, your symptom logs, and optional synced health data to help you notice what may be shaping the day.',
+                            ],
+                            'bullets' => [
+                                'Use Mission Control for the current read.',
+                                'Use Body for symptoms, check-ins, sleep, and health stats.',
+                                'Use Guide for a simpler summary and help links.',
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'why-signals-update-at-different-speeds',
+                    'category' => 'getting-started',
+                    'title' => 'Why signals update at different speeds',
+                    'summary' => 'Some feeds update in near-real time, while others depend on provider cadence or account sync.',
+                    'keywords' => ['stale', 'refresh', 'why not updating'],
+                    'body_sections' => [
+                        [
+                            'title' => 'Refresh timing',
+                            'paragraphs' => [
+                                'Environmental feeds, account sync, and pattern summaries do not all update on the same schedule.',
+                                'If something looks stale, pull to refresh in the app or reload the website after opening the app to let the latest health sync reach your account.',
+                            ],
+                            'bullets' => [
+                                'Dashboard and Guide can show cached content first.',
+                                'Health data depends on app sync and provider delivery.',
+                                'Local and space feeds depend on source availability.',
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'how-background-health-sync-works',
+                    'category' => 'health-sync',
+                    'title' => 'How background Health sync works',
+                    'summary' => 'Optional Health sync updates the app in the background when permissions and data sources are available.',
+                    'keywords' => ['health sync', 'apple health', 'background sync', 'wearables'],
+                    'body_sections' => [
+                        [
+                            'title' => 'Optional health data',
+                            'paragraphs' => [
+                                'Gaia Eyes can read optional health data that you authorize, such as heart rate, sleep, HRV, respiratory rate, SpO2, and related metrics.',
+                                'If the website looks light on sleep or body stats, open the app first so the latest synced data reaches your account.',
+                            ],
+                            'bullets' => [
+                                'You can change permissions in Apple Health and app settings.',
+                                'The website does not read Apple Health directly.',
+                                'Some devices and data types update more slowly than others.',
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'restore-purchases',
+                    'category' => 'billing',
+                    'title' => 'Restore purchases',
+                    'summary' => 'If Plus access is missing, restore purchases from the app and confirm you are signed into the same account.',
+                    'keywords' => ['restore', 'plus', 'subscription', 'purchase'],
+                    'body_sections' => [
+                        [
+                            'title' => 'Restore access',
+                            'paragraphs' => [
+                                'Make sure you are signed in with the same Gaia Eyes account and Apple ID used for the purchase.',
+                                'If access does not return, contact help@gaiaeyes.com and include the purchase date, account email, and a screenshot if possible.',
+                            ],
+                            'bullets' => [
+                                'Open the subscription area in the app.',
+                                'Use the restore purchases action.',
+                                'If needed, contact support for manual review.',
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'need-help-with-billing',
+                    'category' => 'billing',
+                    'title' => 'Need help with billing',
+                    'summary' => 'Use this when you need help with subscriptions, renewals, or account access.',
+                    'keywords' => ['billing', 'charge', 'subscription', 'refund'],
+                    'body_sections' => [
+                        [
+                            'title' => 'Billing support',
+                            'paragraphs' => [
+                                'For billing questions, email help@gaiaeyes.com with the account email, the platform used to subscribe, and a short description of the issue.',
+                            ],
+                            'bullets' => [
+                                'Include screenshots when possible.',
+                                'Mention whether this is a new subscription, renewal, or restore problem.',
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'what-health-data-is-used-for',
+                    'category' => 'privacy',
+                    'title' => 'What Health data is used for',
+                    'summary' => 'Optional health data is used to create personal context, gauges, patterns, and support features.',
+                    'keywords' => ['health data', 'privacy', 'apple health'],
+                    'body_sections' => [
+                        [
+                            'title' => 'How Gaia Eyes uses optional health data',
+                            'paragraphs' => [
+                                'Optional health data helps Gaia Eyes build context around energy, sleep, recovery load, heart-related signals, and pattern relevance.',
+                                'Gaia Eyes is observational. It does not diagnose medical conditions or provide treatment instructions.',
+                            ],
+                            'bullets' => [
+                                'You control permissions.',
+                                'You can disconnect health access at any time.',
+                                'See the Privacy Policy for more detail.',
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'report-a-bug',
+                    'category' => 'troubleshooting',
+                    'title' => 'Report a bug',
+                    'summary' => 'Use help@gaiaeyes.com to report app, sync, display, or website issues.',
+                    'keywords' => ['bug', 'report', 'issue', 'problem'],
+                    'body_sections' => [
+                        [
+                            'title' => 'What to include',
+                            'paragraphs' => [
+                                'Send bug reports to help@gaiaeyes.com with the app or website area affected, what you expected, what happened instead, and screenshots if available.',
+                            ],
+                            'bullets' => [
+                                'Include device model and OS version when relevant.',
+                                'If it is a sync issue, include when you last opened the app.',
+                                'If it is a website issue, include the page URL.',
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'id' => 'no-diagnosis-no-medical-advice',
+                    'category' => 'privacy',
+                    'title' => 'No diagnosis, no medical advice',
+                    'summary' => 'Gaia Eyes is a pattern and context tool, not a medical device or diagnostic service.',
+                    'keywords' => ['medical advice', 'diagnosis', 'health disclaimer'],
+                    'body_sections' => [
+                        [
+                            'title' => 'Important limitation',
+                            'paragraphs' => [
+                                'Gaia Eyes is intended to help you notice patterns and context. It is not intended to diagnose, treat, cure, or prevent any disease.',
+                            ],
+                            'bullets' => [
+                                'Seek professional care for urgent or medical questions.',
+                                'Do not delay care based on app or website summaries.',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
+}
+
 if (!function_exists('gaiaeyes_help_center_data')) {
     function gaiaeyes_help_center_data() {
         static $cached = null;
@@ -19,14 +204,13 @@ if (!function_exists('gaiaeyes_help_center_data')) {
         }
 
         $path = gaiaeyes_help_center_json_path();
-        if (!file_exists($path)) {
-            $cached = [];
-            return $cached;
+        if (file_exists($path)) {
+            $raw = file_get_contents($path);
+            $decoded = is_string($raw) ? json_decode($raw, true) : null;
+            $cached = is_array($decoded) && !empty($decoded) ? $decoded : gaiaeyes_help_center_fallback_data();
+        } else {
+            $cached = gaiaeyes_help_center_fallback_data();
         }
-
-        $raw = file_get_contents($path);
-        $decoded = is_string($raw) ? json_decode($raw, true) : null;
-        $cached = is_array($decoded) ? $decoded : [];
         return $cached;
     }
 }
