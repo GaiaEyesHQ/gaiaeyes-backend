@@ -636,6 +636,13 @@ final class APIClient {
         )
     }
 
+    func deleteAccount() async throws -> Envelope<DeleteAccountResult> {
+        try await deleteJSON(
+            "v1/profile/account",
+            as: Envelope<DeleteAccountResult>.self
+        )
+    }
+
     func respondSymptomFollowUp(
         promptId: String,
         state: CurrentSymptomState,

@@ -347,6 +347,12 @@ struct UserExperienceProfileEnvelope: Codable {
     let detail: String?
 }
 
+struct DeleteAccountResult: Decodable {
+    let deletedUserId: String?
+    let rowsDeleted: Int?
+    let tablesTouched: Int?
+}
+
 struct UserExperienceProfileUpdate: Encodable {
     var mode: ExperienceMode? = nil
     var guide: GuideType? = nil

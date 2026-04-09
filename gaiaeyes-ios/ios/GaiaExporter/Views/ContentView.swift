@@ -2795,6 +2795,9 @@ struct ContentView: View {
     @State private var notificationPreferences: AppNotificationPreferences = PushNotificationService.currentPreferencesDefault()
     @State private var notificationSettingsSaving: Bool = false
     @State private var notificationSettingsMessage: String?
+    @State private var accountDeletionInFlight: Bool = false
+    @State private var accountDeletionMessage: String?
+    @State private var showDeleteAccountConfirmation: Bool = false
     @State private var showNotificationSettingsSection: Bool = false
     @State private var pushPermissionGranted: Bool = PushNotificationService.storedPermissionGranted()
     @State private var pushDeviceToken: String? = PushNotificationService.storedDeviceToken()
@@ -5518,6 +5521,65 @@ struct ContentView: View {
             }
         } catch {
             appLog("[UI] save profile preferences error: \(error.localizedDescription)")
+        }
+    }
+
+    private func deleteAccountFromSettings() async {
+        await MainActor.run {
+            accountDeletionInFlight = true
+            accountDeletionMessage = nil
+        }
+
+        let trimmedBase = state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let token = await auth.validAccessToken(), !token.isEmpty else {
+            await MainActor.run {
+                accountDeletionMessage = "Sign in again to delete your account."
+                accountDeletionInFlight = false
+            }
+            return
+        }
+
+        let api = APIClient(
+            config: APIConfig(
+                baseURLString: trimmedBase.isEmpty ? DeveloperAuthDefaults.baseURL : trimmedBase,
+                bearer: token,
+                timeout: 60
+            )
+        )
+
+        do {
+            let result = try await api.deleteAccount()
+            if result.ok == false {
+                let message = result.error?.trimmingCharacters(in: .whitespacesAndNewlines)
+                throw NSError(
+                    domain: "GaiaEyes",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: (message?.isEmpty == false ? message! : "Could not delete your account.")]
+                )
+            }
+            await MainActor.run {
+                accountDeletionMessage = "Your Gaia Eyes account was deleted."
+                accountDeletionInFlight = false
+                showMissionSettingsSheet = false
+                showGuideSheet = false
+                showMissionInsightsSheet = false
+                showCurrentSymptomsSheet = false
+                showDailyCheckInSheet = false
+                dashboardPayload = nil
+                dashboardError = nil
+                dashboardLastUpdatedText = nil
+                currentSymptomsSnapshot = nil
+                dailyCheckInStatus = nil
+                userOutlook = nil
+                lastKnownUserOutlook = nil
+            }
+            auth.signOutSupabase()
+        } catch {
+            appLog("[UI] delete account error: \(error.localizedDescription)")
+            await MainActor.run {
+                accountDeletionMessage = error.localizedDescription
+                accountDeletionInFlight = false
+            }
         }
     }
 
@@ -15227,6 +15289,68 @@ struct ContentView: View {
         .padding(.horizontal)
     }
 
+    private var missionSettingsAccountSection: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Signed-in state, current plan, billing, and account deletion live here.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                if let email = auth.supabaseEmail, !email.isEmpty {
+                    Text("Signed in as \(email)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                NavigationLink(destination: SubscribeView(guideProfile: currentGuideProfile, helpContext: helpCenterContext)) {
+                    Label("Open Account & Membership", systemImage: "creditcard")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Delete account")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Permanently deletes your Gaia Eyes account and associated app data. App Store subscriptions are managed separately in Apple Subscriptions.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Button(role: .destructive) {
+                        showDeleteAccountConfirmation = true
+                    } label: {
+                        HStack {
+                            if accountDeletionInFlight {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            }
+                            Text(accountDeletionInFlight ? "Deleting..." : "Delete Account")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                    .disabled(accountDeletionInFlight)
+
+                    if let accountDeletionMessage, !accountDeletionMessage.isEmpty {
+                        Text(accountDeletionMessage)
+                            .font(.caption)
+                            .foregroundColor(
+                                accountDeletionMessage.lowercased().contains("could not")
+                                || accountDeletionMessage.lowercased().contains("sign in")
+                                ? .orange
+                                : .secondary
+                            )
+                    }
+                }
+            }
+        } label: {
+            Label("Account & Membership", systemImage: "person.crop.circle")
+        }
+        .padding(.horizontal)
+    }
+
     @ViewBuilder
     private var missionSettingsContextAndNotificationSections: some View {
         let environmentalTags = missionSettingsTagBuckets.environmental
@@ -15526,21 +15650,7 @@ struct ContentView: View {
                         }
                         .padding(.horizontal)
 
-                        GroupBox {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Signed-in state, current plan, billing, and upgrade options live here.")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                NavigationLink(destination: SubscribeView(guideProfile: currentGuideProfile, helpContext: helpCenterContext)) {
-                                    Label("Open Account & Membership", systemImage: "creditcard")
-                                        .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.borderedProminent)
-                            }
-                        } label: {
-                            Label("Account & Membership", systemImage: "person.crop.circle")
-                        }
-                        .padding(.horizontal)
+                        missionSettingsAccountSection
 
     }
 
@@ -16022,6 +16132,14 @@ struct ContentView: View {
             primaryModalShell
         .sheet(isPresented: $showMissionSettingsSheet) {
             missionSettingsSheetContent
+        }
+        .alert("Delete account?", isPresented: $showDeleteAccountConfirmation) {
+            Button("Delete Account", role: .destructive) {
+                Task { await deleteAccountFromSettings() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes your Gaia Eyes account and associated app data. App Store subscriptions must be cancelled separately in Apple Subscriptions.")
         }
         )
 

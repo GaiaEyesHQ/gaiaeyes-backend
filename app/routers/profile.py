@@ -5,12 +5,14 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from psycopg import sql
 from psycopg.rows import dict_row
 
-from app.db import get_db
-from app.security.auth import require_read_auth, require_write_auth
+from app.db import get_db, settings
+from app.security.auth import require_read_auth, require_supabase_jwt, require_write_auth
 from services.personalization.health_context import canonicalize_tag_key, canonicalize_tag_keys
 
 
@@ -48,6 +50,7 @@ _TRACKED_STAT_KEYS = {
 }
 _DEFAULT_TRACKED_STAT_KEYS = ["resting_hr", "respiratory", "hrv", "spo2", "steps"]
 _MAX_FAVORITE_SYMPTOM_CODES = 6
+_ACCOUNT_DELETE_SCHEMAS = ["raw", "app", "content", "marts", "gaia"]
 _ONBOARDING_STEPS = {
     "welcome",
     "mode",
@@ -95,6 +98,122 @@ async def _table_columns(conn, schema: str, table: str) -> List[str]:
         )
         rows = await cur.fetchall()
     return [r.get("column_name") for r in rows or [] if r.get("column_name")]
+
+
+async def _list_user_scoped_tables(conn) -> List[tuple[str, str]]:
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select c.table_schema, c.table_name
+              from information_schema.columns c
+              join information_schema.tables t
+                on t.table_schema = c.table_schema
+               and t.table_name = c.table_name
+             where c.column_name = 'user_id'
+               and t.table_type = 'BASE TABLE'
+               and c.table_schema = any(%s)
+             order by
+               case c.table_schema
+                 when 'raw' then 1
+                 when 'app' then 2
+                 when 'content' then 3
+                 when 'marts' then 4
+                 when 'gaia' then 5
+                 else 99
+               end,
+               c.table_name
+            """,
+            (_ACCOUNT_DELETE_SCHEMAS,),
+            prepare=False,
+        )
+        rows = await cur.fetchall()
+    return [
+        (str(row.get("table_schema")), str(row.get("table_name")))
+        for row in rows or []
+        if row.get("table_schema") and row.get("table_name")
+    ]
+
+
+def _positive_rowcount(cursor) -> int:
+    rowcount = getattr(cursor, "rowcount", 0)
+    return rowcount if isinstance(rowcount, int) and rowcount > 0 else 0
+
+
+async def _delete_user_scoped_rows(conn, user_id: str) -> Dict[str, Any]:
+    deleted: Dict[str, int] = {}
+    for schema, table in await _list_user_scoped_tables(conn):
+        async with conn.cursor() as cur:
+            await cur.execute(
+                sql.SQL("delete from {}.{} where {} = %s").format(
+                    sql.Identifier(schema),
+                    sql.Identifier(table),
+                    sql.Identifier("user_id"),
+                ),
+                (user_id,),
+                prepare=False,
+            )
+            deleted[f"{schema}.{table}"] = _positive_rowcount(cur)
+
+    gaia_user_columns = await _table_columns(conn, "gaia", "users")
+    if "id" in gaia_user_columns:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                sql.SQL("delete from {}.{} where {} = %s").format(
+                    sql.Identifier("gaia"),
+                    sql.Identifier("users"),
+                    sql.Identifier("id"),
+                ),
+                (user_id,),
+                prepare=False,
+            )
+            deleted["gaia.users"] = _positive_rowcount(cur)
+
+    return {
+        "rows_deleted": sum(deleted.values()),
+        "tables_touched": len([key for key, count in deleted.items() if count > 0]),
+        "deleted_by_table": deleted,
+    }
+
+
+async def _delete_supabase_auth_user(user_id: str) -> None:
+    supabase_url = (settings.SUPABASE_URL or "").strip().rstrip("/")
+    service_role_key = (settings.SUPABASE_SERVICE_ROLE_KEY or "").strip()
+    if not supabase_url or not service_role_key:
+        raise HTTPException(status_code=500, detail="Supabase admin deletion is not configured")
+
+    headers = {
+        "apikey": service_role_key,
+        "Authorization": f"Bearer {service_role_key}",
+    }
+    endpoint = f"{supabase_url}/auth/v1/admin/users/{user_id}"
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(endpoint, headers=headers)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Supabase auth deletion failed: {exc}") from exc
+
+    if response.status_code in {200, 204, 404}:
+        return
+
+    detail = ""
+    try:
+        payload = response.json()
+        if isinstance(payload, dict):
+            detail = str(
+                payload.get("msg")
+                or payload.get("error_description")
+                or payload.get("error")
+                or payload.get("message")
+                or ""
+            )
+    except Exception:
+        detail = ""
+    if not detail:
+        detail = response.text[:240]
+    raise HTTPException(
+        status_code=502,
+        detail=f"Supabase auth deletion failed ({response.status_code}): {detail or 'unknown error'}",
+    )
 
 
 class ProfileLocationIn(BaseModel):
@@ -572,6 +691,27 @@ async def profile_location_upsert(
 async def profile_preferences(request: Request, conn=Depends(get_db)):
     user_id = _require_user_id(request)
     return {"ok": True, "preferences": await _fetch_profile_preferences(conn, user_id)}
+
+
+@router.delete("/account", dependencies=[Depends(require_supabase_jwt)])
+async def profile_delete_account(
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    if not (settings.SUPABASE_URL or "").strip() or not (settings.SUPABASE_SERVICE_ROLE_KEY or "").strip():
+        raise HTTPException(status_code=500, detail="Supabase admin deletion is not configured")
+    deletion_summary = await _delete_user_scoped_rows(conn, user_id)
+    await conn.commit()
+    await _delete_supabase_auth_user(user_id)
+    return {
+        "ok": True,
+        "data": {
+            "deleted_user_id": user_id,
+            "rows_deleted": deletion_summary["rows_deleted"],
+            "tables_touched": deletion_summary["tables_touched"],
+        },
+    }
 
 
 @router.put("/preferences", dependencies=[Depends(require_write_auth)])

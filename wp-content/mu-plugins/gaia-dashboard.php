@@ -46,6 +46,7 @@ add_action('wp_enqueue_scripts', function () {
         'profilePreferences' => esc_url_raw(rest_url('gaia/v1/member/profile-preferences')),
         'guideSeen' => esc_url_raw(rest_url('gaia/v1/member/guide-seen')),
         'notifications' => esc_url_raw(rest_url('gaia/v1/member/notifications')),
+        'accountDelete' => esc_url_raw(rest_url('gaia/v1/member/account')),
     ];
 
     wp_localize_script('gaia-dashboard', 'GAIA_DASHBOARD_CFG', [
@@ -149,6 +150,7 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__btn{border:0;border-radius:999px;padding:8px 14px;background:#2b8cff;color:#fff;font-weight:600;cursor:pointer}
         .gaia-dashboard__btn--ghost{background:#1f2a3a;color:#d7e6ff}
         .gaia-dashboard__btn--quiet{background:#172130;color:#d7e6ff;border:1px solid rgba(255,255,255,.08)}
+        .gaia-dashboard__btn--danger{background:rgba(187,92,97,.16);color:#ffd5d8;border:1px solid rgba(230,122,126,.32)}
         .gaia-dashboard__shell{display:flex;flex-direction:column;gap:14px}
         .gaia-dashboard__shell-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
         .gaia-dashboard__shell-copy{display:flex;flex-direction:column;gap:4px;max-width:760px}
@@ -694,6 +696,16 @@ add_action('rest_api_init', function () {
             'permission_callback' => '__return_true',
             'callback' => function (WP_REST_Request $request) {
                 return gaia_dashboard_proxy_json($request, '/v1/profile/notifications', [], WP_REST_Server::EDITABLE);
+            },
+        ],
+    ]);
+
+    register_rest_route('gaia/v1', '/member/account', [
+        [
+            'methods' => WP_REST_Server::DELETABLE,
+            'permission_callback' => '__return_true',
+            'callback' => function (WP_REST_Request $request) {
+                return gaia_dashboard_proxy_json($request, '/v1/profile/account', [], 'DELETE');
             },
         ],
     ]);

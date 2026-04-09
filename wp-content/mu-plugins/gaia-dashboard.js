@@ -1195,6 +1195,32 @@
     return parsed;
   };
 
+  const deleteJson = async (url, token) => {
+    const response = await fetch(url, {
+      method: "DELETE",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const raw = await response.text();
+    let parsed = null;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      parsed = null;
+    }
+    if (!response.ok) {
+      const detail =
+        (parsed && (parsed.error || parsed.detail || parsed.message || parsed.friendly_error)) ||
+        (raw ? raw.slice(0, 180) : "");
+      throw new Error(`HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
+    }
+    return parsed;
+  };
+
   const fetchSymptomCodes = async (token) => {
     const url = routeFor("symptomCodes");
     if (!url) throw new Error("Symptom code route is not configured.");
@@ -1934,7 +1960,15 @@
 
     const signOutBtn = root.querySelector("[data-gaia-signout]");
     if (signOutBtn && state.authCtx && typeof state.authCtx.onSignOut === "function") {
-      signOutBtn.addEventListener("click", state.authCtx.onSignOut);
+      signOutBtn.addEventListener("click", () => {
+        void state.authCtx.onSignOut();
+      });
+    }
+    const deleteAccountBtn = root.querySelector("[data-gaia-delete-account]");
+    if (deleteAccountBtn) {
+      deleteAccountBtn.addEventListener("click", () => {
+        void deleteMemberAccount(root, state);
+      });
     }
     const switchBtn = root.querySelector("[data-gaia-switch]");
     if (switchBtn && state.authCtx && typeof state.authCtx.onSwitch === "function") {
@@ -2402,7 +2436,9 @@
 
     const signOutBtn = root.querySelector("[data-gaia-signout]");
     if (signOutBtn && authCtx && typeof authCtx.onSignOut === "function") {
-        signOutBtn.addEventListener("click", authCtx.onSignOut);
+        signOutBtn.addEventListener("click", () => {
+          void authCtx.onSignOut();
+        });
     }
     const switchBtn = root.querySelector("[data-gaia-switch]");
     if (switchBtn && authCtx && typeof authCtx.onSwitch === "function") {
@@ -4104,6 +4140,34 @@
     }
   };
 
+  const deleteMemberAccount = async (root, state) => {
+    const token = state && state.authCtx ? state.authCtx.token : "";
+    const url = routeFor("accountDelete");
+    if (!token || !url || state.ui.accountDeletionPending) return;
+    const confirmed = window.confirm(
+      "Delete your Gaia Eyes account? This permanently deletes your account and associated app data. App Store subscriptions are managed separately in Apple Subscriptions."
+    );
+    if (!confirmed) return;
+    state.ui.accountDeletionPending = true;
+    state.ui.accountDeletionStatus = "Deleting account…";
+    renderMemberHub(root, state);
+    try {
+      const payload = await deleteJson(url, token);
+      if (payload && payload.ok === false) {
+        throw new Error(payload.error || "Could not delete your account.");
+      }
+      state.ui.accountDeletionStatus = "Account deleted.";
+      renderMemberHub(root, state);
+      if (state.authCtx && typeof state.authCtx.onSignOut === "function") {
+        await state.authCtx.onSignOut("Account deleted. Sign in with email if you want to return.");
+      }
+    } catch (err) {
+      state.ui.accountDeletionStatus = err && err.message ? err.message : "Could not delete your account.";
+      state.ui.accountDeletionPending = false;
+      renderMemberHub(root, state);
+    }
+  };
+
   const renderSettingsSection = (state) => {
     const authCtx = state.authCtx || {};
     const isMember = state.dashboard.entitled === true || !!state.dashboard.memberPost;
@@ -4123,6 +4187,7 @@
     const symptomCodesLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.symptomCodes);
     const profilePreferencesStatus = textOrEmpty(state.ui.profilePreferencesStatus || state.member.errors.profilePreferences);
     const notificationPreferencesStatus = textOrEmpty(state.ui.notificationPreferencesStatus || state.member.errors.notifications);
+    const accountDeletionStatus = textOrEmpty(state.ui.accountDeletionStatus);
     return `
       <section class="gaia-dashboard__section${state.ui.activeTab === "settings" ? " is-active" : ""}" data-section="settings">
         <div class="gaia-dashboard__section-head">
@@ -4149,6 +4214,14 @@
             <div class="gaia-dashboard__section-actions">
               <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-switch>Email link</button>
               <button class="gaia-dashboard__btn gaia-dashboard__btn--ghost" type="button" data-gaia-signout>Sign out</button>
+            </div>
+            <div class="gaia-dashboard__empty">
+              <strong>Delete account</strong>
+              <p>Permanently deletes your Gaia Eyes account and associated app data. App Store subscriptions are managed separately in Apple Subscriptions.</p>
+              <div class="gaia-dashboard__section-actions">
+                <button class="gaia-dashboard__btn gaia-dashboard__btn--danger" type="button" data-gaia-delete-account${state.ui.accountDeletionPending ? " disabled" : ""}>${state.ui.accountDeletionPending ? "Deleting..." : "Delete account"}</button>
+              </div>
+              ${accountDeletionStatus ? `<div class="gaia-dashboard__status-note">${esc(accountDeletionStatus)}</div>` : ""}
             </div>
           </article>
           <article class="gaia-dashboard__card">
@@ -4500,11 +4573,11 @@
         authCtx: {
         email: user && user.email ? user.email : "",
         token,
-        onSignOut: async () => {
+        onSignOut: async (message) => {
           try {
             await supabase.auth.signOut();
           } finally {
-            renderSignInPrompt(root, supabase, "Signed out. Sign in with email.");
+            renderSignInPrompt(root, supabase, message || "Signed out. Sign in with email.");
           }
         },
         onSwitch: async () => {
@@ -4537,6 +4610,8 @@
           loadingKeys: defaultLoadingKeys(),
           currentSymptomPendingById: {},
           currentSymptomStatusById: {},
+          accountDeletionPending: false,
+          accountDeletionStatus: "",
         },
       };
       if (state.ui.activeTab === "guide") {
