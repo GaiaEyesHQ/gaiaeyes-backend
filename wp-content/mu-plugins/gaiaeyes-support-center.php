@@ -395,6 +395,7 @@ if (!function_exists('gaiaeyes_render_support_center')) {
                         <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url(gaiaeyes_support_url('health-sync-help')); ?>">Health sync help</a>
                         <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url(gaiaeyes_support_url('need-help-with-billing')); ?>">Billing help</a>
                         <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url(gaiaeyes_support_url('what-health-data-is-used-for')); ?>">Privacy and Health data</a>
+                        <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url(home_url('/privacy/')); ?>">Privacy Policy</a>
                     </div>
                     <form class="ge-support-search" method="get" action="<?php echo esc_url(gaiaeyes_support_url()); ?>">
                         <label for="ge-support-search-input">Search the help center</label>

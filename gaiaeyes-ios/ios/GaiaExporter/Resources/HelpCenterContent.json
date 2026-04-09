@@ -971,6 +971,12 @@
           "label": "Read user control over permissions",
           "kind": "article",
           "target": "user-control-over-permissions"
+        },
+        {
+          "id": "privacy-policy-link-health-data",
+          "label": "View Privacy Policy",
+          "kind": "url",
+          "target": "https://gaiaeyes.com/privacy/"
         }
       ]
     },
@@ -1000,6 +1006,14 @@
             "Trust matters more than squeezing every possible signal out of you. Gaia Eyes is meant to be useful without forcing an all-or-nothing setup.",
             "That is why optional Health data and permission controls are treated as product principles, not just settings."
           ]
+        }
+      ],
+      "links": [
+        {
+          "id": "privacy-policy-link-permissions",
+          "label": "View Privacy Policy",
+          "kind": "url",
+          "target": "https://gaiaeyes.com/privacy/"
         }
       ]
     },
