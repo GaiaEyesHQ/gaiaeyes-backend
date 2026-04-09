@@ -743,6 +743,34 @@ struct DashboardSupportItem: Codable, Hashable, Identifiable {
     var id: String { key }
 }
 
+private struct DashboardGuideState: Codable {
+    let signature: String?
+    let hasUnseen: Bool?
+    let reasons: [String]?
+    let updatedAt: String?
+    let lastViewedSignature: String?
+    let lastViewedAt: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case signature
+        case hasUnseen = "has_unseen"
+        case reasons
+        case updatedAt = "updated_at"
+        case lastViewedSignature = "last_viewed_signature"
+        case lastViewedAt = "last_viewed_at"
+    }
+}
+
+private struct DashboardGuideStateEnvelope: Codable {
+    let ok: Bool?
+    let guideState: DashboardGuideState?
+
+    private enum CodingKeys: String, CodingKey {
+        case ok
+        case guideState = "guide_state"
+    }
+}
+
 private struct DashboardPayload: Codable {
     let day: String?
     let gauges: DashboardGaugeSet?
@@ -765,6 +793,7 @@ private struct DashboardPayload: Codable {
     let modalModels: DashboardModalModels?
     let earthscopeSummary: String?
     let supportItems: [DashboardSupportItem]?
+    let guideState: DashboardGuideState?
     let alerts: [DashboardAlertItem]?
     let entitled: Bool?
     let memberPost: DashboardEarthscopePost?
@@ -772,7 +801,7 @@ private struct DashboardPayload: Codable {
     let personalPost: DashboardEarthscopePost?
 
     private enum CodingKeys: String, CodingKey {
-        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, gaugesDelta, drivers, signalBar, driversCompact, primaryDriver, supportingDrivers, patternRelevantGauges, activePatternRefs, todayPersonalThemes, todayRelevanceExplanations, healthStatusExplainer, gaugeRecentLogBoosts, lastSymptomUpdateAt, modalModels, earthscopeSummary, supportItems, alerts, entitled
+        case day, gauges, gaugesMeta, gaugeZones, gaugeLabels, gaugesDelta, drivers, signalBar, driversCompact, primaryDriver, supportingDrivers, patternRelevantGauges, activePatternRefs, todayPersonalThemes, todayRelevanceExplanations, healthStatusExplainer, gaugeRecentLogBoosts, lastSymptomUpdateAt, modalModels, earthscopeSummary, supportItems, guideState, alerts, entitled
         case memberPost
         case publicPost
         case personalPost
@@ -2090,6 +2119,7 @@ private func mergedDashboardPayload(
         modalModels: preferred.modalModels ?? fallback.modalModels,
         earthscopeSummary: preferred.earthscopeSummary ?? fallback.earthscopeSummary,
         supportItems: preferLongerArray(preferred.supportItems, fallback: fallback.supportItems),
+        guideState: preferred.guideState ?? fallback.guideState,
         alerts: (preferred.alerts?.isEmpty == false) ? preferred.alerts : fallback.alerts,
         entitled: preferred.entitled ?? fallback.entitled,
         memberPost: preferred.memberPost ?? fallback.memberPost,
@@ -3184,6 +3214,10 @@ struct ContentView: View {
     }
 
     private var currentGuideStateSignature: String {
+        if let signature = dashboardPayload?.guideState?.signature?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !signature.isEmpty {
+            return signature
+        }
         var parts: [String] = []
         if let prompt = dailyCheckInStatus?.prompt,
            prompt.status != "answered" {
@@ -3219,6 +3253,9 @@ struct ContentView: View {
     }
 
     private var hasGuideUpdatesWaiting: Bool {
+        if let hasUnseen = dashboardPayload?.guideState?.hasUnseen {
+            return hasUnseen
+        }
         let signature = currentGuideStateSignature
         guard !signature.isEmpty else { return false }
         return UserDefaults.standard.string(forKey: guideUnseenStorageKey) != signature
@@ -3231,6 +3268,52 @@ struct ContentView: View {
             defaults.removeObject(forKey: guideUnseenStorageKey)
         } else {
             defaults.set(signature, forKey: guideUnseenStorageKey)
+            Task {
+                do {
+                    let savedState = try await postGuideSeenSignature(signature)
+                    await MainActor.run {
+                        guard let payload = dashboardPayload else { return }
+                        dashboardPayload = DashboardPayload(
+                            day: payload.day,
+                            gauges: payload.gauges,
+                            gaugesMeta: payload.gaugesMeta,
+                            gaugeZones: payload.gaugeZones,
+                            gaugeLabels: payload.gaugeLabels,
+                            gaugesDelta: payload.gaugesDelta,
+                            drivers: payload.drivers,
+                            signalBar: payload.signalBar,
+                            driversCompact: payload.driversCompact,
+                            primaryDriver: payload.primaryDriver,
+                            supportingDrivers: payload.supportingDrivers,
+                            patternRelevantGauges: payload.patternRelevantGauges,
+                            activePatternRefs: payload.activePatternRefs,
+                            todayPersonalThemes: payload.todayPersonalThemes,
+                            todayRelevanceExplanations: payload.todayRelevanceExplanations,
+                            healthStatusExplainer: payload.healthStatusExplainer,
+                            gaugeRecentLogBoosts: payload.gaugeRecentLogBoosts,
+                            lastSymptomUpdateAt: payload.lastSymptomUpdateAt,
+                            modalModels: payload.modalModels,
+                            earthscopeSummary: payload.earthscopeSummary,
+                            supportItems: payload.supportItems,
+                            guideState: savedState ?? DashboardGuideState(
+                                signature: signature,
+                                hasUnseen: false,
+                                reasons: payload.guideState?.reasons,
+                                updatedAt: payload.guideState?.updatedAt,
+                                lastViewedSignature: signature,
+                                lastViewedAt: payload.guideState?.lastViewedAt
+                            ),
+                            alerts: payload.alerts,
+                            entitled: payload.entitled,
+                            memberPost: payload.memberPost,
+                            publicPost: payload.publicPost,
+                            personalPost: payload.personalPost
+                        )
+                    }
+                } catch {
+                    appLog("[UI] guide seen save error: \(error.localizedDescription)")
+                }
+            }
         }
     }
 
@@ -3560,6 +3643,18 @@ struct ContentView: View {
         ]
         .compactMap { $0 }
         .max()
+    }
+
+    private func dashboardNeedsForegroundRefresh(now: Date = Date()) -> Bool {
+        let referenceDate: Date
+        if dashboardLastFetchAt != .distantPast {
+            referenceDate = dashboardLastFetchAt
+        } else if let cachedDate = dashboardSnapshotReferenceDate(from: dashboardPayload ?? decodeDashboardPayload(from: dashboardPayloadCacheJSON)) {
+            referenceDate = cachedDate
+        } else {
+            return true
+        }
+        return now.timeIntervalSince(referenceDate) >= 5 * 60
     }
 
     private func debugFormattedDate(_ date: Date?) -> String {
@@ -4912,6 +5007,7 @@ struct ContentView: View {
                             modalModels: resolvedPayload.modalModels,
                             earthscopeSummary: resolvedPayload.earthscopeSummary,
                             supportItems: resolvedPayload.supportItems,
+                            guideState: resolvedPayload.guideState,
                             alerts: resolvedPayload.alerts,
                             entitled: resolvedPayload.entitled,
                             memberPost: currentMemberPost ?? currentPersonalPost ?? normalizedMember,
@@ -4965,6 +5061,7 @@ struct ContentView: View {
                             modalModels: resolvedPayload.modalModels ?? older.modalModels,
                             earthscopeSummary: resolvedPayload.earthscopeSummary,
                             supportItems: preferLongerArray(resolvedPayload.supportItems, fallback: older.supportItems),
+                            guideState: resolvedPayload.guideState ?? older.guideState,
                             alerts: (resolvedPayload.alerts?.isEmpty == false) ? resolvedPayload.alerts : older.alerts,
                             entitled: resolvedPayload.entitled ?? older.entitled,
                             memberPost: resolvedPayload.memberPost ?? resolvedPayload.personalPost ?? older.memberPost ?? older.personalPost,
@@ -5022,6 +5119,7 @@ struct ContentView: View {
                             modalModels: resolvedPayload.modalModels,
                             earthscopeSummary: resolvedPayload.earthscopeSummary,
                             supportItems: resolvedPayload.supportItems,
+                            guideState: resolvedPayload.guideState,
                             alerts: resolvedPayload.alerts,
                             entitled: resolvedPayload.entitled,
                             memberPost: preferredMemberPost,
@@ -5068,6 +5166,7 @@ struct ContentView: View {
                         modalModels: resolvedPayload.modalModels,
                         earthscopeSummary: resolvedPayload.earthscopeSummary,
                         supportItems: resolvedPayload.supportItems,
+                        guideState: resolvedPayload.guideState,
                         alerts: resolvedPayload.alerts,
                         entitled: resolvedPayload.entitled,
                         memberPost: preferredEarthscopePost(resolvedPayload.memberPost, requestedDay: dashboardDay),
@@ -5276,6 +5375,38 @@ struct ContentView: View {
             throw URLError(.badServerResponse)
         }
         return envelope.preferences ?? .default
+    }
+
+    private func postGuideSeenSignature(_ signature: String) async throws -> DashboardGuideState? {
+        guard var url = URL(string: state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            throw URLError(.badURL)
+        }
+        url.appendPathComponent("v1/profile/guide/seen")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 20
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        if !state.bearer.isEmpty {
+            req.setValue("Bearer \(state.bearer)", forHTTPHeaderField: "Authorization")
+        }
+        let devUser = state.userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !devUser.isEmpty {
+            req.setValue(devUser, forHTTPHeaderField: "X-Dev-UserId")
+        }
+        req.httpBody = try JSONEncoder().encode(["signature": signature])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200...299).contains(code) else {
+            throw DecodingPreviewError(endpoint: "v1/profile/guide/seen", preview: String(data: data, encoding: .utf8) ?? "", underlying: URLError(.badServerResponse))
+        }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let envelope = try decoder.decode(DashboardGuideStateEnvelope.self, from: data)
+        guard envelope.ok != false else {
+            throw URLError(.badServerResponse)
+        }
+        return envelope.guideState
     }
 
     private func fetchProfileLocation() async {
@@ -14071,9 +14202,11 @@ struct ContentView: View {
                 if newPhase == .active {
                     state.refreshStatus()
                     Task {
-                        await HealthKitBackgroundSync.shared.kickOnce(reason: "became active")
-                        await fetchDashboardPayload()
-                        await refreshLiveSchumannSignalBar(api: state.apiWithAuth())
+                        let api = state.apiWithAuth()
+                        async let dashboardRefresh: Void = fetchDashboardPayload(force: dashboardNeedsForegroundRefresh())
+                        async let healthKick: Void = HealthKitBackgroundSync.shared.kickOnce(reason: "became active")
+                        async let schumannRefresh: Void = refreshLiveSchumannSignalBar(api: api)
+                        _ = await (dashboardRefresh, healthKick, schumannRefresh)
                     }
                 }
             }

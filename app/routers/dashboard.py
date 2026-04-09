@@ -173,6 +173,187 @@ def _safe_float(value: Any) -> Optional[float]:
         return None
 
 
+async def _table_columns(conn, schema: str, table: str) -> list[str]:
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select column_name
+              from information_schema.columns
+             where table_schema = %s
+               and table_name = %s
+             order by ordinal_position
+            """,
+            (schema, table),
+            prepare=False,
+        )
+        rows = await cur.fetchall()
+    return [str(row.get("column_name")) for row in rows or [] if row.get("column_name")]
+
+
+async def _fetch_guide_seen_state(conn, user_id: str) -> Dict[str, Any]:
+    columns = await _table_columns(conn, "app", "user_experience_profiles")
+    if (
+        not columns
+        or "user_id" not in columns
+        or "guide_last_viewed_signature" not in columns
+        or "guide_last_viewed_at" not in columns
+    ):
+        return {"last_viewed_signature": None, "last_viewed_at": None}
+
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select guide_last_viewed_signature, guide_last_viewed_at
+              from app.user_experience_profiles
+             where user_id = %s
+             limit 1
+            """,
+            (user_id,),
+            prepare=False,
+        )
+        row = await cur.fetchone()
+
+    if not row:
+        return {"last_viewed_signature": None, "last_viewed_at": None}
+
+    viewed_at = row.get("guide_last_viewed_at")
+    return {
+        "last_viewed_signature": str(row.get("guide_last_viewed_signature") or "").strip() or None,
+        "last_viewed_at": viewed_at.astimezone(timezone.utc).isoformat() if isinstance(viewed_at, datetime) else None,
+    }
+
+
+def _guide_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _latest_iso_timestamp(*values: Any) -> Optional[str]:
+    latest: Optional[datetime] = None
+    for raw in values:
+        if raw is None:
+            continue
+        parsed: Optional[datetime] = None
+        if isinstance(raw, datetime):
+            parsed = raw.astimezone(timezone.utc)
+        elif isinstance(raw, str):
+            candidate = raw.strip()
+            if not candidate:
+                continue
+            try:
+                parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00")).astimezone(timezone.utc)
+            except Exception:
+                parsed = None
+        if parsed is None:
+            continue
+        if latest is None or parsed > latest:
+            latest = parsed
+    return latest.isoformat() if latest else None
+
+
+def _build_guide_state(
+    *,
+    daily_check_in: Dict[str, Any] | None,
+    pending_follow_up: Dict[str, Any] | None,
+    earthscope_summary: str | None,
+    earthscope_updated_at: str | None,
+    support_items: list[Dict[str, Any]] | None,
+    last_viewed_signature: str | None,
+    last_viewed_at: str | None,
+) -> Dict[str, Any]:
+    parts: list[str] = []
+    reasons: list[str] = []
+
+    prompt = (daily_check_in or {}).get("prompt") if isinstance(daily_check_in, dict) else None
+    if isinstance(prompt, dict):
+        prompt_status = _guide_text(prompt.get("status")) or "ready"
+        if prompt_status.lower() != "answered":
+            parts.append(
+                f"checkin:{_guide_text(prompt.get('id'))}:{_guide_text(prompt.get('day'))}:{prompt_status}"
+            )
+            reasons.append("daily_check_in")
+
+    if isinstance(pending_follow_up, dict):
+        prompt_status = _guide_text(pending_follow_up.get("status")) or "pending"
+        parts.append(
+            f"followup:{_guide_text(pending_follow_up.get('id'))}:{_guide_text(pending_follow_up.get('episode_id'))}:{prompt_status}"
+        )
+        reasons.append("symptom_follow_up")
+
+    summary = _guide_text(earthscope_summary)
+    earthscope_marker = _guide_text(earthscope_updated_at) or summary
+    if earthscope_marker:
+        parts.append(f"summary:{earthscope_marker}")
+        reasons.append("earthscope_summary")
+
+    normalized_support = [item for item in support_items or [] if isinstance(item, dict)]
+    if normalized_support:
+        support_signature = "~".join(
+            ":".join(
+                value for value in [
+                    _guide_text(item.get("key")),
+                    _guide_text(item.get("badge")),
+                    _guide_text(item.get("title")),
+                    _guide_text(item.get("message")),
+                ]
+                if value
+            )
+            for item in normalized_support[:3]
+        )
+        if support_signature:
+            parts.append(f"support:{support_signature}")
+            reasons.append("support")
+
+    signature = "|".join(parts)
+    return {
+        "signature": signature or None,
+        "has_unseen": bool(signature) and signature != (last_viewed_signature or ""),
+        "reasons": reasons,
+        "updated_at": _latest_iso_timestamp(
+            prompt.get("updated_at") if isinstance(prompt, dict) else None,
+            prompt.get("created_at") if isinstance(prompt, dict) else None,
+            pending_follow_up.get("updated_at") if isinstance(pending_follow_up, dict) else None,
+            pending_follow_up.get("scheduled_for") if isinstance(pending_follow_up, dict) else None,
+            earthscope_updated_at,
+        ),
+        "last_viewed_signature": last_viewed_signature,
+        "last_viewed_at": last_viewed_at,
+    }
+
+
+async def _fetch_latest_pending_follow_up(conn, user_id: str) -> Optional[Dict[str, Any]]:
+    try:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
+                """
+                select id, episode_id, status, scheduled_for, snoozed_until, delivered_at, updated_at, created_at
+                  from raw.user_feedback_prompts
+                 where user_id = %s
+                   and prompt_type = 'symptom_follow_up'
+                   and status in ('pending', 'snoozed')
+                   and coalesce(snoozed_until, scheduled_for) <= now()
+                 order by coalesce(snoozed_until, scheduled_for) asc, created_at asc
+                 limit 1
+                """,
+                (user_id,),
+                prepare=False,
+            )
+            row = await cur.fetchone()
+    except Exception:
+        return None
+
+    if not row:
+        return None
+
+    serialized: Dict[str, Any] = {}
+    for key in ("id", "episode_id", "status"):
+        value = row.get(key)
+        serialized[key] = str(value) if value is not None else None
+    for key in ("scheduled_for", "snoozed_until", "delivered_at", "updated_at", "created_at"):
+        value = row.get(key)
+        serialized[key] = value.astimezone(timezone.utc).isoformat() if isinstance(value, datetime) else None
+    return serialized
+
+
 def _normalize_delta_map(raw: Any) -> Dict[str, int]:
     payload = raw
     if isinstance(payload, str):
@@ -512,6 +693,8 @@ async def dashboard(
         symptom_gauge_context,
         symptom_summary,
         latest_daily_check_in,
+        pending_follow_up,
+        guide_seen_state,
     ) = await asyncio.gather(
         asyncio.to_thread(fetch_user_tags, user_id),
         fetch_best_pattern_rows(conn, user_id),
@@ -520,6 +703,8 @@ async def dashboard(
         asyncio.to_thread(fetch_recent_symptom_gauge_context, user_id, day),
         asyncio.to_thread(fetch_symptom_summary, user_id, day),
         feedback_db.fetch_latest_daily_check_in(conn, user_id),
+        _fetch_latest_pending_follow_up(conn, user_id),
+        _fetch_guide_seen_state(conn, user_id),
     )
     drivers = normalize_environmental_drivers(
         active_states=active_states,
@@ -605,6 +790,18 @@ async def dashboard(
         user_tags=user_tags,
         symptoms=symptom_summary if isinstance(symptom_summary, dict) else {},
         personal_relevance=personal_relevance,
+    )
+    out["guide_state"] = _build_guide_state(
+        daily_check_in=latest_daily_check_in if isinstance(latest_daily_check_in, dict) else None,
+        pending_follow_up=pending_follow_up if isinstance(pending_follow_up, dict) else None,
+        earthscope_summary=out.get("earthscope_summary"),
+        earthscope_updated_at=(
+            (resolved_member or {}).get("updated_at")
+            or (public_post or {}).get("updated_at")
+        ),
+        support_items=out.get("support_items") if isinstance(out.get("support_items"), list) else None,
+        last_viewed_signature=(guide_seen_state or {}).get("last_viewed_signature"),
+        last_viewed_at=(guide_seen_state or {}).get("last_viewed_at"),
     )
 
     if debug:

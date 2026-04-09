@@ -1932,7 +1932,7 @@
       node.addEventListener("click", () => {
         state.ui.activeTab = normalizeTabKey(node.getAttribute("data-tab-target"));
         if (state.ui.activeTab === "guide") {
-          writeGuideSeenSignature(state);
+          void markGuideSeenRemotely(state);
         }
         writeTabHash(state.ui.activeTab);
         hydrateTabData(root, state, state.ui.activeTab);
@@ -2505,6 +2505,8 @@
     return `gaia.guide.last_seen_signature.${identity}`;
   };
 
+  const guideStatePayload = (state) => maybeObject(state && state.dashboard && state.dashboard.guide_state);
+
   const readGuideSeenSignature = (state) => {
     try {
       return window.localStorage.getItem(guideSeenStorageKey(state)) || "";
@@ -2524,6 +2526,30 @@
     } catch (_) {}
   };
 
+  const markGuideSeenRemotely = async (state) => {
+    const signature = guideStateSignature(state);
+    if (!signature) return;
+    writeGuideSeenSignature(state);
+    if (state.dashboard) {
+      state.dashboard.guide_state = {
+        ...(guideStatePayload(state) || {}),
+        signature,
+        has_unseen: false,
+        last_viewed_signature: signature,
+      };
+    }
+    const token = state && state.authCtx ? state.authCtx.token : "";
+    const url = routeFor("guideSeen");
+    if (!token || !url) return;
+    try {
+      const payload = await postJson(url, token, { signature });
+      const guideState = maybeObject(payload && payload.guide_state);
+      if (state.dashboard && guideState) {
+        state.dashboard.guide_state = guideState;
+      }
+    } catch (_) {}
+  };
+
   const isOutlookHealthRelevantDriver = (driver) => {
     const key = textOrEmpty(driver && driver.key).toLowerCase();
     const label = textOrEmpty(driver && driver.label).toLowerCase();
@@ -2533,6 +2559,10 @@
   };
 
   const guideStateSignature = (state) => {
+    const remoteState = guideStatePayload(state);
+    if (remoteState && textOrEmpty(remoteState.signature)) {
+      return textOrEmpty(remoteState.signature);
+    }
     const currentSymptoms = extractCurrentSymptoms(state && state.member && state.member.currentSymptoms);
     const followUp = firstPendingFollowUp(currentSymptoms);
     const dailyCheckIn = extractDailyCheckIn(state && state.member && state.member.dailyCheckIn);
@@ -2576,6 +2606,10 @@
   };
 
   const guideHasUnseen = (state) => {
+    const remoteState = guideStatePayload(state);
+    if (remoteState && typeof remoteState.has_unseen === "boolean") {
+      return remoteState.has_unseen;
+    }
     const signature = guideStateSignature(state);
     if (!signature) return false;
     return readGuideSeenSignature(state) !== signature;
@@ -4466,14 +4500,14 @@
         },
       };
       if (state.ui.activeTab === "guide") {
-        writeGuideSeenSignature(state);
+        void markGuideSeenRemotely(state);
       }
       renderMemberHub(root, state);
       if (!root.dataset.gaiaHashBound) {
         window.addEventListener("hashchange", () => {
           state.ui.activeTab = currentTabFromHash();
           if (state.ui.activeTab === "guide") {
-            writeGuideSeenSignature(state);
+            void markGuideSeenRemotely(state);
           }
           hydrateTabData(root, state, state.ui.activeTab);
           renderMemberHub(root, state);

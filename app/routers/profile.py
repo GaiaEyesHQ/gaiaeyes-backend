@@ -120,6 +120,11 @@ class ProfilePreferencesIn(BaseModel):
     last_backfill_at: Optional[datetime] = Field(default=None)
 
 
+class GuideSeenIn(BaseModel):
+    signature: str = Field(default="")
+    viewed_at: Optional[datetime] = Field(default=None)
+
+
 def _normalize_zip(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
@@ -675,6 +680,69 @@ async def profile_preferences_upsert(
         )
 
     return {"ok": True, "preferences": await _fetch_profile_preferences(conn, user_id)}
+
+
+@router.post("/guide/seen", dependencies=[Depends(require_write_auth)])
+async def profile_guide_seen(
+    payload: GuideSeenIn,
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    columns = await _table_columns(conn, "app", "user_experience_profiles")
+    if not columns or "user_id" not in columns:
+        return {"ok": False, "error": "app.user_experience_profiles table unavailable"}
+
+    required_columns = ["guide_last_viewed_signature", "guide_last_viewed_at"]
+    missing_columns = [column for column in required_columns if column not in columns]
+    if missing_columns:
+        return {
+            "ok": False,
+            "error": "missing_guide_seen_columns",
+            "missing_columns": missing_columns,
+        }
+
+    now = datetime.now(timezone.utc)
+    signature = str(payload.signature or "").strip()
+    viewed_at = payload.viewed_at or now
+    values_by_column: Dict[str, Any] = {
+        "user_id": user_id,
+        "guide_last_viewed_signature": signature or None,
+        "guide_last_viewed_at": viewed_at if signature else None,
+        "updated_at": now,
+    }
+    if "created_at" in columns:
+        values_by_column["created_at"] = now
+
+    insert_columns = [column for column in values_by_column.keys() if column in columns]
+    placeholders = ["%s"] * len(insert_columns)
+    update_columns = [column for column in insert_columns if column not in {"user_id", "created_at"}]
+    update_set_sql = ", ".join(f"{column} = excluded.{column}" for column in update_columns)
+    insert_values = [values_by_column[column] for column in insert_columns]
+
+    async with conn.cursor() as cur:
+        await cur.execute(
+            (
+                "insert into app.user_experience_profiles ("
+                f"{', '.join(insert_columns)}) "
+                "values ("
+                f"{', '.join(placeholders)}) "
+                "on conflict (user_id) do update set "
+                f"{update_set_sql}"
+            ),
+            insert_values,
+            prepare=False,
+        )
+
+    return {
+        "ok": True,
+        "guide_state": {
+            "signature": signature,
+            "has_unseen": False,
+            "last_viewed_signature": signature or None,
+            "last_viewed_at": viewed_at.astimezone(timezone.utc).isoformat() if signature else None,
+        },
+    }
 
 
 class ProfileTagsIn(BaseModel):
