@@ -5426,7 +5426,7 @@ struct ContentView: View {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         let envelope = try decoder.decode(DashboardGuideStateEnvelope.self, from: data)
         guard envelope.ok != false else {
-            throw URLError(.badServerResponse)
+            return nil
         }
         return envelope.guideState
     }

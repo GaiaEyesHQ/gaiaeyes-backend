@@ -130,6 +130,8 @@ _SYMPTOM_GAUGE_CAPS: Dict[str, float] = {
     "mood": 18.0,
     "health_status": 22.0,
 }
+_HEALTH_STATUS_SYMPTOM_WEIGHT = 0.6
+_HEALTH_STATUS_SYMPTOM_CAP = 12.0
 
 _CURRENT_SYMPTOM_STATE_MULTIPLIERS: Dict[str, float] = {
     "new": 1.0,
@@ -1366,7 +1368,9 @@ def build_health_status_explainer(
             }
         )
 
-    symptom_points = _safe_float(symptoms.get("health_status_symptom_boost"))
+    symptom_points = _safe_float(health_meta.get("symptom_health_boost"))
+    if symptom_points is None or symptom_points <= 0:
+        symptom_points = _safe_float(symptoms.get("health_status_symptom_boost"))
     if symptom_points is None or symptom_points <= 0:
         symptom_points = min(15.0, max(0.0, (_safe_float(symptoms.get("max_severity")) or 0.0) * 1.5))
     top_symptoms = [
@@ -1563,12 +1567,17 @@ def compute_health_status(
     if recovery_penalty_total:
         health_status = min(100.0, round(health_status + recovery_penalty_total, 1))
 
-    symptom_health_boost = _safe_float(symptoms.get("health_status_symptom_boost"))
-    if symptom_health_boost is None or symptom_health_boost <= 0:
+    symptom_health_boost_raw = _safe_float(symptoms.get("health_status_symptom_boost"))
+    if symptom_health_boost_raw is None or symptom_health_boost_raw <= 0:
         severity_max = _safe_float(symptoms.get("max_severity"))
         if severity_max:
-            symptom_health_boost = min(15.0, severity_max * 1.5)
-    if symptom_health_boost:
+            symptom_health_boost_raw = min(15.0, severity_max * 1.5)
+    symptom_health_boost = 0.0
+    if symptom_health_boost_raw and symptom_health_boost_raw > 0:
+        symptom_health_boost = min(
+            _HEALTH_STATUS_SYMPTOM_CAP,
+            round(float(symptom_health_boost_raw) * _HEALTH_STATUS_SYMPTOM_WEIGHT, 2),
+        )
         health_status = min(100.0, health_status + symptom_health_boost)
 
     stress_penalty = 0.0
@@ -1590,6 +1599,7 @@ def compute_health_status(
         "camera_stress_index": camera_stress_index,
         "stress_penalty": round(stress_penalty, 2) if stress_penalty else 0.0,
         "symptom_health_boost": round(float(symptom_health_boost or 0.0), 2),
+        "symptom_health_boost_raw": round(float(symptom_health_boost_raw or 0.0), 2),
     }
 
 

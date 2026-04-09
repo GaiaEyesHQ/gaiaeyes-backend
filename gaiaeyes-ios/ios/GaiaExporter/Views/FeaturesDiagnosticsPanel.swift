@@ -22,7 +22,7 @@ struct FeaturesDiagnosticsPanel: View {
     private var metaSection: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 6) {
-                metaRow(label: "Source", systemImage: "shippingbox", value: diag.source)
+                metaRow(label: "Source", systemImage: "shippingbox", value: resolvedSource)
                 metaRow(label: "Branch", systemImage: "person.text.rectangle", value: diag.branch)
                 metaRow(label: "Day / Used", systemImage: "calendar", value: "\(diag.day ?? "-") / \(diag.dayUsed ?? "-")")
                 metaRow(label: "TZ", systemImage: "globe", value: diag.tz)
@@ -30,6 +30,22 @@ struct FeaturesDiagnosticsPanel: View {
         } label: {
             Text("Fetch Meta")
         }
+    }
+
+    private var resolvedSource: String? {
+        if let raw = diag.source?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+            return raw
+        }
+        if diag.freshened == true {
+            return "freshened"
+        }
+        if diag.martRow == true {
+            return "today"
+        }
+        if diag.cacheFallback == true {
+            return "cache"
+        }
+        return nil
     }
 
     private func metaRow(label: String, systemImage: String, value: String?) -> some View {

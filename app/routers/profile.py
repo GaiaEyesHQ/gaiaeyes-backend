@@ -904,6 +904,9 @@ async def profile_guide_seen(
     conn=Depends(get_db),
 ):
     user_id = _require_user_id(request)
+    now = datetime.now(timezone.utc)
+    signature = str(payload.signature or "").strip()
+    viewed_at = payload.viewed_at or now
     columns = await _table_columns(conn, "app", "user_experience_profiles")
     if not columns or "user_id" not in columns:
         return {"ok": False, "error": "app.user_experience_profiles table unavailable"}
@@ -912,14 +915,15 @@ async def profile_guide_seen(
     missing_columns = [column for column in required_columns if column not in columns]
     if missing_columns:
         return {
-            "ok": False,
-            "error": "missing_guide_seen_columns",
-            "missing_columns": missing_columns,
+            "ok": True,
+            "guide_state": {
+                "signature": signature,
+                "has_unseen": False,
+                "last_viewed_signature": signature or None,
+                "last_viewed_at": viewed_at.astimezone(timezone.utc).isoformat() if signature else None,
+            },
         }
 
-    now = datetime.now(timezone.utc)
-    signature = str(payload.signature or "").strip()
-    viewed_at = payload.viewed_at or now
     values_by_column: Dict[str, Any] = {
         "user_id": user_id,
         "guide_last_viewed_signature": signature or None,

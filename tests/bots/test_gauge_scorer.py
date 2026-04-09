@@ -49,6 +49,7 @@ if "psycopg" not in sys.modules:
         return _FakeConnection()
 
     psycopg_stub.connect = _connect
+    psycopg_stub.Connection = _FakeConnection
     rows_stub = types.ModuleType("psycopg.rows")
     rows_stub.dict_row = object()
     sys.modules["psycopg"] = psycopg_stub
@@ -183,6 +184,30 @@ class GaugeScorerTests(unittest.TestCase):
         self.assertIsNotNone(health_status)
         self.assertEqual(meta["metrics_used"], [])
         self.assertGreater(meta["recovery_penalty_total"], 0.0)
+
+    def test_compute_health_status_softens_symptom_boost_contribution(self) -> None:
+        baseline_rows = [_baseline_row(idx) for idx in range(14)]
+        today_row = {
+            **_baseline_row(0),
+            "sleep_debt_proxy": 95.0,
+            "resting_hr_baseline_delta": 5.5,
+            "respiratory_rate_baseline_delta": 2.0,
+        }
+
+        health_status, meta = compute_health_status(
+            today_row,
+            baseline_rows,
+            {
+                "health_status_symptom_boost": 22.0,
+                "max_severity": 9,
+                "top_symptoms": [{"symptom_code": "DRAINED", "events": 1, "max_severity": 9}],
+            },
+        )
+
+        self.assertIsNotNone(health_status)
+        self.assertEqual(meta["symptom_health_boost_raw"], 22.0)
+        self.assertLess(meta["symptom_health_boost"], meta["symptom_health_boost_raw"])
+        self.assertLessEqual(meta["symptom_health_boost"], 12.0)
 
     def test_build_health_status_explainer_surfaces_recovery_and_cycle_context(self) -> None:
         today_row = {
