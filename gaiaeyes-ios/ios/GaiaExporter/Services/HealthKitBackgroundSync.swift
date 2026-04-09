@@ -1183,6 +1183,8 @@ final class HealthKitBackgroundSync {
             let uploaded = try await api.postSamplesChunked(samples, chunkSize: chunkSize, maxRetries: maxRetries)
             appLog("[Backfill] uploaded \(samples.count) sleep_stage samples")
             if uploaded {
+                StatusStore.shared.setUpload(for: "sleep_stage")
+                recordImportedSampleMetadata(for: "sleep_stage", samples: collected)
                 await requestFeaturesRefreshAfterUpload(rows: samples.count, source: "hk:backfill_sleep")
             }
             return HealthBackfillMetricResult(

@@ -4,6 +4,7 @@ import HealthKit
 final class HealthKitSleepExporter {
     private let healthStore = HKHealthStore()
     private let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+    private let diagnosticsMetric = "sleep_stage"
 
     // ISO8601 formatter with fractional seconds for wire format
     private let iso: ISO8601DateFormatter = {
@@ -20,6 +21,31 @@ final class HealthKitSleepExporter {
             minutes[seg.stage, default: 0] += m
         }
         return minutes
+    }
+
+    private func diagnosticsKey(_ prefix: String, metric: String) -> String {
+        "gaia.hk.\(prefix).\(metric)"
+    }
+
+    private func setDiagnosticsValue(_ value: String?, prefix: String, metric: String) {
+        let key = diagnosticsKey(prefix, metric: metric)
+        let defaults = UserDefaults.standard
+        if let value, !value.isEmpty {
+            defaults.set(value, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    private func setDiagnosticsDate(_ date: Date, prefix: String, metric: String) {
+        setDiagnosticsValue(iso.string(from: date), prefix: prefix, metric: metric)
+    }
+
+    private func recordUploadedSleepDiagnostics(_ segments: [(stage: Stage, start: Date, end: Date)]) {
+        guard let latestEnd = segments.map(\.end).max() else { return }
+        StatusStore.shared.setUpload(for: diagnosticsMetric)
+        setDiagnosticsDate(latestEnd, prefix: "last_sample", metric: diagnosticsMetric)
+        setDiagnosticsValue("HealthKit sleep export", prefix: "last_source", metric: diagnosticsMetric)
     }
 
     enum Stage: String {
@@ -129,6 +155,7 @@ final class HealthKitSleepExporter {
         guard !samples.isEmpty else { return 0 }
         let uploaded = try await api.postSamplesChunked(samples, chunkSize: 200)
         if uploaded {
+            recordUploadedSleepDiagnostics(segs)
             await HealthKitBackgroundSync.shared.requestFeaturesRefreshAfterUpload(rows: samples.count, source: "sleep_exporter")
             return samples.count
         }

@@ -2314,6 +2314,8 @@ private struct DebugHealthMetricItem: Identifiable {
     let lastAnchorAt: Date?
     let lastSampleAt: Date?
     let sourceHint: String?
+    let derivedAt: Date?
+    let derivedSource: String?
 }
 
 private struct DebugBillingSnapshot {
@@ -2461,6 +2463,11 @@ private struct LaunchDebugToolkitPanel: View {
                             Text("Last sample: \(formatted(item.lastSampleAt)) • Source: \(item.sourceHint ?? "—")")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
+                            if let derivedAt = item.derivedAt {
+                                Text("Derived / mart: \(formatted(derivedAt)) • Source: \(item.derivedSource ?? "—")")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                         if item.id != healthItems.last?.id {
                             Divider()
@@ -3885,6 +3892,7 @@ struct ContentView: View {
         return specs.map { metric, title, option in
             let backgroundStatus = healthDiagnosticsValue(prefix: "bg_delivery_status", metric: metric)?.capitalized ?? "Unknown"
             let sourceHint = healthDiagnosticsValue(prefix: "last_source", metric: metric)
+            let derivedAt = debugMartBackedMetricDate(for: metric)
             return DebugHealthMetricItem(
                 id: metric,
                 title: title,
@@ -3893,12 +3901,14 @@ struct ContentView: View {
                 lastObserverAt: healthDiagnosticsDate(prefix: "observer_event", metric: metric),
                 lastAnchorAt: healthDiagnosticsDate(prefix: "anchor_advanced", metric: metric),
                 lastSampleAt: healthDiagnosticsDate(prefix: "last_sample", metric: metric),
-                sourceHint: sourceHint
+                sourceHint: sourceHint,
+                derivedAt: derivedAt,
+                derivedSource: derivedAt == nil ? nil : "daily_features mart"
             )
         }
     }
 
-    private var debugHealthImportDate: Date? {
+    private var debugRawHealthImportDate: Date? {
         let dates = [
             StatusStore.shared.lastUpload(for: "heart_rate"),
             StatusStore.shared.lastUpload(for: "sleep_stage"),
@@ -3910,12 +3920,90 @@ struct ContentView: View {
         return dates.max()
     }
 
+    private var debugSelectedFeatures: FeaturesToday? {
+        features ?? lastKnownFeatures
+    }
+
+    private var debugMartBackedHealthDate: Date? {
+        guard let selected = debugSelectedFeatures, bodyMetricScore(for: selected) > 0 else {
+            return nil
+        }
+        return parseDebugDate(selected.updatedAt)
+    }
+
+    private func debugMartBackedMetricDate(for metric: String) -> Date? {
+        guard let selected = debugSelectedFeatures,
+              debugMetricHasMartEvidence(metric, features: selected) else {
+            return nil
+        }
+        return parseDebugDate(selected.updatedAt)
+    }
+
+    private func debugMetricHasMartEvidence(_ metric: String, features: FeaturesToday) -> Bool {
+        switch metric {
+        case "heart_rate":
+            return [
+                features.hrMin,
+                features.hrMax,
+                features.restingHrAvg,
+                features.restingHrBaselineDelta,
+            ].contains { $0?.value != nil }
+        case "sleep_stage":
+            return [
+                features.sleepTotalMinutes,
+                features.remM,
+                features.coreM,
+                features.deepM,
+                features.awakeM,
+                features.inbedM,
+                features.sleepEfficiency,
+                features.sleepDebtProxy,
+                features.sleepVs14dBaselineDelta,
+            ].contains { $0?.value != nil }
+        case "hrv_sdnn":
+            return features.hrvAvg?.value != nil
+        case "spo2":
+            return features.spo2AvgDisplay != nil
+        case "respiratory_rate":
+            return [
+                features.respiratoryRateAvg,
+                features.respiratoryRateSleepAvg,
+                features.respiratoryRateBaselineDelta,
+            ].contains { $0?.value != nil }
+        default:
+            return false
+        }
+    }
+
+    private var debugHealthImportDate: Date? {
+        switch (debugRawHealthImportDate, debugMartBackedHealthDate) {
+        case let (raw?, mart?):
+            return max(raw, mart)
+        case let (raw?, nil):
+            return raw
+        case let (nil, mart?):
+            return mart
+        default:
+            return nil
+        }
+    }
+
     private var debugSleepFreshnessNote: String {
-        let sleepDate = debugHealthMetricItems.first(where: { $0.id == "sleep_stage" })?.lastSampleAt
-        guard let sleepDate else {
+        let rawSleepDate = debugHealthMetricItems.first(where: { $0.id == "sleep_stage" })?.lastSampleAt
+        let martSleepDate = debugMartBackedMetricDate(for: "sleep_stage")
+        if let martSleepDate {
+            if let rawSleepDate {
+                let rawHours = Date().timeIntervalSince(rawSleepDate) / 3600.0
+                if rawHours > 36, martSleepDate > rawSleepDate {
+                    return "Sleep metrics are current in the daily_features row. Raw HealthKit sleep sample evidence is older (\(Int(rawHours.rounded()))h since the last tracked sample)."
+                }
+            }
+            return "Sleep metrics are current in the daily_features row."
+        }
+        guard let rawSleepDate else {
             return "No imported sleep-stage sample is tracked yet."
         }
-        let hours = Date().timeIntervalSince(sleepDate) / 3600.0
+        let hours = Date().timeIntervalSince(rawSleepDate) / 3600.0
         if hours > 36 {
             return "Sleep import looks stale (\(Int(hours.rounded()))h since the last imported sleep sample)."
         }
@@ -3923,7 +4011,7 @@ struct ContentView: View {
     }
 
     private var debugFreshnessItems: [DebugFreshnessItem] {
-        let selected = features ?? lastKnownFeatures
+        let selected = debugSelectedFeatures
         let earthscopePersonal = preferredEarthscopePost(dashboardPayload?.personalPost, requestedDay: chicagoTodayString())
         let earthscopeMember = preferredEarthscopePost(dashboardPayload?.memberPost, requestedDay: chicagoTodayString())
         let earthscopePublic = preferredEarthscopePost(dashboardPayload?.publicPost, requestedDay: chicagoTodayString())
@@ -3937,6 +4025,27 @@ struct ContentView: View {
         let patternsPayload = decodedPatternsPayloadFromCache()
         let patternsDate = parseDebugDate(patternsPayload?.generatedAt) ?? dashboardLastFetchAt
         let schumannDate = parseDebugDate(selected?.updatedAt) ?? dashboardLastFetchAt
+        let healthImportSourceKind: String = {
+            guard let martDate = debugMartBackedHealthDate else {
+                return "healthkit"
+            }
+            if let rawDate = debugRawHealthImportDate, rawDate > martDate {
+                return "healthkit"
+            }
+            return "daily_features"
+        }()
+        let healthImportEndpoint = healthImportSourceKind == "daily_features"
+            ? "daily_features / HealthKitBackgroundSync"
+            : "HealthKitBackgroundSync"
+        let healthImportDetail: String? = {
+            guard let martDate = debugMartBackedHealthDate else {
+                return nil
+            }
+            if let rawDate = debugRawHealthImportDate, rawDate < martDate {
+                return "Body metrics are current in the daily_features row. Raw HealthKit upload evidence is older."
+            }
+            return "Body metrics are current in the daily_features row."
+        }()
 
         let dashboardSnapshotDate = dashboardLastFetchAt == .distantPast
             ? dashboardSnapshotReferenceDate(from: dashboardPayload ?? decodeDashboardPayload(from: dashboardPayloadCacheJSON))
@@ -3998,8 +4107,9 @@ struct ContentView: View {
                 title: "Health import",
                 date: debugHealthImportDate,
                 staleAfter: 18 * 60 * 60,
-                endpoint: "HealthKitBackgroundSync",
-                sourceKind: "healthkit"
+                endpoint: healthImportEndpoint,
+                sourceKind: healthImportSourceKind,
+                detail: healthImportDetail
             ),
             makeFreshnessItem(
                 id: "current_symptoms",
@@ -4211,7 +4321,11 @@ struct ContentView: View {
         lines.append("")
         lines.append("Health Sync:")
         for item in healthItems {
-            lines.append("- \(item.title): read \(item.permissionStatus) | bg \(item.backgroundDeliveryStatus) | observer \(debugFormattedDate(item.lastObserverAt)) | anchor \(debugFormattedDate(item.lastAnchorAt)) | sample \(debugFormattedDate(item.lastSampleAt)) | source \(item.sourceHint ?? "—")")
+            var line = "- \(item.title): read \(item.permissionStatus) | bg \(item.backgroundDeliveryStatus) | observer \(debugFormattedDate(item.lastObserverAt)) | anchor \(debugFormattedDate(item.lastAnchorAt)) | sample \(debugFormattedDate(item.lastSampleAt)) | source \(item.sourceHint ?? "—")"
+            if let derivedAt = item.derivedAt {
+                line += " | derived \(debugFormattedDate(derivedAt)) | via \(item.derivedSource ?? "daily_features mart")"
+            }
+            lines.append(line)
         }
         lines.append("")
         lines.append("Feature Inputs:")
