@@ -8202,6 +8202,8 @@ struct ContentView: View {
                     return "gauge.with.dots.needle.bottom.50percent"
                 case "temp":
                     return "thermometer.medium"
+                case "humidity":
+                    return "humidity.fill"
                 case "aqi":
                     return "aqi.low"
                 case "allergens":
@@ -8660,6 +8662,8 @@ struct ContentView: View {
                     return "Pressure Change"
                 case "temp":
                     return "Temperature Swing"
+                case "humidity":
+                    return "Humidity"
                 case "schumann":
                     return "Earth Resonance"
                 case "kp":
@@ -8688,6 +8692,8 @@ struct ContentView: View {
                 switch normalizedDriverPopupKey(driver.key) {
                 case "aqi":
                     return "AQI is \(state)"
+                case "humidity":
+                    return "Humidity is \(state)"
                 case "allergens":
                     return "Allergens are \(state)"
                 case "allergen_exposure":
@@ -11196,7 +11202,7 @@ struct ContentView: View {
                 return ShareCardBackground(style: .solar)
             case "cme":
                 return ShareCardBackground(style: .cme)
-            case "pressure", "temp", "aqi", "allergens":
+            case "pressure", "temp", "humidity", "aqi", "allergens":
                 return ShareCardBackground(style: .atmospheric)
             case "schumann":
                 return ShareCardBackground(style: .schumann)

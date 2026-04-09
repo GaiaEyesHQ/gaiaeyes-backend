@@ -33,6 +33,7 @@ _CATEGORY_LABELS = {
 _DRIVER_CATEGORY = {
     "pressure": "local",
     "temp": "local",
+    "humidity": "local",
     "aqi": "local",
     "allergens": "local",
     "overexertion": "body_context",
@@ -52,17 +53,18 @@ _DRIVER_CATEGORY = {
 _BASE_DRIVER_ORDER = {
     "pressure": 1,
     "temp": 2,
-    "aqi": 3,
-    "allergens": 4,
-    "kp": 5,
-    "bz": 6,
-    "sw": 7,
-    "ulf": 8,
-    "flare": 9,
-    "cme": 10,
-    "sep": 11,
-    "drap": 12,
-    "schumann": 13,
+    "humidity": 3,
+    "aqi": 4,
+    "allergens": 5,
+    "kp": 6,
+    "bz": 7,
+    "sw": 8,
+    "ulf": 9,
+    "flare": 10,
+    "cme": 11,
+    "sep": 12,
+    "drap": 13,
+    "schumann": 14,
     "overexertion": 200,
     "allergen_exposure": 201,
 }
@@ -85,6 +87,7 @@ _CANONICAL_KEY_MAP = {
 _KEY_ALIASES = {
     "pressure": ["pressure"],
     "temp": ["temp", "temperature"],
+    "humidity": ["humidity"],
     "aqi": ["aqi"],
     "allergens": ["allergens", "allergen_load"],
     "kp": ["kp", "geomagnetic", "geomagnetic_activity"],
@@ -103,6 +106,7 @@ _KEY_ALIASES = {
 _WHAT_IT_IS = {
     "pressure": "Rapid barometric changes in your local weather.",
     "temp": "A larger-than-usual local temperature swing.",
+    "humidity": "Relative humidity in your local air right now.",
     "aqi": "Ambient air quality in your current area.",
     "allergens": "Current pollen and allergen load around you.",
     "kp": "Geomagnetic activity measured on the planetary Kp scale.",
@@ -121,6 +125,7 @@ _WHAT_IT_IS = {
 _SCIENCE_NOTES = {
     "pressure": "Fast pressure changes are a common weather-context variable in symptom tracking.",
     "temp": "Bigger day-to-day temperature swings can increase physical load even when absolute temperatures look manageable.",
+    "humidity": "Humidity can shape perceived temperature, respiratory irritation, and overall comfort load even when temperature is steady.",
     "aqi": "AQI is an observational air-quality measure, not a diagnosis of exposure effects.",
     "allergens": "Pollen intensity is a local environmental signal and can change quickly by day, wind, and source type.",
     "kp": "Kp reflects planetary geomagnetic disturbance aggregated across magnetometer stations.",
@@ -455,6 +460,46 @@ def _base_short_reason(key: str, value: float | None, local_payload: Mapping[str
                 else f"Temperature change is limited right now at about {temp_delta:+.1f} C over the last day.",
                 reading,
             )
+    if canonical == "humidity":
+        humidity_pct = _safe_float(weather.get("humidity_pct") or weather.get("humidity"))
+        if humidity_pct is not None:
+            reading = f"{int(round(humidity_pct))}% RH"
+            if humidity_pct >= 85:
+                return (
+                    "Humidity is running very high right now.",
+                    f"Humidity is running around {reading} right now, so the air may feel heavier.",
+                    reading,
+                )
+            if humidity_pct >= 78:
+                return (
+                    "Humidity is running high right now.",
+                    f"Humidity is running around {reading} right now.",
+                    reading,
+                )
+            if humidity_pct >= 70:
+                return (
+                    "Humidity is a little elevated right now.",
+                    f"Humidity is running around {reading} right now.",
+                    reading,
+                )
+            if humidity_pct <= 25:
+                return (
+                    "Air looks quite dry right now.",
+                    f"Humidity is running around {reading} right now, so the air may feel drier or harsher.",
+                    reading,
+                )
+            if humidity_pct <= 30:
+                return (
+                    "Air looks noticeably dry right now.",
+                    f"Humidity is running around {reading} right now.",
+                    reading,
+                )
+            if humidity_pct <= 35:
+                return (
+                    "Air is leaning a bit dry right now.",
+                    f"Humidity is running around {reading} right now.",
+                    reading,
+                )
     if canonical == "aqi":
         aqi = _safe_float(air.get("aqi"))
         if aqi is not None:
@@ -572,7 +617,7 @@ def _seed_allergen_driver(local_payload: Mapping[str, Any], *, generated_at: str
 
     return _build_base_driver(
         key="allergens",
-        label="Allergens",
+        label=primary_label or "Allergens",
         severity=severity,
         state=state_label,
         value=index_value,

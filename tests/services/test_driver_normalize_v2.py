@@ -47,6 +47,7 @@ class DriverNormalizeV2Tests(unittest.TestCase):
             "weather": {
                 "baro_delta_12h_hpa": -9.1,
                 "temp_delta_24h_c": 6.2,
+                "humidity_pct": 82,
             },
             "air": {"aqi": 58},
         }
@@ -59,11 +60,15 @@ class DriverNormalizeV2Tests(unittest.TestCase):
 
         keys = [row["key"] for row in rows]
         self.assertEqual(keys[0], "pressure")
-        self.assertEqual(set(keys), {"pressure", "temp", "aqi"})
+        self.assertEqual(set(keys), {"pressure", "temp", "humidity", "aqi"})
 
         pressure = rows[0]
         self.assertEqual(pressure["severity"], "watch")
         self.assertIn("Pressure Swing", pressure["display"])
+
+        humidity = next(row for row in rows if row["key"] == "humidity")
+        self.assertEqual(humidity["severity"], "watch")
+        self.assertEqual(humidity["display"], "Humidity: Watch (82%)")
 
     def test_normalize_environmental_drivers_preserves_force_visible_high_signal(self) -> None:
         rows = normalize_environmental_drivers(
@@ -88,6 +93,29 @@ class DriverNormalizeV2Tests(unittest.TestCase):
         self.assertEqual(rows[0]["key"], "sw")
         self.assertTrue(rows[0]["force_visible"])
         self.assertTrue(rows[0]["show_driver"])
+
+    def test_normalize_environmental_drivers_uses_primary_pollen_label_when_available(self) -> None:
+        rows = normalize_environmental_drivers(
+            active_states=[
+                {
+                    "signal_key": "earthweather.allergens",
+                    "state": "high",
+                    "value": 4.2,
+                }
+            ],
+            local_payload={
+                "allergens": {
+                    "overall_level": "high",
+                    "overall_index": 4.2,
+                    "primary_type": "grass",
+                }
+            },
+            alerts_json=[],
+        )
+
+        allergen = next(row for row in rows if row["key"] == "allergens")
+        self.assertEqual(allergen["label"], "Grass pollen")
+        self.assertIn("Grass pollen", allergen["display"])
 
 
 if __name__ == "__main__":

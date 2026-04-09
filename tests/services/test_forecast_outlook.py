@@ -366,6 +366,7 @@ Outlook For March 23-29
         self.assertIsNotNone(payload)
         assert payload is not None
         self.assertEqual(payload["top_drivers"][0]["key"], "allergens")
+        self.assertEqual(payload["top_drivers"][0]["label"], "Tree pollen")
         self.assertIn("tree pollen", payload["summary"].lower())
         self.assertIn("filters", payload["support_line"].lower())
         self.assertEqual(payload["voice_semantic"]["kind"], "user_outlook_window")
@@ -373,6 +374,32 @@ Outlook For March 23-29
             "tree pollen",
             payload["voice_semantic"]["interpretation"]["header_summary"].lower(),
         )
+
+    def test_build_window_outlook_surfaces_humidity_driver_when_extreme(self) -> None:
+        merged_rows = [
+            {
+                "day": date(2026, 3, 19),
+                "humidity_avg": 82.0,
+            },
+            {
+                "day": date(2026, 3, 20),
+                "humidity_avg": 76.0,
+            },
+        ]
+
+        payload = build_window_outlook(
+            merged_rows,
+            pattern_rows=[],
+            gauges={},
+            window_hours=24,
+        )
+
+        self.assertIsNotNone(payload)
+        assert payload is not None
+        self.assertEqual(payload["top_drivers"][0]["key"], "humidity")
+        self.assertEqual(payload["top_drivers"][0]["label"], "Humidity")
+        self.assertIn("humidity looks muggier", payload["summary"].lower())
+        self.assertIn("hydration", payload["support_line"].lower())
 
     def test_forecast_row_serializers_emit_json_safe_shapes(self) -> None:
         local_rows = [

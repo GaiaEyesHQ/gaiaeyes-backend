@@ -60,6 +60,7 @@ GAUGE_BY_DOMAIN = {
 SIGNAL_TO_DRIVER = {
     "pressure_swing_exposed": "pressure",
     "temp_swing_exposed": "temp",
+    "humidity_extreme_exposed": "humidity",
     "aqi_moderate_plus_exposed": "aqi",
     "pollen_overall_exposed": "allergens",
     "kp_g1_plus_exposed": "kp",
@@ -70,6 +71,7 @@ DRIVER_TO_SIGNAL = {value: key for key, value in SIGNAL_TO_DRIVER.items()}
 DRIVER_LABELS = {
     "pressure": "Pressure swing",
     "temp": "Temperature swing",
+    "humidity": "Humidity",
     "aqi": "Air quality",
     "allergens": "Allergen load",
     "kp": "Geomagnetic outlook",
@@ -83,14 +85,15 @@ DRIVER_LABELS = {
 DRIVER_ORDER = {
     "pressure": 1,
     "temp": 2,
-    "aqi": 3,
-    "allergens": 4,
-    "kp": 5,
-    "solar_wind": 6,
-    "cme": 7,
-    "radio": 8,
-    "radiation": 9,
-    "flare": 10,
+    "humidity": 3,
+    "aqi": 4,
+    "allergens": 5,
+    "kp": 6,
+    "solar_wind": 7,
+    "cme": 8,
+    "radio": 9,
+    "radiation": 10,
+    "flare": 11,
 }
 
 SEVERITY_RANK = {"high": 3, "watch": 2, "mild": 1, "low": 0}
@@ -270,6 +273,37 @@ def _severity_from_aqi(aqi: float | None) -> str:
     if aqi >= 51:
         return "mild"
     return "low"
+
+
+def _severity_from_humidity(humidity: float | None) -> str:
+    if humidity is None:
+        return "low"
+    if humidity >= 85 or humidity <= 25:
+        return "high"
+    if humidity >= 78 or humidity <= 30:
+        return "watch"
+    if humidity >= 70 or humidity <= 35:
+        return "mild"
+    return "low"
+
+
+def _humidity_departure_score(humidity: float | None) -> float:
+    if humidity is None:
+        return 0.0
+    if humidity >= 70:
+        return humidity - 65.0
+    if humidity <= 35:
+        return 40.0 - humidity
+    return 0.0
+
+
+def _humidity_detail(humidity: float) -> str:
+    rounded = int(round(humidity))
+    if humidity >= 70:
+        return f"Humidity looks muggier than usual around {rounded}% in this window."
+    if humidity <= 35:
+        return f"Humidity looks drier than usual around {rounded}% in this window."
+    return f"Humidity may land around {rounded}% in this window."
 
 
 def _severity_from_allergen_level(level: str | None) -> str:
@@ -1468,13 +1502,23 @@ def derive_forecast_drivers(
 
     drivers: list[dict[str, Any]] = []
 
-    def add_driver(key: str, *, severity: str, value: float | None, unit: str | None, day_key: date | None, detail: str, signal_key: str | None = None) -> None:
+    def add_driver(
+        key: str,
+        *,
+        severity: str,
+        value: float | None,
+        unit: str | None,
+        day_key: date | None,
+        detail: str,
+        signal_key: str | None = None,
+        label: str | None = None,
+    ) -> None:
         if severity == "low":
             return
         drivers.append(
             {
                 "key": key,
-                "label": DRIVER_LABELS.get(key, key.replace("_", " ").title()),
+                "label": label or DRIVER_LABELS.get(key, key.replace("_", " ").title()),
                 "severity": severity,
                 "value": _safe_round(value, 1) if value is not None else None,
                 "unit": unit,
@@ -1518,6 +1562,29 @@ def derive_forecast_drivers(
             signal_key=DRIVER_TO_SIGNAL["temp"],
         )
 
+    humidity_candidates = [
+        (row.get("day"), _safe_float(row.get("humidity_avg")))
+        for row in rows
+        if _safe_float(row.get("humidity_avg")) is not None
+    ]
+    if humidity_candidates:
+        day_key, humidity_value = max(
+            humidity_candidates,
+            key=lambda item: (
+                SEVERITY_RANK.get(_severity_from_humidity(item[1]), 0),
+                _humidity_departure_score(item[1]),
+            ),
+        )
+        add_driver(
+            "humidity",
+            severity=_severity_from_humidity(humidity_value),
+            value=humidity_value,
+            unit="%",
+            day_key=day_key if isinstance(day_key, date) else None,
+            detail=_humidity_detail(humidity_value or 0.0),
+            signal_key=DRIVER_TO_SIGNAL.get("humidity"),
+        )
+
     aqi_candidates = [
         (row.get("day"), _safe_float(row.get("aqi_forecast")))
         for row in rows
@@ -1558,6 +1625,7 @@ def derive_forecast_drivers(
         level_label = pollen.STATE_LABELS.get(overall_level, str(overall_level).replace("_", " ").title())
         add_driver(
             "allergens",
+            label=primary_label or DRIVER_LABELS["allergens"],
             severity=_severity_from_allergen_level(overall_level),
             value=overall_index,
             unit="index",
@@ -1692,6 +1760,8 @@ def _support_line(driver_key: str) -> str:
         return "Worth keeping pacing and hydration a little steadier if pressure changes feel easier to notice."
     if driver_key == "temp":
         return "Worth keeping hydration, layering, and recovery a little steadier if the temperature swing lands hard."
+    if driver_key == "humidity":
+        return "Worth keeping hydration, indoor air, and pacing a little steadier if humid or dry air is easier for you to notice."
     if driver_key == "aqi":
         return "Worth keeping the air around you a bit cleaner if the AQI drifts up."
     if driver_key == "allergens":

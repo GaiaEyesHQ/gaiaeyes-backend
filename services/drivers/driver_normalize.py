@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Optional
 
+from services.external import pollen
+
 
 _SEVERITY_RANK = {
     "high": 4,
@@ -22,17 +24,19 @@ _HARD_SIGNAL_THRESHOLD = 0.9
 _DRIVER_ORDER = {
     "pressure": 1,
     "temp": 2,
-    "aqi": 3,
-    "allergens": 4,
-    "kp": 5,
-    "bz": 6,
-    "sw": 7,
-    "schumann": 8,
+    "humidity": 3,
+    "aqi": 4,
+    "allergens": 5,
+    "kp": 6,
+    "bz": 7,
+    "sw": 8,
+    "schumann": 9,
 }
 
 _DRIVER_META = {
     "pressure": {"label": "Pressure Swing", "unit": "hPa"},
     "temp": {"label": "Temperature Swing", "unit": "C"},
+    "humidity": {"label": "Humidity", "unit": "%"},
     "aqi": {"label": "Air Quality", "unit": "AQI"},
     "allergens": {"label": "Allergens", "unit": "index"},
     "kp": {"label": "Kp Index", "unit": "Kp"},
@@ -149,6 +153,8 @@ def _driver_value_from_local(key: str, local_payload: Dict[str, Any]) -> Optiona
         )
     if key == "temp":
         return _safe_float(weather.get("temp_delta_24h_c") or weather.get("temp_delta_24h"))
+    if key == "humidity":
+        return _safe_float(weather.get("humidity_pct") or weather.get("humidity"))
     if key == "aqi":
         return _safe_float(air.get("aqi"))
     if key == "allergens":
@@ -174,6 +180,14 @@ def _severity_from_local_value(key: str, value: Optional[float]) -> str:
         if abs_value >= 8:
             return "watch"
         if abs_value >= 6:
+            return "mild"
+        return "low"
+    if key == "humidity":
+        if value >= 85 or value <= 25:
+            return "high"
+        if value >= 78 or value <= 30:
+            return "watch"
+        if value >= 70 or value <= 35:
             return "mild"
         return "low"
     if key == "aqi":
@@ -220,6 +234,14 @@ def _signal_strength_from_driver(key: str, value: Optional[float], severity: str
             return 0.78
         if abs_value >= 6:
             return 0.58
+        return fallback
+    if key == "humidity":
+        if value >= 85 or value <= 25:
+            return 0.88
+        if value >= 78 or value <= 30:
+            return 0.72
+        if value >= 70 or value <= 35:
+            return 0.52
         return fallback
     if key == "aqi":
         if value >= 151:
@@ -271,6 +293,8 @@ def _signal_strength_from_driver(key: str, value: Optional[float], severity: str
 def _format_value(key: str, value: Optional[float], unit: str) -> Optional[str]:
     if value is None:
         return None
+    if key == "humidity":
+        return f"{int(round(value, 0))}%"
     if key == "sw":
         return f"{int(round(value, 0))} {unit}"
     if key == "aqi":
@@ -293,19 +317,31 @@ def _display_text(label: str, state: str, key: str, value: Optional[float], unit
     return f"{label}: {state}"
 
 
+def _driver_label_from_local(key: str, local_payload: Dict[str, Any]) -> Optional[str]:
+    if key != "allergens":
+        return None
+    allergens = local_payload.get("allergens") or {}
+    primary_label = str(allergens.get("primary_label") or "").strip()
+    if primary_label:
+        return primary_label
+    primary_type = str(allergens.get("primary_type") or "").strip().lower()
+    return pollen.TYPE_LABELS.get(primary_type)
+
+
 def _candidate(
     key: str,
     *,
     severity: str,
     state: str,
     value: Optional[float],
+    label_override: Optional[str] = None,
     signal_strength: Optional[float] = None,
     force_visible: bool = False,
     show_driver: bool = True,
 ) -> Dict[str, Any]:
     meta = _DRIVER_META.get(key) or {"label": key.replace("_", " ").title(), "unit": ""}
     unit = str(meta.get("unit") or "")
-    label = str(meta.get("label") or key)
+    label = str(label_override or meta.get("label") or key)
     rounded_value: Optional[float] = None
     if value is not None:
         if key in {"aqi", "sw"}:
@@ -390,6 +426,7 @@ def normalize_environmental_drivers(
                 severity=severity,
                 state=raw_state or severity,
                 value=value,
+                label_override=_driver_label_from_local(driver_key, normalized_local),
                 signal_strength=_safe_float(state.get("signal_strength")),
                 force_visible=bool(state.get("force_visibility") or state.get("force_signal")),
                 show_driver=bool(state.get("show_driver", True)),
@@ -407,10 +444,16 @@ def normalize_environmental_drivers(
         value = existing.get("value") if existing else _driver_value_from_local(driver_key, normalized_local)
         picked[driver_key] = _pick_stronger(
             existing,
-            _candidate(driver_key, severity=severity, state=state, value=value),
+            _candidate(
+                driver_key,
+                severity=severity,
+                state=state,
+                value=value,
+                label_override=_driver_label_from_local(driver_key, normalized_local),
+            ),
         )
 
-    for driver_key in ("pressure", "temp", "aqi"):
+    for driver_key in ("pressure", "temp", "humidity", "aqi"):
         if driver_key in picked:
             continue
         local_value = _driver_value_from_local(driver_key, normalized_local)
@@ -422,6 +465,7 @@ def normalize_environmental_drivers(
             severity=severity,
             state=_severity_title(severity),
             value=local_value,
+            label_override=_driver_label_from_local(driver_key, normalized_local),
         )
 
     rows = list(picked.values())
