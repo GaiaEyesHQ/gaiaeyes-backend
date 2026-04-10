@@ -225,7 +225,7 @@ enum ShareCaptionEngine {
     }
 
     private static func scientificBulletCaption(hook: String, lines: [String?], cta: String?) -> String {
-        let bulletLines = uniqueLines(lines, maxCount: 3)
+        let bulletLines = Array(uniqueLines(lines).prefix(3))
         var output: [String] = [sentence(hook)]
         output.append(contentsOf: bulletLines.map { "• " + sentence($0) })
         if let cta = cta {

@@ -36,6 +36,7 @@ enum ShareDraftFactory {
             excluding: [hook, title, insight, state, value],
             maxCount: 2
         )
+        let signText = signalSignText(category: category, title: title, value: value, state: state)
 
         let card = ShareCardModel(
             shareType: .signalSnapshot,
