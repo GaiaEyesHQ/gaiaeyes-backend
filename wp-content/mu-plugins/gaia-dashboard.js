@@ -1055,6 +1055,98 @@
     return `Possible symptoms right now: ${guideHumanList(phrases.slice(0, 4))} may be easier to notice.`;
   };
 
+  const guideProfileValue = (state, key, fallback = "") => {
+    const preferences = extractProfilePreferences(state && state.member ? state.member.profilePreferences : null) || {};
+    return textOrEmpty(preferences && preferences[key]) || fallback;
+  };
+
+  const guideHeaderLine = (state) => {
+    const guide = guideProfileValue(state, "guide", "cat").toLowerCase();
+    const mode = guideProfileValue(state, "mode", "scientific").toLowerCase();
+    if (guide === "cat" && mode === "scientific") return "Here’s the clearest read on today’s signal mix.";
+    if (guide === "cat" && mode === "mystical") return "Here’s the feel of what seems active today.";
+    if (guide === "dog" && mode === "scientific") return "A steady read on today’s strongest inputs.";
+    if (guide === "dog" && mode === "mystical") return "A grounded read on what may be nudging the day.";
+    if (guide === "robot" && mode === "scientific") return "Current signal scan: highest-relevance items first.";
+    if (guide === "robot" && mode === "mystical") return "Pattern scan: most likely influences first.";
+    return "Current signal scan: highest-relevance items first.";
+  };
+
+  const guideHeaderSupportLine = (state) => {
+    const guide = guideProfileValue(state, "guide", "cat").toLowerCase();
+    const tone = guideProfileValue(state, "tone", "balanced").toLowerCase();
+    if (tone === "straight") {
+      return "Start with the essentials, then open the deeper layers only if you need them.";
+    }
+    if (tone === "humorous") {
+      if (guide === "dog") return "Quick scan first. No need to chase every squirrel in the data.";
+      if (guide === "robot") return "Quick scan first. No need to overclock the signal spaghetti.";
+      return "Quick scan first. No need to cannonball into the signal soup.";
+    }
+    if (guide === "dog") {
+      return "Use this space to get oriented fast, leave a little feedback, and keep the day grounded.";
+    }
+    if (guide === "robot") {
+      return "Use this space to orient quickly, add lightweight feedback, and keep the day legible.";
+    }
+    return "Use this space for quick orientation, light feedback, and a calmer read on the day.";
+  };
+
+  const guideTitleForValue = (value, fallback = "") => {
+    const normalized = textOrEmpty(value).toLowerCase();
+    if (normalized === "cat") return "Cat";
+    if (normalized === "dog") return "Dog";
+    if (normalized === "robot") return "Robot";
+    if (normalized === "scientific") return "Scientific";
+    if (normalized === "mystical") return "Mystical";
+    if (normalized === "straight") return "Straight";
+    if (normalized === "balanced") return "Balanced";
+    if (normalized === "humorous") return "Humorous";
+    return fallback;
+  };
+
+  const guideProfileSummary = (state) => {
+    const guide = guideTitleForValue(guideProfileValue(state, "guide", "cat"), "Cat");
+    const mode = guideTitleForValue(guideProfileValue(state, "mode", "scientific"), "Scientific");
+    const tone = guideTitleForValue(guideProfileValue(state, "tone", "balanced"), "Balanced");
+    return [guide, mode, tone].filter(Boolean).join(" • ");
+  };
+
+  const renderGuideHeaderCard = (state) => {
+    const possibleSymptoms = guidePossibleSymptoms(state);
+    const lead = possibleSymptoms.length
+      ? "Based on the current signal mix, these may be easier to notice."
+      : guidePossibleSymptomsSummary(state) || guideHeaderLine(state);
+    return `
+      <article class="gaia-dashboard__card gaia-dashboard__card--guide-header">
+        <div class="gaia-dashboard__card-title-row gaia-dashboard__card-title-row--guide">
+          <div>
+            <h4 class="gaia-dashboard__card-title">Possible symptoms</h4>
+          </div>
+          <button
+            class="gaia-dashboard__guide-settings-btn"
+            type="button"
+            data-tab-target="settings"
+            aria-label="Open guide settings"
+            title="Open guide settings"
+          >
+            &#9881;
+          </button>
+        </div>
+        <p class="gaia-dashboard__guide-topline">${esc(guideHeaderSupportLine(state))}</p>
+        <p class="gaia-dashboard__card-copy">${esc(lead)}</p>
+        ${
+          possibleSymptoms.length
+            ? `<div class="gaia-dashboard__guide-bullet-grid gaia-dashboard__guide-bullet-grid--compact">${possibleSymptoms
+                .map((item) => `<div class="gaia-dashboard__guide-bullet">${esc(item)}</div>`)
+                .join("")}</div>`
+            : ""
+        }
+        <div class="gaia-dashboard__guide-profile-line">${esc(guideProfileSummary(state))}</div>
+      </article>
+    `;
+  };
+
   const guideInfluenceDomain = (driver) => {
     const tokens = `${textOrEmpty(driver && driver.key)} ${textOrEmpty(driver && driver.label)}`.toLowerCase();
     if (!tokens) return "";
@@ -1219,8 +1311,7 @@
       <article class="gaia-dashboard__card">
         <div class="gaia-dashboard__card-title-row">
           <div>
-            <span class="gaia-dashboard__eyebrow">Possible influences</span>
-            <h4 class="gaia-dashboard__card-title">What is feeding the current read</h4>
+            <h4 class="gaia-dashboard__card-title">Possible influences</h4>
           </div>
         </div>
         <p class="gaia-dashboard__card-copy">These are the strongest earth, space, and body signals in the current read.</p>
@@ -1675,7 +1766,7 @@
       return;
     }
     if (key === "guide") {
-      hydrateMemberKeys(root, state, ["currentSymptoms", "dailyCheckIn", "outlook", "notifications"]);
+      hydrateMemberKeys(root, state, ["profilePreferences", "currentSymptoms", "dailyCheckIn", "outlook", "notifications"]);
       return;
     }
     if (key === "settings") {
@@ -3482,6 +3573,34 @@
     </button>
   `;
 
+  const missionMobileNavItem = (state, key, label, icon) => `
+    <button
+      class="gaia-dashboard__mobile-tab${state.ui.activeTab === key ? " is-active" : ""}${key === "guide" && guideHasUnseen(state) ? " gaia-dashboard__mobile-tab--unseen" : ""}"
+      type="button"
+      data-tab-target="${esc(key)}"
+      aria-label="${esc(label)}"
+      title="${esc(label)}"
+    >
+      <span class="gaia-dashboard__mobile-tab-icon" aria-hidden="true">${icon}</span>
+      <span class="gaia-dashboard__mobile-tab-label">${esc(label)}</span>
+      ${key === "guide" && guideHasUnseen(state) ? '<span class="gaia-dashboard__mobile-tab-dot" aria-hidden="true"></span>' : ""}
+    </button>
+  `;
+
+  const renderMissionMobileNav = (state) => `
+    <nav class="gaia-dashboard__mobile-tabbar" aria-label="Mission Control">
+      <div class="gaia-dashboard__mobile-tabbar-scroll">
+        ${missionMobileNavItem(state, "mission", "Home", "⌂")}
+        ${missionMobileNavItem(state, "drivers", "Drivers", "◌")}
+        ${missionMobileNavItem(state, "body", "Body", "♡")}
+        ${missionMobileNavItem(state, "patterns", "Patterns", "≈")}
+        ${missionMobileNavItem(state, "outlook", "Outlook", "◔")}
+        ${missionMobileNavItem(state, "guide", "Guide", "✦")}
+        ${missionMobileNavItem(state, "settings", "Settings", "⚙")}
+      </div>
+    </nav>
+  `;
+
   const renderMemberPatternsList = (cards, emptyText) => {
     const items = maybeArray(cards).slice(0, 4);
     if (!items.length) return `<div class="gaia-dashboard__empty">${esc(emptyText)}</div>`;
@@ -4243,43 +4362,19 @@
     const currentSymptoms = extractCurrentSymptoms(state.member.currentSymptoms);
     const followUp = firstPendingFollowUp(currentSymptoms);
     const poll = derivedDailyPoll(state);
-    const possibleSymptoms = guidePossibleSymptoms(state);
     return `
       <section class="gaia-dashboard__section${state.ui.activeTab === "guide" ? " is-active" : ""}" data-section="guide">
         <div class="gaia-dashboard__section-head">
           <div class="gaia-dashboard__section-copy">
             <h3 class="gaia-dashboard__section-title">Guide</h3>
-            <p class="gaia-dashboard__section-subtitle">A lighter orientation layer built from the current dashboard read, your body context, and the help center.</p>
+            <p class="gaia-dashboard__section-subtitle">A lighter read of what is surfacing now, what is feeding it, and what may help next.</p>
           </div>
         </div>
         <div class="gaia-dashboard__guide-stack">
-          <article class="gaia-dashboard__card">
-            <div class="gaia-dashboard__card-title-row">
-              <div>
-                <span class="gaia-dashboard__eyebrow">Possible symptoms</span>
-                <h4 class="gaia-dashboard__card-title">Quick scan</h4>
-              </div>
-            </div>
-            <p class="gaia-dashboard__card-copy">${
-              possibleSymptoms.length
-                ? "Based on the current signal mix, these may be easier to notice."
-                : "Possible symptoms will sharpen as the active driver mix gets clearer."
-            }</p>
-            ${
-              possibleSymptoms.length
-                ? `<div class="gaia-dashboard__guide-bullet-grid">${possibleSymptoms
-                    .map((item) => `<div class="gaia-dashboard__guide-bullet">${esc(item)}</div>`)
-                    .join("")}</div>`
-                : ""
-            }
-            <div class="gaia-dashboard__section-actions">
-              <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="drivers">Open Drivers</button>
-              <a class="gaia-dashboard__btn gaia-dashboard__btn--quiet" href="${esc(supportUrl)}">Support</a>
-            </div>
-          </article>
+          ${renderGuideHeaderCard(state)}
           ${renderGuideInfluenceCard(state)}
-          ${renderDailyCheckInCard(state, "guide")}
           ${renderGuideSupportCard(state)}
+          ${renderDailyCheckInCard(state, "guide")}
           <article class="gaia-dashboard__card">
             <div class="gaia-dashboard__card-title-row">
               <div>
@@ -4677,7 +4772,7 @@
   const renderMissionControlApp = (root, state) => {
     const title = root.dataset.title || "Mission Control";
     root.innerHTML = `
-      <div class="gaia-dashboard__shell">
+      <div class="gaia-dashboard__shell gaia-dashboard__shell--hub">
         <div class="gaia-dashboard__shell-head">
           <div class="gaia-dashboard__shell-copy">
             <span class="gaia-dashboard__shell-kicker">Member Hub</span>
@@ -4701,6 +4796,7 @@
         ${renderOutlookSection(state)}
         ${renderGuideSection(state)}
         ${renderSettingsSection(state)}
+        ${renderMissionMobileNav(state)}
         <div class="gaia-dashboard__modal" data-gaia-modal>
           <div class="gaia-dashboard__modal-backdrop" data-gaia-modal-backdrop="1"></div>
           <div class="gaia-dashboard__modal-card" role="dialog" aria-modal="true">

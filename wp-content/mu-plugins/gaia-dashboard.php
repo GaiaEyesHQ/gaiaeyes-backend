@@ -175,6 +175,15 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__nav-card strong{display:block;font-size:14px}
         .gaia-dashboard__nav-card span{display:block;margin-top:5px;font-size:12px;color:#9da9c1;line-height:1.45}
         .gaia-dashboard__nav-badge{display:inline-flex;align-items:center;justify-content:center;padding:4px 9px;border-radius:999px;background:rgba(43,140,255,.16);border:1px solid rgba(84,201,255,.28);color:#8fdcff;font-size:11px;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+        .gaia-dashboard__mobile-tabbar{display:none}
+        .gaia-dashboard__mobile-tabbar-scroll{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+        .gaia-dashboard__mobile-tabbar-scroll::-webkit-scrollbar{display:none}
+        .gaia-dashboard__mobile-tab{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:68px;padding:10px 12px;border-radius:16px;border:1px solid rgba(255,255,255,.08);background:#151c28;color:#dfe9fb;cursor:pointer;flex:0 0 auto}
+        .gaia-dashboard__mobile-tab.is-active{background:#1e314c;border-color:rgba(156,192,255,.38);box-shadow:0 0 0 1px rgba(156,192,255,.12) inset}
+        .gaia-dashboard__mobile-tab--unseen{border-color:rgba(84,201,255,.28)}
+        .gaia-dashboard__mobile-tab-icon{font-size:16px;line-height:1}
+        .gaia-dashboard__mobile-tab-label{font-size:11px;font-weight:700;line-height:1.1;white-space:nowrap}
+        .gaia-dashboard__mobile-tab-dot{position:absolute;top:8px;right:10px;width:7px;height:7px;border-radius:999px;background:#59d1ff;box-shadow:0 0 10px rgba(89,209,255,.45)}
         .gaia-dashboard__grid{display:grid;grid-template-columns:1fr;gap:14px}
         @media(min-width:900px){.gaia-dashboard__grid--2{grid-template-columns:repeat(2,minmax(0,1fr));}}
         @media(min-width:1200px){.gaia-dashboard__grid--3{grid-template-columns:repeat(3,minmax(0,1fr));}}
@@ -232,6 +241,10 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__guide-bullet-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
         @media(max-width:520px){.gaia-dashboard__guide-bullet-grid{grid-template-columns:1fr;}}
         .gaia-dashboard__guide-bullet-grid--compact{gap:8px}
+        .gaia-dashboard__card-title-row--guide{align-items:center}
+        .gaia-dashboard__guide-settings-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:999px;border:1px solid rgba(84,201,255,.24);background:rgba(62,177,255,.14);color:#e6f2ff;cursor:pointer}
+        .gaia-dashboard__guide-topline{margin:0;font-size:12px;font-weight:700;line-height:1.45;color:#a8c6df}
+        .gaia-dashboard__guide-profile-line{font-size:12px;color:#8f9db7;line-height:1.4}
         .gaia-dashboard__guide-bullet{padding:10px 12px;border-radius:12px;background:rgba(62,177,255,.12);border:1px solid rgba(62,177,255,.12);font-size:13px;font-weight:600;line-height:1.45;color:#e6f2ff;min-width:0}
         .gaia-dashboard__guide-influence-stack{display:flex;flex-direction:column;gap:12px}
         .gaia-dashboard__guide-influence-section{padding:12px;border-radius:14px;background:#151d2a;border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:8px;min-width:0}
@@ -258,6 +271,11 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__modal-group h5{margin:0 0 7px;font-size:15px}
         .gaia-dashboard__modal-group ul{margin:0;padding-left:18px}
         .gaia-dashboard__modal-group li{margin:0 0 6px;line-height:1.45}
+        @media(max-width:900px){
+          .gaia-dashboard__shell--hub{padding-bottom:110px}
+          .gaia-dashboard__nav-grid--hub{display:none}
+          .gaia-dashboard__mobile-tabbar{position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:block;padding:10px;border-radius:22px;background:rgba(10,14,22,.94);border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 40px rgba(0,0,0,.38);backdrop-filter:blur(16px);z-index:30}
+        }
         .gaia-dashboard__modal-copy{margin:0;color:#e8edf7;line-height:1.55}
         .gaia-dashboard__quicklog-pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
         .gaia-dashboard__quicklog-pill{border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:8px 14px;background:#182234;color:#e8edf7;font-weight:600;cursor:pointer}
