@@ -2891,6 +2891,10 @@ struct ContentView: View {
     @State private var didHydrateSymptomPresets: Bool = false
     @State private var isSymptomServiceOffline: Bool = false
     @State private var didLogSymptomTimeout: Bool = false
+    @State private var showExperienceReadingSettings: Bool = true
+    @State private var showExperienceDisplaySettings: Bool = false
+    @State private var showExperienceTrackedStatsSettings: Bool = false
+    @State private var showExperienceFavoriteSymptomsSettings: Bool = false
     @State private var showSpaceWeatherDetail: Bool = false
     @State private var spaceDetailFocus: SpaceDetailSection? = nil
     @State private var interactiveVisualItem: SpaceVisualItem? = nil
@@ -5454,6 +5458,7 @@ struct ContentView: View {
         if onboardingCompleted && !incoming.onboardingCompleted {
             resolved.onboardingCompleted = true
         }
+        resolved.favoriteSymptomCodes = _normalizeFavoriteSymptomCodesForUI(resolved.favoriteSymptomCodes)
 
         experienceProfile = resolved
         guideProfileStore.sync(from: resolved)
@@ -13483,12 +13488,33 @@ struct ContentView: View {
         @Binding var favoriteSymptomCodes: [String]
 
         private var availablePresets: [SymptomPreset] {
-            presets.filter { normalize($0.code) != SymptomCodeHelper.fallbackCode }
+            presets
+                .filter { normalize($0.code) != SymptomCodeHelper.fallbackCode }
+                .sorted { lhs, rhs in
+                    let lhsFavorite = normalizedFavoriteCodes.contains(normalize(lhs.code))
+                    let rhsFavorite = normalizedFavoriteCodes.contains(normalize(rhs.code))
+                    if lhsFavorite != rhsFavorite {
+                        return lhsFavorite && !rhsFavorite
+                    }
+                    return lhs.label.localizedCaseInsensitiveCompare(rhs.label) == .orderedAscending
+                }
+        }
+
+        private var normalizedFavoriteCodes: [String] {
+            favoriteSymptomCodes.map(normalize)
+        }
+
+        private var selectedLabelsSummary: String? {
+            let selected = availablePresets
+                .filter { normalizedFavoriteCodes.contains(normalize($0.code)) }
+                .map(\.label)
+            guard !selected.isEmpty else { return nil }
+            return selected.prefix(3).joined(separator: ", ") + (selected.count > 3 ? " +" + String(selected.count - 3) : "")
         }
 
         private func toggle(_ preset: SymptomPreset) {
             let normalizedCode = normalize(preset.code)
-            var updated = favoriteSymptomCodes.map(normalize)
+            var updated = normalizedFavoriteCodes
             if updated.contains(normalizedCode) {
                 updated.removeAll { $0 == normalizedCode }
             } else if updated.count < FavoriteSymptomPreference.maxCount {
@@ -13504,10 +13530,15 @@ struct ContentView: View {
                 Text("Choose up to \(FavoriteSymptomPreference.maxCount) symptoms you log often. Gaia shows these first in the app and website symptom pickers.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                if let selectedLabelsSummary, !selectedLabelsSummary.isEmpty {
+                    Text("Saved favorites: \(selectedLabelsSummary)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white.opacity(0.82))
+                }
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     ForEach(availablePresets, id: \.id) { preset in
-                        let isSelected = favoriteSymptomCodes.map(normalize).contains(normalize(preset.code))
+                        let isSelected = normalizedFavoriteCodes.contains(normalize(preset.code))
                         Button {
                             toggle(preset)
                         } label: {
@@ -14793,6 +14824,96 @@ struct ContentView: View {
         symptomHighlights()
     }
 
+    private enum GuideInfluenceDomain {
+        case earth
+        case space
+        case body
+    }
+
+    private struct GuideInfluenceBuckets {
+        let earth: [String]
+        let space: [String]
+        let body: [String]
+    }
+
+    private func guidePossibleSymptomsSummary(
+        dashboard: DashboardPayload?,
+        currentSymptomsSnapshot: CurrentSymptomsSnapshot?
+    ) -> String? {
+        let candidates = [
+            currentSymptomsSnapshot?.semanticActiveSummary,
+            dashboard?.drivers?.first(where: { !textOrEmpty($0.personalReason).isEmpty })?.personalReason,
+            dashboard?.todayRelevanceExplanations?.dailyBrief,
+            dashboard?.earthscopeSummary,
+        ]
+        for candidate in candidates {
+            let trimmed = textOrEmpty(candidate)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+        return nil
+    }
+
+    private func guideInfluenceBuckets(
+        dashboard: DashboardPayload?,
+        currentSymptomsSnapshot: CurrentSymptomsSnapshot?
+    ) -> GuideInfluenceBuckets {
+        var earth: [String] = []
+        var space: [String] = []
+        var body: [String] = []
+
+        for driver in dashboard?.drivers ?? [] {
+            guard let line = guideInfluenceLine(for: driver), !line.isEmpty else { continue }
+            switch guideInfluenceDomain(for: driver) {
+            case .earth:
+                if !earth.contains(line) && earth.count < 3 { earth.append(line) }
+            case .space:
+                if !space.contains(line) && space.count < 3 { space.append(line) }
+            case .body:
+                if !body.contains(line) && body.count < 3 { body.append(line) }
+            case nil:
+                continue
+            }
+        }
+
+        if body.isEmpty,
+           let summary = textOrEmpty(currentSymptomsSnapshot?.semanticActiveLabelSummary).nilIfTrimmedEmpty {
+            body.append("Current symptoms — \(summary)")
+        }
+
+        return GuideInfluenceBuckets(earth: earth, space: space, body: body)
+    }
+
+    private func guideInfluenceDomain(for driver: DashboardDriverItem) -> GuideInfluenceDomain? {
+        let tokens = "\(driver.key) \(driver.label ?? "")".lowercased()
+        if ["schumann", "kp", "bz", "sw", "solar", "geomag", "aurora", "magnetosphere", "space", "resonance"]
+            .contains(where: { tokens.contains($0) }) {
+            return .space
+        }
+        if ["symptom", "body", "sleep", "recovery", "fatigue", "pain", "mood", "energy", "stamina", "health"]
+            .contains(where: { tokens.contains($0) }) {
+            return .body
+        }
+        if ["humidity", "allergen", "pollen", "grass", "tree", "weed", "mold", "aqi", "air", "pressure", "temp", "weather", "local"]
+            .contains(where: { tokens.contains($0) }) {
+            return .earth
+        }
+        return nil
+    }
+
+    private func guideInfluenceLine(for driver: DashboardDriverItem) -> String? {
+        let label = textOrEmpty(driver.label).nilIfTrimmedEmpty ?? textOrEmpty(driver.key).nilIfTrimmedEmpty
+        guard let label else { return nil }
+        let badge = textOrEmpty(driver.severity).nilIfTrimmedEmpty
+            ?? textOrEmpty(driver.state).nilIfTrimmedEmpty
+            ?? textOrEmpty(driver.roleLabel).nilIfTrimmedEmpty
+        if let badge {
+            return "\(label) — \(badge)"
+        }
+        return label
+    }
+
     private var bodyNavigationStack: some View {
         let selection = selectedFeaturesTuple
 
@@ -15236,23 +15357,86 @@ struct ContentView: View {
                 Text("Changes save automatically.")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                missionSettingsModeControl
-                missionSettingsGuideControl
-                missionSettingsToneControl
-                missionSettingsTemperatureControl
-                TrackedStatsSettingsSection(
-                    trackedStatKeys: $experienceProfile.trackedStatKeys,
-                    smartStatSwapEnabled: $experienceProfile.smartStatSwapEnabled
-                )
-                FavoriteSymptomsSettingsSection(
-                    presets: preferredSymptomPresets(symptomPresets, favoriteCodes: experienceProfile.favoriteSymptomCodes),
-                    favoriteSymptomCodes: $experienceProfile.favoriteSymptomCodes
-                )
-                missionSettingsLunarPriorityControl
+                missionSettingsDisclosure(
+                    title: "Reading style",
+                    summary: "\(experienceProfile.mode.title) • \(experienceProfile.guide.title) • \(experienceProfile.tone.title)",
+                    isExpanded: $showExperienceReadingSettings
+                ) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        missionSettingsModeControl
+                        missionSettingsGuideControl
+                        missionSettingsToneControl
+                    }
+                }
+                missionSettingsDisclosure(
+                    title: "Display and body context",
+                    summary: "\(experienceProfile.tempUnit.title) • Lunar overlays \(experienceProfile.lunarSensitivityDeclared ? "on" : "off")",
+                    isExpanded: $showExperienceDisplaySettings
+                ) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        missionSettingsTemperatureControl
+                        missionSettingsLunarPriorityControl
+                    }
+                }
+                missionSettingsDisclosure(
+                    title: "Tracked body stats",
+                    summary: "\(experienceProfile.trackedStatKeys.count) selected" + (experienceProfile.smartStatSwapEnabled ? " • smart swap on" : ""),
+                    isExpanded: $showExperienceTrackedStatsSettings
+                ) {
+                    TrackedStatsSettingsSection(
+                        trackedStatKeys: $experienceProfile.trackedStatKeys,
+                        smartStatSwapEnabled: $experienceProfile.smartStatSwapEnabled
+                    )
+                }
+                missionSettingsDisclosure(
+                    title: "Favorite symptoms",
+                    summary: favoriteSymptomsSettingsSummary,
+                    isExpanded: $showExperienceFavoriteSymptomsSettings
+                ) {
+                    FavoriteSymptomsSettingsSection(
+                        presets: symptomPresets,
+                        favoriteSymptomCodes: $experienceProfile.favoriteSymptomCodes
+                    )
+                }
             }
         } label: {
             Label("Experience", systemImage: "sparkles")
         }
+    }
+
+    @ViewBuilder
+    private func missionSettingsDisclosure<Content: View>(
+        title: String,
+        summary: String,
+        isExpanded: Binding<Bool>,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        DisclosureGroup(isExpanded: isExpanded) {
+            VStack(alignment: .leading, spacing: 14) {
+                content()
+            }
+            .padding(.top, 8)
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.primary)
+                Text(summary)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .tint(.accentColor)
+    }
+
+    private var favoriteSymptomsSettingsSummary: String {
+        let favorites = preferredSymptomPresets(symptomPresets, favoriteCodes: experienceProfile.favoriteSymptomCodes)
+            .filter { experienceProfile.favoriteSymptomCodes.contains(normalize($0.code)) }
+            .map(\.label)
+        guard !favorites.isEmpty else { return "None selected yet" }
+        let preview = favorites.prefix(3).joined(separator: ", ")
+        return favorites.count > 3 ? "\(preview) +\(favorites.count - 3)" : preview
     }
 
     private var missionSettingsModeControl: some View {
@@ -16122,6 +16306,10 @@ struct ContentView: View {
         let primaryModalShell = AnyView(
             mainTabView
         .sheet(isPresented: $showGuideSheet) {
+            let guideInfluences = guideInfluenceBuckets(
+                dashboard: dashboardPayload,
+                currentSymptomsSnapshot: currentSymptomsSnapshot
+            )
             GuideHubView(
                 profileStore: guideProfileStore,
                 api: state.apiWithAuth(),
@@ -16130,9 +16318,16 @@ struct ContentView: View {
                 dailyCheckInLoading: dailyCheckInLoading,
                 dailyCheckInError: dailyCheckInError,
                 currentSymptomsSnapshot: currentSymptomsSnapshot,
+                possibleSymptomsSummary: guidePossibleSymptomsSummary(
+                    dashboard: dashboardPayload,
+                    currentSymptomsSnapshot: currentSymptomsSnapshot
+                ),
                 earthscopeSummary: guideEarthscopeSummary,
                 earthscopeUpdatedAt: guideEarthscopeUpdatedAt,
                 supportItems: dashboardPayload?.supportItems ?? [],
+                earthInfluences: guideInfluences.earth,
+                spaceInfluences: guideInfluences.space,
+                bodyInfluences: guideInfluences.body,
                 whatMattersNow: dashboardPayload?.driversCompact ?? [],
                 whatMattersSummary: dashboardPayload?.todayRelevanceExplanations?.dailyBrief,
                 initialFocus: guideHubFocus,

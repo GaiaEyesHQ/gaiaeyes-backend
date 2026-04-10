@@ -414,6 +414,11 @@ if (!function_exists('gaiaeyes_render_support_center')) {
                 .ge-support-article li {
                     color: rgba(255,255,255,0.82);
                 }
+                .ge-support-hero__meta {
+                    margin-top: -6px;
+                    font-size: 0.92rem;
+                    color: rgba(255,255,255,0.62);
+                }
                 .ge-support-chip-row,
                 .ge-support-actions,
                 .ge-support-category-grid {
@@ -566,18 +571,10 @@ if (!function_exists('gaiaeyes_render_support_center')) {
                 <header class="ge-support-hero">
                     <p class="ge-support-article__eyebrow">Support</p>
                     <h1>Gaia Eyes Help Center</h1>
-                    <p>Clear answers for Health sync, permissions, billing, privacy, and the basics of how Gaia Eyes works. This page is public, requires no login, and is the right support link to share for app review or customer handoff.</p>
-                    <div class="ge-support-chip-row">
-                        <span class="ge-support-chip">public support link</span>
-                        <span class="ge-support-chip"><?php echo esc_html($article_count); ?> help articles</span>
-                        <?php if ($updated_at !== ''): ?>
-                            <span class="ge-support-chip">updated <?php echo esc_html($updated_at); ?></span>
-                        <?php endif; ?>
-                        <span class="ge-support-chip">patterns, not certainties</span>
-                        <span class="ge-support-chip">optional Health data</span>
-                        <span class="ge-support-chip">user stays in control</span>
-                        <span class="ge-support-chip">no diagnosis / no medical advice</span>
-                    </div>
+                    <p>Clear answers for Health sync, permissions, billing, privacy, and the basics of how Gaia Eyes works.</p>
+                    <?php if ($updated_at !== ''): ?>
+                        <p class="ge-support-hero__meta">Updated <?php echo esc_html($updated_at); ?></p>
+                    <?php endif; ?>
                     <div class="ge-support-actions">
                         <?php if ($support_email !== ''): ?>
                             <a class="ge-support-link" href="<?php echo esc_url('mailto:' . $support_email . '?subject=Gaia%20Eyes%20Support'); ?>">Email Support</a>

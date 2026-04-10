@@ -2751,7 +2751,7 @@ def _profile_support_item(
             tone="watch",
             badge="Comfort",
             actions=[
-                "Use warmth, gentler movement, or shorter effort blocks if those usually help.",
+                "Favor shorter effort blocks or gentler movement if your body feels less forgiving today.",
                 "Skip one nonessential heavier task if your body is asking for a slower lane.",
             ],
             visual_key="comfort",

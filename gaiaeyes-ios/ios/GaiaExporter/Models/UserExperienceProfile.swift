@@ -328,13 +328,30 @@ struct UserExperienceProfile: Codable, Equatable {
         tempUnit = try container.decodeIfPresent(TemperatureUnit.self, forKey: .tempUnit) ?? .localeDefault
         trackedStatKeys = try container.decodeIfPresent([TrackedStatKey].self, forKey: .trackedStatKeys) ?? TrackedStatKey.defaultSelection
         smartStatSwapEnabled = try container.decodeIfPresent(Bool.self, forKey: .smartStatSwapEnabled) ?? true
-        favoriteSymptomCodes = try container.decodeIfPresent([String].self, forKey: .favoriteSymptomCodes) ?? []
+        favoriteSymptomCodes = Self.normalizeFavoriteSymptomCodes(
+            try container.decodeIfPresent([String].self, forKey: .favoriteSymptomCodes) ?? []
+        )
         lunarSensitivityDeclared = try container.decodeIfPresent(Bool.self, forKey: .lunarSensitivityDeclared) ?? false
         onboardingStep = try container.decodeIfPresent(OnboardingStep.self, forKey: .onboardingStep) ?? .welcome
         onboardingCompleted = try container.decodeIfPresent(Bool.self, forKey: .onboardingCompleted) ?? false
         onboardingCompletedAt = try container.decodeIfPresent(String.self, forKey: .onboardingCompletedAt)
         healthkitRequestedAt = try container.decodeIfPresent(String.self, forKey: .healthkitRequestedAt)
         lastBackfillAt = try container.decodeIfPresent(String.self, forKey: .lastBackfillAt)
+    }
+
+    private static func normalizeFavoriteSymptomCodes(_ codes: [String]) -> [String] {
+        var normalized: [String] = []
+        for code in codes {
+            let token = normalize(code)
+            if token.isEmpty || normalized.contains(token) {
+                continue
+            }
+            normalized.append(token)
+            if normalized.count >= FavoriteSymptomPreference.maxCount {
+                break
+            }
+        }
+        return normalized
     }
 
     static let `default` = UserExperienceProfile()
