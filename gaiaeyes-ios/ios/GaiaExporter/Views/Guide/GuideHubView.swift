@@ -193,10 +193,17 @@ struct GuideHubView: View {
     }
 
     private var curatedSupportItems: [DashboardSupportItem] {
+        let sourceItems = supportItems.filter { item in
+            let key = item.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if key.hasPrefix("theme:"), supportItems.contains(where: { !$0.key.lowercased().hasPrefix("theme:") }) {
+                return false
+            }
+            return true
+        }
         var chosen: [DashboardSupportItem] = []
         var seenPrefixes: Set<String> = []
 
-        for item in supportItems {
+        for item in sourceItems {
             let prefix = supportActionPrefix(for: item)
             if let prefix, seenPrefixes.contains(prefix) {
                 continue
@@ -223,11 +230,45 @@ struct GuideHubView: View {
         return "Keep the basics steady and use a gentler pace if your body is asking for more margin."
     }
 
+    private var localSymptomSupportBullets: [String] {
+        let codes = Set(
+            (currentSymptomsSnapshot?.items ?? []).map { $0.symptomCode.uppercased() }
+        )
+        var lines: [String] = []
+
+        if !codes.isDisjoint(with: ["PAIN", "NERVE_PAIN", "JOINT_PAIN", "STIFFNESS", "STOMACH_PAIN"]) {
+            lines.append("Use warmth, gentler movement, or a lighter task load if pain or stiffness is closer to the surface.")
+        }
+        if !codes.isDisjoint(with: ["HEADACHE", "SINUS_PRESSURE", "LIGHT_SENSITIVITY", "RESP_IRRITATION"]) {
+            lines.append("Hydrate, use cleaner air, and lean on sinus or head-pressure support if that is a pattern for you.")
+        }
+        if !codes.isDisjoint(with: ["DRAINED", "FATIGUE", "BRAIN_FOG", "INSOMNIA", "RESTLESS_SLEEP"]) {
+            lines.append("Use shorter effort blocks and leave more recovery space between heavier tasks.")
+        }
+        if !codes.isDisjoint(with: ["ANXIOUS", "WIRED", "PALPITATIONS"]) {
+            lines.append("Use grounding or slower breathing before adding more stimulation if your system feels buzzy.")
+        }
+
+        return lines
+    }
+
     private var supportSuggestionBullets: [String] {
         var lines: [String] = []
 
+        for action in localSymptomSupportBullets {
+            let normalized = normalizedSupportLine(action)
+            if lines.contains(where: { normalizedSupportLine($0) == normalized }) {
+                continue
+            }
+            lines.append(action)
+        }
+
         if supportNeedsGrounding {
-            lines.append("Use a grounding reset before adding more input if your system feels buzzy or overloaded.")
+            let grounding = "Use a grounding reset before adding more input if your system feels buzzy or overloaded."
+            let normalized = normalizedSupportLine(grounding)
+            if !lines.contains(where: { normalizedSupportLine($0) == normalized }) {
+                lines.append(grounding)
+            }
         }
 
         for item in curatedSupportItems {
@@ -241,6 +282,21 @@ struct GuideHubView: View {
                 lines.append(cleaned)
                 if lines.count >= 5 {
                     return lines
+                }
+            }
+        }
+
+        if lines.count < 4 {
+            for item in curatedSupportItems {
+                let cleaned = guideText(item.message)
+                guard !cleaned.isEmpty else { continue }
+                let normalized = normalizedSupportLine(cleaned)
+                if lines.contains(where: { normalizedSupportLine($0) == normalized }) {
+                    continue
+                }
+                lines.append(cleaned)
+                if lines.count >= 5 {
+                    break
                 }
             }
         }
@@ -579,7 +635,7 @@ struct GuideHubView: View {
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(alignment: .center, spacing: 12) {
                         Text("Possible symptoms")
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
                             .foregroundStyle(headerStyle.primaryText)
                         Spacer(minLength: 0)
                         Button(action: onOpenSettings) {
@@ -595,7 +651,7 @@ struct GuideHubView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(headerStyle.tertiaryText)
                     Text(possibleSymptomsLead)
-                        .font(.footnote.weight(.semibold))
+                        .font(.footnote)
                         .foregroundStyle(headerStyle.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                     if !symptomHighlights.isEmpty {
@@ -618,21 +674,14 @@ struct GuideHubView: View {
     }
 
     private var influenceGrid: some View {
-        LazyVGrid(
-            columns: [
-                GridItem(.flexible(minimum: 120), spacing: 10, alignment: .top),
-                GridItem(.flexible(minimum: 120), spacing: 10, alignment: .top),
-            ],
-            alignment: .leading,
-            spacing: 10
-        ) {
+        VStack(alignment: .leading, spacing: 12) {
             ForEach(Array(influenceSections.enumerated()), id: \.offset) { _, section in
-                influenceSectionCard(title: section.title, items: section.items)
+                influenceSection(title: section.title, items: section.items)
             }
         }
     }
 
-    private func influenceSectionCard(title: String, items: [String]) -> some View {
+    private func influenceSection(title: String, items: [String]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.caption.weight(.semibold))
@@ -642,28 +691,6 @@ struct GuideHubView: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(style.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-
-    private func influenceSection(title: String, items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(style.tertiaryText)
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(items, id: \.self) { item in
-                    HStack(alignment: .top, spacing: 8) {
-                        Circle()
-                            .fill(style.accent.opacity(0.92))
-                            .frame(width: 6, height: 6)
-                            .padding(.top, 6)
-                        Text(item)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(style.primaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
     }
 
     private func guideBulletGrid(_ items: [String]) -> some View {
@@ -684,8 +711,8 @@ struct GuideHubView: View {
     private func guideInfluenceBulletGrid(_ items: [String]) -> some View {
         LazyVGrid(
             columns: [
-                GridItem(.flexible(minimum: 110), spacing: 8, alignment: .top),
-                GridItem(.flexible(minimum: 110), spacing: 8, alignment: .top),
+                GridItem(.flexible(minimum: 150), spacing: 8, alignment: .top),
+                GridItem(.flexible(minimum: 150), spacing: 8, alignment: .top),
             ],
             alignment: .leading,
             spacing: 8
@@ -703,7 +730,7 @@ struct GuideHubView: View {
                 .frame(width: 6, height: 6)
                 .padding(.top, 5)
             Text(text)
-                .font(.caption.weight(.semibold))
+                .font(.caption)
                 .foregroundStyle(style.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)

@@ -222,6 +222,11 @@ _DRIVER_NOTICE = {
         "Brain fog or fatigue can show up faster for some people when pollen is up.",
         "Breathing or histamine-style irritation may be easier to notice for some people.",
     ],
+    "humidity": [
+        "Head pressure, sinus heaviness, or body drag may feel easier to notice for some people.",
+        "Fatigue or heavier pacing can show up faster for some people in muggy or very dry air.",
+        "Sleep or breathing comfort can feel a little less steady for some people.",
+    ],
     "kp": [
         "Scattered focus can show up for some people during geomagnetic activity.",
         "Some people may notice a wired or restless feeling.",
@@ -265,6 +270,11 @@ _DRIVER_ACTIONS = {
         "Shift outdoor time away from your worst trigger windows when possible.",
         "Hydrate and keep effort a little steadier if allergy load tends to stack fatigue.",
     ],
+    "humidity": [
+        "Keep hydration steady and use cleaner indoor air if muggy or dry air tends to hit you harder.",
+        "Use gentler pacing if humidity extremes usually stack fatigue, headache, or sinus pressure for you.",
+        "Keep sleep space, airflow, and temperature steadier than usual if the air feels less forgiving.",
+    ],
     "kp": [
         "Reduce late stimulation.",
         "Add short regulation breaks during the day.",
@@ -292,6 +302,7 @@ _DRIVER_CONTEXT = {
     "temp": "This driver is more about body load, stiffness, and recovery drag.",
     "aqi": "This driver is more about fatigue, fogginess, sinus irritation, or breathing irritation.",
     "allergens": "This driver is more about sinus pressure, headache sensitivity, brain fog, fatigue, and breathing or histamine-style irritation.",
+    "humidity": "This driver is more about sinus heaviness, fatigue, headache pressure, breathing comfort, and overall body drag.",
     "kp": "This driver is more about restless edge, sleep disruption, focus drift, and nervous-system reactivity.",
     "bz": "This driver is more about restless edge, sleep disruption, focus drift, and nervous-system reactivity.",
     "sw": "This driver is more about restless edge, sleep disruption, focus drift, and nervous-system reactivity.",

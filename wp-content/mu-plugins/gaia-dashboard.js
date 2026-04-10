@@ -1117,6 +1117,35 @@
     return fallback.length ? fallback.slice(0, 2).join(" • ") : "";
   };
 
+  const localGuideSupportActions = (state) => {
+    const codes = new Set(
+      maybeArray(extractCurrentSymptoms(state && state.member && state.member.currentSymptoms)?.items)
+        .map((item) => normalizeSymptomCode(item && (item.symptomCode || item.symptom_code)))
+        .filter(Boolean)
+    );
+    const lines = [];
+    const push = (line) => {
+      const cleaned = textOrEmpty(line);
+      if (!cleaned) return;
+      const normalized = normalizeGuideSupportLine(cleaned);
+      if (lines.some((item) => normalizeGuideSupportLine(item) === normalized)) return;
+      lines.push(cleaned);
+    };
+    if (["PAIN", "NERVE_PAIN", "JOINT_PAIN", "STIFFNESS", "STOMACH_PAIN"].some((code) => codes.has(code))) {
+      push("Use warmth, gentler movement, or a lighter task load if pain or stiffness is closer to the surface.");
+    }
+    if (["HEADACHE", "SINUS_PRESSURE", "LIGHT_SENSITIVITY", "RESP_IRRITATION"].some((code) => codes.has(code))) {
+      push("Hydrate, use cleaner air, and lean on sinus or head-pressure support if that is a pattern for you.");
+    }
+    if (["DRAINED", "FATIGUE", "BRAIN_FOG", "INSOMNIA", "RESTLESS_SLEEP"].some((code) => codes.has(code))) {
+      push("Use shorter effort blocks and leave more recovery space between heavier tasks.");
+    }
+    if (["ANXIOUS", "WIRED", "PALPITATIONS"].some((code) => codes.has(code))) {
+      push("Use grounding or slower breathing before adding more stimulation if your system feels buzzy.");
+    }
+    return lines;
+  };
+
   const normalizeGuideSupportLine = (value) =>
     textOrEmpty(value)
       .toLowerCase()
@@ -1142,8 +1171,12 @@
 
   const guideSupportActions = (state, items) => {
     const lines = [];
+    localGuideSupportActions(state).forEach((line) => lines.push(line));
     if (guideSupportNeedsGrounding(state, items)) {
-      lines.push("Use a grounding reset before adding more input if your system feels buzzy or overloaded.");
+      const grounding = "Use a grounding reset before adding more input if your system feels buzzy or overloaded.";
+      if (!lines.some((line) => normalizeGuideSupportLine(line) === normalizeGuideSupportLine(grounding))) {
+        lines.push(grounding);
+      }
     }
     maybeArray(items).forEach((item) => {
       maybeArray(item && item.actions).forEach((action) => {
@@ -1154,6 +1187,15 @@
         lines.push(cleaned);
       });
     });
+    if (lines.length < 4) {
+      maybeArray(items).forEach((item) => {
+        const cleaned = textOrEmpty(item && item.message);
+        if (!cleaned) return;
+        const normalized = normalizeGuideSupportLine(cleaned);
+        if (lines.some((line) => normalizeGuideSupportLine(line) === normalized)) return;
+        lines.push(cleaned);
+      });
+    }
     return lines.slice(0, 5);
   };
 
@@ -1182,13 +1224,13 @@
           </div>
         </div>
         <p class="gaia-dashboard__card-copy">These are the strongest earth, space, and body signals in the current read.</p>
-        <div class="gaia-dashboard__guide-influence-grid">
+        <div class="gaia-dashboard__guide-influence-stack">
           ${groups
             .map(
               (group) => `
-                <div class="gaia-dashboard__guide-influence-card">
+                <div class="gaia-dashboard__guide-influence-section">
                   <div class="gaia-dashboard__mini-title">${esc(group.title)}</div>
-                  <div class="gaia-dashboard__guide-bullet-grid gaia-dashboard__guide-bullet-grid--compact">
+                  <div class="gaia-dashboard__guide-bullet-grid">
                     ${group.items.map((item) => `<div class="gaia-dashboard__guide-bullet-row">${esc(item)}</div>`).join("")}
                   </div>
                 </div>

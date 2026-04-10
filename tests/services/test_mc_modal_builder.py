@@ -329,3 +329,28 @@ def test_support_items_include_profile_aware_autonomic_support() -> None:
     autonomic_item = next(item for item in items if item["key"] == "profile:autonomic_support")
     assert autonomic_item["badge"] == "Regulate"
     assert any("breathing" in line.lower() for line in autonomic_item["actions"])
+
+
+def test_support_items_include_specific_humidity_support_actions() -> None:
+    items = build_support_items(
+        day=date(2026, 4, 10),
+        drivers=[
+            {
+                "key": "humidity",
+                "label": "Humidity",
+                "severity": "high",
+                "state": "High",
+                "value": 88.0,
+                "unit": "%",
+            }
+        ],
+        symptoms={
+            "top_symptoms": [
+                {"symptom_code": "HEADACHE", "events": 1, "max_severity": 6},
+            ]
+        },
+    )
+
+    humidity_item = next(item for item in items if item["key"] == "driver:humidity")
+    assert humidity_item["title"] == "What may help with Humidity"
+    assert any("hydration" in line.lower() or "cleaner indoor air" in line.lower() for line in humidity_item["actions"])
