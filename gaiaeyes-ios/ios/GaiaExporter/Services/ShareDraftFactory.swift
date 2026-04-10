@@ -36,7 +36,6 @@ enum ShareDraftFactory {
             excluding: [hook, title, insight, state, value],
             maxCount: 2
         )
-        let signText = signalSignText(category: category, title: title, value: value, state: state)
 
         let card = ShareCardModel(
             shareType: .signalSnapshot,
@@ -46,14 +45,14 @@ enum ShareDraftFactory {
             accentLevel: accent,
             eyebrow: title,
             title: hook,
-            subtitle: insight,
-            signText: signText,
-            primaryText: nil,
-            valueText: nil,
+            subtitle: nil,
+            signText: nil,
+            primaryText: title,
+            valueText: cleanSignValue(state) ?? cleanSignValue(value) ?? accent.pillTitle,
             stateText: state,
-            bullets: support,
+            bullets: [],
             highlights: [],
-            note: nil,
+            note: secondaryMetricNote(primary: cleanSignValue(state) ?? cleanSignValue(value) ?? accent.pillTitle, value: value, state: state),
             footer: footer(updatedAt),
             sourceLine: sourceLine,
             branding: .gaiaEyes
@@ -186,7 +185,6 @@ enum ShareDraftFactory {
             excluding: [hook, title, leading, insight],
             maxCount: 2
         )
-        let signText = linePair("Today", clippedText(leading, maxWords: 3))
 
         let card = ShareCardModel(
             shareType: .dailyState,
@@ -196,14 +194,14 @@ enum ShareDraftFactory {
             accentLevel: accent,
             eyebrow: title,
             title: hook,
-            subtitle: insight,
-            signText: signText,
-            primaryText: nil,
-            valueText: nil,
+            subtitle: nil,
+            signText: nil,
+            primaryText: leading,
+            valueText: accent.pillTitle,
             stateText: accent.pillTitle,
-            bullets: support,
+            bullets: [],
             highlights: [],
-            note: nil,
+            note: supportDrivers.first,
             footer: footer(updatedAt),
             sourceLine: nil,
             branding: .gaiaEyes
@@ -255,7 +253,6 @@ enum ShareDraftFactory {
             excluding: [hook, title, severity, insight],
             maxCount: 2
         )
-        let signText = eventSignText(title: title, severity: severity, category: category)
 
         let card = ShareCardModel(
             shareType: .event,
@@ -263,16 +260,16 @@ enum ShareDraftFactory {
             format: .square,
             background: background,
             accentLevel: accent,
-            eyebrow: "Event",
+            eyebrow: title,
             title: hook,
-            subtitle: insight,
-            signText: signText,
-            primaryText: nil,
-            valueText: nil,
+            subtitle: nil,
+            signText: nil,
+            primaryText: title,
+            valueText: cleanSignValue(severity) ?? accent.pillTitle,
             stateText: severity ?? accent.pillTitle,
-            bullets: support,
+            bullets: [],
             highlights: [],
-            note: nil,
+            note: support.first ?? condensedSentence(context, maxWords: 8),
             footer: footer(updatedAt),
             sourceLine: nil,
             branding: .gaiaEyes
@@ -305,6 +302,8 @@ enum ShareDraftFactory {
         supportingDrivers: [String],
         affectedDomains: [String],
         actionLine: String,
+        primaryState: String? = nil,
+        primaryValue: String? = nil,
         accent: ShareAccentLevel,
         background: ShareCardBackground,
         updatedAt: String? = nil,
@@ -330,7 +329,6 @@ enum ShareDraftFactory {
             excluding: [hook, windowTitle, primaryDriver, insight],
             maxCount: 2
         )
-        let signText = linePair(clippedText(windowTitle, maxWords: 3), clippedText(primaryDriver, maxWords: 3))
 
         let card = ShareCardModel(
             shareType: .outlook,
@@ -338,16 +336,17 @@ enum ShareDraftFactory {
             format: .square,
             background: background,
             accentLevel: accent,
-            eyebrow: "Outlook",
+            eyebrow: windowTitle,
             title: hook,
-            subtitle: insight,
-            signText: signText,
-            primaryText: nil,
-            valueText: nil,
+            subtitle: nil,
+            signText: nil,
+            primaryText: primaryDriver,
+            valueText: cleanSignValue(primaryState) ?? accent.pillTitle,
             stateText: accent.pillTitle,
-            bullets: support,
+            bullets: [],
             highlights: [],
-            note: nil,
+            note: secondaryMetricNote(primary: cleanSignValue(primaryState) ?? accent.pillTitle, value: primaryValue, state: primaryState)
+                ?? supportDrivers.first,
             footer: footer(updatedAt),
             sourceLine: nil,
             branding: .gaiaEyes
@@ -360,7 +359,9 @@ enum ShareDraftFactory {
             primaryDriver: primaryDriver,
             insight: insight,
             bullets: support,
-            actionLine: actionLine
+            actionLine: actionLine,
+            primaryState: primaryState,
+            primaryValue: primaryValue
         )
         return ShareDraft(
             shareType: .outlook,
@@ -492,6 +493,19 @@ enum ShareDraftFactory {
             return "gaiaeyes.app"
         }
         return updatedAt
+    }
+
+    private static func secondaryMetricNote(primary: String?, value: String?, state: String?) -> String? {
+        let primaryValue = cleanSignValue(primary)
+        let cleanedValue = cleanSignValue(value)
+        let cleanedState = cleanSignValue(state)
+        if let cleanedValue, cleanedValue != primaryValue {
+            return cleanedValue
+        }
+        if let cleanedState, cleanedState != primaryValue {
+            return cleanedState
+        }
+        return nil
     }
 
     private static func uniqueLines(

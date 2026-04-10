@@ -23,24 +23,27 @@ enum ShareCaptionEngine {
             : groundingLine(category: category, style: .balanced, mode: mode)
 
         return ShareCaptionSet(
-            scientific: caption([
-                hook,
-                dataLine ?? insight,
-                feelLine,
-                groundingLine(category: category, style: .scientific, mode: mode),
-            ]),
-            balanced: caption([
+            scientific: scientificBulletCaption(
+                hook: hook,
+                lines: [
+                    dataLine ?? insight,
+                    feelLine,
+                    groundingLine(category: category, style: .scientific, mode: mode),
+                ],
+                cta: shareCTA(style: .scientific, mode: mode)
+            ),
+            balanced: paragraphCaption([
                 hook,
                 insight,
                 feelingLine(category: category, bullets: bullets, style: .balanced, mode: mode),
                 balancedGrounding,
-            ]),
-            humorous: caption([
+            ], cta: shareCTA(style: .balanced, mode: mode)),
+            humorous: paragraphCaption([
                 hook,
                 playfulLine(category: category, title: title, mode: mode),
                 feelingLine(category: category, bullets: bullets, style: .humorous, mode: mode),
                 groundingLine(category: category, style: .humorous, mode: mode),
-            ])
+            ], cta: shareCTA(style: .humorous, mode: mode))
         )
     }
 
@@ -61,24 +64,27 @@ enum ShareCaptionEngine {
         ], maxCount: 1)
 
         return ShareCaptionSet(
-            scientific: caption([
-                hook,
-                relationship,
-                evidenceLine ?? bullets.first,
-                "Worth watching as a pattern, not treating as proof",
-            ]),
-            balanced: caption([
+            scientific: scientificBulletCaption(
+                hook: hook,
+                lines: [
+                    relationship,
+                    evidenceLine ?? bullets.first,
+                    "Worth watching as a pattern, not treating as proof",
+                ],
+                cta: shareCTA(style: .scientific, mode: mode)
+            ),
+            balanced: paragraphCaption([
                 hook,
                 insight,
                 bullets.first ?? "It keeps showing up in the same direction",
                 mode == .mystical ? "Treat it as a clue, not a sentence" : "Treat it as a clue, not a guarantee",
-            ]),
-            humorous: caption([
+            ], cta: shareCTA(style: .balanced, mode: mode)),
+            humorous: paragraphCaption([
                 hook,
                 "Your log keeps bringing this one back",
                 bullets.first ?? evidenceLine ?? "Apparently the pattern has opinions",
                 mode == .mystical ? "The universe left a sticky note" : "The data left a sticky note",
-            ])
+            ], cta: shareCTA(style: .humorous, mode: mode))
         )
     }
 
@@ -98,24 +104,27 @@ enum ShareCaptionEngine {
         ], maxCount: 1)
 
         return ShareCaptionSet(
-            scientific: caption([
-                hook,
-                dataLine ?? title,
-                bullets.first ?? feelingLine(category: category, bullets: [], style: .scientific, mode: mode),
-                groundingLine(category: category, style: .scientific, mode: mode),
-            ]),
-            balanced: caption([
+            scientific: scientificBulletCaption(
+                hook: hook,
+                lines: [
+                    dataLine ?? title,
+                    bullets.first ?? feelingLine(category: category, bullets: [], style: .scientific, mode: mode),
+                    groundingLine(category: category, style: .scientific, mode: mode),
+                ],
+                cta: shareCTA(style: .scientific, mode: mode)
+            ),
+            balanced: paragraphCaption([
                 hook,
                 insight,
                 bullets.first ?? feelingLine(category: category, bullets: [], style: .balanced, mode: mode),
                 groundingLine(category: category, style: .balanced, mode: mode),
-            ]),
-            humorous: caption([
+            ], cta: shareCTA(style: .balanced, mode: mode)),
+            humorous: paragraphCaption([
                 hook,
                 "\(leading) is running the group chat",
                 bullets.first ?? feelingLine(category: category, bullets: [], style: .humorous, mode: mode),
                 groundingLine(category: category, style: .humorous, mode: mode),
-            ])
+            ], cta: shareCTA(style: .humorous, mode: mode))
         )
     }
 
@@ -134,24 +143,27 @@ enum ShareCaptionEngine {
         ], maxCount: 1)
 
         return ShareCaptionSet(
-            scientific: caption([
-                hook,
-                dataLine ?? insight,
-                feelingLine(category: category, bullets: bullets, style: .scientific, mode: mode),
-                groundingLine(category: category, style: .scientific, mode: mode),
-            ]),
-            balanced: caption([
+            scientific: scientificBulletCaption(
+                hook: hook,
+                lines: [
+                    dataLine ?? insight,
+                    feelingLine(category: category, bullets: bullets, style: .scientific, mode: mode),
+                    groundingLine(category: category, style: .scientific, mode: mode),
+                ],
+                cta: shareCTA(style: .scientific, mode: mode)
+            ),
+            balanced: paragraphCaption([
                 hook,
                 insight,
                 feelingLine(category: category, bullets: bullets, style: .balanced, mode: mode),
                 groundingLine(category: category, style: .balanced, mode: mode),
-            ]),
-            humorous: caption([
+            ], cta: shareCTA(style: .balanced, mode: mode)),
+            humorous: paragraphCaption([
                 hook,
                 playfulLine(category: category, title: title, mode: mode),
                 feelingLine(category: category, bullets: bullets, style: .humorous, mode: mode),
                 groundingLine(category: category, style: .humorous, mode: mode),
-            ])
+            ], cta: shareCTA(style: .humorous, mode: mode))
         )
     }
 
@@ -163,32 +175,37 @@ enum ShareCaptionEngine {
         primaryDriver: String,
         insight: String,
         bullets: [String],
-        actionLine: String
+        actionLine: String,
+        primaryState: String?,
+        primaryValue: String?
     ) -> ShareCaptionSet {
         let dataLine = sentenceJoin([
             "\(windowTitle) has \(primaryDriver) out front",
-            bullets.first
+            titleMetricLine(title: primaryDriver, value: primaryValue, state: primaryState) ?? bullets.first
         ], maxCount: 1)
 
         return ShareCaptionSet(
-            scientific: caption([
-                hook,
-                dataLine ?? insight,
-                clippedSentence(actionLine, maxWords: 14) ?? feelingLine(category: category, bullets: bullets, style: .scientific, mode: mode),
-                groundingLine(category: category, style: .scientific, mode: mode),
-            ]),
-            balanced: caption([
+            scientific: scientificBulletCaption(
+                hook: hook,
+                lines: [
+                    dataLine ?? insight,
+                    clippedSentence(actionLine, maxWords: 14) ?? feelingLine(category: category, bullets: bullets, style: .scientific, mode: mode),
+                    groundingLine(category: category, style: .scientific, mode: mode),
+                ],
+                cta: shareCTA(style: .scientific, mode: mode)
+            ),
+            balanced: paragraphCaption([
                 hook,
                 insight,
                 clippedSentence(actionLine, maxWords: 14) ?? feelingLine(category: category, bullets: bullets, style: .balanced, mode: mode),
                 groundingLine(category: category, style: .balanced, mode: mode),
-            ]),
-            humorous: caption([
+            ], cta: shareCTA(style: .balanced, mode: mode)),
+            humorous: paragraphCaption([
                 hook,
                 "\(primaryDriver) looks ready to call the shots",
                 clippedSentence(actionLine, maxWords: 14) ?? feelingLine(category: category, bullets: bullets, style: .humorous, mode: mode),
                 groundingLine(category: category, style: .humorous, mode: mode),
-            ])
+            ], cta: shareCTA(style: .humorous, mode: mode))
         )
     }
 
@@ -201,6 +218,33 @@ enum ShareCaptionEngine {
     private static func caption(_ lines: [String?]) -> String {
         let unique = uniqueLines(lines).prefix(4)
         return unique.map(sentence).joined(separator: " ")
+    }
+
+    private static func paragraphCaption(_ lines: [String?], cta: String?) -> String {
+        caption(lines + [cta])
+    }
+
+    private static func scientificBulletCaption(hook: String, lines: [String?], cta: String?) -> String {
+        let bulletLines = uniqueLines(lines, maxCount: 3)
+        var output: [String] = [sentence(hook)]
+        output.append(contentsOf: bulletLines.map { "• " + sentence($0) })
+        if let cta = cta {
+            output.append("• " + sentence(cta))
+        }
+        return output.joined(separator: "\n")
+    }
+
+    private static func shareCTA(style: CaptionTone, mode: ExperienceMode) -> String {
+        switch style {
+        case .scientific:
+            return "Track your own signal mix in Gaia Eyes"
+        case .balanced:
+            return "Track your own patterns in Gaia Eyes"
+        case .humorous:
+            return mode == .mystical
+                ? "Gaia Eyes keeps an eye on the weird days"
+                : "Gaia Eyes keeps receipts on the weird days"
+        }
     }
 
     private static func titleMetricLine(title: String, value: String?, state: String?) -> String? {

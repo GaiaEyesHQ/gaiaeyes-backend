@@ -74,6 +74,13 @@ struct ShareCardView: View {
     }
 
     private var contentBlock: some View {
+        if usesMinimalHeroLayout {
+            return AnyView(minimalContentBlock)
+        }
+        return AnyView(legacyContentBlock)
+    }
+
+    private var legacyContentBlock: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(model.title)
                 .font(.system(size: titleSize, weight: .bold, design: .rounded))
@@ -152,6 +159,41 @@ struct ShareCardView: View {
         }
     }
 
+    private var minimalContentBlock: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(model.title)
+                .font(.system(size: titleSize + 2, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .lineLimit(3)
+                .minimumScaleFactor(0.76)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let primaryText = model.primaryText?.trimmingCharacters(in: .whitespacesAndNewlines), !primaryText.isEmpty {
+                Text(primaryText.uppercased())
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.68))
+                    .tracking(0.9)
+                    .lineLimit(1)
+            }
+
+            if let valueText = model.valueText?.trimmingCharacters(in: .whitespacesAndNewlines), !valueText.isEmpty {
+                Text(valueText)
+                    .font(.system(size: valueSize + 10, weight: .heavy, design: .rounded))
+                    .foregroundColor(.white)
+                    .minimumScaleFactor(0.72)
+                    .lineLimit(2)
+            }
+
+            if let note = minimalNoteText {
+                Text(note)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundColor(.white.opacity(0.84))
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     private var footerBlock: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let sourceLine = model.sourceLine, !sourceLine.isEmpty {
@@ -212,6 +254,25 @@ struct ShareCardView: View {
             return state
         }
         return model.accentLevel.pillTitle
+    }
+
+    private var usesMinimalHeroLayout: Bool {
+        switch model.layout {
+        case .signalSnapshot, .dailyState, .event, .outlook:
+            return true
+        case .personalPattern:
+            return false
+        }
+    }
+
+    private var minimalNoteText: String? {
+        if let note = model.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            return note
+        }
+        if let subtitle = model.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines), !subtitle.isEmpty {
+            return subtitle
+        }
+        return nil
     }
 }
 

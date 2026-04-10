@@ -11264,6 +11264,8 @@ struct ContentView: View {
                 supportingDrivers: supporting,
                 affectedDomains: domains,
                 actionLine: actionLine,
+                primaryState: driverSeverityValue(primary),
+                primaryValue: driverValue(primary),
                 accent: accentLevel,
                 background: outlookBackground(for: primary.key),
                 updatedAt: formatUpdate(payload?.generatedAt),
@@ -11454,6 +11456,16 @@ struct ContentView: View {
                                     }
                                 }
                             }
+                        }
+
+                        if let draft = shareDraft(for: window) {
+                            Button {
+                                shareDraft = draft
+                            } label: {
+                                Label(sharePrompt(for: draft.card.accentLevel), systemImage: "square.and.arrow.up")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                         }
                     }
                 }
