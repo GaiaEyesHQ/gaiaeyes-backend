@@ -12,6 +12,7 @@
 | `SUPABASE_URL` | Supabase REST/Auth/Storage base URL | `https://<project>.supabase.co` | `app/utils/supabase_storage.py`, `app/routers/profile.py` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Preferred service-role key for storage uploads and authenticated account deletion | `service-role-key` | `app/utils/supabase_storage.py`, `app/routers/profile.py` |
 | `SUPABASE_SERVICE_KEY` | Legacy service-key alias accepted by account-deletion preflight/delete and some scripts | `service-key` | `app/routers/profile.py`, various scripts |
+| `BUG_REPORT_ALERT_WEBHOOK_URL` | Optional webhook notified when a new in-app bug report is submitted | `https://hooks.example.com/...` | `app/routers/profile.py` |
 | `BUCKET` | Storage bucket name | `space-visuals` | `app/utils/supabase_storage.py` |
 | `READ_TOKENS` | Comma-separated read tokens | `token1,token2` | `app/security/auth.py` |
 | `WRITE_TOKENS` | Comma-separated write tokens | `token1,token2` | `app/security/auth.py` |

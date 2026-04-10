@@ -385,6 +385,13 @@ struct DeleteAccountPreflightResult: Decodable {
     let issues: [String]?
 }
 
+struct BugReportResult: Decodable {
+    let reportId: String?
+    let createdAt: Date?
+    let alertSent: Bool?
+    let alertError: String?
+}
+
 struct UserExperienceProfileUpdate: Encodable {
     var mode: ExperienceMode? = nil
     var guide: GuideType? = nil

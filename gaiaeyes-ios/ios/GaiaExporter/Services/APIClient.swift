@@ -75,6 +75,22 @@ private struct SamplesRawPayload: Encodable {
     let samples: [Sample]
 }
 
+private struct BugReportSubmissionPayload: Encodable {
+    let description: String
+    let diagnosticsBundle: String
+    let appVersion: String?
+    let device: String?
+    let source: String?
+
+    enum CodingKeys: String, CodingKey {
+        case description
+        case diagnosticsBundle = "diagnostics_bundle"
+        case appVersion = "app_version"
+        case device
+        case source
+    }
+}
+
 private enum APIError: Error {
     case server(code: Int, body: String)
 }
@@ -647,6 +663,27 @@ final class APIClient {
         try await getJSON(
             "v1/profile/account/preflight",
             as: Envelope<DeleteAccountPreflightResult>.self
+        )
+    }
+
+    func submitBugReport(
+        description: String,
+        diagnosticsBundle: String,
+        appVersion: String? = nil,
+        device: String? = nil,
+        source: String = "ios_app"
+    ) async throws -> Envelope<BugReportResult> {
+        let payload = BugReportSubmissionPayload(
+            description: description,
+            diagnosticsBundle: diagnosticsBundle,
+            appVersion: appVersion,
+            device: device,
+            source: source
+        )
+        return try await postJSON(
+            "v1/profile/bug-report",
+            body: payload,
+            as: Envelope<BugReportResult>.self
         )
     }
 

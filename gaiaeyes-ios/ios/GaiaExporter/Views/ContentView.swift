@@ -2807,6 +2807,10 @@ struct ContentView: View {
     @State private var accountDeletionMessage: String?
     @State private var accountDeletionPreflightInFlight: Bool = false
     @State private var accountDeletionPreflightMessage: String?
+    @State private var showBugReportSheet: Bool = false
+    @State private var bugReportDescription: String = ""
+    @State private var bugReportSubmitting: Bool = false
+    @State private var bugReportMessage: String?
     @State private var showDeleteAccountConfirmation: Bool = false
     @State private var showNotificationSettingsSection: Bool = false
     @State private var pushPermissionGranted: Bool = PushNotificationService.storedPermissionGranted()
@@ -4300,27 +4304,32 @@ struct ContentView: View {
         return Array(state.log.suffix(12))
     }
 
+    private func diagnosticsAppVersionString() -> String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        return "\(version) (\(build))"
+    }
+
+    private func diagnosticsDeviceDescription() -> String {
+#if canImport(UIKit)
+        return "\(UIDevice.current.model) • \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
+#else
+        return "iOS"
+#endif
+    }
+
     private func diagnosticsBundleText() -> String {
         let billing = debugBillingSnapshot
         let profile = debugProfileSnapshot
         let featureInputs = debugFeatureInputSnapshot
         let freshness = debugFreshnessItems
         let healthItems = debugHealthMetricItems
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
-        let deviceDescription: String = {
-#if canImport(UIKit)
-            "\(UIDevice.current.model) • \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)"
-#else
-            "iOS"
-#endif
-        }()
 
         var lines: [String] = []
         lines.append("Gaia Eyes Diagnostics Bundle")
         lines.append("Generated: \(debugFormattedDate(Date()))")
-        lines.append("App: \(version) (\(build))")
-        lines.append("Device: \(deviceDescription)")
+        lines.append("App: \(diagnosticsAppVersionString())")
+        lines.append("Device: \(diagnosticsDeviceDescription())")
         lines.append("Current user: \(profile.currentUserID)")
         lines.append("Dev user: \(profile.devUserID)")
         lines.append("Guide / Mode / Tone: \(profile.guide) / \(profile.mode) / \(profile.tone)")
@@ -4394,6 +4403,78 @@ struct ContentView: View {
 #endif
         debugToolkitMessage = "Diagnostics bundle share sheet opened."
         appLog("[UI] diagnostics bundle share presented")
+    }
+
+    @MainActor
+    private func openBugReportComposer() {
+        bugReportDescription = ""
+        bugReportMessage = nil
+        showBugReportSheet = true
+    }
+
+    private func submitBugReport() async {
+        let description = await MainActor.run {
+            bugReportDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard !description.isEmpty else {
+            await MainActor.run {
+                bugReportMessage = "Add a short description before submitting."
+            }
+            return
+        }
+
+        await MainActor.run {
+            bugReportSubmitting = true
+            bugReportMessage = nil
+        }
+
+        let trimmedBase = state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let token = await auth.validAccessToken(), !token.isEmpty else {
+            await MainActor.run {
+                bugReportMessage = "Sign in again to submit a bug report."
+                bugReportSubmitting = false
+            }
+            return
+        }
+
+        let api = APIClient(
+            config: APIConfig(
+                baseURLString: trimmedBase.isEmpty ? DeveloperAuthDefaults.baseURL : trimmedBase,
+                bearer: token,
+                timeout: 45
+            )
+        )
+
+        do {
+            let envelope = try await api.submitBugReport(
+                description: description,
+                diagnosticsBundle: diagnosticsBundleText(),
+                appVersion: diagnosticsAppVersionString(),
+                device: diagnosticsDeviceDescription()
+            )
+            if envelope.ok == false {
+                let message = envelope.error?.trimmingCharacters(in: .whitespacesAndNewlines)
+                throw NSError(
+                    domain: "GaiaEyes",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: (message?.isEmpty == false ? message! : "Could not submit the bug report.")]
+                )
+            }
+
+            await MainActor.run {
+                bugReportMessage = "Bug report submitted."
+                debugToolkitMessage = "Bug report submitted."
+                showBugReportSheet = false
+                bugReportDescription = ""
+                bugReportSubmitting = false
+            }
+        } catch {
+            appLog("[UI] bug report submit error: \(error.localizedDescription)")
+            await MainActor.run {
+                bugReportMessage = error.localizedDescription
+                bugReportSubmitting = false
+            }
+        }
     }
 
     @MainActor
@@ -14341,48 +14422,6 @@ struct ContentView: View {
             VStack(spacing: 16) {
                 dashboardFeaturesView(features ?? lastKnownFeatures)
 
-                if showDebug {
-                    let debugFeaturesState = self.featureFetchState
-                    DebugPanel(state: state, expandLog: $expandLog, featuresState: debugFeaturesState)
-
-                    GroupBox {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Label("Features Diagnostics", systemImage: "wrench.and.screwdriver")
-                                Spacer()
-                                if featuresDiagnosticsLoading {
-                                    ProgressView()
-                                        .scaleEffect(0.8)
-                                }
-                                Button("Refresh") {
-                                    Task { await fetchFeaturesDiagnostics() }
-                                }
-                                .disabled(featuresDiagnosticsLoading)
-                            }
-                            if let error = featuresDiagnosticsError {
-                                Text(error)
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
-                            }
-                            if let diagnostics = featuresDiagnostics {
-                                FeaturesDiagnosticsPanel(
-                                    diag: diagnostics,
-                                    onCopyTrace: { copyTrace(diagnostics.trace ?? []) },
-                                    onShareTrace: { shareTrace(diagnostics.trace ?? []) },
-                                    onCopyToStatus: { appendTraceToStatus(diagnostics.trace ?? []) }
-                                )
-                            } else if !featuresDiagnosticsLoading {
-                                Text("No diagnostics yet. Tap Refresh.")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    } label: {
-                        Text("Diagnostics")
-                    }
-                    .padding(.horizontal)
-                }
-
                 Spacer(minLength: 10)
             }
             .padding(.bottom, 12)
@@ -14627,8 +14666,8 @@ struct ContentView: View {
                     await refreshPushState()
                     await fetchProfileSettings(includeNotifications: true)
                     await fetchLocalHealth()
+                    await fetchFeaturesDiagnostics()
                     if showDebug {
-                        await fetchFeaturesDiagnostics()
                         await refreshBillingDiagnostics(showSuccessMessage: false)
                     }
                 }
@@ -15332,6 +15371,21 @@ struct ContentView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
         }
+    }
+
+    private var bugReportSheetContent: some View {
+        BugReportComposerView(
+            description: $bugReportDescription,
+            isSubmitting: bugReportSubmitting,
+            message: bugReportMessage,
+            onDismiss: {
+                guard !bugReportSubmitting else { return }
+                showBugReportSheet = false
+            },
+            onSubmit: {
+                Task { await submitBugReport() }
+            }
+        )
     }
 
     @ViewBuilder
@@ -16168,12 +16222,17 @@ struct ContentView: View {
                                     VStack(alignment: .leading, spacing: 8) {
                                         Toggle("Show in-app debug panel", isOn: $showDebug)
                                             .font(.subheadline.weight(.semibold))
-                                        Text("Keeps the existing debug panel and in-app log available on Home without exposing it as the main top-right action.")
+                                        Text("Shows the raw feature log and launch toolkit inside Advanced Settings without exposing it as the main top-right action.")
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
                                     }
                                 } label: {
                                     Label("Developer Controls", systemImage: "ladybug")
+                                }
+
+                                if showDebug {
+                                    let debugFeaturesState = self.featureFetchState
+                                    DebugPanel(state: state, expandLog: $expandLog, featuresState: debugFeaturesState)
                                 }
 
                                 ConnectionSettingsSection(state: state, isExpanded: $showConnections)
@@ -16239,6 +16298,31 @@ struct ContentView: View {
                                             )
                                         } else if !featuresDiagnosticsLoading {
                                             Text("No diagnostics yet. Tap Refresh.")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        Divider()
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text("Report a bug")
+                                                    .font(.subheadline.weight(.semibold))
+                                                Text("Attach the current diagnostics bundle and a short description for review.")
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            Spacer()
+                                            if bugReportSubmitting {
+                                                ProgressView()
+                                                    .scaleEffect(0.8)
+                                            } else {
+                                                Button("Report Bug") {
+                                                    openBugReportComposer()
+                                                }
+                                                .buttonStyle(.borderedProminent)
+                                            }
+                                        }
+                                        if let bugReportMessage, !bugReportMessage.isEmpty {
+                                            Text(bugReportMessage)
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                         }
@@ -16653,6 +16737,9 @@ struct ContentView: View {
             primaryModalShell
         .sheet(isPresented: $showMissionSettingsSheet) {
             missionSettingsSheetContent
+        }
+        .sheet(isPresented: $showBugReportSheet) {
+            bugReportSheetContent
         }
         .alert("Delete account?", isPresented: $showDeleteAccountConfirmation) {
             Button("Delete Account", role: .destructive) {
@@ -20983,8 +21070,63 @@ struct ContentView: View {
                     }
                 }
             }
+    }
+}
+
+private struct BugReportComposerView: View {
+    @Binding var description: String
+    let isSubmitting: Bool
+    let message: String?
+    let onDismiss: () -> Void
+    let onSubmit: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Describe what went wrong. The current diagnostics bundle will be attached automatically.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                TextEditor(text: $description)
+                    .frame(minHeight: 180)
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.secondary.opacity(0.12))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+                    .disabled(isSubmitting)
+
+                if let message, !message.isEmpty {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding()
+            .navigationTitle("Report a Bug")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onDismiss)
+                        .disabled(isSubmitting)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if isSubmitting {
+                        ProgressView()
+                    } else {
+                        Button("Submit", action: onSubmit)
+                    }
+                }
+            }
         }
     }
+}
 
     private struct DebugPanel: View {
         @ObservedObject var state: AppState

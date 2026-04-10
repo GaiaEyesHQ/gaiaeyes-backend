@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
@@ -18,6 +19,7 @@ from services.personalization.health_context import canonicalize_tag_key, canoni
 
 
 router = APIRouter(prefix="/v1/profile", tags=["profile"])
+logger = logging.getLogger(__name__)
 
 _NOTIFICATION_FAMILY_DEFAULTS: Dict[str, bool] = {
     "geomagnetic": True,
@@ -253,6 +255,25 @@ def _supabase_admin_delete_issues() -> List[str]:
     return issues
 
 
+async def _send_bug_report_alert(payload: Dict[str, Any]) -> tuple[bool, Optional[str]]:
+    webhook_url = (settings.BUG_REPORT_ALERT_WEBHOOK_URL or "").strip()
+    if not webhook_url:
+        return False, None
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(webhook_url, json=payload)
+    except httpx.HTTPError as exc:
+        logger.warning("bug report alert webhook failed: %s", exc)
+        return False, str(exc)
+
+    if 200 <= response.status_code < 300:
+        return True, None
+
+    detail = response.text[:240].strip() or f"status {response.status_code}"
+    logger.warning("bug report alert webhook failed: %s", detail)
+    return False, detail
+
+
 async def _count_user_scoped_rows(conn, user_id: str) -> Dict[str, Any]:
     counts: Dict[str, int] = {}
     for schema, table in await _list_user_scoped_tables(conn):
@@ -323,6 +344,14 @@ class ProfilePreferencesIn(BaseModel):
 class GuideSeenIn(BaseModel):
     signature: str = Field(default="")
     viewed_at: Optional[datetime] = Field(default=None)
+
+
+class BugReportIn(BaseModel):
+    description: str = Field(default="", max_length=4000)
+    diagnostics_bundle: str = Field(default="", max_length=200000)
+    app_version: Optional[str] = Field(default=None, max_length=80)
+    device: Optional[str] = Field(default=None, max_length=160)
+    source: Optional[str] = Field(default="ios_app", max_length=40)
 
 
 def _normalize_zip(value: Optional[str]) -> Optional[str]:
@@ -813,6 +842,95 @@ async def profile_delete_account(
             "deleted_user_id": user_id,
             "rows_deleted": deletion_summary["rows_deleted"],
             "tables_touched": deletion_summary["tables_touched"],
+        },
+    }
+
+
+@router.post("/bug-report", dependencies=[Depends(require_write_auth)])
+async def profile_submit_bug_report(
+    payload: BugReportIn,
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    description = payload.description.strip()
+    diagnostics_bundle = payload.diagnostics_bundle.strip()
+    source = (payload.source or "ios_app").strip().lower() or "ios_app"
+
+    if not description:
+        raise HTTPException(status_code=400, detail="description required")
+    if not diagnostics_bundle:
+        raise HTTPException(status_code=400, detail="diagnostics bundle required")
+
+    columns = await _table_columns(conn, "app", "user_bug_reports")
+    required_columns = {"user_id", "source", "description", "diagnostics_bundle", "created_at"}
+    if not columns or not required_columns.issubset(set(columns)):
+        return {"ok": False, "error": "app.user_bug_reports table unavailable"}
+
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            insert into app.user_bug_reports (
+              user_id,
+              source,
+              description,
+              diagnostics_bundle,
+              app_version,
+              device
+            )
+            values (%s, %s, %s, %s, %s, %s)
+            returning id, created_at
+            """,
+            (
+                user_id,
+                source,
+                description,
+                diagnostics_bundle,
+                (payload.app_version or "").strip() or None,
+                (payload.device or "").strip() or None,
+            ),
+            prepare=False,
+        )
+        row = await cur.fetchone() or {}
+    await conn.commit()
+
+    report_id = str(row.get("id") or "")
+    created_at = row.get("created_at")
+    alert_sent, alert_error = await _send_bug_report_alert(
+        {
+            "event": "bug_report_submitted",
+            "report_id": report_id,
+            "user_id": user_id,
+            "source": source,
+            "description": description,
+            "app_version": (payload.app_version or "").strip() or None,
+            "device": (payload.device or "").strip() or None,
+            "created_at": created_at.isoformat() if isinstance(created_at, datetime) else None,
+            "has_diagnostics_bundle": True,
+        }
+    )
+
+    if "alert_sent" in columns or "alert_error" in columns:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                update app.user_bug_reports
+                   set alert_sent = %s,
+                       alert_error = %s
+                 where id = %s
+                """,
+                (bool(alert_sent), alert_error, report_id),
+                prepare=False,
+            )
+        await conn.commit()
+
+    return {
+        "ok": True,
+        "data": {
+            "report_id": report_id,
+            "created_at": created_at,
+            "alert_sent": bool(alert_sent),
+            "alert_error": alert_error,
         },
     }
 
