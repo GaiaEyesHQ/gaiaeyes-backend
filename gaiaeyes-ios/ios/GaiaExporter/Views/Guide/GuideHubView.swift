@@ -17,6 +17,7 @@ struct GuideHubView: View {
     let dailyCheckInError: String?
     let currentSymptomsSnapshot: CurrentSymptomsSnapshot?
     let possibleSymptomsSummary: String?
+    let possibleSymptomPhrases: [String]
     let earthscopeSummary: String?
     let earthscopeUpdatedAt: String?
     let supportItems: [DashboardSupportItem]
@@ -134,7 +135,7 @@ struct GuideHubView: View {
 
     private var earthscopeBody: String {
         if !influenceSections.isEmpty {
-            return "These are the strongest earth, space, and body influences standing out in today’s read."
+            return "These are the strongest earth, space, and body influences standing out in the current read."
         }
         if let summary = earthscopeSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty {
             return summary
@@ -164,12 +165,19 @@ struct GuideHubView: View {
         return nil
     }
 
+    private var symptomHighlights: [String] {
+        Array(possibleSymptomPhrases.prefix(6))
+    }
+
     private var guideTopLine: String {
         GuidePromptStyle.headerSupportLine(for: profile)
     }
 
-    private var possibleSymptomsBody: String {
-        let summary = guideOverviewSummary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    private var possibleSymptomsLead: String {
+        if !symptomHighlights.isEmpty {
+            return "Based on the current signal mix, these may be easier to notice."
+        }
+        let summary = guideText(guideOverviewSummary)
         if !summary.isEmpty {
             return summary
         }
@@ -203,6 +211,56 @@ struct GuideHubView: View {
         }
 
         return chosen
+    }
+
+    private var supportIntroText: String {
+        if let summary = guideText(currentSymptomsSnapshot?.semanticActiveLabelSummary).nilIfGuideEmpty {
+            return "Current body context: \(summary). Keep the next stretch a little gentler while this mix is up."
+        }
+        if let primary = curatedSupportItems.first {
+            return primary.message
+        }
+        return "Keep the basics steady and use a gentler pace if your body is asking for more margin."
+    }
+
+    private var supportSuggestionBullets: [String] {
+        var lines: [String] = []
+
+        if supportNeedsGrounding {
+            lines.append("Use a grounding reset before adding more input if your system feels buzzy or overloaded.")
+        }
+
+        for item in curatedSupportItems {
+            for action in item.actions ?? [] {
+                let cleaned = guideText(action)
+                guard !cleaned.isEmpty else { continue }
+                let normalized = normalizedSupportLine(cleaned)
+                if lines.contains(where: { normalizedSupportLine($0) == normalized }) {
+                    continue
+                }
+                lines.append(cleaned)
+                if lines.count >= 5 {
+                    return lines
+                }
+            }
+        }
+
+        return Array(lines.prefix(5))
+    }
+
+    private var supportNeedsGrounding: Bool {
+        let nervousSystemCodes: Set<String> = ["ANXIOUS", "WIRED", "PALPITATIONS", "RESTLESS_SLEEP", "DRAINED"]
+        if currentSymptomsSnapshot?.items.contains(where: { nervousSystemCodes.contains($0.symptomCode.uppercased()) }) == true {
+            return true
+        }
+        for item in curatedSupportItems {
+            let tokens = "\(item.key) \(item.title) \(item.message) \(item.badge ?? "")".lowercased()
+            if ["calm", "regulate", "nervous", "schumann", "kp", "bz", "sw", "solar", "geomag", "wired", "buzzy"]
+                .contains(where: { tokens.contains($0) }) {
+                return true
+            }
+        }
+        return false
     }
 
     private var dailyPollSupportText: String {
@@ -414,19 +472,15 @@ struct GuideHubView: View {
             guideType: profile.guideType,
             expression: .helpful,
             emphasis: .elevated,
-            eyebrow: "Why",
-            title: "Today's possible influences",
+            eyebrow: nil,
+            title: "Possible influences",
             message: earthscopeBody,
             badgeText: earthscopeBadge,
             secondaryActionTitle: "All drivers",
             secondaryAction: onOpenAllDrivers
         ) {
             if !influenceSections.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(influenceSections.enumerated()), id: \.offset) { _, section in
-                        influenceSection(title: section.title, items: section.items)
-                    }
-                }
+                influenceGrid
             } else if !whatMattersNow.isEmpty {
                 wrappingHighlightList(Array(whatMattersNow.prefix(3)))
             }
@@ -449,54 +503,22 @@ struct GuideHubView: View {
 
     private var supportCard: some View {
         let primary = curatedSupportItems.first
-        let additional = Array(curatedSupportItems.dropFirst())
 
         return GuideHubSectionCard(
             guideType: profile.guideType,
             expression: guideSupportExpression(for: primary?.tone),
             emphasis: guideSupportEmphasis(for: primary?.tone),
             eyebrow: "Support right now",
-            title: primary?.title ?? "A steadier lane for today",
-            message: primary?.message ?? "Keep the basics steady and use a gentler pace if your body is asking for more margin.",
+            title: primary?.title ?? "A steadier lane right now",
+            message: supportIntroText,
             badgeText: primary?.badge,
             primaryActionTitle: "Open Body context",
             primaryAction: onOpenCurrentSymptoms,
             secondaryActionTitle: "All drivers",
             secondaryAction: onOpenAllDrivers
         ) {
-            VStack(alignment: .leading, spacing: 10) {
-                if let primary, let actions = primary.actions, !actions.isEmpty {
-                    wrappingHighlightList(actions)
-                }
-                if !additional.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(additional) { item in
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack(spacing: 8) {
-                                    Text(item.title)
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(style.primaryText)
-                                    if let badge = item.badge, !badge.isEmpty {
-                                        Text(badge)
-                                            .font(.caption2.weight(.semibold))
-                                            .foregroundStyle(style.primaryText)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(style.accent.opacity(0.18))
-                                            .clipShape(Capsule())
-                                    }
-                                }
-                                Text(item.message)
-                                    .font(.caption)
-                                    .foregroundStyle(style.secondaryText)
-                                if let actions = item.actions, !actions.isEmpty {
-                                    wrappingHighlightList(Array(actions.prefix(2)))
-                                }
-                            }
-                            .padding(.top, 2)
-                        }
-                    }
-                }
+            if !supportSuggestionBullets.isEmpty {
+                guideSuggestionList(supportSuggestionBullets)
             }
         }
     }
@@ -541,43 +563,48 @@ struct GuideHubView: View {
     private var headerCard: some View {
         let headerStyle = GuidePromptStyle.style(for: profile.guideType, emphasis: .elevated)
 
-        return VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 16) {
                 GuideAvatarView(
                     guide: profile.guideType,
                     expression: .guide,
-                    size: .large,
+                    size: .medium,
                     emphasis: .elevated,
                     showBackingPlate: false,
                     showGlow: false,
-                    sizeMultiplier: 1.3,
+                    sizeMultiplier: 1.08,
                     animate: true
                 )
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Possible symptoms today")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundStyle(headerStyle.primaryText)
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .center, spacing: 12) {
+                        Text("Possible symptoms")
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(headerStyle.primaryText)
+                        Spacer(minLength: 0)
+                        Button(action: onOpenSettings) {
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(headerStyle.primaryText)
+                                .frame(width: 34, height: 34)
+                                .background(headerStyle.accent.opacity(0.22), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                     Text(guideTopLine)
-                        .font(.subheadline)
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(headerStyle.tertiaryText)
-                    Text(possibleSymptomsBody)
-                        .font(.headline)
+                    Text(possibleSymptomsLead)
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(headerStyle.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
+                    if !symptomHighlights.isEmpty {
+                        guideBulletGrid(symptomHighlights)
+                    }
                     Text("\(profile.guideType.title) • \(profile.mode.title) • \(profile.tone.title)")
                         .font(.caption)
                         .foregroundStyle(headerStyle.tertiaryText)
                 }
-                Spacer(minLength: 0)
-                Button(action: onOpenSettings) {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(headerStyle.primaryText)
-                        .frame(width: 38, height: 38)
-                        .background(headerStyle.accent.opacity(0.22), in: Circle())
-                }
-                .buttonStyle(.plain)
             }
         }
         .padding(18)
@@ -588,6 +615,33 @@ struct GuideHubView: View {
                 .stroke(headerStyle.cardBorder, lineWidth: 1)
         )
         .shadow(color: headerStyle.glow, radius: 16)
+    }
+
+    private var influenceGrid: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(minimum: 120), spacing: 10, alignment: .top),
+                GridItem(.flexible(minimum: 120), spacing: 10, alignment: .top),
+            ],
+            alignment: .leading,
+            spacing: 10
+        ) {
+            ForEach(Array(influenceSections.enumerated()), id: \.offset) { _, section in
+                influenceSectionCard(title: section.title, items: section.items)
+            }
+        }
+    }
+
+    private func influenceSectionCard(title: String, items: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(style.tertiaryText)
+            guideInfluenceBulletGrid(items)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(style.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func influenceSection(title: String, items: [String]) -> some View {
@@ -612,6 +666,103 @@ struct GuideHubView: View {
         }
     }
 
+    private func guideBulletGrid(_ items: [String]) -> some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(minimum: 120), spacing: 10, alignment: .top),
+                GridItem(.flexible(minimum: 120), spacing: 10, alignment: .top),
+            ],
+            alignment: .leading,
+            spacing: 10
+        ) {
+            ForEach(items, id: \.self) { item in
+                guideBulletTile(item)
+            }
+        }
+    }
+
+    private func guideInfluenceBulletGrid(_ items: [String]) -> some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(minimum: 110), spacing: 8, alignment: .top),
+                GridItem(.flexible(minimum: 110), spacing: 8, alignment: .top),
+            ],
+            alignment: .leading,
+            spacing: 8
+        ) {
+            ForEach(items, id: \.self) { item in
+                guideInfluenceBulletTile(item)
+            }
+        }
+    }
+
+    private func guideInfluenceBulletTile(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle()
+                .fill(style.accent.opacity(0.92))
+                .frame(width: 6, height: 6)
+                .padding(.top, 5)
+            Text(text)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(style.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .topLeading)
+        .background(style.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func guideBulletTile(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle()
+                .fill(style.accent.opacity(0.92))
+                .frame(width: 6, height: 6)
+                .padding(.top, 5)
+            Text(text)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(style.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: 54, alignment: .topLeading)
+        .background(style.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func guideSuggestionList(_ items: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(items, id: \.self) { item in
+                guideBulletRow(item, tone: .secondary)
+            }
+        }
+    }
+
+    private enum GuideBulletTone {
+        case primary
+        case secondary
+    }
+
+    private func guideBulletRow(_ text: String, tone: GuideBulletTone) -> some View {
+        let fill = tone == .primary ? style.accent.opacity(0.14) : style.accent.opacity(0.12)
+        return HStack(alignment: .top, spacing: 8) {
+            Circle()
+                .fill(style.accent.opacity(0.92))
+                .frame(width: 6, height: 6)
+                .padding(.top, 6)
+            Text(text)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(style.primaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
     private func wrappingHighlightList(_ items: [String]) -> some View {
         let rowStyle = GuidePromptStyle.style(for: profile.guideType, emphasis: .quiet)
         return VStack(alignment: .leading, spacing: 8) {
@@ -626,6 +777,13 @@ struct GuideHubView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    private func normalizedSupportLine(_ value: String) -> String {
+        guideText(value)
+            .lowercased()
+            .replacingOccurrences(of: "’", with: "'")
+            .replacingOccurrences(of: ".", with: "")
     }
 
     private func supportActionPrefix(for item: DashboardSupportItem) -> String? {
@@ -655,5 +813,12 @@ struct GuideHubView: View {
         let formatter = ISO8601DateFormatter()
         guard let date = formatter.date(from: iso) else { return nil }
         return DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .short)
+    }
+}
+
+private extension String {
+    var nilIfGuideEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

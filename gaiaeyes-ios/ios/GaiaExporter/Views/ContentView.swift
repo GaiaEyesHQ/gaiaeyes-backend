@@ -14836,23 +14836,17 @@ struct ContentView: View {
         let body: [String]
     }
 
+    private func guideText(_ value: String?) -> String {
+        value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
     private func guidePossibleSymptomsSummary(
         dashboard: DashboardPayload?,
-        currentSymptomsSnapshot: CurrentSymptomsSnapshot?
+        lunarInsights: LunarInsightPayload?
     ) -> String? {
-        let candidates = [
-            currentSymptomsSnapshot?.semanticActiveSummary,
-            dashboard?.drivers?.first(where: { !textOrEmpty($0.personalReason).isEmpty })?.personalReason,
-            dashboard?.todayRelevanceExplanations?.dailyBrief,
-            dashboard?.earthscopeSummary,
-        ]
-        for candidate in candidates {
-            let trimmed = textOrEmpty(candidate)
-            if !trimmed.isEmpty {
-                return trimmed
-            }
-        }
-        return nil
+        let phrases = guidePossibleSymptomPhrases(dashboard: dashboard, lunarInsights: lunarInsights)
+        guard !phrases.isEmpty else { return nil }
+        return "Possible symptoms right now: \(guideHumanList(Array(phrases.prefix(4)))) may be easier to notice."
     }
 
     private func guideInfluenceBuckets(
@@ -14878,11 +14872,87 @@ struct ContentView: View {
         }
 
         if body.isEmpty,
-           let summary = textOrEmpty(currentSymptomsSnapshot?.semanticActiveLabelSummary).nilIfTrimmedEmpty {
+           let summary = guideText(currentSymptomsSnapshot?.semanticActiveLabelSummary).nilIfTrimmedEmpty {
             body.append("Current symptoms — \(summary)")
         }
 
         return GuideInfluenceBuckets(earth: earth, space: space, body: body)
+    }
+
+    private func guidePossibleSymptomPhrases(
+        dashboard: DashboardPayload?,
+        lunarInsights: LunarInsightPayload?
+    ) -> [String] {
+        var phrases: [String] = []
+
+        for driver in Array((dashboard?.drivers ?? []).prefix(4)) {
+            for phrase in guidePossibleSymptomPhrases(for: driver) where !phrases.contains(phrase) {
+                phrases.append(phrase)
+                if phrases.count >= 5 {
+                    break
+                }
+            }
+            if phrases.count >= 5 {
+                break
+            }
+        }
+
+        if let lunarInsights,
+           let highlightWindow = guideText(lunarInsights.highlightWindow).nilIfTrimmedEmpty,
+           ["full", "new"].contains(highlightWindow.lowercased()) {
+            for phrase in ["Shortened sleep", "Headache", "Elevated pain"] where !phrases.contains(phrase) {
+                phrases.append(phrase)
+                if phrases.count >= 5 {
+                    break
+                }
+            }
+        }
+
+        return phrases
+    }
+
+    private func guidePossibleSymptomPhrases(for driver: DashboardDriverItem) -> [String] {
+        let tokens = "\(driver.key) \(driver.label ?? "")".lowercased()
+
+        if ["aqi", "air quality"].contains(where: { tokens.contains($0) }) {
+            return ["Sinus pressure", "Headache", "Brain fog", "Shorter breath"]
+        }
+        if ["pressure"].contains(where: { tokens.contains($0) }) {
+            return ["Sinus pressure", "Headache", "Elevated pain", "Light sensitivity"]
+        }
+        if ["humidity"].contains(where: { tokens.contains($0) }) {
+            return ["Headache", "Elevated pain", "Fatigue", "Sinus pressure"]
+        }
+        if ["allergen", "pollen", "grass", "tree", "weed", "mold"].contains(where: { tokens.contains($0) }) {
+            return ["Sinus pressure", "Headache", "Fatigue", "Irritation"]
+        }
+        if ["schumann", "ulf", "kp", "bz", "sw", "geomag", "solar", "magnetosphere"].contains(where: { tokens.contains($0) }) {
+            return ["Energy variance", "Heightened sensitivity", "Sleep shifts", "Focus drift"]
+        }
+        if ["temp", "temperature"].contains(where: { tokens.contains($0) }) {
+            return ["Elevated pain", "Fatigue", "Headache"]
+        }
+        if ["sleep"].contains(where: { tokens.contains($0) }) {
+            return ["Shortened sleep", "Fatigue", "Energy variance"]
+        }
+        if ["recovery", "stamina", "energy", "health", "pain"].contains(where: { tokens.contains($0) }) {
+            return ["Fatigue", "Elevated pain", "Energy variance"]
+        }
+        return []
+    }
+
+    private func guideHumanList(_ items: [String]) -> String {
+        switch items.count {
+        case 0:
+            return ""
+        case 1:
+            return items[0]
+        case 2:
+            return "\(items[0]) or \(items[1])"
+        default:
+            let head = items.dropLast().joined(separator: ", ")
+            return "\(head), or \(items.last ?? "")"
+        }
     }
 
     private func guideInfluenceDomain(for driver: DashboardDriverItem) -> GuideInfluenceDomain? {
@@ -14903,11 +14973,11 @@ struct ContentView: View {
     }
 
     private func guideInfluenceLine(for driver: DashboardDriverItem) -> String? {
-        let label = textOrEmpty(driver.label).nilIfTrimmedEmpty ?? textOrEmpty(driver.key).nilIfTrimmedEmpty
+        let label = guideText(driver.label).nilIfTrimmedEmpty ?? guideText(driver.key).nilIfTrimmedEmpty
         guard let label else { return nil }
-        let badge = textOrEmpty(driver.severity).nilIfTrimmedEmpty
-            ?? textOrEmpty(driver.state).nilIfTrimmedEmpty
-            ?? textOrEmpty(driver.roleLabel).nilIfTrimmedEmpty
+        let badge = guideText(driver.severity).nilIfTrimmedEmpty
+            ?? guideText(driver.state).nilIfTrimmedEmpty
+            ?? guideText(driver.roleLabel).nilIfTrimmedEmpty
         if let badge {
             return "\(label) — \(badge)"
         }
@@ -15409,7 +15479,7 @@ struct ContentView: View {
         title: String,
         summary: String,
         isExpanded: Binding<Bool>,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         DisclosureGroup(isExpanded: isExpanded) {
             VStack(alignment: .leading, spacing: 14) {
@@ -16320,7 +16390,11 @@ struct ContentView: View {
                 currentSymptomsSnapshot: currentSymptomsSnapshot,
                 possibleSymptomsSummary: guidePossibleSymptomsSummary(
                     dashboard: dashboardPayload,
-                    currentSymptomsSnapshot: currentSymptomsSnapshot
+                    lunarInsights: lunarInsights
+                ),
+                possibleSymptomPhrases: guidePossibleSymptomPhrases(
+                    dashboard: dashboardPayload,
+                    lunarInsights: lunarInsights
                 ),
                 earthscopeSummary: guideEarthscopeSummary,
                 earthscopeUpdatedAt: guideEarthscopeUpdatedAt,

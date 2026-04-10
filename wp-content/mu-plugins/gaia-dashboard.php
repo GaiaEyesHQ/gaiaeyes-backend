@@ -229,6 +229,15 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__driver-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#1a2434;color:#cdd9ef;font-size:12px}
         .gaia-dashboard__guide-stack{display:grid;grid-template-columns:1fr;gap:12px}
         @media(min-width:960px){.gaia-dashboard__guide-stack{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        .gaia-dashboard__guide-bullet-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
+        @media(max-width:520px){.gaia-dashboard__guide-bullet-grid{grid-template-columns:1fr;}}
+        .gaia-dashboard__guide-bullet-grid--compact{gap:8px}
+        .gaia-dashboard__guide-bullet{padding:10px 12px;border-radius:12px;background:rgba(62,177,255,.12);border:1px solid rgba(62,177,255,.12);font-size:13px;font-weight:600;line-height:1.45;color:#e6f2ff;min-width:0}
+        .gaia-dashboard__guide-influence-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
+        @media(max-width:640px){.gaia-dashboard__guide-influence-grid{grid-template-columns:1fr;}}
+        .gaia-dashboard__guide-influence-card{padding:12px;border-radius:14px;background:#151d2a;border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:8px;min-width:0}
+        .gaia-dashboard__guide-bullet-list{display:flex;flex-direction:column;gap:8px;min-width:0}
+        .gaia-dashboard__guide-bullet-row{padding:10px 12px;border-radius:12px;background:rgba(62,177,255,.10);font-size:14px;font-weight:600;line-height:1.5;color:#e6f2ff;white-space:normal;overflow-wrap:anywhere}
         .gaia-dashboard__poll-choices{display:flex;flex-wrap:wrap;gap:8px}
         .gaia-dashboard__poll-choice{border:1px solid rgba(255,255,255,.08);border-radius:999px;background:#172130;color:#e8edf7;padding:8px 14px;cursor:pointer;font-weight:600}
         .gaia-dashboard__poll-choice.is-selected{background:#224064;border-color:rgba(156,192,255,.38)}

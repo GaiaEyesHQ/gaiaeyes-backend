@@ -990,6 +990,219 @@
     return sections.summary || sectionDefaults.summary;
   };
 
+  const guidePossibleSymptomPhrasesForDriver = (driver) => {
+    const tokens = `${textOrEmpty(driver && driver.key)} ${textOrEmpty(driver && driver.label)}`.toLowerCase();
+    if (!tokens) return [];
+    if (tokens.includes("aqi") || tokens.includes("air quality")) {
+      return ["Sinus pressure", "Headache", "Brain fog", "Shorter breath"];
+    }
+    if (tokens.includes("pressure")) {
+      return ["Sinus pressure", "Headache", "Elevated pain", "Light sensitivity"];
+    }
+    if (tokens.includes("humidity")) {
+      return ["Headache", "Elevated pain", "Fatigue", "Sinus pressure"];
+    }
+    if (["allergen", "pollen", "grass", "tree", "weed", "mold"].some((term) => tokens.includes(term))) {
+      return ["Sinus pressure", "Headache", "Fatigue", "Irritation"];
+    }
+    if (["schumann", "ulf", "kp", "bz", "sw", "geomag", "solar", "magnetosphere"].some((term) => tokens.includes(term))) {
+      return ["Energy variance", "Heightened sensitivity", "Sleep shifts", "Focus drift"];
+    }
+    if (tokens.includes("temp") || tokens.includes("temperature")) {
+      return ["Elevated pain", "Fatigue", "Headache"];
+    }
+    if (tokens.includes("sleep")) {
+      return ["Shortened sleep", "Fatigue", "Energy variance"];
+    }
+    if (["recovery", "stamina", "energy", "health", "pain"].some((term) => tokens.includes(term))) {
+      return ["Fatigue", "Elevated pain", "Energy variance"];
+    }
+    return [];
+  };
+
+  const guidePossibleSymptoms = (state) => {
+    const phrases = [];
+    maybeArray(state && state.dashboard && state.dashboard.drivers)
+      .slice(0, 4)
+      .forEach((driver) => {
+        guidePossibleSymptomPhrasesForDriver(driver).forEach((phrase) => {
+          if (!phrases.includes(phrase) && phrases.length < 6) phrases.push(phrase);
+        });
+      });
+
+    const lunar = maybeObject(state && state.member && state.member.lunar);
+    const highlightWindow = textOrEmpty(lunar && lunar.highlight_window).toLowerCase();
+    if (highlightWindow === "full" || highlightWindow === "new") {
+      ["Shortened sleep", "Headache", "Elevated pain"].forEach((phrase) => {
+        if (!phrases.includes(phrase) && phrases.length < 6) phrases.push(phrase);
+      });
+    }
+
+    return phrases;
+  };
+
+  const guideHumanList = (items) => {
+    const values = maybeArray(items).filter(Boolean);
+    if (!values.length) return "";
+    if (values.length === 1) return values[0];
+    if (values.length === 2) return `${values[0]} or ${values[1]}`;
+    return `${values.slice(0, -1).join(", ")}, or ${values[values.length - 1]}`;
+  };
+
+  const guidePossibleSymptomsSummary = (state) => {
+    const phrases = guidePossibleSymptoms(state);
+    if (!phrases.length) return "";
+    return `Possible symptoms right now: ${guideHumanList(phrases.slice(0, 4))} may be easier to notice.`;
+  };
+
+  const guideInfluenceDomain = (driver) => {
+    const tokens = `${textOrEmpty(driver && driver.key)} ${textOrEmpty(driver && driver.label)}`.toLowerCase();
+    if (!tokens) return "";
+    if (["schumann", "kp", "bz", "sw", "solar", "geomag", "aurora", "magnetosphere", "space", "resonance"].some((term) => tokens.includes(term))) {
+      return "space";
+    }
+    if (["symptom", "body", "sleep", "recovery", "fatigue", "pain", "mood", "energy", "stamina", "health"].some((term) => tokens.includes(term))) {
+      return "body";
+    }
+    if (["humidity", "allergen", "pollen", "grass", "tree", "weed", "mold", "aqi", "air", "pressure", "temp", "weather", "local"].some((term) => tokens.includes(term))) {
+      return "earth";
+    }
+    return "";
+  };
+
+  const guideInfluenceLine = (driver) => {
+    const label = textOrEmpty(driver && (driver.label || driver.key));
+    if (!label) return "";
+    const badge = textOrEmpty(driver && (driver.severity || driver.state || driver.roleLabel || driver.role_label));
+    return badge ? `${label} — ${badge}` : label;
+  };
+
+  const guideInfluenceBuckets = (state) => {
+    const buckets = { earth: [], space: [], body: [] };
+    maybeArray(state && state.dashboard && state.dashboard.drivers).forEach((driver) => {
+      const domain = guideInfluenceDomain(driver);
+      const line = guideInfluenceLine(driver);
+      if (!domain || !line) return;
+      if (!buckets[domain].includes(line) && buckets[domain].length < 3) {
+        buckets[domain].push(line);
+      }
+    });
+    const currentSymptoms = extractCurrentSymptoms(state && state.member && state.member.currentSymptoms);
+    const semanticLabels = maybeArray(
+      currentSymptoms && currentSymptoms.voiceSemantic && currentSymptoms.voiceSemantic.facts && currentSymptoms.voiceSemantic.facts.activeLabels
+    )
+      .map((item) => textOrEmpty(item))
+      .filter(Boolean);
+    const fallbackLabels = maybeArray(currentSymptoms && currentSymptoms.items)
+      .map((item) => textOrEmpty(item && item.label))
+      .filter(Boolean);
+    const labels = semanticLabels.length ? semanticLabels : fallbackLabels;
+    if (!buckets.body.length && labels.length) {
+      buckets.body.push(`Current symptoms — ${labels.slice(0, 2).join(" • ")}`);
+    }
+    return buckets;
+  };
+
+  const currentSymptomsLabelSummary = (state) => {
+    const currentSymptoms = extractCurrentSymptoms(state && state.member && state.member.currentSymptoms);
+    const semanticLabels = maybeArray(
+      currentSymptoms && currentSymptoms.voiceSemantic && currentSymptoms.voiceSemantic.facts && currentSymptoms.voiceSemantic.facts.activeLabels
+    )
+      .map((item) => textOrEmpty(item))
+      .filter(Boolean);
+    if (semanticLabels.length) return semanticLabels.slice(0, 2).join(" • ");
+    const fallback = maybeArray(currentSymptoms && currentSymptoms.items)
+      .map((item) => textOrEmpty(item && item.label))
+      .filter(Boolean);
+    return fallback.length ? fallback.slice(0, 2).join(" • ") : "";
+  };
+
+  const normalizeGuideSupportLine = (value) =>
+    textOrEmpty(value)
+      .toLowerCase()
+      .replace(/[.’]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const guideSupportNeedsGrounding = (state, items) => {
+    const codes = new Set(
+      maybeArray(extractCurrentSymptoms(state && state.member && state.member.currentSymptoms)?.items)
+        .map((item) => normalizeSymptomCode(item && (item.symptomCode || item.symptom_code)))
+        .filter(Boolean)
+    );
+    const nervousSystemCodes = new Set(["ANXIOUS", "WIRED", "PALPITATIONS", "RESTLESS_SLEEP", "DRAINED"]);
+    for (const code of codes) {
+      if (nervousSystemCodes.has(code)) return true;
+    }
+    return maybeArray(items).some((item) => {
+      const tokens = `${textOrEmpty(item && item.key)} ${textOrEmpty(item && item.title)} ${textOrEmpty(item && item.message)} ${textOrEmpty(item && item.badge)}`.toLowerCase();
+      return ["calm", "regulate", "nervous", "schumann", "kp", "bz", "sw", "solar", "geomag", "wired", "buzzy"].some((term) => tokens.includes(term));
+    });
+  };
+
+  const guideSupportActions = (state, items) => {
+    const lines = [];
+    if (guideSupportNeedsGrounding(state, items)) {
+      lines.push("Use a grounding reset before adding more input if your system feels buzzy or overloaded.");
+    }
+    maybeArray(items).forEach((item) => {
+      maybeArray(item && item.actions).forEach((action) => {
+        const cleaned = textOrEmpty(action);
+        if (!cleaned) return;
+        const normalized = normalizeGuideSupportLine(cleaned);
+        if (lines.some((line) => normalizeGuideSupportLine(line) === normalized)) return;
+        lines.push(cleaned);
+      });
+    });
+    return lines.slice(0, 5);
+  };
+
+  const guideSupportIntro = (state, items) => {
+    const summary = currentSymptomsLabelSummary(state);
+    if (summary) {
+      return `Current body context: ${summary}. Keep the next stretch a little gentler while this mix is up.`;
+    }
+    return textOrEmpty(items && items[0] && items[0].message) || "Keep following the body read and the current driver stack.";
+  };
+
+  const renderGuideInfluenceCard = (state) => {
+    const buckets = guideInfluenceBuckets(state);
+    const groups = [
+      { title: "Earth influences", items: buckets.earth },
+      { title: "Space influences", items: buckets.space },
+      { title: "Body influences", items: buckets.body },
+    ].filter((group) => group.items.length);
+    if (!groups.length) return "";
+    return `
+      <article class="gaia-dashboard__card">
+        <div class="gaia-dashboard__card-title-row">
+          <div>
+            <span class="gaia-dashboard__eyebrow">Possible influences</span>
+            <h4 class="gaia-dashboard__card-title">What is feeding the current read</h4>
+          </div>
+        </div>
+        <p class="gaia-dashboard__card-copy">These are the strongest earth, space, and body signals in the current read.</p>
+        <div class="gaia-dashboard__guide-influence-grid">
+          ${groups
+            .map(
+              (group) => `
+                <div class="gaia-dashboard__guide-influence-card">
+                  <div class="gaia-dashboard__mini-title">${esc(group.title)}</div>
+                  <div class="gaia-dashboard__guide-bullet-grid gaia-dashboard__guide-bullet-grid--compact">
+                    ${group.items.map((item) => `<div class="gaia-dashboard__guide-bullet-row">${esc(item)}</div>`).join("")}
+                  </div>
+                </div>
+              `
+            )
+            .join("")}
+        </div>
+        <div class="gaia-dashboard__section-actions">
+          <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="drivers">Open Drivers</button>
+        </div>
+      </article>
+    `;
+  };
+
   const normalizeSymptomCode = (value) =>
     String(value || "")
       .trim()
@@ -2988,6 +3201,7 @@
   const renderGuideSupportCard = (state) => {
     const items = supportItemsFromDashboard(state && state.dashboard);
     if (!items.length) return "";
+    const bullets = guideSupportActions(state, items);
     return `
       <article class="gaia-dashboard__card">
         <div class="gaia-dashboard__card-title-row">
@@ -3001,32 +3215,14 @@
               : ""
           }
         </div>
-        <div class="gaia-dashboard__support-list">
-          ${items
-            .map(
-              (item, index) => `
-                <div class="gaia-dashboard__support-card">
-                  <div class="gaia-dashboard__support-card-head">
-                    <div class="gaia-dashboard__support-card-title">${esc(textOrEmpty(item && item.title) || `Support note ${index + 1}`)}</div>
-                    ${
-                      textOrEmpty(item && item.badge)
-                        ? `<span class="${pillClass(textOrEmpty(item && item.tone) || "watch")}">${esc(item.badge)}</span>`
-                        : ""
-                    }
-                  </div>
-                  <div class="gaia-dashboard__support-card-copy">${esc(textOrEmpty(item && item.message) || "Keep following the body read and the current driver stack.")}</div>
-                  ${
-                    maybeArray(item && item.actions).length
-                      ? `<div class="gaia-dashboard__support-actions">${maybeArray(item.actions)
-                          .map((action) => `<span class="gaia-dashboard__meta-chip">${esc(action)}</span>`)
-                          .join("")}</div>`
-                      : ""
-                  }
-                </div>
-              `
-            )
-            .join("")}
-        </div>
+        <p class="gaia-dashboard__card-copy">${esc(guideSupportIntro(state, items))}</p>
+        ${
+          bullets.length
+            ? `<div class="gaia-dashboard__guide-bullet-list">${bullets
+                .map((item) => `<div class="gaia-dashboard__guide-bullet-row">${esc(item)}</div>`)
+                .join("")}</div>`
+            : ""
+        }
         <div class="gaia-dashboard__section-actions">
           <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="body">Open Body</button>
           <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="drivers">Open Drivers</button>
@@ -4010,33 +4206,41 @@
     const currentSymptoms = extractCurrentSymptoms(state.member.currentSymptoms);
     const followUp = firstPendingFollowUp(currentSymptoms);
     const poll = derivedDailyPoll(state);
-    const earthscopeSummary = resolveEarthscopeSummary(
-      state.dashboard.earthscopeSummary,
-      state.dashboard.memberPost || state.dashboard.publicPost || null,
-      state.dashboard.driversCompact || []
-    );
+    const possibleSymptoms = guidePossibleSymptoms(state);
     return `
       <section class="gaia-dashboard__section${state.ui.activeTab === "guide" ? " is-active" : ""}" data-section="guide">
         <div class="gaia-dashboard__section-head">
           <div class="gaia-dashboard__section-copy">
             <h3 class="gaia-dashboard__section-title">Guide</h3>
-            <p class="gaia-dashboard__section-subtitle">A lighter orientation layer built from today’s dashboard read, your body context, and the help center.</p>
+            <p class="gaia-dashboard__section-subtitle">A lighter orientation layer built from the current dashboard read, your body context, and the help center.</p>
           </div>
         </div>
         <div class="gaia-dashboard__guide-stack">
           <article class="gaia-dashboard__card">
             <div class="gaia-dashboard__card-title-row">
               <div>
-                <span class="gaia-dashboard__eyebrow">Today’s translated read</span>
-                <h4 class="gaia-dashboard__card-title">Guide snapshot</h4>
+                <span class="gaia-dashboard__eyebrow">Possible symptoms</span>
+                <h4 class="gaia-dashboard__card-title">Quick scan</h4>
               </div>
             </div>
-            <p class="gaia-dashboard__card-copy">${esc(sentence(earthscopeSummary, "Guide is still shaping today’s summary."))}</p>
+            <p class="gaia-dashboard__card-copy">${
+              possibleSymptoms.length
+                ? "Based on the current signal mix, these may be easier to notice."
+                : "Possible symptoms will sharpen as the active driver mix gets clearer."
+            }</p>
+            ${
+              possibleSymptoms.length
+                ? `<div class="gaia-dashboard__guide-bullet-grid">${possibleSymptoms
+                    .map((item) => `<div class="gaia-dashboard__guide-bullet">${esc(item)}</div>`)
+                    .join("")}</div>`
+                : ""
+            }
             <div class="gaia-dashboard__section-actions">
               <button class="gaia-dashboard__btn gaia-dashboard__btn--quiet" type="button" data-tab-target="drivers">Open Drivers</button>
               <a class="gaia-dashboard__btn gaia-dashboard__btn--quiet" href="${esc(supportUrl)}">Support</a>
             </div>
           </article>
+          ${renderGuideInfluenceCard(state)}
           ${renderDailyCheckInCard(state, "guide")}
           ${renderGuideSupportCard(state)}
           <article class="gaia-dashboard__card">

@@ -2671,7 +2671,7 @@ def _symptom_support_item(symptoms: Optional[Dict[str, Any]]) -> Optional[Dict[s
             tone="watch",
             badge="Regulate",
             actions=[
-                "Try a slower breathing break or a quieter environment before the edge stacks up.",
+                "Try a grounding check-in or slower breathing break before the edge stacks up.",
                 "Reduce extra stimulation for a bit if your system feels buzzy.",
             ],
             visual_key="calm",
@@ -2718,7 +2718,7 @@ def _profile_support_item(
             tone="watch",
             badge="Regulate",
             actions=[
-                "Try 5-10 minutes of slower breathing or a quieter environment before adding more input.",
+                "Try 5-10 minutes of grounding or slower breathing before adding more input.",
                 "Keep effort steadier than spiky if your system feels buzzy or overreactive.",
             ],
             visual_key="calm",
