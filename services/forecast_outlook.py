@@ -1845,15 +1845,40 @@ def build_window_outlook(
         bucket["refs"].append({"pattern_row": dict(row), "driver": dict(driver), "score": score})
 
     driver_scores: dict[str, float] = defaultdict(float)
+    for payload in domain_scores.values():
+        for ref in payload.get("refs") or []:
+            driver_key = str(ref["driver"].get("key") or "")
+            driver_scores[driver_key] += float(ref.get("score") or 0.0)
+
+    top_drivers = sorted(
+        drivers,
+        key=lambda item: (
+            -driver_scores.get(str(item.get("key") or ""), 0.0),
+            -SEVERITY_RANK.get(str(item.get("severity")), 0),
+            int(DRIVER_ORDER.get(str(item.get("key")), 999)),
+        ),
+    )[:3]
+    visible_driver_keys = {
+        str(item.get("key") or "").strip()
+        for item in top_drivers
+        if str(item.get("key") or "").strip()
+    }
+
     likely_domains: list[dict[str, Any]] = []
     for domain_key, payload in domain_scores.items():
         refs = sorted(payload["refs"], key=lambda item: item["score"], reverse=True)
-        top_ref = refs[0]
+        if not refs:
+            continue
+        visible_refs = [
+            ref for ref in refs if str(ref["driver"].get("key") or "").strip() in visible_driver_keys
+        ]
+        if visible_driver_keys and not visible_refs:
+            continue
+        chosen_refs = visible_refs or refs
+        top_ref = chosen_refs[0]
         pattern_row = top_ref["pattern_row"]
         driver = top_ref["driver"]
-        for ref in refs:
-            driver_key = str(ref["driver"].get("key") or "")
-            driver_scores[driver_key] += float(ref.get("score") or 0.0)
+        domain_score = sum(float(ref.get("score") or 0.0) for ref in chosen_refs) or float(payload["score"] or 0.0)
         explanation = (
             f"{driver['detail']} Over the next {window_label}, {_history_sentence(str(driver.get('label') or 'This signal'), pattern_row)}."
         )
@@ -1864,9 +1889,9 @@ def build_window_outlook(
             {
                 "key": domain_key,
                 "label": DOMAIN_LABELS[domain_key],
-                "likelihood": _likelihood_label(float(payload["score"] or 0.0)),
+                "likelihood": _likelihood_label(domain_score),
                 "current_gauge": current_gauge,
-                "score": round(float(payload["score"] or 0.0), 2),
+                "score": round(domain_score, 2),
                 "explanation": explanation,
                 "top_driver_key": driver.get("key"),
                 "top_driver_label": driver.get("label"),
@@ -1880,15 +1905,6 @@ def build_window_outlook(
         )
     )
     likely_domains = likely_domains[:4]
-
-    top_drivers = sorted(
-        drivers,
-        key=lambda item: (
-            -driver_scores.get(str(item.get("key") or ""), 0.0),
-            -SEVERITY_RANK.get(str(item.get("severity")), 0),
-            int(DRIVER_ORDER.get(str(item.get("key")), 999)),
-        ),
-    )[:3]
     top_domain = likely_domains[0] if likely_domains else None
     if top_domain and top_drivers:
         summary = (

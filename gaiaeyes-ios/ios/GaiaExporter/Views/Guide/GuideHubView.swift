@@ -808,6 +808,10 @@ struct GuideHubView: View {
         return raw
     }
 
+    private func guideText(_ value: String?) -> String {
+        value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
     private func asofText(_ iso: String?) -> String? {
         guard let iso else { return nil }
         let formatter = ISO8601DateFormatter()

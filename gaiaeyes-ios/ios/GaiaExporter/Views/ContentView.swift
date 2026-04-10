@@ -11175,6 +11175,14 @@ struct ContentView: View {
             return (driver.severity ?? "watch").capitalized
         }
 
+        private func driverSeverityValue(_ driver: UserOutlookDriver) -> String {
+            let severityText = (driver.severity ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !severityText.isEmpty {
+                return severityText.capitalized
+            }
+            return driverValue(driver)
+        }
+
         private func availabilityText(_ raw: String) -> String {
             switch raw {
             case "next_24h":
@@ -11364,6 +11372,19 @@ struct ContentView: View {
         }
 
         @ViewBuilder
+        private func driverFactChips(_ drivers: [UserOutlookDriver], primary: Bool = false) -> some View {
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                ForEach(drivers) { driver in
+                    LocalConditionsValueChip(
+                        label: driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized,
+                        value: primary ? driverSeverityValue(driver) : driverValue(driver),
+                        tint: GaugePalette.zoneColor(primary ? (driver.severity ?? "watch") : driver.severity)
+                    )
+                }
+            }
+        }
+
+        @ViewBuilder
         private func domainCard(_ domain: UserOutlookDomain, window: UserOutlookWindow, primary: UserOutlookDriver?) -> some View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
@@ -11377,11 +11398,12 @@ struct ContentView: View {
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 }
-                if let explanation = domainExplanation(domain, window: window, primary: primary) {
-                    Text(explanation)
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                if let topDriver = (domain.topDriverLabel ?? domain.topDriverKey)?.nilIfTrimmedEmpty {
+                    LocalConditionsValueChip(
+                        label: "Linked signal",
+                        value: topDriver,
+                        tint: GaugePalette.zoneColor(domain.likelihood)
+                    )
                 }
             }
             .padding(12)
@@ -11400,35 +11422,15 @@ struct ContentView: View {
                 let drivers = visibleDrivers(window.topDrivers ?? [])
                 let domains = window.likelyElevatedDomains ?? []
                 let primary = drivers.first
-                let summary = refinedText(window.semanticSummary)
-                let domainsSummary = refinedText(window.semanticDomainsSummary)
-                let supportLine = refinedText(window.semanticSupportSummary)
 
                 LocalConditionsSurfaceCard(title: windowTitle(window.windowHours), icon: "sparkles.rectangle.stack.fill") {
                     VStack(alignment: .leading, spacing: 12) {
-                        if let summary {
-                            Text(summary)
-                                .font(.body)
-                        }
-
                         if let primary {
                             VStack(alignment: .leading, spacing: 8) {
-                                HStack(alignment: .top, spacing: 8) {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text("Main thing to watch")
-                                            .font(.footnote.weight(.semibold))
-                                            .foregroundColor(.secondary)
-                                        Text(primary.label ?? primary.key.replacingOccurrences(of: "_", with: " ").capitalized)
-                                            .font(.headline)
-                                    }
-                                    Spacer()
-                                    StatusPill((primary.severity ?? "watch").capitalized, severity: severity(primary.severity))
-                                }
-                                if let detail = leadingDetail(for: window, primary: primary) {
-                                    Text(detail)
-                                        .font(.footnote)
-                                        .foregroundColor(.secondary)
-                                }
+                                Text("Main thing to watch")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundColor(.secondary)
+                                driverFactChips([primary], primary: true)
                             }
                         }
 
@@ -11437,17 +11439,7 @@ struct ContentView: View {
                                 Text("Also contributing")
                                     .font(.footnote.weight(.semibold))
                                     .foregroundColor(.secondary)
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 10) {
-                                        ForEach(Array(drivers.dropFirst())) { driver in
-                                            LocalConditionsValueChip(
-                                                label: driver.label ?? driver.key.capitalized,
-                                                value: driverValue(driver),
-                                                tint: GaugePalette.zoneColor(driver.severity)
-                                            )
-                                        }
-                                    }
-                                }
+                                driverFactChips(Array(drivers.dropFirst()))
                             }
                         }
 
@@ -11456,39 +11448,12 @@ struct ContentView: View {
                                 Text("Most likely to show up in")
                                     .font(.footnote.weight(.semibold))
                                     .foregroundColor(.secondary)
-                                if let domainsSummary {
-                                    Text(domainsSummary)
-                                        .font(.footnote)
-                                        .foregroundColor(.secondary)
-                                }
                                 LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
                                     ForEach(domains) { domain in
                                         domainCard(domain, window: window, primary: primary)
                                     }
                                 }
                             }
-                        }
-
-                        if let supportLine {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("A steadier way through it")
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundColor(.secondary)
-                                Text(supportLine)
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                            }
-                            .padding(.top, 2)
-                        }
-
-                        if let draft = shareDraft(for: window) {
-                            Button {
-                                shareDraft = draft
-                            } label: {
-                                Label(sharePrompt(for: draft.card.accentLevel), systemImage: "square.and.arrow.up")
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
                         }
                     }
                 }
@@ -11504,34 +11469,20 @@ struct ContentView: View {
                 ScrollView {
                     LazyVStack(spacing: 16) {
                         LocalConditionsSurfaceCard(title: "Near-Future Outlook", icon: "calendar.badge.clock") {
-                            HStack(alignment: .top, spacing: 12) {
+                            HStack(alignment: .center, spacing: 12) {
                                 VStack(alignment: .leading, spacing: 8) {
                                     if let updated = formatUpdate(payload?.generatedAt) {
                                         Text("Updated \(updated)")
                                             .font(.footnote)
                                             .foregroundColor(.secondary)
                                     }
-                                    if let availability = payload?.semanticAvailabilitySummary, !availability.isEmpty {
-                                        Text(availability)
-                                            .font(.footnote)
-                                            .foregroundColor(.secondary)
-                                    }
                                 }
                                 Spacer()
                                 if isLoading { ProgressView().scaleEffect(0.85) }
-                                VStack(alignment: .trailing, spacing: 8) {
+                                HStack(spacing: 8) {
                                     Button("Refresh") { onRefresh() }
                                         .buttonStyle(.bordered)
                                         .controlSize(.small)
-                                    if let draft = shareDraft(for: payload?.next24h ?? payload?.next72h ?? payload?.next7d) {
-                                        Button {
-                                            shareDraft = draft
-                                        } label: {
-                                            Label(sharePrompt(for: draft.card.accentLevel), systemImage: "square.and.arrow.up")
-                                        }
-                                        .buttonStyle(.bordered)
-                                        .controlSize(.small)
-                                    }
                                     Button("Drivers") { onOpenAllDrivers() }
                                         .buttonStyle(.bordered)
                                         .controlSize(.small)

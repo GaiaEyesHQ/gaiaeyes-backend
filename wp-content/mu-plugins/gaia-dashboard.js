@@ -3480,6 +3480,12 @@
     const primary = drivers[0] || null;
     const supporting = drivers.slice(1, 4).filter(isOutlookHealthRelevantDriver);
     const domains = maybeArray(window.likelyElevatedDomains || window.likely_elevated_domains).slice(0, 3);
+    const driverStatCard = (driver, primaryCard = false) => `
+      <div class="gaia-dashboard__outlook-signal-card">
+        <div class="gaia-dashboard__outlook-signal-label">${esc(driver.label || driver.key || "Driver")}</div>
+        <div class="gaia-dashboard__outlook-signal-value">${esc(primaryCard ? (driver.severity || "Watch") : formatDriverValue(driver))}</div>
+      </div>
+    `;
 
     return `
       <article class="gaia-dashboard__card">
@@ -3487,14 +3493,14 @@
           <h4 class="gaia-dashboard__card-title">${esc(label)}</h4>
           ${primary ? `<span class="${pillClass(primary.severity || "watch")}">${esc(primary.severity || "Watch")}</span>` : ""}
         </div>
-        <p class="gaia-dashboard__card-copy">${esc(sentence(window.summary, "No clear outlook note yet."))}</p>
         ${
           primary
             ? `
-              <div class="gaia-dashboard__list-row">
-                <span class="gaia-dashboard__eyebrow">Main thing to watch</span>
-                <strong>${esc(primary.label || primary.key || "Driver")}</strong>
-                <p>${esc(sentence(primary.detail, "This looks most relevant in this window."))}</p>
+              <div>
+                <div class="gaia-dashboard__mini-title">Main thing to watch</div>
+                <div class="gaia-dashboard__outlook-signal-grid">
+                  ${driverStatCard(primary, true)}
+                </div>
               </div>
             `
             : ""
@@ -3504,14 +3510,8 @@
             ? `
               <div>
                 <div class="gaia-dashboard__mini-title">Also contributing</div>
-                <div class="gaia-dashboard__meta-row">
-                  ${supporting
-                    .map(
-                      (driver) => `
-                        <span class="gaia-dashboard__meta-chip">${esc(driver.label || driver.key || "Driver")}</span>
-                      `
-                    )
-                    .join("")}
+                <div class="gaia-dashboard__outlook-signal-grid">
+                  ${supporting.map((driver) => driverStatCard(driver, false)).join("")}
                 </div>
               </div>
             `
@@ -3531,22 +3531,17 @@
                             <strong>${esc(domain.label || titleFromKey(domain.key))}</strong>
                             <span class="${pillClass(domain.likelihood || "watch")}">${esc(domain.likelihood || "Watch")}</span>
                           </div>
-                          <p>${esc(truncate(domain.explanation || "", 108) || "This domain may be easier to notice in this window.")}</p>
+                          ${domain.currentGauge != null ? `<p>${esc(`Gauge now ${Math.round(Number(domain.currentGauge))}`)}</p>` : ""}
+                          ${
+                            textOrEmpty(domain.topDriverLabel || domain.top_driver_label || domain.topDriverKey || domain.top_driver_key)
+                              ? `<div class="gaia-dashboard__meta-row"><span class="gaia-dashboard__meta-chip">${esc(domain.topDriverLabel || domain.top_driver_label || titleFromKey(domain.topDriverKey || domain.top_driver_key))}</span></div>`
+                              : ""
+                          }
                         </div>
                       `
                     )
                     .join("")}
                 </div>
-              </div>
-            `
-            : ""
-        }
-        ${
-          textOrEmpty(window.supportLine || window.support_line)
-            ? `
-              <div>
-                <div class="gaia-dashboard__mini-title">A steadier way through it</div>
-                <p class="gaia-dashboard__card-copy">${esc(window.supportLine || window.support_line)}</p>
               </div>
             `
             : ""

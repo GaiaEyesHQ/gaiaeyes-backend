@@ -401,6 +401,80 @@ Outlook For March 23-29
         self.assertIn("humidity looks muggier", payload["summary"].lower())
         self.assertIn("hydration", payload["support_line"].lower())
 
+    def test_build_window_outlook_keeps_domain_drivers_within_visible_driver_stack(self) -> None:
+        merged_rows = [
+            {
+                "day": date(2026, 3, 19),
+                "humidity_avg": 88.0,
+                "kp_max_forecast": 5.0,
+                "g_scale_max": "G1",
+                "pollen_overall_level": "moderate",
+                "pollen_overall_index": 3.0,
+                "pollen_primary_type": "grass",
+                "temp_delta_from_prior_day_c": 2.1,
+            },
+            {
+                "day": date(2026, 3, 20),
+                "humidity_avg": 82.0,
+                "kp_max_forecast": 4.0,
+                "g_scale_max": "G0",
+                "pollen_overall_level": "moderate",
+                "pollen_overall_index": 2.8,
+                "pollen_primary_type": "grass",
+                "temp_delta_from_prior_day_c": 1.8,
+            },
+        ]
+
+        pattern_rows = [
+            {
+                "signal_key": "humidity_extreme_exposed",
+                "outcome_key": "fatigue_day",
+                "confidence": "Strong",
+                "relative_lift": 2.4,
+                "lag_hours": 24,
+            },
+            {
+                "signal_key": "kp_g1_plus_exposed",
+                "outcome_key": "poor_sleep_day",
+                "confidence": "Moderate",
+                "relative_lift": 1.8,
+                "lag_hours": 24,
+            },
+            {
+                "signal_key": "pollen_overall_exposed",
+                "outcome_key": "pain_flare_day",
+                "confidence": "Moderate",
+                "relative_lift": 1.6,
+                "lag_hours": 24,
+            },
+            {
+                "signal_key": "temp_swing_exposed",
+                "outcome_key": "focus_fog_day",
+                "confidence": "Weak",
+                "relative_lift": 1.1,
+                "lag_hours": 24,
+            },
+        ]
+
+        payload = build_window_outlook(
+            merged_rows,
+            pattern_rows=pattern_rows,
+            gauges={"energy": 52, "sleep": 41, "pain": 39, "focus": 30},
+            window_hours=24,
+        )
+
+        self.assertIsNotNone(payload)
+        assert payload is not None
+        visible_driver_keys = {item["key"] for item in payload["top_drivers"]}
+        self.assertTrue(visible_driver_keys)
+        self.assertTrue(payload["likely_elevated_domains"])
+        self.assertTrue(
+            all(
+                str(item.get("top_driver_key") or "") in visible_driver_keys
+                for item in payload["likely_elevated_domains"]
+            )
+        )
+
     def test_forecast_row_serializers_emit_json_safe_shapes(self) -> None:
         local_rows = [
             {

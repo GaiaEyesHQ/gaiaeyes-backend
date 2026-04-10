@@ -241,6 +241,10 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__poll-choices{display:flex;flex-wrap:wrap;gap:8px}
         .gaia-dashboard__poll-choice{border:1px solid rgba(255,255,255,.08);border-radius:999px;background:#172130;color:#e8edf7;padding:8px 14px;cursor:pointer;font-weight:600}
         .gaia-dashboard__poll-choice.is-selected{background:#224064;border-color:rgba(156,192,255,.38)}
+        .gaia-dashboard__outlook-signal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;align-items:start}
+        .gaia-dashboard__outlook-signal-card{padding:10px 12px;border-radius:12px;background:#172130;border:1px solid rgba(255,255,255,.08);min-width:0}
+        .gaia-dashboard__outlook-signal-label{font-size:11px;color:#8f9db7;text-transform:uppercase;letter-spacing:.06em;line-height:1.35}
+        .gaia-dashboard__outlook-signal-value{margin-top:6px;font-size:18px;font-weight:700;color:#eef4ff;line-height:1.2}
         .gaia-dashboard__outlook-domain-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;align-items:start}
         .gaia-dashboard__outlook-domain{padding:12px;border-radius:12px;background:#172130;border:1px solid rgba(255,255,255,.08)}
         .gaia-dashboard__outlook-domain-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
