@@ -26,24 +26,24 @@ enum ShareCaptionEngine {
             scientific: scientificBulletCaption(
                 hook: hook,
                 lines: [
-                    dataLine ?? insight,
-                    feelLine,
-                    groundingLine(category: category, style: .scientific, mode: mode),
+                    factLine("Signal", dataLine ?? insight),
+                    factLine("Watch", feelLine),
+                    factLine("Note", groundingLine(category: category, style: .scientific, mode: mode)),
                 ],
-                cta: shareCTA(style: .scientific, mode: mode)
+                cta: signalCTA(category: category, style: .scientific, mode: mode)
             ),
             balanced: paragraphCaption([
                 hook,
-                insight,
+                dataLine ?? insight,
                 feelingLine(category: category, bullets: bullets, style: .balanced, mode: mode),
                 balancedGrounding,
-            ], cta: shareCTA(style: .balanced, mode: mode)),
+            ], cta: signalCTA(category: category, style: .balanced, mode: mode)),
             humorous: paragraphCaption([
                 hook,
                 playfulLine(category: category, title: title, mode: mode),
                 feelingLine(category: category, bullets: bullets, style: .humorous, mode: mode),
                 groundingLine(category: category, style: .humorous, mode: mode),
-            ], cta: shareCTA(style: .humorous, mode: mode))
+            ], cta: signalCTA(category: category, style: .humorous, mode: mode))
         )
     }
 
@@ -67,24 +67,24 @@ enum ShareCaptionEngine {
             scientific: scientificBulletCaption(
                 hook: hook,
                 lines: [
-                    relationship,
-                    evidenceLine ?? bullets.first,
-                    "Worth watching as a pattern, not treating as proof",
+                    factLine("Pattern", relationship),
+                    factLine("Evidence", evidenceLine ?? bullets.first),
+                    factLine("Note", "Worth watching as a pattern, not treating as proof"),
                 ],
-                cta: shareCTA(style: .scientific, mode: mode)
+                cta: patternCTA(style: .scientific, mode: mode)
             ),
             balanced: paragraphCaption([
                 hook,
                 insight,
                 bullets.first ?? "It keeps showing up in the same direction",
                 mode == .mystical ? "Treat it as a clue, not a sentence" : "Treat it as a clue, not a guarantee",
-            ], cta: shareCTA(style: .balanced, mode: mode)),
+            ], cta: patternCTA(style: .balanced, mode: mode)),
             humorous: paragraphCaption([
                 hook,
                 "Your log keeps bringing this one back",
                 bullets.first ?? evidenceLine ?? "Apparently the pattern has opinions",
                 mode == .mystical ? "The universe left a sticky note" : "The data left a sticky note",
-            ], cta: shareCTA(style: .humorous, mode: mode))
+            ], cta: patternCTA(style: .humorous, mode: mode))
         )
     }
 
@@ -107,24 +107,24 @@ enum ShareCaptionEngine {
             scientific: scientificBulletCaption(
                 hook: hook,
                 lines: [
-                    dataLine ?? title,
-                    bullets.first ?? feelingLine(category: category, bullets: [], style: .scientific, mode: mode),
-                    groundingLine(category: category, style: .scientific, mode: mode),
+                    factLine("Leading", dataLine ?? title),
+                    factLine("Watch", bullets.first ?? feelingLine(category: category, bullets: [], style: .scientific, mode: mode)),
+                    factLine("Note", groundingLine(category: category, style: .scientific, mode: mode)),
                 ],
-                cta: shareCTA(style: .scientific, mode: mode)
+                cta: dailyStateCTA(style: .scientific, mode: mode)
             ),
             balanced: paragraphCaption([
                 hook,
                 insight,
                 bullets.first ?? feelingLine(category: category, bullets: [], style: .balanced, mode: mode),
                 groundingLine(category: category, style: .balanced, mode: mode),
-            ], cta: shareCTA(style: .balanced, mode: mode)),
+            ], cta: dailyStateCTA(style: .balanced, mode: mode)),
             humorous: paragraphCaption([
                 hook,
                 "\(leading) is running the group chat",
                 bullets.first ?? feelingLine(category: category, bullets: [], style: .humorous, mode: mode),
                 groundingLine(category: category, style: .humorous, mode: mode),
-            ], cta: shareCTA(style: .humorous, mode: mode))
+            ], cta: dailyStateCTA(style: .humorous, mode: mode))
         )
     }
 
@@ -146,24 +146,24 @@ enum ShareCaptionEngine {
             scientific: scientificBulletCaption(
                 hook: hook,
                 lines: [
-                    dataLine ?? insight,
-                    feelingLine(category: category, bullets: bullets, style: .scientific, mode: mode),
-                    groundingLine(category: category, style: .scientific, mode: mode),
+                    factLine("Event", dataLine ?? insight),
+                    factLine("Watch", feelingLine(category: category, bullets: bullets, style: .scientific, mode: mode)),
+                    factLine("Note", groundingLine(category: category, style: .scientific, mode: mode)),
                 ],
-                cta: shareCTA(style: .scientific, mode: mode)
+                cta: eventCTA(category: category, style: .scientific, mode: mode)
             ),
             balanced: paragraphCaption([
                 hook,
                 insight,
                 feelingLine(category: category, bullets: bullets, style: .balanced, mode: mode),
                 groundingLine(category: category, style: .balanced, mode: mode),
-            ], cta: shareCTA(style: .balanced, mode: mode)),
+            ], cta: eventCTA(category: category, style: .balanced, mode: mode)),
             humorous: paragraphCaption([
                 hook,
                 playfulLine(category: category, title: title, mode: mode),
                 feelingLine(category: category, bullets: bullets, style: .humorous, mode: mode),
                 groundingLine(category: category, style: .humorous, mode: mode),
-            ], cta: shareCTA(style: .humorous, mode: mode))
+            ], cta: eventCTA(category: category, style: .humorous, mode: mode))
         )
     }
 
@@ -175,6 +175,8 @@ enum ShareCaptionEngine {
         primaryDriver: String,
         insight: String,
         bullets: [String],
+        supportingDrivers: [String],
+        affectedDomains: [String],
         actionLine: String,
         primaryState: String?,
         primaryValue: String?
@@ -183,29 +185,32 @@ enum ShareCaptionEngine {
             "\(windowTitle) has \(primaryDriver) out front",
             titleMetricLine(title: primaryDriver, value: primaryValue, state: primaryState) ?? bullets.first
         ], maxCount: 1)
+        let watchLine = commaList(affectedDomains, maxCount: 3)
+        let supportLine = commaList(supportingDrivers, maxCount: 2)
 
         return ShareCaptionSet(
             scientific: scientificBulletCaption(
                 hook: hook,
                 lines: [
-                    dataLine ?? insight,
-                    clippedSentence(actionLine, maxWords: 14) ?? feelingLine(category: category, bullets: bullets, style: .scientific, mode: mode),
-                    groundingLine(category: category, style: .scientific, mode: mode),
+                    factLine("Window", windowTitle),
+                    factLine("Leading", dataLine ?? insight),
+                    factLine("Watch for", watchLine ?? supportLine ?? clippedSentence(actionLine, maxWords: 14) ?? feelingLine(category: category, bullets: bullets, style: .scientific, mode: mode)),
                 ],
-                cta: shareCTA(style: .scientific, mode: mode)
+                cta: outlookCTA(style: .scientific, mode: mode)
             ),
             balanced: paragraphCaption([
                 hook,
-                insight,
+                dataLine ?? insight,
+                supportLine.map { "\($0) is also in play" },
+                watchLine.map { "Most likely to stand out: \($0)" },
                 clippedSentence(actionLine, maxWords: 14) ?? feelingLine(category: category, bullets: bullets, style: .balanced, mode: mode),
-                groundingLine(category: category, style: .balanced, mode: mode),
-            ], cta: shareCTA(style: .balanced, mode: mode)),
+            ], cta: outlookCTA(style: .balanced, mode: mode)),
             humorous: paragraphCaption([
                 hook,
                 "\(primaryDriver) looks ready to call the shots",
+                watchLine.map { "If anything gets loud, it may be \($0.lowercased())" },
                 clippedSentence(actionLine, maxWords: 14) ?? feelingLine(category: category, bullets: bullets, style: .humorous, mode: mode),
-                groundingLine(category: category, style: .humorous, mode: mode),
-            ], cta: shareCTA(style: .humorous, mode: mode))
+            ], cta: outlookCTA(style: .humorous, mode: mode))
         )
     }
 
@@ -247,6 +252,79 @@ enum ShareCaptionEngine {
         }
     }
 
+    private static func signalCTA(category: ShareHookCategory, style: CaptionTone, mode: ExperienceMode) -> String {
+        switch (category, style) {
+        case (.air, .scientific):
+            return "Track local air shifts in Gaia Eyes"
+        case (.pressure, .scientific):
+            return "Track weather-sensitive shifts in Gaia Eyes"
+        case (.solar, .scientific), (.geomagnetic, .scientific):
+            return "Track space weather and body context in Gaia Eyes"
+        case (_, .balanced):
+            return "See how your own signal mix trends in Gaia Eyes"
+        case (_, .humorous):
+            return mode == .mystical
+                ? "Gaia Eyes keeps an eye on the louder days"
+                : "Gaia Eyes keeps score when the day gets weird"
+        default:
+            return shareCTA(style: style, mode: mode)
+        }
+    }
+
+    private static func patternCTA(style: CaptionTone, mode: ExperienceMode) -> String {
+        switch style {
+        case .scientific:
+            return "Track recurring patterns in Gaia Eyes"
+        case .balanced:
+            return "See which patterns keep repeating in Gaia Eyes"
+        case .humorous:
+            return mode == .mystical
+                ? "Gaia Eyes keeps track of the repeating themes"
+                : "Gaia Eyes keeps receipts on repeat offenders"
+        }
+    }
+
+    private static func dailyStateCTA(style: CaptionTone, mode: ExperienceMode) -> String {
+        switch style {
+        case .scientific:
+            return "Track what is leading in Gaia Eyes"
+        case .balanced:
+            return "See what is shaping your mix in Gaia Eyes"
+        case .humorous:
+            return mode == .mystical
+                ? "Gaia Eyes translates the louder days"
+                : "Gaia Eyes translates the louder days"
+        }
+    }
+
+    private static func eventCTA(category: ShareHookCategory, style: CaptionTone, mode: ExperienceMode) -> String {
+        switch (category, style) {
+        case (.solar, .scientific), (.geomagnetic, .scientific):
+            return "Track live space weather in Gaia Eyes"
+        case (_, .balanced):
+            return "See how the wider signal picture shifts in Gaia Eyes"
+        case (_, .humorous):
+            return mode == .mystical
+                ? "Gaia Eyes keeps an eye on the dramatic sky days"
+                : "Gaia Eyes keeps an eye on the dramatic signal days"
+        default:
+            return shareCTA(style: style, mode: mode)
+        }
+    }
+
+    private static func outlookCTA(style: CaptionTone, mode: ExperienceMode) -> String {
+        switch style {
+        case .scientific:
+            return "Track the next shifts in Gaia Eyes"
+        case .balanced:
+            return "See what is lining up next in Gaia Eyes"
+        case .humorous:
+            return mode == .mystical
+                ? "Gaia Eyes keeps tabs on what is lining up next"
+                : "Gaia Eyes keeps tabs on what is lining up next"
+        }
+    }
+
     private static func titleMetricLine(title: String, value: String?, state: String?) -> String? {
         if let value = valueOrNil(value), let state = valueOrNil(state) {
             return "\(title) is \(state.lowercased()) at \(value)"
@@ -258,6 +336,17 @@ enum ShareCaptionEngine {
             return "\(title) is \(state.lowercased()) right now"
         }
         return nil
+    }
+
+    private static func factLine(_ label: String, _ value: String?) -> String? {
+        guard let value = valueOrNil(value) else { return nil }
+        return "\(label): \(value)"
+    }
+
+    private static func commaList(_ values: [String], maxCount: Int) -> String? {
+        let lines = uniqueLines(values.map(Optional.some))
+        guard !lines.isEmpty else { return nil }
+        return lines.prefix(maxCount).joined(separator: ", ")
     }
 
     private static func feelingLine(

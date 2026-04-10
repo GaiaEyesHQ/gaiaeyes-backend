@@ -37,12 +37,21 @@ enum ShareDraftFactory {
             maxCount: 2
         )
         let signText = signalSignText(category: category, title: title, value: value, state: state)
+        let themedBackground = backgroundWithThemes(
+            background,
+            shareType: .signalSnapshot,
+            surface: surface,
+            category: category,
+            analyticsKey: analyticsKey,
+            title: title,
+            emphasis: state ?? value
+        )
 
         let card = ShareCardModel(
             shareType: .signalSnapshot,
             layout: .signalSnapshot,
             format: .square,
-            background: background,
+            background: themedBackground,
             accentLevel: accent,
             eyebrow: title,
             title: hook,
@@ -112,12 +121,21 @@ enum ShareDraftFactory {
             maxCount: 2
         )
         let signText = patternSignText(evidenceCount: evidenceCount, confidence: confidence)
+        let themedBackground = backgroundWithThemes(
+            background,
+            shareType: .personalPattern,
+            surface: surface,
+            category: .pattern,
+            analyticsKey: analyticsKey,
+            title: relationship,
+            emphasis: confidence
+        )
 
         let card = ShareCardModel(
             shareType: .personalPattern,
             layout: .personalPattern,
             format: .square,
-            background: background,
+            background: themedBackground,
             accentLevel: accent,
             eyebrow: "Pattern",
             title: hook,
@@ -186,12 +204,21 @@ enum ShareDraftFactory {
             excluding: [hook, title, leading, insight],
             maxCount: 2
         )
+        let themedBackground = backgroundWithThemes(
+            background,
+            shareType: .dailyState,
+            surface: surface,
+            category: category,
+            analyticsKey: analyticsKey,
+            title: leading,
+            emphasis: supporting.first
+        )
 
         let card = ShareCardModel(
             shareType: .dailyState,
             layout: .dailyState,
             format: .square,
-            background: background,
+            background: themedBackground,
             accentLevel: accent,
             eyebrow: title,
             title: hook,
@@ -254,12 +281,21 @@ enum ShareDraftFactory {
             excluding: [hook, title, severity, insight],
             maxCount: 2
         )
+        let themedBackground = backgroundWithThemes(
+            background,
+            shareType: .event,
+            surface: surface,
+            category: category,
+            analyticsKey: analyticsKey,
+            title: title,
+            emphasis: severity
+        )
 
         let card = ShareCardModel(
             shareType: .event,
             layout: .event,
             format: .square,
-            background: background,
+            background: themedBackground,
             accentLevel: accent,
             eyebrow: title,
             title: hook,
@@ -330,12 +366,21 @@ enum ShareDraftFactory {
             excluding: [hook, windowTitle, primaryDriver, insight],
             maxCount: 2
         )
+        let themedBackground = backgroundWithThemes(
+            background,
+            shareType: .outlook,
+            surface: surface,
+            category: category,
+            analyticsKey: analyticsKey,
+            title: primaryDriver,
+            emphasis: windowTitle
+        )
 
         let card = ShareCardModel(
             shareType: .outlook,
             layout: .outlook,
             format: .square,
-            background: background,
+            background: themedBackground,
             accentLevel: accent,
             eyebrow: windowTitle,
             title: hook,
@@ -360,6 +405,8 @@ enum ShareDraftFactory {
             primaryDriver: primaryDriver,
             insight: insight,
             bullets: support,
+            supportingDrivers: supportDrivers,
+            affectedDomains: affectedDomains,
             actionLine: actionLine,
             primaryState: primaryState,
             primaryValue: primaryValue
@@ -494,6 +541,30 @@ enum ShareDraftFactory {
             return "gaiaeyes.app"
         }
         return updatedAt
+    }
+
+    private static func backgroundWithThemes(
+        _ background: ShareCardBackground,
+        shareType: ShareType,
+        surface: String,
+        category: ShareHookCategory,
+        analyticsKey: String?,
+        title: String,
+        emphasis: String?
+    ) -> ShareCardBackground {
+        let themeKeys = uniqueThemeKeys(
+            explicitThemeKeys(analyticsKey: analyticsKey, title: title, emphasis: emphasis)
+                + [normalizedThemeKey(surface), normalizedThemeKey(shareType.rawValue)]
+                + categoryThemeKeys(category)
+                + styleThemeKeys(background.style)
+                + background.themeKeys
+        )
+
+        return ShareCardBackground(
+            style: background.style,
+            candidateURLs: background.candidateURLs,
+            themeKeys: Array(themeKeys.prefix(5))
+        )
     }
 
     private static func secondaryMetricNote(primary: String?, value: String?, state: String?) -> String? {
@@ -679,5 +750,112 @@ enum ShareDraftFactory {
 
         let smallerCount = min(leftTokens.count, rightTokens.count)
         return smallerCount > 1 && overlap == smallerCount
+    }
+
+    private static func explicitThemeKeys(analyticsKey: String?, title: String, emphasis: String?) -> [String] {
+        let haystack = [analyticsKey, title, emphasis]
+            .compactMap { $0?.lowercased() }
+            .joined(separator: " ")
+
+        var keys: [String] = []
+        if haystack.contains("humidity") {
+            keys.append("humidity")
+        }
+        if haystack.contains("air quality") || haystack.contains("aqi") {
+            keys.append("air_quality")
+        }
+        if haystack.contains("tree pollen") {
+            keys.append("tree_pollen")
+        }
+        if haystack.contains("grass pollen") {
+            keys.append("grass_pollen")
+        }
+        if haystack.contains("weed pollen") {
+            keys.append("weed_pollen")
+        }
+        if haystack.contains("mold") {
+            keys.append("mold")
+        }
+        if haystack.contains("allergen") || haystack.contains("pollen") {
+            keys.append("pollen")
+        }
+        if haystack.contains("pressure") || haystack.contains("barometric") {
+            keys.append("pressure")
+        }
+        if haystack.contains("temperature") || haystack.contains("temp") {
+            keys.append("temperature")
+        }
+        if haystack.contains("schumann") {
+            keys.append("schumann")
+        }
+        if haystack.contains("ulf") {
+            keys.append("ulf")
+        }
+        if haystack.contains("geomagnetic") || haystack.contains("kp") || haystack.contains("bz") || haystack.contains("solar wind") {
+            keys.append("geomagnetic")
+        }
+        if haystack.contains("flare") {
+            keys.append("solar_flare")
+        }
+        if haystack.contains("cme") {
+            keys.append("cme")
+        }
+        if haystack.contains("solar") {
+            keys.append("solar")
+        }
+        if haystack.contains("mission control") || haystack.contains("earthscope") {
+            keys.append("mission_control")
+        }
+        if haystack.contains("outlook") {
+            keys.append("outlook")
+        }
+        if haystack.contains("pattern") {
+            keys.append("pattern")
+        }
+        return keys
+    }
+
+    private static func categoryThemeKeys(_ category: ShareHookCategory) -> [String] {
+        switch category {
+        case .solar:
+            return ["space_weather", "solar"]
+        case .earth:
+            return ["signals", "earth"]
+        case .pressure:
+            return ["weather_shift", "atmospheric"]
+        case .air:
+            return ["local_conditions", "atmospheric"]
+        case .geomagnetic:
+            return ["space_weather", "field"]
+        case .pattern:
+            return ["signals", "pattern"]
+        }
+    }
+
+    private static func styleThemeKeys(_ style: ShareBackgroundStyle) -> [String] {
+        switch style {
+        case .schumann:
+            return ["schumann", "resonance"]
+        case .solar:
+            return ["solar", "space_weather"]
+        case .cme:
+            return ["cme", "solar"]
+        case .atmospheric:
+            return ["atmospheric", "local_conditions"]
+        case .abstract:
+            return ["signals", "abstract"]
+        }
+    }
+
+    private static func uniqueThemeKeys(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values
+            .map(normalizedThemeKey)
+            .filter { !$0.isEmpty }
+            .filter { seen.insert($0).inserted }
+    }
+
+    private static func normalizedThemeKey(_ raw: String) -> String {
+        normalized(raw).replacingOccurrences(of: " ", with: "_")
     }
 }

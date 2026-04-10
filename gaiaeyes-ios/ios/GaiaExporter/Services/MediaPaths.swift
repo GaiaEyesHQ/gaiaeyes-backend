@@ -65,6 +65,45 @@ enum MediaPaths {
             .appendingPathComponent("daily_playbook.jpg")
     }
 
+    static func storageBaseURL() -> URL {
+        if let raw = Bundle.main.object(forInfoDictionaryKey: "MEDIA_BASE_URL") as? String,
+           let url = sanitize(raw) {
+            return url
+        }
+
+        if let raw = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") as? String {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty,
+               let base = URL(string: trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed) {
+                return base
+                    .appendingPathComponent("storage")
+                    .appendingPathComponent("v1")
+                    .appendingPathComponent("object")
+                    .appendingPathComponent("public")
+                    .appendingPathComponent("space-visuals")
+            }
+        }
+
+        return URL(string: "https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals")!
+    }
+
+    static func storageURL(_ raw: String?) -> URL? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let absolute = URL(string: trimmed), let scheme = absolute.scheme, !scheme.isEmpty {
+            return sanitize(absolute)
+        }
+
+        let cleaned = trimmed.hasPrefix("/") ? String(trimmed.dropFirst()) : trimmed
+        return cleaned
+            .split(separator: "/")
+            .reduce(storageBaseURL()) { url, segment in
+                url.appendingPathComponent(String(segment))
+            }
+    }
+
     static func sanitize(_ url: URL) -> URL {
         if let scheme = url.scheme, !scheme.isEmpty {
             var absolute = url.absoluteString

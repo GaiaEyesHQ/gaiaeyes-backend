@@ -377,3 +377,49 @@ struct SymptomEnvelopeTests {
         #expect(snapshot.setupHints.first?.key == "health_data")
     }
 }
+
+struct ShareEngineTests {
+
+    @Test
+    func outlookScientificCaptionUsesLabeledFacts() {
+        let captions = ShareCaptionEngine.outlook(
+            mode: .scientific,
+            category: .air,
+            hook: "Humidity is doing more than usual",
+            windowTitle: "Next 24 Hours",
+            primaryDriver: "Humidity",
+            insight: "Next 24 Hours points to Humidity first.",
+            bullets: ["Energy", "Pain"],
+            supportingDrivers: ["Geomagnetic Outlook"],
+            affectedDomains: ["Energy", "Pain"],
+            actionLine: "Keep hydration steady and pace a little more evenly.",
+            primaryState: "High",
+            primaryValue: "93%"
+        )
+
+        #expect(captions.scientific.contains("• Window: Next 24 Hours."))
+        #expect(captions.scientific.contains("• Leading:"))
+        #expect(captions.scientific.contains("• Watch for: Energy, Pain."))
+        #expect(captions.scientific.contains("Track the next shifts in Gaia Eyes."))
+    }
+
+    @Test
+    func airSignalBalancedCaptionUsesLocalCta() {
+        let captions = ShareCaptionEngine.signalSnapshot(
+            mode: .scientific,
+            tone: .balanced,
+            category: .air,
+            hook: "The air is more reactive right now",
+            title: "Humidity",
+            insight: "Humidity is high right now.",
+            signText: "Sinus watch\nHigh",
+            bullets: ["Higher irritant load can line up with sinus, headache, or fatigue days"],
+            value: "93%",
+            state: "High"
+        )
+
+        #expect(captions.balanced.contains("See how your own signal mix trends in Gaia Eyes."))
+        #expect(captions.scientific.contains("• Signal:"))
+        #expect(captions.scientific.contains("Track local air shifts in Gaia Eyes."))
+    }
+}

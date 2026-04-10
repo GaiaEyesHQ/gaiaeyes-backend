@@ -115,10 +115,12 @@ struct ShareCardChip: Identifiable, Hashable {
 struct ShareCardBackground: Hashable {
     let style: ShareBackgroundStyle
     let candidateURLs: [URL]
+    let themeKeys: [String]
 
-    init(style: ShareBackgroundStyle, candidateURLs: [URL] = []) {
+    init(style: ShareBackgroundStyle, candidateURLs: [URL] = [], themeKeys: [String] = []) {
         self.style = style
         self.candidateURLs = candidateURLs
+        self.themeKeys = themeKeys
     }
 }
 
