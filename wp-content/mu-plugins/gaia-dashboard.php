@@ -393,6 +393,13 @@ function gaia_dashboard_backend_base() {
 }
 }
 
+if (!function_exists('gaia_dashboard_backend_bearer')) {
+function gaia_dashboard_backend_bearer() {
+    $bearer = defined('GAIAEYES_API_BEARER') ? GAIAEYES_API_BEARER : getenv('GAIAEYES_API_BEARER');
+    return is_string($bearer) ? trim($bearer) : '';
+}
+}
+
 if (!function_exists('gaia_dashboard_forwarded_auth_header')) {
 function gaia_dashboard_forwarded_auth_header(WP_REST_Request $request) {
     $auth = (string) $request->get_header('authorization');
@@ -402,6 +409,136 @@ function gaia_dashboard_forwarded_auth_header(WP_REST_Request $request) {
     return $auth;
 }
 }
+
+if (!function_exists('gaia_bug_reports_fetch_recent')) {
+function gaia_bug_reports_fetch_recent($limit = 50) {
+    $backend_base = gaia_dashboard_backend_base();
+    $bearer = gaia_dashboard_backend_bearer();
+
+    if ($backend_base === '') {
+        return new WP_Error('gaia_bug_reports_backend_missing', 'GAIAEYES_API_BASE is not configured.');
+    }
+    if ($bearer === '') {
+        return new WP_Error('gaia_bug_reports_bearer_missing', 'GAIAEYES_API_BEARER is not configured.');
+    }
+
+    $url = add_query_arg(
+        ['limit' => max(1, min((int) $limit, 200))],
+        $backend_base . '/v1/profile/bug-reports'
+    );
+
+    $resp = wp_remote_get($url, [
+        'timeout' => 20,
+        'headers' => [
+            'Accept' => 'application/json',
+            'Authorization' => 'Bearer ' . $bearer,
+        ],
+    ]);
+    if (is_wp_error($resp)) {
+        return $resp;
+    }
+
+    $status = (int) wp_remote_retrieve_response_code($resp);
+    $body = (string) wp_remote_retrieve_body($resp);
+    $decoded = json_decode($body, true);
+    if (!is_array($decoded)) {
+        return new WP_Error('gaia_bug_reports_invalid_json', 'Bug reports endpoint returned invalid JSON.');
+    }
+    if ($status < 200 || $status >= 300 || empty($decoded['ok'])) {
+        return new WP_Error(
+            'gaia_bug_reports_fetch_failed',
+            isset($decoded['error']) && is_string($decoded['error']) ? $decoded['error'] : 'Bug reports fetch failed.'
+        );
+    }
+    $data = isset($decoded['data']) && is_array($decoded['data']) ? $decoded['data'] : [];
+    $reports = isset($data['reports']) && is_array($data['reports']) ? $data['reports'] : [];
+    return $reports;
+}
+}
+
+if (!function_exists('gaia_bug_reports_render_admin_page')) {
+function gaia_bug_reports_render_admin_page() {
+    if (!current_user_can('manage_options')) {
+        wp_die('You do not have permission to view this page.');
+    }
+
+    $reports = gaia_bug_reports_fetch_recent(60);
+    ?>
+    <div class="wrap">
+        <h1>Gaia Bug Reports</h1>
+        <p>Recent in-app bug submissions with attached diagnostics bundles.</p>
+        <style>
+            .gaia-bug-reports{display:flex;flex-direction:column;gap:16px;max-width:1100px}
+            .gaia-bug-report{background:#fff;border:1px solid #dcdcde;border-radius:12px;padding:16px}
+            .gaia-bug-report__head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
+            .gaia-bug-report__meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:12px}
+            .gaia-bug-report__meta div{background:#f6f7f7;border-radius:10px;padding:10px}
+            .gaia-bug-report__meta strong{display:block;font-size:11px;color:#50575e;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+            .gaia-bug-report__desc{font-size:14px;line-height:1.55;margin:12px 0 0}
+            .gaia-bug-report__status{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:#eef4ff;color:#1d4d8f;font-weight:600}
+            .gaia-bug-report__status.is-failed{background:#fff1f0;color:#8a2424}
+            .gaia-bug-report details{margin-top:14px}
+            .gaia-bug-report summary{cursor:pointer;font-weight:600}
+            .gaia-bug-report textarea{width:100%;min-height:280px;margin-top:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+            .gaia-bug-reports__empty{padding:16px;background:#fff;border:1px solid #dcdcde;border-radius:12px}
+            .gaia-bug-reports__error{padding:16px;background:#fff1f0;border:1px solid #f0c0bb;border-radius:12px;color:#8a2424}
+        </style>
+        <?php if (is_wp_error($reports)): ?>
+            <div class="gaia-bug-reports__error">
+                <strong>Could not load bug reports.</strong>
+                <p><?php echo esc_html($reports->get_error_message()); ?></p>
+            </div>
+        <?php elseif (empty($reports)): ?>
+            <div class="gaia-bug-reports__empty">No bug reports yet.</div>
+        <?php else: ?>
+            <div class="gaia-bug-reports">
+                <?php foreach ($reports as $report): ?>
+                    <?php
+                    $report_id = isset($report['id']) ? (string) $report['id'] : '';
+                    $description = isset($report['description']) ? (string) $report['description'] : '';
+                    $diagnostics = isset($report['diagnostics_bundle']) ? (string) $report['diagnostics_bundle'] : '';
+                    $alert_sent = !empty($report['alert_sent']);
+                    ?>
+                    <section class="gaia-bug-report">
+                        <div class="gaia-bug-report__head">
+                            <div>
+                                <h2 style="margin:0 0 6px;"><?php echo esc_html($report_id !== '' ? $report_id : 'Bug report'); ?></h2>
+                                <p class="gaia-bug-report__desc"><?php echo esc_html($description !== '' ? $description : 'No description provided.'); ?></p>
+                            </div>
+                            <span class="gaia-bug-report__status<?php echo $alert_sent ? '' : ' is-failed'; ?>">
+                                <?php echo esc_html($alert_sent ? 'Alert sent' : 'Alert pending'); ?>
+                            </span>
+                        </div>
+                        <div class="gaia-bug-report__meta">
+                            <div><strong>Created</strong><span><?php echo esc_html(isset($report['created_at']) ? (string) $report['created_at'] : '—'); ?></span></div>
+                            <div><strong>User</strong><span><?php echo esc_html(isset($report['user_id']) ? (string) $report['user_id'] : '—'); ?></span></div>
+                            <div><strong>Source</strong><span><?php echo esc_html(isset($report['source']) ? (string) $report['source'] : '—'); ?></span></div>
+                            <div><strong>App</strong><span><?php echo esc_html(isset($report['app_version']) ? (string) $report['app_version'] : '—'); ?></span></div>
+                            <div><strong>Device</strong><span><?php echo esc_html(isset($report['device']) ? (string) $report['device'] : '—'); ?></span></div>
+                            <div><strong>Alert error</strong><span><?php echo esc_html(isset($report['alert_error']) && $report['alert_error'] !== '' ? (string) $report['alert_error'] : '—'); ?></span></div>
+                        </div>
+                        <details>
+                            <summary>Diagnostics bundle</summary>
+                            <textarea readonly><?php echo esc_textarea($diagnostics); ?></textarea>
+                        </details>
+                    </section>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+    <?php
+}
+}
+
+add_action('admin_menu', function () {
+    add_management_page(
+        'Gaia Bug Reports',
+        'Gaia Bug Reports',
+        'manage_options',
+        'gaia-bug-reports',
+        'gaia_bug_reports_render_admin_page'
+    );
+});
 
 if (!function_exists('gaia_dashboard_proxy_json')) {
 function gaia_dashboard_proxy_json(
@@ -492,6 +629,96 @@ function gaia_dashboard_proxy_backend(WP_REST_Request $request) {
             'debug' => 'debug',
         ]
     );
+}
+}
+
+if (!function_exists('gaia_bug_report_alert_secret')) {
+function gaia_bug_report_alert_secret() {
+    $defined = defined('GAIA_BUG_REPORT_ALERT_SECRET') ? GAIA_BUG_REPORT_ALERT_SECRET : '';
+    if (is_string($defined) && trim($defined) !== '') {
+        return trim($defined);
+    }
+    $env = getenv('GAIA_BUG_REPORT_ALERT_SECRET');
+    return is_string($env) ? trim($env) : '';
+}
+}
+
+if (!function_exists('gaia_bug_report_alert_email')) {
+function gaia_bug_report_alert_email() {
+    $email = defined('GAIA_BUG_REPORT_ALERT_EMAIL') ? GAIA_BUG_REPORT_ALERT_EMAIL : getenv('GAIA_BUG_REPORT_ALERT_EMAIL');
+    $email = is_string($email) ? trim($email) : '';
+    if ($email === '') {
+        $email = 'help@gaiaeyes.com';
+    }
+    return apply_filters('gaia_bug_report_alert_email', $email);
+}
+}
+
+if (!function_exists('gaia_bug_report_alert_permission')) {
+function gaia_bug_report_alert_permission(WP_REST_Request $request) {
+    $configured = gaia_bug_report_alert_secret();
+    if ($configured === '') {
+        return new WP_Error('gaia_bug_report_secret_missing', 'Bug report alert secret is not configured.', ['status' => 503]);
+    }
+
+    $provided = $request->get_header('X-Gaia-Bug-Secret');
+    if (!is_string($provided) || trim($provided) === '') {
+        return new WP_Error('gaia_bug_report_forbidden', 'Missing bug report alert secret.', ['status' => 403]);
+    }
+
+    if (!hash_equals($configured, trim($provided))) {
+        return new WP_Error('gaia_bug_report_forbidden', 'Invalid bug report alert secret.', ['status' => 403]);
+    }
+
+    return true;
+}
+}
+
+if (!function_exists('gaia_bug_report_alert_callback')) {
+function gaia_bug_report_alert_callback(WP_REST_Request $request) {
+    $payload = $request->get_json_params();
+    if (!is_array($payload)) {
+        $payload = [];
+    }
+
+    $report_id = isset($payload['report_id']) ? sanitize_text_field((string) $payload['report_id']) : '';
+    $user_id = isset($payload['user_id']) ? sanitize_text_field((string) $payload['user_id']) : '';
+    $source = isset($payload['source']) ? sanitize_text_field((string) $payload['source']) : 'unknown';
+    $description = isset($payload['description']) ? trim(wp_strip_all_tags((string) $payload['description'])) : '';
+    $app_version = isset($payload['app_version']) ? sanitize_text_field((string) $payload['app_version']) : '';
+    $device = isset($payload['device']) ? sanitize_text_field((string) $payload['device']) : '';
+    $created_at = isset($payload['created_at']) ? sanitize_text_field((string) $payload['created_at']) : '';
+
+    if ($report_id === '' || $description === '') {
+        return new WP_REST_Response([
+            'ok' => false,
+            'error' => 'missing bug report fields',
+        ], 400);
+    }
+
+    $to = gaia_bug_report_alert_email();
+    $subject = sprintf('[Gaia Eyes] New bug report %s', $report_id);
+    $lines = [
+        'A new Gaia Eyes bug report was submitted.',
+        '',
+        'Report ID: ' . $report_id,
+        'User ID: ' . ($user_id !== '' ? $user_id : '—'),
+        'Source: ' . $source,
+        'App version: ' . ($app_version !== '' ? $app_version : '—'),
+        'Device: ' . ($device !== '' ? $device : '—'),
+        'Created at: ' . ($created_at !== '' ? $created_at : '—'),
+        '',
+        'Description:',
+        $description,
+    ];
+    $sent = wp_mail($to, $subject, implode("\n", $lines));
+
+    return new WP_REST_Response([
+        'ok' => (bool) $sent,
+        'email_sent' => (bool) $sent,
+        'email_to' => $to,
+        'report_id' => $report_id,
+    ], $sent ? 200 : 500);
 }
 }
 
@@ -750,6 +977,14 @@ add_action('rest_api_init', function () {
             'callback' => function (WP_REST_Request $request) {
                 return gaia_dashboard_proxy_json($request, '/v1/profile/account/preflight');
             },
+        ],
+    ]);
+
+    register_rest_route('gaia/v1', '/internal/bug-report-alert', [
+        [
+            'methods' => WP_REST_Server::CREATABLE,
+            'permission_callback' => 'gaia_bug_report_alert_permission',
+            'callback' => 'gaia_bug_report_alert_callback',
         ],
     ]);
 });

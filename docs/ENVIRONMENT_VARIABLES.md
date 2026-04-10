@@ -13,6 +13,7 @@
 | `SUPABASE_SERVICE_ROLE_KEY` | Preferred service-role key for storage uploads and authenticated account deletion | `service-role-key` | `app/utils/supabase_storage.py`, `app/routers/profile.py` |
 | `SUPABASE_SERVICE_KEY` | Legacy service-key alias accepted by account-deletion preflight/delete and some scripts | `service-key` | `app/routers/profile.py`, various scripts |
 | `BUG_REPORT_ALERT_WEBHOOK_URL` | Optional webhook notified when a new in-app bug report is submitted | `https://hooks.example.com/...` | `app/routers/profile.py` |
+| `BUG_REPORT_ALERT_SECRET` | Shared secret header sent to the bug-report alert endpoint | `long-random-string` | `app/routers/profile.py` |
 | `BUCKET` | Storage bucket name | `space-visuals` | `app/utils/supabase_storage.py` |
 | `READ_TOKENS` | Comma-separated read tokens | `token1,token2` | `app/security/auth.py` |
 | `WRITE_TOKENS` | Comma-separated write tokens | `token1,token2` | `app/security/auth.py` |
@@ -74,8 +75,10 @@
 | Variable | Purpose | Example placeholder | Where used |
 | --- | --- | --- | --- |
 | `GAIAEYES_API_BASE` | Backend API base URL | `https://gaiaeyes-backend.onrender.com` | `wp-content/mu-plugins/gaiaeyes-space-weather-detail.php` |
-| `GAIAEYES_API_BEARER` | Backend bearer token | `devtoken123` | `wp-content/mu-plugins/gaiaeyes-space-weather-detail.php` |
+| `GAIAEYES_API_BEARER` | Backend bearer token for internal WordPress proxy/admin reads | `devtoken123` | `wp-content/mu-plugins/gaiaeyes-space-weather-detail.php`, `wp-content/mu-plugins/gaia-dashboard.php` |
 | `GAIAEYES_API_DEV_USERID` | Dev user id for backend | `uuid` | `wp-content/mu-plugins/gaiaeyes-space-weather-detail.php` |
+| `GAIA_BUG_REPORT_ALERT_SECRET` | Shared secret required by the internal bug-report alert endpoint | `same-long-random-string-as-backend` | `wp-content/mu-plugins/gaia-dashboard.php` |
+| `GAIA_BUG_REPORT_ALERT_EMAIL` | Optional destination email for bug-report alerts | `help@gaiaeyes.com` | `wp-content/mu-plugins/gaia-dashboard.php` |
 | `GAIAEYES_SPACE_VISUALS_ENDPOINT` | Override space visuals API URL | `https://.../v1/space/visuals` | `wp-content/mu-plugins/gaiaeyes-space-visuals.php` |
 | `GAIAEYES_SPACE_VISUALS_BEARER` | Auth for space visuals endpoint | `token` | `wp-content/mu-plugins/gaiaeyes-space-visuals.php` |
 | `GAIA_MEDIA_BASE` | Base URL for JSON/media | `https://.../gaiaeyes-media` | `wp-content/mu-plugins/gaiaeyes-space-visuals.php` |

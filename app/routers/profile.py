@@ -259,9 +259,13 @@ async def _send_bug_report_alert(payload: Dict[str, Any]) -> tuple[bool, Optiona
     webhook_url = (settings.BUG_REPORT_ALERT_WEBHOOK_URL or "").strip()
     if not webhook_url:
         return False, None
+    headers: Dict[str, str] = {}
+    secret = (settings.BUG_REPORT_ALERT_SECRET or "").strip()
+    if secret:
+        headers["X-Gaia-Bug-Secret"] = secret
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(webhook_url, json=payload)
+            response = await client.post(webhook_url, json=payload, headers=headers or None)
     except httpx.HTTPError as exc:
         logger.warning("bug report alert webhook failed: %s", exc)
         return False, str(exc)
@@ -931,6 +935,51 @@ async def profile_submit_bug_report(
             "created_at": created_at,
             "alert_sent": bool(alert_sent),
             "alert_error": alert_error,
+        },
+    }
+
+
+@router.get("/bug-reports", dependencies=[Depends(require_write_auth)])
+async def profile_bug_reports_recent(
+    request: Request,
+    limit: int = 50,
+    conn=Depends(get_db),
+):
+    safe_limit = max(1, min(int(limit or 50), 200))
+    columns = await _table_columns(conn, "app", "user_bug_reports")
+    required_columns = {"id", "user_id", "source", "description", "diagnostics_bundle", "created_at"}
+    if not columns or not required_columns.issubset(set(columns)):
+        return {"ok": False, "error": "app.user_bug_reports table unavailable"}
+
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select
+              id,
+              user_id,
+              source,
+              description,
+              diagnostics_bundle,
+              app_version,
+              device,
+              alert_sent,
+              alert_error,
+              created_at
+            from app.user_bug_reports
+            order by created_at desc
+            limit %s
+            """,
+            (safe_limit,),
+            prepare=False,
+        )
+        rows = await cur.fetchall() or []
+
+    return {
+        "ok": True,
+        "data": {
+            "reports": rows,
+            "count": len(rows),
+            "limit": safe_limit,
         },
     }
 
