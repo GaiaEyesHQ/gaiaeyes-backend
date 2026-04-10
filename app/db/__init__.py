@@ -28,8 +28,10 @@ class Settings(BaseSettings):
     DEV_BEARER: Optional[str] = None
     CORS_ORIGINS: Optional[str] = "*"
     SUPABASE_JWT_SECRET: Optional[str] = None
+    SUPABASE_DB_URL: Optional[str] = None
     SUPABASE_URL: Optional[str] = None
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
+    SUPABASE_SERVICE_KEY: Optional[str] = None
     REDIS_URL: Optional[str] = None
     FEATURES_CACHE_TTL_SECONDS: Optional[int] = None
     SCHUMANN_FUSE_TOMSK: bool = True

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -175,9 +176,33 @@ async def _delete_user_scoped_rows(conn, user_id: str) -> Dict[str, Any]:
     }
 
 
+def _derived_supabase_url_from_db_url() -> str:
+    for candidate in ((settings.SUPABASE_DB_URL or "").strip(), (settings.DATABASE_URL or "").strip()):
+        if not candidate:
+            continue
+        parsed = urlparse(candidate)
+        host = (parsed.hostname or "").strip().lower()
+        if host.startswith("db.") and host.endswith(".supabase.co"):
+            project_ref = host[len("db.") : -len(".supabase.co")]
+            if project_ref:
+                return f"https://{project_ref}.supabase.co"
+    return ""
+
+
+def _effective_supabase_url() -> str:
+    configured = (settings.SUPABASE_URL or "").strip().rstrip("/")
+    if configured:
+        return configured
+    return _derived_supabase_url_from_db_url().rstrip("/")
+
+
+def _effective_supabase_service_key() -> str:
+    return ((settings.SUPABASE_SERVICE_ROLE_KEY or "").strip() or (settings.SUPABASE_SERVICE_KEY or "").strip())
+
+
 async def _delete_supabase_auth_user(user_id: str) -> None:
-    supabase_url = (settings.SUPABASE_URL or "").strip().rstrip("/")
-    service_role_key = (settings.SUPABASE_SERVICE_ROLE_KEY or "").strip()
+    supabase_url = _effective_supabase_url()
+    service_role_key = _effective_supabase_service_key()
     if not supabase_url or not service_role_key:
         raise HTTPException(status_code=500, detail="Supabase admin deletion is not configured")
 
@@ -218,10 +243,13 @@ async def _delete_supabase_auth_user(user_id: str) -> None:
 
 def _supabase_admin_delete_issues() -> List[str]:
     issues: List[str] = []
-    if not (settings.SUPABASE_URL or "").strip():
-        issues.append("SUPABASE_URL is not configured")
-    if not (settings.SUPABASE_SERVICE_ROLE_KEY or "").strip():
-        issues.append("SUPABASE_SERVICE_ROLE_KEY is not configured")
+    if not _effective_supabase_url():
+        if (settings.SUPABASE_DB_URL or "").strip() or (settings.DATABASE_URL or "").strip():
+            issues.append("SUPABASE_URL is not configured and could not be derived from SUPABASE_DB_URL / DATABASE_URL")
+        else:
+            issues.append("SUPABASE_URL or SUPABASE_DB_URL is not configured")
+    if not _effective_supabase_service_key():
+        issues.append("SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SERVICE_KEY is not configured")
     return issues
 
 

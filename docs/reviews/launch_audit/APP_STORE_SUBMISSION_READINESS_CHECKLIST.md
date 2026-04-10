@@ -50,8 +50,8 @@ Notes:
 
 These are the main live blockers that must be configured on the deployed backend before trusting account deletion for review:
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_URL` or a derivable `SUPABASE_DB_URL`
+- `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SERVICE_KEY`
 
 Why they matter:
 - delete-account preflight checks them
