@@ -7,6 +7,7 @@ struct HelpCenterView: View {
     let document: HelpCenterDocument
     let context: HelpCenterContext
 
+    @Environment(\.openURL) private var openURL
     @State private var searchText: String = ""
 
     init(
@@ -48,6 +49,30 @@ struct HelpCenterView: View {
 
     private var searchResults: [HelpCenterArticle] {
         document.search(searchText)
+    }
+
+    private struct HeroAction: Identifiable {
+        let id: String
+        let label: String
+        let url: URL
+    }
+
+    private var heroActions: [HeroAction] {
+        var actions: [HeroAction] = []
+        if let url = URL(string: document.metadata.webSupportURL), !document.metadata.webSupportURL.isEmpty {
+            actions.append(HeroAction(id: "support", label: "Open Support Center", url: url))
+        }
+        if let privacy = document.metadata.privacyPolicyURL,
+           !privacy.isEmpty,
+           let url = URL(string: privacy) {
+            actions.append(HeroAction(id: "privacy", label: "Privacy Policy", url: url))
+        }
+        if let terms = document.metadata.termsOfUseURL,
+           !terms.isEmpty,
+           let url = URL(string: terms) {
+            actions.append(HeroAction(id: "terms", label: "Terms of Use", url: url))
+        }
+        return actions
     }
 
     var body: some View {
@@ -150,6 +175,17 @@ struct HelpCenterView: View {
                 Text("Gaia Eyes is built for patterns, not certainties. This center keeps the practical answers close to the product language already in the app.")
                     .font(.subheadline)
                     .foregroundStyle(Color.white.opacity(0.76))
+                if !heroActions.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(heroActions) { action in
+                            Button(action.label) {
+                                openURL(action.url)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(Color.teal.opacity(0.92))
+                        }
+                    }
+                }
             }
         }
     }

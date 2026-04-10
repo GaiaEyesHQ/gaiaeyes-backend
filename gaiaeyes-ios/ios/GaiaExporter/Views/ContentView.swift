@@ -2697,6 +2697,7 @@ struct ContentView: View {
     @State private var lastFeaturesSuccessAt: Date = .distantPast
     @StateObject private var state = AppState()
     @EnvironmentObject private var auth: AuthManager
+    @Environment(\.openURL) private var openURL
     @AppStorage("features_cache_json") private var featuresCacheJSON: String = ""
     @AppStorage("series_cache_json") private var seriesCacheJSON: String = ""
     @AppStorage("symptom_codes_cache_json") private var symptomCodesCacheJSON: String = ""
@@ -3100,6 +3101,24 @@ struct ContentView: View {
             guideProfile: currentGuideProfile,
             appState: state
         )
+    }
+
+    private var helpCenterSupportURL: URL? {
+        let value = HelpCenterContent.shared.metadata.webSupportURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        return URL(string: value)
+    }
+
+    private var helpCenterPrivacyURL: URL? {
+        guard let value = HelpCenterContent.shared.metadata.privacyPolicyURL?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else { return nil }
+        return URL(string: value)
+    }
+
+    private var helpCenterTermsURL: URL? {
+        guard let value = HelpCenterContent.shared.metadata.termsOfUseURL?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else { return nil }
+        return URL(string: value)
     }
 
     private func openGuideHub(focus: GuideHubFocus = .overview) {
@@ -15476,7 +15495,7 @@ struct ContentView: View {
     private var missionSettingsHelpSection: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Troubleshooting, billing answers, privacy basics, and contact paths live in the shared Help Center.")
+                Text("Troubleshooting, billing answers, privacy basics, terms, and contact paths live in the shared Help Center.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
 
@@ -15485,6 +15504,38 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+
+                if helpCenterSupportURL != nil || helpCenterPrivacyURL != nil || helpCenterTermsURL != nil {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let supportURL = helpCenterSupportURL {
+                            Button {
+                                openURL(supportURL)
+                            } label: {
+                                Label("Public Support Page", systemImage: "paperplane")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        if let privacyURL = helpCenterPrivacyURL {
+                            Button {
+                                openURL(privacyURL)
+                            } label: {
+                                Label("Privacy Policy", systemImage: "lock.shield")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        if let termsURL = helpCenterTermsURL {
+                            Button {
+                                openURL(termsURL)
+                            } label: {
+                                Label("Terms of Use", systemImage: "doc.text")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                }
             }
         } label: {
             Label("Help & Support", systemImage: "questionmark.circle")

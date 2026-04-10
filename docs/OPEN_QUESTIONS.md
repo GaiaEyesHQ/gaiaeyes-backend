@@ -43,3 +43,7 @@
 11. **RPC signatures for dashboard + local signals**
    - **Why needed**: The backend calls `app.get_local_signals_for_user` and `app.get_dashboard_payload`; it is unclear whether these require a `user_id` argument or rely on JWT context.
    - **Where to fill**: Supabase SQL definitions for the RPCs (or runbook notes).
+
+12. **Public support contact details for App Store submission**
+   - **Why needed**: Apple’s Support URL guidance expects real contact information on the support site, and the current public support page clearly exposes the support email but may still need a business mailing address and/or phone number depending on legal/jurisdiction requirements.
+   - **Where to fill**: Product/legal/ops decision for what public contact details Gaia Eyes should publish on `https://gaiaeyes.com/support/`.

@@ -60,6 +60,8 @@ add_action('wp_enqueue_scripts', function () {
         'redirectUrl' => $redirect_url,
         'symptomLogUrl' => $symptom_log_url ? esc_url_raw($symptom_log_url) : '',
         'supportUrl' => esc_url_raw(home_url('/support/')),
+        'privacyUrl' => esc_url_raw(home_url('/privacy/')),
+        'termsUrl' => esc_url_raw(home_url('/terms/')),
         'publicLinks' => [
             'spaceWeather' => esc_url_raw(home_url('/space-weather/')),
             'schumann' => esc_url_raw(home_url('/schumann-resonance/')),

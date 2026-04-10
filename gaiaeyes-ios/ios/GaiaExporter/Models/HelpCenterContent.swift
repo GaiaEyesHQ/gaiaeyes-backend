@@ -4,11 +4,15 @@ struct HelpCenterMetadata: Decodable, Hashable {
     let updatedAt: String
     let supportEmail: String
     let webSupportURL: String
+    let privacyPolicyURL: String?
+    let termsOfUseURL: String?
 
     private enum CodingKeys: String, CodingKey {
         case updatedAt
         case supportEmail
         case webSupportURL = "webSupportUrl"
+        case privacyPolicyURL = "privacyPolicyUrl"
+        case termsOfUseURL = "termsOfUseUrl"
     }
 }
 
@@ -168,7 +172,17 @@ enum HelpCenterContent {
             return try load()
         } catch {
             print("Failed to load HelpCenterContent.json: \(error)")
-            return HelpCenterDocument(metadata: HelpCenterMetadata(updatedAt: "", supportEmail: "", webSupportURL: ""), categories: [], articles: [])
+            return HelpCenterDocument(
+                metadata: HelpCenterMetadata(
+                    updatedAt: "",
+                    supportEmail: "",
+                    webSupportURL: "",
+                    privacyPolicyURL: nil,
+                    termsOfUseURL: nil
+                ),
+                categories: [],
+                articles: []
+            )
         }
     }()
 

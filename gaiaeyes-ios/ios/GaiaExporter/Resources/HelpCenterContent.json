@@ -1,8 +1,10 @@
 {
   "metadata": {
-    "updated_at": "2026-04-01",
+    "updated_at": "2026-04-09",
     "support_email": "help@gaiaeyes.com",
-    "web_support_url": "https://gaiaeyes.com/support"
+    "web_support_url": "https://gaiaeyes.com/support",
+    "privacy_policy_url": "https://gaiaeyes.com/privacy/",
+    "terms_of_use_url": "https://gaiaeyes.com/terms/"
   },
   "categories": [
     {
@@ -977,6 +979,12 @@
           "label": "View Privacy Policy",
           "kind": "url",
           "target": "https://gaiaeyes.com/privacy/"
+        },
+        {
+          "id": "terms-link-health-data",
+          "label": "View Terms of Use",
+          "kind": "url",
+          "target": "https://gaiaeyes.com/terms/"
         }
       ]
     },
@@ -1014,6 +1022,12 @@
           "label": "View Privacy Policy",
           "kind": "url",
           "target": "https://gaiaeyes.com/privacy/"
+        },
+        {
+          "id": "terms-link-permissions",
+          "label": "View Terms of Use",
+          "kind": "url",
+          "target": "https://gaiaeyes.com/terms/"
         }
       ]
     },
@@ -1136,6 +1150,12 @@
           "label": "Read restore purchases first",
           "kind": "article",
           "target": "restore-purchases"
+        },
+        {
+          "id": "terms-link-billing-help",
+          "label": "View Terms of Use",
+          "kind": "url",
+          "target": "https://gaiaeyes.com/terms/"
         }
       ]
     },

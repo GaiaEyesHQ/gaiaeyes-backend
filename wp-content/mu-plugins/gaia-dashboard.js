@@ -5,6 +5,8 @@
   const dashboardProxy = normalizeBase(cfg.dashboardProxy);
   const memberRoutes = cfg.memberRoutes && typeof cfg.memberRoutes === "object" ? cfg.memberRoutes : {};
   const supportUrl = cfg.supportUrl || "/support/";
+  const privacyUrl = cfg.privacyUrl || "/privacy/";
+  const termsUrl = cfg.termsUrl || "/terms/";
   const publicLinks = cfg.publicLinks && typeof cfg.publicLinks === "object" ? cfg.publicLinks : {};
   const DEFAULT_TRACKED_STAT_KEYS = ["resting_hr", "respiratory", "hrv", "spo2", "steps"];
   const MAX_FAVORITE_SYMPTOM_CODES = 6;
@@ -4337,6 +4339,8 @@
               <a class="gaia-dashboard__link-card" href="${esc(publicLinks.aurora || "/aurora-tracker/")}"><strong>Aurora</strong><small>Live tracker and viewlines.</small></a>
               <a class="gaia-dashboard__link-card" href="${esc(publicLinks.earthquakes || "/earthquakes/")}"><strong>Earthquakes</strong><small>Global quake activity and recent clusters.</small></a>
               <a class="gaia-dashboard__link-card" href="${esc(supportUrl)}"><strong>Help Center</strong><small>Support, sync help, billing, and account guidance.</small></a>
+              <a class="gaia-dashboard__link-card" href="${esc(privacyUrl)}"><strong>Privacy Policy</strong><small>Public privacy disclosures for the app and website.</small></a>
+              <a class="gaia-dashboard__link-card" href="${esc(termsUrl)}"><strong>Terms of Use</strong><small>Public terms, billing boundaries, and app-use conditions.</small></a>
             </div>
           </article>
         </div>

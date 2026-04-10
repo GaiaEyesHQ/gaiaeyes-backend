@@ -245,6 +245,7 @@ if (!function_exists('gaiaeyes_render_privacy_policy')) {
                     }
                 }
             </style>
+            <?php $terms_url = function_exists('gaiaeyes_terms_url') ? gaiaeyes_terms_url() : home_url('/terms/'); ?>
             <div class="ge-privacy-shell">
                 <header class="ge-privacy-hero">
                     <p class="ge-privacy-eyebrow">Legal</p>
@@ -259,6 +260,7 @@ if (!function_exists('gaiaeyes_render_privacy_policy')) {
                     <div class="ge-privacy-actions">
                         <a class="ge-privacy-link" href="mailto:help@gaiaeyes.com?subject=Privacy%20Question">Contact Privacy Support</a>
                         <a class="ge-privacy-link ge-privacy-link--quiet" href="<?php echo esc_url(home_url('/support/')); ?>">Open Support Center</a>
+                        <a class="ge-privacy-link ge-privacy-link--quiet" href="<?php echo esc_url($terms_url); ?>">Terms of Use</a>
                     </div>
                 </header>
 
@@ -268,6 +270,7 @@ if (!function_exists('gaiaeyes_render_privacy_policy')) {
                         <a href="<?php echo esc_url(gaiaeyes_privacy_url('collect')); ?>"><strong>What we collect</strong><span>Account info, app inputs, optional Health data, location, diagnostics, and billing metadata.</span></a>
                         <a href="<?php echo esc_url(gaiaeyes_privacy_url('share')); ?>"><strong>How we share data</strong><span>Supabase, Stripe, Apple services, environmental data providers, and core infrastructure partners.</span></a>
                         <a href="<?php echo esc_url(gaiaeyes_privacy_url('choices')); ?>"><strong>Your choices</strong><span>Permissions, settings, support requests, and how to contact us about your data.</span></a>
+                        <a href="<?php echo esc_url($terms_url); ?>"><strong>Terms of Use</strong><span>Read the public app and website terms alongside the Privacy Policy.</span></a>
                         <a href="<?php echo esc_url(gaiaeyes_privacy_url('contact')); ?>"><strong>Contact</strong><span>Use help@gaiaeyes.com for privacy, support, or data questions.</span></a>
                     </div>
                 </nav>

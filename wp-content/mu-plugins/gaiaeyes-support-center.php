@@ -19,6 +19,7 @@ if (!function_exists('gaiaeyes_help_center_fallback_data')) {
                 'updated_at' => '2026-04-08',
                 'web_support_url' => home_url('/support/'),
                 'privacy_policy_url' => home_url('/privacy/'),
+                'terms_of_use_url' => home_url('/terms/'),
             ],
             'categories' => [
                 ['id' => 'getting-started', 'title' => 'Getting started', 'summary' => 'What Gaia Eyes does and how to read it.'],
@@ -374,6 +375,12 @@ if (!function_exists('gaiaeyes_render_support_center')) {
         $popular_articles = gaiaeyes_support_articles_by_ids($articles, gaiaeyes_support_popular_article_ids());
         $support_email = isset($metadata['support_email']) ? (string) $metadata['support_email'] : '';
         $updated_at = isset($metadata['updated_at']) ? (string) $metadata['updated_at'] : '';
+        $privacy_url = isset($metadata['privacy_policy_url']) && is_string($metadata['privacy_policy_url']) && trim($metadata['privacy_policy_url']) !== ''
+            ? (string) $metadata['privacy_policy_url']
+            : home_url('/privacy/');
+        $terms_url = isset($metadata['terms_of_use_url']) && is_string($metadata['terms_of_use_url']) && trim($metadata['terms_of_use_url']) !== ''
+            ? (string) $metadata['terms_of_use_url']
+            : (function_exists('gaiaeyes_terms_url') ? gaiaeyes_terms_url() : home_url('/terms/'));
         $article_count = count($articles);
         $filtered_count = count($filtered_articles);
 
@@ -579,7 +586,8 @@ if (!function_exists('gaiaeyes_render_support_center')) {
                         <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url(gaiaeyes_support_url('health-sync-help')); ?>">Health sync help</a>
                         <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url(gaiaeyes_support_url('need-help-with-billing')); ?>">Billing help</a>
                         <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url(gaiaeyes_support_url('what-health-data-is-used-for')); ?>">Privacy and Health data</a>
-                        <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url(home_url('/privacy/')); ?>">Privacy Policy</a>
+                        <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url($privacy_url); ?>">Privacy Policy</a>
+                        <a class="ge-support-link ge-support-link--quiet" href="<?php echo esc_url($terms_url); ?>">Terms of Use</a>
                     </div>
                     <form class="ge-support-search" method="get" action="<?php echo esc_url(gaiaeyes_support_url()); ?>">
                         <label for="ge-support-search-input">Search the help center</label>
