@@ -4318,6 +4318,76 @@ struct ContentView: View {
 #endif
     }
 
+    private func diagnosticsBoolText(_ value: Bool?) -> String {
+        guard let value else { return "-" }
+        return value ? "true" : "false"
+    }
+
+    private func diagnosticsPresenceSummary(_ map: PresenceMap?) -> String {
+        guard let map else { return "-" }
+        return [
+            "health=\(diagnosticsBoolText(map.health))",
+            "sleep=\(diagnosticsBoolText(map.sleep))",
+            "space=\(diagnosticsBoolText(map.spaceWeather))",
+            "schumann=\(diagnosticsBoolText(map.schumann))",
+            "post=\(diagnosticsBoolText(map.postCopy))",
+        ].joined(separator: " | ")
+    }
+
+    private func featureDiagnosticsBundleLines() -> [String] {
+        guard let diagnostics = featuresDiagnostics else {
+            return [
+                "Feature Diagnostics:",
+                "- Not loaded in this session.",
+                "- Feature fetch state: ok=\(featureFetchState.okText) | source=\(featureFetchState.source ?? "-") | cacheFallback=\(featureFetchState.cacheFallback ?? "-") | poolTimeout=\(featureFetchState.poolTimeout ?? "-") | error=\(featureFetchState.error ?? "-")",
+            ]
+        }
+
+        var lines: [String] = []
+        lines.append("Feature Diagnostics:")
+        lines.append("- Source: \(diagnostics.source ?? "-")")
+        lines.append("- Branch: \(diagnostics.branch ?? "-")")
+        lines.append("- Day / used: \(diagnostics.day ?? "-") / \(diagnostics.dayUsed ?? "-")")
+        lines.append("- TZ: \(diagnostics.tz ?? "-")")
+        lines.append("- Updated at: \(diagnostics.updatedAt ?? "-")")
+        lines.append("- Max day: \(diagnostics.maxDay ?? "-")")
+        lines.append("- Total rows: \(diagnostics.totalRows.map(String.init) ?? "-")")
+        lines.append("- Statement timeout ms: \(diagnostics.statementTimeoutMs.map(String.init) ?? "-")")
+        lines.append("- Requested user: \(diagnostics.requestedUserId ?? "-")")
+        lines.append("- Resolved user: \(diagnostics.userId ?? "-")")
+        lines.append("- Mart row: \(diagnosticsBoolText(diagnostics.martRow))")
+        lines.append("- Freshened: \(diagnosticsBoolText(diagnostics.freshened))")
+        lines.append("- Cache hit: \(diagnosticsBoolText(diagnostics.cacheHit))")
+        lines.append("- Cache fallback: \(diagnosticsBoolText(diagnostics.cacheFallback))")
+        lines.append("- Cache rehydrated: \(diagnosticsBoolText(diagnostics.cacheRehydrated))")
+        lines.append("- Cache updated: \(diagnosticsBoolText(diagnostics.cacheUpdated))")
+        lines.append("- Cache age seconds: \(diagnostics.cacheAgeSeconds.map { String(format: "%.1f", $0) } ?? "-")")
+        lines.append("- Refresh attempted: \(diagnosticsBoolText(diagnostics.refreshAttempted))")
+        lines.append("- Refresh scheduled: \(diagnosticsBoolText(diagnostics.refreshScheduled))")
+        lines.append("- Refresh reason: \(diagnostics.refreshReason ?? "-")")
+        lines.append("- Refresh forced: \(diagnosticsBoolText(diagnostics.refreshForced))")
+        lines.append("- Pool timeout: \(diagnosticsBoolText(diagnostics.poolTimeout))")
+        lines.append("- Initial snapshot: \(diagnosticsPresenceSummary(diagnostics.cacheSnapshotInitial))")
+        lines.append("- Final snapshot: \(diagnosticsPresenceSummary(diagnostics.cacheSnapshotFinal))")
+        lines.append("- Payload summary: \(diagnosticsPresenceSummary(diagnostics.payloadSummary))")
+        if let lastError = diagnostics.lastError, !lastError.isEmpty {
+            lines.append("- Last error: \(lastError)")
+        }
+        if let error = diagnostics.error, !error.isEmpty {
+            lines.append("- Error: \(error)")
+        }
+        if let enrichmentErrors = diagnostics.enrichmentErrors, !enrichmentErrors.isEmpty {
+            lines.append("- Enrichment errors: \(enrichmentErrors.joined(separator: " | "))")
+        }
+        let trace = Array((diagnostics.trace ?? []).suffix(80).reversed())
+        lines.append("- Trace lines included: \(trace.count)")
+        if !trace.isEmpty {
+            lines.append("Feature Diagnostics Trace (latest first):")
+            lines.append(contentsOf: trace.map { "- \($0)" })
+        }
+        return lines
+    }
+
     private func diagnosticsBundleText() -> String {
         let billing = debugBillingSnapshot
         let profile = debugProfileSnapshot
@@ -4365,6 +4435,16 @@ struct ContentView: View {
         lines.append("- Gauges: \(featureInputs.gaugeSummary.isEmpty ? "none" : featureInputs.gaugeSummary.joined(separator: " | "))")
         lines.append("- Local: \(featureInputs.localValues.isEmpty ? "none" : featureInputs.localValues.joined(separator: " | "))")
         lines.append("- Space: \(featureInputs.spaceValues.isEmpty ? "none" : featureInputs.spaceValues.joined(separator: " | "))")
+        lines.append("")
+        lines.append(contentsOf: featureDiagnosticsBundleLines())
+        lines.append("")
+        lines.append("In-App Debug Log Tail:")
+        let appLogTail = Array(state.log.suffix(80))
+        if appLogTail.isEmpty {
+            lines.append("- (no app log lines)")
+        } else {
+            lines.append(contentsOf: appLogTail.map { "- \($0)" })
+        }
         lines.append("")
         lines.append("Recent Trace:")
         if diagnosticsBundleTraceLines.isEmpty {
@@ -4427,6 +4507,9 @@ struct ContentView: View {
             bugReportSubmitting = true
             bugReportMessage = nil
         }
+        if featuresDiagnostics == nil {
+            await fetchFeaturesDiagnostics()
+        }
 
         let trimmedBase = state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let token = await auth.validAccessToken(), !token.isEmpty else {
@@ -4460,10 +4543,21 @@ struct ContentView: View {
                     userInfo: [NSLocalizedDescriptionKey: (message?.isEmpty == false ? message! : "Could not submit the bug report.")]
                 )
             }
+            let alertError = envelope.data?.alertError?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let alertMessage: String
+            if envelope.data?.alertSent == true {
+                alertMessage = "Bug report submitted and alert sent."
+            } else if let alertError, !alertError.isEmpty {
+                alertMessage = "Bug report saved. Alert email failed: \(alertError)"
+                appLog("[UI] bug report alert email failed: \(alertError)")
+            } else {
+                alertMessage = "Bug report saved. Alert email not sent."
+                appLog("[UI] bug report alert email not sent")
+            }
 
             await MainActor.run {
-                bugReportMessage = "Bug report submitted."
-                debugToolkitMessage = "Bug report submitted."
+                bugReportMessage = alertMessage
+                debugToolkitMessage = alertMessage
                 showBugReportSheet = false
                 bugReportDescription = ""
                 bugReportSubmitting = false
@@ -15371,6 +15465,9 @@ struct ContentView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .sheet(isPresented: $showBugReportSheet) {
+            bugReportSheetContent
+        }
     }
 
     private var bugReportSheetContent: some View {
@@ -16737,9 +16834,6 @@ struct ContentView: View {
             primaryModalShell
         .sheet(isPresented: $showMissionSettingsSheet) {
             missionSettingsSheetContent
-        }
-        .sheet(isPresented: $showBugReportSheet) {
-            bugReportSheetContent
         }
         .alert("Delete account?", isPresented: $showDeleteAccountConfirmation) {
             Button("Delete Account", role: .destructive) {

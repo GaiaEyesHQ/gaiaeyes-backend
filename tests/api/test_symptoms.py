@@ -412,6 +412,19 @@ async def test_current_symptoms_snapshot_builds_live_context(monkeypatch, client
                 "last_interaction_at": "2024-04-02T09:30:00+00:00",
                 "latest_note_text": "Worse this afternoon",
                 "note_count": 1,
+            },
+            {
+                "id": "ep-duplicate",
+                "symptom_code": "headache",
+                "label": "Headache",
+                "original_severity": 6,
+                "current_severity": 6,
+                "started_at": "2024-04-02T08:20:00+00:00",
+                "current_state": "new",
+                "state_updated_at": "2024-04-02T08:20:00+00:00",
+                "last_interaction_at": "2024-04-02T08:20:00+00:00",
+                "latest_note_text": None,
+                "note_count": 0,
             }
         ]
 
@@ -485,6 +498,7 @@ async def test_current_symptoms_snapshot_builds_live_context(monkeypatch, client
     payload = response.json()
     assert payload["ok"] is True
     assert payload["data"]["summary"]["active_count"] == 1
+    assert payload["data"]["items"][0]["id"] == "ep-1"
     assert payload["data"]["items"][0]["current_state"] == "ongoing"
     assert payload["data"]["items"][0]["likely_drivers"][0]["key"] == "pressure"
     assert payload["data"]["pattern_context"][0]["signal_key"] == "pressure_swing_exposed"

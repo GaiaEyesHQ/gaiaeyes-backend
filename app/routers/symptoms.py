@@ -328,6 +328,19 @@ def _serialize_pattern_ref(ref: Dict[str, Any]) -> CurrentSymptomPatternOut:
     )
 
 
+def _dedupe_current_symptom_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    deduped: List[Dict[str, Any]] = []
+    seen_codes: set[str] = set()
+    for row in rows:
+        code = _normalize_symptom_code(str(row.get("symptom_code") or ""))
+        if code:
+            if code in seen_codes:
+                continue
+            seen_codes.add(code)
+        deduped.append(row)
+    return deduped
+
+
 def _serialize_driver(
     driver: Dict[str, Any],
     *,
@@ -423,6 +436,7 @@ async def _build_current_symptoms_payload(
         rows = await symptoms_db.fetch_current_symptom_items(conn, user_id, window_hours=window_hours)
     except Exception:
         rows = await symptoms_db.fetch_current_symptom_items_fallback(conn, user_id, window_hours=window_hours)
+    rows = _dedupe_current_symptom_rows(rows)
 
     follow_up = await symptoms_db.fetch_symptom_follow_up_settings(conn, user_id)
     now_day = datetime.now(timezone.utc).date()
