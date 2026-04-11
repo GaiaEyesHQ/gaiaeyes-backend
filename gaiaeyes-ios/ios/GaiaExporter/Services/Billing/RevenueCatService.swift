@@ -58,6 +58,8 @@ enum RevenueCatBillingError: LocalizedError {
     case missingAPIKey
     case missingProductIDs
     case productUnavailable(String)
+    case purchaseCancelled
+    case purchaseDidNotActivate
 
     var errorDescription: String? {
         switch self {
@@ -67,6 +69,10 @@ enum RevenueCatBillingError: LocalizedError {
             return "Missing RevenueCat product identifiers in Info.plist."
         case .productUnavailable(let planID):
             return "RevenueCat product is not available for \(planID)."
+        case .purchaseCancelled:
+            return "Purchase was cancelled before it completed."
+        case .purchaseDidNotActivate:
+            return "Purchase finished, but Plus is not active yet. Check that the RevenueCat product is attached to the plus entitlement, then tap Restore Purchases."
         }
     }
 }
@@ -187,7 +193,13 @@ final class RevenueCatService: ObservableObject {
             throw RevenueCatBillingError.productUnavailable(planID)
         }
         let result = try await Purchases.shared.purchase(product: option.product)
+        if result.userCancelled {
+            throw RevenueCatBillingError.purchaseCancelled
+        }
         apply(customerInfo: result.customerInfo)
+        if activePlan == .free {
+            throw RevenueCatBillingError.purchaseDidNotActivate
+        }
         return activePlan
     }
 

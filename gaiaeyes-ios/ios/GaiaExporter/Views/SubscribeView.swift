@@ -67,6 +67,16 @@ struct SubscribeView: View {
         return labels.filter { seen.insert($0).inserted }
     }
 
+    private var plusOptionsSummary: String {
+        if revenueCat.productOptions["plus_monthly"] != nil && revenueCat.productOptions["plus_yearly"] != nil {
+            return "Plus options are ready."
+        }
+        if revenueCat.productOptions.isEmpty {
+            return "Loading Plus options..."
+        }
+        return "Some Plus options are still loading."
+    }
+
     private var resolvedHelpContext: HelpCenterContext {
         var context = helpContext
         if context.guideProfile == nil {
@@ -169,7 +179,7 @@ struct SubscribeView: View {
                 }
                 Text("Your Plan: \(currentPlan.title)")
                     .font(.headline)
-                Text(revenueCat.productStatus)
+                Text(plusOptionsSummary)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -200,17 +210,14 @@ struct SubscribeView: View {
         case .plus:
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Upgrade to Pro")
+                    Text("Plus is active")
                         .font(.subheadline.weight(.semibold))
-                    Text("Keep your current Plus access and move up when you want deeper outlooks and premium intelligence layers.")
+                    Text("Renewals and cancellations are managed through Apple Subscriptions.")
                         .font(.footnote)
                         .foregroundColor(.secondary)
-                    purchaseButton(title: "Upgrade to Pro (Monthly)", planID: "pro_monthly", isProminent: true)
-                    purchaseButton(title: "Upgrade to Pro (Yearly)", planID: "pro_yearly", isProminent: false)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .disabled(isWorking)
         case .pro:
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
@@ -230,19 +237,10 @@ struct SubscribeView: View {
             planCard(
                 title: "Plus",
                 description: "Unlock richer current-state personalization, better drivers, and more useful day-to-day signal context.",
-                primaryTitle: "Get Plus (Monthly)",
+                primaryTitle: "Monthly",
                 primaryPlan: "plus_monthly",
-                secondaryTitle: "Get Plus (Yearly)",
+                secondaryTitle: "Yearly",
                 secondaryPlan: "plus_yearly"
-            )
-
-            planCard(
-                title: "Pro",
-                description: "Add deeper outlooks, advanced history, premium notifications, and a more complete intelligence layer.",
-                primaryTitle: "Get Pro (Monthly)",
-                primaryPlan: "pro_monthly",
-                secondaryTitle: "Get Pro (Yearly)",
-                secondaryPlan: "pro_yearly"
             )
         }
     }
@@ -289,8 +287,8 @@ struct SubscribeView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 } else {
-                    purchaseButton(title: primaryTitle, planID: primaryPlan, isProminent: true)
-                    purchaseButton(title: secondaryTitle, planID: secondaryPlan, isProminent: false)
+                    purchaseButton(title: primaryTitle, planID: primaryPlan)
+                    purchaseButton(title: secondaryTitle, planID: secondaryPlan)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -298,22 +296,33 @@ struct SubscribeView: View {
     }
 
     @ViewBuilder
-    private func purchaseButton(title: String, planID: String, isProminent: Bool) -> some View {
+    private func purchaseButton(title: String, planID: String) -> some View {
         let option = revenueCat.productOptions[planID]
-        let label = option.map { "\(title) • \($0.price)" } ?? title
-        if isProminent {
-            Button(label) {
-                Task { await purchase(planID: planID) }
+        Button {
+            Task { await purchase(planID: planID) }
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(planID.contains("yearly") ? "Best value annual access" : "Flexible monthly access")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.82))
+                }
+                Spacer()
+                if let option {
+                    Text(option.price)
+                        .font(.headline.weight(.bold))
+                } else {
+                    Text("Loading")
+                        .font(.caption.weight(.semibold))
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(isWorking || option == nil)
-        } else {
-            Button(label) {
-                Task { await purchase(planID: planID) }
-            }
-            .buttonStyle(.bordered)
-            .disabled(isWorking || option == nil)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
         }
+        .buttonStyle(.borderedProminent)
+        .disabled(isWorking || option == nil)
     }
 
     private var entitlementSummary: some View {
@@ -367,6 +376,7 @@ struct SubscribeView: View {
             let plan = try await revenueCat.purchase(planID: planID, appUserID: userID)
             cachedPlanRaw = plan.rawValue
             cachedPlanSyncedAt = ISO8601DateFormatter().string(from: Date())
+            errorMessage = "\(plan.title) is active."
             await refreshBackendEntitlementsAfterRevenueCatUpdate()
         } catch {
             errorMessage = error.localizedDescription
@@ -384,6 +394,7 @@ struct SubscribeView: View {
             let plan = try await revenueCat.restore(appUserID: userID)
             cachedPlanRaw = plan.rawValue
             cachedPlanSyncedAt = ISO8601DateFormatter().string(from: Date())
+            errorMessage = plan == .free ? "No active App Store subscription was found for this Apple ID." : "\(plan.title) access restored."
             await refreshBackendEntitlementsAfterRevenueCatUpdate()
         } catch {
             errorMessage = error.localizedDescription

@@ -30,19 +30,13 @@
 		<true/>
 	</dict>
 	<key>REVENUECAT_IOS_API_KEY</key>
-	<string>$(REVENUECAT_IOS_API_KEY)</string>
+	<string>appl_yiYbPrukxNEjnWCTlzKULBDhaJL</string>
 	<key>REVENUECAT_PLUS_ENTITLEMENT_ID</key>
 	<string>plus</string>
 	<key>REVENUECAT_PLUS_MONTHLY_PRODUCT_ID</key>
-	<string>$(REVENUECAT_PLUS_MONTHLY_PRODUCT_ID)</string>
+	<string>gaiaeyes_plus_monthly</string>
 	<key>REVENUECAT_PLUS_YEARLY_PRODUCT_ID</key>
-	<string>$(REVENUECAT_PLUS_YEARLY_PRODUCT_ID)</string>
-	<key>REVENUECAT_PRO_ENTITLEMENT_ID</key>
-	<string>pro</string>
-	<key>REVENUECAT_PRO_MONTHLY_PRODUCT_ID</key>
-	<string>$(REVENUECAT_PRO_MONTHLY_PRODUCT_ID)</string>
-	<key>REVENUECAT_PRO_YEARLY_PRODUCT_ID</key>
-	<string>$(REVENUECAT_PRO_YEARLY_PRODUCT_ID)</string>
+	<string>gaiaeyes_plus_yearly</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFhZHd6a3d1YmZiZnVzbGZ4a3psIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5ODgxOTEsImV4cCI6MjA3MTU2NDE5MX0.tS67xEsIyRJXXkqmnWJNfqv280WYbOPwTdMhCaudSQU</string>
 	<key>SUPABASE_URL</key>
