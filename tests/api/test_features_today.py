@@ -81,6 +81,49 @@ class _FakePool:
         return _FakeConnContext()
 
 
+class _RecordingCursor:
+    def __init__(self):
+        self.calls: List[tuple[str, tuple]] = []
+        self.rowcount = 1
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def execute(self, query, values=None, **kwargs):  # noqa: ARG002
+        self.calls.append((str(query), tuple(values or ())))
+
+
+class _RecordingConn:
+    def __init__(self, cursor: _RecordingCursor):
+        self._cursor = cursor
+
+    def cursor(self, *args, **kwargs):  # noqa: ARG002
+        return self._cursor
+
+    async def commit(self):
+        return None
+
+
+class _RecordingPool:
+    def __init__(self):
+        self.cursor = _RecordingCursor()
+
+    def connection(self):
+        pool = self
+
+        class _Ctx:
+            async def __aenter__(self_inner):
+                return _RecordingConn(pool.cursor)
+
+            async def __aexit__(self_inner, exc_type, exc, tb):
+                return False
+
+        return _Ctx()
+
+
 class _FlakyPool:
     def __init__(self, failures: list[str]):
         self._failures = list(failures)
@@ -220,6 +263,31 @@ async def test_ingest_accepts_supabase_jwt_and_uses_authenticated_user(monkeypat
     assert resp.json()["ok"] is True
     assert captured["insert_user"] == auth_user_id
     assert captured["refresh_user"] == auth_user_id
+
+
+@pytest.mark.anyio
+async def test_insert_batch_provisions_gaia_user_before_samples():
+    user_id = str(uuid4())
+    pool = _RecordingPool()
+    sample = ingest.SampleIn(
+        user_id=str(uuid4()),
+        device_os="ios",
+        source="watch",
+        type="heart_rate",
+        start_time=datetime(2024, 4, 3, 12, 0, tzinfo=timezone.utc),
+        end_time=datetime(2024, 4, 3, 12, 1, tzinfo=timezone.utc),
+        value=70,
+    )
+
+    inserted, skipped, errors = await ingest._insert_batch_once(pool, [(sample, 0)], user_id)
+
+    assert inserted == 1
+    assert skipped == 0
+    assert errors == []
+    assert "insert into gaia.users" in pool.cursor.calls[0][0]
+    assert pool.cursor.calls[0][1] == (user_id,)
+    assert "insert into gaia.samples" in pool.cursor.calls[1][0]
+    assert pool.cursor.calls[1][1][0] == user_id
 
 
 @pytest.mark.anyio

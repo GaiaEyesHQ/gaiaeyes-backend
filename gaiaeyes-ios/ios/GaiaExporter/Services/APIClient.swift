@@ -795,8 +795,13 @@ final class APIClient {
     // MARK: - Public upload
 
     private struct SamplesBatchResponse: Decodable {
+        struct BatchError: Decodable {}
+
         let ok: Bool?
         let received: Int?
+        let inserted: Int?
+        let buffered: Int?
+        let errors: [BatchError]?
     }
 
     /// Upload in chunks with retry/backoff per chunk and bisect-on-failure (default: 200 rows, 3 tries)
@@ -888,8 +893,10 @@ final class APIClient {
                     let body = String(data: data, encoding: .utf8) ?? ""
                     if (200...299).contains(code) {
                         logger?("↩︎ \(code) \(body)")
-                        let uploaded = parseReceivedCount(from: data) ?? (chunk.isEmpty ? 0 : chunk.count)
-                        return uploaded > 0
+                        if let accepted = parseAcceptedBatch(from: data) {
+                            return accepted
+                        }
+                        return !chunk.isEmpty
                     } else {
                         logger?("↩︎ \(code) \(HTTPURLResponse.localizedString(forStatusCode: code)) \(body)")
                         let serverError = APIError.server(code: code, body: body)
@@ -919,11 +926,19 @@ final class APIClient {
         return false
     }
 
-    private func parseReceivedCount(from data: Data) -> Int? {
+    private func parseAcceptedBatch(from data: Data) -> Bool? {
         guard !data.isEmpty else { return nil }
         let decoder = APIClient.tolerantJSONDecoder()
         if let resp = try? decoder.decode(SamplesBatchResponse.self, from: data) {
-            return resp.received
+            let accepted = (resp.inserted ?? 0) + (resp.buffered ?? 0)
+            if accepted > 0 {
+                return true
+            }
+            let hasErrors = !(resp.errors ?? []).isEmpty
+            if resp.ok == true && !hasErrors && (resp.received ?? 0) > 0 {
+                return true
+            }
+            return false
         }
         return nil
     }

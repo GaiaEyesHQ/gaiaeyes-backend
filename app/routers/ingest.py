@@ -200,6 +200,10 @@ async def _insert_batch_once(
 
     async with pool.connection() as conn:
         async with conn.cursor() as cur:
+            user_ids = {dev_uid} if dev_uid else {sample.user_id for sample, _ in rows if sample.user_id}
+            for user_id in sorted(user_ids):
+                await _ensure_gaia_user(cur, user_id)
+
             for sample, original_index in rows:
                 values = (
                     dev_uid or sample.user_id,
@@ -235,6 +239,18 @@ async def _insert_batch_once(
             await conn.commit()
 
     return inserted, skipped, errors
+
+
+async def _ensure_gaia_user(cur, user_id: str) -> None:
+    await cur.execute(
+        """
+        insert into gaia.users (id)
+        values (%s)
+        on conflict (id) do nothing
+        """,
+        (user_id,),
+        prepare=False,
+    )
 
 
 # ---------- Models ----------
