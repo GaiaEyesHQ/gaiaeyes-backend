@@ -212,7 +212,7 @@ final class RevenueCatService: ObservableObject {
     }
 
     func logOutIfConfigured() async {
-        guard isConfigured else { return }
+        guard isConfigured, configuredAppUserID != nil else { return }
         do {
             let customerInfo = try await Purchases.shared.logOut()
             configuredAppUserID = nil

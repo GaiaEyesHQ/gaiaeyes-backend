@@ -53,14 +53,14 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             UserDefaults.standard.set(trimmed, forKey: "baseURL")
         }
     }
-    @Published var bearer: String = DeveloperAuthDefaults.bearer {
+    @Published var bearer: String = "" {
         didSet {
             let trimmed = bearer.trimmingCharacters(in: .whitespacesAndNewlines)
             UserDefaults.standard.set(trimmed, forKey: "bearer")
             warnedAboutAnonymousDevRequest = false
         }
     }
-    @Published var userId: String = DeveloperAuthDefaults.userId {
+    @Published var userId: String = "" {
         didSet {
             let trimmed = userId.trimmingCharacters(in: .whitespacesAndNewlines)
             UserDefaults.standard.set(trimmed, forKey: "userId")
@@ -186,27 +186,30 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         }
         if let storedBearer = defaults.string(forKey: "bearer") {
             let trimmed = storedBearer.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty { bearer = trimmed } else { defaults.set(bearer, forKey: "bearer") }
+            if trimmed.lowercased() == DeveloperAuthDefaults.bearer.lowercased() {
+                bearer = ""
+                defaults.removeObject(forKey: "bearer")
+            } else if !trimmed.isEmpty {
+                bearer = trimmed
+            } else {
+                defaults.set(bearer, forKey: "bearer")
+            }
         } else {
             defaults.set(bearer, forKey: "bearer")
         }
-        var replacedAnonymousUser = false
         if let storedUser = defaults.string(forKey: "userId") {
             let trimmed = storedUser.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty || trimmed.lowercased() == "anonymous" {
-                userId = DeveloperAuthDefaults.userId
-                defaults.set(userId, forKey: "userId")
-                replacedAnonymousUser = true
+                userId = ""
+                defaults.removeObject(forKey: "userId")
+            } else if trimmed == DeveloperAuthDefaults.userId && bearer.isEmpty {
+                userId = ""
+                defaults.removeObject(forKey: "userId")
             } else {
                 userId = trimmed
             }
         } else {
             defaults.set(userId, forKey: "userId")
-        }
-        if replacedAnonymousUser {
-            Task { @MainActor in
-                self.append("[NET] Replaced anonymous user id with developer default (\(DeveloperAuthDefaults.userId))")
-            }
         }
 
         selectedHealthPermissionKeys = Self.deserializeHealthPermissionKeys(selectedHealthPermissionKeysRaw)
@@ -269,9 +272,10 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     }
 
     private func effectiveDeveloperUserId() -> String? {
+        guard isDeveloperBearer else { return nil }
         let trimmedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedUserId.isEmpty || trimmedUserId.lowercased() == "anonymous" {
-            return DeveloperAuthDefaults.userId
+            return nil
         }
         return trimmedUserId
     }
@@ -326,7 +330,9 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     // MARK: - API client
     func apiWithAuth() -> APIClient {
         let trimmedBase = baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedBearer = bearer.trimmingCharacters(in: .whitespacesAndNewlines)
+        let storedBearer = bearer.trimmingCharacters(in: .whitespacesAndNewlines)
+        let supabaseBearer = AuthManager.shared.supabaseAccessToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let trimmedBearer = supabaseBearer.isEmpty ? storedBearer : supabaseBearer
         let trimmedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedBase = trimmedBase.isEmpty ? "http://127.0.0.1:8000" : trimmedBase
         let clientSignature = "\(normalizedBase)|\(trimmedBearer)"
@@ -342,15 +348,9 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             cachedAPIClientSignature = clientSignature
             append("[NET] client ready base=\(cfg.baseURLString) bearer=\(!trimmedBearer.isEmpty) uid=\(trimmedUserId.isEmpty ? "nil" : trimmedUserId)")
         }
-        // Always scope requests when using the developer bearer; fallback to the known dev user id if needed
-        if let eff = effectiveDeveloperUserId() {
+        // Scope only developer-token calls. Supabase JWTs are already account-scoped.
+        if supabaseBearer.isEmpty, let eff = effectiveDeveloperUserId() {
             client.devUserId = eff
-            // If we had to repair an anonymous/empty id, persist the fix for future requests
-            if isDeveloperBearer && (trimmedUserId.isEmpty || trimmedUserId.lowercased() == "anonymous") {
-                userId = eff
-                UserDefaults.standard.set(eff, forKey: "userId")
-                append("[NET] Auto‑scoped X-Dev-UserId=\(eff) for developer bearer")
-            }
         } else {
             client.devUserId = nil
         }
@@ -387,11 +387,14 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         guard let url = URL(string: (base.isEmpty ? "http://127.0.0.1:8000" : base))?.appendingPathComponent("v1/symptoms") else {
             throw LocalSymptomUploadError.server("bad_url")
         }
+        let storedBearer = bearer.trimmingCharacters(in: .whitespacesAndNewlines)
+        let supabaseBearer = AuthManager.shared.supabaseAccessToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let activeBearer = supabaseBearer.isEmpty ? storedBearer : supabaseBearer
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if !bearer.isEmpty { req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization") }
-        if let eff = effectiveDeveloperUserId() { req.setValue(eff, forHTTPHeaderField: "X-Dev-UserId") }
+        if !activeBearer.isEmpty { req.setValue("Bearer \(activeBearer)", forHTTPHeaderField: "Authorization") }
+        if supabaseBearer.isEmpty, let eff = effectiveDeveloperUserId() { req.setValue(eff, forHTTPHeaderField: "X-Dev-UserId") }
         appLog("[SYM] POST /v1/symptoms X-Dev-UserId=\(req.value(forHTTPHeaderField: "X-Dev-UserId") ?? "nil") bearerEmpty=\(bearer.isEmpty)")
         struct Body: Encodable {
             let symptom_code: String
@@ -632,7 +635,8 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         do {
             try await exporter.requestAuthorization()
             let api = apiWithAuth()
-            let uploaded = try await exporter.syncSleep(lastDays: 7, api: api, userId: userId)
+            let uploadUserId = AuthManager.shared.currentSupabaseUserId() ?? userId
+            let uploaded = try await exporter.syncSleep(lastDays: 7, api: api, userId: uploadUserId)
             append("[SLEEP] uploaded \(uploaded) segments (7d)")
             // stamp last upload time so Status shows it
             let f = ISO8601DateFormatter()

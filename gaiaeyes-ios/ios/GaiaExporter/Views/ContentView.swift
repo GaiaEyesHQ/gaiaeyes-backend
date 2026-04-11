@@ -2746,6 +2746,7 @@ struct ContentView: View {
     @AppStorage("gaia.membership.cached_plan") private var cachedPlanRaw: String = MembershipPlan.free.rawValue
     @AppStorage("gaia.membership.last_sync_at") private var cachedPlanSyncedAt: String = ""
     @AppStorage("gaia.app_notice.dismissed_id") private var dismissedAppNoticeID: String = ""
+    @AppStorage("gaia.auth.last_user_scope") private var lastAuthUserScope: String = ""
     @Environment(\.scenePhase) private var scenePhase
     @State private var showConnections: Bool = false
     @State private var expandLog: Bool = false
@@ -2896,6 +2897,132 @@ struct ContentView: View {
                 experienceProfile.onboardingStep = newValue
             }
         )
+    }
+
+    private func normalizedAuthScope(_ userID: String?) -> String {
+        let trimmed = userID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "signed_out" : trimmed
+    }
+
+    private func syncBackendIdentityFromAuth(userID: String?) {
+        let token = auth.supabaseAccessToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let userID = userID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !token.isEmpty, !userID.isEmpty {
+            if state.bearer != token { state.bearer = token }
+            if state.userId != userID { state.userId = userID }
+            return
+        }
+
+        let bearer = state.bearer.trimmingCharacters(in: .whitespacesAndNewlines)
+        let bearerLower = bearer.lowercased()
+        let isDeveloperBearer = bearerLower == DeveloperAuthDefaults.bearer.lowercased() || bearerLower.contains("gaia-dev")
+        if !isDeveloperBearer {
+            state.bearer = ""
+            state.userId = ""
+        }
+    }
+
+    @MainActor
+    private func handleAuthScopeChangeIfNeeded() {
+        let userID = auth.currentSupabaseUserId()
+        let nextScope = normalizedAuthScope(userID)
+        syncBackendIdentityFromAuth(userID: userID)
+
+        guard lastAuthUserScope != nextScope else { return }
+        let previousScope = lastAuthUserScope
+        clearUserScopedRuntimeState()
+        lastAuthUserScope = nextScope
+        let previousLabel = previousScope.isEmpty ? "unset" : String(previousScope.prefix(8))
+        let nextLabel = String(nextScope.prefix(8))
+        appLog("[AUTH] account scope changed \(previousLabel) → \(nextLabel); cleared user-scoped caches")
+    }
+
+    @MainActor
+    private func clearUserScopedRuntimeState() {
+        pendingDashboardRefreshTask?.cancel()
+        pendingDashboardRefreshTask = nil
+        pendingRefreshTask?.cancel()
+        pendingRefreshTask = nil
+
+        dashboardPayloadCacheJSON = ""
+        dashboardPayload = nil
+        lastNonNilDashboardGauges = nil
+        dashboardError = nil
+        dashboardLoading = false
+        dashboardFetchInFlight = false
+        dashboardLastFetchAt = .distantPast
+        dashboardLastUpdatedText = nil
+
+        featuresCacheJSON = ""
+        features = nil
+        lastKnownFeatures = nil
+        featuresDiagnostics = nil
+        featuresShowingCachedSnapshot = false
+        featuresCacheFallbackActive = false
+        featuresPoolTimeoutActive = false
+        featuresErrorDiagnosticActive = false
+
+        userOutlookCacheJSON = ""
+        userOutlook = nil
+        lastKnownUserOutlook = nil
+        userOutlookError = nil
+        userOutlookLoading = false
+
+        userPatternsCacheJSON = ""
+        allDriversCacheJSON = ""
+        missionDriversPreview = nil
+        missionDriversPreviewLastFetchAt = .distantPast
+        lunarInsights = nil
+        lunarInsightsError = nil
+        lunarInsightsLoading = false
+
+        symptomsToday = []
+        symptomDaily = []
+        symptomDiagnostics = []
+        currentSymptomsSnapshot = nil
+        currentSymptomsError = nil
+        currentSymptomsLoading = false
+        dailyCheckInStatus = nil
+        dailyCheckInError = nil
+        dailyCheckInLoading = false
+        symptomToast = nil
+        symptomSheetPrefill = nil
+
+        latestCameraCheck = nil
+        latestCameraCheckError = nil
+        latestCameraCheckLoading = false
+
+        localHealth = nil
+        localHealthError = nil
+        localHealthZip = "78209"
+        didLocationOnboarding = false
+        showLocationOnboarding = false
+        profileUseGPS = false
+        profileLocationMessage = nil
+
+        onboardingCompleted = false
+        onboardingStepRaw = OnboardingStep.welcome.rawValue
+        showOnboardingFlow = true
+        experienceProfile = .default
+        guideProfileStore.sync(from: .default)
+        selectedTagKeys = []
+        tagSaveMessage = nil
+        notificationPreferences = PushNotificationService.currentPreferencesDefault()
+        notificationSettingsMessage = nil
+        state.healthkitRequestedAtISO = ""
+        state.lastHealthBackfillAtISO = ""
+
+        cachedPlanRaw = MembershipPlan.free.rawValue
+        cachedPlanSyncedAt = ""
+        debugEntitlements = []
+        debugEntitlementsUserId = nil
+        debugEntitlementsEmail = nil
+        debugEntitlementsError = nil
+
+        Task {
+            await SymptomLogQueue.shared.clear()
+            await state.refreshSymptomQueueCount()
+        }
     }
 
     @State private var magnetosphere: MagnetosphereData? = nil
@@ -5142,6 +5269,25 @@ struct ContentView: View {
         }
     }
 
+    private func applyBackendAuthHeaders(to request: inout URLRequest) {
+        let supabaseBearer = auth.supabaseAccessToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !supabaseBearer.isEmpty {
+            request.setValue("Bearer \(supabaseBearer)", forHTTPHeaderField: "Authorization")
+            return
+        }
+
+        let bearer = state.bearer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !bearer.isEmpty else { return }
+        request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
+
+        let bearerLower = bearer.lowercased()
+        let isDeveloperBearer = bearerLower == DeveloperAuthDefaults.bearer.lowercased() || bearerLower.contains("gaia-dev")
+        let devUser = state.userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isDeveloperBearer, !devUser.isEmpty, devUser.lowercased() != "anonymous" {
+            request.setValue(devUser, forHTTPHeaderField: "X-Dev-UserId")
+        }
+    }
+
     private func putJSON<Body: Encodable, Resp: Decodable>(_ path: String, body: Body, as responseType: Resp.Type) async throws -> Resp {
         let clean = path.hasPrefix("/") ? String(path.dropFirst()) : path
         guard var url = URL(string: state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
@@ -5153,13 +5299,7 @@ struct ContentView: View {
         req.timeoutInterval = 30
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        if !state.bearer.isEmpty {
-            req.setValue("Bearer \(state.bearer)", forHTTPHeaderField: "Authorization")
-        }
-        let devUser = state.userId.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !devUser.isEmpty {
-            req.setValue(devUser, forHTTPHeaderField: "X-Dev-UserId")
-        }
+        applyBackendAuthHeaders(to: &req)
         let encoder = JSONEncoder()
         req.httpBody = try encoder.encode(body)
         let (data, response) = try await URLSession.shared.data(for: req)
@@ -5794,13 +5934,7 @@ struct ContentView: View {
         req.timeoutInterval = 30
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        if !state.bearer.isEmpty {
-            req.setValue("Bearer \(state.bearer)", forHTTPHeaderField: "Authorization")
-        }
-        let devUser = state.userId.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !devUser.isEmpty {
-            req.setValue(devUser, forHTTPHeaderField: "X-Dev-UserId")
-        }
+        applyBackendAuthHeaders(to: &req)
         let encoder = JSONEncoder()
         req.httpBody = try encoder.encode(body)
         let (data, response) = try await URLSession.shared.data(for: req)
@@ -5827,13 +5961,7 @@ struct ContentView: View {
         req.timeoutInterval = 20
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        if !state.bearer.isEmpty {
-            req.setValue("Bearer \(state.bearer)", forHTTPHeaderField: "Authorization")
-        }
-        let devUser = state.userId.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !devUser.isEmpty {
-            req.setValue(devUser, forHTTPHeaderField: "X-Dev-UserId")
-        }
+        applyBackendAuthHeaders(to: &req)
         req.httpBody = try JSONEncoder().encode(["signature": signature])
         let (data, response) = try await URLSession.shared.data(for: req)
         let code = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -7772,14 +7900,7 @@ struct ContentView: View {
             req.addValue("application/json", forHTTPHeaderField: "Content-Type")
             req.addValue("application/json", forHTTPHeaderField: "Accept")
             req.timeoutInterval = 20
-            if !state.bearer.isEmpty {
-                req.addValue("Bearer \(state.bearer)", forHTTPHeaderField: "Authorization")
-                let trimmedUID = state.userId.trimmingCharacters(in: .whitespacesAndNewlines)
-                let effectiveUserId = (trimmedUID.isEmpty || trimmedUID.lowercased() == "anonymous")
-                    ? DeveloperAuthDefaults.userId
-                    : trimmedUID
-                req.addValue(effectiveUserId, forHTTPHeaderField: "X-Dev-UserId")
-            }
+            applyBackendAuthHeaders(to: &req)
 
             let iso = ISO8601DateFormatter()
             iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -14658,6 +14779,11 @@ struct ContentView: View {
             .task {
                 guard !didRunInitialTasks else { return }
                 didRunInitialTasks = true
+                auth.loadFromKeychain()
+                _ = await auth.validAccessToken()
+                await MainActor.run {
+                    handleAuthScopeChangeIfNeeded()
+                }
                 await state.updateBackendDBFlag()
                 let api = state.apiWithAuth()
                 async let a: Void = fetchDashboardPayload(force: true)
@@ -14675,6 +14801,9 @@ struct ContentView: View {
                 _ = await (c, d)
             }
             .refreshable {
+                auth.loadFromKeychain()
+                _ = await auth.validAccessToken()
+                handleAuthScopeChangeIfNeeded()
                 await state.updateBackendDBFlag()
                 let api = state.apiWithAuth()
                 async let a: Void = fetchDashboardPayload(force: true)
@@ -14692,6 +14821,8 @@ struct ContentView: View {
                 _ = await (c, d)
             }
             .onAppear {
+                auth.loadFromKeychain()
+                handleAuthScopeChangeIfNeeded()
                 state.refreshStatus()
                 if features == nil, let cached = decodeCachedFeatures() {
                     features = cached
@@ -14743,10 +14874,21 @@ struct ContentView: View {
                 showOnboardingFlow = !onboardingCompleted
                 hydrateSymptomPresetsFromCache()
             }
+            .onChange(of: auth.supabaseUserId, initial: false) { _, _ in
+                handleAuthScopeChangeIfNeeded()
+            }
+            .onChange(of: auth.supabaseAccessToken, initial: false) { _, _ in
+                handleAuthScopeChangeIfNeeded()
+            }
             .onChange(of: scenePhase, initial: false) { _, newPhase in
                 if newPhase == .active {
                     state.refreshStatus()
                     Task {
+                        auth.loadFromKeychain()
+                        _ = await auth.validAccessToken()
+                        await MainActor.run {
+                            handleAuthScopeChangeIfNeeded()
+                        }
                         let api = state.apiWithAuth()
                         async let dashboardRefresh: Void = fetchDashboardPayload(force: dashboardNeedsForegroundRefresh())
                         async let healthKick: Void = HealthKitBackgroundSync.shared.kickOnce(reason: "became active")

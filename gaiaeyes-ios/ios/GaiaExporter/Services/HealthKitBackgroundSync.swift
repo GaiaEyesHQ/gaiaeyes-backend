@@ -425,6 +425,11 @@ final class HealthKitBackgroundSync {
             self.recordObserverEvent(for: key)
             Task { [weak self] in
                 guard let self else { return }
+                guard self.passiveHealthSyncAllowed() else {
+                    appLog("[HK] observer \(key): skipped until account onboarding is complete")
+                    completion()
+                    return
+                }
                 await self.processingGate.runOnce(key: key, op: {
                     do {
                         if type.isEqual(self.sleepType) {
@@ -752,6 +757,7 @@ final class HealthKitBackgroundSync {
             if let bg = task as? BGAppRefreshTask {
                 self.handleRefresh(task: bg)
                 Task {
+                    guard self.passiveHealthSyncAllowed() else { return }
                     try? await self.processSleepDeltas(anchorKey: "sleep_stage")
                     try? await self.processCycleDeltas(anchorKey: "menstrual_flow")
                 }
@@ -788,6 +794,10 @@ final class HealthKitBackgroundSync {
         StatusStore.shared.setBackgroundRun()
         let op = BlockOperation {
             Task {
+                guard self.passiveHealthSyncAllowed() else {
+                    appLog("[BG] refresh skipped until account onboarding is complete")
+                    return
+                }
                 try? await self.processDeltas(for: self.hrType, anchorKey: "heart_rate")
                 try? await self.processDeltas(for: self.spo2Type, anchorKey: "spo2")
                 try? await self.processDeltas(for: self.stepsType, anchorKey: "step_count")
@@ -816,6 +826,10 @@ final class HealthKitBackgroundSync {
         StatusStore.shared.setBackgroundRun()
         let op = BlockOperation {
             Task {
+                guard self.passiveHealthSyncAllowed() else {
+                    appLog("[BG] processing skipped until account onboarding is complete")
+                    return
+                }
                 await self.kickOnce(reason: "processing")
                 try? await self.processSleepDeltas(anchorKey: "sleep_stage")
                 try? await self.processCycleDeltas(anchorKey: "menstrual_flow")
@@ -830,12 +844,23 @@ final class HealthKitBackgroundSync {
     private func currentUserId() -> String {
         UserDefaults.standard.string(forKey: "userId") ?? ""
     }
+
+    private func passiveHealthSyncAllowed() -> Bool {
+        let defaults = UserDefaults.standard
+        let uid = currentUserId().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard uid.count == 36 else { return false }
+        guard defaults.bool(forKey: "gaia.onboarding.completed") else { return false }
+        return defaults.string(forKey: "gaia.auth.last_user_scope") == uid
+    }
+
     private func buildAPI() -> APIClient {
         // Read persisted config that @AppStorage writes
         let rawBase = UserDefaults.standard.string(forKey: "baseURL") ?? ""
         let base = rawBase.trimmingCharacters(in: .whitespacesAndNewlines)
         let bearer = (UserDefaults.standard.string(forKey: "bearer") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let uid = currentUserId().trimmingCharacters(in: .whitespacesAndNewlines)
+        let bearerLower = bearer.lowercased()
+        let isDeveloperBearer = bearerLower == DeveloperAuthDefaults.bearer.lowercased() || bearerLower.contains("gaia-dev")
 
         // Sanity logging so we can see why a -1011 or 401/422 might happen
         if base.isEmpty || URL(string: base) == nil {
@@ -850,7 +875,7 @@ final class HealthKitBackgroundSync {
 
         // Build client and surface HTTP logs
         let api = APIClient(config: APIConfig(baseURLString: base, bearer: bearer, timeout: 60))
-        api.devUserId = uid
+        api.devUserId = isDeveloperBearer ? uid : nil
         api.logger = { message in
             appLog("[BG] \(message)")
         }
@@ -925,6 +950,10 @@ final class HealthKitBackgroundSync {
     /// Clear stale anchors for newly-expanded context signals once so recent history
     /// is re-uploaded even if prior anchors stopped advancing.
     func ensurePhase2RecentBackfillIfNeeded() async {
+        guard passiveHealthSyncAllowed() else {
+            appLog("[Backfill] phase2 recent backfill skipped until account onboarding is complete")
+            return
+        }
         let defaults = UserDefaults.standard
         let appliedVersion = defaults.integer(forKey: Self.phase2BackfillMarkerKey)
         guard appliedVersion < Self.phase2BackfillVersion else { return }
@@ -1087,8 +1116,13 @@ final class HealthKitBackgroundSync {
         onProgress: (@Sendable (String) async -> Void)? = nil
     ) async -> HealthBackfillSummary {
         let metrics = InteractiveBackfillMetric.allCases
-        anchorStore.clear(keys: metrics.map(\.key))
         var summary = HealthBackfillSummary(totalMetrics: metrics.count)
+        guard currentUserId().trimmingCharacters(in: .whitespacesAndNewlines).count == 36 else {
+            summary.failedMetrics = ["signed-in user"]
+            await reportBackfillProgress("Sign in before importing Health data.", onProgress: onProgress)
+            return summary
+        }
+        anchorStore.clear(keys: metrics.map(\.key))
 
         await reportBackfillProgress("Preparing 30-day import…", onProgress: onProgress)
 
@@ -1281,6 +1315,10 @@ final class HealthKitBackgroundSync {
         }
         if suppressed {
             appLog("[BG] kickOnce suppressed (recent)")
+            return
+        }
+        guard passiveHealthSyncAllowed() else {
+            appLog("[BG] kickOnce skipped until account onboarding is complete")
             return
         }
         appLog("[BG] kickOnce: \(reason)")

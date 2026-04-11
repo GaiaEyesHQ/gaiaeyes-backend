@@ -27,6 +27,7 @@ final class AuthManager: ObservableObject {
         if let exp = keychain.read("expires_at"), let ts = TimeInterval(exp) {
             supabaseExpiresAt = Date(timeIntervalSince1970: ts)
         }
+        mirrorSessionToBackendDefaults(accessToken: supabaseAccessToken, userId: supabaseUserId)
 
         if supabaseRefreshToken != nil {
             Task { await refreshSessionIfNeeded() }
@@ -128,6 +129,7 @@ final class AuthManager: ObservableObject {
         keychain.delete("user_id")
         keychain.delete("email")
         keychain.delete("expires_at")
+        clearMirroredBackendDefaults(accessToken: accessToken, userId: currentUserId)
     }
 
     private func persistSession(accessToken: String, refreshToken: String, expiresAt: Date?, userId: String?) {
@@ -148,6 +150,26 @@ final class AuthManager: ObservableObject {
         }
         if let expiresAt {
             keychain.write(String(expiresAt.timeIntervalSince1970), key: "expires_at")
+        }
+        mirrorSessionToBackendDefaults(accessToken: accessToken, userId: supabaseUserId)
+    }
+
+    private func mirrorSessionToBackendDefaults(accessToken: String?, userId: String?) {
+        let token = accessToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let userId = userId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !token.isEmpty, !userId.isEmpty else { return }
+        let defaults = UserDefaults.standard
+        defaults.set(token, forKey: "bearer")
+        defaults.set(userId, forKey: "userId")
+    }
+
+    private func clearMirroredBackendDefaults(accessToken: String?, userId: String?) {
+        let defaults = UserDefaults.standard
+        let storedBearer = defaults.string(forKey: "bearer")
+        guard storedBearer == accessToken else { return }
+        defaults.removeObject(forKey: "bearer")
+        if defaults.string(forKey: "userId") == userId {
+            defaults.removeObject(forKey: "userId")
         }
     }
 
