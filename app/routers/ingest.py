@@ -10,13 +10,12 @@ from collections import deque
 from psycopg import errors as pg_errors, OperationalError
 from psycopg_pool.errors import PoolTimeout
 
-from fastapi import APIRouter, Body, Depends, Request, Header, HTTPException, status, Query
+from fastapi import APIRouter, Body, Request, Query
 from pydantic import BaseModel
 
 from ..db import (
     get_pool,
     get_pool_metrics,
-    settings,  # settings.DEV_BEARER, async pg pool
     handle_connection_failure,
     handle_pool_timeout,
 )
@@ -291,21 +290,6 @@ def _validate_sample(s: SampleIn) -> tuple[bool, str | None]:
     return True, None
 
 
-# ---------- Auth ----------
-async def require_bearer(authorization: str = Header(..., alias="Authorization")) -> None:
-    if not authorization.lower().startswith("bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid Authorization header",
-        )
-    token = authorization.split(" ", 1)[1].strip()
-    if not settings.DEV_BEARER or token != settings.DEV_BEARER:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid bearer token",
-        )
-
-
 # ---------- Endpoint ----------
 # Accept EITHER {"samples":[...]} OR a raw array [...]
 Payload = Annotated[Union[SamplesWrapper, List[SampleIn]], Body(..., media_type="application/json")]
@@ -348,7 +332,6 @@ def _log_batch_summary(user: str, received: int, inserted: int, skipped: int, db
 async def samples_batch(
     payload: Payload,
     request: Request,
-    _auth: None = Depends(require_bearer),
     tz: str = Query(DEFAULT_TIMEZONE, description="IANA timezone for mart refresh scheduling"),
 ):
     # Normalize payload to list
@@ -359,8 +342,12 @@ async def samples_batch(
         _log_batch_summary("<empty>", 0, 0, 0, True)
         return {"ok": True, "received": 0, "inserted": 0, "skipped": 0, "db": True, "errors": [], "error": None}
 
+    auth_uid_raw = getattr(request.state, "user_id", None)
+    auth_uid = str(auth_uid_raw).strip() if auth_uid_raw else None
     x_uid = request.headers.get("X-Dev-UserId", "").strip() or None
-    dev_uid = x_uid
+    # Shared write auth sets request.state.user_id for Supabase JWTs and dev-scoped calls.
+    # Use it as the insert override so app clients cannot spoof another sample user_id.
+    dev_uid = auth_uid or x_uid
     effective_user = dev_uid or "<unknown>"
 
     batch_start_iso: str | None = None

@@ -421,6 +421,18 @@ struct OnboardingFlowView: View {
                 Text(copy.welcomeSubtitle)
                     .font(.title3)
                     .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("What to expect after setup")
+                        .font(.headline)
+                    onboardingExpectationRow("Your first dashboard can take a minute while Gaia builds your personal read.")
+                    onboardingExpectationRow("Patterns sharpen over time as you log symptoms and Gaia gathers more history.")
+                    onboardingExpectationRow("Health Status may be blank or limited at first until Health data finishes importing.")
+                    onboardingExpectationRow("Some pages fill in after the first sync finishes.")
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 Button("Get Started") {
                     currentStep = .mode
                 }
@@ -428,6 +440,19 @@ struct OnboardingFlowView: View {
                 .controlSize(.large)
                 .tint(Color(red: 0.51, green: 0.82, blue: 0.97))
             }
+        }
+    }
+
+    private func onboardingExpectationRow(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "sparkle")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(Color(red: 0.51, green: 0.82, blue: 0.97))
+                .padding(.top, 3)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

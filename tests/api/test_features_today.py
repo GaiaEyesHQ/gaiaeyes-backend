@@ -3,6 +3,7 @@ from datetime import date, datetime, timezone
 from typing import List
 from uuid import uuid4
 
+import jwt
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -166,6 +167,59 @@ async def test_refresh_scheduled_on_ingest(monkeypatch, client: AsyncClient):
     scheduled_user, scheduled_day = scheduled[0]
     assert scheduled_user == user_id
     assert scheduled_day == ingest._today_local(ZoneInfo("UTC"))
+
+
+@pytest.mark.anyio
+async def test_ingest_accepts_supabase_jwt_and_uses_authenticated_user(monkeypatch, client: AsyncClient):
+    monkeypatch.setattr(settings, "SUPABASE_JWT_SECRET", "test-secret")
+
+    fake_pool = _FakePool()
+
+    async def _fake_get_pool():
+        return fake_pool
+
+    captured: dict[str, str] = {}
+
+    async def _fake_safe_insert_batch(pool, rows, dev_uid):  # noqa: ARG001
+        captured["insert_user"] = dev_uid
+        return len(rows), 0, []
+
+    async def _fake_schedule_refresh(user_id, day_local, inserted, tz_name="UTC"):  # noqa: ARG001
+        captured["refresh_user"] = user_id
+        return True
+
+    monkeypatch.setattr(ingest, "get_pool", _fake_get_pool)
+    monkeypatch.setattr(ingest, "safe_insert_batch", _fake_safe_insert_batch)
+    monkeypatch.setattr(ingest, "_maybe_schedule_refresh", _fake_schedule_refresh)
+
+    auth_user_id = str(uuid4())
+    payload_user_id = str(uuid4())
+    token = jwt.encode({"sub": auth_user_id}, "test-secret", algorithm="HS256")
+    payload = {
+        "samples": [
+            {
+                "user_id": payload_user_id,
+                "device_os": "ios",
+                "source": "watch",
+                "type": "heart_rate",
+                "start_time": "2024-04-03T12:00:00Z",
+                "end_time": "2024-04-03T12:01:00Z",
+                "value": 70,
+            }
+        ]
+    }
+
+    resp = await client.post(
+        "/v1/samples/batch",
+        headers={"Authorization": f"Bearer {token}"},
+        params={"tz": "UTC"},
+        json=payload,
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    assert captured["insert_user"] == auth_user_id
+    assert captured["refresh_user"] == auth_user_id
 
 
 @pytest.mark.anyio

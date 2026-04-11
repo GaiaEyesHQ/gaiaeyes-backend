@@ -892,9 +892,16 @@ final class APIClient {
                         return uploaded > 0
                     } else {
                         logger?("↩︎ \(code) \(HTTPURLResponse.localizedString(forStatusCode: code)) \(body)")
-                        lastError = APIError.server(code: code, body: body)
+                        let serverError = APIError.server(code: code, body: body)
+                        if code == 401 || code == 403 {
+                            throw serverError
+                        }
+                        lastError = serverError
                     }
                 } catch {
+                    if case APIError.server(let code, _) = error, code == 401 || code == 403 {
+                        throw error
+                    }
                     lastError = error
                     logger?("POST error: \(error.localizedDescription)")
                 }
