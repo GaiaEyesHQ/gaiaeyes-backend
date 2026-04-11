@@ -2687,6 +2687,43 @@ struct ContentView: View {
         }
     }
 
+    private struct AppNoticeEnvelope: Decodable {
+        let ok: Bool?
+        let notice: AppNotice?
+    }
+
+    private struct AppNotice: Decodable, Equatable, Identifiable {
+        let id: String
+        let type: String?
+        let title: String?
+        let message: String?
+        let linkLabel: String?
+        let linkURL: String?
+        let updatedAt: String?
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case type
+            case title
+            case message
+            case linkLabel = "link_label"
+            case linkURL = "link_url"
+            case updatedAt = "updated_at"
+        }
+
+        var hasDisplayContent: Bool {
+            !(title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !(message ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        var link: URL? {
+            guard let raw = linkURL?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+                return nil
+            }
+            return URL(string: raw)
+        }
+    }
+
     private static let cameraHealthCheckVisible = false
 
     // Throttle / circuit-breaker for features refresh loops
@@ -2696,6 +2733,7 @@ struct ContentView: View {
     @State private var lastFeaturesAttemptAt: Date = .distantPast
     @State private var lastFeaturesSuccessAt: Date = .distantPast
     @StateObject private var state = AppState()
+    @StateObject private var revenueCat = RevenueCatService.shared
     @EnvironmentObject private var auth: AuthManager
     @Environment(\.openURL) private var openURL
     @AppStorage("features_cache_json") private var featuresCacheJSON: String = ""
@@ -2707,6 +2745,7 @@ struct ContentView: View {
     @AppStorage("user_patterns_cache_json") private var userPatternsCacheJSON: String = ""
     @AppStorage("gaia.membership.cached_plan") private var cachedPlanRaw: String = MembershipPlan.free.rawValue
     @AppStorage("gaia.membership.last_sync_at") private var cachedPlanSyncedAt: String = ""
+    @AppStorage("gaia.app_notice.dismissed_id") private var dismissedAppNoticeID: String = ""
     @Environment(\.scenePhase) private var scenePhase
     @State private var showConnections: Bool = false
     @State private var expandLog: Bool = false
@@ -2727,6 +2766,7 @@ struct ContentView: View {
     @State private var debugEntitlementsEmail: String?
     @State private var debugToolkitMessage: String?
     @State private var debugSelectedCacheTarget: DebugCacheTarget = .dashboardSnapshot
+    @State private var appNotice: AppNotice? = nil
 
     @State private var pendingRefreshTask: Task<Void, Never>? = nil
     @State private var pendingDashboardRefreshTask: Task<Void, Never>? = nil
@@ -3127,6 +3167,29 @@ struct ContentView: View {
         guard let value = HelpCenterContent.shared.metadata.termsOfUseURL?.trimmingCharacters(in: .whitespacesAndNewlines),
               !value.isEmpty else { return nil }
         return URL(string: value)
+    }
+
+    private var appNoticeURL: URL? {
+        let support = HelpCenterContent.shared.metadata.webSupportURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let supportURL = URL(string: support),
+              let scheme = supportURL.scheme,
+              let host = supportURL.host else {
+            return URL(string: "https://gaiaeyes.com/wp-json/gaia/v1/app-notice")
+        }
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = host
+        components.path = "/wp-json/gaia/v1/app-notice"
+        return components.url
+    }
+
+    private var visibleAppNotice: AppNotice? {
+        guard let appNotice,
+              appNotice.hasDisplayContent,
+              appNotice.id.trimmingCharacters(in: .whitespacesAndNewlines) != dismissedAppNoticeID else {
+            return nil
+        }
+        return appNotice
     }
 
     private func openGuideHub(focus: GuideHubFocus = .overview) {
@@ -3634,6 +3697,31 @@ struct ContentView: View {
     }
 
     @MainActor
+    private func fetchAppNotice() async {
+        guard let url = appNoticeURL else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 8
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            guard (200...299).contains(status) else {
+                appLog("[UI] app notice fetch failed status=\(status)")
+                return
+            }
+            let envelope = try JSONDecoder().decode(AppNoticeEnvelope.self, from: data)
+            appNotice = envelope.ok == false ? nil : envelope.notice
+        } catch is CancellationError {
+            return
+        } catch let error as URLError where error.code == .cancelled {
+            return
+        } catch {
+            appLog("[UI] app notice fetch error: \(error.localizedDescription)")
+        }
+    }
+
+    @MainActor
     private func copyTrace(_ lines: [String]) {
         let ordered = Array(lines.reversed())
         let text = ordered.joined(separator: "\n")
@@ -3771,6 +3859,9 @@ struct ContentView: View {
         auth.loadFromKeychain()
         let token = await auth.validAccessToken()
         _ = await auth.resolveSupabaseUserId()
+        await revenueCat.identifyIfNeeded(appUserID: auth.currentSupabaseUserId())
+        await revenueCat.refreshProducts(appUserID: auth.currentSupabaseUserId())
+        await revenueCat.refreshCustomerInfo(appUserID: auth.currentSupabaseUserId())
 
         guard let token, !token.isEmpty else {
             debugEntitlements = []
@@ -3805,10 +3896,17 @@ struct ContentView: View {
 
     @MainActor
     private func restorePurchasesForDebug() async {
-        await refreshBillingDiagnostics(showSuccessMessage: false)
-        debugToolkitMessage = debugEntitlementsError == nil
-            ? "Restore purchases check completed."
-            : "Restore purchases check failed."
+        let userID = await auth.resolveSupabaseUserId()
+        do {
+            let plan = try await revenueCat.restore(appUserID: userID)
+            cachedPlanRaw = plan.rawValue
+            cachedPlanSyncedAt = ISO8601DateFormatter().string(from: Date())
+            await refreshBillingDiagnostics(showSuccessMessage: false)
+            debugToolkitMessage = "RevenueCat restore completed."
+        } catch {
+            debugEntitlementsError = error.localizedDescription
+            debugToolkitMessage = "RevenueCat restore failed."
+        }
     }
 
     private func decodedPatternsPayloadFromCache() -> UserPatternsPayload? {
@@ -4159,7 +4257,9 @@ struct ContentView: View {
 
     private var debugBillingSnapshot: DebugBillingSnapshot {
         let hasToken = (auth.supabaseAccessToken?.isEmpty == false)
-        let plan = billingPlan(for: debugEntitlements, hasAccessToken: hasToken)
+        let backendPlan = billingPlan(for: debugEntitlements, hasAccessToken: hasToken)
+        let plan = revenueCat.activePlan == .free ? backendPlan : revenueCat.activePlan
+        let activeIDs = Array(Set(debugEntitlements.filter { $0.isActive == true }.map(\.key) + revenueCat.activeEntitlementIDs)).sorted()
         let userLabel: String = {
             if let email = auth.supabaseEmail, !email.isEmpty {
                 return "Signed in as \(email)"
@@ -4175,12 +4275,12 @@ struct ContentView: View {
         return DebugBillingSnapshot(
             planTitle: plan.title,
             signedInState: userLabel,
-            activeEntitlementIDs: debugEntitlements.filter { $0.isActive == true }.map(\.key),
-            customerState: hasToken ? "Backend entitlements available" : "No billing session",
-            revenueCatState: "Not integrated",
-            offerEligibility: "Not tracked in current billing flow",
-            lastSyncAt: parseDebugDate(cachedPlanSyncedAt),
-            productFetchStatus: "Stripe checkout + backend entitlement fetch",
+            activeEntitlementIDs: activeIDs,
+            customerState: hasToken ? "Supabase session available" : "No billing session",
+            revenueCatState: revenueCat.diagnosticsState,
+            offerEligibility: "RevenueCat / App Store managed",
+            lastSyncAt: revenueCat.lastSyncAt ?? parseDebugDate(cachedPlanSyncedAt),
+            productFetchStatus: revenueCat.productStatus,
             error: debugEntitlementsError
         )
     }
@@ -14566,7 +14666,8 @@ struct ContentView: View {
                 async let e: Void = fetchLatestCameraCheck()
                 async let f: Void = fetchCurrentSymptomsSummary(api: api)
                 async let g: Void = fetchDailyCheckInStatus(api: api)
-                _ = await (n, e, f, g)
+                async let notice: Void = fetchAppNotice()
+                _ = await (n, e, f, g, notice)
                 async let h: Void = fetchFeaturesToday(trigger: .initial, bypassGuard: true)
                 _ = await (a, b, h)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
@@ -14582,7 +14683,8 @@ struct ContentView: View {
                 async let e: Void = fetchLatestCameraCheck()
                 async let f: Void = fetchCurrentSymptomsSummary(api: api)
                 async let g: Void = fetchDailyCheckInStatus(api: api)
-                _ = await (n, e, f, g)
+                async let notice: Void = fetchAppNotice()
+                _ = await (n, e, f, g, notice)
                 async let h: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
                 _ = await (a, b, h)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
@@ -14649,7 +14751,8 @@ struct ContentView: View {
                         async let dashboardRefresh: Void = fetchDashboardPayload(force: dashboardNeedsForegroundRefresh())
                         async let healthKick: Void = HealthKitBackgroundSync.shared.kickOnce(reason: "became active")
                         async let schumannRefresh: Void = refreshLiveSchumannSignalBar(api: api)
-                        _ = await (dashboardRefresh, healthKick, schumannRefresh)
+                        async let noticeRefresh: Void = fetchAppNotice()
+                        _ = await (dashboardRefresh, healthKick, schumannRefresh, noticeRefresh)
                     }
                 }
             }
@@ -15492,11 +15595,11 @@ struct ContentView: View {
 
     @ViewBuilder
     private var missionSettingsTopSections: some View {
+        missionSettingsHelpSection
         missionSettingsExperienceSection
         missionSettingsSignalsSection
         missionSettingsHealthDataSection
         missionSettingsAboutSection
-        missionSettingsHelpSection
     }
 
     private var missionSettingsExperienceSection: some View {
@@ -15877,6 +15980,27 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+
+                Button {
+                    openBugReportComposer()
+                } label: {
+                    HStack {
+                        if bugReportSubmitting {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        }
+                        Label("Report a Bug", systemImage: "ladybug")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(bugReportSubmitting)
+
+                if let bugReportMessage, !bugReportMessage.isEmpty {
+                    Text(bugReportMessage)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
 
                 if helpCenterSupportURL != nil || helpCenterPrivacyURL != nil || helpCenterTermsURL != nil {
                     VStack(alignment: .leading, spacing: 8) {
@@ -16400,31 +16524,6 @@ struct ContentView: View {
                                             )
                                         } else if !featuresDiagnosticsLoading {
                                             Text("No diagnostics yet. Tap Refresh.")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-                                        Divider()
-                                        HStack {
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text("Report a bug")
-                                                    .font(.subheadline.weight(.semibold))
-                                                Text("Attach the current diagnostics bundle and a short description for review.")
-                                                    .font(.caption2)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                            Spacer()
-                                            if bugReportSubmitting {
-                                                ProgressView()
-                                                    .scaleEffect(0.8)
-                                            } else {
-                                                Button("Report Bug") {
-                                                    openBugReportComposer()
-                                                }
-                                                .buttonStyle(.borderedProminent)
-                                            }
-                                        }
-                                        if let bugReportMessage, !bugReportMessage.isEmpty {
-                                            Text(bugReportMessage)
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                         }
@@ -17009,6 +17108,23 @@ struct ContentView: View {
         )
 
         return onboardingShell
+        .safeAreaInset(edge: .top) {
+            if let notice = visibleAppNotice {
+                AppNoticeBannerView(
+                    notice: notice,
+                    onDismiss: {
+                        dismissedAppNoticeID = notice.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                    },
+                    onOpen: { url in
+                        openURL(url)
+                    }
+                )
+                .padding(.horizontal, 12)
+                .padding(.top, 6)
+                .padding(.bottom, 6)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
         .fullScreenCover(isPresented: $showInteractiveViewer) {
             if let item = interactiveVisualItem {
                 VisualsInteractiveViewer(
@@ -17022,6 +17138,75 @@ struct ContentView: View {
                 )
                 .ignoresSafeArea()
             }
+        }
+    }
+
+    private struct AppNoticeBannerView: View {
+        let notice: AppNotice
+        let onDismiss: () -> Void
+        let onOpen: (URL) -> Void
+
+        private var tint: Color {
+            switch notice.type?.lowercased() {
+            case "update":
+                return .blue
+            case "warning":
+                return .orange
+            default:
+                return .teal
+            }
+        }
+
+        var body: some View {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: notice.type?.lowercased() == "update" ? "arrow.down.app.fill" : "info.circle.fill")
+                    .foregroundColor(tint)
+                    .font(.headline)
+                    .padding(.top, 2)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    if let title = notice.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+                        Text(title)
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    if let message = notice.message?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let link = notice.link {
+                        Button {
+                            onOpen(link)
+                        } label: {
+                            Text((notice.linkLabel?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? "Open")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .tint(tint)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(.secondary)
+                        .padding(8)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss notice")
+            }
+            .padding(12)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(tint.opacity(0.35), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.18), radius: 12, x: 0, y: 6)
         }
     }
 

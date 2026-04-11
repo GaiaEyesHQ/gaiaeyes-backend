@@ -780,7 +780,7 @@
     {
       "id": "restore-purchases",
       "title": "Restore purchases",
-      "summary": "If paid access looks missing, first sign in with the same account and refresh your membership status.",
+      "summary": "If paid access looks missing, first sign in, then use Restore Purchases.",
       "category": "billing-subscriptions",
       "keywords": [
         "restore",
@@ -792,15 +792,15 @@
           "id": "first-steps",
           "title": "Start with the account itself",
           "paragraphs": [
-            "Gaia Eyes matches access to the account used during checkout. If access looks missing, make sure you are signed in with that same email or account first.",
-            "After that, refresh membership status so the app can fetch your latest entitlements."
+            "Gaia Eyes uses App Store purchases for iOS plans and connects them to your signed-in Gaia Eyes account.",
+            "If access looks missing, make sure you are signed in, then tap Restore Purchases from Account and Membership."
           ]
         },
         {
           "id": "when-to-contact",
           "title": "When to contact support",
           "paragraphs": [
-            "If the right account is signed in and access still looks wrong after a refresh, contact billing help with the email used at checkout and a short description of what looks off.",
+            "If the right account is signed in and access still looks wrong after restore, contact billing help with your Gaia Eyes email and a short description of what looks off.",
             "That makes it much easier to track down the mismatch quickly."
           ]
         }
@@ -817,7 +817,7 @@
     {
       "id": "how-subscriptions-work",
       "title": "How subscriptions work",
-      "summary": "Gaia Eyes uses account-based billing, so your access follows the account you used at checkout.",
+      "summary": "Gaia Eyes uses App Store purchases on iOS, with access tied back to your Gaia Eyes account.",
       "category": "billing-subscriptions",
       "keywords": [
         "subscription",
@@ -829,15 +829,15 @@
           "id": "account-based-access",
           "title": "Access follows the account",
           "paragraphs": [
-            "Your plan is tied to the account used for checkout, not only to one device. That is why signing in with the correct account matters when you switch devices or reinstall the app.",
-            "The app checks your current entitlements and uses that result to decide which plan is active."
+            "Your iOS plan is purchased through the App Store and linked to your signed-in Gaia Eyes account.",
+            "The app checks RevenueCat and Gaia Eyes entitlements to decide which plan is active."
           ]
         },
         {
           "id": "managing-changes",
           "title": "Changes and renewals",
           "paragraphs": [
-            "Upgrade, renewal, and billing changes depend on the billing flow you used. Gaia Eyes shows your current plan and gives you a billing-management path when one is available.",
+            "Upgrades, renewals, cancellations, and billing changes for iOS plans are managed through Apple Subscriptions.",
             "If something looks wrong, start with a refresh and then contact billing help if needed."
           ]
         }
@@ -846,7 +846,7 @@
     {
       "id": "manage-subscription-on-apple-devices",
       "title": "Managing subscriptions on Apple devices",
-      "summary": "On launch, Gaia Eyes billing may open a secure web billing flow rather than using the App Store subscription screen.",
+      "summary": "iOS subscriptions are managed through Apple Subscriptions.",
       "category": "billing-subscriptions",
       "keywords": [
         "apple",
@@ -858,15 +858,15 @@
           "id": "where-to-manage",
           "title": "Where to manage your plan",
           "paragraphs": [
-            "If Gaia Eyes gives you a Manage Billing button, use that first. In the current launch setup, billing changes may happen through the secure billing portal instead of the App Store subscriptions page.",
-            "That means the right management path depends on how the plan was originally purchased."
+            "Open Account and Membership, then use Manage App Store Subscriptions.",
+            "You can also manage Gaia Eyes from the Apple Subscriptions screen in your Apple ID settings."
           ]
         },
         {
           "id": "if-you-are-unsure",
           "title": "If you are not sure",
           "paragraphs": [
-            "Open Account and Membership and look for the plan status or billing-management link there.",
+            "Open Account and Membership and look for the current plan status or Restore Purchases.",
             "If you still are not sure where the subscription lives, billing help can confirm the right path."
           ]
         }
@@ -883,7 +883,7 @@
     {
       "id": "offer-codes-and-promos",
       "title": "Offer codes and promo basics",
-      "summary": "If promo or offer codes are available for your plan, they usually appear during the secure checkout flow.",
+      "summary": "If Apple offer codes are available, redeem them through the App Store flow.",
       "category": "billing-subscriptions",
       "keywords": [
         "promo",
@@ -895,8 +895,8 @@
           "id": "where-codes-show-up",
           "title": "Where to look",
           "paragraphs": [
-            "Gaia Eyes can support promotion codes in the checkout flow when that billing path is enabled for the plan you are using.",
-            "If a promotion applies, it should show up in checkout rather than needing a separate manual unlock in the app."
+            "Gaia Eyes can support App Store offer codes when they are configured for the active subscription products.",
+            "If a promotion applies, it should appear in the App Store purchase or redemption flow rather than needing a separate manual unlock in the app."
           ]
         },
         {
@@ -1121,7 +1121,7 @@
     {
       "id": "need-help-with-billing",
       "title": "Need help with billing?",
-      "summary": "Billing help is easiest when you send the email used at checkout plus a short description of the issue.",
+      "summary": "Billing help is easiest when you send your Gaia Eyes email plus a short description of the issue.",
       "category": "contact-feedback",
       "keywords": [
         "billing help",
@@ -1133,8 +1133,8 @@
           "id": "what-to-include",
           "title": "What to include",
           "paragraphs": [
-            "Send the email used during checkout, the plan you expected to have, and what looks wrong right now.",
-            "If you already tried refreshing your account status or opening the billing portal, mention that too."
+            "Send your Gaia Eyes email, the plan you expected to have, and what looks wrong right now.",
+            "If you already tried restoring purchases or refreshing account status, mention that too."
           ]
         }
       ],

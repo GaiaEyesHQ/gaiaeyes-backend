@@ -553,7 +553,215 @@ function gaia_bug_reports_render_admin_page() {
 }
 }
 
+if (!function_exists('gaia_app_notice_defaults')) {
+function gaia_app_notice_defaults() {
+    return [
+        'active' => false,
+        'id' => '',
+        'type' => 'info',
+        'title' => '',
+        'message' => '',
+        'link_label' => '',
+        'link_url' => '',
+        'starts_at' => '',
+        'ends_at' => '',
+        'updated_at' => '',
+    ];
+}
+}
+
+if (!function_exists('gaia_app_notice_get')) {
+function gaia_app_notice_get() {
+    $stored = get_option('gaia_app_notice', []);
+    if (!is_array($stored)) {
+        $stored = [];
+    }
+    return array_merge(gaia_app_notice_defaults(), $stored);
+}
+}
+
+if (!function_exists('gaia_app_notice_sanitize')) {
+function gaia_app_notice_sanitize($raw) {
+    $raw = is_array($raw) ? $raw : [];
+    $type = isset($raw['type']) ? sanitize_key((string) $raw['type']) : 'info';
+    if (!in_array($type, ['info', 'update', 'warning'], true)) {
+        $type = 'info';
+    }
+
+    $title = isset($raw['title']) ? sanitize_text_field((string) $raw['title']) : '';
+    $message = isset($raw['message']) ? trim(wp_strip_all_tags((string) $raw['message'])) : '';
+    $link_url = isset($raw['link_url']) ? esc_url_raw((string) $raw['link_url']) : '';
+    $id = isset($raw['id']) ? sanitize_key((string) $raw['id']) : '';
+    if ($id === '' && ($title !== '' || $message !== '')) {
+        $id = 'notice-' . gmdate('YmdHis');
+    }
+
+    return [
+        'active' => !empty($raw['active']),
+        'id' => $id,
+        'type' => $type,
+        'title' => $title,
+        'message' => $message,
+        'link_label' => isset($raw['link_label']) ? sanitize_text_field((string) $raw['link_label']) : '',
+        'link_url' => $link_url,
+        'starts_at' => isset($raw['starts_at']) ? sanitize_text_field((string) $raw['starts_at']) : '',
+        'ends_at' => isset($raw['ends_at']) ? sanitize_text_field((string) $raw['ends_at']) : '',
+        'updated_at' => gmdate('c'),
+    ];
+}
+}
+
+if (!function_exists('gaia_app_notice_is_current')) {
+function gaia_app_notice_is_current($notice) {
+    if (empty($notice['active'])) {
+        return false;
+    }
+    $title = isset($notice['title']) ? trim((string) $notice['title']) : '';
+    $message = isset($notice['message']) ? trim((string) $notice['message']) : '';
+    if ($title === '' && $message === '') {
+        return false;
+    }
+
+    $now = time();
+    $starts_at = isset($notice['starts_at']) ? trim((string) $notice['starts_at']) : '';
+    if ($starts_at !== '') {
+        $start_ts = strtotime($starts_at);
+        if ($start_ts !== false && $now < $start_ts) {
+            return false;
+        }
+    }
+
+    $ends_at = isset($notice['ends_at']) ? trim((string) $notice['ends_at']) : '';
+    if ($ends_at !== '') {
+        $end_ts = strtotime($ends_at);
+        if ($end_ts !== false && $now > $end_ts) {
+            return false;
+        }
+    }
+
+    return true;
+}
+}
+
+if (!function_exists('gaia_app_notice_public_payload')) {
+function gaia_app_notice_public_payload($notice) {
+    if (!gaia_app_notice_is_current($notice)) {
+        return null;
+    }
+    $id = isset($notice['id']) ? trim((string) $notice['id']) : '';
+    if ($id === '') {
+        $id = 'notice-' . md5(($notice['title'] ?? '') . '|' . ($notice['message'] ?? '') . '|' . ($notice['updated_at'] ?? ''));
+    }
+    return [
+        'id' => $id,
+        'type' => isset($notice['type']) ? (string) $notice['type'] : 'info',
+        'title' => isset($notice['title']) ? (string) $notice['title'] : '',
+        'message' => isset($notice['message']) ? (string) $notice['message'] : '',
+        'link_label' => isset($notice['link_label']) ? (string) $notice['link_label'] : '',
+        'link_url' => isset($notice['link_url']) ? (string) $notice['link_url'] : '',
+        'updated_at' => isset($notice['updated_at']) ? (string) $notice['updated_at'] : '',
+    ];
+}
+}
+
+if (!function_exists('gaia_app_notice_render_admin_page')) {
+function gaia_app_notice_render_admin_page() {
+    if (!current_user_can('manage_options')) {
+        wp_die('You do not have permission to edit app notices.');
+    }
+
+    $saved = false;
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        check_admin_referer('gaia_app_notice_save');
+        $notice = gaia_app_notice_sanitize(wp_unslash($_POST['gaia_app_notice'] ?? []));
+        update_option('gaia_app_notice', $notice, false);
+        $saved = true;
+    }
+
+    $notice = gaia_app_notice_get();
+    $public_payload = gaia_app_notice_public_payload($notice);
+    ?>
+    <div class="wrap">
+        <h1>Gaia App Notice</h1>
+        <p>Create a short dismissible notice shown at the top of the iOS app on launch, foreground refresh, and pull-to-refresh.</p>
+        <?php if ($saved): ?>
+            <div class="notice notice-success is-dismissible"><p>App notice saved.</p></div>
+        <?php endif; ?>
+        <form method="post" action="">
+            <?php wp_nonce_field('gaia_app_notice_save'); ?>
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row">Active</th>
+                    <td>
+                        <label>
+                            <input type="checkbox" name="gaia_app_notice[active]" value="1" <?php checked(!empty($notice['active'])); ?>>
+                            Show this notice in the app
+                        </label>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="gaia-app-notice-id">Notice ID</label></th>
+                    <td>
+                        <input class="regular-text" id="gaia-app-notice-id" name="gaia_app_notice[id]" type="text" value="<?php echo esc_attr($notice['id']); ?>" placeholder="update-2026-04-11">
+                        <p class="description">Change this when you want users who dismissed an old notice to see the new one.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="gaia-app-notice-type">Type</label></th>
+                    <td>
+                        <select id="gaia-app-notice-type" name="gaia_app_notice[type]">
+                            <option value="info" <?php selected($notice['type'], 'info'); ?>>Info</option>
+                            <option value="update" <?php selected($notice['type'], 'update'); ?>>Update available</option>
+                            <option value="warning" <?php selected($notice['type'], 'warning'); ?>>Important</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="gaia-app-notice-title">Title</label></th>
+                    <td><input class="regular-text" id="gaia-app-notice-title" name="gaia_app_notice[title]" type="text" value="<?php echo esc_attr($notice['title']); ?>" placeholder="Update available"></td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="gaia-app-notice-message">Message</label></th>
+                    <td>
+                        <textarea class="large-text" id="gaia-app-notice-message" name="gaia_app_notice[message]" rows="4" placeholder="A new Gaia Eyes version is available."><?php echo esc_textarea($notice['message']); ?></textarea>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="gaia-app-notice-link-label">Link label</label></th>
+                    <td><input class="regular-text" id="gaia-app-notice-link-label" name="gaia_app_notice[link_label]" type="text" value="<?php echo esc_attr($notice['link_label']); ?>" placeholder="Open App Store"></td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="gaia-app-notice-link-url">Link URL</label></th>
+                    <td><input class="large-text" id="gaia-app-notice-link-url" name="gaia_app_notice[link_url]" type="url" value="<?php echo esc_attr($notice['link_url']); ?>" placeholder="https://apps.apple.com/app/..."></td>
+                </tr>
+                <tr>
+                    <th scope="row">Schedule</th>
+                    <td>
+                        <input class="regular-text" name="gaia_app_notice[starts_at]" type="text" value="<?php echo esc_attr($notice['starts_at']); ?>" placeholder="optional start, e.g. 2026-04-11 09:00">
+                        <input class="regular-text" name="gaia_app_notice[ends_at]" type="text" value="<?php echo esc_attr($notice['ends_at']); ?>" placeholder="optional end">
+                        <p class="description">Leave blank to show immediately while active. Times use the WordPress server timezone parser.</p>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button('Save App Notice'); ?>
+        </form>
+        <hr>
+        <h2>Public API Preview</h2>
+        <p><code><?php echo esc_html(rest_url('gaia/v1/app-notice')); ?></code></p>
+        <textarea class="large-text code" rows="8" readonly><?php echo esc_textarea(wp_json_encode(['ok' => true, 'notice' => $public_payload], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)); ?></textarea>
+    </div>
+    <?php
+}
+}
+
 add_action('admin_menu', function () {
+    add_management_page(
+        'Gaia App Notice',
+        'Gaia App Notice',
+        'manage_options',
+        'gaia-app-notice',
+        'gaia_app_notice_render_admin_page'
+    );
     add_management_page(
         'Gaia Bug Reports',
         'Gaia Bug Reports',
@@ -746,6 +954,17 @@ function gaia_bug_report_alert_callback(WP_REST_Request $request) {
 }
 
 add_action('rest_api_init', function () {
+    register_rest_route('gaia/v1', '/app-notice', [
+        'methods' => WP_REST_Server::READABLE,
+        'permission_callback' => '__return_true',
+        'callback' => function () {
+            return new WP_REST_Response([
+                'ok' => true,
+                'notice' => gaia_app_notice_public_payload(gaia_app_notice_get()),
+            ], 200);
+        },
+    ]);
+
     register_rest_route('gaia/v1', '/dashboard', [
         'methods' => WP_REST_Server::READABLE,
         'permission_callback' => '__return_true',

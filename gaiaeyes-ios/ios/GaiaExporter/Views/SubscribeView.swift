@@ -1,22 +1,21 @@
 import SwiftUI
-import SafariServices
 
 struct SubscribeView: View {
     let guideProfile: GuideProfile?
     let helpContext: HelpCenterContext
 
     @EnvironmentObject var auth: AuthManager
+    @Environment(\.openURL) private var openURL
+    @StateObject private var revenueCat = RevenueCatService.shared
     @AppStorage("gaia.membership.cached_plan") private var cachedPlanRaw: String = MembershipPlan.free.rawValue
     @AppStorage("gaia.membership.last_sync_at") private var cachedPlanSyncedAt: String = ""
 
-    @State private var checkoutURL: URL? = nil
-    @State private var showSafari = false
     @State private var errorMessage: String? = nil
     @State private var isWorking = false
     @State private var entitlements: [Entitlement] = []
     @State private var entitlementsLoading = false
 
-    private let billingPortalURL = Bundle.main.object(forInfoDictionaryKey: "GAIA_BILLING_PORTAL_URL") as? String
+    private let appleSubscriptionsURL = URL(string: "https://apps.apple.com/account/subscriptions")
 
     init(
         guideProfile: GuideProfile? = nil,
@@ -26,7 +25,7 @@ struct SubscribeView: View {
         self.helpContext = helpContext
     }
 
-    private var activeEntitlements: [Entitlement] {
+    private var activeBackendEntitlements: [Entitlement] {
         entitlements.filter { $0.isActive == true }
     }
 
@@ -34,10 +33,13 @@ struct SubscribeView: View {
         guard auth.supabaseAccessToken != nil else {
             return .free
         }
-        if activeEntitlements.contains(where: { $0.key.lowercased().contains("pro") }) {
+        if revenueCat.activePlan != .free {
+            return revenueCat.activePlan
+        }
+        if activeBackendEntitlements.contains(where: { $0.key.lowercased().contains("pro") }) {
             return .pro
         }
-        if activeEntitlements.contains(where: { $0.key.lowercased().contains("plus") }) {
+        if activeBackendEntitlements.contains(where: { $0.key.lowercased().contains("plus") }) {
             return .plus
         }
         return MembershipPlan(rawValue: cachedPlanRaw) ?? .free
@@ -53,13 +55,16 @@ struct SubscribeView: View {
         return "Signed in on this device"
     }
 
-    private var canManageBilling: Bool {
-        currentPlan != .free && billingPortalResolvedURL != nil
-    }
-
-    private var billingPortalResolvedURL: URL? {
-        guard let billingPortalURL else { return nil }
-        return URL(string: billingPortalURL)
+    private var activeAccessLabels: [String] {
+        var labels: [String] = []
+        for entitlementID in revenueCat.activeEntitlementIDs {
+            labels.append("\(entitlementID.replacingOccurrences(of: "_", with: " ").capitalized) via App Store")
+        }
+        for entitlement in activeBackendEntitlements {
+            labels.append(formattedEntitlement(entitlement))
+        }
+        var seen = Set<String>()
+        return labels.filter { seen.insert($0).inserted }
     }
 
     private var resolvedHelpContext: HelpCenterContext {
@@ -86,7 +91,7 @@ struct SubscribeView: View {
 
                 if auth.supabaseAccessToken == nil {
                     LoginView()
-                    Text("Sign in to manage plans, billing, and future purchases on this device.")
+                    Text("Sign in to manage plans, purchases, and restore access on this device.")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                     freePlanCards
@@ -94,25 +99,32 @@ struct SubscribeView: View {
                     currentPlanCard
                     planActions
 
-                    if !activeEntitlements.isEmpty {
+                    if !activeAccessLabels.isEmpty {
                         entitlementSummary
                     }
 
-                    if canManageBilling, let portal = billingPortalResolvedURL {
-                        Button("Manage Billing") {
-                            checkoutURL = portal
-                            showSafari = true
+                    if let appleSubscriptionsURL {
+                        Button {
+                            openURL(appleSubscriptionsURL)
+                        } label: {
+                            Label("Manage App Store Subscriptions", systemImage: "creditcard")
+                                .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)
                     }
 
                     Button("Restore Purchases") {
-                        Task { await refreshMembershipStatus() }
+                        Task { await restorePurchases() }
                     }
                     .buttonStyle(.bordered)
 
-                    Button("Sign Out") { auth.signOutSupabase() }
-                        .buttonStyle(.bordered)
+                    Button("Sign Out") {
+                        Task {
+                            await revenueCat.logOutIfConfigured()
+                            auth.signOutSupabase()
+                        }
+                    }
+                    .buttonStyle(.bordered)
                 }
 
                 if isWorking || entitlementsLoading {
@@ -123,17 +135,16 @@ struct SubscribeView: View {
                     Text(errorMessage)
                         .foregroundColor(.orange)
                         .font(.footnote)
+                } else if let revenueCatError = revenueCat.lastError, !revenueCatError.isEmpty {
+                    Text(revenueCatError)
+                        .foregroundColor(.orange)
+                        .font(.footnote)
                 }
 
                 helpCard
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
-        }
-        .sheet(isPresented: $showSafari) {
-            if let url = checkoutURL {
-                SafariView(url: url)
-            }
         }
         .task {
             await refreshMembershipStatus()
@@ -158,6 +169,9 @@ struct SubscribeView: View {
                 }
                 Text("Your Plan: \(currentPlan.title)")
                     .font(.headline)
+                Text(revenueCat.productStatus)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -191,14 +205,8 @@ struct SubscribeView: View {
                     Text("Keep your current Plus access and move up when you want deeper outlooks and premium intelligence layers.")
                         .font(.footnote)
                         .foregroundColor(.secondary)
-                    Button("Upgrade to Pro (Monthly)") {
-                        Task { await startCheckout(plan: "pro_monthly") }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    Button("Upgrade to Pro (Yearly)") {
-                        Task { await startCheckout(plan: "pro_yearly") }
-                    }
-                    .buttonStyle(.bordered)
+                    purchaseButton(title: "Upgrade to Pro (Monthly)", planID: "pro_monthly", isProminent: true)
+                    purchaseButton(title: "Upgrade to Pro (Yearly)", planID: "pro_yearly", isProminent: false)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -208,7 +216,7 @@ struct SubscribeView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Pro is active on this account.")
                         .font(.subheadline.weight(.semibold))
-                    Text("Billing and renewal changes stay available in Manage Billing.")
+                    Text("Renewals and cancellations are managed through Apple Subscriptions.")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 }
@@ -252,7 +260,7 @@ struct SubscribeView: View {
                 .buttonStyle(.borderedProminent)
 
                 if auth.supabaseAccessToken == nil {
-                    Text("Use the same sign-in you checked out with to restore access on this device.")
+                    Text("Use the same sign-in you purchased with to restore access on this device.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -281,18 +289,30 @@ struct SubscribeView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 } else {
-                    Button(primaryTitle) {
-                        Task { await startCheckout(plan: primaryPlan) }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    Button(secondaryTitle) {
-                        Task { await startCheckout(plan: secondaryPlan) }
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(isWorking)
+                    purchaseButton(title: primaryTitle, planID: primaryPlan, isProminent: true)
+                    purchaseButton(title: secondaryTitle, planID: secondaryPlan, isProminent: false)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func purchaseButton(title: String, planID: String, isProminent: Bool) -> some View {
+        let option = revenueCat.productOptions[planID]
+        let label = option.map { "\(title) • \($0.price)" } ?? title
+        if isProminent {
+            Button(label) {
+                Task { await purchase(planID: planID) }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isWorking || option == nil)
+        } else {
+            Button(label) {
+                Task { await purchase(planID: planID) }
+            }
+            .buttonStyle(.bordered)
+            .disabled(isWorking || option == nil)
         }
     }
 
@@ -301,9 +321,8 @@ struct SubscribeView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Current Access")
                     .font(.subheadline.weight(.semibold))
-                ForEach(activeEntitlements.indices, id: \.self) { idx in
-                    let ent = activeEntitlements[idx]
-                    Text(formattedEntitlement(ent))
+                ForEach(activeAccessLabels, id: \.self) { label in
+                    Text(label)
                         .font(.footnote)
                 }
             }
@@ -330,24 +349,50 @@ struct SubscribeView: View {
         return label
     }
 
-    private func startCheckout(plan: String) async {
+    private func purchase(planID: String) async {
         errorMessage = nil
         isWorking = true
         defer { isWorking = false }
 
-        guard let token = auth.supabaseAccessToken else {
+        guard auth.supabaseAccessToken != nil else {
             errorMessage = "Sign-in required."
+            return
+        }
+        guard let userID = await auth.resolveSupabaseUserId(), !userID.isEmpty else {
+            errorMessage = "Could not resolve your signed-in user before purchase."
             return
         }
 
         do {
-            let service = try CheckoutService()
-            let url = try await service.startCheckout(plan: plan, accessToken: token)
-            checkoutURL = url
-            showSafari = true
+            let plan = try await revenueCat.purchase(planID: planID, appUserID: userID)
+            cachedPlanRaw = plan.rawValue
+            cachedPlanSyncedAt = ISO8601DateFormatter().string(from: Date())
+            await refreshBackendEntitlementsAfterRevenueCatUpdate()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func restorePurchases() async {
+        errorMessage = nil
+        isWorking = true
+        defer { isWorking = false }
+
+        let userID = await auth.resolveSupabaseUserId()
+
+        do {
+            let plan = try await revenueCat.restore(appUserID: userID)
+            cachedPlanRaw = plan.rawValue
+            cachedPlanSyncedAt = ISO8601DateFormatter().string(from: Date())
+            await refreshBackendEntitlementsAfterRevenueCatUpdate()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func refreshBackendEntitlementsAfterRevenueCatUpdate() async {
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        await refreshEntitlementsIfNeeded()
     }
 
     private func refreshEntitlementsIfNeeded() async {
@@ -357,6 +402,12 @@ struct SubscribeView: View {
             cachedPlanRaw = MembershipPlan.free.rawValue
             return
         }
+
+        let userID = await auth.resolveSupabaseUserId()
+        await revenueCat.identifyIfNeeded(appUserID: userID)
+        await revenueCat.refreshProducts(appUserID: userID)
+        await revenueCat.refreshCustomerInfo(appUserID: userID)
+
         entitlementsLoading = true
         defer { entitlementsLoading = false }
         do {
@@ -366,7 +417,9 @@ struct SubscribeView: View {
             cachedPlanRaw = currentPlan.rawValue
             cachedPlanSyncedAt = ISO8601DateFormatter().string(from: Date())
         } catch {
-            errorMessage = error.localizedDescription
+            if revenueCat.activePlan == .free {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -380,14 +433,4 @@ struct SubscribeView: View {
         _ = await auth.validAccessToken()
         _ = await auth.resolveSupabaseUserId()
     }
-}
-
-struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        SFSafariViewController(url: url)
-    }
-
-    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0CDCBB9A2E6D036200B3EDB0 /* PolarBleSdk in Frameworks */ = {isa = PBXBuildFile; productRef = 0CDCBB992E6D036200B3EDB0 /* PolarBleSdk */; };
+		715BC994547E44EF94AA1184 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 6B7A770CC3234B8884788611 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +72,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				715BC994547E44EF94AA1184 /* RevenueCat in Frameworks */,
 				0CDCBB9A2E6D036200B3EDB0 /* PolarBleSdk in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -149,6 +151,7 @@
 			);
 			name = GaiaEyes;
 			packageProductDependencies = (
+				6B7A770CC3234B8884788611 /* RevenueCat */,
 				0CDCBB992E6D036200B3EDB0 /* PolarBleSdk */,
 			);
 			productName = GaiaEyes;
@@ -234,6 +237,7 @@
 			mainGroup = 0CA35D4A2E5B8F960099297E;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				68EB5F02F6FA43C9AEB8DE8D /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
 				0CDCBB902E6CF16D00B3EDB0 /* XCRemoteSwiftPackageReference "polar-ble-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -703,6 +707,15 @@
 				minimumVersion = 6.5.0;
 			};
 		};
+		68EB5F02F6FA43C9AEB8DE8D /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm.git";
+			requirement = {
+				kind = versionRange;
+				maximumVersion = 6.0.0;
+				minimumVersion = 5.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -710,6 +723,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 0CDCBB902E6CF16D00B3EDB0 /* XCRemoteSwiftPackageReference "polar-ble-sdk" */;
 			productName = PolarBleSdk;
+		};
+		6B7A770CC3234B8884788611 /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 68EB5F02F6FA43C9AEB8DE8D /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCat;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -45,5 +45,9 @@
    - **Where to fill**: Supabase SQL definitions for the RPCs (or runbook notes).
 
 12. **Public support contact details for App Store submission**
-   - **Why needed**: Apple’s Support URL guidance expects real contact information on the support site, and the current public support page clearly exposes the support email but may still need a business mailing address and/or phone number depending on legal/jurisdiction requirements.
-   - **Where to fill**: Product/legal/ops decision for what public contact details Gaia Eyes should publish on `https://gaiaeyes.com/support/`.
+    - **Why needed**: Apple’s Support URL guidance expects real contact information on the support site, and the current public support page clearly exposes the support email but may still need a business mailing address and/or phone number depending on legal/jurisdiction requirements.
+    - **Where to fill**: Product/legal/ops decision for what public contact details Gaia Eyes should publish on `https://gaiaeyes.com/support/`.
+
+13. **RevenueCat launch product configuration**
+    - **Why needed**: The app now reads RevenueCat API/product values from `Info.plist` build settings, but the real RevenueCat Apple SDK key, App Store product identifiers, entitlement ids, and webhook Authorization value must match the RevenueCat dashboard before TestFlight purchase testing.
+    - **Where to fill**: RevenueCat dashboard, App Store Connect subscriptions, Xcode build settings / xcconfig, and backend environment variable `REVENUECAT_WEBHOOK_AUTHORIZATION`.

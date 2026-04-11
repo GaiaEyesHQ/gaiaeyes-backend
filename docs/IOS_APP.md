@@ -19,16 +19,20 @@
 ## Auth + user identity
 - Dev defaults (base URL, bearer token, user UUID) are stored in `AppState` and persisted to `UserDefaults`.
 - Tokens are attached to requests as standard bearer auth.
-- The Subscribe view expects the bearer token to be a **Supabase JWT** when calling `/v1/billing/checkout`.
+- The Subscribe view expects a **Supabase JWT** for backend entitlement confirmation and uses RevenueCat for native iOS purchases.
 
-## Supabase auth (billing)
-- The billing flow uses Supabase email magic links and stores the Supabase session (access/refresh) in Keychain.
+## Supabase auth + RevenueCat billing
+- Account auth uses Supabase email magic links and stores the Supabase session (access/refresh) in Keychain.
+- iOS purchases use RevenueCat/App Store products. RevenueCat is configured with the Supabase user UUID as the app user id when the user is signed in.
+- RevenueCat webhooks should point to `/v1/webhooks/revenuecat` so App Store subscription events update `public.app_user_entitlements` for backend-gated member content.
 - `AuthManager` reads config from Info.plist:
   - `SUPABASE_URL`
   - `SUPABASE_ANON_KEY`
-  - `GAIA_API_BASE` (backend base for billing calls)
-  - `GAIA_BILLING_PORTAL_URL` (optional)
+  - `GAIA_API_BASE` (backend base for entitlement confirmation)
   - `GAIA_MAGICLINK_REDIRECT` (optional redirect URL for magic links, e.g. `gaiaeyes://auth/callback`)
+  - `REVENUECAT_IOS_API_KEY`
+  - `REVENUECAT_PLUS_MONTHLY_PRODUCT_ID`, `REVENUECAT_PLUS_YEARLY_PRODUCT_ID`
+  - `REVENUECAT_PRO_MONTHLY_PRODUCT_ID`, `REVENUECAT_PRO_YEARLY_PRODUCT_ID`
 - Supabase Auth redirect allow-list must include `gaiaeyes://auth/callback` for native sign-in completion.
 
 ## Environment/config
@@ -45,5 +49,4 @@
 - `/v1/samples/batch` for HealthKit uploads.
 - `/v1/symptoms` and related symptom list endpoints.
 - `/v1/features/today`, `/v1/space/forecast/*`, `/v1/space/series`, `/v1/space/visuals` (with CDN fallbacks).
-- `/v1/billing/checkout` for Stripe Checkout (requires Supabase JWT).
-- `/v1/billing/entitlements` to show current subscription status (requires Supabase JWT).
+- `/v1/billing/entitlements` to confirm backend subscription status (requires Supabase JWT).

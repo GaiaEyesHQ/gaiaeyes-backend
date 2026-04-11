@@ -28,6 +28,7 @@ sensitive entries (if any) should move to repository variables.
 | `MEDIA_ROOT` | Filesystem root for media sync | GitHub org secret |
 | `NASA_API_KEY` | NASA APIs | GitHub org secret |
 | `OPENAI_API_KEY` | OpenAI access key | GitHub org secret |
+| `REVENUECAT_WEBHOOK_AUTHORIZATION` | Shared Authorization header value for RevenueCat webhooks | GitHub org secret |
 | `SOCIAL_WEBHOOK_URL` | Social automation webhook | GitHub org secret |
 | `SUPABASE_DB_URL` | Supabase pooled database URL | GitHub org secret |
 | `SUPERMAG_USERNAME` | Registered username required for SuperMAG ingest | GitHub org secret |

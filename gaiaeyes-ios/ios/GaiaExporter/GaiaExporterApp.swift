@@ -27,6 +27,16 @@ struct GaiaEyesApp: App {
                 }
                 .task {
                     auth.loadFromKeychain()
+                    await RevenueCatService.shared.identifyIfNeeded(appUserID: auth.currentSupabaseUserId())
+                }
+                .onChange(of: auth.supabaseAccessToken) { _, token in
+                    Task {
+                        if token == nil {
+                            await RevenueCatService.shared.logOutIfConfigured()
+                        } else {
+                            await RevenueCatService.shared.identifyIfNeeded(appUserID: auth.currentSupabaseUserId())
+                        }
+                    }
                 }
         }
     }

@@ -54,6 +54,7 @@
 | `DEBUG_FEATURES_DIAG` | Enable features diagnostics | `1` | `app/routers/summary.py` |
 | `WEBHOOK_SECRET` | HMAC secret for `/hooks/*` | `webhook-secret` | `api/middleware.py`, `api/webhooks.py` |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret | `whsec_...` | `app/api/webhooks.py` |
+| `REVENUECAT_WEBHOOK_AUTHORIZATION` | Exact Authorization header value configured on the RevenueCat webhook destination | `Bearer rc_webhook_secret` | `app/api/webhooks.py` |
 | `STRIPE_API_KEY` | Stripe secret key (server checkout) | `sk_live_...` | `app/routers/billing.py` |
 | `CHECKOUT_SUCCESS_URL` | Stripe Checkout success redirect | `https://gaiaeyes.com/account?success=1` | `app/routers/billing.py` |
 | `CHECKOUT_CANCEL_URL` | Stripe Checkout cancel redirect | `https://gaiaeyes.com/subscribe?canceled=1` | `app/routers/billing.py` |
@@ -76,8 +77,14 @@
 | `SUPABASE_URL` | Supabase auth base | `Info.plist` |
 | `SUPABASE_ANON_KEY` | Supabase anon key | `Info.plist` |
 | `GAIA_API_BASE` | Backend base for billing flows | `Info.plist` |
-| `GAIA_BILLING_PORTAL_URL` | Stripe customer portal (optional) | `Info.plist` |
 | `GAIA_MAGICLINK_REDIRECT` | Magic link redirect URL (optional) | `Info.plist` |
+| `REVENUECAT_IOS_API_KEY` | RevenueCat public Apple SDK key (`appl_...`) | `Info.plist` / build setting |
+| `REVENUECAT_PLUS_ENTITLEMENT_ID` | RevenueCat Plus entitlement id | `Info.plist` |
+| `REVENUECAT_PRO_ENTITLEMENT_ID` | RevenueCat Pro entitlement id | `Info.plist` |
+| `REVENUECAT_PLUS_MONTHLY_PRODUCT_ID` | App Store product id mapped to Plus monthly | `Info.plist` / build setting |
+| `REVENUECAT_PLUS_YEARLY_PRODUCT_ID` | App Store product id mapped to Plus yearly | `Info.plist` / build setting |
+| `REVENUECAT_PRO_MONTHLY_PRODUCT_ID` | App Store product id mapped to Pro monthly | `Info.plist` / build setting |
+| `REVENUECAT_PRO_YEARLY_PRODUCT_ID` | App Store product id mapped to Pro yearly | `Info.plist` / build setting |
 
 ## WordPress (wp-content)
 | Variable | Purpose | Example placeholder | Where used |

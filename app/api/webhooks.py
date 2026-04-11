@@ -24,6 +24,7 @@ def _looks_like_uuid(s: str) -> bool:
 
 # --- Environment ---
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
+REVENUECAT_WEBHOOK_AUTHORIZATION = os.environ.get("REVENUECAT_WEBHOOK_AUTHORIZATION", "").strip()
 SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL", os.environ.get("DATABASE_URL", "")).strip()
 
 if not SUPABASE_DB_URL:
@@ -39,22 +40,22 @@ def _db_conn():
     return psycopg.connect(SUPABASE_DB_URL)
 
 
-def _map_price_to_entitlement(price_id: str) -> Tuple[str, str]:
+def _map_price_to_entitlement(price_id: str, provider: str = "stripe") -> Tuple[str, str]:
     """
-    Returns (entitlement_key, term) for a Stripe price_id based on public.app_price_map.
+    Returns (entitlement_key, term) for a provider product/price id based on public.app_price_map.
     """
     with _db_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
             select entitlement_key, term
             from public.app_price_map
-            where price_id = %s and provider = 'stripe'
+            where price_id = %s and provider = %s
             """,
-            (price_id,),
+            (price_id, provider),
         )
         row = cur.fetchone()
         if not row:
-            raise HTTPException(status_code=400, detail=f"Unknown price_id mapping: {price_id}")
+            raise HTTPException(status_code=400, detail=f"Unknown {provider} product mapping: {price_id}")
         return row[0], row[1]
 
 
@@ -63,6 +64,7 @@ def _upsert_user_entitlement(
     entitlement_key: str,
     term: str,
     expires_at: Optional[dt.datetime],
+    source: str = "stripe",
 ) -> None:
     """
     Calls public.upsert_user_entitlement(...).
@@ -70,7 +72,7 @@ def _upsert_user_entitlement(
     with _db_conn() as conn, conn.cursor() as cur:
         cur.execute(
             "select public.upsert_user_entitlement(%s, %s, %s, %s, %s)",
-            (user_id, entitlement_key, "stripe", term, expires_at),
+            (user_id, entitlement_key, source, term, expires_at),
         )
         conn.commit()
 
@@ -174,6 +176,70 @@ def _verify_stripe_signature(raw_body: bytes, sig_header: Optional[str]) -> None
         raise HTTPException(status_code=401, detail="Invalid Stripe signature")
 
 
+def _verify_revenuecat_authorization(auth_header: Optional[str]) -> None:
+    """
+    RevenueCat webhook destinations can send a configured Authorization header.
+    Treat that value as a shared secret when REVENUECAT_WEBHOOK_AUTHORIZATION is set.
+    """
+    if not REVENUECAT_WEBHOOK_AUTHORIZATION:
+        return
+    received = (auth_header or "").strip()
+    expected = REVENUECAT_WEBHOOK_AUTHORIZATION
+    allowed = {expected}
+    if not expected.lower().startswith("bearer "):
+        allowed.add(f"Bearer {expected}")
+    if not any(hmac.compare_digest(received, candidate) for candidate in allowed):
+        raise HTTPException(status_code=401, detail="Invalid RevenueCat authorization")
+
+
+def _datetime_from_revenuecat_ms(value: object) -> Optional[dt.datetime]:
+    if not isinstance(value, (int, float)) or value <= 0:
+        return None
+    return dt.datetime.fromtimestamp(float(value) / 1000.0, tz=dt.timezone.utc)
+
+
+def _revenuecat_term_from_product(product_id: Optional[str], fallback: str = "monthly") -> str:
+    text = (product_id or "").lower()
+    if "year" in text or "annual" in text:
+        return "yearly"
+    if "month" in text:
+        return "monthly"
+    return fallback
+
+
+def _revenuecat_entitlements(event: dict) -> list[str]:
+    raw_ids = event.get("entitlement_ids")
+    if isinstance(raw_ids, list):
+        ids = [str(item).strip().lower() for item in raw_ids if str(item).strip()]
+        if ids:
+            return ids
+
+    raw_id = event.get("entitlement_id")
+    if isinstance(raw_id, str) and raw_id.strip():
+        return [raw_id.strip().lower()]
+
+    product_id = str(event.get("product_id") or "").lower()
+    if "pro" in product_id:
+        return ["pro"]
+    if "plus" in product_id:
+        return ["plus"]
+    return []
+
+
+def _revenuecat_user_id(event: dict) -> Optional[str]:
+    candidates = [
+        event.get("app_user_id"),
+        event.get("original_app_user_id"),
+    ]
+    aliases = event.get("aliases")
+    if isinstance(aliases, list):
+        candidates.extend(aliases)
+    for value in candidates:
+        if value and _looks_like_uuid(str(value)):
+            return str(value)
+    return None
+
+
 # --- Lightweight models kept for your existing hooks ---
 class AlertPayload(BaseModel):
     kind: str
@@ -273,16 +339,89 @@ async def stripe_webhook(request: Request, stripe_signature: Optional[str] = Hea
             if isinstance(cpe, (int, float)) and cpe > 0:
                 expires_at = dt.datetime.utcfromtimestamp(int(cpe)).replace(tzinfo=dt.timezone.utc)
 
-            _upsert_user_entitlement(user_id, entitlement_key, term, expires_at)
+            _upsert_user_entitlement(user_id, entitlement_key, term, expires_at, source="stripe")
             return {"ok": True, "action": "upsert", "entitlement": entitlement_key, "term": term, "user_id": user_id}
 
         if evt_type == "customer.subscription.deleted":
             # Immediate termination
-            _upsert_user_entitlement(user_id, entitlement_key, term, dt.datetime.now(dt.timezone.utc))
+            _upsert_user_entitlement(user_id, entitlement_key, term, dt.datetime.now(dt.timezone.utc), source="stripe")
             return {"ok": True, "action": "cancel", "entitlement": entitlement_key, "user_id": user_id}
 
     # Unhandled event types are acknowledged to avoid retries.
     return {"ok": True, "ignored": evt_type}
+
+
+@router.post("/webhooks/revenuecat")
+async def revenuecat_webhook(request: Request, authorization: Optional[str] = Header(None, alias="Authorization")):
+    """
+    Handle RevenueCat subscription lifecycle events for iOS purchases.
+    RevenueCat should be configured with app_user_id equal to the Supabase user UUID.
+    """
+    _verify_revenuecat_authorization(authorization)
+
+    raw = await request.body()
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    event = payload.get("event") if isinstance(payload, dict) else None
+    if not isinstance(event, dict):
+        raise HTTPException(status_code=400, detail="Missing RevenueCat event")
+
+    evt_type = str(event.get("type") or "").upper()
+    product_id = str(event.get("product_id") or "")
+    user_id = _revenuecat_user_id(event)
+    if not user_id:
+        return {"ok": True, "ignored": evt_type, "reason": "no_uuid_app_user_id"}
+
+    entitlement_keys = _revenuecat_entitlements(event)
+    if not entitlement_keys and product_id:
+        try:
+            key, term = _map_price_to_entitlement(product_id, provider="revenuecat")
+            entitlement_keys = [key]
+        except HTTPException:
+            entitlement_keys = []
+    if not entitlement_keys:
+        return {"ok": True, "ignored": evt_type, "reason": "no_entitlement_mapping", "user_id": user_id}
+
+    term = _revenuecat_term_from_product(product_id)
+    expires_at = _datetime_from_revenuecat_ms(event.get("expiration_at_ms"))
+    if product_id:
+        try:
+            _, mapped_term = _map_price_to_entitlement(product_id, provider="revenuecat")
+            term = mapped_term or term
+        except HTTPException:
+            pass
+
+    if evt_type == "EXPIRATION":
+        expires_at = expires_at or dt.datetime.now(dt.timezone.utc)
+
+    updated: list[str] = []
+    for entitlement_key in entitlement_keys:
+        if entitlement_key not in {"plus", "pro"}:
+            continue
+        _upsert_user_entitlement(
+            user_id=user_id,
+            entitlement_key=entitlement_key,
+            term=term,
+            expires_at=expires_at,
+            source="revenuecat",
+        )
+        updated.append(entitlement_key)
+
+    if not updated:
+        return {"ok": True, "ignored": evt_type, "reason": "unsupported_entitlement", "user_id": user_id}
+
+    return {
+        "ok": True,
+        "event": evt_type,
+        "action": "upsert",
+        "entitlements": updated,
+        "term": term,
+        "user_id": user_id,
+        "expires_at": expires_at.isoformat() if expires_at else None,
+    }
 
 
 # --- Minimal entitlements API ---
@@ -393,5 +532,6 @@ def manual_grant(payload: ManualGrant):
         entitlement_key=payload.entitlement_key,
         term=payload.term or "monthly",
         expires_at=payload.expires_at,
+        source="manual",
     )
     return {"ok": True}

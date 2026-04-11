@@ -1,5 +1,5 @@
 {
-  "originHash" : "1b504976b9531aad5c8b136c8aff3639bbd5b58b34838e788d302e368f8a479c",
+  "originHash" : "ada711fd8f67c2396e685fe3150502456b7b9e23ccdd085dca8646c0c7cd4bbf",
   "pins" : [
     {
       "identity" : "polar-ble-sdk",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "a988428492670113f2f9127355bb582f2cd9ee68",
         "version" : "6.10.0"
+      }
+    },
+    {
+      "identity" : "purchases-ios-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/RevenueCat/purchases-ios-spm.git",
+      "state" : {
+        "revision" : "a78d10e43fd32e636cef073b8fede9a24a0b2d0b",
+        "version" : "5.67.2"
       }
     },
     {
