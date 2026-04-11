@@ -175,8 +175,8 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__nav-card strong{display:block;font-size:14px}
         .gaia-dashboard__nav-card span{display:block;margin-top:5px;font-size:12px;color:#9da9c1;line-height:1.45}
         .gaia-dashboard__nav-badge{display:inline-flex;align-items:center;justify-content:center;padding:4px 9px;border-radius:999px;background:rgba(43,140,255,.16);border:1px solid rgba(84,201,255,.28);color:#8fdcff;font-size:11px;font-weight:700;letter-spacing:.03em;white-space:nowrap}
-        .gaia-dashboard__sticky-tabs{position:fixed!important;left:50%!important;top:96px!important;transform:translateX(-50%);width:min(calc(100vw - 24px),980px);z-index:99990!important;padding:10px;border-radius:20px;background:rgba(10,14,22,.88);border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 40px rgba(0,0,0,.28);backdrop-filter:blur(16px)}
-        body.admin-bar .gaia-dashboard__sticky-tabs{top:128px!important}
+        .gaia-dashboard__sticky-tabs{position:fixed!important;left:50%!important;top:auto!important;bottom:calc(18px + env(safe-area-inset-bottom,0px))!important;transform:translateX(-50%);width:min(calc(100vw - 24px),980px);z-index:99990!important;padding:10px;border-radius:20px;background:rgba(10,14,22,.88);border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 40px rgba(0,0,0,.28);backdrop-filter:blur(16px)}
+        body.admin-bar .gaia-dashboard__sticky-tabs{top:auto!important}
         .gaia-dashboard__sticky-tabs-scroll{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
         .gaia-dashboard__sticky-tabs-scroll::-webkit-scrollbar{display:none}
         .gaia-dashboard__sticky-tab{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:8px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:#151c28;color:#dfe9fb;cursor:pointer;white-space:nowrap;font-size:12px;font-weight:750;letter-spacing:.01em;flex:0 0 auto}
@@ -280,7 +280,7 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__modal-group ul{margin:0;padding-left:18px}
         .gaia-dashboard__modal-group li{margin:0 0 6px;line-height:1.45}
         @media(min-width:901px){
-          .gaia-dashboard__shell--hub{padding-top:158px}
+          .gaia-dashboard__shell--hub{padding-bottom:112px}
         }
         @media(max-width:900px){
           .gaia-dashboard__shell--hub{padding-bottom:110px}
