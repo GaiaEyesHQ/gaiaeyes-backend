@@ -175,8 +175,8 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__nav-card strong{display:block;font-size:14px}
         .gaia-dashboard__nav-card span{display:block;margin-top:5px;font-size:12px;color:#9da9c1;line-height:1.45}
         .gaia-dashboard__nav-badge{display:inline-flex;align-items:center;justify-content:center;padding:4px 9px;border-radius:999px;background:rgba(43,140,255,.16);border:1px solid rgba(84,201,255,.28);color:#8fdcff;font-size:11px;font-weight:700;letter-spacing:.03em;white-space:nowrap}
-        .gaia-dashboard__sticky-tabs{position:sticky;top:12px;z-index:80;padding:10px;border-radius:20px;background:rgba(10,14,22,.88);border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 40px rgba(0,0,0,.28);backdrop-filter:blur(16px)}
-        body.admin-bar .gaia-dashboard__sticky-tabs{top:46px}
+        .gaia-dashboard__sticky-tabs{position:fixed!important;left:50%!important;top:12px!important;transform:translateX(-50%);width:min(calc(100vw - 24px),980px);z-index:99990!important;padding:10px;border-radius:20px;background:rgba(10,14,22,.88);border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 40px rgba(0,0,0,.28);backdrop-filter:blur(16px)}
+        body.admin-bar .gaia-dashboard__sticky-tabs{top:46px!important}
         .gaia-dashboard__sticky-tabs-scroll{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
         .gaia-dashboard__sticky-tabs-scroll::-webkit-scrollbar{display:none}
         .gaia-dashboard__sticky-tab{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:8px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:#151c28;color:#dfe9fb;cursor:pointer;white-space:nowrap;font-size:12px;font-weight:750;letter-spacing:.01em;flex:0 0 auto}
@@ -186,7 +186,7 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__mobile-tabbar{display:none}
         .gaia-dashboard__mobile-tabbar-scroll{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
         .gaia-dashboard__mobile-tabbar-scroll::-webkit-scrollbar{display:none}
-        .gaia-dashboard__mobile-tab{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:68px;padding:10px 12px;border-radius:16px;border:1px solid rgba(255,255,255,.08);background:#151c28;color:#dfe9fb;cursor:pointer;flex:0 0 auto}
+        button.gaia-dashboard__mobile-tab{appearance:none;-webkit-appearance:none;box-sizing:border-box;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:68px;padding:10px 12px;border-radius:16px;border:1px solid rgba(255,255,255,.08);background:#151c28;color:#dfe9fb;cursor:pointer;flex:0 0 auto;text-decoration:none}
         .gaia-dashboard__mobile-tab.is-active{background:#1e314c;border-color:rgba(156,192,255,.38);box-shadow:0 0 0 1px rgba(156,192,255,.12) inset}
         .gaia-dashboard__mobile-tab--unseen{border-color:rgba(84,201,255,.28)}
         .gaia-dashboard__mobile-tab-icon{font-size:16px;line-height:1}
@@ -279,11 +279,16 @@ add_action('wp_enqueue_scripts', function () {
         .gaia-dashboard__modal-group h5{margin:0 0 7px;font-size:15px}
         .gaia-dashboard__modal-group ul{margin:0;padding-left:18px}
         .gaia-dashboard__modal-group li{margin:0 0 6px;line-height:1.45}
+        @media(min-width:901px){
+          .gaia-dashboard__shell--hub{padding-top:72px}
+        }
         @media(max-width:900px){
           .gaia-dashboard__shell--hub{padding-bottom:110px}
           .gaia-dashboard__sticky-tabs{display:none}
           .gaia-dashboard__nav-grid--hub{display:none}
-          .gaia-dashboard__mobile-tabbar{position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:block;max-width:760px;margin:0 auto;padding:8px;border-radius:22px;background:rgba(10,14,22,.94);border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 40px rgba(0,0,0,.38);backdrop-filter:blur(16px);z-index:99990}
+          .gaia-dashboard__mobile-tabbar{position:fixed!important;left:12px!important;right:12px!important;bottom:calc(10px + env(safe-area-inset-bottom,0px))!important;display:block!important;max-width:760px;margin:0 auto!important;padding:8px!important;border-radius:22px!important;background:rgba(10,14,22,.94)!important;border:1px solid rgba(255,255,255,.1)!important;box-shadow:0 18px 40px rgba(0,0,0,.38)!important;backdrop-filter:blur(16px);z-index:99990!important}
+          button.gaia-dashboard__mobile-tab{background:#151c28!important;color:#dfe9fb!important;border-color:rgba(255,255,255,.08)!important}
+          button.gaia-dashboard__mobile-tab.is-active{background:#1e314c!important;border-color:rgba(156,192,255,.38)!important}
         }
         .gaia-dashboard__modal-copy{margin:0;color:#e8edf7;line-height:1.55}
         .gaia-dashboard__quicklog-pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}

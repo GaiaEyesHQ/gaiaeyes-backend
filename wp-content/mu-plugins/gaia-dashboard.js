@@ -2305,6 +2305,7 @@
     }
 
     const rerender = () => renderMemberHub(root, state);
+    syncMissionMobileNavPortal(root, state, rerender);
 
     const signOutBtn = root.querySelector("[data-gaia-signout]");
     if (signOutBtn && state.authCtx && typeof state.authCtx.onSignOut === "function") {
@@ -3601,6 +3602,41 @@
     </nav>
   `;
 
+  const mobileNavPortalKey = (root) => {
+    if (!root.dataset.gaiaMobileNavPortalKey) {
+      root.dataset.gaiaMobileNavPortalKey = `gaia-mobile-nav-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    return root.dataset.gaiaMobileNavPortalKey;
+  };
+
+  const removeMissionMobileNavPortal = (root) => {
+    const key = root.dataset.gaiaMobileNavPortalKey;
+    if (!key) return;
+    document.querySelectorAll(`[data-gaia-mobile-nav-portal="${key}"]`).forEach((node) => node.remove());
+  };
+
+  const syncMissionMobileNavPortal = (root, state, rerender) => {
+    const key = mobileNavPortalKey(root);
+    let portal = document.querySelector(`[data-gaia-mobile-nav-portal="${key}"]`);
+    if (!portal) {
+      portal = document.createElement("div");
+      portal.setAttribute("data-gaia-mobile-nav-portal", key);
+      document.body.appendChild(portal);
+    }
+    portal.innerHTML = `${renderMissionStickyNav(state)}${renderMissionMobileNav(state)}`;
+    portal.querySelectorAll("[data-tab-target]").forEach((node) => {
+      node.addEventListener("click", () => {
+        state.ui.activeTab = normalizeTabKey(node.getAttribute("data-tab-target"));
+        if (state.ui.activeTab === "guide") {
+          void markGuideSeenRemotely(state);
+        }
+        writeTabHash(state.ui.activeTab);
+        hydrateTabData(root, state, state.ui.activeTab);
+        rerender();
+      });
+    });
+  };
+
   const missionStickyTab = (state, key, label) => `
     <button
       class="gaia-dashboard__sticky-tab${state.ui.activeTab === key ? " is-active" : ""}${key === "guide" && guideHasUnseen(state) ? " gaia-dashboard__sticky-tab--unseen" : ""}"
@@ -4814,7 +4850,6 @@
           ${missionNavCard(state, "guide", "Guide", "A lighter orientation layer with daily check-in and help links.")}
           ${missionNavCard(state, "settings", "Settings", "Account actions, support, and website shortcuts.")}
         </div>
-        ${renderMissionStickyNav(state)}
         ${renderMissionSection(state)}
         ${renderDriversHubSection(state)}
         ${renderBodySection(state)}
@@ -4822,7 +4857,6 @@
         ${renderOutlookSection(state)}
         ${renderGuideSection(state)}
         ${renderSettingsSection(state)}
-        ${renderMissionMobileNav(state)}
         <div class="gaia-dashboard__modal" data-gaia-modal>
           <div class="gaia-dashboard__modal-backdrop" data-gaia-modal-backdrop="1"></div>
           <div class="gaia-dashboard__modal-card" role="dialog" aria-modal="true">
@@ -4834,6 +4868,7 @@
   };
 
   const renderSignInPrompt = (root, supabase, statusText) => {
+    removeMissionMobileNavPortal(root);
     root.innerHTML = `
       <div class="gaia-dashboard__signin">
         <span class="gaia-dashboard__status">${esc(statusText || "Sign in to view your dashboard.")}</span>
@@ -4873,6 +4908,7 @@
     if (!cfg.supabaseAnon) missing.push("SUPABASE_ANON_KEY");
     if (!dashboardProxy && !backendBase) missing.push("GAIAEYES_API_BASE or dashboardProxy");
     if (missing.length) {
+      removeMissionMobileNavPortal(root);
       root.innerHTML = `<div class="gaia-dashboard__status">Dashboard config missing: ${esc(
         missing.join(", ")
       )}</div>`;
@@ -4880,6 +4916,7 @@
     }
 
     if (!window.supabase || !window.supabase.createClient) {
+      removeMissionMobileNavPortal(root);
       root.innerHTML = '<div class="gaia-dashboard__status">Supabase client did not load.</div>';
       return;
     }
@@ -4893,6 +4930,7 @@
 
     const { data, error } = await supabase.auth.getSession();
     if (error) {
+      removeMissionMobileNavPortal(root);
       root.innerHTML = `<div class="gaia-dashboard__status">${esc(error.message || "Session check failed.")}</div>`;
       return;
     }
@@ -5068,6 +5106,7 @@
       hydrateTabData(root, state, state.ui.activeTab);
       scheduleIdleHydration(root, state);
     } catch (err) {
+      removeMissionMobileNavPortal(root);
       const msg = err && err.message ? String(err.message) : String(err);
       const authErr =
         msg.includes("401") ||
