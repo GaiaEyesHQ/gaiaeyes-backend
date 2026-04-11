@@ -3564,16 +3564,6 @@
     ].filter((item) => item.value !== "—");
   };
 
-  const missionNavCard = (state, key, title, body) => `
-    <button class="gaia-dashboard__nav-card${state.ui.activeTab === key ? " is-active" : ""}${key === "guide" && guideHasUnseen(state) ? " gaia-dashboard__nav-card--unseen" : ""}" type="button" data-tab-target="${esc(key)}">
-      <div class="gaia-dashboard__nav-card-head">
-        <strong>${esc(title)}</strong>
-        ${key === "guide" && guideHasUnseen(state) ? '<span class="gaia-dashboard__nav-badge">New</span>' : ""}
-      </div>
-      <span>${esc(body)}</span>
-    </button>
-  `;
-
   const missionMobileNavItem = (state, key, label, icon) => `
     <button
       class="gaia-dashboard__mobile-tab${state.ui.activeTab === key ? " is-active" : ""}${key === "guide" && guideHasUnseen(state) ? " gaia-dashboard__mobile-tab--unseen" : ""}"
@@ -4840,15 +4830,6 @@
             <h2 class="gaia-dashboard__title">${esc(title)}</h2>
             <p class="gaia-dashboard__shell-subtitle">Mission Control for the web: gauges, body context, patterns, outlook, drivers, and a lighter Guide layer in one signed-in shell.</p>
           </div>
-        </div>
-        <div class="gaia-dashboard__nav-grid gaia-dashboard__nav-grid--hub">
-          ${missionNavCard(state, "mission", "Mission Control", "Gauges, drivers, and your current outlook live here.")}
-          ${missionNavCard(state, "drivers", "Drivers", "The full active stack Gaia is weighing right now.")}
-          ${missionNavCard(state, "body", "Body", "Current symptoms, check-in, sleep, health stats, and lunar watch.")}
-          ${missionNavCard(state, "patterns", "Patterns", "The clearest repeats in your logs and wearable history.")}
-          ${missionNavCard(state, "outlook", "Outlook", "Your 24h, 72h, and 7-day personal forecast windows.")}
-          ${missionNavCard(state, "guide", "Guide", "A lighter orientation layer with daily check-in and help links.")}
-          ${missionNavCard(state, "settings", "Settings", "Account actions, support, and website shortcuts.")}
         </div>
         ${renderMissionSection(state)}
         ${renderDriversHubSection(state)}
