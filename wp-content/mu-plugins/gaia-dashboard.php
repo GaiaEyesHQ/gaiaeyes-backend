@@ -498,6 +498,10 @@ function gaia_bug_reports_render_admin_page() {
                     $description = isset($report['description']) ? (string) $report['description'] : '';
                     $diagnostics = isset($report['diagnostics_bundle']) ? (string) $report['diagnostics_bundle'] : '';
                     $alert_sent = !empty($report['alert_sent']);
+                    $alert_response = isset($report['alert_response']) ? $report['alert_response'] : null;
+                    $alert_response_text = is_array($alert_response)
+                        ? wp_json_encode($alert_response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+                        : (is_string($alert_response) ? $alert_response : '');
                     ?>
                     <section class="gaia-bug-report">
                         <div class="gaia-bug-report__head">
@@ -515,8 +519,15 @@ function gaia_bug_reports_render_admin_page() {
                             <div><strong>Source</strong><span><?php echo esc_html(isset($report['source']) ? (string) $report['source'] : '—'); ?></span></div>
                             <div><strong>App</strong><span><?php echo esc_html(isset($report['app_version']) ? (string) $report['app_version'] : '—'); ?></span></div>
                             <div><strong>Device</strong><span><?php echo esc_html(isset($report['device']) ? (string) $report['device'] : '—'); ?></span></div>
+                            <div><strong>Alert email to</strong><span><?php echo esc_html(isset($report['alert_email_to']) && $report['alert_email_to'] !== '' ? (string) $report['alert_email_to'] : '—'); ?></span></div>
                             <div><strong>Alert error</strong><span><?php echo esc_html(isset($report['alert_error']) && $report['alert_error'] !== '' ? (string) $report['alert_error'] : '—'); ?></span></div>
                         </div>
+                        <?php if ($alert_response_text !== ''): ?>
+                            <details>
+                                <summary>Alert response</summary>
+                                <textarea readonly><?php echo esc_textarea($alert_response_text); ?></textarea>
+                            </details>
+                        <?php endif; ?>
                         <details>
                             <summary>Diagnostics bundle</summary>
                             <textarea readonly><?php echo esc_textarea($diagnostics); ?></textarea>

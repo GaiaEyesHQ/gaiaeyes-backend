@@ -390,6 +390,7 @@ struct BugReportResult: Decodable {
     let createdAt: Date?
     let alertSent: Bool?
     let alertError: String?
+    let alertEmailTo: String?
 }
 
 struct UserExperienceProfileUpdate: Encodable {

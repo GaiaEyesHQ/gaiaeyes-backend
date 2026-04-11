@@ -255,10 +255,11 @@ def _supabase_admin_delete_issues() -> List[str]:
     return issues
 
 
-async def _send_bug_report_alert(payload: Dict[str, Any]) -> tuple[bool, Optional[str]]:
+async def _send_bug_report_alert(payload: Dict[str, Any]) -> tuple[bool, Optional[str], Dict[str, Any]]:
     webhook_url = (settings.BUG_REPORT_ALERT_WEBHOOK_URL or "").strip()
+    details: Dict[str, Any] = {"configured": bool(webhook_url)}
     if not webhook_url:
-        return False, None
+        return False, None, details
     headers: Dict[str, str] = {}
     secret = (settings.BUG_REPORT_ALERT_SECRET or "").strip()
     if secret:
@@ -268,14 +269,34 @@ async def _send_bug_report_alert(payload: Dict[str, Any]) -> tuple[bool, Optiona
             response = await client.post(webhook_url, json=payload, headers=headers or None)
     except httpx.HTTPError as exc:
         logger.warning("bug report alert webhook failed: %s", exc)
-        return False, str(exc)
+        details["exception"] = str(exc)
+        return False, str(exc), details
+
+    details["status_code"] = response.status_code
+    body_text = response.text[:1000].strip()
+    response_json: Optional[Dict[str, Any]] = None
+    try:
+        parsed = response.json()
+        if isinstance(parsed, dict):
+            response_json = parsed
+            details["response"] = parsed
+            if parsed.get("email_to"):
+                details["email_to"] = str(parsed.get("email_to"))
+            if "email_sent" in parsed:
+                details["email_sent"] = bool(parsed.get("email_sent"))
+    except ValueError:
+        if body_text:
+            details["response_text"] = body_text[:500]
 
     if 200 <= response.status_code < 300:
-        return True, None
+        if response_json and response_json.get("email_sent") is False:
+            detail = str(response_json.get("error") or "webhook reported email_sent=false")
+            return False, detail, details
+        return True, None, details
 
-    detail = response.text[:240].strip() or f"status {response.status_code}"
+    detail = body_text[:240] or f"status {response.status_code}"
     logger.warning("bug report alert webhook failed: %s", detail)
-    return False, detail
+    return False, detail, details
 
 
 async def _count_user_scoped_rows(conn, user_id: str) -> Dict[str, Any]:
@@ -900,7 +921,7 @@ async def profile_submit_bug_report(
 
     report_id = str(row.get("id") or "")
     created_at = row.get("created_at")
-    alert_sent, alert_error = await _send_bug_report_alert(
+    alert_sent, alert_error, alert_details = await _send_bug_report_alert(
         {
             "event": "bug_report_submitted",
             "report_id": report_id,
@@ -913,17 +934,32 @@ async def profile_submit_bug_report(
             "has_diagnostics_bundle": True,
         }
     )
+    alert_email_to = alert_details.get("email_to")
+    alert_response_json = json.dumps(alert_details, default=str)
 
-    if "alert_sent" in columns or "alert_error" in columns:
+    alert_updates: List[str] = []
+    alert_params: List[Any] = []
+    if "alert_sent" in columns:
+        alert_updates.append("alert_sent = %s")
+        alert_params.append(bool(alert_sent))
+    if "alert_error" in columns:
+        alert_updates.append("alert_error = %s")
+        alert_params.append(alert_error)
+    if "alert_email_to" in columns:
+        alert_updates.append("alert_email_to = %s")
+        alert_params.append(str(alert_email_to) if alert_email_to else None)
+    if "alert_response" in columns:
+        alert_updates.append("alert_response = %s::jsonb")
+        alert_params.append(alert_response_json)
+
+    if alert_updates:
+        alert_params.append(report_id)
         async with conn.cursor() as cur:
             await cur.execute(
-                """
-                update app.user_bug_reports
-                   set alert_sent = %s,
-                       alert_error = %s
-                 where id = %s
-                """,
-                (bool(alert_sent), alert_error, report_id),
+                sql.SQL("update app.user_bug_reports set {} where id = %s").format(
+                    sql.SQL(", ").join(sql.SQL(update) for update in alert_updates)
+                ),
+                alert_params,
                 prepare=False,
             )
         await conn.commit()
@@ -935,6 +971,8 @@ async def profile_submit_bug_report(
             "created_at": created_at,
             "alert_sent": bool(alert_sent),
             "alert_error": alert_error,
+            "alert_email_to": str(alert_email_to) if alert_email_to else None,
+            "alert_response": alert_details,
         },
     }
 
@@ -951,24 +989,30 @@ async def profile_bug_reports_recent(
     if not columns or not required_columns.issubset(set(columns)):
         return {"ok": False, "error": "app.user_bug_reports table unavailable"}
 
+    select_fields = [
+        "id",
+        "user_id",
+        "source",
+        "description",
+        "diagnostics_bundle",
+        "app_version",
+        "device",
+        "alert_sent",
+        "alert_error",
+        "created_at",
+        "alert_email_to" if "alert_email_to" in columns else "null::text as alert_email_to",
+        "alert_response" if "alert_response" in columns else "null::jsonb as alert_response",
+    ]
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
-            """
-            select
-              id,
-              user_id,
-              source,
-              description,
-              diagnostics_bundle,
-              app_version,
-              device,
-              alert_sent,
-              alert_error,
-              created_at
-            from app.user_bug_reports
-            order by created_at desc
-            limit %s
-            """,
+            sql.SQL(
+                """
+                select {}
+                from app.user_bug_reports
+                order by created_at desc
+                limit %s
+                """
+            ).format(sql.SQL(", ").join(sql.SQL(field) for field in select_fields)),
             (safe_limit,),
             prepare=False,
         )

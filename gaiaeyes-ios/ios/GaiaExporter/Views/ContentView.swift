@@ -4544,9 +4544,14 @@ struct ContentView: View {
                 )
             }
             let alertError = envelope.data?.alertError?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let alertEmailTo = envelope.data?.alertEmailTo?.trimmingCharacters(in: .whitespacesAndNewlines)
             let alertMessage: String
             if envelope.data?.alertSent == true {
-                alertMessage = "Bug report submitted and alert sent."
+                if let alertEmailTo, !alertEmailTo.isEmpty {
+                    alertMessage = "Bug report submitted and alert sent to \(alertEmailTo)."
+                } else {
+                    alertMessage = "Bug report submitted and alert sent."
+                }
             } else if let alertError, !alertError.isEmpty {
                 alertMessage = "Bug report saved. Alert email failed: \(alertError)"
                 appLog("[UI] bug report alert email failed: \(alertError)")
