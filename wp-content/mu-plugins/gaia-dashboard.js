@@ -3601,6 +3601,31 @@
     </nav>
   `;
 
+  const missionStickyTab = (state, key, label) => `
+    <button
+      class="gaia-dashboard__sticky-tab${state.ui.activeTab === key ? " is-active" : ""}${key === "guide" && guideHasUnseen(state) ? " gaia-dashboard__sticky-tab--unseen" : ""}"
+      type="button"
+      data-tab-target="${esc(key)}"
+    >
+      ${esc(label)}
+      ${key === "guide" && guideHasUnseen(state) ? '<span class="gaia-dashboard__sticky-tab-dot" aria-hidden="true"></span>' : ""}
+    </button>
+  `;
+
+  const renderMissionStickyNav = (state) => `
+    <nav class="gaia-dashboard__sticky-tabs" aria-label="Mission Control sections">
+      <div class="gaia-dashboard__sticky-tabs-scroll">
+        ${missionStickyTab(state, "mission", "Home")}
+        ${missionStickyTab(state, "drivers", "Drivers")}
+        ${missionStickyTab(state, "body", "Body")}
+        ${missionStickyTab(state, "patterns", "Patterns")}
+        ${missionStickyTab(state, "outlook", "Outlook")}
+        ${missionStickyTab(state, "guide", "Guide")}
+        ${missionStickyTab(state, "settings", "Settings")}
+      </div>
+    </nav>
+  `;
+
   const renderMemberPatternsList = (cards, emptyText) => {
     const items = maybeArray(cards).slice(0, 4);
     if (!items.length) return `<div class="gaia-dashboard__empty">${esc(emptyText)}</div>`;
@@ -4789,6 +4814,7 @@
           ${missionNavCard(state, "guide", "Guide", "A lighter orientation layer with daily check-in and help links.")}
           ${missionNavCard(state, "settings", "Settings", "Account actions, support, and website shortcuts.")}
         </div>
+        ${renderMissionStickyNav(state)}
         ${renderMissionSection(state)}
         ${renderDriversHubSection(state)}
         ${renderBodySection(state)}
