@@ -12,8 +12,16 @@
 | `SUPABASE_URL` | Supabase REST/Auth/Storage base URL | `https://<project>.supabase.co` | `app/utils/supabase_storage.py`, `app/routers/profile.py` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Preferred service-role key for storage uploads and authenticated account deletion | `service-role-key` | `app/utils/supabase_storage.py`, `app/routers/profile.py` |
 | `SUPABASE_SERVICE_KEY` | Legacy service-key alias accepted by account-deletion preflight/delete and some scripts | `service-key` | `app/routers/profile.py`, various scripts |
-| `BUG_REPORT_ALERT_WEBHOOK_URL` | Optional webhook notified when a new in-app bug report is submitted | `https://hooks.example.com/...` | `app/routers/profile.py` |
-| `BUG_REPORT_ALERT_SECRET` | Shared secret header sent to the bug-report alert endpoint | `long-random-string` | `app/routers/profile.py` |
+| `BUG_REPORT_ALERT_EMAIL` | Destination email for in-app bug report alerts | `help@gaiaeyes.com` | `app/routers/profile.py` |
+| `BUG_REPORT_SMTP_HOST` | SMTP host for backend-sent bug report alert email; when set, SMTP is used before webhook fallback | `mail.example.com` | `app/routers/profile.py` |
+| `BUG_REPORT_SMTP_PORT` | SMTP port for bug report alert email | `587` | `app/routers/profile.py` |
+| `BUG_REPORT_SMTP_USERNAME` | Optional SMTP username for bug report alert email | `help@gaiaeyes.com` | `app/routers/profile.py` |
+| `BUG_REPORT_SMTP_PASSWORD` | Optional SMTP password for bug report alert email | `smtp-password` | `app/routers/profile.py` |
+| `BUG_REPORT_SMTP_FROM_EMAIL` | Optional sender address for bug report alert email; defaults to SMTP username, then alert email | `help@gaiaeyes.com` | `app/routers/profile.py` |
+| `BUG_REPORT_SMTP_USE_SSL` | Use implicit SMTP SSL, usually with port 465 | `false` | `app/routers/profile.py` |
+| `BUG_REPORT_SMTP_USE_STARTTLS` | Use SMTP STARTTLS, usually with port 587 | `true` | `app/routers/profile.py` |
+| `BUG_REPORT_ALERT_WEBHOOK_URL` | Optional fallback webhook notified when SMTP is not configured | `https://hooks.example.com/...` | `app/routers/profile.py` |
+| `BUG_REPORT_ALERT_SECRET` | Shared secret header sent to the fallback bug-report alert endpoint | `long-random-string` | `app/routers/profile.py` |
 | `BUCKET` | Storage bucket name | `space-visuals` | `app/utils/supabase_storage.py` |
 | `READ_TOKENS` | Comma-separated read tokens | `token1,token2` | `app/security/auth.py` |
 | `WRITE_TOKENS` | Comma-separated write tokens | `token1,token2` | `app/security/auth.py` |

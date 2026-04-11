@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import smtplib
+import ssl
 from datetime import datetime, timezone
+from email.message import EmailMessage
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -255,18 +259,122 @@ def _supabase_admin_delete_issues() -> List[str]:
     return issues
 
 
+def _bug_report_alert_email_to() -> str:
+    return (settings.BUG_REPORT_ALERT_EMAIL or "help@gaiaeyes.com").strip()
+
+
+def _bug_report_smtp_from_email(to_email: str) -> str:
+    return (
+        (settings.BUG_REPORT_SMTP_FROM_EMAIL or "").strip()
+        or (settings.BUG_REPORT_SMTP_USERNAME or "").strip()
+        or to_email
+    )
+
+
+def _send_bug_report_smtp_sync(payload: Dict[str, Any], details: Dict[str, Any]) -> None:
+    to_email = str(details["email_to"])
+    from_email = str(details["email_from"])
+    report_id = str(payload.get("report_id") or "unknown")
+    description = str(payload.get("description") or "").strip()
+
+    msg = EmailMessage()
+    msg["Subject"] = f"[Gaia Eyes] New bug report {report_id}"
+    msg["From"] = from_email
+    msg["To"] = to_email
+    msg.set_content(
+        "\n".join(
+            [
+                "A new Gaia Eyes bug report was submitted.",
+                "",
+                f"Report ID: {report_id}",
+                f"User ID: {payload.get('user_id') or '—'}",
+                f"Source: {payload.get('source') or '—'}",
+                f"App version: {payload.get('app_version') or '—'}",
+                f"Device: {payload.get('device') or '—'}",
+                f"Created at: {payload.get('created_at') or '—'}",
+                "",
+                "Description:",
+                description or "—",
+                "",
+                "Review the full diagnostics bundle in the internal Gaia Bug Reports admin page.",
+            ]
+        )
+    )
+
+    host = str(details["smtp_host"])
+    port = int(details["smtp_port"])
+    username = (settings.BUG_REPORT_SMTP_USERNAME or "").strip()
+    password = settings.BUG_REPORT_SMTP_PASSWORD or ""
+    context = ssl.create_default_context()
+
+    if bool(details["smtp_use_ssl"]):
+        with smtplib.SMTP_SSL(host, port, timeout=15, context=context) as server:
+            if username and password:
+                server.login(username, password)
+            server.send_message(msg)
+        return
+
+    with smtplib.SMTP(host, port, timeout=15) as server:
+        if bool(details["smtp_use_starttls"]):
+            server.starttls(context=context)
+        if username and password:
+            server.login(username, password)
+        server.send_message(msg)
+
+
+async def _send_bug_report_smtp_alert(payload: Dict[str, Any]) -> tuple[bool, Optional[str], Dict[str, Any]]:
+    host = (settings.BUG_REPORT_SMTP_HOST or "").strip()
+    to_email = _bug_report_alert_email_to()
+    from_email = _bug_report_smtp_from_email(to_email)
+    details: Dict[str, Any] = {
+        "channel": "smtp",
+        "configured": bool(host),
+        "email_to": to_email,
+        "email_from": from_email,
+        "smtp_host": host or None,
+        "smtp_port": settings.BUG_REPORT_SMTP_PORT,
+        "smtp_auth": bool((settings.BUG_REPORT_SMTP_USERNAME or "").strip()),
+        "smtp_use_ssl": settings.BUG_REPORT_SMTP_USE_SSL,
+        "smtp_use_starttls": bool(settings.BUG_REPORT_SMTP_USE_STARTTLS and not settings.BUG_REPORT_SMTP_USE_SSL),
+    }
+    if not host:
+        return False, None, details
+    if not to_email or not from_email:
+        return False, "SMTP bug report alert is missing email addresses", details
+    if bool(details["smtp_auth"]) and not (settings.BUG_REPORT_SMTP_PASSWORD or ""):
+        return False, "SMTP bug report alert is missing BUG_REPORT_SMTP_PASSWORD", details
+
+    try:
+        await asyncio.to_thread(_send_bug_report_smtp_sync, payload, details)
+    except Exception as exc:
+        logger.warning("bug report SMTP alert failed: %s", exc)
+        details["exception"] = str(exc)
+        return False, str(exc), details
+
+    details["email_sent"] = True
+    return True, None, details
+
+
 async def _send_bug_report_alert(payload: Dict[str, Any]) -> tuple[bool, Optional[str], Dict[str, Any]]:
+    smtp_sent, smtp_error, smtp_details = await _send_bug_report_smtp_alert(payload)
+    if smtp_details.get("configured"):
+        return smtp_sent, smtp_error, smtp_details
+
     webhook_url = (settings.BUG_REPORT_ALERT_WEBHOOK_URL or "").strip()
-    details: Dict[str, Any] = {"configured": bool(webhook_url)}
+    details: Dict[str, Any] = {"channel": "webhook", "configured": bool(webhook_url)}
     if not webhook_url:
         return False, None, details
-    headers: Dict[str, str] = {}
+    headers: Dict[str, str] = {
+        "Accept": "application/json",
+        "User-Agent": "GaiaEyes-Backend/1.0",
+        "X-Requested-With": "GaiaEyes-Backend",
+    }
     secret = (settings.BUG_REPORT_ALERT_SECRET or "").strip()
     if secret:
         headers["X-Gaia-Bug-Secret"] = secret
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(webhook_url, json=payload, headers=headers or None)
+            response = await client.post(webhook_url, json=payload, headers=headers)
     except httpx.HTTPError as exc:
         logger.warning("bug report alert webhook failed: %s", exc)
         details["exception"] = str(exc)
@@ -289,10 +397,17 @@ async def _send_bug_report_alert(payload: Dict[str, Any]) -> tuple[bool, Optiona
             details["response_text"] = body_text[:500]
 
     if 200 <= response.status_code < 300:
-        if response_json and response_json.get("email_sent") is False:
+        if response_json is None:
+            detail = "webhook returned non-JSON response"
+            logger.warning("bug report alert webhook failed: %s", body_text[:240] or detail)
+            return False, detail, details
+        if response_json.get("ok") is False or response_json.get("email_sent") is False:
             detail = str(response_json.get("error") or "webhook reported email_sent=false")
             return False, detail, details
-        return True, None, details
+        if response_json.get("email_sent") is True:
+            return True, None, details
+        detail = "webhook response missing email_sent=true"
+        return False, detail, details
 
     detail = body_text[:240] or f"status {response.status_code}"
     logger.warning("bug report alert webhook failed: %s", detail)
