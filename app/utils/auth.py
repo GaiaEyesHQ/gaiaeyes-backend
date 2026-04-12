@@ -89,6 +89,7 @@ async def require_admin(request: Request) -> None:
         value.strip()
         for value in (
             os.getenv("ADMIN_TOKEN"),
+            os.getenv("GAIAEYES_API_ADMIN_BEARER"),
             os.getenv("GAIAEYES_ADMIN_BEARER"),
         )
         if value and value.strip()

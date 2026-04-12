@@ -284,6 +284,35 @@ async def analytics_summary(
         )
         totals = _json_row(await cur.fetchone())
 
+        current_start_utc = datetime.now(timezone.utc) - timedelta(hours=24)
+        await cur.execute(
+            """
+            select count(*)::int as events,
+                   count(distinct user_id)::int as users,
+                   count(distinct session_id)::int as sessions,
+                   min(event_ts_utc) as first_event_at,
+                   max(event_ts_utc) as last_event_at
+              from raw.app_analytics_events
+             where event_ts_utc >= %s
+            """,
+            (current_start_utc,),
+            prepare=False,
+        )
+        current = _json_row(await cur.fetchone())
+
+        await cur.execute(
+            """
+            select count(*)::int as events,
+                   count(distinct user_id)::int as users,
+                   count(distinct session_id)::int as sessions,
+                   min(event_ts_utc) as first_event_at,
+                   max(event_ts_utc) as last_event_at
+              from raw.app_analytics_events
+            """,
+            prepare=False,
+        )
+        lifetime = _json_row(await cur.fetchone())
+
         await cur.execute(
             """
             select (event_ts_utc at time zone %s)::date as day,
@@ -356,6 +385,8 @@ async def analytics_summary(
             "end_utc": end_utc.isoformat().replace("+00:00", "Z"),
         },
         "totals": totals,
+        "current": current,
+        "lifetime": lifetime,
         "daily": daily,
         "top_events": top_events,
         "onboarding": onboarding,

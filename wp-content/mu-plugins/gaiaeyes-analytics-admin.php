@@ -224,6 +224,8 @@ function gaiaeyes_analytics_render_admin_page() {
     $summary = gaiaeyes_analytics_fetch_summary($from, $to);
     $selected_range = isset($_GET['gaia_range']) ? sanitize_key((string) wp_unslash($_GET['gaia_range'])) : '7d';
     $totals = is_array($summary) ? ($summary['totals'] ?? []) : [];
+    $current = is_array($summary) ? ($summary['current'] ?? []) : [];
+    $lifetime = is_array($summary) ? ($summary['lifetime'] ?? []) : [];
     $onboarding = is_array($summary) ? ($summary['onboarding'] ?? []) : [];
     $health_sync = is_array($summary) ? ($summary['health_sync'] ?? []) : [];
     $engagement = is_array($summary) ? ($summary['engagement'] ?? []) : [];
@@ -280,9 +282,12 @@ function gaiaeyes_analytics_render_admin_page() {
         <?php else: ?>
             <h2><?php echo esc_html($label); ?>: <?php echo esc_html($from); ?> to <?php echo esc_html($to); ?></h2>
             <div class="gaia-analytics-grid">
+                <?php gaiaeyes_analytics_render_metric('Current 24h events', $current['events'] ?? 0, 'Rolling window'); ?>
+                <?php gaiaeyes_analytics_render_metric('Current 24h users', $current['users'] ?? 0); ?>
                 <?php gaiaeyes_analytics_render_metric('Events', $totals['events'] ?? 0); ?>
                 <?php gaiaeyes_analytics_render_metric('Users', $totals['users'] ?? 0); ?>
                 <?php gaiaeyes_analytics_render_metric('Sessions', $totals['sessions'] ?? 0); ?>
+                <?php gaiaeyes_analytics_render_metric('All-time events', $lifetime['events'] ?? 0, !empty($lifetime['last_event_at']) ? 'Last event: ' . (string) $lifetime['last_event_at'] : 'No stored events yet'); ?>
                 <?php gaiaeyes_analytics_render_metric('Onboarding completed', gaiaeyes_analytics_event_count($onboarding, 'onboarding_completed')); ?>
                 <?php gaiaeyes_analytics_render_metric('Health sync completed', gaiaeyes_analytics_event_count($health_sync, 'health_backfill_completed')); ?>
                 <?php gaiaeyes_analytics_render_metric('Daily check-ins', gaiaeyes_analytics_event_count($engagement, 'daily_checkin_completed')); ?>

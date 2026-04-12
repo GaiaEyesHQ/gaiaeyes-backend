@@ -2826,6 +2826,7 @@ struct ContentView: View {
     @State private var profileLocationMessage: String?
     @State private var profileLocationSaving: Bool = false
     @State private var experienceProfile: UserExperienceProfile = .default
+    @State private var profilePreferenceSaveRevision: Int = 0
     @StateObject private var guideProfileStore = GuideProfileStore()
     @State private var healthPermissionsMessage: String?
     @State private var backfillMessage: String?
@@ -3062,7 +3063,7 @@ struct ContentView: View {
     @State private var didHydrateSymptomPresets: Bool = false
     @State private var isSymptomServiceOffline: Bool = false
     @State private var didLogSymptomTimeout: Bool = false
-    @State private var showExperienceReadingSettings: Bool = true
+    @State private var showExperienceReadingSettings: Bool = false
     @State private var showExperienceDisplaySettings: Bool = false
     @State private var showExperienceTrackedStatsSettings: Bool = false
     @State private var showExperienceFavoriteSymptomsSettings: Bool = false
@@ -3308,6 +3309,24 @@ struct ContentView: View {
         components.host = host
         components.path = "/wp-json/gaia/v1/app-notice"
         return components.url
+    }
+
+    private var appNoticeURLCandidates: [URL] {
+        var urls: [URL] = []
+        if let appNoticeURL {
+            urls.append(appNoticeURL)
+        }
+        [
+            "https://gaiaeyes.com/wp-json/gaia/v1/app-notice",
+            "https://www.gaiaeyes.com/wp-json/gaia/v1/app-notice",
+        ]
+        .compactMap(URL.init(string:))
+        .forEach { candidate in
+            if !urls.contains(candidate) {
+                urls.append(candidate)
+            }
+        }
+        return urls
     }
 
     private var visibleAppNotice: AppNotice? {
@@ -3825,26 +3844,37 @@ struct ContentView: View {
 
     @MainActor
     private func fetchAppNotice() async {
-        guard let url = appNoticeURL else { return }
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.timeoutInterval = 8
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            guard (200...299).contains(status) else {
-                appLog("[UI] app notice fetch failed status=\(status)")
+        var lastFailureStatus: Int?
+        for url in appNoticeURLCandidates {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.timeoutInterval = 8
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+                guard (200...299).contains(status) else {
+                    lastFailureStatus = status
+                    if status == 404 {
+                        continue
+                    }
+                    appLog("[UI] app notice fetch failed status=\(status)")
+                    return
+                }
+                let envelope = try JSONDecoder().decode(AppNoticeEnvelope.self, from: data)
+                appNotice = envelope.ok == false ? nil : envelope.notice
+                return
+            } catch is CancellationError {
+                return
+            } catch let error as URLError where error.code == .cancelled {
+                return
+            } catch {
+                appLog("[UI] app notice fetch error: \(error.localizedDescription)")
                 return
             }
-            let envelope = try JSONDecoder().decode(AppNoticeEnvelope.self, from: data)
-            appNotice = envelope.ok == false ? nil : envelope.notice
-        } catch is CancellationError {
-            return
-        } catch let error as URLError where error.code == .cancelled {
-            return
-        } catch {
-            appLog("[UI] app notice fetch error: \(error.localizedDescription)")
+        }
+        if let lastFailureStatus {
+            appLog("[UI] app notice fetch failed status=\(lastFailureStatus)")
         }
     }
 
@@ -5896,7 +5926,23 @@ struct ContentView: View {
     }
 
     private func resolvedProfileAfterSave(_ saved: UserExperienceProfile, applying update: UserExperienceProfileUpdate) -> UserExperienceProfile {
-        var resolved = saved
+        profileAfterApplying(update, to: saved)
+    }
+
+    private func profileAfterApplying(_ update: UserExperienceProfileUpdate, to profile: UserExperienceProfile) -> UserExperienceProfile {
+        var resolved = profile
+        if let mode = update.mode {
+            resolved.mode = mode
+        }
+        if let guide = update.guide {
+            resolved.guide = guide
+        }
+        if let tone = update.tone {
+            resolved.tone = tone
+        }
+        if let tempUnit = update.tempUnit {
+            resolved.tempUnit = tempUnit
+        }
         if let trackedStatKeys = update.trackedStatKeys {
             resolved.trackedStatKeys = trackedStatKeys
         }
@@ -5905,6 +5951,18 @@ struct ContentView: View {
         }
         if let favoriteSymptomCodes = update.favoriteSymptomCodes {
             resolved.favoriteSymptomCodes = _normalizeFavoriteSymptomCodesForUI(favoriteSymptomCodes)
+        }
+        if let lunarSensitivityDeclared = update.lunarSensitivityDeclared {
+            resolved.lunarSensitivityDeclared = lunarSensitivityDeclared
+        }
+        if let onboardingStep = update.onboardingStep {
+            resolved.onboardingStep = onboardingStep
+        }
+        if let onboardingCompleted = update.onboardingCompleted {
+            resolved.onboardingCompleted = onboardingCompleted
+        }
+        if let lastBackfillAt = update.lastBackfillAt {
+            resolved.lastBackfillAt = lastBackfillAt
         }
         return resolved
     }
@@ -5992,6 +6050,7 @@ struct ContentView: View {
                 }
             }
         } catch {
+            if isCancellationError(error) { return }
             appLog("[UI] profile location fetch error: \(error.localizedDescription)")
         }
     }
@@ -6017,8 +6076,13 @@ struct ContentView: View {
             return false
         }
         do {
-            let _: ProfileLocationEnvelope = try await putJSON("v1/profile/location", body: payload, as: ProfileLocationEnvelope.self)
+            let saved: ProfileLocationEnvelope = try await putJSON("v1/profile/location", body: payload, as: ProfileLocationEnvelope.self)
             await MainActor.run {
+                if let zip = saved.location?.zip, !zip.isEmpty {
+                    localHealthZip = zip
+                }
+                profileUseGPS = payload.useGps ?? profileUseGPS
+                profileLocalInsightsEnabled = payload.localInsightsEnabled ?? profileLocalInsightsEnabled
                 profileLocationMessage = "Location saved"
                 profileLocationSaving = false
                 didLocationOnboarding = true
@@ -6052,6 +6116,7 @@ struct ContentView: View {
                 }
             }
         } catch {
+            if isCancellationError(error) { return }
             appLog("[UI] profile preferences fetch error: \(error.localizedDescription)")
             await MainActor.run {
                 experienceProfile.onboardingStep = OnboardingStep(rawValue: onboardingStepRaw) ?? .welcome
@@ -6062,12 +6127,20 @@ struct ContentView: View {
     }
 
     private func saveProfilePreferences(_ update: UserExperienceProfileUpdate) async {
+        let revision = await MainActor.run { () -> Int in
+            profilePreferenceSaveRevision += 1
+            let revision = profilePreferenceSaveRevision
+            applyExperienceProfile(profileAfterApplying(update, to: experienceProfile))
+            return revision
+        }
         do {
             let saved = try await putProfilePreferences(update)
             await MainActor.run {
+                guard revision == profilePreferenceSaveRevision else { return }
                 applyExperienceProfile(resolvedProfileAfterSave(saved, applying: update))
             }
         } catch {
+            if isCancellationError(error) { return }
             appLog("[UI] save profile preferences error: \(error.localizedDescription)")
         }
     }
@@ -6267,6 +6340,7 @@ struct ContentView: View {
                 tagCatalog = payload.items ?? []
             }
         } catch {
+            if isCancellationError(error) { return }
             appLog("[UI] tag catalog fetch error: \(error.localizedDescription)")
         }
     }
@@ -6279,6 +6353,7 @@ struct ContentView: View {
                 selectedTagKeys = Set((payload.tags ?? []).map(canonicalProfileTagKey))
             }
         } catch {
+            if isCancellationError(error) { return }
             appLog("[UI] selected tags fetch error: \(error.localizedDescription)")
         }
     }
@@ -6336,6 +6411,7 @@ struct ContentView: View {
                 notificationSettingsMessage = nil
             }
         } catch {
+            if isCancellationError(error) { return }
             await MainActor.run {
                 if notificationPreferences.timeZone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     notificationPreferences.timeZone = TimeZone.current.identifier
@@ -7754,6 +7830,10 @@ struct ContentView: View {
                 }
             }
         } catch is CancellationError {
+            await MainActor.run { currentSymptomsLoading = false }
+            return
+        } catch let uerr as URLError where uerr.code == .cancelled {
+            await MainActor.run { currentSymptomsLoading = false }
             return
         } catch {
             await MainActor.run {
@@ -7784,6 +7864,10 @@ struct ContentView: View {
                 dailyCheckInLoading = false
             }
         } catch is CancellationError {
+            await MainActor.run { dailyCheckInLoading = false }
+            return
+        } catch let uerr as URLError where uerr.code == .cancelled {
+            await MainActor.run { dailyCheckInLoading = false }
             return
         } catch {
             await MainActor.run {
@@ -13865,7 +13949,15 @@ struct ContentView: View {
         }
 
         private var normalizedFavoriteCodes: [String] {
-            favoriteSymptomCodes.map(normalize)
+            var normalized: [String] = []
+            for code in favoriteSymptomCodes {
+                let token = normalize(code)
+                if token.isEmpty || normalized.contains(token) {
+                    continue
+                }
+                normalized.append(token)
+            }
+            return normalized
         }
 
         private var selectedLabelsSummary: String? {
@@ -13925,7 +14017,7 @@ struct ContentView: View {
                             )
                         }
                         .buttonStyle(.plain)
-                        .disabled(!isSelected && favoriteSymptomCodes.count >= FavoriteSymptomPreference.maxCount)
+                        .disabled(!isSelected && normalizedFavoriteCodes.count >= FavoriteSymptomPreference.maxCount)
                     }
                 }
             }
@@ -15746,6 +15838,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private var missionSettingsTopSections: some View {
+        missionSettingsAccountSection
         missionSettingsHelpSection
         missionSettingsExperienceSection
         missionSettingsSignalsSection
@@ -15878,8 +15971,9 @@ struct ContentView: View {
     }
 
     private var favoriteSymptomsSettingsSummary: String {
+        let favoriteSet = Set(experienceProfile.favoriteSymptomCodes.map(normalize))
         let favorites = preferredSymptomPresets(symptomPresets, favoriteCodes: experienceProfile.favoriteSymptomCodes)
-            .filter { experienceProfile.favoriteSymptomCodes.contains(normalize($0.code)) }
+            .filter { favoriteSet.contains(normalize($0.code)) }
             .map(\.label)
         guard !favorites.isEmpty else { return "None selected yet" }
         let preview = favorites.prefix(3).joined(separator: ", ")
@@ -16466,7 +16560,7 @@ struct ContentView: View {
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
                                         if notificationPreferences.symptomFollowupsEnabled {
-                                            Toggle("Allow push reminders", isOn: $notificationPreferences.symptomFollowupPushEnabled)
+                                            Toggle("Allow symptom follow-up pushes", isOn: $notificationPreferences.symptomFollowupPushEnabled)
                                             Picker("Follow-up cadence", selection: $notificationPreferences.symptomFollowupCadence) {
                                                 Text("Minimal").tag("minimal")
                                                 Text("Balanced").tag("balanced")
@@ -16499,7 +16593,7 @@ struct ContentView: View {
                                             .font(.caption2)
                                             .foregroundColor(.secondary)
                                         if notificationPreferences.dailyCheckinsEnabled {
-                                            Toggle("Allow push reminders", isOn: $notificationPreferences.dailyCheckinPushEnabled)
+                                            Toggle("Allow daily check-in pushes", isOn: $notificationPreferences.dailyCheckinPushEnabled)
                                             Picker("Daily check-in cadence", selection: $notificationPreferences.dailyCheckinCadence) {
                                                 Text("Minimal").tag("minimal")
                                                 Text("Balanced").tag("balanced")
@@ -16590,8 +16684,6 @@ struct ContentView: View {
                             Label("Notifications", systemImage: "bell.badge.fill")
                         }
                         .padding(.horizontal)
-
-                        missionSettingsAccountSection
 
     }
 

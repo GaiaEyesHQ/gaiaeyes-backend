@@ -757,7 +757,10 @@ async def _fetch_location_row(conn, user_id: str) -> Optional[Dict[str, Any]]:
     lon_col = _pick(cols, ["lon", "lng", "longitude"])
     label_col = _pick(cols, ["label", "name"])
     primary_col = _pick(cols, ["is_primary", "primary", "is_default"])
-    gps_col = _pick(cols, ["use_gps", "gps_enabled", "gps_allowed"])
+    gps_col = _pick(
+        cols,
+        ["use_gps", "gps_enabled", "gps_allowed", "use_current_location", "current_location_enabled", "use_device_location"],
+    )
     local_col = _pick(cols, ["local_insights_enabled", "local_enabled", "is_local_enabled"])
     updated_col = _pick(cols, ["updated_at", "created_at"])
     if not user_col:
@@ -880,7 +883,10 @@ async def profile_location_upsert(
     lon_col = _pick(cols, ["lon", "lng", "longitude"])
     label_col = _pick(cols, ["label", "name"])
     primary_col = _pick(cols, ["is_primary", "primary", "is_default"])
-    gps_col = _pick(cols, ["use_gps", "gps_enabled", "gps_allowed"])
+    gps_col = _pick(
+        cols,
+        ["use_gps", "gps_enabled", "gps_allowed", "use_current_location", "current_location_enabled", "use_device_location"],
+    )
     local_col = _pick(cols, ["local_insights_enabled", "local_enabled", "is_local_enabled"])
     updated_col = _pick(cols, ["updated_at"])
     created_col = _pick(cols, ["created_at"])
