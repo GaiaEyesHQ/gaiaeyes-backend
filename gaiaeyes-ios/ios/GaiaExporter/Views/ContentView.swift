@@ -3565,14 +3565,159 @@ struct ContentView: View {
     private var persistentSignalBarItems: [SignalPill] {
         var items = dashboardPayload?.signalBar?.items ?? SignalPill.placeholders
         guard let liveSchumannSignalBarItem else {
-            return items
+            return reconciledSignalBarItems(items)
         }
         if let index = items.firstIndex(where: { $0.key == liveSchumannSignalBarItem.key }) {
             items[index] = liveSchumannSignalBarItem
         } else {
             items.append(liveSchumannSignalBarItem)
         }
-        return items
+        return reconciledSignalBarItems(items)
+    }
+
+    private func reconciledSignalBarItems(_ items: [SignalPill]) -> [SignalPill] {
+        let activeStates = activeSignalStatesFromDashboard()
+        return items.map { item in
+            let key = normalizeDriverFocusKey(item.driverKey ?? item.key) ?? item.key
+            let valueState = signalStateFromValue(key: key, valueText: item.value)
+            let activeState = activeStates[key]
+            let resolvedState = strongestSignalState([item.state, valueState, activeState])
+            guard resolvedState != item.state else { return item }
+            return SignalPill(
+                key: item.key,
+                label: item.label,
+                value: item.value,
+                state: resolvedState,
+                driverKey: item.driverKey,
+                detailTarget: item.detailTarget,
+                updatedAt: item.updatedAt
+            )
+        }
+    }
+
+    private func activeSignalStatesFromDashboard() -> [String: SignalBarState] {
+        var states: [String: SignalBarState] = [:]
+
+        func merge(key rawKey: String?, state: SignalBarState?) {
+            guard let key = normalizeDriverFocusKey(rawKey), let state else { return }
+            guard ["kp", "solar_wind", "schumann", "pressure"].contains(key) else { return }
+            states[key] = strongestSignalState([states[key], state])
+        }
+
+        for alert in dashboardPayload?.alerts ?? [] {
+            merge(key: signalKey(for: alert), state: signalStateFromSeverity(alert.severity ?? alert.title))
+        }
+
+        var drivers = dashboardPayload?.drivers ?? []
+        if let primary = dashboardPayload?.primaryDriver {
+            drivers.append(primary)
+        }
+        drivers.append(contentsOf: dashboardPayload?.supportingDrivers ?? [])
+        for driver in drivers {
+            let key = normalizeDriverFocusKey(driver.key)
+            merge(key: key, state: signalStateFromSeverity(driver.severity ?? driver.state))
+            if key == "solar_wind" {
+                merge(key: key, state: signalStateFromSolarWindSpeed(driver.value))
+            }
+            if key == "kp" {
+                merge(key: key, state: signalStateFromKp(driver.value))
+            }
+        }
+
+        return states
+    }
+
+    private func signalKey(for alert: DashboardAlertItem) -> String? {
+        for raw in [alert.key, alert.title].compactMap({ $0 }) {
+            if let key = normalizeDriverFocusKey(raw),
+               ["kp", "solar_wind", "schumann", "pressure"].contains(key) {
+                return key
+            }
+        }
+        let haystack = [alert.key, alert.title]
+            .compactMap { $0?.lowercased() }
+            .joined(separator: " ")
+        if haystack.contains("solar wind") { return "solar_wind" }
+        if haystack.contains("geomagnetic") || haystack.contains("kp") { return "kp" }
+        if haystack.contains("schumann") || haystack.contains("resonance") { return "schumann" }
+        if haystack.contains("pressure") || haystack.contains("barometric") { return "pressure" }
+        return nil
+    }
+
+    private func strongestSignalState(_ states: [SignalBarState?]) -> SignalBarState {
+        states.compactMap { $0 }.max { signalStateRank($0) < signalStateRank($1) } ?? .quiet
+    }
+
+    private func signalStateRank(_ state: SignalBarState) -> Int {
+        switch state {
+        case .quiet:
+            return 0
+        case .watch:
+            return 1
+        case .elevated:
+            return 2
+        case .strong:
+            return 3
+        }
+    }
+
+    private func signalStateFromSeverity(_ raw: String?) -> SignalBarState? {
+        let token = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch token {
+        case "high", "strong", "alert", "red":
+            return .strong
+        case "elevated", "watch", "warn", "warning", "yellow", "orange":
+            return .elevated
+        case "mild", "moderate", "active":
+            return .watch
+        case "quiet", "calm", "low", "stable", "ok", "normal":
+            return .quiet
+        default:
+            return nil
+        }
+    }
+
+    private func signalStateFromValue(key: String, valueText: String) -> SignalBarState? {
+        guard let value = firstNumber(in: valueText) else { return nil }
+        switch key {
+        case "solar_wind":
+            return signalStateFromSolarWindSpeed(value)
+        case "kp":
+            return signalStateFromKp(value)
+        default:
+            return nil
+        }
+    }
+
+    private func signalStateFromSolarWindSpeed(_ speed: Double?) -> SignalBarState? {
+        guard let speed else { return nil }
+        if speed >= 650 { return .strong }
+        if speed >= 550 { return .elevated }
+        if speed >= 450 { return .watch }
+        return .quiet
+    }
+
+    private func signalStateFromKp(_ kp: Double?) -> SignalBarState? {
+        guard let kp else { return nil }
+        if kp >= 6 { return .strong }
+        if kp >= 5 { return .elevated }
+        if kp >= 4 { return .watch }
+        return .quiet
+    }
+
+    private func firstNumber(in text: String) -> Double? {
+        var token = ""
+        for character in text {
+            if character.isNumber || character == "." || character == "-" {
+                token.append(character)
+            } else if !token.isEmpty {
+                if let value = Double(token) {
+                    return value
+                }
+                token = ""
+            }
+        }
+        return token.isEmpty ? nil : Double(token)
     }
 
     @ViewBuilder
@@ -16133,19 +16278,6 @@ struct ContentView: View {
             .pickerStyle(.segmented)
             Text(experienceProfile.guide.subtitle)
                 .font(.caption)
-                .foregroundColor(.secondary)
-
-            Toggle(
-                "Use guide as app icon",
-                isOn: Binding(
-                    get: { guideProfileStore.profile.useGuideAppIcon },
-                    set: { guideProfileStore.setUseGuideAppIcon($0) }
-                )
-            )
-            .disabled(!guideProfileStore.supportsAlternateIcons)
-
-            Text(guideProfileStore.iconPreferenceFootnote)
-                .font(.caption2)
                 .foregroundColor(.secondary)
         }
     }

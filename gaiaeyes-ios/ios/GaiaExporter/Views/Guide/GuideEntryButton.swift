@@ -28,11 +28,11 @@ struct GuideEntryButton: View {
                 size: .small,
                 emphasis: hasUnseen ? .active : .standard,
                 showBackingPlate: false,
+                sizeMultiplier: 1.18,
                 animate: hasUnseen
             )
-            .scaleEffect(1.34)
         }
-        .frame(minWidth: 50, minHeight: 50)
+        .frame(width: 54, height: 54)
         .overlay(alignment: .topTrailing) {
             if hasUnseen {
                 Circle()

@@ -674,7 +674,7 @@ struct GuideHubView: View {
     }
 
     private var influenceGrid: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(influenceSections.enumerated()), id: \.offset) { _, section in
                 influenceSection(title: section.title, items: section.items)
             }
@@ -682,13 +682,14 @@ struct GuideHubView: View {
     }
 
     private func influenceSection(title: String, items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(style.tertiaryText)
             guideInfluenceBulletGrid(items)
         }
-        .padding(10)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(style.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
@@ -711,11 +712,11 @@ struct GuideHubView: View {
     private func guideInfluenceBulletGrid(_ items: [String]) -> some View {
         LazyVGrid(
             columns: [
-                GridItem(.flexible(minimum: 130), spacing: 8, alignment: .top),
-                GridItem(.flexible(minimum: 130), spacing: 8, alignment: .top),
+                GridItem(.flexible(minimum: 124), spacing: 6, alignment: .top),
+                GridItem(.flexible(minimum: 124), spacing: 6, alignment: .top),
             ],
             alignment: .leading,
-            spacing: 8
+            spacing: 6
         ) {
             ForEach(items, id: \.self) { item in
                 guideInfluenceBulletTile(item)
@@ -724,21 +725,21 @@ struct GuideHubView: View {
     }
 
     private func guideInfluenceBulletTile(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 6) {
             Circle()
                 .fill(style.accent.opacity(0.92))
-                .frame(width: 6, height: 6)
-                .padding(.top, 5)
+                .frame(width: 5, height: 5)
+                .padding(.top, 4)
             Text(text)
-                .font(.caption)
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(style.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, minHeight: 44, alignment: .topLeading)
-        .background(style.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 32, alignment: .topLeading)
+        .background(style.accent.opacity(0.13), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func guideBulletTile(_ text: String) -> some View {
