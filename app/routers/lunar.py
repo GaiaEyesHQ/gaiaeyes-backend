@@ -139,11 +139,14 @@ async def lunar_insights(request: Request, conn=Depends(get_db)) -> Dict[str, An
     strongest = None
     if visible_rows:
         strongest = visible_rows[0]
+    elif rows:
+        strongest = rows[0]
 
     observed_days = 0
     if rows:
         observed_days = max(_int_or_zero(row.get("exposed_n")) + _int_or_zero(row.get("unexposed_n")) for row in rows)
-    insufficient_data = observed_days < MIN_TOTAL_OBSERVATIONS
+    pattern_strength = _canonical_pattern_strength(strongest)
+    insufficient_data = observed_days < MIN_TOTAL_OBSERVATIONS and pattern_strength == "none"
 
     return {
         "user_id": "current",
@@ -151,7 +154,7 @@ async def lunar_insights(request: Request, conn=Depends(get_db)) -> Dict[str, An
         "current_lunar_context": current_context,
         "observed_days": observed_days,
         "n_nights": observed_days,
-        "pattern_strength": _canonical_pattern_strength(strongest),
+        "pattern_strength": pattern_strength,
         "highlight_window": LUNAR_SIGNAL_TO_WINDOW.get(str((strongest or {}).get("signal_key") or "")),
         "highlight_metric": LUNAR_OUTCOME_TO_METRIC.get(str((strongest or {}).get("outcome_key") or "")),
         "message_scientific": _canonical_lunar_message(strongest, scientific=True, insufficient_data=insufficient_data),

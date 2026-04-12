@@ -1673,6 +1673,9 @@ private struct UserOutlookDomain: Codable, Hashable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case key, label, likelihood, currentGauge, explanation, topDriverKey, topDriverLabel
+        case currentGaugeSnake = "current_gauge"
+        case topDriverKeySnake = "top_driver_key"
+        case topDriverLabelSnake = "top_driver_label"
     }
 
     init(from decoder: Decoder) throws {
@@ -1680,10 +1683,25 @@ private struct UserOutlookDomain: Codable, Hashable, Identifiable {
         key = (try container.decodeIfPresent(String.self, forKey: .key)) ?? "domain"
         label = try container.decodeIfPresent(String.self, forKey: .label)
         likelihood = try container.decodeIfPresent(String.self, forKey: .likelihood)
-        currentGauge = container.decodeFlexibleDouble(forKey: .currentGauge)
+        currentGauge = container.decodeFlexibleDouble(forKey: .currentGauge) ?? container.decodeFlexibleDouble(forKey: .currentGaugeSnake)
         explanation = try container.decodeIfPresent(String.self, forKey: .explanation)
-        topDriverKey = try container.decodeIfPresent(String.self, forKey: .topDriverKey)
-        topDriverLabel = try container.decodeIfPresent(String.self, forKey: .topDriverLabel)
+        let decodedTopDriverKey = try container.decodeIfPresent(String.self, forKey: .topDriverKey)
+        let decodedTopDriverKeySnake = try container.decodeIfPresent(String.self, forKey: .topDriverKeySnake)
+        topDriverKey = decodedTopDriverKey ?? decodedTopDriverKeySnake
+        let decodedTopDriverLabel = try container.decodeIfPresent(String.self, forKey: .topDriverLabel)
+        let decodedTopDriverLabelSnake = try container.decodeIfPresent(String.self, forKey: .topDriverLabelSnake)
+        topDriverLabel = decodedTopDriverLabel ?? decodedTopDriverLabelSnake
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(key, forKey: .key)
+        try container.encodeIfPresent(label, forKey: .label)
+        try container.encodeIfPresent(likelihood, forKey: .likelihood)
+        try container.encodeIfPresent(currentGauge, forKey: .currentGauge)
+        try container.encodeIfPresent(explanation, forKey: .explanation)
+        try container.encodeIfPresent(topDriverKey, forKey: .topDriverKey)
+        try container.encodeIfPresent(topDriverLabel, forKey: .topDriverLabel)
     }
 }
 
@@ -1701,6 +1719,7 @@ private struct UserOutlookDriver: Codable, Hashable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case key, label, severity, value, unit, day, detail, signalKey
+        case signalKeySnake = "signal_key"
     }
 
     init(from decoder: Decoder) throws {
@@ -1712,7 +1731,21 @@ private struct UserOutlookDriver: Codable, Hashable, Identifiable {
         unit = try container.decodeIfPresent(String.self, forKey: .unit)
         day = try container.decodeIfPresent(String.self, forKey: .day)
         detail = try container.decodeIfPresent(String.self, forKey: .detail)
-        signalKey = try container.decodeIfPresent(String.self, forKey: .signalKey)
+        let decodedSignalKey = try container.decodeIfPresent(String.self, forKey: .signalKey)
+        let decodedSignalKeySnake = try container.decodeIfPresent(String.self, forKey: .signalKeySnake)
+        signalKey = decodedSignalKey ?? decodedSignalKeySnake
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(key, forKey: .key)
+        try container.encodeIfPresent(label, forKey: .label)
+        try container.encodeIfPresent(severity, forKey: .severity)
+        try container.encodeIfPresent(value, forKey: .value)
+        try container.encodeIfPresent(unit, forKey: .unit)
+        try container.encodeIfPresent(day, forKey: .day)
+        try container.encodeIfPresent(detail, forKey: .detail)
+        try container.encodeIfPresent(signalKey, forKey: .signalKey)
     }
 }
 
@@ -1726,16 +1759,37 @@ private struct UserOutlookWindow: Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case windowHours, likelyElevatedDomains, topDrivers, summary, supportLine, voiceSemantic
+        case windowHoursSnake = "window_hours"
+        case likelyElevatedDomainsSnake = "likely_elevated_domains"
+        case topDriversSnake = "top_drivers"
+        case supportLineSnake = "support_line"
+        case voiceSemanticSnake = "voice_semantic"
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        windowHours = container.decodeFlexibleInt(forKey: .windowHours)
+        windowHours = container.decodeFlexibleInt(forKey: .windowHours) ?? container.decodeFlexibleInt(forKey: .windowHoursSnake)
         likelyElevatedDomains = (try? container.decode(LossyArray<UserOutlookDomain>.self, forKey: .likelyElevatedDomains))?.values
+            ?? (try? container.decode(LossyArray<UserOutlookDomain>.self, forKey: .likelyElevatedDomainsSnake))?.values
         topDrivers = (try? container.decode(LossyArray<UserOutlookDriver>.self, forKey: .topDrivers))?.values
+            ?? (try? container.decode(LossyArray<UserOutlookDriver>.self, forKey: .topDriversSnake))?.values
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
-        supportLine = try container.decodeIfPresent(String.self, forKey: .supportLine)
-        voiceSemantic = try container.decodeIfPresent(UserOutlookWindowVoiceSemantic.self, forKey: .voiceSemantic)
+        let decodedSupportLine = try container.decodeIfPresent(String.self, forKey: .supportLine)
+        let decodedSupportLineSnake = try container.decodeIfPresent(String.self, forKey: .supportLineSnake)
+        supportLine = decodedSupportLine ?? decodedSupportLineSnake
+        let decodedVoiceSemantic = try container.decodeIfPresent(UserOutlookWindowVoiceSemantic.self, forKey: .voiceSemantic)
+        let decodedVoiceSemanticSnake = try container.decodeIfPresent(UserOutlookWindowVoiceSemantic.self, forKey: .voiceSemanticSnake)
+        voiceSemantic = decodedVoiceSemantic ?? decodedVoiceSemanticSnake
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(windowHours, forKey: .windowHours)
+        try container.encodeIfPresent(likelyElevatedDomains, forKey: .likelyElevatedDomains)
+        try container.encodeIfPresent(topDrivers, forKey: .topDrivers)
+        try container.encodeIfPresent(summary, forKey: .summary)
+        try container.encodeIfPresent(supportLine, forKey: .supportLine)
+        try container.encodeIfPresent(voiceSemantic, forKey: .voiceSemantic)
     }
 }
 
@@ -1763,6 +1817,43 @@ private struct UserOutlookWindowVoiceInterpretation: Codable, Hashable {
     let domainsSummary: String?
     let supportSummary: String?
     let emptyState: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case headerSummary, leadingSignalSummary, domainsSummary, supportSummary, emptyState
+        case headerSummarySnake = "header_summary"
+        case leadingSignalSummarySnake = "leading_signal_summary"
+        case domainsSummarySnake = "domains_summary"
+        case supportSummarySnake = "support_summary"
+        case emptyStateSnake = "empty_state"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedHeaderSummary = try container.decodeIfPresent(String.self, forKey: .headerSummary)
+        let decodedHeaderSummarySnake = try container.decodeIfPresent(String.self, forKey: .headerSummarySnake)
+        headerSummary = decodedHeaderSummary ?? decodedHeaderSummarySnake
+        let decodedLeadingSignalSummary = try container.decodeIfPresent(String.self, forKey: .leadingSignalSummary)
+        let decodedLeadingSignalSummarySnake = try container.decodeIfPresent(String.self, forKey: .leadingSignalSummarySnake)
+        leadingSignalSummary = decodedLeadingSignalSummary ?? decodedLeadingSignalSummarySnake
+        let decodedDomainsSummary = try container.decodeIfPresent(String.self, forKey: .domainsSummary)
+        let decodedDomainsSummarySnake = try container.decodeIfPresent(String.self, forKey: .domainsSummarySnake)
+        domainsSummary = decodedDomainsSummary ?? decodedDomainsSummarySnake
+        let decodedSupportSummary = try container.decodeIfPresent(String.self, forKey: .supportSummary)
+        let decodedSupportSummarySnake = try container.decodeIfPresent(String.self, forKey: .supportSummarySnake)
+        supportSummary = decodedSupportSummary ?? decodedSupportSummarySnake
+        let decodedEmptyState = try container.decodeIfPresent(String.self, forKey: .emptyState)
+        let decodedEmptyStateSnake = try container.decodeIfPresent(String.self, forKey: .emptyStateSnake)
+        emptyState = decodedEmptyState ?? decodedEmptyStateSnake
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(headerSummary, forKey: .headerSummary)
+        try container.encodeIfPresent(leadingSignalSummary, forKey: .leadingSignalSummary)
+        try container.encodeIfPresent(domainsSummary, forKey: .domainsSummary)
+        try container.encodeIfPresent(supportSummary, forKey: .supportSummary)
+        try container.encodeIfPresent(emptyState, forKey: .emptyState)
+    }
 }
 
 private struct UserOutlookWindowVoiceSemantic: Codable, Hashable {
@@ -1928,6 +2019,38 @@ private struct UserOutlookOverviewVoiceInterpretation: Codable, Hashable {
     let availabilitySummary: String?
     let emptyState: String?
     let sevenDayPending: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case headerSummary, availabilitySummary, emptyState, sevenDayPending
+        case headerSummarySnake = "header_summary"
+        case availabilitySummarySnake = "availability_summary"
+        case emptyStateSnake = "empty_state"
+        case sevenDayPendingSnake = "seven_day_pending"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedHeaderSummary = try container.decodeIfPresent(String.self, forKey: .headerSummary)
+        let decodedHeaderSummarySnake = try container.decodeIfPresent(String.self, forKey: .headerSummarySnake)
+        headerSummary = decodedHeaderSummary ?? decodedHeaderSummarySnake
+        let decodedAvailabilitySummary = try container.decodeIfPresent(String.self, forKey: .availabilitySummary)
+        let decodedAvailabilitySummarySnake = try container.decodeIfPresent(String.self, forKey: .availabilitySummarySnake)
+        availabilitySummary = decodedAvailabilitySummary ?? decodedAvailabilitySummarySnake
+        let decodedEmptyState = try container.decodeIfPresent(String.self, forKey: .emptyState)
+        let decodedEmptyStateSnake = try container.decodeIfPresent(String.self, forKey: .emptyStateSnake)
+        emptyState = decodedEmptyState ?? decodedEmptyStateSnake
+        let decodedSevenDayPending = try container.decodeIfPresent(String.self, forKey: .sevenDayPending)
+        let decodedSevenDayPendingSnake = try container.decodeIfPresent(String.self, forKey: .sevenDayPendingSnake)
+        sevenDayPending = decodedSevenDayPending ?? decodedSevenDayPendingSnake
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(headerSummary, forKey: .headerSummary)
+        try container.encodeIfPresent(availabilitySummary, forKey: .availabilitySummary)
+        try container.encodeIfPresent(emptyState, forKey: .emptyState)
+        try container.encodeIfPresent(sevenDayPending, forKey: .sevenDayPending)
+    }
 }
 
 private struct UserOutlookOverviewVoiceSemantic: Codable, Hashable {
@@ -9993,99 +10116,6 @@ struct ContentView: View {
             return "The signals standing out most right now."
         }
 
-        private func missionOutlookDrivers(for window: UserOutlookWindow?) -> [UserOutlookDriver] {
-            (window?.topDrivers ?? []).filter { driver in
-                let key = driver.key.lowercased()
-                if key == "radio" || key == "radio_blackout" || key == "radio-blackout" {
-                    return false
-                }
-                let label = (driver.label ?? "").lowercased()
-                let detail = (driver.detail ?? "").lowercased()
-                return !label.contains("radio blackout") && !detail.contains("radio blackout")
-            }
-        }
-
-        @ViewBuilder
-        private var missionCurrentOutlookCard: some View {
-            let window = userOutlook?.next24h ?? userOutlook?.next72h ?? userOutlook?.next7d
-            let primary = missionOutlookDrivers(for: window).first
-            let supportLine = window?.semanticSupportSummary?.nilIfTrimmedEmpty
-            let cleanError = ContentView.scrubError(userOutlookError)
-            let summary = (CopyRefiner.refine(window?.semanticSummary ?? window?.summary) ?? window?.semanticSummary ?? window?.summary)?.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            NavigationLink(value: InsightsRoute.yourOutlook) {
-                GroupBox {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(alignment: .top, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Here’s what’s affecting you")
-                                    .font(.headline)
-                                if userOutlookLoading && window == nil {
-                                    Text("Loading the latest personal outlook.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                } else if let summary, !summary.isEmpty {
-                                    Text(summary)
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                } else {
-                                    Text("Your near-future read is still filling in.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            Spacer()
-                            if let primary {
-                                StatusPill((primary.severity ?? "watch").capitalized, severity: LocalConditionsStyle.pillSeverity(primary.severity))
-                            } else if userOutlookLoading {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
-                        }
-
-                        if let primary {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("Main thing to watch")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundColor(.secondary)
-                                Text((CopyRefiner.refine(primary.detail) ?? primary.detail)?.nilIfTrimmedEmpty ?? "This looks most relevant in the current window.")
-                                    .font(.subheadline)
-                                    .foregroundColor(.primary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .padding(10)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                            if let supportLine, !supportLine.isEmpty {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("A steadier way through it")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundColor(.secondary)
-                                    Text(supportLine)
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                .padding(10)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            }
-                        } else if let cleanError, !cleanError.isEmpty {
-                            Text("Current outlook is temporarily unavailable. Mission Control can keep using the last-good dashboard state.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                } label: {
-                    Label("Current Outlook", systemImage: "calendar.badge.clock")
-                }
-            }
-            .buttonStyle(.plain)
-        }
-
         @ViewBuilder
         private var currentSymptomsButton: some View {
             Button(action: onOpenCurrentSymptoms) {
@@ -10312,8 +10342,6 @@ struct ContentView: View {
                             .controlSize(.small)
                         }
                     }
-
-                    missionCurrentOutlookCard
 
                     if ContentView.cameraHealthCheckVisible {
                         CameraCheckCard(
@@ -14263,14 +14291,15 @@ struct ContentView: View {
 
                 ScrollView {
                     LazyVStack(spacing: 16) {
-                        SymptomsTileView(
-                            todayCount: todayCount,
-                            activeCount: currentSymptomsCount,
-                            queuedCount: queuedCount,
-                            sparklinePoints: sparklinePoints,
-                            topSummary: topSummary,
-                            onLogTap: { showSymptomSheet = true }
-                        )
+                        Button {
+                            showSymptomSheet = true
+                        } label: {
+                            Label("Log symptom", systemImage: "plus.circle.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
 
                         NavigationLink(value: InsightsRoute.currentSymptoms) {
                             LocalConditionsSurfaceCard(title: "Current Symptoms", icon: "waveform.path.ecg.rectangle") {
@@ -17657,7 +17686,7 @@ struct ContentView: View {
         let onLogTap: () -> Void
         
         var body: some View {
-            LocalConditionsSurfaceCard(title: "Today in Body", icon: "waveform.path.ecg") {
+            LocalConditionsSurfaceCard(title: "Symptoms", icon: "waveform.path.ecg") {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .top, spacing: 12) {
                         VStack(alignment: .leading, spacing: 6) {

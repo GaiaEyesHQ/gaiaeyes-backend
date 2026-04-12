@@ -3943,77 +3943,6 @@
     `;
   };
 
-  const missionOutlookFallbackSummary = (state, fallbackSummary) => {
-    const trimmedFallback = textOrEmpty(fallbackSummary);
-    const drivers = maybeArray(state && state.dashboard && state.dashboard.drivers).filter(isOutlookHealthRelevantDriver);
-    const primary = drivers[0] || null;
-    const secondary = drivers[1] || null;
-    if (primary && secondary) {
-      return `${primary.label || titleFromKey(primary.key)} looks most active right now, with ${secondary.label || titleFromKey(secondary.key)} also in the mix.`;
-    }
-    if (primary) {
-      return `${primary.label || titleFromKey(primary.key)} looks most active right now.`;
-    }
-    return trimmedFallback || "Your near-future read is still filling in.";
-  };
-
-  const renderMissionOutlookCard = (state, fallbackSummary) => {
-    const outlook = state.member.outlook && typeof state.member.outlook === "object" ? state.member.outlook : {};
-    const window24 = maybeObject(outlook.next24h || outlook.next_24h);
-    const outlookLoading = !!(state.ui.loadingKeys && state.ui.loadingKeys.outlook);
-    const outlookError = textOrEmpty(state.member.errors && state.member.errors.outlook);
-    const drivers = maybeArray(window24 && (window24.topDrivers || window24.top_drivers)).filter(isOutlookHealthRelevantDriver);
-    const primary = drivers[0] || null;
-    const supportLine = textOrEmpty(window24 && (window24.supportLine || window24.support_line));
-    const summary = textOrEmpty(window24 && window24.summary) || missionOutlookFallbackSummary(state, fallbackSummary);
-
-    return `
-      <div class="gaia-dashboard__earthscope gaia-dashboard__earthscope--outlook">
-        <div class="gaia-dashboard__card-title-row">
-          <div>
-            <span class="gaia-dashboard__eyebrow">Current outlook</span>
-            <h4>${esc(
-              outlookLoading && !window24
-                ? "Current outlook loading"
-                : "Here's what's affecting you"
-            )}</h4>
-          </div>
-          ${primary ? `<span class="${pillClass(primary.severity || "watch")}">${esc(primary.severity || "Watch")}</span>` : ""}
-        </div>
-        <p class="gaia-dashboard__earthscope-summary">${
-          outlookLoading && !window24
-            ? "Loading the latest personal outlook."
-            : esc(summary)
-        }</p>
-        ${
-          primary
-            ? `
-              <div class="gaia-dashboard__earthscope-preview">
-                <div class="gaia-dashboard__earthscope-row">
-                  <div class="gaia-dashboard__earthscope-label">Main thing to watch</div>
-                  <div class="gaia-dashboard__earthscope-copy">${esc(sentence(primary.detail, "This looks most relevant in the current window."))}</div>
-                </div>
-                ${
-                  supportLine
-                    ? `
-                      <div class="gaia-dashboard__earthscope-row">
-                        <div class="gaia-dashboard__earthscope-label">A steadier way through it</div>
-                        <div class="gaia-dashboard__earthscope-copy">${esc(supportLine)}</div>
-                      </div>
-                    `
-                    : ""
-                }
-              </div>
-            `
-            : outlookError
-              ? `<div class="gaia-dashboard__muted">Current outlook is temporarily unavailable. Guide and Body can still use the last-good state.</div>`
-              : ""
-        }
-        <button class="gaia-dashboard__earthscope-link" type="button" data-tab-target="outlook">Open full Outlook</button>
-      </div>
-    `;
-  };
-
   const renderMissionSection = (state) => {
     const payload = state.dashboard;
     const gaugesRaw = payload.gauges || {};
@@ -4049,9 +3978,6 @@
       meta: gaugesMeta[row.key] || null,
     }));
     const alerts = Array.isArray(payload.alerts) ? payload.alerts : [];
-    const driversCompact = Array.isArray(payload.driversCompact) ? payload.driversCompact : [];
-    const earthscope = payload.entitled === true || !!payload.memberPost ? payload.memberPost || payload.publicPost || null : payload.publicPost || payload.memberPost || null;
-    const earthscopeSummary = resolveEarthscopeSummary(payload.earthscopeSummary, earthscope, driversCompact);
     const geomagneticContext = normalizeGeomagneticContext(payload.geomagneticContext || payload);
 
     return `
@@ -4086,7 +4012,6 @@
             : ""
         }
         ${renderGeomagneticContext(geomagneticContext)}
-        ${renderMissionOutlookCard(state, earthscopeSummary)}
       </section>
     `;
   };
@@ -4401,9 +4326,9 @@
           </div>
         </article>
         <div class="gaia-dashboard__grid gaia-dashboard__grid--3">
-          ${renderOutlookWindow("Next 24 Hours", outlook.next24h || outlook.next_24h)}
-          ${renderOutlookWindow("Next 72 Hours", outlook.next72h || outlook.next_72h)}
-          ${renderOutlookWindow("Next 7 Days", outlook.next7d || outlook.next_7d)}
+          ${renderOutlookWindow("Next 24 Hours", outlook.next24h || outlook.next24H || outlook.next_24h)}
+          ${renderOutlookWindow("Next 72 Hours", outlook.next72h || outlook.next72H || outlook.next_72h)}
+          ${renderOutlookWindow("Next 7 Days", outlook.next7d || outlook.next7D || outlook.next_7d)}
         </div>
       </section>
     `;
