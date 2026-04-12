@@ -6173,7 +6173,11 @@ struct ContentView: View {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         let envelope = try decoder.decode(UserExperienceProfileEnvelope.self, from: data)
         guard envelope.ok != false else {
-            throw URLError(.badServerResponse)
+            let detail = [envelope.error, envelope.detail]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+            throw DecodingPreviewError(endpoint: "v1/profile/preferences", preview: detail, underlying: URLError(.badServerResponse))
         }
         return envelope.preferences ?? .default
     }
@@ -6310,7 +6314,7 @@ struct ContentView: View {
             }
         } catch {
             if isCancellationError(error) { return }
-            appLog("[UI] save profile preferences error: \(error.localizedDescription)")
+            appLog("[UI] save profile preferences error: \(String(describing: error))")
         }
     }
 

@@ -354,6 +354,9 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         } else {
             client.devUserId = nil
         }
+        client.bearerProvider = {
+            await AuthManager.shared.validAccessToken()
+        }
         client.logger = { [weak self] msg in Task { @MainActor in self?.append("[NET] \(msg)") } }
         if developerCredentialsAreMissingUserId && !warnedAboutAnonymousDevRequest {
             append("⚠️ Developer bearer requests need X-Dev-UserId; tap ‘Use Developer Credentials’ in Connection Settings.")

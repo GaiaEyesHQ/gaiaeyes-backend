@@ -876,6 +876,9 @@ final class HealthKitBackgroundSync {
         // Build client and surface HTTP logs
         let api = APIClient(config: APIConfig(baseURLString: base, bearer: bearer, timeout: 60))
         api.devUserId = isDeveloperBearer ? uid : nil
+        api.bearerProvider = {
+            await AuthManager.shared.validAccessToken()
+        }
         api.logger = { message in
             appLog("[BG] \(message)")
         }

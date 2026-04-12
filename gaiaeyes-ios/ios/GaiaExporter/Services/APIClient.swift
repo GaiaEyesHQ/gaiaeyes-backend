@@ -203,6 +203,9 @@ final class APIClient {
     /// Optional dev-only header for your backend (used in earlier code)
     public var devUserId: String?
 
+    /// Optional dynamic bearer source for long-running uploads whose JWT may refresh mid-run.
+    public var bearerProvider: (() async -> String?)?
+
     /// Optional logger to surface network activity
     public var logger: ((String) -> Void)?
 
@@ -906,6 +909,12 @@ final class APIClient {
             var lastError: Error?
             while attempt < max(1, attemptLimit) {
                 do {
+                    await refreshAuthorizationHeader(on: &req)
+                    guard req.value(forHTTPHeaderField: "Authorization") != nil else {
+                        let authError = APIError.server(code: 401, body: "missing local auth token before upload")
+                        logger?("POST \(label) skipped: missing Authorization header")
+                        throw authError
+                    }
                     logger?("POST \(label) (\(chunk.count) rows) → \(req.url?.absoluteString ?? path)")
                     let (data, resp) = try await session.data(for: req)
                     let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
@@ -943,6 +952,16 @@ final class APIClient {
             logger?("⚠️ Switching upload path to '\(paths[pi+1])'")
         }
         return false
+    }
+
+    private func refreshAuthorizationHeader(on request: inout URLRequest) async {
+        let dynamicBearer = (await bearerProvider?())?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let activeBearer = dynamicBearer.isEmpty ? bearer : dynamicBearer
+        if activeBearer.isEmpty {
+            request.setValue(nil, forHTTPHeaderField: "Authorization")
+        } else {
+            request.setValue("Bearer \(activeBearer)", forHTTPHeaderField: "Authorization")
+        }
     }
 
     private func parseAcceptedBatch(from data: Data) -> Bool? {
