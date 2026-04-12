@@ -236,7 +236,12 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         HealthKitBackgroundSync.shared.registerAppState(self)
         Task { [weak self] in
             await self?.refreshSymptomQueueCount()
-            await self?.flushQueuedSymptoms()
+            let token = await AuthManager.shared.validAccessToken()
+            let hasAuth = !(token?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+                || !(self?.bearer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            if hasAuth {
+                await self?.flushQueuedSymptoms()
+            }
         }
         // One-shot debug: log SpO₂ snapshot from /v1/diag/features on launch
         Task { [weak self] in

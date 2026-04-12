@@ -82,6 +82,51 @@ final class AuthManager: ObservableObject {
         keychain.write(email, key: "email")
     }
 
+    func signInAnonymously() async throws {
+        lastError = nil
+        guard let config else {
+            throw AuthError.missingConfig
+        }
+
+        var req = URLRequest(url: config.url.appendingPathComponent("auth/v1/signup"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue(config.anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(config.anonKey)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "data": [
+                "source": "gaiaeyes_ios",
+                "auth_mode": "anonymous",
+            ],
+        ])
+
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else {
+            throw AuthError.unexpectedResponse
+        }
+        appLog("[AUTH] anonymous signup response status=\(http.statusCode)")
+        guard (200...299).contains(http.statusCode) else {
+            let msg = Self.extractMessage(from: data) ?? "Supabase anonymous sign-in failed"
+            throw AuthError.remote(msg)
+        }
+
+        let decoded = try JSONDecoder().decode(SupabaseSessionResponse.self, from: data)
+        supabaseEmail = decoded.user?.email
+        if let email = decoded.user?.email, !email.isEmpty {
+            keychain.write(email, key: "email")
+        } else {
+            keychain.delete("email")
+        }
+        persistSession(
+            accessToken: decoded.accessToken,
+            refreshToken: decoded.refreshToken,
+            expiresAt: Date().addingTimeInterval(TimeInterval(decoded.expiresIn)),
+            userId: decoded.user?.id
+        )
+        appLog("[AUTH] anonymous session established")
+    }
+
     func handleMagicLink(_ url: URL) async -> Bool {
         lastError = nil
         appLog("[AUTH] received magic-link callback: \(url.absoluteString)")

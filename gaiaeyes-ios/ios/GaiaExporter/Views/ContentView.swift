@@ -5653,6 +5653,28 @@ struct ContentView: View {
         return !state.bearer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private func ensureBackendIdentity(reason: String) async -> Bool {
+        auth.loadFromKeychain()
+        if let token = await auth.validAccessToken(), !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            await MainActor.run {
+                handleAuthScopeChangeIfNeeded()
+            }
+            return true
+        }
+
+        do {
+            try await auth.signInAnonymously()
+            await MainActor.run {
+                handleAuthScopeChangeIfNeeded()
+            }
+            appLog("[AUTH] backend identity ready via anonymous session reason=\(reason)")
+            return true
+        } catch {
+            appLog("[AUTH] anonymous backend identity failed reason=\(reason): \(String(describing: error))")
+            return false
+        }
+    }
+
     private func putJSON<Body: Encodable, Resp: Decodable>(_ path: String, body: Body, as responseType: Resp.Type) async throws -> Resp {
         let clean = path.hasPrefix("/") ? String(path.dropFirst()) : path
         guard var url = URL(string: state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
@@ -6414,6 +6436,9 @@ struct ContentView: View {
             }
             return false
         }
+        if allowLocalFallback && !hasBackendAuthHeader() {
+            _ = await ensureBackendIdentity(reason: "save profile location")
+        }
         if allowLocalFallback && !hasBackendAuthHeader() && (!profileLocalInsightsEnabled || resolved.usedGPS || (resolved.zip?.isEmpty == false)) {
             await MainActor.run {
                 if let zip = resolved.zip, !zip.isEmpty {
@@ -6516,6 +6541,10 @@ struct ContentView: View {
             return revision
         }
         do {
+            guard await ensureBackendIdentity(reason: "save profile preferences") else {
+                appLog("[UI] save profile preferences fallback: no backend auth")
+                return
+            }
             let saved = try await putProfilePreferences(update)
             await MainActor.run {
                 guard revision == profilePreferenceSaveRevision else { return }
@@ -6746,6 +6775,9 @@ struct ContentView: View {
             tagSaveMessage = nil
         }
         let payload = UserTagsUpsert(tags: Array(selectedTagKeys).sorted())
+        if allowLocalFallback && !hasBackendAuthHeader() {
+            _ = await ensureBackendIdentity(reason: "save profile tags")
+        }
         if allowLocalFallback && !hasBackendAuthHeader() {
             await MainActor.run {
                 tagsSaving = false
@@ -15222,13 +15254,13 @@ struct ContentView: View {
             .task {
                 guard !didRunInitialTasks else { return }
                 didRunInitialTasks = true
-                auth.loadFromKeychain()
-                _ = await auth.validAccessToken()
-                await MainActor.run {
-                    handleAuthScopeChangeIfNeeded()
-                }
+                let identityReady = await ensureBackendIdentity(reason: "initial dashboard task")
                 await state.updateBackendDBFlag()
                 let api = state.apiWithAuth()
+                guard identityReady else {
+                    await fetchAppNotice()
+                    return
+                }
                 AppAnalytics.configure { events in
                     _ = try await api.postAnalyticsEvents(events)
                 }
@@ -15247,11 +15279,13 @@ struct ContentView: View {
                 _ = await (c, d)
             }
             .refreshable {
-                auth.loadFromKeychain()
-                _ = await auth.validAccessToken()
-                handleAuthScopeChangeIfNeeded()
+                let identityReady = await ensureBackendIdentity(reason: "manual refresh")
                 await state.updateBackendDBFlag()
                 let api = state.apiWithAuth()
+                guard identityReady else {
+                    await fetchAppNotice()
+                    return
+                }
                 AppAnalytics.configure { events in
                     _ = try await api.postAnalyticsEvents(events)
                 }
@@ -15333,20 +15367,20 @@ struct ContentView: View {
                 if newPhase == .active {
                     state.refreshStatus()
                     Task {
-                        auth.loadFromKeychain()
-                        _ = await auth.validAccessToken()
-                        await MainActor.run {
-                            handleAuthScopeChangeIfNeeded()
-                        }
+                        let identityReady = await ensureBackendIdentity(reason: "became active")
                         let api = state.apiWithAuth()
-                        AppAnalytics.configure { events in
-                            _ = try await api.postAnalyticsEvents(events)
-                        }
-                        async let dashboardRefresh: Void = fetchDashboardPayload(force: dashboardNeedsForegroundRefresh())
-                        async let healthKick: Void = HealthKitBackgroundSync.shared.kickOnce(reason: "became active")
                         async let schumannRefresh: Void = refreshLiveSchumannSignalBar(api: api)
                         async let noticeRefresh: Void = fetchAppNotice()
-                        _ = await (dashboardRefresh, healthKick, schumannRefresh, noticeRefresh)
+                        if identityReady {
+                            AppAnalytics.configure { events in
+                                _ = try await api.postAnalyticsEvents(events)
+                            }
+                            async let dashboardRefresh: Void = fetchDashboardPayload(force: dashboardNeedsForegroundRefresh())
+                            async let healthKick: Void = HealthKitBackgroundSync.shared.kickOnce(reason: "became active")
+                            _ = await (dashboardRefresh, healthKick, schumannRefresh, noticeRefresh)
+                        } else {
+                            _ = await (schumannRefresh, noticeRefresh)
+                        }
                     }
                 }
             }
