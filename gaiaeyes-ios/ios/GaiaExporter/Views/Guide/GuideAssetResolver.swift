@@ -11,11 +11,11 @@ struct GuideAssetResolver {
         case .cat:
             return catCandidates(for: expression, size: size)
         case .dog:
-            // Dog assets are not in the catalog yet. Probe future-friendly names first,
+            // Dog assets are not in the catalog yet. Probe cat-style role names first,
             // then fall back to the calmest cat equivalent so the UI never renders blank.
             return futureGuideCandidates(prefix: "dog", expression: expression, size: size) + fallbackCandidates(for: expression, size: size)
         case .robot:
-            // Robot assets follow the same strategy: prefer future robot-specific assets
+            // Robot assets follow the same strategy: prefer robot-specific assets
             // when they land, otherwise degrade gracefully to the shared cat fallback set.
             return futureGuideCandidates(prefix: "robot", expression: expression, size: size) + fallbackCandidates(for: expression, size: size)
         }
@@ -45,6 +45,26 @@ struct GuideAssetResolver {
 
     private static func futureGuideCandidates(prefix: String, expression: GuideExpression, size: GuideAvatarSize) -> [String] {
         switch expression {
+        case .neutral, .playful:
+            return ["\(prefix)_avatar_neutral"]
+        case .calm:
+            return ["\(prefix)_avatar_calm", "\(prefix)_avatar_neutral"]
+        case .alert:
+            return ["\(prefix)_avatar_alert", "\(prefix)_avatar_neutral"]
+        case .curious:
+            return ["\(prefix)_avatar_curious", "\(prefix)_avatar_neutral"]
+        case .followUp:
+            return [
+                "\(prefix)_avatar_followUp",
+                "\(prefix)_avatar_curious",
+                "\(prefix)_avatar_neutral"
+            ]
+        case .helpful:
+            return [
+                "\(prefix)_avatar_sign",
+                "\(prefix)_avatar_helpful",
+                "\(prefix)_avatar_neutral"
+            ]
         case .guide:
             return [
                 "\(prefix)_portrait_neutral",
@@ -57,10 +77,11 @@ struct GuideAssetResolver {
                 "\(prefix)_avatar_subtle",
                 "\(prefix)_avatar_neutral"
             ]
-        default:
+        case .subtle:
             return [
-                "\(prefix)_avatar_\(expression.rawValue)",
-                "\(prefix)_avatar_neutral"
+                "\(prefix)_avatar_neutral",
+                "\(prefix)_avatar_icon",
+                "\(prefix)_avatar_subtle"
             ]
         }
     }
