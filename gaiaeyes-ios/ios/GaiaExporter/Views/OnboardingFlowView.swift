@@ -286,7 +286,6 @@ struct OnboardingFlowView: View {
         } else {
             selectedTagKeys.insert(option.id)
         }
-        Task { await onPersistTags() }
     }
 
     private func goNext() {

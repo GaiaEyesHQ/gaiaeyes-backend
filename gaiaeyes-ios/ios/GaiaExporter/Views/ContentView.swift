@@ -4326,6 +4326,14 @@ struct ContentView: View {
         return MembershipPlan(rawValue: cachedPlanRaw) ?? .free
     }
 
+    private var hasPlusAccess: Bool {
+        if dashboardPayload?.entitled == true {
+            return true
+        }
+        let plan = MembershipPlan(rawValue: cachedPlanRaw) ?? .free
+        return plan == .plus || plan == .pro
+    }
+
     @MainActor
     private func refreshBillingDiagnostics(showSuccessMessage: Bool = false) async {
         debugEntitlementsError = nil
@@ -5637,6 +5645,14 @@ struct ContentView: View {
         }
     }
 
+    private func hasBackendAuthHeader() -> Bool {
+        let supabaseBearer = auth.supabaseAccessToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !supabaseBearer.isEmpty {
+            return true
+        }
+        return !state.bearer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private func putJSON<Body: Encodable, Resp: Decodable>(_ path: String, body: Body, as responseType: Resp.Type) async throws -> Resp {
         let clean = path.hasPrefix("/") ? String(path.dropFirst()) : path
         guard var url = URL(string: state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
@@ -6398,6 +6414,24 @@ struct ContentView: View {
             }
             return false
         }
+        if allowLocalFallback && !hasBackendAuthHeader() && (!profileLocalInsightsEnabled || resolved.usedGPS || (resolved.zip?.isEmpty == false)) {
+            await MainActor.run {
+                if let zip = resolved.zip, !zip.isEmpty {
+                    localHealthZip = zip
+                }
+                profileUseGPS = payload.useGps ?? profileUseGPS
+                profileLocalInsightsEnabled = payload.localInsightsEnabled ?? profileLocalInsightsEnabled
+                profileLocationMessage = "Location saved on this device. Server sync will retry later."
+                profileLocationSaving = false
+                didLocationOnboarding = true
+                if markOnboardingComplete {
+                    showLocationOnboarding = false
+                }
+            }
+            await fetchLocalHealth()
+            appLog("[UI] save profile location fallback: no backend auth header")
+            return true
+        }
         do {
             let saved: ProfileLocationEnvelope = try await putJSON("v1/profile/location", body: payload, as: ProfileLocationEnvelope.self)
             guard saved.ok != false else {
@@ -6706,12 +6740,20 @@ struct ContentView: View {
         }
     }
 
-    private func saveSelectedTags() async {
+    private func saveSelectedTags(allowLocalFallback: Bool = false) async {
         await MainActor.run {
             tagsSaving = true
             tagSaveMessage = nil
         }
         let payload = UserTagsUpsert(tags: Array(selectedTagKeys).sorted())
+        if allowLocalFallback && !hasBackendAuthHeader() {
+            await MainActor.run {
+                tagsSaving = false
+                tagSaveMessage = "Personalization saved on this device. Server sync will retry later."
+            }
+            appLog("[UI] save personalization fallback: no backend auth header")
+            return
+        }
         do {
             let _: UserTagsEnvelope = try await putJSON("v1/profile/tags", body: payload, as: UserTagsEnvelope.self)
             await MainActor.run {
@@ -6719,11 +6761,19 @@ struct ContentView: View {
                 tagSaveMessage = "Personalization saved"
             }
         } catch {
+            if allowLocalFallback {
+                await MainActor.run {
+                    tagsSaving = false
+                    tagSaveMessage = "Personalization saved on this device. Server sync will retry later."
+                }
+                appLog("[UI] save personalization fallback after error: \(String(describing: error))")
+                return
+            }
             await MainActor.run {
                 tagsSaving = false
                 tagSaveMessage = "Could not save personalization"
             }
-            appLog("[UI] save personalization error: \(error.localizedDescription)")
+            appLog("[UI] save personalization error: \(String(describing: error))")
         }
     }
 
@@ -13024,6 +13074,7 @@ struct ContentView: View {
         let forecast: ForecastSummary?
         let outlook: SpaceForecastOutlook?
         let magnetosphere: MagnetosphereData?
+        let plusUnlocked: Bool
         let onRefresh: () async -> Void
         let onLoadFullForecast: () async -> Void
         @State private var showAllForecastDays: Bool = false
@@ -13045,6 +13096,7 @@ struct ContentView: View {
         }
 
         private var needsInitialRefresh: Bool {
+            guard plusUnlocked else { return false }
             let forecastDayCount = outlook?.forecastDaily?.count ?? 0
             let hasFullForecastDays = forecastDayCount >= 7
             let hasOutlookSummaries =
@@ -13159,6 +13211,24 @@ struct ContentView: View {
             if day.flareWatch == true { flags.append("Flare watch") }
             if day.solarWindWatch == true { flags.append("Solar wind watch") }
             return flags
+        }
+
+        private var forecastLockedCard: some View {
+            LocalConditionsSurfaceCard(title: "Forecast", icon: "lock.fill") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Space forecast is included with Plus")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Current Kp, solar wind, and event stats stay available. Plus unlocks the outlook summary and 7-day forecast.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    NavigationLink(destination: SubscribeView()) {
+                        Label("View Plus", systemImage: "sparkles")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
         }
 
         var body: some View {
@@ -13311,123 +13381,127 @@ struct ContentView: View {
                             }
                         }
 
-                        if !outlookSummaryLines.isEmpty {
-                            LocalConditionsSurfaceCard(title: "Outlook", icon: "text.justify.left") {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    ForEach(Array(outlookSummaryLines.enumerated()), id: \.offset) { _, line in
-                                        Text("• \(line)")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if plusUnlocked {
+                            if !outlookSummaryLines.isEmpty {
+                                LocalConditionsSurfaceCard(title: "Outlook", icon: "text.justify.left") {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        ForEach(Array(outlookSummaryLines.enumerated()), id: \.offset) { _, line in
+                                            Text("• \(line)")
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        if let forecastDays = outlook?.forecastDaily, !forecastDays.isEmpty {
-                            let displayedForecastDays = showAllForecastDays ? forecastDays : Array(forecastDays.prefix(3))
-                            LocalConditionsSurfaceCard(title: "7-Day Space Forecast", icon: "calendar") {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    ForEach(displayedForecastDays) { day in
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            HStack(alignment: .top, spacing: 12) {
-                                                VStack(alignment: .leading, spacing: 3) {
-                                                    Text(forecastDayLabel(day.forecastDay))
-                                                        .font(.headline)
-                                                    Text(day.gScaleMax ?? "Geomagnetic outlook")
+                            if let forecastDays = outlook?.forecastDaily, !forecastDays.isEmpty {
+                                let displayedForecastDays = showAllForecastDays ? forecastDays : Array(forecastDays.prefix(3))
+                                LocalConditionsSurfaceCard(title: "7-Day Space Forecast", icon: "calendar") {
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        ForEach(displayedForecastDays) { day in
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                HStack(alignment: .top, spacing: 12) {
+                                                    VStack(alignment: .leading, spacing: 3) {
+                                                        Text(forecastDayLabel(day.forecastDay))
+                                                            .font(.headline)
+                                                        Text(day.gScaleMax ?? "Geomagnetic outlook")
+                                                            .font(.caption)
+                                                            .foregroundColor(.secondary)
+                                                    }
+                                                    Spacer()
+                                                    StatusPill(
+                                                        (day.geomagneticSeverityBucket ?? "mild").capitalized,
+                                                        severity: severity(day.geomagneticSeverityBucket)
+                                                    )
+                                                }
+
+                                                ScrollView(.horizontal, showsIndicators: false) {
+                                                    HStack(spacing: 10) {
+                                                        LocalConditionsValueChip(
+                                                            label: "Kp Max",
+                                                            value: day.kpMaxForecast.map { String(format: "%.1f", $0) } ?? "—",
+                                                            tint: GaugePalette.low
+                                                        )
+                                                        LocalConditionsValueChip(
+                                                            label: "G-Scale",
+                                                            value: day.gScaleMax ?? "—",
+                                                            tint: GaugePalette.elevated
+                                                        )
+                                                        LocalConditionsValueChip(
+                                                            label: "S1+",
+                                                            value: day.s1OrGreaterPct.map { String(format: "%.0f%%", $0) } ?? "—",
+                                                            tint: GaugePalette.mild
+                                                        )
+                                                        LocalConditionsValueChip(
+                                                            label: "R1-R2",
+                                                            value: day.r1R2Pct.map { String(format: "%.0f%%", $0) } ?? "—",
+                                                            tint: GaugePalette.elevated
+                                                        )
+                                                        LocalConditionsValueChip(
+                                                            label: "R3+",
+                                                            value: day.r3OrGreaterPct.map { String(format: "%.0f%%", $0) } ?? "—",
+                                                            tint: GaugePalette.high
+                                                        )
+                                                    }
+                                                }
+
+                                                let flags = watchFlags(for: day)
+                                                if !flags.isEmpty {
+                                                    Text(flags.joined(separator: " · "))
+                                                        .font(.caption2.weight(.semibold))
+                                                        .foregroundColor(.secondary)
+                                                }
+
+                                                if let rationale = cleanedOutlookLine(day.geomagneticRationale), !rationale.isEmpty {
+                                                    Text(rationale)
                                                         .font(.caption)
                                                         .foregroundColor(.secondary)
                                                 }
-                                                Spacer()
-                                                StatusPill(
-                                                    (day.geomagneticSeverityBucket ?? "mild").capitalized,
-                                                    severity: severity(day.geomagneticSeverityBucket)
-                                                )
                                             }
+                                            .padding(.bottom, day.id == displayedForecastDays.last?.id ? 0 : 8)
 
-                                            ScrollView(.horizontal, showsIndicators: false) {
-                                                HStack(spacing: 10) {
-                                                    LocalConditionsValueChip(
-                                                        label: "Kp Max",
-                                                        value: day.kpMaxForecast.map { String(format: "%.1f", $0) } ?? "—",
-                                                        tint: GaugePalette.low
-                                                    )
-                                                    LocalConditionsValueChip(
-                                                        label: "G-Scale",
-                                                        value: day.gScaleMax ?? "—",
-                                                        tint: GaugePalette.elevated
-                                                    )
-                                                    LocalConditionsValueChip(
-                                                        label: "S1+",
-                                                        value: day.s1OrGreaterPct.map { String(format: "%.0f%%", $0) } ?? "—",
-                                                        tint: GaugePalette.mild
-                                                    )
-                                                    LocalConditionsValueChip(
-                                                        label: "R1-R2",
-                                                        value: day.r1R2Pct.map { String(format: "%.0f%%", $0) } ?? "—",
-                                                        tint: GaugePalette.elevated
-                                                    )
-                                                    LocalConditionsValueChip(
-                                                        label: "R3+",
-                                                        value: day.r3OrGreaterPct.map { String(format: "%.0f%%", $0) } ?? "—",
-                                                        tint: GaugePalette.high
-                                                    )
+                                            if day.id != displayedForecastDays.last?.id {
+                                                Divider().overlay(Color.white.opacity(0.08))
+                                            }
+                                        }
+
+                                        if !showAllForecastDays || forecastDays.count > 3 {
+                                            let hasFullForecastLoaded = forecastDays.count > 3
+                                            Button(showAllForecastDays && hasFullForecastLoaded ? "Show fewer days" : "Show full 7-day forecast") {
+                                                if showAllForecastDays && hasFullForecastLoaded {
+                                                    showAllForecastDays = false
+                                                    return
+                                                }
+                                                Task {
+                                                    if !hasFullForecastLoaded {
+                                                        await MainActor.run { fullForecastLoading = true }
+                                                        await onLoadFullForecast()
+                                                        await MainActor.run { fullForecastLoading = false }
+                                                    }
+                                                    await MainActor.run { showAllForecastDays = true }
                                                 }
                                             }
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundColor(Color(red: 0.46, green: 0.7, blue: 1.0))
+                                            .buttonStyle(.plain)
+                                            .disabled(fullForecastLoading)
+                                        }
 
-                                            let flags = watchFlags(for: day)
-                                            if !flags.isEmpty {
-                                                Text(flags.joined(separator: " · "))
-                                                    .font(.caption2.weight(.semibold))
-                                                    .foregroundColor(.secondary)
-                                            }
-
-                                            if let rationale = cleanedOutlookLine(day.geomagneticRationale), !rationale.isEmpty {
-                                                Text(rationale)
+                                        if fullForecastLoading {
+                                            HStack(spacing: 8) {
+                                                ProgressView()
+                                                    .scaleEffect(0.82)
+                                                Text("Loading the full 7-day forecast")
                                                     .font(.caption)
                                                     .foregroundColor(.secondary)
                                             }
                                         }
-                                        .padding(.bottom, day.id == displayedForecastDays.last?.id ? 0 : 8)
-
-                                        if day.id != displayedForecastDays.last?.id {
-                                            Divider().overlay(Color.white.opacity(0.08))
-                                        }
-                                    }
-
-                                    if !showAllForecastDays || forecastDays.count > 3 {
-                                        let hasFullForecastLoaded = forecastDays.count > 3
-                                        Button(showAllForecastDays && hasFullForecastLoaded ? "Show fewer days" : "Show full 7-day forecast") {
-                                            if showAllForecastDays && hasFullForecastLoaded {
-                                                showAllForecastDays = false
-                                                return
-                                            }
-                                            Task {
-                                                if !hasFullForecastLoaded {
-                                                    await MainActor.run { fullForecastLoading = true }
-                                                    await onLoadFullForecast()
-                                                    await MainActor.run { fullForecastLoading = false }
-                                                }
-                                                await MainActor.run { showAllForecastDays = true }
-                                            }
-                                        }
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundColor(Color(red: 0.46, green: 0.7, blue: 1.0))
-                                        .buttonStyle(.plain)
-                                        .disabled(fullForecastLoading)
-                                    }
-
-                                    if fullForecastLoading {
-                                        HStack(spacing: 8) {
-                                            ProgressView()
-                                                .scaleEffect(0.82)
-                                            Text("Loading the full 7-day forecast")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
                                     }
                                 }
                             }
+                        } else {
+                            forecastLockedCard
                         }
                     }
                     .padding(16)
@@ -15915,6 +15989,7 @@ struct ContentView: View {
                 forecast: forecast,
                 outlook: resolvedSpaceOutlookPayload,
                 magnetosphere: magnetosphere,
+                plusUnlocked: hasPlusAccess,
                 onRefresh: { await fetchSpaceWeatherDetailData(force: true) },
                 onLoadFullForecast: { await fetchSpaceOutlook(days: 7) }
             )
@@ -17330,6 +17405,7 @@ struct ContentView: View {
                             forecast: forecast,
                             outlook: resolvedOutlook,
                             magnetosphere: magnetosphere,
+                            plusUnlocked: hasPlusAccess,
                             onRefresh: { await fetchSpaceWeatherDetailData(force: true) },
                             onLoadFullForecast: { await fetchSpaceOutlook(days: 7) }
                         )
@@ -17607,7 +17683,7 @@ struct ContentView: View {
                     await saveProfilePreferences(update)
                 },
                 onPersistTags: {
-                    await saveSelectedTags()
+                    await saveSelectedTags(allowLocalFallback: true)
                 },
                 onSaveLocation: {
                     await saveProfileLocation(allowLocalFallback: true)

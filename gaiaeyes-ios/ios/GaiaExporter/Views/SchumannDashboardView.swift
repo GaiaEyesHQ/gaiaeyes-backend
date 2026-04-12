@@ -1068,6 +1068,7 @@ struct SchumannDashboardView: View {
     @ObservedObject var state: AppState
     var mode: ExperienceMode = .scientific
     var tone: ToneStyle = .balanced
+    @AppStorage("gaia.membership.cached_plan") private var cachedPlanRaw: String = MembershipPlan.free.rawValue
     @StateObject private var viewModel = SchumannDashboardViewModel()
     @State private var showHowToRead: Bool = false
     @State private var showBandsDetails: Bool = false
@@ -1076,15 +1077,24 @@ struct SchumannDashboardView: View {
     @State private var showTomskDetails: Bool = false
     @State private var shareDraft: ShareDraft?
 
+    private var plusUnlocked: Bool {
+        let plan = MembershipPlan(rawValue: cachedPlanRaw) ?? .free
+        return plan == .plus || plan == .pro
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
                 headerCard
                 gaugeCard
-                heatmapCard
-                bandsCard
-                tomskCard
-                pulseCard
+                if plusUnlocked {
+                    heatmapCard
+                    bandsCard
+                    tomskCard
+                    pulseCard
+                } else {
+                    advancedLockedCard
+                }
             }
             .padding()
         }
@@ -1097,11 +1107,11 @@ struct SchumannDashboardView: View {
                     Task {
                         await viewModel.refreshVisibleContent(
                             using: state,
-                            includeTomsk: showTomskDetails || viewModel.tomskLatest != nil,
-                            includeTomskSeries: showTomskDetails || !viewModel.tomskSeries.isEmpty,
-                            includeBands: showBandsDetails || !viewModel.seriesRows.isEmpty,
-                            includeHeatmap: showHeatmapDetails || viewModel.heatmap != nil,
-                            includePulse: showPulseDetails
+                            includeTomsk: plusUnlocked && (showTomskDetails || viewModel.tomskLatest != nil),
+                            includeTomskSeries: plusUnlocked && (showTomskDetails || !viewModel.tomskSeries.isEmpty),
+                            includeBands: plusUnlocked && (showBandsDetails || !viewModel.seriesRows.isEmpty),
+                            includeHeatmap: plusUnlocked && (showHeatmapDetails || viewModel.heatmap != nil),
+                            includePulse: plusUnlocked && showPulseDetails
                         )
                     }
                 } label: {
@@ -1142,6 +1152,27 @@ struct SchumannDashboardView: View {
             Task {
                 await viewModel.loadSeriesIfNeeded(using: state, force: false)
             }
+        }
+    }
+
+    private var advancedLockedCard: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Advanced Schumann tools are included with Plus", systemImage: "lock.fill")
+                    .font(.subheadline.weight(.semibold))
+                Text("The current reading and gauge stay available. Plus unlocks the 48h pulse line, frequency bands, heatmap, and Tomsk comparison cards.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                NavigationLink(destination: SubscribeView()) {
+                    Label("View Plus", systemImage: "sparkles")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Label("Plus", systemImage: "sparkles")
         }
     }
 
