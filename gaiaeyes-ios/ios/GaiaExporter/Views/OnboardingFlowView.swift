@@ -621,6 +621,10 @@ struct OnboardingFlowView: View {
                     }
                 }
 
+                if currentStep == .healthContext {
+                    lunarTrackingCard
+                }
+
                 HStack {
                     if currentStep == .healthContext {
                         Button("Skip for now") {
@@ -639,6 +643,18 @@ struct OnboardingFlowView: View {
                     Button(currentStep == .sensitivities ? "Continue" : "Save and Continue") {
                         Task {
                             await onPersistTags()
+                            if currentStep == .healthContext {
+                                AppAnalytics.track(
+                                    profile.lunarSensitivityDeclared ? "lunar_tracking_enabled" : "lunar_tracking_skipped",
+                                    properties: ["surface": "onboarding"]
+                                )
+                                await onPersistExperience(
+                                    UserExperienceProfileUpdate(
+                                        lunarSensitivityDeclared: profile.lunarSensitivityDeclared,
+                                        onboardingStep: .location
+                                    )
+                                )
+                            }
                             currentStep = currentStep == .sensitivities ? .healthContext : .location
                         }
                     }
@@ -647,6 +663,37 @@ struct OnboardingFlowView: View {
                 }
             }
         }
+    }
+
+    private var lunarTrackingCard: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "moon.stars.fill")
+                .font(.title3)
+                .foregroundStyle(Color(red: 0.51, green: 0.82, blue: 0.97))
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: $profile.lunarSensitivityDeclared) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Add lunar overlay tracking")
+                            .font(.headline)
+                        Text("Show moon phase context and let Gaia watch whether full or new moon windows overlap with sleep, cycle, pain, or energy changes.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .toggleStyle(.switch)
+
+                Text("Observational only. You can turn this off later in Settings.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(profile.lunarSensitivityDeclared ? Color.white.opacity(0.10) : Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private var locationStep: some View {

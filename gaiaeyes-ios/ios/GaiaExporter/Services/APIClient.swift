@@ -91,6 +91,17 @@ private struct BugReportSubmissionPayload: Encodable {
     }
 }
 
+private struct AnalyticsEventsPayload: Encodable {
+    let events: [AppAnalyticsEvent]
+}
+
+struct AnalyticsUploadResponse: Decodable {
+    let ok: Bool?
+    let received: Int?
+    let inserted: Int?
+    let error: String?
+}
+
 private enum APIError: Error {
     case server(code: Int, body: String)
 }
@@ -615,6 +626,14 @@ final class APIClient {
 
     func fetchCurrentSymptoms(windowHours: Int = 12) async throws -> Envelope<CurrentSymptomsSnapshot> {
         try await getJSON("v1/symptoms/current?window_hours=\(windowHours)", as: Envelope<CurrentSymptomsSnapshot>.self)
+    }
+
+    func postAnalyticsEvents(_ events: [AppAnalyticsEvent]) async throws -> AnalyticsUploadResponse {
+        try await postJSON(
+            "v1/analytics/events",
+            body: AnalyticsEventsPayload(events: events),
+            as: AnalyticsUploadResponse.self
+        )
     }
 
     func fetchAllDrivers() async throws -> AllDriversSnapshot {

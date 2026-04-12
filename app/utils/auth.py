@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Optional
 from uuid import UUID
 
@@ -73,7 +74,7 @@ async def require_auth(request: Request) -> None:
 
 
 async def require_admin(request: Request) -> None:
-    """Ensure the caller presents the developer bearer token."""
+    """Ensure the caller presents an internal admin bearer token."""
 
     auth_header = request.headers.get("Authorization", "") or ""
     if not auth_header.lower().startswith("bearer "):
@@ -82,6 +83,17 @@ async def require_admin(request: Request) -> None:
     token = auth_header.split(" ", 1)[1].strip()
     settings = db.settings
     if settings.DEV_BEARER and token == settings.DEV_BEARER:
+        return
+
+    admin_tokens = {
+        value.strip()
+        for value in (
+            os.getenv("ADMIN_TOKEN"),
+            os.getenv("GAIAEYES_ADMIN_BEARER"),
+        )
+        if value and value.strip()
+    }
+    if token in admin_tokens:
         return
 
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="admin token required")

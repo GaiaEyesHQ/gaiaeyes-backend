@@ -14786,6 +14786,9 @@ struct ContentView: View {
                 }
                 await state.updateBackendDBFlag()
                 let api = state.apiWithAuth()
+                AppAnalytics.configure { events in
+                    _ = try await api.postAnalyticsEvents(events)
+                }
                 async let a: Void = fetchDashboardPayload(force: true)
                 async let b: Void = fetchProfileSettings()
                 async let n: Void = fetchNotificationPreferences()
@@ -14806,6 +14809,9 @@ struct ContentView: View {
                 handleAuthScopeChangeIfNeeded()
                 await state.updateBackendDBFlag()
                 let api = state.apiWithAuth()
+                AppAnalytics.configure { events in
+                    _ = try await api.postAnalyticsEvents(events)
+                }
                 async let a: Void = fetchDashboardPayload(force: true)
                 async let b: Void = fetchProfileSettings()
                 async let n: Void = fetchNotificationPreferences()
@@ -14890,6 +14896,9 @@ struct ContentView: View {
                             handleAuthScopeChangeIfNeeded()
                         }
                         let api = state.apiWithAuth()
+                        AppAnalytics.configure { events in
+                            _ = try await api.postAnalyticsEvents(events)
+                        }
                         async let dashboardRefresh: Void = fetchDashboardPayload(force: dashboardNeedsForegroundRefresh())
                         async let healthKick: Void = HealthKitBackgroundSync.shared.kickOnce(reason: "became active")
                         async let schumannRefresh: Void = refreshLiveSchumannSignalBar(api: api)
@@ -15751,6 +15760,10 @@ struct ContentView: View {
     private var missionSettingsExperienceLunarObservedSection: some View {
         missionSettingsExperiencePreferenceObservedSection
             .onChange(of: experienceProfile.lunarSensitivityDeclared, initial: false) { _, newValue in
+                AppAnalytics.track(
+                    newValue ? "lunar_tracking_enabled" : "lunar_tracking_disabled",
+                    properties: ["surface": "settings"]
+                )
                 Task { await saveProfilePreferences(UserExperienceProfileUpdate(lunarSensitivityDeclared: newValue)) }
             }
     }

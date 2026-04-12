@@ -26,6 +26,7 @@
 | `READ_TOKENS` | Comma-separated read tokens | `token1,token2` | `app/security/auth.py` |
 | `WRITE_TOKENS` | Comma-separated write tokens | `token1,token2` | `app/security/auth.py` |
 | `DEV_BEARER` | Dev bearer token | `devtoken123` | `app/security/auth.py`, `app/db/__init__.py` |
+| `ADMIN_TOKEN` / `GAIAEYES_ADMIN_BEARER` | Internal admin bearer accepted by admin-only diagnostics and analytics endpoints | `long-random-token` | `app/utils/auth.py`, `app/routers/analytics.py` |
 | `PUBLIC_READ_ENABLED` | Enable public read allowlist | `1` | `app/security/auth.py` |
 | `PUBLIC_READ_PATHS` | CSV allowlist additions for public GET paths; built-in defaults remain public | `/health,/v1/space/visuals` | `app/security/auth.py` |
 | `AIRNOW_API_KEY` | AirNow API access key | `airnow-key` | `services/external/airnow.py` |
@@ -91,6 +92,7 @@
 | --- | --- | --- | --- |
 | `GAIAEYES_API_BASE` | Backend API base URL | `https://gaiaeyes-backend.onrender.com` | `wp-content/mu-plugins/gaiaeyes-space-weather-detail.php` |
 | `GAIAEYES_API_BEARER` | Backend bearer token for internal WordPress proxy/admin reads | `devtoken123` | `wp-content/mu-plugins/gaiaeyes-space-weather-detail.php`, `wp-content/mu-plugins/gaia-dashboard.php` |
+| `GAIAEYES_API_ADMIN_BEARER` | Preferred admin bearer for WP Tools → Gaia Analytics | `long-random-token` | `wp-content/mu-plugins/gaiaeyes-analytics-admin.php` |
 | `GAIAEYES_API_DEV_USERID` | Dev user id for backend | `uuid` | `wp-content/mu-plugins/gaiaeyes-space-weather-detail.php` |
 | `GAIA_BUG_REPORT_ALERT_SECRET` | Shared secret required by the internal bug-report alert endpoint | `same-long-random-string-as-backend` | `wp-content/mu-plugins/gaia-dashboard.php` |
 | `GAIA_BUG_REPORT_ALERT_EMAIL` | Optional destination email for bug-report alerts | `help@gaiaeyes.com` | `wp-content/mu-plugins/gaia-dashboard.php` |

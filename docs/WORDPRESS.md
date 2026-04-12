@@ -13,6 +13,7 @@
 - **Checkout plan cards** (`ge-checkout.php`): shortcode `[ge_checkout_plans]` renders Plus/Pro cards with pricing, features, and buttons. Override labels via attributes like `plus_price_monthly`, `pro_features`, etc.
 - **Pricing table (legacy backup)** (`gaia-subscriptions.php`): shortcode `[ge_pricing_table]` for Stripe’s hosted pricing table (kept as fallback).
 - **AASA (Universal Links)** (`gaiaeyes-aasa.php`): serves Apple App Site Association JSON at `/.well-known/apple-app-site-association` and `/apple-app-site-association`.
+- **Analytics admin report** (`gaiaeyes-analytics-admin.php`): WP Admin → Tools → Gaia Analytics, using `/v1/admin/analytics/summary`.
 - **Space visuals** (`gaiaeyes-space-visuals.php`): uses backend API when configured, else `space_live.json`.
 - **Space weather detail** (`gaiaeyes-space-weather-detail.php`): API-first (features + forecast + history + flares), falls back to `space_weather.json` + `flares_cmes.json`.
 - **Magnetosphere card** (`gaiaeyes-magnetosphere.php`): API-first (`/v1/space/magnetosphere`), fallback `magnetosphere_latest.json`.
@@ -47,5 +48,6 @@
 
 ## Environment variables (WP)
 See `docs/ENVIRONMENT_VARIABLES.md` for required env vars like `GAIAEYES_API_BASE`, `GAIAEYES_API_BEARER`, `GAIA_MEDIA_BASE`, and space visuals overrides.
+The Analytics admin report prefers `GAIAEYES_API_ADMIN_BEARER`, then `GAIAEYES_ADMIN_BEARER`, then `ADMIN_TOKEN`, then `GAIAEYES_API_BEARER` for internal backend access.
 The signed-in checkout flow also requires `SUPABASE_URL` + `SUPABASE_ANON_KEY` for Supabase auth on the Subscribe page.
 Universal links require `GAIA_IOS_TEAM_ID` + `GAIA_IOS_BUNDLE_ID` so the AASA file matches the iOS app.

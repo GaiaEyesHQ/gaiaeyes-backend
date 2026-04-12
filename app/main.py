@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .routers import (
+    analytics,
     badges,
     billing,
     dashboard,
@@ -149,6 +150,7 @@ app.include_router(patterns.router)
 app.include_router(profile.router)
 app.include_router(feedback.router)
 app.include_router(exposures.router)
+app.include_router(analytics.router)
 # Local health check endpoints are public (used by WP card and iOS onboarding)
 app.include_router(local.router)
 
