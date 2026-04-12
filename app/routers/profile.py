@@ -767,34 +767,71 @@ async def _fetch_location_row(conn, user_id: str) -> Optional[Dict[str, Any]]:
         return None
 
     select_parts = []
-    select_parts.append(f"{zip_col} as zip" if zip_col else "null::text as zip")
-    select_parts.append(f"{lat_col} as lat" if lat_col else "null::double precision as lat")
-    select_parts.append(f"{lon_col} as lon" if lon_col else "null::double precision as lon")
-    select_parts.append(f"{label_col} as label" if label_col else "null::text as label")
+    select_parts.append(
+        sql.SQL("{} as {}").format(sql.Identifier(zip_col), sql.Identifier("zip"))
+        if zip_col
+        else sql.SQL("null::text as zip")
+    )
+    select_parts.append(
+        sql.SQL("{} as {}").format(sql.Identifier(lat_col), sql.Identifier("lat"))
+        if lat_col
+        else sql.SQL("null::double precision as lat")
+    )
+    select_parts.append(
+        sql.SQL("{} as {}").format(sql.Identifier(lon_col), sql.Identifier("lon"))
+        if lon_col
+        else sql.SQL("null::double precision as lon")
+    )
+    select_parts.append(
+        sql.SQL("{} as {}").format(sql.Identifier(label_col), sql.Identifier("label"))
+        if label_col
+        else sql.SQL("null::text as label")
+    )
     if primary_col:
-        select_parts.append(f"coalesce({primary_col}, false) as is_primary")
+        select_parts.append(
+            sql.SQL("coalesce({}, false) as {}").format(
+                sql.Identifier(primary_col),
+                sql.Identifier("is_primary"),
+            )
+        )
     else:
-        select_parts.append("true as is_primary")
-    select_parts.append(f"{gps_col} as use_gps" if gps_col else "null::boolean as use_gps")
-    select_parts.append(f"{local_col} as local_insights_enabled" if local_col else "null::boolean as local_insights_enabled")
-    select_parts.append(f"{updated_col} as updated_at" if updated_col else "null::timestamptz as updated_at")
+        select_parts.append(sql.SQL("true as is_primary"))
+    select_parts.append(
+        sql.SQL("{} as {}").format(sql.Identifier(gps_col), sql.Identifier("use_gps"))
+        if gps_col
+        else sql.SQL("null::boolean as use_gps")
+    )
+    select_parts.append(
+        sql.SQL("{} as {}").format(sql.Identifier(local_col), sql.Identifier("local_insights_enabled"))
+        if local_col
+        else sql.SQL("null::boolean as local_insights_enabled")
+    )
+    select_parts.append(
+        sql.SQL("{} as {}").format(sql.Identifier(updated_col), sql.Identifier("updated_at"))
+        if updated_col
+        else sql.SQL("null::timestamptz as updated_at")
+    )
 
     order_parts = []
     if primary_col:
-        order_parts.append(f"{primary_col} desc")
+        order_parts.append(sql.SQL("{} desc").format(sql.Identifier(primary_col)))
     if updated_col:
-        order_parts.append(f"{updated_col} desc")
-    order_sql = f" order by {', '.join(order_parts)}" if order_parts else ""
+        order_parts.append(sql.SQL("{} desc").format(sql.Identifier(updated_col)))
+    order_sql = (
+        sql.SQL(" order by {}").format(sql.SQL(", ").join(order_parts))
+        if order_parts
+        else sql.SQL("")
+    )
 
-    sql = (
-        f"select {', '.join(select_parts)} "
-        f"from app.user_locations "
-        f"where {user_col} = %s"
-        f"{order_sql} "
-        f"limit 1"
+    query = sql.SQL("select {} from {}.{} where {} = %s{} limit 1").format(
+        sql.SQL(", ").join(select_parts),
+        sql.Identifier("app"),
+        sql.Identifier("user_locations"),
+        sql.Identifier(user_col),
+        order_sql,
     )
     async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute(sql, (user_id,), prepare=False)
+        await cur.execute(query, (user_id,), prepare=False)
         return await cur.fetchone()
 
 
@@ -907,16 +944,24 @@ async def profile_location_upsert(
     if updated_col:
         values[updated_col] = datetime.now(timezone.utc)
 
-    where = f"{user_col} = %s"
+    where_sql = sql.SQL("{} = %s").format(sql.Identifier(user_col))
     if primary_col:
-        where += f" and coalesce({primary_col}, false) = true"
+        where_sql += sql.SQL(" and coalesce({}, false) = true").format(sql.Identifier(primary_col))
 
     if values:
-        set_sql = ", ".join([f"{k} = %s" for k in values.keys()])
+        set_sql = sql.SQL(", ").join(
+            sql.SQL("{} = %s").format(sql.Identifier(k))
+            for k in values.keys()
+        )
         params = list(values.values()) + [user_id]
-        sql = f"update app.user_locations set {set_sql} where {where}"
+        query = sql.SQL("update {}.{} set {} where {}").format(
+            sql.Identifier("app"),
+            sql.Identifier("user_locations"),
+            set_sql,
+            where_sql,
+        )
         async with conn.cursor() as cur:
-            await cur.execute(sql, params, prepare=False)
+            await cur.execute(query, params, prepare=False)
             updated = cur.rowcount or 0
     else:
         updated = 0
@@ -933,11 +978,16 @@ async def profile_location_upsert(
         if updated_col:
             insert_values.setdefault(updated_col, datetime.now(timezone.utc))
 
-        cols_sql = ", ".join(insert_values.keys())
-        val_sql = ", ".join(["%s"] * len(insert_values))
-        sql = f"insert into app.user_locations ({cols_sql}) values ({val_sql})"
+        cols_sql = sql.SQL(", ").join(sql.Identifier(k) for k in insert_values.keys())
+        val_sql = sql.SQL(", ").join(sql.SQL("%s") for _ in insert_values)
+        query = sql.SQL("insert into {}.{} ({}) values ({})").format(
+            sql.Identifier("app"),
+            sql.Identifier("user_locations"),
+            cols_sql,
+            val_sql,
+        )
         async with conn.cursor() as cur:
-            await cur.execute(sql, list(insert_values.values()), prepare=False)
+            await cur.execute(query, list(insert_values.values()), prepare=False)
 
     row = await _fetch_location_row(conn, user_id)
     return {"ok": True, "location": row}

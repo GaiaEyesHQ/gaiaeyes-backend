@@ -981,6 +981,8 @@ private struct ProfileLocation: Codable {
 private struct ProfileLocationEnvelope: Codable {
     let ok: Bool?
     let location: ProfileLocation?
+    let error: String?
+    let detail: String?
 }
 
 private struct ProfileLocationUpsert: Codable {
@@ -2354,6 +2356,7 @@ private final class OneShotLocationProvider: NSObject, CLLocationManagerDelegate
             self.continuation = continuation
             if status == .notDetermined {
                 manager.requestWhenInUseAuthorization()
+                return
             }
             manager.requestLocation()
         }
@@ -2373,7 +2376,9 @@ private final class OneShotLocationProvider: NSObject, CLLocationManagerDelegate
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
-        if status == .denied || status == .restricted {
+        if status == .authorizedAlways || status == .authorizedWhenInUse {
+            manager.requestLocation()
+        } else if status == .denied || status == .restricted {
             guard let continuation else { return }
             self.continuation = nil
             continuation.resume(returning: nil)
@@ -6373,7 +6378,7 @@ struct ContentView: View {
         }
     }
 
-    private func saveProfileLocation(markOnboardingComplete: Bool = false) async -> Bool {
+    private func saveProfileLocation(markOnboardingComplete: Bool = false, allowLocalFallback: Bool = false) async -> Bool {
         await MainActor.run {
             profileLocationSaving = true
             profileLocationMessage = nil
@@ -6395,6 +6400,13 @@ struct ContentView: View {
         }
         do {
             let saved: ProfileLocationEnvelope = try await putJSON("v1/profile/location", body: payload, as: ProfileLocationEnvelope.self)
+            guard saved.ok != false else {
+                let detail = [saved.error, saved.detail]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " ")
+                throw DecodingPreviewError(endpoint: "v1/profile/location", preview: detail, underlying: URLError(.badServerResponse))
+            }
             await MainActor.run {
                 if let zip = saved.location?.zip, !zip.isEmpty {
                     localHealthZip = zip
@@ -6411,11 +6423,29 @@ struct ContentView: View {
             await fetchLocalHealth()
             return true
         } catch {
+            if allowLocalFallback && (!profileLocalInsightsEnabled || resolved.usedGPS || (resolved.zip?.isEmpty == false)) {
+                await MainActor.run {
+                    if let zip = resolved.zip, !zip.isEmpty {
+                        localHealthZip = zip
+                    }
+                    profileUseGPS = payload.useGps ?? profileUseGPS
+                    profileLocalInsightsEnabled = payload.localInsightsEnabled ?? profileLocalInsightsEnabled
+                    profileLocationMessage = "Location saved on this device. Server sync will retry later."
+                    profileLocationSaving = false
+                    didLocationOnboarding = true
+                    if markOnboardingComplete {
+                        showLocationOnboarding = false
+                    }
+                }
+                await fetchLocalHealth()
+                appLog("[UI] save profile location fallback after error: \(String(describing: error))")
+                return true
+            }
             await MainActor.run {
                 profileLocationMessage = "Could not save location"
                 profileLocationSaving = false
             }
-            appLog("[UI] save profile location error: \(error.localizedDescription)")
+            appLog("[UI] save profile location error: \(String(describing: error))")
             return false
         }
     }
@@ -17580,7 +17610,7 @@ struct ContentView: View {
                     await saveSelectedTags()
                 },
                 onSaveLocation: {
-                    await saveProfileLocation()
+                    await saveProfileLocation(allowLocalFallback: true)
                 },
                 onRequestHealthPermissions: {
                     await requestHealthPermissionsForOnboarding()
@@ -17612,7 +17642,7 @@ struct ContentView: View {
                 isSaving: profileLocationSaving,
                 message: profileLocationMessage,
                 onSave: {
-                    Task { await saveProfileLocation(markOnboardingComplete: true) }
+                    Task { await saveProfileLocation(markOnboardingComplete: true, allowLocalFallback: true) }
                 },
                 onSkip: {
                     didLocationOnboarding = true
