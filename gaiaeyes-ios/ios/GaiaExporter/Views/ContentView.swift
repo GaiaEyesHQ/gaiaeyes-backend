@@ -3329,6 +3329,14 @@ struct ContentView: View {
         return urls
     }
 
+    private func appNoticeRequestURL(for url: URL) -> URL {
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        var queryItems = components?.queryItems ?? []
+        queryItems.append(URLQueryItem(name: "_gaia_notice_ts", value: String(Int(Date().timeIntervalSince1970))))
+        components?.queryItems = queryItems
+        return components?.url ?? url
+    }
+
     private var visibleAppNotice: AppNotice? {
         guard let appNotice,
               appNotice.hasDisplayContent,
@@ -3846,10 +3854,15 @@ struct ContentView: View {
     private func fetchAppNotice() async {
         var lastFailureStatus: Int?
         for url in appNoticeURLCandidates {
-            var request = URLRequest(url: url)
+            var request = URLRequest(
+                url: appNoticeRequestURL(for: url),
+                cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
+                timeoutInterval: 8
+            )
             request.httpMethod = "GET"
             request.setValue("application/json", forHTTPHeaderField: "Accept")
-            request.timeoutInterval = 8
+            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+            request.setValue("no-cache", forHTTPHeaderField: "Pragma")
             do {
                 let (data, response) = try await URLSession.shared.data(for: request)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -3862,7 +3875,11 @@ struct ContentView: View {
                     return
                 }
                 let envelope = try JSONDecoder().decode(AppNoticeEnvelope.self, from: data)
-                appNotice = envelope.ok == false ? nil : envelope.notice
+                let nextNotice = envelope.ok == false ? nil : envelope.notice
+                appNotice = nextNotice
+                if nextNotice == nil {
+                    appLog("[UI] app notice empty")
+                }
                 return
             } catch is CancellationError {
                 return

@@ -958,10 +958,14 @@ add_action('rest_api_init', function () {
         'methods' => WP_REST_Server::READABLE,
         'permission_callback' => '__return_true',
         'callback' => function () {
-            return new WP_REST_Response([
+            $response = new WP_REST_Response([
                 'ok' => true,
                 'notice' => gaia_app_notice_public_payload(gaia_app_notice_get()),
             ], 200);
+            $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+            $response->header('Pragma', 'no-cache');
+            $response->header('Expires', 'Wed, 11 Jan 1984 05:00:00 GMT');
+            return $response;
         },
     ]);
 
