@@ -1113,7 +1113,7 @@
   };
 
   const renderGuideHeaderCard = (state) => {
-    const possibleSymptoms = guidePossibleSymptoms(state);
+    const possibleSymptoms = guidePossibleSymptoms(state).slice(0, 4);
     const lead = possibleSymptoms.length
       ? "Based on the current signal mix, these may be easier to notice."
       : guidePossibleSymptomsSummary(state) || guideHeaderLine(state);
@@ -1175,7 +1175,7 @@
       const domain = guideInfluenceDomain(driver);
       const line = guideInfluenceLine(driver);
       if (!domain || !line) return;
-      if (!buckets[domain].includes(line) && buckets[domain].length < 3) {
+      if (!buckets[domain].includes(line) && buckets[domain].length < 2) {
         buckets[domain].push(line);
       }
     });
@@ -2684,6 +2684,18 @@
           ? ""
           : '<div class="gaia-dashboard__muted" style="margin-bottom:10px">No dashboard data yet for this account. Use a magic link for another email, or refresh shortly.</div>'
       }
+      ${
+        alerts.length
+          ? `<div class="gaia-dashboard__alerts">${alerts
+              .map(
+                (item) =>
+                  `<span class="${pillClass(item && item.severity)}">${esc(
+                    (item && item.title) || (item && item.key) || "Alert"
+                  )}</span>`
+              )
+              .join("")}</div>`
+          : '<div class="gaia-dashboard__muted">No active alerts.</div>'
+      }
       <div class="gaia-dashboard__gauges">
         ${displayRows.map((row) => renderGaugeCard(row, gaugeZones, !!modalGauges[row.key])).join("")}
       </div>
@@ -2699,18 +2711,6 @@
           )
           .join("")}
       </div>
-      ${
-        alerts.length
-          ? `<div class="gaia-dashboard__alerts">${alerts
-              .map(
-                (item) =>
-                  `<span class="${pillClass(item && item.severity)}">${esc(
-                    (item && item.title) || (item && item.key) || "Alert"
-                  )}</span>`
-              )
-              .join("")}</div>`
-          : '<div class="gaia-dashboard__muted">No active alerts.</div>'
-      }
       ${renderDriversSection(drivers, modalModels)}
       ${renderGeomagneticContext(geomagneticContext)}
       <div class="gaia-dashboard__earthscope">
@@ -3982,6 +3982,13 @@
 
     return `
       <section class="gaia-dashboard__section${state.ui.activeTab === "mission" ? " is-active" : ""}" data-section="mission">
+        ${
+          alerts.length
+            ? `<div class="gaia-dashboard__alerts">${alerts
+                .map((item) => `<span class="${pillClass(item && item.severity)}">${esc((item && item.title) || (item && item.key) || "Alert")}</span>`)
+                .join("")}</div>`
+            : '<div class="gaia-dashboard__muted">No active alerts.</div>'
+        }
         <div class="gaia-dashboard__gauges">
           ${gaugeRows.map((row) => renderGaugeCard(row, gaugeZones, !!(payload.modalModels && payload.modalModels.gauges && payload.modalModels.gauges[row.key]))).join("")}
         </div>
@@ -3997,13 +4004,6 @@
             )
             .join("")}
         </div>
-        ${
-          alerts.length
-            ? `<div class="gaia-dashboard__alerts">${alerts
-                .map((item) => `<span class="${pillClass(item && item.severity)}">${esc((item && item.title) || (item && item.key) || "Alert")}</span>`)
-                .join("")}</div>`
-            : '<div class="gaia-dashboard__muted">No active alerts.</div>'
-        }
         ${renderMissionBodyContext(state)}
         ${renderDriversSection(drivers, payload.modalModels || {}, 3)}
         ${

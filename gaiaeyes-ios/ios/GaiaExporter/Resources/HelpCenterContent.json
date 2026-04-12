@@ -1075,19 +1075,12 @@
           "id": "what-to-send",
           "title": "What helps most",
           "paragraphs": [
-            "Tell us what you expected, what happened instead, and how often it happens. A screenshot and the exact screen name are both helpful.",
-            "If the problem looks tied to Health sync, billing, or a stale timestamp, say that clearly in the message subject."
+            "Use the in-app Bug Submission form so Gaia can include the app area, description, and diagnostic context in one place.",
+            "Tell us what you expected, what happened instead, which screen you were on, and how often it happens. If the problem looks tied to Health sync, billing, or a stale timestamp, mention that in the description."
           ]
         }
       ],
-      "links": [
-        {
-          "id": "email-bug-report",
-          "label": "Email Bug Report",
-          "kind": "url",
-          "target": "mailto:help@gaiaeyes.com?subject=Bug%20Report"
-        }
-      ]
+      "links": []
     },
     {
       "id": "send-feedback",

@@ -166,7 +166,7 @@ struct GuideHubView: View {
     }
 
     private var symptomHighlights: [String] {
-        Array(possibleSymptomPhrases.prefix(6))
+        Array(possibleSymptomPhrases.prefix(4))
     }
 
     private var guideTopLine: String {
@@ -186,9 +186,9 @@ struct GuideHubView: View {
 
     private var influenceSections: [(title: String, items: [String])] {
         [
-            ("Earth influences", Array(earthInfluences.prefix(3))),
-            ("Space influences", Array(spaceInfluences.prefix(3))),
-            ("Body influences", Array(bodyInfluences.prefix(3))),
+            ("Earth influences", Array(earthInfluences.prefix(2))),
+            ("Space influences", Array(spaceInfluences.prefix(2))),
+            ("Body influences", Array(bodyInfluences.prefix(2))),
         ].filter { !$0.items.isEmpty }
     }
 
@@ -481,12 +481,12 @@ struct GuideHubView: View {
             message: dailyCheckInBody,
             badgeText: dailyCheckInCardBadge,
             primaryActionTitle: "Open check-in",
-            primaryAction: { navigationPath.append(.dailyCheckIn) }
-        ) {
+            primaryAction: { navigationPath.append(.dailyCheckIn) },
+            content: {
             if let labels = dailyCheckInStatus?.prompt?.activeSymptomLabels, !labels.isEmpty {
                 wrappingHighlightList(Array(labels.prefix(3)))
             }
-        }
+        })
     }
 
     private var dailyPollCard: some View {
@@ -674,7 +674,7 @@ struct GuideHubView: View {
     }
 
     private var influenceGrid: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(influenceSections.enumerated()), id: \.offset) { _, section in
                 influenceSection(title: section.title, items: section.items)
             }
@@ -682,13 +682,13 @@ struct GuideHubView: View {
     }
 
     private func influenceSection(title: String, items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(style.tertiaryText)
             guideInfluenceBulletGrid(items)
         }
-        .padding(12)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(style.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
@@ -696,11 +696,11 @@ struct GuideHubView: View {
     private func guideBulletGrid(_ items: [String]) -> some View {
         LazyVGrid(
             columns: [
-                GridItem(.flexible(minimum: 120), spacing: 10, alignment: .top),
-                GridItem(.flexible(minimum: 120), spacing: 10, alignment: .top),
+                GridItem(.flexible(minimum: 112), spacing: 8, alignment: .top),
+                GridItem(.flexible(minimum: 112), spacing: 8, alignment: .top),
             ],
             alignment: .leading,
-            spacing: 10
+            spacing: 8
         ) {
             ForEach(items, id: \.self) { item in
                 guideBulletTile(item)
@@ -711,8 +711,8 @@ struct GuideHubView: View {
     private func guideInfluenceBulletGrid(_ items: [String]) -> some View {
         LazyVGrid(
             columns: [
-                GridItem(.flexible(minimum: 150), spacing: 8, alignment: .top),
-                GridItem(.flexible(minimum: 150), spacing: 8, alignment: .top),
+                GridItem(.flexible(minimum: 130), spacing: 8, alignment: .top),
+                GridItem(.flexible(minimum: 130), spacing: 8, alignment: .top),
             ],
             alignment: .leading,
             spacing: 8
@@ -736,8 +736,8 @@ struct GuideHubView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: 56, alignment: .topLeading)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .topLeading)
         .background(style.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
@@ -753,9 +753,9 @@ struct GuideHubView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: 54, alignment: .topLeading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .topLeading)
         .background(style.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 

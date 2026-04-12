@@ -164,6 +164,7 @@ struct HelpCenterDocument: Decodable, Hashable {
 struct HelpCenterContext {
     var guideProfile: GuideProfile? = nil
     var appState: AppState? = nil
+    var openBugReporter: (() -> Void)? = nil
 }
 
 enum HelpCenterContent {

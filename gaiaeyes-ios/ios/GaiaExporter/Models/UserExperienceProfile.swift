@@ -312,6 +312,7 @@ struct UserExperienceProfile: Codable, Equatable {
         case trackedStatKeys
         case smartStatSwapEnabled
         case favoriteSymptomCodes
+        case favoriteSymptomCodesSnake = "favorite_symptom_codes"
         case lunarSensitivityDeclared
         case onboardingStep
         case onboardingCompleted
@@ -328,8 +329,11 @@ struct UserExperienceProfile: Codable, Equatable {
         tempUnit = try container.decodeIfPresent(TemperatureUnit.self, forKey: .tempUnit) ?? .localeDefault
         trackedStatKeys = try container.decodeIfPresent([TrackedStatKey].self, forKey: .trackedStatKeys) ?? TrackedStatKey.defaultSelection
         smartStatSwapEnabled = try container.decodeIfPresent(Bool.self, forKey: .smartStatSwapEnabled) ?? true
+        let decodedFavoriteCodes = try container.decodeIfPresent([String].self, forKey: .favoriteSymptomCodes)
+            ?? container.decodeIfPresent([String].self, forKey: .favoriteSymptomCodesSnake)
+            ?? []
         favoriteSymptomCodes = Self.normalizeFavoriteSymptomCodes(
-            try container.decodeIfPresent([String].self, forKey: .favoriteSymptomCodes) ?? []
+            decodedFavoriteCodes
         )
         lunarSensitivityDeclared = try container.decodeIfPresent(Bool.self, forKey: .lunarSensitivityDeclared) ?? false
         onboardingStep = try container.decodeIfPresent(OnboardingStep.self, forKey: .onboardingStep) ?? .welcome
@@ -337,6 +341,23 @@ struct UserExperienceProfile: Codable, Equatable {
         onboardingCompletedAt = try container.decodeIfPresent(String.self, forKey: .onboardingCompletedAt)
         healthkitRequestedAt = try container.decodeIfPresent(String.self, forKey: .healthkitRequestedAt)
         lastBackfillAt = try container.decodeIfPresent(String.self, forKey: .lastBackfillAt)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(mode, forKey: .mode)
+        try container.encode(guide, forKey: .guide)
+        try container.encode(tone, forKey: .tone)
+        try container.encode(tempUnit, forKey: .tempUnit)
+        try container.encode(trackedStatKeys, forKey: .trackedStatKeys)
+        try container.encode(smartStatSwapEnabled, forKey: .smartStatSwapEnabled)
+        try container.encode(favoriteSymptomCodes, forKey: .favoriteSymptomCodes)
+        try container.encode(lunarSensitivityDeclared, forKey: .lunarSensitivityDeclared)
+        try container.encode(onboardingStep, forKey: .onboardingStep)
+        try container.encode(onboardingCompleted, forKey: .onboardingCompleted)
+        try container.encodeIfPresent(onboardingCompletedAt, forKey: .onboardingCompletedAt)
+        try container.encodeIfPresent(healthkitRequestedAt, forKey: .healthkitRequestedAt)
+        try container.encodeIfPresent(lastBackfillAt, forKey: .lastBackfillAt)
     }
 
     private static func normalizeFavoriteSymptomCodes(_ codes: [String]) -> [String] {

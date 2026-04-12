@@ -11,13 +11,13 @@ struct GuideEntryButton: View {
             if hasUnseen {
                 Circle()
                     .fill(Color(red: 0.25, green: 0.84, blue: 0.98).opacity(0.24))
-                    .frame(width: 36, height: 36)
+                    .frame(width: 42, height: 42)
                     .blur(radius: 6)
                     .scaleEffect(isPulsing ? 1.36 : 1.02)
 
                 Circle()
                     .stroke(Color(red: 0.32, green: 0.90, blue: 0.98).opacity(0.72), lineWidth: 1.6)
-                    .frame(width: 34, height: 34)
+                    .frame(width: 40, height: 40)
                     .blur(radius: 0.4)
                     .scaleEffect(isPulsing ? 1.24 : 0.96)
             }
@@ -30,9 +30,9 @@ struct GuideEntryButton: View {
                 showBackingPlate: false,
                 animate: hasUnseen
             )
-            .scaleEffect(1.15)
+            .scaleEffect(1.34)
         }
-        .frame(minWidth: 44, minHeight: 44)
+        .frame(minWidth: 50, minHeight: 50)
         .overlay(alignment: .topTrailing) {
             if hasUnseen {
                 Circle()

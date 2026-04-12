@@ -975,7 +975,10 @@ struct OnboardingFlowView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if notificationPreferences.symptomFollowupsEnabled {
-                        Toggle("Allow push reminders", isOn: $notificationPreferences.symptomFollowupPushEnabled)
+                        Toggle("Allow symptom follow-up pushes", isOn: $notificationPreferences.symptomFollowupPushEnabled)
+                        Text("These reminders check back after a symptom log so you can mark whether it improved, continued, or resolved.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                         Picker("Follow-up cadence", selection: $notificationPreferences.symptomFollowupCadence) {
                             Text("Minimal").tag("minimal")
                             Text("Balanced").tag("balanced")
@@ -994,7 +997,10 @@ struct OnboardingFlowView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if notificationPreferences.dailyCheckinsEnabled {
-                        Toggle("Allow push reminders", isOn: $notificationPreferences.dailyCheckinPushEnabled)
+                        Toggle("Allow daily check-in pushes", isOn: $notificationPreferences.dailyCheckinPushEnabled)
+                        Text("These reminders prompt the daily check-in, separate from symptom follow-ups.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                         Picker("Daily check-in cadence", selection: $notificationPreferences.dailyCheckinCadence) {
                             Text("Minimal").tag("minimal")
                             Text("Balanced").tag("balanced")

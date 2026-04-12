@@ -294,6 +294,10 @@ struct HelpArticleView: View {
         ]
     }
 
+    private var bugActionArticleIDs: Set<String> {
+        ["report-a-bug"]
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -372,7 +376,8 @@ struct HelpArticleView: View {
     private var hasSupplementalActions: Bool {
         healthActionArticleIDs.contains(article.id) ||
         billingActionArticleIDs.contains(article.id) ||
-        understandingArticleIDs.contains(article.id)
+        understandingArticleIDs.contains(article.id) ||
+        bugActionArticleIDs.contains(article.id)
     }
 
     @ViewBuilder
@@ -444,6 +449,15 @@ struct HelpArticleView: View {
                 UnderstandingGaiaEyesView(profile: guideProfile)
             } label: {
                 HelpActionLabel(title: "Open the deeper understanding view", systemImage: "globe")
+            }
+            .buttonStyle(.plain)
+        }
+
+        if bugActionArticleIDs.contains(article.id), let openBugReporter = context.openBugReporter {
+            Button {
+                openBugReporter()
+            } label: {
+                HelpActionLabel(title: "Open Bug Submission", systemImage: "ladybug")
             }
             .buttonStyle(.plain)
         }

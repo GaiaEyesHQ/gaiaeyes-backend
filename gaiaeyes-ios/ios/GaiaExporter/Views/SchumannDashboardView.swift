@@ -1085,7 +1085,6 @@ struct SchumannDashboardView: View {
                 bandsCard
                 tomskCard
                 pulseCard
-                proCard
             }
             .padding()
         }
@@ -1446,26 +1445,6 @@ struct SchumannDashboardView: View {
             }
         } label: {
             Label("Tomsk Detail", systemImage: "point.3.connected.trianglepath.dotted")
-        }
-    }
-
-    private var proCard: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Free window: 48h (15-minute cadence)")
-                    .font(.subheadline)
-                Text("Pro: 30d history")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.secondary.opacity(0.15), in: Capsule())
-                Text("Feature flag hook is in place; premium history is intentionally not enabled yet.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            Label("History Access", systemImage: "lock.fill")
         }
     }
 

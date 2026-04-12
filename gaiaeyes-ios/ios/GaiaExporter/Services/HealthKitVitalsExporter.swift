@@ -38,7 +38,7 @@ final class HealthKitVitalsExporter {
                         domain: "HealthKit",
                         code: 2,
                         userInfo: [NSLocalizedDescriptionKey:
-                            "Blood Pressure permission not granted. Open Health → Profile → Privacy → Apps → Gaia Exporter and enable Blood Pressure."]
+                            "Blood Pressure permission not granted. Open Health → Profile → Privacy → Apps → Gaia Eyes and enable Blood Pressure."]
                     ))
                     return
                 }

@@ -2944,7 +2944,7 @@ struct ContentView: View {
     @State private var magnetosphereLastFetchAt: Date = .distantPast
     @State private var showLocationOnboarding: Bool = false
     @State private var showOnboardingFlow: Bool = false
-    @State private var profileUseGPS: Bool = false
+    @AppStorage("profile_use_gps") private var profileUseGPS: Bool = false
     @State private var profileLocalInsightsEnabled: Bool = true
     @State private var profileLocationMessage: String?
     @State private var profileLocationSaving: Bool = false
@@ -2964,6 +2964,12 @@ struct ContentView: View {
     @State private var selectedTagKeys: Set<String> = []
     @State private var tagSaveMessage: String?
     @State private var tagsSaving: Bool = false
+    @State private var showAccountSettingsSection: Bool = false
+    @State private var showAccountHealthDataSettings: Bool = false
+    @State private var showHelpSettingsSection: Bool = false
+    @State private var showExperienceSettingsSection: Bool = false
+    @State private var showSignalsSettingsSection: Bool = false
+    @State private var showAboutSettingsSection: Bool = false
     @State private var showPersonalContextSettings: Bool = false
     @State private var notificationPreferences: AppNotificationPreferences = PushNotificationService.currentPreferencesDefault()
     @State private var notificationSettingsSaving: Bool = false
@@ -3368,11 +3374,14 @@ struct ContentView: View {
         let normalized = raw
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "-", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
             .lowercased()
         guard !normalized.isEmpty else { return nil }
         switch normalized {
-        case "sw":
+        case "sw", "solarwind", "solar_wind_speed":
             return "solar_wind"
+        case "sr", "earth_resonance":
+            return "schumann"
         case "flares":
             return "flare"
         case "radio":
@@ -3398,7 +3407,8 @@ struct ContentView: View {
     private var helpCenterContext: HelpCenterContext {
         HelpCenterContext(
             guideProfile: currentGuideProfile,
-            appState: state
+            appState: state,
+            openBugReporter: { openBugReportComposer() }
         )
     }
 
@@ -3572,6 +3582,10 @@ struct ContentView: View {
 
     private func handleMissionControlSignalTap(_ signal: SignalPill) {
         AppAnalytics.track("signal_bar_tapped", properties: ["surface": "mission_control", "signal_key": signal.key])
+        if signalLinksToSpaceWeather(signal) {
+            openMissionInsights(route: .spaceWeather)
+            return
+        }
         switch signal.detailTarget {
         case "local_conditions":
             showLocalConditionsSheet = true
@@ -3584,6 +3598,10 @@ struct ContentView: View {
 
     private func handleInsightsSignalTap(_ signal: SignalPill) {
         AppAnalytics.track("signal_bar_tapped", properties: ["surface": "insights", "signal_key": signal.key])
+        if signalLinksToSpaceWeather(signal) {
+            missionInsightsPath = [.spaceWeather]
+            return
+        }
         switch signal.detailTarget {
         case "local_conditions":
             missionInsightsPath = [.localConditions]
@@ -3591,6 +3609,17 @@ struct ContentView: View {
             missionInsightsPath = [.schumann]
         default:
             openAllDriversAfterClosingInsights(focus: signal.driverKey ?? signal.key)
+        }
+    }
+
+    private func signalLinksToSpaceWeather(_ signal: SignalPill) -> Bool {
+        let key = normalizeDriverFocusKey(signal.driverKey ?? signal.key)
+        guard key == "kp" || key == "solar_wind" else { return false }
+        switch signal.state {
+        case .quiet:
+            return true
+        case .watch, .elevated, .strong:
+            return false
         }
     }
 
@@ -8829,7 +8858,7 @@ struct ContentView: View {
                 let unit = (driver.unit ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 let key = driver.key.lowercased()
                 let text: String
-                if key == "sw" || key == "aqi" {
+                if key == "sw" || key == "solar_wind" || key == "aqi" {
                     text = String(Int(round(value)))
                 } else if key == "schumann" {
                     text = String(format: "%.2f", value)
@@ -8861,7 +8890,7 @@ struct ContentView: View {
                     return "sun.max.fill"
                 case "bz":
                     return "arrow.down.circle.fill"
-                case "sw":
+                case "sw", "solar_wind":
                     return "wind"
                 case "schumann":
                     return "waveform.path.ecg.rectangle"
@@ -9966,7 +9995,23 @@ struct ContentView: View {
         }
 
         private func normalizedDriverKey(_ raw: String?) -> String {
-            (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let token = (raw ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "-", with: "_")
+                .replacingOccurrences(of: " ", with: "_")
+                .lowercased()
+            switch token {
+            case "sw", "solarwind", "solar_wind_speed":
+                return "solar_wind"
+            case "sr", "earth_resonance":
+                return "schumann"
+            case "geomagnetic", "geomagnetic_activity":
+                return "kp"
+            case "pressure_swing", "barometric_pressure":
+                return "pressure"
+            default:
+                return token
+            }
         }
 
         private func dedupedDrivers(_ source: [DashboardDriverItem]) -> [DashboardDriverItem] {
@@ -10235,6 +10280,20 @@ struct ContentView: View {
             return .ok
         }
 
+        @ViewBuilder
+        private func alertPills(limit: Int? = nil) -> some View {
+            let visibleAlerts = limit.map { Array(alerts.prefix($0)) } ?? alerts
+            if !visibleAlerts.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(visibleAlerts) { alert in
+                            StatusPill(alert.title ?? (alert.key ?? "Alert"), severity: pillSeverity(alert.severity))
+                        }
+                    }
+                }
+            }
+        }
+
         var body: some View {
             let rows = gaugeRows(gauges)
             GroupBox {
@@ -10270,16 +10329,6 @@ struct ContentView: View {
                                     Text(key.capitalized)
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
-                                }
-                            }
-                        }
-                    }
-
-                    if !alerts.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(alerts) { alert in
-                                    StatusPill(alert.title ?? (alert.key ?? "Alert"), severity: pillSeverity(alert.severity))
                                 }
                             }
                         }
@@ -10358,7 +10407,10 @@ struct ContentView: View {
                     }
                 }
             } label: {
-                Label("Mission Control", systemImage: "dial.medium")
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Mission Control", systemImage: "dial.medium")
+                    alertPills(limit: 3)
+                }
             }
             .sheet(item: $selectedModal) { modal in
                 ContextModalSheetView(
@@ -15854,7 +15906,6 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     missionSettingsTopSections
-                    missionSettingsContextAndNotificationSections
                     missionSettingsAdvancedSection
                 }
                 .padding(.vertical, 16)
@@ -15888,7 +15939,6 @@ struct ContentView: View {
         missionSettingsHelpSection
         missionSettingsExperienceSection
         missionSettingsSignalsSection
-        missionSettingsHealthDataSection
         missionSettingsAboutSection
     }
 
@@ -15939,50 +15989,57 @@ struct ContentView: View {
 
     private var missionSettingsExperienceCard: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Changes save automatically.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                missionSettingsDisclosure(
-                    title: "Reading style",
-                    summary: "\(experienceProfile.mode.title) • \(experienceProfile.guide.title) • \(experienceProfile.tone.title)",
-                    isExpanded: $showExperienceReadingSettings
-                ) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        missionSettingsModeControl
-                        missionSettingsGuideControl
-                        missionSettingsToneControl
+            missionSettingsDisclosure(
+                title: "Experience controls",
+                summary: "Reading style, body context, favorites, notifications",
+                isExpanded: $showExperienceSettingsSection
+            ) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Changes save automatically.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    missionSettingsDisclosure(
+                        title: "Reading style",
+                        summary: "\(experienceProfile.mode.title) • \(experienceProfile.guide.title) • \(experienceProfile.tone.title)",
+                        isExpanded: $showExperienceReadingSettings
+                    ) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            missionSettingsModeControl
+                            missionSettingsGuideControl
+                            missionSettingsToneControl
+                        }
                     }
-                }
-                missionSettingsDisclosure(
-                    title: "Display and body context",
-                    summary: "\(experienceProfile.tempUnit.title) • Lunar overlays \(experienceProfile.lunarSensitivityDeclared ? "on" : "off")",
-                    isExpanded: $showExperienceDisplaySettings
-                ) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        missionSettingsTemperatureControl
-                        missionSettingsLunarPriorityControl
+                    missionSettingsDisclosure(
+                        title: "Display and body context",
+                        summary: "\(experienceProfile.tempUnit.title) • Lunar overlays \(experienceProfile.lunarSensitivityDeclared ? "on" : "off")",
+                        isExpanded: $showExperienceDisplaySettings
+                    ) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            missionSettingsTemperatureControl
+                            missionSettingsLunarPriorityControl
+                        }
                     }
-                }
-                missionSettingsDisclosure(
-                    title: "Tracked body stats",
-                    summary: "\(experienceProfile.trackedStatKeys.count) selected" + (experienceProfile.smartStatSwapEnabled ? " • smart swap on" : ""),
-                    isExpanded: $showExperienceTrackedStatsSettings
-                ) {
-                    TrackedStatsSettingsSection(
-                        trackedStatKeys: $experienceProfile.trackedStatKeys,
-                        smartStatSwapEnabled: $experienceProfile.smartStatSwapEnabled
-                    )
-                }
-                missionSettingsDisclosure(
-                    title: "Favorite symptoms",
-                    summary: favoriteSymptomsSettingsSummary,
-                    isExpanded: $showExperienceFavoriteSymptomsSettings
-                ) {
-                    FavoriteSymptomsSettingsSection(
-                        presets: symptomPresets,
-                        favoriteSymptomCodes: $experienceProfile.favoriteSymptomCodes
-                    )
+                    missionSettingsDisclosure(
+                        title: "Tracked body stats",
+                        summary: "\(experienceProfile.trackedStatKeys.count) selected" + (experienceProfile.smartStatSwapEnabled ? " • smart swap on" : ""),
+                        isExpanded: $showExperienceTrackedStatsSettings
+                    ) {
+                        TrackedStatsSettingsSection(
+                            trackedStatKeys: $experienceProfile.trackedStatKeys,
+                            smartStatSwapEnabled: $experienceProfile.smartStatSwapEnabled
+                        )
+                    }
+                    missionSettingsDisclosure(
+                        title: "Favorite symptoms",
+                        summary: favoriteSymptomsSettingsSummary,
+                        isExpanded: $showExperienceFavoriteSymptomsSettings
+                    ) {
+                        FavoriteSymptomsSettingsSection(
+                            presets: symptomPresets,
+                            favoriteSymptomCodes: $experienceProfile.favoriteSymptomCodes
+                        )
+                    }
+                    missionSettingsContextAndNotificationSections
                 }
             }
         } label: {
@@ -16135,7 +16192,12 @@ struct ContentView: View {
 
     private var missionSettingsSignalsSection: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
+            missionSettingsDisclosure(
+                title: "Local signal setup",
+                summary: profileUseGPS ? "GPS local context" : (localHealthZip.isEmpty ? "ZIP not set" : "ZIP \(localHealthZip)"),
+                isExpanded: $showSignalsSettingsSection
+            ) {
+                VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(profileLocalInsightsEnabled ? "Local insights on" : "Local insights off")
@@ -16184,6 +16246,7 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+                }
             }
         } label: {
             Label("Your Signals", systemImage: "location.fill")
@@ -16193,7 +16256,12 @@ struct ContentView: View {
 
     private var missionSettingsHealthDataSection: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
+            missionSettingsDisclosure(
+                title: "Health sync and imports",
+                summary: backfillInFlight ? "Sync in progress" : "Permissions and 30-day import",
+                isExpanded: $showAccountHealthDataSettings
+            ) {
+                VStack(alignment: .leading, spacing: 12) {
                 Text("Use Health data to improve sleep, heart-rate, recovery, and pattern context. Gaia only reads the domains it can actually use.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
@@ -16233,6 +16301,7 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+                }
             }
         } label: {
             Label("Health & Data", systemImage: "heart.text.square")
@@ -16242,7 +16311,12 @@ struct ContentView: View {
 
     private var missionSettingsAboutSection: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
+            missionSettingsDisclosure(
+                title: "About and foundations",
+                summary: "What Gaia watches and what it does not claim",
+                isExpanded: $showAboutSettingsSection
+            ) {
+                VStack(alignment: .leading, spacing: 12) {
                 Text("See what Gaia Eyes watches, how it personalizes over time, what the research context looks like, and what the app does not claim.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
@@ -16256,6 +16330,7 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                }
             }
         } label: {
             Label("About Gaia Eyes", systemImage: "info.circle")
@@ -16265,7 +16340,12 @@ struct ContentView: View {
 
     private var missionSettingsHelpSection: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
+            missionSettingsDisclosure(
+                title: "Help Center and reports",
+                summary: "Help articles, bug submission, privacy, terms",
+                isExpanded: $showHelpSettingsSection
+            ) {
+                VStack(alignment: .leading, spacing: 12) {
                 Text("Troubleshooting, billing answers, privacy basics, terms, and contact paths live in the shared Help Center.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
@@ -16328,6 +16408,7 @@ struct ContentView: View {
                         }
                     }
                 }
+                }
             }
         } label: {
             Label("Help & Support", systemImage: "questionmark.circle")
@@ -16337,7 +16418,12 @@ struct ContentView: View {
 
     private var missionSettingsAccountSection: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
+            missionSettingsDisclosure(
+                title: "Account, membership, and data",
+                summary: "Plan, Health data, billing, delete controls",
+                isExpanded: $showAccountSettingsSection
+            ) {
+                VStack(alignment: .leading, spacing: 12) {
                 Text("Signed-in state, current plan, billing, and account deletion live here.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
@@ -16353,6 +16439,8 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+
+                missionSettingsHealthDataSection
 
                 Divider()
 
@@ -16424,6 +16512,7 @@ struct ContentView: View {
                                 : .secondary
                             )
                     }
+                }
                 }
             }
         } label: {

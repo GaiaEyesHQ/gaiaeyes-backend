@@ -157,13 +157,13 @@ if (!function_exists('gaiaeyes_help_center_fallback_data')) {
                     'id' => 'report-a-bug',
                     'category' => 'troubleshooting',
                     'title' => 'Report a bug',
-                    'summary' => 'Use help@gaiaeyes.com to report app, sync, display, or website issues.',
+                    'summary' => 'Use the in-app bug submission flow for app, sync, display, or website issues.',
                     'keywords' => ['bug', 'report', 'issue', 'problem'],
                     'body_sections' => [
                         [
                             'title' => 'What to include',
                             'paragraphs' => [
-                                'Send bug reports to help@gaiaeyes.com with the app or website area affected, what you expected, what happened instead, and screenshots if available.',
+                                'Open Settings, go to Help & Support, then choose Report a Bug. Include the app or website area affected, what you expected, what happened instead, and how often it happens.',
                             ],
                             'bullets' => [
                                 'Include device model and OS version when relevant.',
