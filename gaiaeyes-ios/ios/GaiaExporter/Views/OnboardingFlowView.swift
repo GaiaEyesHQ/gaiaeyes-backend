@@ -321,12 +321,7 @@ struct OnboardingFlowView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(red: 0.05, green: 0.06, blue: 0.1), Color(red: 0.09, green: 0.12, blue: 0.18)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            GaiaAtmosphereBackground(variant: .onboarding)
 
             VStack(spacing: 0) {
                 header
@@ -1253,10 +1248,10 @@ struct OnboardingFlowView: View {
             content()
         }
         .padding(24)
-        .background(Color.black.opacity(0.34))
+        .background(Color.black.opacity(0.40))
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                .stroke(Color.white.opacity(0.09), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }

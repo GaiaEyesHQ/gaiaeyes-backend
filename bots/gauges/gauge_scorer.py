@@ -143,6 +143,7 @@ _CURRENT_SYMPTOM_STATE_MULTIPLIERS: Dict[str, float] = {
 _EXPOSURE_GAUGE_EFFECTS: Dict[str, Dict[str, float]] = {
     "ALLERGEN_EXPOSURE": {"pain": 0.55, "focus": 0.45, "energy": 0.35, "sleep": 0.2, "heart": 0.15},
     "OVEREXERTION": {"stamina": 1.0, "energy": 0.75, "pain": 0.35, "sleep": 0.2, "heart": 0.15},
+    "TEMPORARY_ILLNESS": {"energy": 0.8, "pain": 0.45, "focus": 0.4, "sleep": 0.35, "heart": 0.25, "mood": 0.15},
 }
 
 _EXPOSURE_GAUGE_CAPS: Dict[str, float] = {
@@ -501,6 +502,14 @@ def _exposure_recency_multiplier(
         if age_hours <= 72.0:
             return 0.3
         return 0.0
+    if exposure_key == "TEMPORARY_ILLNESS":
+        if age_hours <= 24.0:
+            return 1.0
+        if age_hours <= 48.0:
+            return 0.65
+        if age_hours <= 72.0:
+            return 0.35
+        return 0.0
     return 0.0
 
 
@@ -518,6 +527,8 @@ def _is_recent_exposure(
         return age_hours <= 18.0
     if exposure_key == "ALLERGEN_EXPOSURE":
         return age_hours <= 24.0
+    if exposure_key == "TEMPORARY_ILLNESS":
+        return age_hours <= 36.0
     return False
 
 

@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from services.forecast_outlook import (  # noqa: E402
+    build_daily_outlook,
     build_window_outlook,
     parse_swpc_range_forecast,
     parse_swpc_three_day_forecast,
@@ -400,6 +401,33 @@ Outlook For March 23-29
         self.assertEqual(payload["top_drivers"][0]["label"], "Humidity")
         self.assertIn("humidity looks muggier", payload["summary"].lower())
         self.assertIn("hydration", payload["support_line"].lower())
+
+    def test_build_daily_outlook_returns_weather_style_days(self) -> None:
+        merged_rows = [
+            {
+                "day": date(2026, 3, 19),
+                "humidity_avg": 82.0,
+            },
+            {
+                "day": date(2026, 3, 20),
+                "pollen_overall_level": "high",
+                "pollen_overall_index": 4.0,
+                "pollen_primary_type": "tree",
+            },
+        ]
+
+        payload = build_daily_outlook(
+            merged_rows,
+            pattern_rows=[],
+            gauges={},
+            days=7,
+        )
+
+        self.assertEqual(len(payload), 2)
+        self.assertEqual(payload[0]["day"], "2026-03-19")
+        self.assertEqual(payload[0]["top_drivers"][0]["key"], "humidity")
+        self.assertEqual(payload[1]["top_drivers"][0]["key"], "allergens")
+        self.assertTrue(payload[0]["label"])
 
     def test_build_window_outlook_keeps_domain_drivers_within_visible_driver_stack(self) -> None:
         merged_rows = [

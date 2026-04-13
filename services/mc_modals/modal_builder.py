@@ -759,27 +759,30 @@ _SUPPORT_FATIGUE_CODES = {
 _EXPOSURE_DISPLAY_LABELS = {
     "allergen_exposure": "allergen exposure",
     "overexertion": "heavy activity",
+    "temporary_illness": "temporary illness",
 }
 
 _EXPOSURE_CODES_BY_GAUGE = {
-    "pain": {"allergen_exposure", "overexertion"},
-    "focus": {"allergen_exposure"},
-    "heart": {"allergen_exposure", "overexertion"},
-    "stamina": {"overexertion"},
-    "energy": {"allergen_exposure", "overexertion"},
-    "sleep": {"allergen_exposure", "overexertion"},
+    "pain": {"allergen_exposure", "overexertion", "temporary_illness"},
+    "focus": {"allergen_exposure", "temporary_illness"},
+    "heart": {"allergen_exposure", "overexertion", "temporary_illness"},
+    "stamina": {"overexertion", "temporary_illness"},
+    "energy": {"allergen_exposure", "overexertion", "temporary_illness"},
+    "sleep": {"allergen_exposure", "overexertion", "temporary_illness"},
     "mood": set(),
-    "health_status": {"allergen_exposure", "overexertion"},
+    "health_status": {"allergen_exposure", "overexertion", "temporary_illness"},
 }
 
 _EXPOSURE_EFFECT_BUCKETS = {
     "allergen_exposure": {"sinus_irritation", "head_pressure", "fatigue_fog", "focus_drag", "sleep_fragility"},
     "overexertion": {"fatigue_fog", "pain_flare", "sleep_fragility", "heart_reactivity"},
+    "temporary_illness": {"fatigue_fog", "head_pressure", "focus_drag", "sleep_fragility", "heart_reactivity"},
 }
 
 _EXPOSURE_HELP_BUCKETS = {
     "allergen_exposure": {"allergy_support", "cleaner_air"},
     "overexertion": {"steadier_effort", "hydration_pacing", "sleep_routine"},
+    "temporary_illness": {"steadier_effort", "hydration_pacing", "sleep_routine"},
 }
 
 _GAUGE_MODAL_STATE_LABELS = {
@@ -1268,24 +1271,30 @@ def _build_exposure_cause_candidates(
         "pain": {
             "allergen_exposure": "You logged allergen exposure recently, so sinus or head-pressure load may be contributing to pain sensitivity.",
             "overexertion": "You logged heavy activity recently, so body load may still be contributing to pain sensitivity.",
+            "temporary_illness": "You logged temporary illness recently, so pain sensitivity may be reading higher than baseline.",
         },
         "focus": {
             "allergen_exposure": "You logged allergen exposure recently, so fog or distraction may be stacking faster.",
+            "temporary_illness": "You logged temporary illness recently, so focus may be more fragile than usual.",
         },
         "heart": {
             "allergen_exposure": "You logged allergen exposure recently, so irritation load may be making exertion feel heavier.",
             "overexertion": "You logged heavy activity recently, so recovery is being read more cautiously right now.",
+            "temporary_illness": "You logged temporary illness recently, so heart and recovery signals are being read more cautiously.",
         },
         "stamina": {
             "overexertion": "You logged heavy activity recently, so recovery load is elevated.",
+            "temporary_illness": "You logged temporary illness recently, so stamina may be temporarily lower.",
         },
         "energy": {
             "allergen_exposure": "You logged allergen exposure recently, so irritation load may be adding to fatigue.",
             "overexertion": "You logged heavy activity recently, so your capacity is being read more cautiously.",
+            "temporary_illness": "You logged temporary illness recently, so energy may be temporarily reduced.",
         },
         "sleep": {
             "allergen_exposure": "You logged allergen exposure recently, so overnight irritation may make recovery feel less settled.",
             "overexertion": "You logged heavy activity recently, so recovery may need a calmer wind-down tonight.",
+            "temporary_illness": "You logged temporary illness recently, so sleep and recovery may be less settled.",
         },
     }
     line = ((templates.get(gauge_key) or {}).get(exposure_key) or "").strip()

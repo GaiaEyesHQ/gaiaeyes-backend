@@ -5,6 +5,7 @@ from unittest.mock import patch
 import bots.patterns.pattern_engine_job as pattern_engine_job
 from bots.patterns.pattern_engine_job import (
     ASSOCIATION_PAIRS,
+    build_associations,
     build_user_daily_features,
     build_user_daily_outcomes,
     confidence_bucket,
@@ -181,6 +182,43 @@ class PatternEngineJobTests(unittest.TestCase):
         self.assertIn(("solar_wind_exposed", "high_hr_day"), ASSOCIATION_PAIRS)
         self.assertIn(("solar_wind_exposed", "short_sleep_day"), ASSOCIATION_PAIRS)
         self.assertIn(("kp_g1_plus_exposed", "short_sleep_day"), ASSOCIATION_PAIRS)
+
+    def test_build_associations_skips_temporary_context_days(self) -> None:
+        days = [date(2026, 3, day) for day in range(1, 11)]
+        feature_rows = [
+            {
+                "user_id": "user-1",
+                "day": day,
+                "pressure_swing_exposed": index < 5,
+                "temporary_illness_reported": day == date(2026, 3, 3),
+            }
+            for index, day in enumerate(days)
+        ]
+        outcome_rows = [
+            {
+                "user_id": "user-1",
+                "day": day,
+                "headache_day": day in {date(2026, 3, 1), date(2026, 3, 2), date(2026, 3, 3)},
+            }
+            for day in days
+        ]
+
+        rows = build_associations(
+            feature_rows,
+            outcome_rows,
+            as_of_day=date(2026, 3, 10),
+            updated_at=datetime(2026, 3, 10, tzinfo=timezone.utc),
+        )
+        pressure_headache = next(
+            row
+            for row in rows
+            if row["signal_key"] == "pressure_swing_exposed"
+            and row["outcome_key"] == "headache_day"
+            and row["lag_hours"] == 0
+        )
+
+        self.assertEqual(pressure_headache["exposed_n"], 4)
+        self.assertEqual(pressure_headache["exposed_outcome_n"], 2)
 
     def test_collect_relevant_zip_codes_dedupes_and_sorts(self) -> None:
         self.assertEqual(

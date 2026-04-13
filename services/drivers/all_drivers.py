@@ -39,6 +39,7 @@ _DRIVER_CATEGORY = {
     "allergens": "local",
     "overexertion": "body_context",
     "allergen_exposure": "body_context",
+    "temporary_illness": "body_context",
     "kp": "space",
     "bz": "space",
     "sw": "space",
@@ -68,6 +69,7 @@ _BASE_DRIVER_ORDER = {
     "schumann": 14,
     "overexertion": 200,
     "allergen_exposure": 201,
+    "temporary_illness": 202,
 }
 
 _SEVERITY_RANK = {
@@ -102,6 +104,7 @@ _KEY_ALIASES = {
     "schumann": ["schumann"],
     "overexertion": ["overexertion", "heavy_activity"],
     "allergen_exposure": ["allergen_exposure", "allergen exposure"],
+    "temporary_illness": ["temporary_illness", "illness", "cold_flu"],
 }
 
 _WHAT_IT_IS = {
@@ -121,6 +124,7 @@ _WHAT_IT_IS = {
     "schumann": "Recent variability in Earth-ionosphere resonance activity.",
     "overexertion": "Recent heavy activity or overexertion you logged for today.",
     "allergen_exposure": "Recent allergen exposure you logged for today.",
+    "temporary_illness": "A temporary illness context you logged for today.",
 }
 
 _SCIENCE_NOTES = {
@@ -140,6 +144,7 @@ _SCIENCE_NOTES = {
     "schumann": "Schumann readings here are contextual environmental measurements, not a medical marker.",
     "overexertion": "Logged exposures are body-context inputs that help explain recovery load alongside environmental drivers.",
     "allergen_exposure": "Logged allergen exposure is body context from your own report, not a measured ambient pollen level.",
+    "temporary_illness": "Temporary illness is treated as a context flag so pattern learning is less likely to over-credit outside signals.",
 }
 
 _BODY_CONTEXT_NOTE = (
@@ -150,6 +155,7 @@ _BODY_CONTEXT_NOTE = (
 _EXPOSURE_DRIVER_WINDOWS_HOURS = {
     "overexertion": 18.0,
     "allergen_exposure": 24.0,
+    "temporary_illness": 36.0,
 }
 
 _EXPOSURE_DRIVER_META = {
@@ -162,6 +168,11 @@ _EXPOSURE_DRIVER_META = {
         "label": "Allergen Exposure",
         "short_reason": "Recent allergen exposure may still be part of today’s body context.",
         "active_now_text": "Recent allergen exposure is still in the mix for today.",
+    },
+    "temporary_illness": {
+        "label": "Temporary Illness",
+        "short_reason": "A short-term illness may be adding load today.",
+        "active_now_text": "Temporary illness context is still in the mix for today.",
     },
 }
 

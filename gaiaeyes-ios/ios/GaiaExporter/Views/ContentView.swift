@@ -1813,6 +1813,62 @@ private extension UserOutlookWindow {
     }
 }
 
+private struct UserOutlookDay: Codable, Hashable, Identifiable {
+    let day: String?
+    let label: String?
+    let likelyElevatedDomains: [UserOutlookDomain]?
+    let topDrivers: [UserOutlookDriver]?
+    let summary: String?
+    let supportLine: String?
+    let primaryState: String?
+    let voiceSemantic: UserOutlookWindowVoiceSemantic?
+
+    var id: String {
+        day ?? label ?? summary ?? UUID().uuidString
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case day, label, likelyElevatedDomains, topDrivers, summary, supportLine, primaryState, voiceSemantic
+        case likelyElevatedDomainsSnake = "likely_elevated_domains"
+        case topDriversSnake = "top_drivers"
+        case supportLineSnake = "support_line"
+        case primaryStateSnake = "primary_state"
+        case voiceSemanticSnake = "voice_semantic"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        day = try container.decodeIfPresent(String.self, forKey: .day)
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+        likelyElevatedDomains = (try? container.decode(LossyArray<UserOutlookDomain>.self, forKey: .likelyElevatedDomains))?.values
+            ?? (try? container.decode(LossyArray<UserOutlookDomain>.self, forKey: .likelyElevatedDomainsSnake))?.values
+        topDrivers = (try? container.decode(LossyArray<UserOutlookDriver>.self, forKey: .topDrivers))?.values
+            ?? (try? container.decode(LossyArray<UserOutlookDriver>.self, forKey: .topDriversSnake))?.values
+        summary = try container.decodeIfPresent(String.self, forKey: .summary)
+        let decodedSupportLine = try container.decodeIfPresent(String.self, forKey: .supportLine)
+        let decodedSupportLineSnake = try container.decodeIfPresent(String.self, forKey: .supportLineSnake)
+        supportLine = decodedSupportLine ?? decodedSupportLineSnake
+        let decodedPrimaryState = try container.decodeIfPresent(String.self, forKey: .primaryState)
+        let decodedPrimaryStateSnake = try container.decodeIfPresent(String.self, forKey: .primaryStateSnake)
+        primaryState = decodedPrimaryState ?? decodedPrimaryStateSnake
+        let decodedVoiceSemantic = try container.decodeIfPresent(UserOutlookWindowVoiceSemantic.self, forKey: .voiceSemantic)
+        let decodedVoiceSemanticSnake = try container.decodeIfPresent(UserOutlookWindowVoiceSemantic.self, forKey: .voiceSemanticSnake)
+        voiceSemantic = decodedVoiceSemantic ?? decodedVoiceSemanticSnake
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(day, forKey: .day)
+        try container.encodeIfPresent(label, forKey: .label)
+        try container.encodeIfPresent(likelyElevatedDomains, forKey: .likelyElevatedDomains)
+        try container.encodeIfPresent(topDrivers, forKey: .topDrivers)
+        try container.encodeIfPresent(summary, forKey: .summary)
+        try container.encodeIfPresent(supportLine, forKey: .supportLine)
+        try container.encodeIfPresent(primaryState, forKey: .primaryState)
+        try container.encodeIfPresent(voiceSemantic, forKey: .voiceSemantic)
+    }
+}
+
 private struct UserOutlookWindowVoiceInterpretation: Codable, Hashable {
     let headerSummary: String?
     let leadingSignalSummary: String?
@@ -1929,6 +1985,7 @@ private struct UserForecastOutlook: Codable {
     let ok: Bool?
     let generatedAt: String?
     let availableWindows: [String]?
+    let dailyOutlook: [UserOutlookDay]?
     let forecastDataReady: UserOutlookDataReady?
     let next24h: UserOutlookWindow?
     let next72h: UserOutlookWindow?
@@ -1948,6 +2005,7 @@ private struct UserForecastOutlook: Codable {
         var ok: Bool? = nil
         var generatedAt: String? = nil
         var availableWindows: [String]? = nil
+        var dailyOutlook: [UserOutlookDay]? = nil
         var forecastDataReady: UserOutlookDataReady? = nil
         var next24h: UserOutlookWindow? = nil
         var next72h: UserOutlookWindow? = nil
@@ -1963,6 +2021,8 @@ private struct UserForecastOutlook: Codable {
                 generatedAt = try? container.decode(String.self, forKey: key)
             case "availableWindows", "available_windows":
                 availableWindows = try? container.decode([String].self, forKey: key)
+            case "dailyOutlook", "daily_outlook":
+                dailyOutlook = (try? container.decode(LossyArray<UserOutlookDay>.self, forKey: key))?.values
             case "forecastDataReady", "forecast_data_ready":
                 forecastDataReady = try? container.decode(UserOutlookDataReady.self, forKey: key)
             case "next24H", "next24h", "next_24h":
@@ -1983,6 +2043,7 @@ private struct UserForecastOutlook: Codable {
         self.ok = ok
         self.generatedAt = generatedAt
         self.availableWindows = availableWindows
+        self.dailyOutlook = dailyOutlook
         self.forecastDataReady = forecastDataReady
         self.next24h = next24h
         self.next72h = next72h
@@ -1997,6 +2058,7 @@ private extension UserForecastOutlook {
         ok: Bool?,
         generatedAt: String?,
         availableWindows: [String]?,
+        dailyOutlook: [UserOutlookDay]?,
         forecastDataReady: UserOutlookDataReady?,
         next24h: UserOutlookWindow?,
         next72h: UserOutlookWindow?,
@@ -2007,6 +2069,7 @@ private extension UserForecastOutlook {
         self.ok = ok
         self.generatedAt = generatedAt
         self.availableWindows = availableWindows
+        self.dailyOutlook = dailyOutlook
         self.forecastDataReady = forecastDataReady
         self.next24h = next24h
         self.next72h = next72h
@@ -2113,6 +2176,9 @@ private func userOutlookWindowHasContent(_ window: UserOutlookWindow?) -> Bool {
 
 private func userOutlookNeedsRefresh(_ payload: UserForecastOutlook?) -> Bool {
     guard let payload else { return true }
+    if payload.dailyOutlook?.isEmpty == false {
+        return false
+    }
     return !userOutlookWindowHasContent(payload.next24h)
         || !userOutlookWindowHasContent(payload.next72h)
         || !userOutlookWindowHasContent(payload.next7d)
@@ -2162,6 +2228,7 @@ private func mergedUserOutlook(_ preferred: UserForecastOutlook?, fallback: User
         ok: preferred.ok ?? fallback.ok,
         generatedAt: preferred.generatedAt ?? fallback.generatedAt,
         availableWindows: preferLongerArray(preferred.availableWindows, fallback: fallback.availableWindows),
+        dailyOutlook: preferLongerArray(preferred.dailyOutlook, fallback: fallback.dailyOutlook),
         forecastDataReady: preferred.forecastDataReady ?? fallback.forecastDataReady,
         next24h: mergedUserOutlookWindow(preferred.next24h, fallback: fallback.next24h),
         next72h: mergedUserOutlookWindow(preferred.next72h, fallback: fallback.next72h),
@@ -2815,43 +2882,6 @@ struct ContentView: View {
         }
     }
 
-    private struct AppNoticeEnvelope: Decodable {
-        let ok: Bool?
-        let notice: AppNotice?
-    }
-
-    private struct AppNotice: Decodable, Equatable, Identifiable {
-        let id: String
-        let type: String?
-        let title: String?
-        let message: String?
-        let linkLabel: String?
-        let linkURL: String?
-        let updatedAt: String?
-
-        enum CodingKeys: String, CodingKey {
-            case id
-            case type
-            case title
-            case message
-            case linkLabel = "link_label"
-            case linkURL = "link_url"
-            case updatedAt = "updated_at"
-        }
-
-        var hasDisplayContent: Bool {
-            !(title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !(message ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
-
-        var link: URL? {
-            guard let raw = linkURL?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
-                return nil
-            }
-            return URL(string: raw)
-        }
-    }
-
     private static let cameraHealthCheckVisible = false
 
     // Throttle / circuit-breaker for features refresh loops
@@ -2896,6 +2926,9 @@ struct ContentView: View {
     @State private var debugToolkitMessage: String?
     @State private var debugSelectedCacheTarget: DebugCacheTarget = .dashboardSnapshot
     @State private var appNotice: AppNotice? = nil
+    @State private var homeFeedItem: HomeFeedItem? = nil
+    @State private var homeFeedLoading: Bool = false
+    @State private var homeFeedSeenIDs: Set<String> = []
 
     @State private var pendingRefreshTask: Task<Void, Never>? = nil
     @State private var pendingDashboardRefreshTask: Task<Void, Never>? = nil
@@ -3113,6 +3146,9 @@ struct ContentView: View {
         lastKnownUserOutlook = nil
         userOutlookError = nil
         userOutlookLoading = false
+        homeFeedItem = nil
+        homeFeedLoading = false
+        homeFeedSeenIDs = []
 
         userPatternsCacheJSON = ""
         allDriversCacheJSON = ""
@@ -3215,9 +3251,10 @@ struct ContentView: View {
         async let driversTask: Void = fetchMissionDriversPreview(api: api, force: true)
         async let presetsTask: Void = refreshSymptomPresets(api: api)
         async let cameraTask: Void = fetchLatestCameraCheck()
+        async let homeFeedTask: Void = fetchHomeFeed()
         _ = await (dashboardTask, featuresTask, profileTask)
         _ = await (notificationTask, currentSymptomsTask, dailyCheckInTask)
-        _ = await (driversTask, presetsTask, cameraTask)
+        _ = await (driversTask, presetsTask, cameraTask, homeFeedTask)
         appLog("[UI] post-auth refresh complete scope=\(String(expectedScope.prefix(8)))")
     }
 
@@ -3536,13 +3573,17 @@ struct ContentView: View {
         return components?.url ?? url
     }
 
-    private var visibleAppNotice: AppNotice? {
+    private func visibleAppNotice(for placement: AppNoticePlacement) -> AppNotice? {
         guard let appNotice,
-              appNotice.hasDisplayContent,
-              appNotice.id.trimmingCharacters(in: .whitespacesAndNewlines) != dismissedAppNoticeID else {
+              appNotice.isVisible(in: placement),
+              appNotice.trimmedID != dismissedAppNoticeID else {
             return nil
         }
         return appNotice
+    }
+
+    private func dismissAppNotice(_ notice: AppNotice) {
+        dismissedAppNoticeID = notice.trimmedID
     }
 
     private func openGuideHub(focus: GuideHubFocus = .overview) {
@@ -4255,6 +4296,67 @@ struct ContentView: View {
         }
         if let lastFailureStatus {
             appLog("[UI] app notice fetch failed status=\(lastFailureStatus)")
+        }
+    }
+
+    private func fetchHomeFeed() async {
+        await MainActor.run {
+            homeFeedLoading = true
+        }
+        let mode = await MainActor.run { experienceProfile.mode.rawValue }
+        let encodedMode = mode.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? mode
+        let api = state.apiWithAuth()
+        do {
+            let envelope: HomeFeedEnvelope = try await api.getJSON(
+                "v1/profile/home-feed?mode=\(encodedMode)",
+                as: HomeFeedEnvelope.self,
+                retries: 1,
+                perRequestTimeout: 12
+            )
+            let nextItem = envelope.ok == false ? nil : envelope.item
+            await MainActor.run {
+                homeFeedItem = nextItem
+                homeFeedLoading = false
+            }
+            if let nextItem {
+                await markHomeFeedSeen(nextItem, dismissed: false)
+            }
+        } catch is CancellationError {
+            await MainActor.run { homeFeedLoading = false }
+        } catch let error as URLError where error.code == .cancelled {
+            await MainActor.run { homeFeedLoading = false }
+        } catch {
+            await MainActor.run {
+                homeFeedItem = nil
+                homeFeedLoading = false
+            }
+            appLog("[UI] home feed fetch error: \(error.localizedDescription)")
+        }
+    }
+
+    private func markHomeFeedSeen(_ item: HomeFeedItem, dismissed: Bool) async {
+        let itemID = item.trimmedID
+        guard !itemID.isEmpty else { return }
+        let seenCacheKey = dismissed ? "\(itemID):dismissed" : "\(itemID):seen"
+        let shouldPost = await MainActor.run {
+            homeFeedSeenIDs.insert(seenCacheKey).inserted
+        }
+        guard shouldPost else { return }
+
+        let payload = HomeFeedSeenRequest(itemID: itemID, dismissed: dismissed)
+        do {
+            let _: HomeFeedSeenEnvelope = try await state.apiWithAuth().postJSON(
+                "v1/profile/home-feed/seen",
+                body: payload,
+                as: HomeFeedSeenEnvelope.self
+            )
+        } catch is CancellationError {
+            await MainActor.run { _ = homeFeedSeenIDs.remove(seenCacheKey) }
+        } catch let error as URLError where error.code == .cancelled {
+            await MainActor.run { _ = homeFeedSeenIDs.remove(seenCacheKey) }
+        } catch {
+            await MainActor.run { _ = homeFeedSeenIDs.remove(seenCacheKey) }
+            appLog("[UI] home feed seen save error: \(error.localizedDescription)")
         }
     }
 
@@ -8888,6 +8990,224 @@ struct ContentView: View {
             )
             .padding(.horizontal)
 
+            if let item = homeFeedItem,
+               item.displayTitle != nil || item.displayBody != nil {
+                DashboardHomeFeedCard(
+                    mode: experienceProfile.mode,
+                    item: item,
+                    onDismiss: {
+                        homeFeedItem = nil
+                        Task { await markHomeFeedSeen(item, dismissed: true) }
+                    },
+                    onOpen: { openURL($0) }
+                )
+                .padding(.horizontal)
+            }
+
+            if let notice = visibleAppNotice(for: .homeTip) {
+                DashboardRemoteContentCard(
+                    mode: experienceProfile.mode,
+                    notice: notice,
+                    onDismiss: { dismissAppNotice(notice) },
+                    onOpen: { openURL($0) }
+                )
+                .padding(.horizontal)
+            }
+
+        }
+    }
+
+    private struct DashboardHomeFeedCard: View {
+        let mode: ExperienceMode
+        let item: HomeFeedItem
+        let onDismiss: () -> Void
+        let onOpen: (URL) -> Void
+
+        private var sectionTitle: String {
+            mode == .mystical ? "Message from Gaia" : "Fun Facts"
+        }
+
+        private var symbolName: String {
+            mode == .mystical ? "moon.stars.fill" : "sparkles.rectangle.stack.fill"
+        }
+
+        private var tint: Color {
+            mode == .mystical ? Color(red: 0.36, green: 0.78, blue: 0.96) : Color(red: 0.83, green: 0.78, blue: 0.48)
+        }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(tint.opacity(0.16))
+                        Image(systemName: symbolName)
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(tint)
+                    }
+                    .frame(width: 38, height: 38)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Text(sectionTitle.uppercased())
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(.white.opacity(0.52))
+                                .tracking(0.8)
+                            Text(item.displayKind)
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(tint.opacity(0.95))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(tint.opacity(0.14), in: Capsule())
+                        }
+                        if let title = item.displayTitle {
+                            Text(title)
+                                .font(.headline.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.94))
+                        }
+                        if let body = item.displayBody {
+                            Text(body)
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.70))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(.white.opacity(0.56))
+                            .padding(8)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss \(sectionTitle)")
+                }
+
+                if let link = item.link {
+                    Button {
+                        onOpen(link)
+                    } label: {
+                        Label(item.displayLinkLabel ?? "Read more", systemImage: "arrow.up.right")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(tint)
+                    .controlSize(.small)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(Color.white.opacity(0.055))
+                    LinearGradient(
+                        colors: [
+                            tint.opacity(0.11),
+                            Color.white.opacity(0.025),
+                            Color.black.opacity(0.16)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                }
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(tint.opacity(0.18), lineWidth: 1)
+            )
+            .shadow(color: tint.opacity(0.14), radius: 16, x: 0, y: 8)
+        }
+    }
+
+    private struct DashboardRemoteContentCard: View {
+        let mode: ExperienceMode
+        let notice: AppNotice
+        let onDismiss: () -> Void
+        let onOpen: (URL) -> Void
+
+        private var sectionTitle: String {
+            mode == .mystical ? "Message from Gaia" : "Fun Facts"
+        }
+
+        private var symbolName: String {
+            mode == .mystical ? "sparkles" : "lightbulb.max.fill"
+        }
+
+        private var tint: Color {
+            mode == .mystical ? Color(red: 0.36, green: 0.78, blue: 0.96) : Color(red: 0.84, green: 0.72, blue: 0.36)
+        }
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: symbolName)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(tint)
+                        .frame(width: 36, height: 36)
+                        .background(tint.opacity(0.16), in: Circle())
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(sectionTitle.uppercased())
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(.white.opacity(0.52))
+                            .tracking(0.8)
+                        Text(notice.trimmedTitle ?? sectionTitle)
+                            .font(.headline.weight(.semibold))
+                            .foregroundColor(.white.opacity(0.94))
+                        if let message = notice.trimmedMessage {
+                            Text(message)
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.70))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(.white.opacity(0.56))
+                            .padding(8)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss \(sectionTitle)")
+                }
+
+                if let link = notice.link {
+                    Button {
+                        onOpen(link)
+                    } label: {
+                        Label(notice.trimmedLinkLabel ?? "Open", systemImage: "arrow.up.right")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(tint)
+                    .controlSize(.small)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.065),
+                        tint.opacity(0.10)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(tint.opacity(0.20), lineWidth: 1)
+            )
+            .shadow(color: tint.opacity(0.18), radius: 16, x: 0, y: 8)
         }
     }
 
@@ -12389,6 +12709,119 @@ struct ContentView: View {
             )
         }
 
+        private func dailyDateText(_ isoDay: String?) -> String? {
+            guard let isoDay else { return nil }
+            let parser = DateFormatter()
+            parser.calendar = Calendar(identifier: .gregorian)
+            parser.locale = Locale(identifier: "en_US_POSIX")
+            parser.timeZone = TimeZone(secondsFromGMT: 0)
+            parser.dateFormat = "yyyy-MM-dd"
+            guard let date = parser.date(from: isoDay) else { return nil }
+            let formatter = DateFormatter()
+            formatter.setLocalizedDateFormatFromTemplate("MMM d")
+            return formatter.string(from: date)
+        }
+
+        private func dailySummary(_ day: UserOutlookDay) -> String? {
+            refinedText(day.voiceSemantic?.interpretation?.headerSummary ?? day.summary)
+        }
+
+        private func dailySupportLine(_ day: UserOutlookDay) -> String? {
+            let support = refinedText(day.voiceSemantic?.interpretation?.supportSummary ?? day.supportLine)
+            guard !textCarriesSameIdea(support, dailySummary(day)) else { return nil }
+            return support
+        }
+
+        private func dailyState(_ day: UserOutlookDay) -> String {
+            let raw = day.primaryState
+                ?? day.topDrivers?.first?.severity
+                ?? day.likelyElevatedDomains?.first?.likelihood
+                ?? "watch"
+            return raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "watch" : raw
+        }
+
+        private func dailyDriverLabel(_ driver: UserOutlookDriver) -> String {
+            driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+
+        @ViewBuilder
+        private func dailyOutlookRow(_ day: UserOutlookDay) -> some View {
+            let drivers = visibleDrivers(day.topDrivers ?? [])
+            let primary = drivers.first
+            let domains = day.likelyElevatedDomains ?? []
+            let state = dailyState(day)
+            let title = day.label?.nilIfTrimmedEmpty ?? dailyDateText(day.day) ?? "Day"
+            let dateText = dailyDateText(day.day)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.headline.weight(.semibold))
+                        if let dateText, dateText != title {
+                            Text(dateText)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Spacer()
+                    StatusPill(state.capitalized, severity: severity(state))
+                }
+
+                if let summary = dailySummary(day) {
+                    Text(summary)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if let support = dailySupportLine(day) {
+                    Text(support)
+                        .font(.caption)
+                        .foregroundColor(.secondary.opacity(0.86))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: 8) {
+                    if let primary {
+                        LocalConditionsValueChip(
+                            label: "Driver",
+                            value: dailyDriverLabel(primary),
+                            tint: GaugePalette.zoneColor(primary.severity)
+                        )
+                    }
+                    if let domain = domains.first {
+                        LocalConditionsValueChip(
+                            label: "Likely",
+                            value: domain.label ?? domain.key.replacingOccurrences(of: "_", with: " ").capitalized,
+                            tint: GaugePalette.zoneColor(domain.likelihood)
+                        )
+                    }
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+            )
+        }
+
+        @ViewBuilder
+        private func dailyOutlookSection(_ days: [UserOutlookDay]) -> some View {
+            if !days.isEmpty {
+                LocalConditionsSurfaceCard(title: "7-Day Forecast", icon: "calendar") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(days.prefix(7))) { day in
+                            dailyOutlookRow(day)
+                        }
+                    }
+                }
+            }
+        }
+
         @ViewBuilder
         private func windowSection(_ window: UserOutlookWindow?) -> some View {
             if let window {
@@ -12497,11 +12930,17 @@ struct ContentView: View {
                             }
                         }
 
-                        windowSection(payload?.next24h)
-                        windowSection(payload?.next72h)
-                        windowSection(payload?.next7d)
+                        if let daily = payload?.dailyOutlook, !daily.isEmpty {
+                            dailyOutlookSection(daily)
+                        } else {
+                            windowSection(payload?.next24h)
+                            windowSection(payload?.next72h)
+                            windowSection(payload?.next7d)
+                        }
 
-                        if !isLoading && !userOutlookWindowHasContent(payload?.next7d) {
+                        if !isLoading
+                            && (payload?.dailyOutlook?.isEmpty ?? true)
+                            && !userOutlookWindowHasContent(payload?.next7d) {
                             LocalConditionsSurfaceCard(title: "7-Day Outlook", icon: "calendar") {
                                 Text(payload?.semanticSevenDayPending ?? "The 7-day view will appear once the forecast layer is steady enough to support it.")
                                     .font(.subheadline)
@@ -15467,7 +15906,8 @@ struct ContentView: View {
                 async let f: Void = fetchCurrentSymptomsSummary(api: api)
                 async let g: Void = fetchDailyCheckInStatus(api: api)
                 async let notice: Void = fetchAppNotice()
-                _ = await (n, e, f, g, notice)
+                async let homeFeed: Void = fetchHomeFeed()
+                _ = await (n, e, f, g, notice, homeFeed)
                 async let h: Void = fetchFeaturesToday(trigger: .initial, bypassGuard: true)
                 _ = await (a, b, h)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
@@ -15492,7 +15932,8 @@ struct ContentView: View {
                 async let f: Void = fetchCurrentSymptomsSummary(api: api)
                 async let g: Void = fetchDailyCheckInStatus(api: api)
                 async let notice: Void = fetchAppNotice()
-                _ = await (n, e, f, g, notice)
+                async let homeFeed: Void = fetchHomeFeed()
+                _ = await (n, e, f, g, notice, homeFeed)
                 async let h: Void = fetchFeaturesToday(trigger: .refresh, bypassGuard: true)
                 _ = await (a, b, h)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
@@ -15573,7 +16014,8 @@ struct ContentView: View {
                             }
                             async let dashboardRefresh: Void = fetchDashboardPayload(force: dashboardNeedsForegroundRefresh())
                             async let healthKick: Void = HealthKitBackgroundSync.shared.kickOnce(reason: "became active")
-                            _ = await (dashboardRefresh, healthKick, schumannRefresh, noticeRefresh)
+                            async let homeFeedRefresh: Void = fetchHomeFeed()
+                            _ = await (dashboardRefresh, healthKick, schumannRefresh, noticeRefresh, homeFeedRefresh)
                         } else {
                             _ = await (schumannRefresh, noticeRefresh)
                         }
@@ -16458,7 +16900,14 @@ struct ContentView: View {
         missionSettingsExperienceCard
             .padding(.horizontal)
             .onChange(of: experienceProfile.mode, initial: false) { _, newValue in
-                Task { await saveProfilePreferences(UserExperienceProfileUpdate(mode: newValue)) }
+                Task {
+                    await saveProfilePreferences(UserExperienceProfileUpdate(mode: newValue))
+                    await MainActor.run {
+                        homeFeedItem = nil
+                        homeFeedSeenIDs = []
+                    }
+                    await fetchHomeFeed()
+                }
             }
             .onChange(of: experienceProfile.guide, initial: false) { _, newValue in
                 Task { await saveProfilePreferences(UserExperienceProfileUpdate(guide: newValue)) }
@@ -17505,6 +17954,7 @@ struct ContentView: View {
                 bodyInfluences: guideInfluences.body,
                 whatMattersNow: dashboardPayload?.driversCompact ?? [],
                 whatMattersSummary: dashboardPayload?.todayRelevanceExplanations?.dailyBrief,
+                guideNotice: visibleAppNotice(for: .guideCard),
                 initialFocus: guideHubFocus,
                 onRefreshDailyCheckIn: {
                     Task { await fetchDailyCheckInStatus(api: state.apiWithAuth()) }
@@ -17535,6 +17985,12 @@ struct ContentView: View {
                         selectedTab = .explore
                         openAllDrivers()
                     }
+                },
+                onDismissGuideNotice: { notice in
+                    dismissAppNotice(notice)
+                },
+                onOpenNoticeURL: { url in
+                    openURL(url)
                 },
                 onDailyCheckInStatusChanged: { status in
                     dailyCheckInStatus = status
@@ -17975,11 +18431,11 @@ struct ContentView: View {
 
         return onboardingShell
         .safeAreaInset(edge: .top) {
-            if let notice = visibleAppNotice {
+            if let notice = visibleAppNotice(for: .topBanner) {
                 AppNoticeBannerView(
                     notice: notice,
                     onDismiss: {
-                        dismissedAppNoticeID = notice.id.trimmingCharacters(in: .whitespacesAndNewlines)
+                        dismissAppNotice(notice)
                     },
                     onOpen: { url in
                         openURL(url)
@@ -18031,11 +18487,11 @@ struct ContentView: View {
                     .padding(.top, 2)
 
                 VStack(alignment: .leading, spacing: 5) {
-                    if let title = notice.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty {
+                    if let title = notice.trimmedTitle {
                         Text(title)
                             .font(.subheadline.weight(.semibold))
                     }
-                    if let message = notice.message?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
+                    if let message = notice.trimmedMessage {
                         Text(message)
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -18045,7 +18501,7 @@ struct ContentView: View {
                         Button {
                             onOpen(link)
                         } label: {
-                            Text((notice.linkLabel?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? "Open")
+                            Text(notice.trimmedLinkLabel ?? "Open")
                                 .font(.caption.weight(.semibold))
                         }
                         .buttonStyle(.bordered)
@@ -18096,14 +18552,17 @@ struct ContentView: View {
     }
 
     private var mainTabView: some View {
-        RootTabShellView(
-            selectedTab: $selectedTab,
-            homeTab: homeTabView,
-            bodyTab: bodyTabView,
-            patternsTab: patternsTabView,
-            outlookTab: outlookTabView,
-            exploreTab: exploreTabView
-        )
+        ZStack {
+            GaiaAtmosphereBackground(variant: .appShell)
+            RootTabShellView(
+                selectedTab: $selectedTab,
+                homeTab: homeTabView,
+                bodyTab: bodyTabView,
+                patternsTab: patternsTabView,
+                outlookTab: outlookTabView,
+                exploreTab: exploreTabView
+            )
+        }
     }
 
     private var homeTabView: AnyView {

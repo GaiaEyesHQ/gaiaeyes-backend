@@ -13,6 +13,12 @@ private struct DailyCheckInChoice: Identifiable, Hashable {
 }
 
 private let validSleepImpactChoiceIds: Set<String> = ["yes_strongly", "yes_somewhat", "not_much", "unsure"]
+private let illnessDetailChoiceIds: Set<String> = [
+    "illness_respiratory",
+    "illness_gastrointestinal",
+    "illness_fever",
+    "illness_other",
+]
 
 private struct DailyCheckInChoiceGrid: View {
     let title: String
@@ -151,6 +157,7 @@ struct DailyCheckInView: View {
     @State private var predictionMatch: String = ""
     @State private var noteText: String = ""
     @State private var exposures: Set<String> = []
+    @State private var illnessDetails: Set<String> = []
 
     init(
         api: APIClient,
@@ -264,6 +271,16 @@ struct DailyCheckInView: View {
         return "Check-in saved. Also logged today: \(summary)."
     }
 
+    private var submittedExposureIDs: [String] {
+        var selected = exposures
+        if selected.contains("temporary_illness") {
+            selected.formUnion(illnessDetails)
+        } else {
+            selected.subtract(illnessDetailChoiceIds)
+        }
+        return selected.sorted()
+    }
+
     private var comparisonChoices: [DailyCheckInChoice] {
         [
             DailyCheckInChoice(id: "better", label: "Better than yesterday"),
@@ -329,6 +346,16 @@ struct DailyCheckInView: View {
         [
             DailyCheckInChoice(id: "overexertion", label: "Heavy activity / overdid it"),
             DailyCheckInChoice(id: "allergen_exposure", label: "Allergen exposure"),
+            DailyCheckInChoice(id: "temporary_illness", label: "Cold / flu / temporary illness"),
+        ]
+    }
+
+    private var illnessDetailChoices: [DailyCheckInChoice] {
+        [
+            DailyCheckInChoice(id: "illness_respiratory", label: "Sinus / respiratory"),
+            DailyCheckInChoice(id: "illness_gastrointestinal", label: "Stomach / GI"),
+            DailyCheckInChoice(id: "illness_fever", label: "Fever / infection"),
+            DailyCheckInChoice(id: "illness_other", label: "Other / unsure"),
         ]
     }
 
@@ -407,10 +434,19 @@ struct DailyCheckInView: View {
 
                 DailyCheckInMultiChoiceGrid(
                     title: "Anything likely affected today?",
-                    subtitle: "Optional, but useful when gauges may be reading a confounder like overexertion or allergen load.",
+                    subtitle: "Optional. These keep current gauges honest while helping pattern learning ignore short-term confounders.",
                     selection: $exposures,
                     choices: exposureChoices
                 )
+
+                if exposures.contains("temporary_illness") {
+                    DailyCheckInMultiChoiceGrid(
+                        title: "What kind of illness?",
+                        subtitle: "Optional. This helps Gaia avoid building patterns from temporary sick days.",
+                        selection: $illnessDetails,
+                        choices: illnessDetailChoices
+                    )
+                }
 
                 DailyCheckInChoiceGrid(
                     title: "Did pain stand out today?",
@@ -475,12 +511,7 @@ struct DailyCheckInView: View {
             .padding(16)
         }
         .background(
-            LinearGradient(
-                colors: [Color.black, Color(red: 0.05, green: 0.07, blue: 0.12)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            GaiaAtmosphereBackground(variant: .modal)
         )
         .navigationTitle("Daily Check-In")
         .navigationBarTitleDisplayMode(.inline)
@@ -497,6 +528,11 @@ struct DailyCheckInView: View {
         }
         .refreshable {
             await loadStatus()
+        }
+        .onChange(of: exposures, initial: false) { _, newValue in
+            if !newValue.contains("temporary_illness") {
+                illnessDetails.removeAll()
+            }
         }
         .alert(
             "Daily Check-In",
@@ -697,7 +733,12 @@ struct DailyCheckInView: View {
         sleepImpact = validSleepImpactChoiceIds.contains(entry.sleepImpact ?? "") ? (entry.sleepImpact ?? "") : ""
         predictionMatch = entry.predictionMatch ?? ""
         noteText = entry.noteText ?? ""
-        exposures = Set(entry.exposures)
+        let savedExposures = Set(entry.exposures)
+        illnessDetails = savedExposures.intersection(illnessDetailChoiceIds)
+        exposures = savedExposures.subtracting(illnessDetailChoiceIds)
+        if !illnessDetails.isEmpty {
+            exposures.insert("temporary_illness")
+        }
     }
 
     private func mergedStatus(with entry: DailyCheckInEntry) -> DailyCheckInStatus {
@@ -717,6 +758,7 @@ struct DailyCheckInView: View {
             statusMessage = nil
         }
         do {
+            let exposureIDs = submittedExposureIDs
             let envelope = try await api.submitDailyCheckIn(
                 promptId: prompt?.id,
                 day: targetDay,
@@ -732,7 +774,7 @@ struct DailyCheckInView: View {
                 sleepImpact: sleepImpact.nilIfBlank,
                 predictionMatch: predictionMatch.nilIfBlank,
                 noteText: noteText.nilIfBlank,
-                exposures: Array(exposures).sorted(),
+                exposures: exposureIDs,
                 completedAt: Date()
             )
             if envelope.ok == false {
@@ -754,7 +796,7 @@ struct DailyCheckInView: View {
                 predictionMatch: predictionMatch.nilIfBlank,
                 noteText: noteText.nilIfBlank,
                 completedAt: ISO8601DateFormatter().string(from: Date()),
-                exposures: Array(exposures).sorted()
+                exposures: exposureIDs
             )
             let nextStatus = mergedStatus(with: savedEntry)
             AppAnalytics.track(
@@ -769,7 +811,7 @@ struct DailyCheckInView: View {
             await MainActor.run {
                 status = nextStatus
                 onStatusChanged(nextStatus)
-                statusMessage = exposureConfirmationText(for: savedEntry.exposures)
+                statusMessage = exposureConfirmationText(for: exposureIDs)
                 isSaving = false
             }
             if showsCloseButton {

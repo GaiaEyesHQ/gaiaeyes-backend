@@ -21,7 +21,15 @@ try:
 except Exception:
     LOCAL_TZ = ZoneInfo("America/Chicago")
 
-_ALLOWED_EXPOSURE_KEYS = {"allergen_exposure", "overexertion"}
+_ALLOWED_EXPOSURE_KEYS = {
+    "allergen_exposure",
+    "overexertion",
+    "temporary_illness",
+    "illness_respiratory",
+    "illness_gastrointestinal",
+    "illness_fever",
+    "illness_other",
+}
 _ALLOWED_SOURCES = {"daily_check_in", "guide", "manual", "symptom_log", "system"}
 
 

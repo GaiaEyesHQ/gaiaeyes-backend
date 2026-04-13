@@ -268,4 +268,10 @@ def exposure_personalization_multiplier(
         if gauge_key == "heart" and profile.includes_any(AIRWAY_KEYS):
             multiplier += 0.10
 
+    if exposure_key == "temporary_illness":
+        if gauge_key in {"energy", "focus", "sleep"}:
+            multiplier += 0.20
+        if gauge_key in {"pain", "heart"}:
+            multiplier += 0.10
+
     return min(multiplier, 1.75)

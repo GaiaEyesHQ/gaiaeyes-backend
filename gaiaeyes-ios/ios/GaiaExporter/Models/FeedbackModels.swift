@@ -338,12 +338,23 @@ struct DailyCheckInStatus: Decodable, Hashable {
 }
 
 extension DailyCheckInEntry {
+    private static let illnessDetailLabels: [String: String] = [
+        "illness_respiratory": "Sinus / respiratory",
+        "illness_gastrointestinal": "Stomach / GI",
+        "illness_fever": "Fever / infection",
+        "illness_other": "Other / unsure",
+    ]
+
     static func summaryExposureLabel(for exposureID: String) -> String? {
         switch exposureID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "overexertion":
             return "Heavy activity"
         case "allergen_exposure":
             return "Allergen exposure"
+        case "temporary_illness":
+            return "Temporary illness"
+        case let value where Self.illnessDetailLabels[value] != nil:
+            return Self.illnessDetailLabels[value]
         case "":
             return nil
         default:
@@ -357,7 +368,17 @@ extension DailyCheckInEntry {
     static func summaryExposureText(for exposureIDs: [String]) -> String? {
         var labels: [String] = []
         var seen: Set<String> = []
-        for exposureID in exposureIDs {
+        let normalizedIDs = Set(exposureIDs.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+        if normalizedIDs.contains("temporary_illness") {
+            let details = Self.illnessDetailLabels
+                .filter { normalizedIDs.contains($0.key) }
+                .map(\.value)
+                .sorted()
+            let label = details.isEmpty ? "Temporary illness" : "Temporary illness: \(details.joined(separator: ", "))"
+            labels.append(label)
+            seen.insert("temporary illness")
+        }
+        for exposureID in exposureIDs where !Self.illnessDetailLabels.keys.contains(exposureID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) {
             guard let label = summaryExposureLabel(for: exposureID), !label.isEmpty else { continue }
             let normalized = label.lowercased()
             if seen.insert(normalized).inserted {

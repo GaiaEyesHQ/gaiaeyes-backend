@@ -1939,6 +1939,57 @@ def build_window_outlook(
     return payload
 
 
+def _daily_outlook_label(day: date, index: int) -> str:
+    today = date.today()
+    if day == today:
+        return "Today"
+    if day == today + timedelta(days=1):
+        return "Tomorrow"
+    if index == 0:
+        return "Today"
+    if index == 1:
+        return "Tomorrow"
+    return day.strftime("%a")
+
+
+def build_daily_outlook(
+    merged_rows: Sequence[Mapping[str, Any]],
+    *,
+    pattern_rows: Sequence[Mapping[str, Any]],
+    gauges: Mapping[str, Any],
+    days: int = 7,
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for index, row in enumerate(list(merged_rows)[:days]):
+        day_value = row.get("day")
+        if not isinstance(day_value, date):
+            continue
+        window = build_window_outlook(
+            [row],
+            pattern_rows=pattern_rows,
+            gauges=gauges,
+            window_hours=24,
+        )
+        if not window:
+            continue
+        top_drivers = window.get("top_drivers") or []
+        likely_domains = window.get("likely_elevated_domains") or []
+        primary = top_drivers[0] if top_drivers else None
+        items.append(
+            {
+                "day": day_value.isoformat(),
+                "label": _daily_outlook_label(day_value, index),
+                "likely_elevated_domains": likely_domains,
+                "top_drivers": top_drivers,
+                "summary": window.get("summary"),
+                "support_line": window.get("support_line"),
+                "primary_state": primary.get("severity") if isinstance(primary, Mapping) else None,
+                "voice_semantic": window.get("voice_semantic"),
+            }
+        )
+    return items
+
+
 async def build_user_outlook_payload(conn, user_id: str) -> dict[str, Any]:
     location = await fetch_user_location_context(conn, user_id)
     local_rows: list[dict[str, Any]] = []
@@ -1954,6 +2005,12 @@ async def build_user_outlook_payload(conn, user_id: str) -> dict[str, Any]:
     merged_rows = merge_daily_forecast_inputs(local_rows, space_rows)
     pattern_rows = await fetch_best_pattern_rows(conn, user_id)
     gauges = await fetch_latest_gauges(conn, user_id)
+    daily_outlook = build_daily_outlook(
+        merged_rows,
+        pattern_rows=pattern_rows,
+        gauges=gauges,
+        days=7,
+    )
 
     next_24h = None
     if local_rows and space_rows:
@@ -2010,6 +2067,7 @@ async def build_user_outlook_payload(conn, user_id: str) -> dict[str, Any]:
     return {
         "generated_at": generated_at,
         "available_windows": available_windows,
+        "daily_outlook": daily_outlook,
         "forecast_data_ready": {
             "location_found": bool(location),
             "local_forecast_daily": bool(local_rows),

@@ -559,6 +559,7 @@ function gaia_app_notice_defaults() {
         'active' => false,
         'id' => '',
         'type' => 'info',
+        'placement' => 'top_banner',
         'title' => '',
         'message' => '',
         'link_label' => '',
@@ -587,6 +588,10 @@ function gaia_app_notice_sanitize($raw) {
     if (!in_array($type, ['info', 'update', 'warning'], true)) {
         $type = 'info';
     }
+    $placement = isset($raw['placement']) ? sanitize_key((string) $raw['placement']) : 'top_banner';
+    if (!in_array($placement, ['top_banner', 'guide_card', 'home_tip', 'all'], true)) {
+        $placement = 'top_banner';
+    }
 
     $title = isset($raw['title']) ? sanitize_text_field((string) $raw['title']) : '';
     $message = isset($raw['message']) ? trim(wp_strip_all_tags((string) $raw['message'])) : '';
@@ -600,6 +605,7 @@ function gaia_app_notice_sanitize($raw) {
         'active' => !empty($raw['active']),
         'id' => $id,
         'type' => $type,
+        'placement' => $placement,
         'title' => $title,
         'message' => $message,
         'link_label' => isset($raw['link_label']) ? sanitize_text_field((string) $raw['link_label']) : '',
@@ -655,6 +661,7 @@ function gaia_app_notice_public_payload($notice) {
     return [
         'id' => $id,
         'type' => isset($notice['type']) ? (string) $notice['type'] : 'info',
+        'placement' => isset($notice['placement']) ? (string) $notice['placement'] : 'top_banner',
         'title' => isset($notice['title']) ? (string) $notice['title'] : '',
         'message' => isset($notice['message']) ? (string) $notice['message'] : '',
         'link_label' => isset($notice['link_label']) ? (string) $notice['link_label'] : '',
@@ -683,7 +690,7 @@ function gaia_app_notice_render_admin_page() {
     ?>
     <div class="wrap">
         <h1>Gaia App Notice</h1>
-        <p>Create a short dismissible notice shown at the top of the iOS app on launch, foreground refresh, and pull-to-refresh.</p>
+        <p>Create short remote content for the iOS app. Use placement to choose whether it appears as the top banner, a Guide card, a Home tip, or all placements.</p>
         <?php if ($saved): ?>
             <div class="notice notice-success is-dismissible"><p>App notice saved.</p></div>
         <?php endif; ?>
@@ -714,6 +721,18 @@ function gaia_app_notice_render_admin_page() {
                             <option value="update" <?php selected($notice['type'], 'update'); ?>>Update available</option>
                             <option value="warning" <?php selected($notice['type'], 'warning'); ?>>Important</option>
                         </select>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="gaia-app-notice-placement">Placement</label></th>
+                    <td>
+                        <select id="gaia-app-notice-placement" name="gaia_app_notice[placement]">
+                            <option value="top_banner" <?php selected($notice['placement'], 'top_banner'); ?>>Top banner</option>
+                            <option value="guide_card" <?php selected($notice['placement'], 'guide_card'); ?>>Guide card</option>
+                            <option value="home_tip" <?php selected($notice['placement'], 'home_tip'); ?>>Home tip</option>
+                            <option value="all" <?php selected($notice['placement'], 'all'); ?>>All placements</option>
+                        </select>
+                        <p class="description">Home and Guide placements stay hidden in the app when this notice is inactive, empty, outside its schedule, or dismissed.</p>
                     </td>
                 </tr>
                 <tr>

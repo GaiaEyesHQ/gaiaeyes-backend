@@ -26,7 +26,7 @@ _PAIN_VALUES = {"none", "a_little", "noticeable", "strong"}
 _MOOD_VALUES = {"calm", "slightly_off", "noticeable", "strong"}
 _SLEEP_IMPACT_VALUES = {"yes_strongly", "yes_somewhat", "not_much", "unsure"}
 _PREDICTION_MATCH_VALUES = {"mostly_right", "partly_right", "not_really"}
-_EXPOSURE_VALUES = {"allergen_exposure", "overexertion"}
+_EXPOSURE_VALUES = set(feedback_db.DEFAULT_EXPOSURE_OPTIONS)
 
 
 def _require_user_id(request: Request) -> str:

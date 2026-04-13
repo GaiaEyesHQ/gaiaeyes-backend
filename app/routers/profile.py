@@ -9,10 +9,11 @@ from datetime import datetime, timezone
 from email.message import EmailMessage
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from psycopg import sql
 from psycopg.rows import dict_row
@@ -41,6 +42,7 @@ _NOTIFICATION_SENSITIVITIES = {"minimal", "normal", "detailed"}
 _FEEDBACK_CADENCES = {"minimal", "balanced", "detailed", "gentle", "frequent"}
 _SYMPTOM_FOLLOWUP_STATES = {"new", "ongoing", "improving", "worse"}
 _EXPERIENCE_MODES = {"scientific", "mystical"}
+_HOME_FEED_MODES = {"all", "scientific", "mystical"}
 _GUIDE_TYPES = {"cat", "robot", "dog"}
 _TONE_STYLES = {"straight", "balanced", "humorous"}
 _TEMP_UNITS = {"F", "C"}
@@ -487,6 +489,11 @@ class GuideSeenIn(BaseModel):
     viewed_at: Optional[datetime] = Field(default=None)
 
 
+class HomeFeedSeenIn(BaseModel):
+    item_id: str = Field(default="")
+    dismissed: bool = Field(default=False)
+
+
 class BugReportIn(BaseModel):
     description: str = Field(default="", max_length=4000)
     diagnostics_bundle: str = Field(default="", max_length=200000)
@@ -509,6 +516,11 @@ def _normalize_experience_mode(value: Optional[str], *, fallback: str) -> str:
     if candidate not in _EXPERIENCE_MODES:
         raise HTTPException(status_code=400, detail="invalid experience mode")
     return candidate
+
+
+def _normalize_home_feed_mode(value: Optional[str]) -> str:
+    candidate = str(value or "scientific").strip().lower() or "scientific"
+    return candidate if candidate in _HOME_FEED_MODES else "scientific"
 
 
 def _normalize_guide_type(value: Optional[str], *, fallback: str) -> str:
@@ -895,6 +907,38 @@ async def _fetch_profile_preferences(conn, user_id: str) -> Dict[str, Any]:
     }
 
 
+def _home_feed_row_to_payload(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not row:
+        return None
+    updated_at = row.get("updated_at")
+    return {
+        "id": str(row.get("id") or ""),
+        "slug": row.get("slug"),
+        "mode": row.get("mode"),
+        "kind": row.get("kind"),
+        "title": row.get("title"),
+        "body": row.get("body"),
+        "link_label": row.get("link_label"),
+        "link_url": row.get("link_url"),
+        "updated_at": (
+            updated_at.astimezone(timezone.utc).isoformat()
+            if isinstance(updated_at, datetime)
+            else None
+        ),
+    }
+
+
+async def _home_feed_tables_ready(conn) -> bool:
+    item_columns = set(await _table_columns(conn, "content", "home_feed_items"))
+    seen_columns = set(await _table_columns(conn, "content", "user_home_feed_seen"))
+    return {"id", "mode", "title", "body", "active"}.issubset(item_columns) and {
+        "user_id",
+        "item_id",
+        "seen_at",
+        "dismissed_at",
+    }.issubset(seen_columns)
+
+
 @router.get("/location", dependencies=[Depends(require_read_auth)])
 async def profile_location(request: Request, conn=Depends(get_db)):
     user_id = _require_user_id(request)
@@ -998,6 +1042,127 @@ async def profile_location_upsert(
 async def profile_preferences(request: Request, conn=Depends(get_db)):
     user_id = _require_user_id(request)
     return {"ok": True, "preferences": await _fetch_profile_preferences(conn, user_id)}
+
+
+@router.get("/home-feed", dependencies=[Depends(require_read_auth)])
+async def profile_home_feed(
+    request: Request,
+    mode: str = Query(default="scientific"),
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    normalized_mode = _normalize_home_feed_mode(mode)
+    if not await _home_feed_tables_ready(conn):
+        return {"ok": True, "item": None, "reason": "home_feed_unavailable"}
+
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select 1
+              from content.user_home_feed_seen
+             where user_id = %s
+               and seen_at::date = current_date
+             limit 1
+            """,
+            (user_id,),
+            prepare=False,
+        )
+        if await cur.fetchone():
+            return {"ok": True, "item": None, "reason": "seen_today"}
+
+        await cur.execute(
+            """
+            select id::text as id,
+                   slug,
+                   mode,
+                   kind,
+                   title,
+                   body,
+                   link_label,
+                   link_url,
+                   updated_at
+              from content.home_feed_items item
+             where item.active = true
+               and (item.mode = 'all' or item.mode = %s)
+               and (item.starts_at is null or item.starts_at <= now())
+               and (item.ends_at is null or item.ends_at >= now())
+               and not exists (
+                   select 1
+                     from content.user_home_feed_seen seen
+                    where seen.user_id = %s
+                      and seen.item_id = item.id
+               )
+             order by item.priority desc, item.created_at asc, item.slug asc
+             limit 1
+            """,
+            (normalized_mode, user_id),
+            prepare=False,
+        )
+        row = await cur.fetchone()
+
+    return {
+        "ok": True,
+        "item": _home_feed_row_to_payload(row),
+        "reason": None if row else "exhausted",
+    }
+
+
+@router.post("/home-feed/seen", dependencies=[Depends(require_write_auth)])
+async def profile_home_feed_seen(
+    payload: HomeFeedSeenIn,
+    request: Request,
+    conn=Depends(get_db),
+):
+    user_id = _require_user_id(request)
+    if not await _home_feed_tables_ready(conn):
+        return {"ok": True, "seen": False, "reason": "home_feed_unavailable"}
+    try:
+        item_id = str(UUID(str(payload.item_id or "").strip()))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid home feed item_id") from exc
+
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            insert into content.user_home_feed_seen (
+              user_id,
+              item_id,
+              seen_at,
+              dismissed_at
+            )
+            values (
+              %s,
+              %s::uuid,
+              now(),
+              case when %s then now() else null end
+            )
+            on conflict (user_id, item_id) do update
+            set seen_at = excluded.seen_at,
+                dismissed_at = case
+                  when %s then excluded.dismissed_at
+                  else content.user_home_feed_seen.dismissed_at
+                end
+            returning seen_at, dismissed_at
+            """,
+            (user_id, item_id, bool(payload.dismissed), bool(payload.dismissed)),
+            prepare=False,
+        )
+        row = await cur.fetchone() or {}
+    await conn.commit()
+
+    seen_at = row.get("seen_at")
+    dismissed_at = row.get("dismissed_at")
+    return {
+        "ok": True,
+        "seen": True,
+        "item_id": item_id,
+        "seen_at": seen_at.astimezone(timezone.utc).isoformat() if isinstance(seen_at, datetime) else None,
+        "dismissed_at": (
+            dismissed_at.astimezone(timezone.utc).isoformat()
+            if isinstance(dismissed_at, datetime)
+            else None
+        ),
+    }
 
 
 @router.get("/account/preflight", dependencies=[Depends(require_supabase_jwt)])

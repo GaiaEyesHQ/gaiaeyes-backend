@@ -125,6 +125,35 @@ OUTCOME_KIND = {
     "short_sleep_day": "biometric",
 }
 
+ILLNESS_EXPOSURE_KEYS = {
+    "temporary_illness",
+    "illness_respiratory",
+    "illness_gastrointestinal",
+    "illness_fever",
+    "illness_other",
+}
+
+OUTCOME_CONFOUNDER_FLAGS = {
+    "headache_day": {"temporary_illness_reported", "allergen_exposure_reported"},
+    "pain_flare_day": {"temporary_illness_reported", "overexertion_reported"},
+    "fatigue_day": {
+        "temporary_illness_reported",
+        "overexertion_reported",
+        "allergen_exposure_reported",
+    },
+    "focus_fog_day": {"temporary_illness_reported", "allergen_exposure_reported"},
+    "anxiety_day": {"temporary_illness_reported"},
+    "restlessness_day": {"temporary_illness_reported"},
+    "poor_sleep_day": {
+        "temporary_illness_reported",
+        "overexertion_reported",
+        "allergen_exposure_reported",
+    },
+    "hrv_dip_day": {"temporary_illness_reported", "overexertion_reported"},
+    "high_hr_day": {"temporary_illness_reported", "overexertion_reported"},
+    "short_sleep_day": {"temporary_illness_reported", "overexertion_reported"},
+}
+
 # Exposure rules are the explicit v1 thresholds from the task addendum.
 SIGNAL_DEFINITIONS = {
     "pressure_drop_exposed": {
@@ -802,6 +831,65 @@ def _fetch_base_daily_features(
     return _fetch_rows(conn, sql, params)
 
 
+def _fetch_daily_exposure_context(
+    conn: psycopg.Connection,
+    *,
+    since_day: date,
+    as_of_day: date,
+    user_id: str | None,
+) -> dict[tuple[str, date], dict[str, bool]]:
+    if not _table_exists(conn, "raw", "user_exposure_events"):
+        return {}
+
+    params: list[Any] = [
+        since_day - timedelta(days=2),
+        as_of_day + timedelta(days=2),
+    ]
+    where = [
+        "event_ts_utc >= %s",
+        "event_ts_utc < %s",
+        "exposure_key in ('overexertion', 'allergen_exposure', 'temporary_illness', 'illness_respiratory', 'illness_gastrointestinal', 'illness_fever', 'illness_other')",
+    ]
+    if user_id:
+        where.append("user_id = %s")
+        params.append(user_id)
+
+    sql = f"""
+        with normalized as (
+            select
+                user_id,
+                coalesce(
+                    nullif(substring(coalesce(note_text, '') from 'daily_check_in:([0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})'), '')::date,
+                    (event_ts_utc at time zone 'America/Chicago')::date
+                ) as day,
+                exposure_key
+              from raw.user_exposure_events
+             where {" and ".join(where)}
+        )
+        select
+            user_id,
+            day,
+            bool_or(exposure_key = 'overexertion') as overexertion_reported,
+            bool_or(exposure_key = 'allergen_exposure') as allergen_exposure_reported,
+            bool_or(exposure_key in ('temporary_illness', 'illness_respiratory', 'illness_gastrointestinal', 'illness_fever', 'illness_other')) as temporary_illness_reported
+          from normalized
+         where day >= %s
+           and day <= %s
+         group by user_id, day
+    """
+    params.extend([since_day, as_of_day])
+    rows = _fetch_rows(conn, sql, params)
+    return {
+        (str(row["user_id"]), row["day"]): {
+            "overexertion_reported": bool(row.get("overexertion_reported")),
+            "allergen_exposure_reported": bool(row.get("allergen_exposure_reported")),
+            "temporary_illness_reported": bool(row.get("temporary_illness_reported")),
+        }
+        for row in rows
+        if row.get("user_id") and isinstance(row.get("day"), date)
+    }
+
+
 def _fetch_gauges(
     conn: psycopg.Connection,
     *,
@@ -1266,8 +1354,10 @@ def build_user_daily_features(
     local_signals_daily: dict[tuple[str, date], dict[str, Any]],
     schumann_daily: dict[date, dict[str, Any]],
     updated_at: datetime,
+    exposure_context: dict[tuple[str, date], dict[str, bool]] | None = None,
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
+    exposure_context = exposure_context or {}
     for base in base_rows:
         raw_user_id = str(base.get("user_id") or "").strip()
         day_value = base.get("day")
@@ -1283,6 +1373,7 @@ def build_user_daily_features(
         zip_code = day_zip_map.get(key) or current_zip_map.get(raw_user_id)
         local_row = local_signals_daily.get((zip_code, day_value), {}) if zip_code else {}
         sch_row = schumann_daily.get(day_value, {})
+        exposure_row = exposure_context.get(key, {})
         lunar_context = moon_context_for_day(day_value)
 
         row = {
@@ -1363,6 +1454,9 @@ def build_user_daily_features(
             "restlessness_symptom_events": _safe_int(symptom_row.get("restlessness_symptom_events"), 0),
             "poor_sleep_symptom_events": _safe_int(symptom_row.get("poor_sleep_symptom_events"), 0),
             "focus_fog_symptom_events": _safe_int(symptom_row.get("focus_fog_symptom_events"), 0),
+            "overexertion_reported": bool(exposure_row.get("overexertion_reported", False)),
+            "allergen_exposure_reported": bool(exposure_row.get("allergen_exposure_reported", False)),
+            "temporary_illness_reported": bool(exposure_row.get("temporary_illness_reported", False)),
             "updated_at": updated_at,
         }
 
@@ -1502,6 +1596,13 @@ def build_user_daily_outcomes(
     return outcome_rows
 
 
+def _is_outcome_confounded(feature_row: dict[str, Any] | None, outcome_key: str) -> bool:
+    if not feature_row:
+        return False
+    flags = OUTCOME_CONFOUNDER_FLAGS.get(outcome_key) or set()
+    return any(bool(feature_row.get(flag)) for flag in flags)
+
+
 def build_associations(
     feature_rows: Sequence[dict[str, Any]],
     outcome_rows: Sequence[dict[str, Any]],
@@ -1547,6 +1648,8 @@ def build_associations(
                     target_day = source_day + timedelta(days=lag_offset)
                     outcome_row = outcome_map.get(target_day)
                     if not outcome_row:
+                        continue
+                    if _is_outcome_confounded(feature_map.get(target_day), outcome_key):
                         continue
 
                     outcome_value = outcome_row.get(outcome_key)
@@ -1938,6 +2041,12 @@ def _run_pattern_engine_once(
         gauge_deltas = _fetch_gauge_deltas(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
         symptom_rows = _fetch_symptom_rows(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
         camera_rows = _fetch_camera_rows(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
+        exposure_context = _fetch_daily_exposure_context(
+            conn,
+            since_day=since_day,
+            as_of_day=as_of_day,
+            user_id=user_id,
+        )
         tag_flags = _fetch_tag_flags(conn, user_ids=user_ids)
         day_zip_map = _fetch_day_zip_map(conn, since_day=since_day, as_of_day=as_of_day, user_id=user_id)
         current_zip_map = _fetch_current_zip_map(conn, user_ids=user_ids)
@@ -1955,11 +2064,12 @@ def _run_pattern_engine_once(
             base_rows=base_rows,
         )
         logger.info(
-            "[pattern_engine] fetched gauges=%d deltas=%d symptoms=%d camera=%d tag_users=%d day_zips=%d current_zips=%d scoped_zips=%d local_signals=%d schumann=%d",
+            "[pattern_engine] fetched gauges=%d deltas=%d symptoms=%d camera=%d exposure_context=%d tag_users=%d day_zips=%d current_zips=%d scoped_zips=%d local_signals=%d schumann=%d",
             len(gauges),
             len(gauge_deltas),
             len(symptom_rows),
             len(camera_rows),
+            len(exposure_context),
             len(tag_flags),
             len(day_zip_map),
             len(current_zip_map),
@@ -1980,6 +2090,7 @@ def _run_pattern_engine_once(
             local_signals_daily=local_signals_daily,
             schumann_daily=schumann_daily,
             updated_at=updated_at,
+            exposure_context=exposure_context,
         )
         outcome_rows = build_user_daily_outcomes(feature_rows, updated_at=updated_at)
         association_rows = build_associations(

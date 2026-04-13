@@ -26,6 +26,7 @@ struct GuideHubView: View {
     let bodyInfluences: [String]
     let whatMattersNow: [String]
     let whatMattersSummary: String?
+    let guideNotice: AppNotice?
     var initialFocus: GuideHubFocus = .overview
     let onRefreshDailyCheckIn: () -> Void
     let onOpenEarthScope: () -> Void
@@ -33,6 +34,8 @@ struct GuideHubView: View {
     let onOpenSettings: () -> Void
     let onOpenNotifications: () -> Void
     let onOpenAllDrivers: () -> Void
+    let onDismissGuideNotice: (AppNotice) -> Void
+    let onOpenNoticeURL: (URL) -> Void
     let onDailyCheckInStatusChanged: (DailyCheckInStatus) -> Void
 
     @State private var navigationPath: [GuideHubRoute] = []
@@ -450,6 +453,10 @@ struct GuideHubView: View {
             headerCard
                 .id(GuideHubFocus.overview)
 
+            if let guideNotice {
+                guideNoticeCard(guideNotice)
+            }
+
             earthscopeCard
                 .id(GuideHubFocus.earthScope)
 
@@ -521,6 +528,54 @@ struct GuideHubView: View {
             }
             }
         )
+    }
+
+    private func guideNoticeBadge(for type: String?) -> String {
+        switch type?.lowercased() {
+        case "warning":
+            return "Important"
+        case "update":
+            return "Update"
+        default:
+            return "New"
+        }
+    }
+
+    private func guideNoticeExpression(for type: String?) -> GuideExpression {
+        type?.lowercased() == "warning" ? .alert : .guide
+    }
+
+    private func guideNoticeCard(_ notice: AppNotice) -> some View {
+        let link = notice.link
+        let primaryAction: (() -> Void)? = link.map { url in
+            { onOpenNoticeURL(url) }
+        }
+
+        return GuideHubSectionCard(
+            guideType: profile.guideType,
+            expression: guideNoticeExpression(for: notice.type),
+            emphasis: .elevated,
+            eyebrow: "Gaia Eyes",
+            title: notice.trimmedTitle ?? "New note",
+            message: notice.trimmedMessage ?? "Tap through for the latest note from Gaia Eyes.",
+            badgeText: guideNoticeBadge(for: notice.type),
+            primaryActionTitle: link == nil ? nil : (notice.trimmedLinkLabel ?? "Open"),
+            primaryAction: primaryAction
+        )
+        .overlay(alignment: .topTrailing) {
+            Button {
+                onDismissGuideNotice(notice)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(style.secondaryText)
+                    .padding(8)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(8)
+            .accessibilityLabel("Dismiss guide note")
+        }
     }
 
     private var earthscopeCard: some View {
