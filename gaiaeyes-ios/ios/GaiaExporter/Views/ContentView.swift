@@ -12747,7 +12747,6 @@ struct ContentView: View {
         @ViewBuilder
         private func dailyOutlookRow(_ day: UserOutlookDay) -> some View {
             let drivers = visibleDrivers(day.topDrivers ?? [])
-            let primary = drivers.first
             let domains = day.likelyElevatedDomains ?? []
             let state = dailyState(day)
             let title = day.label?.nilIfTrimmedEmpty ?? dailyDateText(day.day) ?? "Day"
@@ -12782,21 +12781,21 @@ struct ContentView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                HStack(spacing: 8) {
-                    if let primary {
-                        LocalConditionsValueChip(
-                            label: "Driver",
-                            value: dailyDriverLabel(primary),
-                            tint: GaugePalette.zoneColor(primary.severity)
-                        )
+                if !drivers.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Signals in view")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.secondary)
+                        driverFactChips(Array(drivers.prefix(3)))
                     }
-                    if let domain = domains.first {
-                        LocalConditionsValueChip(
-                            label: "Likely",
-                            value: domain.label ?? domain.key.replacingOccurrences(of: "_", with: " ").capitalized,
-                            tint: GaugePalette.zoneColor(domain.likelihood)
-                        )
-                    }
+                }
+
+                if let domain = domains.first {
+                    LocalConditionsValueChip(
+                        label: "Likely",
+                        value: domain.label ?? domain.key.replacingOccurrences(of: "_", with: " ").capitalized,
+                        tint: GaugePalette.zoneColor(domain.likelihood)
+                    )
                 }
             }
             .padding(12)

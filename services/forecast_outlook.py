@@ -96,6 +96,7 @@ DRIVER_ORDER = {
     "flare": 11,
 }
 
+SPACE_DRIVER_KEYS = {"kp", "solar_wind", "cme", "flare", "radio", "radiation"}
 SEVERITY_RANK = {"high": 3, "watch": 2, "mild": 1, "low": 0}
 SEVERITY_WEIGHT = {"high": 1.8, "watch": 1.35, "mild": 0.9, "low": 0.0}
 
@@ -1952,6 +1953,71 @@ def _daily_outlook_label(day: date, index: int) -> str:
     return day.strftime("%a")
 
 
+def _driver_key(driver: Mapping[str, Any]) -> str:
+    return str(driver.get("key") or "").strip()
+
+
+def _driver_label(driver: Mapping[str, Any]) -> str:
+    key = _driver_key(driver)
+    return str(driver.get("label") or DRIVER_LABELS.get(key) or key.replace("_", " ").title()).strip()
+
+
+def _join_driver_labels(labels: Sequence[str]) -> str:
+    cleaned = [label for label in (str(item or "").strip() for item in labels) if label]
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return cleaned[0]
+    if len(cleaned) == 2:
+        return f"{cleaned[0]} and {cleaned[1]}"
+    return f"{', '.join(cleaned[:-1])}, and {cleaned[-1]}"
+
+
+def _balanced_daily_drivers(row: Mapping[str, Any], window_top_drivers: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    all_drivers = derive_forecast_drivers([row], window_hours=24)
+    selected = [dict(driver) for driver in window_top_drivers[:3] if _driver_key(driver)]
+    selected_keys = {_driver_key(driver) for driver in selected}
+
+    space_candidate = next(
+        (
+            dict(driver)
+            for driver in all_drivers
+            if _driver_key(driver) in SPACE_DRIVER_KEYS and _driver_key(driver) not in selected_keys
+        ),
+        None,
+    )
+    if space_candidate and not any(_driver_key(driver) in SPACE_DRIVER_KEYS for driver in selected):
+        if len(selected) >= 3:
+            selected[-1] = space_candidate
+        else:
+            selected.append(space_candidate)
+
+    balanced: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for driver in selected:
+        key = _driver_key(driver)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        balanced.append(driver)
+    return balanced[:3]
+
+
+def _daily_outlook_summary(window: Mapping[str, Any], top_drivers: Sequence[Mapping[str, Any]]) -> str | None:
+    labels = [_driver_label(driver) for driver in top_drivers[:3]]
+    joined = _join_driver_labels(labels)
+    if not joined:
+        return str(window.get("summary") or "").strip() or None
+    lead = f"{joined} are in view for this day." if len(labels) > 1 else f"{joined} is in view for this day."
+    domains = window.get("likely_elevated_domains") or []
+    top_domain = domains[0] if domains and isinstance(domains[0], Mapping) else None
+    if top_domain:
+        domain_label = str(top_domain.get("label") or top_domain.get("key") or "").strip()
+        if domain_label:
+            return f"{lead} {domain_label} may be easier to notice based on your pattern history."
+    return f"{lead} No stronger personal pattern stands out yet, but the signal mix is still worth watching."
+
+
 def build_daily_outlook(
     merged_rows: Sequence[Mapping[str, Any]],
     *,
@@ -1972,19 +2038,29 @@ def build_daily_outlook(
         )
         if not window:
             continue
-        top_drivers = window.get("top_drivers") or []
+        top_drivers = _balanced_daily_drivers(row, window.get("top_drivers") or [])
         likely_domains = window.get("likely_elevated_domains") or []
         primary = top_drivers[0] if top_drivers else None
+        summary = _daily_outlook_summary(window, top_drivers)
+        support_line = window.get("support_line")
+        voice_semantic = build_user_outlook_window_semantic(
+            day=day_value,
+            window_hours=24,
+            top_drivers=top_drivers,
+            likely_domains=likely_domains,
+            summary=summary or "",
+            support_line=str(support_line or ""),
+        ).to_dict()
         items.append(
             {
                 "day": day_value.isoformat(),
                 "label": _daily_outlook_label(day_value, index),
                 "likely_elevated_domains": likely_domains,
                 "top_drivers": top_drivers,
-                "summary": window.get("summary"),
-                "support_line": window.get("support_line"),
+                "summary": summary,
+                "support_line": support_line,
                 "primary_state": primary.get("severity") if isinstance(primary, Mapping) else None,
-                "voice_semantic": window.get("voice_semantic"),
+                "voice_semantic": voice_semantic,
             }
         )
     return items

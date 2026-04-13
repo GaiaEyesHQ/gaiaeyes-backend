@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+import jwt
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -158,6 +159,48 @@ async def test_profile_home_feed_hides_after_seen_today(client: AsyncClient, fak
     assert payload["item"] is None
     assert payload["reason"] == "seen_today"
     assert not any("from content.home_feed_items" in query for query, _ in fake_conn.queries)
+
+
+@pytest.mark.anyio
+async def test_profile_home_feed_public_read_keeps_authenticated_user(
+    client: AsyncClient,
+    fake_conn: FakeConn,
+    monkeypatch,
+):
+    from app import db
+    from app.security import auth as security_auth
+
+    user_id = uuid4()
+    item_id = uuid4()
+    fake_conn.item_row = {
+        "id": str(item_id),
+        "slug": "scientific-test",
+        "mode": "scientific",
+        "kind": "fact",
+        "title": "Context first",
+        "body": "A short test fact.",
+        "link_label": None,
+        "link_url": None,
+        "updated_at": datetime(2026, 4, 13, 11, 0, tzinfo=timezone.utc),
+    }
+    monkeypatch.setattr(security_auth, "PUBLIC_READ_ENABLED", True)
+    monkeypatch.setattr(security_auth, "PUBLIC_READ_PATHS", ["/v1/profile"])
+    monkeypatch.setattr(db.settings, "SUPABASE_JWT_SECRET", "test-secret")
+    token = jwt.encode({"sub": str(user_id)}, "test-secret", algorithm="HS256")
+
+    response = await client.get(
+        "/v1/profile/home-feed?mode=scientific",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["item"]["id"] == str(item_id)
+    seen_query = next(query for query in fake_conn.queries if "seen_at::date = current_date" in query[0])
+    item_query = next(query for query in fake_conn.queries if "from content.home_feed_items" in query[0])
+    assert seen_query[1][0] == str(user_id)
+    assert item_query[1][1] == str(user_id)
 
 
 @pytest.mark.anyio

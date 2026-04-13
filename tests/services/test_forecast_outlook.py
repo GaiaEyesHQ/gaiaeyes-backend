@@ -429,6 +429,37 @@ Outlook For March 23-29
         self.assertEqual(payload[1]["top_drivers"][0]["key"], "allergens")
         self.assertTrue(payload[0]["label"])
 
+    def test_build_daily_outlook_keeps_space_weather_visible_with_local_drivers(self) -> None:
+        merged_rows = [
+            {
+                "day": date(2026, 3, 19),
+                "pressure_delta_from_prior_day_hpa": 8.0,
+                "temp_delta_from_prior_day_c": 5.0,
+                "humidity_avg": 82.0,
+                "aqi_forecast": 88,
+                "pollen_overall_level": "high",
+                "pollen_overall_index": 4.0,
+                "pollen_primary_type": "tree",
+                "kp_max_forecast": 5.0,
+                "g_scale_max": "G1",
+                "cme_watch": True,
+                "geomagnetic_severity_bucket": "watch",
+            },
+        ]
+
+        payload = build_daily_outlook(
+            merged_rows,
+            pattern_rows=[],
+            gauges={},
+            days=7,
+        )
+
+        self.assertEqual(len(payload), 1)
+        keys = [driver["key"] for driver in payload[0]["top_drivers"]]
+        self.assertTrue(any(key in {"kp", "cme"} for key in keys))
+        self.assertIn("geomagnetic", payload[0]["summary"].lower())
+        self.assertIn("geomagnetic", payload[0]["voice_semantic"]["interpretation"]["header_summary"].lower())
+
     def test_build_window_outlook_keeps_domain_drivers_within_visible_driver_stack(self) -> None:
         merged_rows = [
             {

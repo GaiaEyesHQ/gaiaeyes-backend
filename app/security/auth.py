@@ -134,9 +134,13 @@ def _is_allowed_write(request: Request, token: Optional[str]) -> bool:
 
 
 async def require_read_auth(request: Request, authorization: Optional[str] = Header(None)):
-    if _is_public_read(request):
-        return
     token = _extract_bearer(authorization)
+    if _is_public_read(request):
+        # Public reads may still be user-scoped when a caller sends auth. Attach
+        # identity opportunistically so broad env allowlists do not strip context.
+        if token:
+            _is_allowed_read(request, token)
+        return
     if _is_allowed_read(request, token):
         return
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid Authorization header")
