@@ -1050,7 +1050,9 @@ async def profile_home_feed(
     mode: str = Query(default="scientific"),
     conn=Depends(get_db),
 ):
-    user_id = _require_user_id(request)
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     normalized_mode = _normalize_home_feed_mode(mode)
     if not await _home_feed_tables_ready(conn):
         return {"ok": True, "item": None, "reason": "home_feed_unavailable"}
@@ -1058,17 +1060,40 @@ async def profile_home_feed(
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
             """
-            select 1
-              from content.user_home_feed_seen
-             where user_id = %s
-               and seen_at::date = current_date
+            select item.id::text as id,
+                   item.slug,
+                   item.mode,
+                   item.kind,
+                   item.title,
+                   item.body,
+                   item.link_label,
+                   item.link_url,
+                   item.updated_at,
+                   seen.dismissed_at
+              from content.user_home_feed_seen seen
+              join content.home_feed_items item
+                on item.id = seen.item_id
+             where seen.user_id = %s
+               and seen.seen_at::date = current_date
+               and item.active = true
+               and (item.mode = 'all' or item.mode = %s)
+               and (item.starts_at is null or item.starts_at <= now())
+               and (item.ends_at is null or item.ends_at >= now())
+             order by seen.seen_at desc
              limit 1
             """,
-            (user_id,),
+            (user_id, normalized_mode),
             prepare=False,
         )
-        if await cur.fetchone():
-            return {"ok": True, "item": None, "reason": "seen_today"}
+        seen_today = await cur.fetchone()
+        if seen_today:
+            if seen_today.get("dismissed_at") is not None:
+                return {"ok": True, "item": None, "reason": "dismissed_today"}
+            return {
+                "ok": True,
+                "item": _home_feed_row_to_payload(seen_today),
+                "reason": "seen_today",
+            }
 
         await cur.execute(
             """

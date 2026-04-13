@@ -147,8 +147,50 @@ async def test_profile_home_feed_returns_unseen_mode_item(client: AsyncClient, f
 
 
 @pytest.mark.anyio
-async def test_profile_home_feed_hides_after_seen_today(client: AsyncClient, fake_conn: FakeConn):
-    fake_conn.seen_today_row = {"exists": 1}
+async def test_profile_home_feed_returns_seen_today_when_not_dismissed(client: AsyncClient, fake_conn: FakeConn):
+    item_id = uuid4()
+    fake_conn.seen_today_row = {
+        "id": str(item_id),
+        "slug": "scientific-seen-test",
+        "mode": "scientific",
+        "kind": "fact",
+        "title": "Already seen",
+        "body": "Keep showing this until it is dismissed.",
+        "link_label": None,
+        "link_url": None,
+        "updated_at": datetime(2026, 4, 13, 11, 0, tzinfo=timezone.utc),
+        "dismissed_at": None,
+    }
+    headers = {"Authorization": "Bearer test-token", "X-Dev-UserId": str(uuid4())}
+
+    response = await client.get("/v1/profile/home-feed?mode=scientific", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["item"]["id"] == str(item_id)
+    assert payload["item"]["title"] == "Already seen"
+    assert payload["reason"] == "seen_today"
+    assert not any(
+        "from content.home_feed_items item" in query and "not exists" in query
+        for query, _ in fake_conn.queries
+    )
+
+
+@pytest.mark.anyio
+async def test_profile_home_feed_hides_after_dismissed_today(client: AsyncClient, fake_conn: FakeConn):
+    fake_conn.seen_today_row = {
+        "id": str(uuid4()),
+        "slug": "scientific-dismissed-test",
+        "mode": "scientific",
+        "kind": "fact",
+        "title": "Dismissed",
+        "body": "This should stay hidden for today.",
+        "link_label": None,
+        "link_url": None,
+        "updated_at": datetime(2026, 4, 13, 11, 0, tzinfo=timezone.utc),
+        "dismissed_at": datetime(2026, 4, 13, 12, 0, tzinfo=timezone.utc),
+    }
     headers = {"Authorization": "Bearer test-token", "X-Dev-UserId": str(uuid4())}
 
     response = await client.get("/v1/profile/home-feed?mode=scientific", headers=headers)
@@ -157,8 +199,11 @@ async def test_profile_home_feed_hides_after_seen_today(client: AsyncClient, fak
     payload = response.json()
     assert payload["ok"] is True
     assert payload["item"] is None
-    assert payload["reason"] == "seen_today"
-    assert not any("from content.home_feed_items" in query for query, _ in fake_conn.queries)
+    assert payload["reason"] == "dismissed_today"
+    assert not any(
+        "from content.home_feed_items item" in query and "not exists" in query
+        for query, _ in fake_conn.queries
+    )
 
 
 @pytest.mark.anyio
@@ -201,6 +246,24 @@ async def test_profile_home_feed_public_read_keeps_authenticated_user(
     item_query = next(query for query in fake_conn.queries if "from content.home_feed_items" in query[0])
     assert seen_query[1][0] == str(user_id)
     assert item_query[1][1] == str(user_id)
+
+
+@pytest.mark.anyio
+async def test_profile_home_feed_public_read_without_user_is_unauthorized(
+    client: AsyncClient,
+    fake_conn: FakeConn,
+    monkeypatch,
+):
+    from app.security import auth as security_auth
+
+    monkeypatch.setattr(security_auth, "PUBLIC_READ_ENABLED", True)
+    monkeypatch.setattr(security_auth, "PUBLIC_READ_PATHS", ["/v1/profile"])
+
+    response = await client.get("/v1/profile/home-feed?mode=scientific")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Missing or invalid Authorization header"
+    assert fake_conn.queries == []
 
 
 @pytest.mark.anyio
