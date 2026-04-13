@@ -1020,7 +1020,8 @@ final class APIClient {
     private func refreshAuthorizationHeader(on request: inout URLRequest, force: Bool = false) async {
         let source = force ? forceBearerRefreshProvider : bearerProvider
         let dynamicBearer = (await source?())?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let activeBearer = dynamicBearer.isEmpty ? bearer : dynamicBearer
+        let usesDynamicBearer = bearerProvider != nil || forceBearerRefreshProvider != nil
+        let activeBearer = usesDynamicBearer ? dynamicBearer : bearer
         if activeBearer.isEmpty {
             request.setValue(nil, forHTTPHeaderField: "Authorization")
         } else {

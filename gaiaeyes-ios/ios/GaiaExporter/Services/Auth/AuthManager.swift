@@ -14,6 +14,9 @@ final class AuthManager: ObservableObject {
 
     private let keychain = KeychainStore(service: "com.gaiaeyes.supabase")
     private let config = SupabaseConfig.load()
+    private var tokenRefreshInFlight = false
+    private var tokenRefreshWaiters: [CheckedContinuation<Bool, Never>] = []
+    private var forcedRefreshBlockedUntil: Date?
 
     var isConfigured: Bool {
         config != nil
@@ -26,6 +29,8 @@ final class AuthManager: ObservableObject {
         supabaseEmail = keychain.read("email")
         if let exp = keychain.read("expires_at"), let ts = TimeInterval(exp) {
             supabaseExpiresAt = Date(timeIntervalSince1970: ts)
+        } else if let token = supabaseAccessToken {
+            supabaseExpiresAt = Self.jwtExpiration(from: token)
         }
         mirrorSessionToBackendDefaults(accessToken: supabaseAccessToken, userId: supabaseUserId)
 
@@ -322,23 +327,48 @@ final class AuthManager: ObservableObject {
     }
 
     private func refreshSessionIfNeeded() async {
-        await refreshSession(force: false)
+        _ = await refreshSessionCoalesced(force: false)
     }
 
     func forceRefreshAccessToken() async -> String? {
+        if let blockedUntil = forcedRefreshBlockedUntil, blockedUntil > Date() {
+            return nil
+        }
+
         if supabaseAccessToken == nil && supabaseRefreshToken == nil {
             loadFromKeychain()
         }
-        await refreshSession(force: true)
-        return supabaseAccessToken
+        let refreshed = await refreshSessionCoalesced(force: true)
+        return refreshed ? supabaseAccessToken : nil
     }
 
-    private func refreshSession(force: Bool) async {
-        guard let config else { return }
-        guard let refreshToken = supabaseRefreshToken else { return }
+    private func refreshSessionCoalesced(force: Bool) async -> Bool {
+        if tokenRefreshInFlight {
+            return await withCheckedContinuation { continuation in
+                tokenRefreshWaiters.append(continuation)
+            }
+        }
 
-        if !force, let exp = supabaseExpiresAt, exp.timeIntervalSinceNow > 300, supabaseAccessToken != nil {
-            return
+        tokenRefreshInFlight = true
+        let refreshed = await refreshSession(force: force)
+        let waiters = tokenRefreshWaiters
+        tokenRefreshWaiters.removeAll()
+        tokenRefreshInFlight = false
+        waiters.forEach { $0.resume(returning: refreshed) }
+        return refreshed
+    }
+
+    private func refreshSession(force: Bool) async -> Bool {
+        guard let config else { return isAccessTokenUsable(leeway: 0) }
+        guard let refreshToken = supabaseRefreshToken else {
+            if !isAccessTokenUsable(leeway: 0), supabaseAccessToken != nil {
+                invalidateSupabaseSession(reason: "Session expired. Please sign in again.", preserveEmail: true)
+            }
+            return isAccessTokenUsable(leeway: 0)
+        }
+
+        if !force, isAccessTokenUsable(leeway: 300) {
+            return true
         }
 
         var req = URLRequest(url: config.url.appendingPathComponent("auth/v1/token").appending(queryItems: ["grant_type": "refresh_token"]))
@@ -353,26 +383,37 @@ final class AuthManager: ObservableObject {
         do {
             let (data, resp) = try await URLSession.shared.data(for: req)
             guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                lastError = Self.extractMessage(from: data) ?? "Supabase refresh failed"
+                let message = Self.extractMessage(from: data) ?? "Supabase refresh failed"
+                lastError = message
                 if force {
-                    appLog("[AUTH] forced refresh failed: \(lastError ?? "unknown")")
+                    appLog("[AUTH] forced refresh failed: \(message)")
                 }
-                return
+                if Self.isFatalRefreshFailure(message) {
+                    forcedRefreshBlockedUntil = Date().addingTimeInterval(300)
+                    invalidateSupabaseSession(reason: "Session expired. Please sign in again.", preserveEmail: true)
+                } else if force {
+                    forcedRefreshBlockedUntil = Date().addingTimeInterval(30)
+                }
+                return false
             }
             let decoded = try JSONDecoder().decode(SupabaseSessionResponse.self, from: data)
             supabaseEmail = decoded.user?.email
             let expiresAt = Date().addingTimeInterval(TimeInterval(decoded.expiresIn))
+            forcedRefreshBlockedUntil = nil
             persistSession(
                 accessToken: decoded.accessToken,
                 refreshToken: decoded.refreshToken,
                 expiresAt: expiresAt,
                 userId: decoded.user?.id
             )
+            return true
         } catch {
             lastError = error.localizedDescription
             if force {
                 appLog("[AUTH] forced refresh error: \(error.localizedDescription)")
+                forcedRefreshBlockedUntil = Date().addingTimeInterval(15)
             }
+            return false
         }
     }
 
@@ -380,8 +421,10 @@ final class AuthManager: ObservableObject {
         if supabaseAccessToken == nil && supabaseRefreshToken == nil {
             loadFromKeychain()
         }
-        await refreshSessionIfNeeded()
-        return supabaseAccessToken
+        guard await refreshSessionCoalesced(force: false) else {
+            return nil
+        }
+        return isAccessTokenUsable(leeway: 0) ? supabaseAccessToken : nil
     }
 
     func currentSupabaseUserId() -> String? {
@@ -472,7 +515,59 @@ final class AuthManager: ObservableObject {
         return nil
     }
 
+    private static func isFatalRefreshFailure(_ message: String) -> Bool {
+        let lower = message.lowercased()
+        return lower.contains("invalid refresh token")
+            || lower.contains("refresh token not found")
+            || lower.contains("invalid grant")
+    }
+
+    private func isAccessTokenUsable(leeway: TimeInterval) -> Bool {
+        guard supabaseAccessToken?.isEmpty == false else { return false }
+        if supabaseExpiresAt == nil, let token = supabaseAccessToken {
+            supabaseExpiresAt = Self.jwtExpiration(from: token)
+        }
+        guard let supabaseExpiresAt else { return true }
+        return supabaseExpiresAt.timeIntervalSinceNow > leeway
+    }
+
+    private func invalidateSupabaseSession(reason: String, preserveEmail: Bool) {
+        let accessToken = supabaseAccessToken
+        let currentUserId = supabaseUserId
+        let email = supabaseEmail ?? keychain.read("email")
+        supabaseAccessToken = nil
+        supabaseRefreshToken = nil
+        supabaseUserId = nil
+        supabaseExpiresAt = nil
+        if preserveEmail {
+            supabaseEmail = email
+        } else {
+            supabaseEmail = nil
+        }
+        keychain.delete("access_token")
+        keychain.delete("refresh_token")
+        keychain.delete("user_id")
+        keychain.delete("expires_at")
+        if let email, preserveEmail {
+            keychain.write(email, key: "email")
+        } else {
+            keychain.delete("email")
+        }
+        clearMirroredBackendDefaults(accessToken: accessToken, userId: currentUserId)
+        lastError = reason
+        appLog("[AUTH] cleared invalid Supabase session: \(reason)")
+    }
+
     private static func jwtSubject(from token: String) -> String? {
+        jwtPayload(from: token)?["sub"] as? String
+    }
+
+    private static func jwtExpiration(from token: String) -> Date? {
+        guard let exp = jwtPayload(from: token)?["exp"] as? TimeInterval else { return nil }
+        return Date(timeIntervalSince1970: exp)
+    }
+
+    private static func jwtPayload(from token: String) -> [String: Any]? {
         let parts = token.split(separator: ".")
         guard parts.count >= 2 else { return nil }
         var payload = String(parts[1])
@@ -482,12 +577,10 @@ final class AuthManager: ObservableObject {
             payload.append("=")
         }
         guard let data = Data(base64Encoded: payload),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let sub = json["sub"] as? String,
-              !sub.isEmpty else {
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil
         }
-        return sub
+        return json
     }
 }
 
