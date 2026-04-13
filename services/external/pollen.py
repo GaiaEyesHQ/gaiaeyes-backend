@@ -35,9 +35,9 @@ LEVEL_RANK = {
 }
 
 STATE_LABELS = {
-    "low": "Quiet",
-    "moderate": "Moderate",
-    "high": "Elevated",
+    "low": "Low",
+    "moderate": "Elevated",
+    "high": "High",
     "very_high": "High",
 }
 

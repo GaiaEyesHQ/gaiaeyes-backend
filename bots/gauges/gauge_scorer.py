@@ -121,14 +121,14 @@ _SYMPTOM_CLUSTER_WEIGHTS: Dict[str, str] = {
 }
 
 _SYMPTOM_GAUGE_CAPS: Dict[str, float] = {
-    "pain": 24.0,
+    "pain": 36.0,
     "focus": 18.0,
     "heart": 18.0,
-    "stamina": 20.0,
-    "energy": 20.0,
+    "stamina": 30.0,
+    "energy": 32.0,
     "sleep": 19.0,
     "mood": 18.0,
-    "health_status": 22.0,
+    "health_status": 30.0,
 }
 _HEALTH_STATUS_SYMPTOM_WEIGHT = 0.6
 _HEALTH_STATUS_SYMPTOM_CAP = 12.0
@@ -278,9 +278,6 @@ def fetch_symptom_summary(user_id: str, day: date) -> Dict[str, Any]:
         except Exception:
             episode_rows = []
 
-    if episode_rows:
-        return _build_symptom_signal_summary(episode_rows)
-
     try:
         rows = pg.fetch(
             """
@@ -298,7 +295,7 @@ def fetch_symptom_summary(user_id: str, day: date) -> Dict[str, Any]:
     except Exception:
         rows = []
 
-    return _build_symptom_signal_summary(rows or [])
+    return _build_symptom_signal_summary([*(rows or []), *episode_rows])
 
 
 def _severity_points(value: Any) -> float:

@@ -82,6 +82,96 @@ final class AuthManager: ObservableObject {
         keychain.write(email, key: "email")
     }
 
+    func signInWithPassword(email rawEmail: String, password: String) async throws {
+        lastError = nil
+        guard let config else {
+            throw AuthError.missingConfig
+        }
+        let email = rawEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !email.isEmpty else {
+            throw AuthError.invalidEmail
+        }
+        guard !password.isEmpty else {
+            throw AuthError.invalidPassword
+        }
+
+        var req = URLRequest(url: config.url.appendingPathComponent("auth/v1/token").appending(queryItems: ["grant_type": "password"]))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue(config.anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(config.anonKey)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "email": email,
+            "password": password,
+        ])
+
+        let decoded = try await submitAuthRequest(req, fallbackMessage: "Supabase password sign-in failed")
+        guard let accessToken = decoded.accessToken,
+              let refreshToken = decoded.refreshToken,
+              let expiresIn = decoded.expiresIn else {
+            throw AuthError.unexpectedResponse
+        }
+        supabaseEmail = decoded.user?.email ?? email
+        keychain.write(supabaseEmail ?? email, key: "email")
+        persistSession(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            expiresAt: Date().addingTimeInterval(TimeInterval(expiresIn)),
+            userId: decoded.user?.id
+        )
+        appLog("[AUTH] password session established")
+    }
+
+    func createAccountWithPassword(email rawEmail: String, password: String) async throws -> Bool {
+        lastError = nil
+        guard let config else {
+            throw AuthError.missingConfig
+        }
+        let email = rawEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !email.isEmpty else {
+            throw AuthError.invalidEmail
+        }
+        guard password.count >= 8 else {
+            throw AuthError.weakPassword
+        }
+
+        var req = URLRequest(url: config.url.appendingPathComponent("auth/v1/signup"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue(config.anonKey, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(config.anonKey)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "email": email,
+            "password": password,
+            "data": [
+                "source": "gaiaeyes_ios",
+                "auth_mode": "password",
+            ],
+        ])
+
+        let decoded = try await submitAuthRequest(req, fallbackMessage: "Supabase account creation failed")
+        supabaseEmail = decoded.user?.email ?? email
+        keychain.write(supabaseEmail ?? email, key: "email")
+
+        guard let accessToken = decoded.accessToken,
+              let refreshToken = decoded.refreshToken,
+              let expiresIn = decoded.expiresIn else {
+            appLog("[AUTH] password account created; waiting for email verification")
+            return false
+        }
+
+        persistSession(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            expiresAt: Date().addingTimeInterval(TimeInterval(expiresIn)),
+            userId: decoded.user?.id
+        )
+        appLog("[AUTH] password account created and session established")
+        return true
+    }
+
     func signInAnonymously() async throws {
         lastError = nil
         guard let config else {
@@ -125,6 +215,19 @@ final class AuthManager: ObservableObject {
             userId: decoded.user?.id
         )
         appLog("[AUTH] anonymous session established")
+    }
+
+    private func submitAuthRequest(_ req: URLRequest, fallbackMessage: String) async throws -> SupabaseAuthResponse {
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse else {
+            throw AuthError.unexpectedResponse
+        }
+        appLog("[AUTH] auth response status=\(http.statusCode)")
+        guard (200...299).contains(http.statusCode) else {
+            let msg = Self.extractMessage(from: data) ?? fallbackMessage
+            throw AuthError.remote(msg)
+        }
+        return try JSONDecoder().decode(SupabaseAuthResponse.self, from: data)
     }
 
     func handleMagicLink(_ url: URL) async -> Bool {
@@ -373,6 +476,8 @@ final class AuthManager: ObservableObject {
 private enum AuthError: LocalizedError {
     case missingConfig
     case invalidEmail
+    case invalidPassword
+    case weakPassword
     case unexpectedResponse
     case remote(String)
 
@@ -382,6 +487,10 @@ private enum AuthError: LocalizedError {
             return "Supabase config missing from Info.plist."
         case .invalidEmail:
             return "Enter a valid email address."
+        case .invalidPassword:
+            return "Enter your password."
+        case .weakPassword:
+            return "Use a password with at least 8 characters."
         case .unexpectedResponse:
             return "Unexpected response from Supabase."
         case .remote(let msg):
@@ -395,6 +504,22 @@ private struct SupabaseSessionResponse: Decodable {
     let refreshToken: String
     let expiresIn: Int
     let tokenType: String
+    let user: SupabaseUser?
+
+    enum CodingKeys: String, CodingKey {
+        case accessToken = "access_token"
+        case refreshToken = "refresh_token"
+        case expiresIn = "expires_in"
+        case tokenType = "token_type"
+        case user
+    }
+}
+
+private struct SupabaseAuthResponse: Decodable {
+    let accessToken: String?
+    let refreshToken: String?
+    let expiresIn: Int?
+    let tokenType: String?
     let user: SupabaseUser?
 
     enum CodingKeys: String, CodingKey {

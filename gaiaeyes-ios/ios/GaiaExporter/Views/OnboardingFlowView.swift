@@ -235,6 +235,12 @@ struct OnboardingFlowView: View {
     let healthPermissionsMessage: String?
     let backfillMessage: String?
     let backfillInFlight: Bool
+    let accountEmail: String?
+    let accountMessage: String?
+    let accountBusy: Bool
+    let onContinueWithoutAccount: () async -> Bool
+    let onSignInAccount: (String, String) async -> Bool
+    let onCreateAccount: (String, String) async -> Bool
     let onPersistExperience: (UserExperienceProfileUpdate) async -> Void
     let onPersistTags: () async -> Void
     let onSaveLocation: () async -> Bool
@@ -244,6 +250,9 @@ struct OnboardingFlowView: View {
     let onFinish: () async -> Void
 
     @State private var healthPermissionGrantedThisSession = false
+    @State private var accountEmailInput: String = ""
+    @State private var accountPasswordInput: String = ""
+    @State private var accountCreateMode: Bool = false
 
     private var copy: OnboardingFlowCopy {
         OnboardingFlowCopy.resolve(mode: profile.mode, tone: profile.tone)
@@ -379,6 +388,8 @@ struct OnboardingFlowView: View {
         switch currentStep {
         case .welcome:
             welcomeStep
+        case .account:
+            accountStep
         case .mode:
             modeStep
         case .guide:
@@ -433,7 +444,7 @@ struct OnboardingFlowView: View {
                 .background(Color.white.opacity(0.06))
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 Button("Get Started") {
-                    currentStep = .mode
+                    currentStep = .account
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -452,6 +463,102 @@ struct OnboardingFlowView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var accountStep: some View {
+        onboardingCard {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Account access")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                Text("Use Gaia Eyes without an email, or sign in now if you already have an account.")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+
+                if let accountEmail, !accountEmail.isEmpty {
+                    Label("Signed in as \(accountEmail)", systemImage: "checkmark.seal.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color(red: 0.59, green: 0.86, blue: 0.62))
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.06))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(accountCreateMode ? "Create account" : "Sign in")
+                        .font(.headline)
+                    TextField("Email", text: $accountEmailInput)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .disableAutocorrection(true)
+                        .textFieldStyle(.roundedBorder)
+                    SecureField("Password", text: $accountPasswordInput)
+                        .textContentType(accountCreateMode ? .newPassword : .password)
+                        .textFieldStyle(.roundedBorder)
+
+                    Button(accountCreateMode ? "Create Account" : "Sign In") {
+                        Task {
+                            let ok = accountCreateMode
+                                ? await onCreateAccount(accountEmailInput, accountPasswordInput)
+                                : await onSignInAccount(accountEmailInput, accountPasswordInput)
+                            if ok {
+                                currentStep = .mode
+                            }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(accountBusy || accountEmailInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || accountPasswordInput.isEmpty)
+
+                    Button(accountCreateMode ? "Already have an account? Sign in" : "Create an account instead") {
+                        accountCreateMode.toggle()
+                    }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color(red: 0.51, green: 0.82, blue: 0.97))
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("No email required to start")
+                        .font(.headline)
+                    Text("Gaia can create an app-only account now. Add email later for website access, restore, exports, and cross-device sync.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                if let accountMessage, !accountMessage.isEmpty {
+                    Text(accountMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    Button("Back") {
+                        currentStep = .welcome
+                    }
+                    .buttonStyle(.bordered)
+
+                    Spacer()
+
+                    Button(accountBusy ? "Preparing..." : "Continue without account") {
+                        Task {
+                            if await onContinueWithoutAccount() {
+                                currentStep = .mode
+                            }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(accountBusy)
+                }
+            }
         }
     }
 
@@ -1198,12 +1305,10 @@ struct OnboardingFlowView: View {
                     }
                 }
 
-                if currentStep != .mode {
-                    Button("Back") {
-                        goBack()
-                    }
-                    .buttonStyle(.bordered)
+                Button("Back") {
+                    goBack()
                 }
+                .buttonStyle(.bordered)
             }
         }
     }

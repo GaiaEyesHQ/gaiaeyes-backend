@@ -175,7 +175,7 @@ struct GuideHubView: View {
 
     private var possibleSymptomsLead: String {
         if !symptomHighlights.isEmpty {
-            return "Based on the current signal mix, these may be easier to notice."
+            return "Based on the current signals:"
         }
         let summary = guideText(guideOverviewSummary)
         if !summary.isEmpty {
@@ -657,9 +657,6 @@ struct GuideHubView: View {
                     if !symptomHighlights.isEmpty {
                         guideBulletGrid(symptomHighlights)
                     }
-                    Text("\(profile.guideType.title) • \(profile.mode.title) • \(profile.tone.title)")
-                        .font(.caption)
-                        .foregroundStyle(headerStyle.tertiaryText)
                 }
             }
         }
@@ -689,9 +686,9 @@ struct GuideHubView: View {
             guideInfluenceBulletGrid(items)
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 7)
+        .padding(.vertical, 5)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(style.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(style.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func guideBulletGrid(_ items: [String]) -> some View {
@@ -737,8 +734,8 @@ struct GuideHubView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, minHeight: 32, alignment: .topLeading)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, minHeight: 28, alignment: .topLeading)
         .background(style.accent.opacity(0.13), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 

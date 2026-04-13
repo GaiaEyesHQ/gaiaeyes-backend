@@ -1556,13 +1556,7 @@ struct SchumannDashboardView: View {
             ]
         }
 
-        let background = ShareCardBackground(
-            style: .schumann,
-            candidateURLs: [
-                MediaPaths.sanitize("social/earthscope/latest/tomsk_latest.png"),
-                MediaPaths.sanitize("social/earthscope/latest/cumiana_latest.png"),
-            ].compactMap { $0 }
-        )
+        let background = ShareCardBackground(style: .schumann)
 
         return ShareDraftFactory.signalSnapshot(
             surface: "schumann_dashboard",

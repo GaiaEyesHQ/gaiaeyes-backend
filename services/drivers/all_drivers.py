@@ -11,7 +11,7 @@ except ModuleNotFoundError:  # pragma: no cover - local unit tests can run witho
 
 from bots.notifications.push_logic import flare_class_rank
 from bots.patterns.pattern_engine_job import OUTCOME_SYMPTOM_CODES
-from services.drivers.driver_normalize import normalize_environmental_drivers
+from services.drivers.driver_normalize import normalize_environmental_drivers, signal_bar_driver_candidates
 from services.patterns.personal_relevance import (
     compute_personal_relevance,
     fetch_best_pattern_rows,
@@ -19,6 +19,7 @@ from services.patterns.personal_relevance import (
     resolve_current_drivers,
 )
 from services.voice.drivers import build_driver_reason_semantic, render_driver_reason
+from services.signal_bar import build_signal_bar
 
 
 UTC = timezone.utc
@@ -361,6 +362,17 @@ def _allergen_severity(level: str | None, index_value: float | None) -> str:
     return "low"
 
 
+def _allergen_state_label(level: str | None, severity: str) -> str:
+    token = str(level or "").strip().lower()
+    if token in {"very_high", "high"} or severity == "high":
+        return "High"
+    if token == "moderate" or severity in {"watch", "mild"}:
+        return "Elevated"
+    if token == "low" or severity == "low":
+        return "Low"
+    return "Elevated"
+
+
 def _build_base_driver(
     *,
     key: str,
@@ -513,15 +525,15 @@ def _base_short_reason(key: str, value: float | None, local_payload: Mapping[str
         index_value = _safe_float(allergens.get("overall_index") or allergens.get("relevance_score"))
         level = str(allergens.get("overall_level") or "").strip().lower()
         primary_type = str(allergens.get("primary_type") or "").strip().lower()
-        level_label = pollen.STATE_LABELS.get(level, level.replace("_", " ").title() if level else "Elevated")
-        primary_label = pollen.TYPE_LABELS.get(primary_type) if primary_type else None
+        level_label = _allergen_state_label(level, _allergen_severity(level or None, index_value))
+        primary_label = str(allergens.get("primary_label") or "").strip() or (pollen.TYPE_LABELS.get(primary_type) if primary_type else None)
         reading = level_label if index_value is None else f"{level_label} ({index_value:.1f})"
-        short = "Allergen load is elevated in your area right now."
+        short = "Allergen load is part of the local context right now."
         if primary_label:
-            short = f"{primary_label} pollen is leading right now."
+            short = f"{primary_label} is the main pollen signal right now."
         active = f"Allergen load looks {level_label.lower()} right now."
         if primary_label:
-            active = f"{primary_label} pollen is the main local allergen signal right now."
+            active = f"{primary_label} is the main local allergen signal right now."
         return short, active, reading
     if canonical == "kp":
         reading = _reading_from_value(key, value, "Kp")
@@ -605,15 +617,15 @@ def _seed_allergen_driver(local_payload: Mapping[str, Any], *, generated_at: str
         return None
 
     severity = _allergen_severity(level, index_value)
-    state_key, state_label = _state_for_driver("allergens", level or severity, severity)
-    primary_label = pollen.TYPE_LABELS.get(primary_type) if primary_type else None
-    level_label = pollen.STATE_LABELS.get(level, level.replace("_", " ").title() if level else state_label)
+    state_label = _allergen_state_label(level, severity)
+    primary_label = str(allergens.get("primary_label") or "").strip() or (pollen.TYPE_LABELS.get(primary_type) if primary_type else None)
+    level_label = state_label
     reading = level_label if index_value is None else f"{level_label} ({index_value:.1f})"
-    short_reason = "Allergen load is elevated in your area right now."
+    short_reason = "Allergen load is part of the local context right now."
     active_now_text = f"Allergen load looks {level_label.lower()} right now."
     if primary_label:
-        short_reason = f"{primary_label} pollen is leading right now."
-        active_now_text = f"{primary_label} pollen is the main local allergen signal right now."
+        short_reason = f"{primary_label} is the main pollen signal right now."
+        active_now_text = f"{primary_label} is the main local allergen signal right now."
 
     return _build_base_driver(
         key="allergens",
@@ -827,7 +839,10 @@ def _seed_body_context_drivers(health_status_explainer: Mapping[str, Any] | None
         body_key = f"body_{source_key}"
         points = _safe_float(payload.get("points"))
         severity = _body_driver_severity(points)
-        state_key, state_label = _state_for_driver(body_key, payload.get("impact"), severity)
+        impact = payload.get("impact")
+        if str(impact or "").strip().lower() in {"quiet", "low"}:
+            impact = None
+        state_key, state_label = _state_for_driver(body_key, impact, severity)
         display = _clean_text(payload.get("display"))
         short_reason = f"{label} is adding more body context right now."
         active_now = f"{label} is part of your current body context."
@@ -1013,9 +1028,14 @@ def _seed_current_symptom_driver(
 ) -> Optional[Dict[str, Any]]:
     labels: list[str] = []
     seen: set[str] = set()
+    max_severity = 0.0
     for row in current_symptom_rows:
         if not isinstance(row, Mapping):
             continue
+        for severity_key in ("current_severity", "original_severity", "severity"):
+            value = _safe_float(row.get(severity_key))
+            if value is not None:
+                max_severity = max(max_severity, value)
         label = _clean_text(row.get("label")) or _symptom_label(str(row.get("symptom_code") or ""))
         normalized = label.lower()
         if not label or normalized in seen:
@@ -1027,10 +1047,23 @@ def _seed_current_symptom_driver(
         return None
 
     symptom_series, symptom_count = _natural_label_series(", ".join(labels[:3]))
-    severity = "high" if symptom_count >= 3 else "watch" if symptom_count == 2 else "mild"
+    severity = (
+        "high"
+        if max_severity >= 8 or symptom_count >= 3
+        else "watch"
+        if max_severity >= 5 or symptom_count == 2
+        else "mild"
+    )
     state = "Strong" if severity == "high" else "Watch" if severity == "watch" else "Active"
-    signal_strength = 0.9 if symptom_count >= 3 else 0.76 if symptom_count == 2 else 0.6
-    reading = f"{symptom_count} active" if symptom_count >= 2 else labels[0]
+    severity_strength = max(0.0, min(1.0, max_severity / 10.0))
+    count_strength = 0.9 if symptom_count >= 3 else 0.76 if symptom_count == 2 else 0.6
+    signal_strength = max(count_strength, min(0.96, 0.45 + severity_strength * 0.5))
+    if symptom_count == 1 and max_severity > 0:
+        reading = f"{labels[0]} • {max_severity:.0f}/10"
+    elif max_severity > 0:
+        reading = f"{symptom_count} active • peak {max_severity:.0f}/10"
+    else:
+        reading = f"{symptom_count} active" if symptom_count >= 2 else labels[0]
     short_reason = "Current symptoms are part of your body context right now."
     if symptom_series:
         verb = "is" if symptom_count == 1 else "are"
@@ -1043,7 +1076,7 @@ def _seed_current_symptom_driver(
         state=state,
         reading=reading,
         signal_strength=signal_strength,
-        force_visible=symptom_count >= 2,
+        force_visible=severity == "high" or symptom_count >= 2,
         show_driver=True,
         short_reason=short_reason,
         active_now_text=f"Current symptoms in the mix right now: {', '.join(labels[:3])}.",
@@ -1460,6 +1493,17 @@ async def build_all_drivers_payload(
         alerts_json=[],
         limit=12,
     )
+    signal_bar_payload = build_signal_bar(day=day, active_states=active_states, local_payload=local_payload)
+    existing_driver_keys = {
+        _canonical_key(str(item.get("driver_key") or item.get("key") or ""))
+        for item in environmental
+        if isinstance(item, Mapping)
+    }
+    for signal_driver in signal_bar_driver_candidates(signal_bar_payload):
+        key = _canonical_key(str(signal_driver.get("driver_key") or signal_driver.get("key") or ""))
+        if key and key not in existing_driver_keys:
+            environmental.append(signal_driver)
+            existing_driver_keys.add(key)
 
     user_tags_task = asyncio.create_task(asyncio.to_thread(fetch_user_tags, user_id))
     health_status_task = asyncio.create_task(asyncio.to_thread(fetch_health_status_context, user_id, day))

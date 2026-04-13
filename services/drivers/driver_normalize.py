@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 from services.external import pollen
 
@@ -497,3 +497,52 @@ def normalize_environmental_drivers(
             }
         )
     return out
+
+
+def signal_bar_driver_candidates(signal_bar: Mapping[str, Any] | None) -> List[Dict[str, Any]]:
+    """Promote active signal-bar-only readings into driver-shaped rows.
+
+    Schumann live amplitude is intentionally shown in the top signal bar even when
+    the daily variability trigger is not active. This keeps the drivers list and
+    Guide influences aligned with the same visible status.
+    """
+    if not isinstance(signal_bar, Mapping):
+        return []
+
+    key_map = {
+        "kp": "kp",
+        "solar_wind": "sw",
+        "schumann": "schumann",
+        "pressure": "pressure",
+    }
+    severity_map = {
+        "strong": "high",
+        "storm": "high",
+        "elevated": "watch",
+        "watch": "watch",
+        "active": "mild",
+    }
+    rows: List[Dict[str, Any]] = []
+    for item in signal_bar.get("items") or []:
+        if not isinstance(item, Mapping):
+            continue
+        bar_key = str(item.get("key") or "").strip().lower()
+        driver_key = key_map.get(bar_key)
+        if not driver_key:
+            continue
+        raw_state = str(item.get("state") or "").strip().lower()
+        severity = severity_map.get(raw_state)
+        if not severity:
+            continue
+        state = str(item.get("value") or item.get("state") or severity).strip() or severity
+        rows.append(
+            _candidate(
+                driver_key,
+                severity=severity,
+                state=state,
+                value=_safe_float(item.get("value")),
+                signal_strength=0.9 if severity == "high" else 0.76 if severity == "watch" else 0.55,
+                force_visible=severity == "high",
+            )
+        )
+    return rows

@@ -2,14 +2,18 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var auth: AuthManager
+    let onAuthenticated: (() -> Void)? = nil
+
     @State private var email: String = ""
-    @State private var sent: Bool = false
+    @State private var password: String = ""
+    @State private var isCreateMode: Bool = false
     @State private var isBusy: Bool = false
     @State private var errorMessage: String?
+    @State private var successMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sign in to continue")
+            Text(isCreateMode ? "Create account" : "Sign in to continue")
                 .font(.headline)
 
             TextField("Email", text: $email)
@@ -18,14 +22,27 @@ struct LoginView: View {
                 .disableAutocorrection(true)
                 .textFieldStyle(.roundedBorder)
 
-            Button("Send Magic Link") {
-                Task { await sendMagicLink() }
+            SecureField("Password", text: $password)
+                .textContentType(isCreateMode ? .newPassword : .password)
+                .textFieldStyle(.roundedBorder)
+
+            Button(isCreateMode ? "Create Account" : "Sign In") {
+                Task { await submit() }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(isBusy || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(isBusy || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty)
 
-            if sent {
-                Text("Open the magic link on this iPhone. It should return to the app automatically.")
+            Button(isCreateMode ? "Already have an account? Sign in" : "Create an account") {
+                isCreateMode.toggle()
+                errorMessage = nil
+                successMessage = nil
+            }
+            .font(.footnote.weight(.semibold))
+            .buttonStyle(.plain)
+            .foregroundColor(Color(red: 0.45, green: 0.72, blue: 1.0))
+
+            if let successMessage {
+                Text(successMessage)
                     .font(.footnote)
                     .foregroundColor(.secondary)
             }
@@ -38,15 +55,26 @@ struct LoginView: View {
         }
     }
 
-    private func sendMagicLink() async {
+    private func submit() async {
         errorMessage = nil
-        sent = false
+        successMessage = nil
         isBusy = true
         defer { isBusy = false }
 
         do {
-            try await auth.signInSupabase(email: email)
-            sent = true
+            if isCreateMode {
+                let signedIn = try await auth.createAccountWithPassword(email: email, password: password)
+                successMessage = signedIn
+                    ? "Account created."
+                    : "Check your email to verify the account, then sign in here."
+                if signedIn {
+                    onAuthenticated?()
+                }
+            } else {
+                try await auth.signInWithPassword(email: email, password: password)
+                successMessage = "Signed in."
+                onAuthenticated?()
+            }
         } catch {
             errorMessage = error.localizedDescription
         }

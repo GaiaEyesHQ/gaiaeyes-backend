@@ -24,6 +24,8 @@ enum ShareCaptionStyle: String, Codable, CaseIterable, Hashable, Identifiable {
 
     var id: String { rawValue }
 
+    static var availableCases: [ShareCaptionStyle] { [.balanced] }
+
     var title: String {
         switch self {
         case .scientific:

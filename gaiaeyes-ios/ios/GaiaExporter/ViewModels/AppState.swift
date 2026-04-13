@@ -245,6 +245,8 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         }
         // One-shot debug: log SpO₂ snapshot from /v1/diag/features on launch
         Task { [weak self] in
+            let token = await AuthManager.shared.validAccessToken()
+            guard !(token?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) else { return }
             await self?.debugLogFeaturesSpO2()
         }
     }

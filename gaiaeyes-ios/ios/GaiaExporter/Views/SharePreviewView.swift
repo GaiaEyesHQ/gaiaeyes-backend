@@ -158,12 +158,14 @@ struct SharePreviewView: View {
                 .font(.headline)
                 .foregroundColor(.white)
 
-            Picker("Style", selection: $selectedCaptionStyle) {
-                ForEach(ShareCaptionStyle.allCases) { style in
-                    Text(style.title).tag(style)
+            if ShareCaptionStyle.availableCases.count > 1 {
+                Picker("Style", selection: $selectedCaptionStyle) {
+                    ForEach(ShareCaptionStyle.availableCases) { style in
+                        Text(style.title).tag(style)
+                    }
                 }
+                .pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
 
             TextEditor(text: $editableCaption)
                 .frame(minHeight: 132)

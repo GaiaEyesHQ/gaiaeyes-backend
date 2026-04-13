@@ -1532,10 +1532,8 @@ private struct CurrentSymptomEditorSheet: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Button {
                             Task {
-                                let saved = await onSave(severityDraft, noteDraft.nilIfBlank)
-                                if saved {
-                                    dismiss()
-                                }
+                                dismiss()
+                                _ = await onSave(severityDraft, noteDraft.nilIfBlank)
                             }
                         } label: {
                             HStack {

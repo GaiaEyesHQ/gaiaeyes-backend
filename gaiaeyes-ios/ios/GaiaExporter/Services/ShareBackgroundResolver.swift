@@ -74,8 +74,6 @@ enum ShareBackgroundResolver {
         switch style {
         case .schumann:
             return [
-                MediaPaths.storageURL("social/earthscope/latest/tomsk_latest.png"),
-                MediaPaths.storageURL("social/earthscope/latest/cumiana_latest.png"),
                 MediaPaths.storageURL("social/earthscope/backgrounds/current_drivers.png"),
                 MediaPaths.captionImage(),
             ].compactMap { $0 }

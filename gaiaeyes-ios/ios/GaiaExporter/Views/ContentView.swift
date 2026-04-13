@@ -2960,6 +2960,8 @@ struct ContentView: View {
     @State private var backfillMessage: String?
     @State private var backfillInFlight: Bool = false
     @State private var backfillTask: Task<Void, Never>? = nil
+    @State private var onboardingAccountMessage: String?
+    @State private var onboardingAccountBusy: Bool = false
     @State private var onboardingResetInFlight: Bool = false
     @State private var onboardingResetMessage: String?
 #if canImport(CoreLocation)
@@ -5521,7 +5523,7 @@ struct ContentView: View {
         }
     }
 
-    private func fetchSpaceOutlook(days: Int = 3, force: Bool = false) async {
+    private func fetchSpaceOutlook(days: Int = 7, force: Bool = false) async {
         let normalizedDays = max(1, min(7, days))
         let shouldStart = await MainActor.run { () -> Bool in
             let availableDays = max(
@@ -5671,6 +5673,73 @@ struct ContentView: View {
             return true
         } catch {
             appLog("[AUTH] anonymous backend identity failed reason=\(reason): \(String(describing: error))")
+            return false
+        }
+    }
+
+    private func continueOnboardingWithoutAccount() async -> Bool {
+        await MainActor.run {
+            onboardingAccountBusy = true
+            onboardingAccountMessage = nil
+        }
+        let ok = await ensureBackendIdentity(reason: "onboarding continue without account")
+        await MainActor.run {
+            onboardingAccountBusy = false
+            onboardingAccountMessage = ok
+                ? "App-only account ready. You can add email later for website access."
+                : "Could not prepare the app account. Check connection and try again."
+        }
+        return ok
+    }
+
+    private func signInForOnboarding(email: String, password: String) async -> Bool {
+        await MainActor.run {
+            onboardingAccountBusy = true
+            onboardingAccountMessage = nil
+        }
+        do {
+            try await auth.signInWithPassword(email: email, password: password)
+            await MainActor.run {
+                handleAuthScopeChangeIfNeeded()
+                onboardingAccountBusy = false
+                onboardingAccountMessage = "Signed in."
+            }
+            await fetchProfileSettings()
+            return true
+        } catch {
+            await MainActor.run {
+                onboardingAccountBusy = false
+                onboardingAccountMessage = error.localizedDescription
+            }
+            return false
+        }
+    }
+
+    private func createAccountForOnboarding(email: String, password: String) async -> Bool {
+        await MainActor.run {
+            onboardingAccountBusy = true
+            onboardingAccountMessage = nil
+        }
+        do {
+            let signedIn = try await auth.createAccountWithPassword(email: email, password: password)
+            await MainActor.run {
+                if signedIn {
+                    handleAuthScopeChangeIfNeeded()
+                    onboardingAccountMessage = "Account created."
+                } else {
+                    onboardingAccountMessage = "Check your email to verify the account, then sign in here."
+                }
+                onboardingAccountBusy = false
+            }
+            if signedIn {
+                await fetchProfileSettings()
+            }
+            return signedIn
+        } catch {
+            await MainActor.run {
+                onboardingAccountBusy = false
+                onboardingAccountMessage = error.localizedDescription
+            }
             return false
         }
     }
@@ -8335,7 +8404,7 @@ struct ContentView: View {
         let shouldFetchQuakes = await MainActor.run { quakeLatest == nil && quakeEvents.isEmpty && !quakeLoading }
         async let featuresTask: Void = fetchFeaturesToday(trigger: trigger, bypassGuard: trigger == .refresh)
         async let forecastTask: Void = fetchForecastSummary(force: trigger == .refresh)
-        async let outlookTask: Void = fetchSpaceOutlook(days: 3, force: trigger == .refresh)
+        async let outlookTask: Void = fetchSpaceOutlook(days: 7, force: trigger == .refresh)
         async let userOutlookTask: Void = fetchUserOutlook()
         async let symptomsTask: Void = fetchSymptoms(api: api)
         async let currentSymptomsTask: Void = fetchCurrentSymptomsSummary(api: api)
@@ -15678,7 +15747,7 @@ struct ContentView: View {
     ) -> String? {
         let phrases = guidePossibleSymptomPhrases(dashboard: dashboard, lunarInsights: lunarInsights)
         guard !phrases.isEmpty else { return nil }
-        return "Possible symptoms right now: \(guideHumanList(Array(phrases.prefix(4)))) may be easier to notice."
+        return "Based on the current signals:"
     }
 
     private func guideInfluenceBuckets(
@@ -17713,6 +17782,18 @@ struct ContentView: View {
                 healthPermissionsMessage: healthPermissionsMessage,
                 backfillMessage: backfillMessage,
                 backfillInFlight: backfillInFlight,
+                accountEmail: auth.supabaseEmail,
+                accountMessage: onboardingAccountMessage,
+                accountBusy: onboardingAccountBusy,
+                onContinueWithoutAccount: {
+                    await continueOnboardingWithoutAccount()
+                },
+                onSignInAccount: { email, password in
+                    await signInForOnboarding(email: email, password: password)
+                },
+                onCreateAccount: { email, password in
+                    await createAccountForOnboarding(email: email, password: password)
+                },
                 onPersistExperience: { update in
                     await saveProfilePreferences(update)
                 },
@@ -19936,17 +20017,24 @@ struct ContentView: View {
 
         static func formatAllergenState(_ raw: String?, fallbackLabel: String? = nil) -> String {
             if let fallbackLabel, !fallbackLabel.isEmpty {
-                return fallbackLabel
+                switch fallbackLabel.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+                case "quiet", "calm", "low":
+                    return "Low"
+                case "moderate", "elevated":
+                    return "Elevated"
+                case "high", "very high", "very_high":
+                    return "High"
+                default:
+                    return fallbackLabel
+                }
             }
             switch (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-            case "very_high":
+            case "very_high", "high":
                 return "High"
-            case "high":
-                return "Elevated"
             case "moderate":
-                return "Moderate"
+                return "Elevated"
             case "low":
-                return "Calm"
+                return "Low"
             default:
                 return "—"
             }
@@ -20495,12 +20583,10 @@ struct ContentView: View {
             let rawState = allergens?.overallLevel ?? allergens?.state
             let severity: String
             switch (rawState ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-            case "very_high":
+            case "very_high", "high":
                 severity = "high"
-            case "high":
-                severity = "elevated"
             case "moderate":
-                severity = "mild"
+                severity = "elevated"
             default:
                 severity = "low"
             }

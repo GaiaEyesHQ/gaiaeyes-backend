@@ -42,6 +42,7 @@ from services.patterns.personal_relevance import (
     fetch_recent_outcome_summary,
 )
 from services.personalization.health_context import build_personalization_profile
+from services.drivers.driver_normalize import signal_bar_driver_candidates
 from services.signal_bar import build_signal_bar
 
 
@@ -154,6 +155,25 @@ def _apply_recent_symptom_meta_overrides(
         if boost >= 9.0:
             meta["label"] = "Watchful"
             out[gauge_key] = meta
+    return out
+
+
+def _apply_recent_symptom_gauge_floors(
+    gauges: Dict[str, Any],
+    recent_boosts: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(gauges, dict) or not isinstance(recent_boosts, dict):
+        return gauges
+
+    out = dict(gauges)
+    for gauge_key, raw_boost in recent_boosts.items():
+        boost = _safe_float(raw_boost)
+        current = _safe_float(out.get(gauge_key))
+        if boost is None or current is None or boost <= 0:
+            continue
+        floor = 60.0 if boost >= 12.0 else 50.0 if boost >= 9.0 else 42.0 if boost >= 6.0 else None
+        if floor is not None and current < floor:
+            out[gauge_key] = round(floor, 2)
     return out
 
 
@@ -712,6 +732,21 @@ async def dashboard(
         alerts_json=out.get("alerts"),
         limit=6,
     )
+    signal_bar_payload = build_signal_bar(
+        day=day,
+        active_states=active_states,
+        local_payload=local_payload,
+    )
+    existing_driver_keys = {
+        str(item.get("key") or "").strip().lower()
+        for item in drivers
+        if isinstance(item, dict)
+    }
+    for signal_driver in signal_bar_driver_candidates(signal_bar_payload):
+        key = str(signal_driver.get("key") or "").strip().lower()
+        if key and key not in existing_driver_keys:
+            drivers.append(signal_driver)
+            existing_driver_keys.add(key)
     profile = build_personalization_profile(user_tags)
     exposure_summary = await asyncio.to_thread(fetch_exposure_summary, user_id, day, profile=profile)
     exposure_summary = exposure_summary if isinstance(exposure_summary, dict) else {}
@@ -726,11 +761,7 @@ async def dashboard(
     )
     ranked_drivers = personal_relevance.get("ranked_drivers") or ranked_input_drivers
     out["drivers"] = ranked_drivers
-    out["signal_bar"] = build_signal_bar(
-        day=day,
-        active_states=active_states,
-        local_payload=local_payload,
-    )
+    out["signal_bar"] = signal_bar_payload
     out["drivers_compact"] = personal_relevance.get("compact_driver_lines") or [
         str(item.get("display") or "").strip()
         for item in ranked_drivers
@@ -750,10 +781,14 @@ async def dashboard(
     out["last_symptom_update_at"] = symptom_gauge_context.get("last_symptom_update_at")
     out["recent_exposures"] = exposure_summary.get("top_exposures") or []
     out["last_exposure_at"] = exposure_summary.get("last_exposure_at")
+    recent_boosts = out.get("gauge_recent_log_boosts") or {}
+    if isinstance(out.get("gauges"), dict):
+        out["gauges"] = _apply_recent_symptom_gauge_floors(out["gauges"], recent_boosts)
+        out["gauges_meta"] = _decorate_gauges(out["gauges"], definition)
     if isinstance(out.get("gauges_meta"), dict):
         out["gauges_meta"] = _apply_recent_symptom_meta_overrides(
             out["gauges_meta"],
-            out.get("gauge_recent_log_boosts") or {},
+            recent_boosts,
         )
 
     gauges_payload = out.get("gauges") if isinstance(out.get("gauges"), dict) else {}

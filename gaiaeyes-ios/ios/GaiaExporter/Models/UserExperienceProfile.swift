@@ -170,6 +170,7 @@ enum FavoriteSymptomPreference {
 
 enum OnboardingStep: String, CaseIterable, Codable, Identifiable {
     case welcome
+    case account
     case mode
     case guide
     case tone
@@ -186,6 +187,7 @@ enum OnboardingStep: String, CaseIterable, Codable, Identifiable {
 
     static let ordered: [OnboardingStep] = [
         .welcome,
+        .account,
         .mode,
         .guide,
         .tone,

@@ -60,6 +60,7 @@ _MAX_FAVORITE_SYMPTOM_CODES = 6
 _ACCOUNT_DELETE_SCHEMAS = ["raw", "app", "content", "marts", "gaia"]
 _ONBOARDING_STEPS = {
     "welcome",
+    "account",
     "mode",
     "guide",
     "tone",
