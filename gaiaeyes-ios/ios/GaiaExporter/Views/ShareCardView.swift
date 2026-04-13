@@ -41,12 +41,7 @@ struct ShareCardView: View {
                 endPoint: .bottom
             )
 
-            VStack(alignment: .leading, spacing: 14) {
-                topBar
-                Spacer(minLength: 0)
-                contentBlock
-                footerBlock
-            }
+            contentStack
             .padding(padding)
         }
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
@@ -55,6 +50,24 @@ struct ShareCardView: View {
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
         .background(Color.black)
+    }
+
+    private var contentStack: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            topBar
+
+            if model.layout == .personalPattern {
+                Spacer(minLength: 28)
+                    .frame(maxHeight: 54)
+                contentBlock
+                Spacer(minLength: 10)
+            } else {
+                Spacer(minLength: 0)
+                contentBlock
+            }
+
+            footerBlock
+        }
     }
 
     private var topBar: some View {
@@ -168,7 +181,7 @@ struct ShareCardView: View {
                 .minimumScaleFactor(0.76)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if let primaryText = model.primaryText?.trimmingCharacters(in: .whitespacesAndNewlines), !primaryText.isEmpty {
+            if let primaryText = minimalPrimaryText {
                 Text(primaryText.uppercased())
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(.white.opacity(0.68))
@@ -273,6 +286,23 @@ struct ShareCardView: View {
             return subtitle
         }
         return nil
+    }
+
+    private var minimalPrimaryText: String? {
+        guard let primaryText = model.primaryText?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !primaryText.isEmpty else {
+            return nil
+        }
+        guard let eyebrow = model.eyebrow?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !eyebrow.isEmpty else {
+            return primaryText
+        }
+        return normalized(primaryText) == normalized(eyebrow) ? nil : primaryText
+    }
+
+    private func normalized(_ raw: String) -> String {
+        raw.lowercased()
+            .filter { $0.isLetter || $0.isNumber }
     }
 }
 

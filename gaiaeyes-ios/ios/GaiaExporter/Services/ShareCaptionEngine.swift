@@ -77,7 +77,6 @@ enum ShareCaptionEngine {
                 hook,
                 insight,
                 bullets.first ?? "It keeps showing up in the same direction",
-                mode == .mystical ? "Treat it as a clue, not a sentence" : "Treat it as a clue, not a guarantee",
             ], cta: patternCTA(style: .balanced, mode: mode)),
             humorous: paragraphCaption([
                 hook,

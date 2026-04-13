@@ -3,8 +3,8 @@ import UIKit
 
 enum ShareBackgroundResolver {
     private static let cache = NSCache<NSURL, UIImage>()
-    private static let themedCandidateLimit = 18
-    private static let candidateTimeout: TimeInterval = 1.2
+    private static let themedCandidateLimit = 12
+    private static let candidateTimeout: TimeInterval = 0.75
 
     static func loadImage(for background: ShareCardBackground) async -> UIImage? {
         for url in candidateURLs(for: background) {

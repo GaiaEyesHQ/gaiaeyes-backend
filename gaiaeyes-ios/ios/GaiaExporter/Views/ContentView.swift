@@ -2899,6 +2899,7 @@ struct ContentView: View {
 
     @State private var pendingRefreshTask: Task<Void, Never>? = nil
     @State private var pendingDashboardRefreshTask: Task<Void, Never>? = nil
+    @State private var postAuthBootstrapTask: Task<Void, Never>? = nil
     @State private var pendingRefreshToken: UInt64 = 0
 
     @State private var features: FeaturesToday? = nil
@@ -3067,19 +3068,27 @@ struct ContentView: View {
 
         guard lastAuthUserScope != nextScope else { return }
         let previousScope = lastAuthUserScope
-        clearUserScopedRuntimeState()
+        let isSignedInScope = nextScope != "signed_out"
+        clearUserScopedRuntimeState(resetOnboarding: false)
         lastAuthUserScope = nextScope
         let previousLabel = previousScope.isEmpty ? "unset" : String(previousScope.prefix(8))
         let nextLabel = String(nextScope.prefix(8))
         appLog("[AUTH] account scope changed \(previousLabel) → \(nextLabel); cleared user-scoped caches")
+        if isSignedInScope {
+            schedulePostAuthBootstrap(for: nextScope)
+        }
     }
 
     @MainActor
-    private func clearUserScopedRuntimeState() {
+    private func clearUserScopedRuntimeState(resetOnboarding: Bool = true) {
         pendingDashboardRefreshTask?.cancel()
         pendingDashboardRefreshTask = nil
         pendingRefreshTask?.cancel()
         pendingRefreshTask = nil
+        postAuthBootstrapTask?.cancel()
+        postAuthBootstrapTask = nil
+        let preservedOnboardingCompleted = onboardingCompleted
+        let preservedOnboardingStep = OnboardingStep(rawValue: onboardingStepRaw) ?? .welcome
 
         dashboardPayloadCacheJSON = ""
         dashboardPayload = nil
@@ -3137,11 +3146,17 @@ struct ContentView: View {
         profileUseGPS = false
         profileLocationMessage = nil
 
-        onboardingCompleted = false
-        onboardingStepRaw = OnboardingStep.welcome.rawValue
-        showOnboardingFlow = true
         experienceProfile = .default
-        guideProfileStore.sync(from: .default)
+        if resetOnboarding {
+            onboardingCompleted = false
+            onboardingStepRaw = OnboardingStep.welcome.rawValue
+            showOnboardingFlow = true
+        } else {
+            experienceProfile.onboardingCompleted = preservedOnboardingCompleted
+            experienceProfile.onboardingStep = preservedOnboardingStep
+            showOnboardingFlow = !preservedOnboardingCompleted
+        }
+        guideProfileStore.sync(from: experienceProfile)
         selectedTagKeys = []
         tagSaveMessage = nil
         notificationPreferences = PushNotificationService.currentPreferencesDefault()
@@ -3160,6 +3175,50 @@ struct ContentView: View {
             await SymptomLogQueue.shared.clear()
             await state.refreshSymptomQueueCount()
         }
+    }
+
+    @MainActor
+    private func schedulePostAuthBootstrap(for expectedScope: String) {
+        postAuthBootstrapTask?.cancel()
+        postAuthBootstrapTask = Task {
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            await refreshAfterAuthScopeChange(expectedScope: expectedScope)
+            await MainActor.run {
+                if normalizedAuthScope(auth.currentSupabaseUserId()) == expectedScope {
+                    postAuthBootstrapTask = nil
+                }
+            }
+        }
+    }
+
+    private func refreshAfterAuthScopeChange(expectedScope: String) async {
+        let identityReady = await ensureBackendIdentity(reason: "auth scope changed")
+        let currentScope = await MainActor.run {
+            normalizedAuthScope(auth.currentSupabaseUserId())
+        }
+        guard identityReady, currentScope == expectedScope else { return }
+        appLog("[UI] post-auth refresh started scope=\(String(expectedScope.prefix(8)))")
+
+        await state.updateBackendDBFlag()
+        let api = state.apiWithAuth()
+        AppAnalytics.configure { events in
+            _ = try await api.postAnalyticsEvents(events)
+        }
+
+        async let dashboardTask: Void = fetchDashboardPayload(force: true)
+        async let featuresTask: Void = fetchFeaturesToday(trigger: .initial, bypassGuard: true)
+        async let profileTask: Void = fetchProfileSettings()
+        async let notificationTask: Void = fetchNotificationPreferences()
+        async let currentSymptomsTask: Void = fetchCurrentSymptomsSummary(api: api)
+        async let dailyCheckInTask: Void = fetchDailyCheckInStatus(api: api)
+        async let driversTask: Void = fetchMissionDriversPreview(api: api, force: true)
+        async let presetsTask: Void = refreshSymptomPresets(api: api)
+        async let cameraTask: Void = fetchLatestCameraCheck()
+        _ = await (dashboardTask, featuresTask, profileTask)
+        _ = await (notificationTask, currentSymptomsTask, dailyCheckInTask)
+        _ = await (driversTask, presetsTask, cameraTask)
+        appLog("[UI] post-auth refresh complete scope=\(String(expectedScope.prefix(8)))")
     }
 
     @State private var magnetosphere: MagnetosphereData? = nil
@@ -12520,6 +12579,9 @@ struct ContentView: View {
         }
 
         private func iconName(for signalKey: String) -> String {
+            if signalKey.lowercased().contains("lunar") || signalKey.lowercased().contains("moon") {
+                return "moon.stars.fill"
+            }
             switch signalKey {
             case "pressure_swing_exposed":
                 return "gauge.with.dots.needle.bottom.50percent"
@@ -12566,6 +12628,10 @@ struct ContentView: View {
         }
 
         private func shareBackground(for signalKey: String) -> ShareCardBackground {
+            let key = signalKey.lowercased()
+            if key.contains("lunar") || key.contains("moon") {
+                return ShareCardBackground(style: .abstract, themeKeys: ["lunar", "moon", "full_moon", "new_moon"])
+            }
             switch signalKey {
             case "schumann_exposed":
                 return ShareCardBackground(style: .schumann)
@@ -12592,6 +12658,58 @@ struct ContentView: View {
                 background: shareBackground(for: card.signalKey),
                 updatedAt: displayDate(payload?.generatedAt),
                 promptText: sharePrompt(for: card)
+            )
+        }
+
+        private func lunarShareAccent(_ strength: String?) -> ShareAccentLevel {
+            switch (strength ?? "").lowercased() {
+            case "moderate":
+                return .watch
+            case "weak":
+                return .calm
+            default:
+                return lunarSensitivityDeclared ? .watch : .calm
+            }
+        }
+
+        private func lunarShareDraft() -> ShareDraft? {
+            guard let lunarInsights else { return nil }
+            let rawWindow = lunarInsights.highlightWindow?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            let window = (rawWindow?.isEmpty == false ? rawWindow! : "lunar")
+            let metric = lunarInsights.highlightMetric?
+                .replacingOccurrences(of: "_", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let metricText = metric?.isEmpty == false ? metric! : "your pattern"
+            let windowLabel: String
+            if window == "full" || window == "new" {
+                windowLabel = "\(window.capitalized) moon window"
+            } else {
+                windowLabel = "Lunar window"
+            }
+            let analyticsKey = window == "full" || window == "new"
+                ? "lunar_\(window)_window_exposed"
+                : "lunar_window_exposed"
+            let themeKeys = window == "full"
+                ? ["lunar", "moon", "full_moon"]
+                : window == "new"
+                    ? ["lunar", "moon", "new_moon"]
+                    : ["lunar", "moon"]
+            let observed = lunarInsights.observedDays ?? lunarInsights.nNights
+            return ShareDraftFactory.personalPattern(
+                surface: "your_patterns",
+                analyticsKey: analyticsKey,
+                mode: experienceMode,
+                relationship: "\(windowLabel) → \(metricText) (for you)",
+                explanation: lunarInsightMessage ?? lunarWindowLine ?? "Lunar windows compared with your own history.",
+                evidenceCount: (observed ?? 0) > 0 ? observed : nil,
+                lagText: nil,
+                confidence: lunarInsights.patternStrength,
+                accent: lunarShareAccent(lunarInsights.patternStrength),
+                background: ShareCardBackground(style: .abstract, themeKeys: themeKeys),
+                updatedAt: displayDate(payload?.generatedAt),
+                promptText: "Share"
             )
         }
 
@@ -12723,7 +12841,16 @@ struct ContentView: View {
 
                         Spacer(minLength: 8)
 
-                        StatusPill(lunarStrengthLabel, severity: lunarStrengthSeverity)
+                        VStack(alignment: .trailing, spacing: 8) {
+                            StatusPill(lunarStrengthLabel, severity: lunarStrengthSeverity)
+                            if let draft = lunarShareDraft(), !lunarInsightsLoading {
+                                Button("Share") {
+                                    shareDraft = draft
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                        }
                     }
 
                     if lunarInsightsLoading && lunarInsights == nil {

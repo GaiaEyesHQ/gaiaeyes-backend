@@ -104,14 +104,7 @@ enum ShareDraftFactory {
         promptText: String? = nil
     ) -> ShareDraft {
         let hook = ShareHookBank.hook(for: .pattern, mode: mode)
-        let cleanedExplanation = cleanedPatternExplanation(explanation)
-        let insight = joinSentences(
-            [
-                relationship,
-                condensedSentence(cleanedExplanation, maxWords: 10),
-            ],
-            maxCount: 2
-        ) ?? relationship
+        let insight = relationship
         let support = uniqueLines(
             [
                 evidenceCount.map { "Seen \($0) times" },
@@ -781,8 +774,23 @@ enum ShareDraftFactory {
         if haystack.contains("humidity") {
             keys.append("humidity")
         }
-        if haystack.contains("air quality") || haystack.contains("aqi") {
+        if haystack.contains("aqi") || haystack.contains("air quality") || haystack.contains("air clarity") {
+            keys.append("aqi")
+        }
+        if haystack.contains("air quality") || haystack.contains("air clarity") || haystack.contains("aqi") {
             keys.append("air_quality")
+        }
+        if haystack.contains("air clarity") {
+            keys.append("air_clarity")
+        }
+        if haystack.contains("seasonal irritant") {
+            keys.append("seasonal_irritants")
+            keys.append("allergens")
+            keys.append("allergen")
+        }
+        if haystack.contains("allergen") {
+            keys.append("allergens")
+            keys.append("allergen")
         }
         if haystack.contains("tree pollen") {
             keys.append("tree_pollen")
@@ -807,6 +815,16 @@ enum ShareDraftFactory {
         }
         if haystack.contains("schumann") {
             keys.append("schumann")
+        }
+        if haystack.contains("lunar") || haystack.contains("moon") {
+            keys.append("lunar")
+            keys.append("moon")
+        }
+        if haystack.contains("full moon") {
+            keys.append("full_moon")
+        }
+        if haystack.contains("new moon") {
+            keys.append("new_moon")
         }
         if haystack.contains("ulf") {
             keys.append("ulf")
