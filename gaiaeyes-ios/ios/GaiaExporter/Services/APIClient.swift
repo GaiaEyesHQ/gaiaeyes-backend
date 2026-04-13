@@ -36,15 +36,25 @@ extension APIClient {
         }
 
         var attemptsLeft = max(0, retries)
+        var didForceAuthRefresh = false
         var lastError: Error?
         while true {
             do {
+                await refreshAuthorizationHeader(on: &req)
                 logger?("GET \(url.absoluteString)")
                 let (data, resp) = try await session.data(for: req)
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
                 guard (200...299).contains(code) else {
                     let body = String(data: data, encoding: .utf8) ?? ""
                     logger?("↩︎ \(code) \(HTTPURLResponse.localizedString(forStatusCode: code)) \(body)")
+                    if (code == 401 || code == 403), !didForceAuthRefresh {
+                        didForceAuthRefresh = true
+                        await refreshAuthorizationHeader(on: &req, force: true)
+                        if req.value(forHTTPHeaderField: "Authorization") != nil {
+                            logger?("[AUTH] forced bearer refresh after \(code); retrying absolute GET")
+                            continue
+                        }
+                    }
                     throw APIError.server(code: code, body: body)
                 }
                 let dec = APIClient.tolerantJSONDecoder()
@@ -205,6 +215,7 @@ final class APIClient {
 
     /// Optional dynamic bearer source for long-running uploads whose JWT may refresh mid-run.
     public var bearerProvider: (() async -> String?)?
+    public var forceBearerRefreshProvider: (() async -> String?)?
 
     /// Optional logger to surface network activity
     public var logger: ((String) -> Void)?
@@ -358,15 +369,25 @@ final class APIClient {
         await preflightHealth()
 
         var attemptsLeft = max(0, retries)
+        var didForceAuthRefresh = false
         var lastError: Error?
         while true {
             do {
+                await refreshAuthorizationHeader(on: &req)
                 logger?("GET \(finalURL.absoluteString)")
                 let (data, resp) = try await session.data(for: req)
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
                 guard (200...299).contains(code) else {
                     let body = String(data: data, encoding: .utf8) ?? ""
                     logger?("↩︎ \(code) \(HTTPURLResponse.localizedString(forStatusCode: code)) \(body)")
+                    if (code == 401 || code == 403), !didForceAuthRefresh {
+                        didForceAuthRefresh = true
+                        await refreshAuthorizationHeader(on: &req, force: true)
+                        if req.value(forHTTPHeaderField: "Authorization") != nil {
+                            logger?("[AUTH] forced bearer refresh after \(code); retrying \(clean)")
+                            continue
+                        }
+                    }
                     throw APIError.server(code: code, body: body)
                 }
                 let dec = APIClient.tolerantJSONDecoder()
@@ -453,15 +474,30 @@ final class APIClient {
 
         await preflightHealth()
 
-        logger?("POST \(req.url?.absoluteString ?? path)")
-        let (data, resp) = try await session.data(for: req)
-        let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
-        let bodyString = String(data: data, encoding: .utf8) ?? ""
-        guard (200...299).contains(code) else {
-            logger?("↩︎ \(code) \(HTTPURLResponse.localizedString(forStatusCode: code)) \(bodyString)")
-            throw APIError.server(code: code, body: bodyString)
+        var didForceAuthRefresh = false
+        let data: Data
+        while true {
+            await refreshAuthorizationHeader(on: &req)
+            logger?("POST \(req.url?.absoluteString ?? path)")
+            let (responseData, resp) = try await session.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            let bodyString = String(data: responseData, encoding: .utf8) ?? ""
+            guard (200...299).contains(code) else {
+                logger?("↩︎ \(code) \(HTTPURLResponse.localizedString(forStatusCode: code)) \(bodyString)")
+                if (code == 401 || code == 403), !didForceAuthRefresh {
+                    didForceAuthRefresh = true
+                    await refreshAuthorizationHeader(on: &req, force: true)
+                    if req.value(forHTTPHeaderField: "Authorization") != nil {
+                        logger?("[AUTH] forced bearer refresh after \(code); retrying \(path)")
+                        continue
+                    }
+                }
+                throw APIError.server(code: code, body: bodyString)
+            }
+            logger?("↩︎ \(code) \(bodyString)")
+            data = responseData
+            break
         }
-        logger?("↩︎ \(code) \(bodyString)")
 
         let decoder = APIClient.tolerantJSONDecoder()
         return try decoder.decode(Resp.self, from: data)
@@ -475,15 +511,30 @@ final class APIClient {
 
         await preflightHealth()
 
-        logger?("DELETE \(req.url?.absoluteString ?? path)")
-        let (data, resp) = try await session.data(for: req)
-        let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
-        let bodyString = String(data: data, encoding: .utf8) ?? ""
-        guard (200...299).contains(code) else {
-            logger?("↩︎ \(code) \(HTTPURLResponse.localizedString(forStatusCode: code)) \(bodyString)")
-            throw APIError.server(code: code, body: bodyString)
+        var didForceAuthRefresh = false
+        let data: Data
+        while true {
+            await refreshAuthorizationHeader(on: &req)
+            logger?("DELETE \(req.url?.absoluteString ?? path)")
+            let (responseData, resp) = try await session.data(for: req)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+            let bodyString = String(data: responseData, encoding: .utf8) ?? ""
+            guard (200...299).contains(code) else {
+                logger?("↩︎ \(code) \(HTTPURLResponse.localizedString(forStatusCode: code)) \(bodyString)")
+                if (code == 401 || code == 403), !didForceAuthRefresh {
+                    didForceAuthRefresh = true
+                    await refreshAuthorizationHeader(on: &req, force: true)
+                    if req.value(forHTTPHeaderField: "Authorization") != nil {
+                        logger?("[AUTH] forced bearer refresh after \(code); retrying \(path)")
+                        continue
+                    }
+                }
+                throw APIError.server(code: code, body: bodyString)
+            }
+            logger?("↩︎ \(code) \(bodyString)")
+            data = responseData
+            break
         }
-        logger?("↩︎ \(code) \(bodyString)")
 
         let decoder = APIClient.tolerantJSONDecoder()
         return try decoder.decode(Resp.self, from: data)
@@ -906,14 +957,18 @@ final class APIClient {
             req.httpBody = try JSONEncoder().encode(payload)
 
             var attempt = 0
+            var didForceAuthRefresh = false
             var lastError: Error?
             while attempt < max(1, attemptLimit) {
                 do {
                     await refreshAuthorizationHeader(on: &req)
-                    guard req.value(forHTTPHeaderField: "Authorization") != nil else {
-                        let authError = APIError.server(code: 401, body: "missing local auth token before upload")
-                        logger?("POST \(label) skipped: missing Authorization header")
-                        throw authError
+                    if req.value(forHTTPHeaderField: "Authorization") == nil {
+                        await refreshAuthorizationHeader(on: &req, force: true)
+                        guard req.value(forHTTPHeaderField: "Authorization") != nil else {
+                            let authError = APIError.server(code: 401, body: "missing local auth token before upload")
+                            logger?("POST \(label) skipped: missing Authorization header")
+                            throw authError
+                        }
                     }
                     logger?("POST \(label) (\(chunk.count) rows) → \(req.url?.absoluteString ?? path)")
                     let (data, resp) = try await session.data(for: req)
@@ -929,6 +984,14 @@ final class APIClient {
                         logger?("↩︎ \(code) \(HTTPURLResponse.localizedString(forStatusCode: code)) \(body)")
                         let serverError = APIError.server(code: code, body: body)
                         if code == 401 || code == 403 {
+                            if !didForceAuthRefresh {
+                                didForceAuthRefresh = true
+                                await refreshAuthorizationHeader(on: &req, force: true)
+                                if req.value(forHTTPHeaderField: "Authorization") != nil {
+                                    logger?("[AUTH] forced bearer refresh after \(code); retrying \(label)")
+                                    continue
+                                }
+                            }
                             throw serverError
                         }
                         lastError = serverError
@@ -954,8 +1017,9 @@ final class APIClient {
         return false
     }
 
-    private func refreshAuthorizationHeader(on request: inout URLRequest) async {
-        let dynamicBearer = (await bearerProvider?())?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    private func refreshAuthorizationHeader(on request: inout URLRequest, force: Bool = false) async {
+        let source = force ? forceBearerRefreshProvider : bearerProvider
+        let dynamicBearer = (await source?())?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let activeBearer = dynamicBearer.isEmpty ? bearer : dynamicBearer
         if activeBearer.isEmpty {
             request.setValue(nil, forHTTPHeaderField: "Authorization")
@@ -1043,9 +1107,26 @@ extension APIClient {
             request.setValue(uid, forHTTPHeaderField: "X-Dev-UserId")
         }
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw URLError(.badServerResponse)
+        var didForceAuthRefresh = false
+        let data: Data
+        while true {
+            await refreshAuthorizationHeader(on: &request)
+            let (responseData, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+            guard http.statusCode == 200 else {
+                if (http.statusCode == 401 || http.statusCode == 403), !didForceAuthRefresh {
+                    didForceAuthRefresh = true
+                    await refreshAuthorizationHeader(on: &request, force: true)
+                    if request.value(forHTTPHeaderField: "Authorization") != nil {
+                        continue
+                    }
+                }
+                throw URLError(.badServerResponse)
+            }
+            data = responseData
+            break
         }
 
         let decoder = APIClient.tolerantJSONDecoder()

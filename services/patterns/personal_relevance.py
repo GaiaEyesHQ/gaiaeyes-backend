@@ -44,7 +44,7 @@ SIGNAL_LABELS = {
 }
 
 OUTCOME_LABELS = {
-    "headache_day": "Headaches",
+    "headache_day": "Head / sinus pressure",
     "pain_flare_day": "Pain flares",
     "fatigue_day": "Fatigue",
     "anxiety_day": "Anxious or restless days",
@@ -57,7 +57,7 @@ OUTCOME_LABELS = {
 }
 
 THEME_LABELS = {
-    "headache_day": "Headache watch",
+    "headache_day": "Head / sinus watch",
     "pain_flare_day": "Pain flare watch",
     "fatigue_day": "Fatigue watch",
     "anxiety_day": "Restless-day watch",
@@ -164,9 +164,9 @@ _PATTERN_MESSAGE_MAP = {
         "clause": "it has lined up with more pain flare days for you",
     },
     ("pressure_swing_exposed", "headache_day"): {
-        "full": "Pressure swings have lined up with more headache days in your history.",
-        "short": "Pressure has lined up with more headache days for you.",
-        "clause": "it has lined up with more headache days for you",
+        "full": "Pressure swings have lined up with more head/sinus-pressure days in your history.",
+        "short": "Pressure has lined up with more head/sinus-pressure days for you.",
+        "clause": "it has lined up with more head/sinus-pressure days for you",
     },
     ("pressure_swing_exposed", "focus_fog_day"): {
         "full": "Pressure swings have lined up with more brain-fog days in your history.",
@@ -194,14 +194,14 @@ _PATTERN_MESSAGE_MAP = {
         "clause": "it has lined up with more brain-fog days for you",
     },
     ("aqi_moderate_plus_exposed", "headache_day"): {
-        "full": "Moderate-or-higher AQI has lined up with more headache days in your history.",
-        "short": "AQI has lined up with more headache days for you.",
-        "clause": "it has lined up with more headache days for you",
+        "full": "Moderate-or-higher AQI has lined up with more head/sinus-pressure days in your history.",
+        "short": "AQI has lined up with more head/sinus-pressure days for you.",
+        "clause": "it has lined up with more head/sinus-pressure days for you",
     },
     ("pollen_overall_exposed", "headache_day"): {
-        "full": "Allergen load has lined up with more headache days in your history.",
-        "short": "Allergen load has lined up with more headache days for you.",
-        "clause": "it has lined up with more headache days for you",
+        "full": "Allergen load has lined up with more head/sinus-pressure days in your history.",
+        "short": "Allergen load has lined up with more head/sinus-pressure days for you.",
+        "clause": "it has lined up with more head/sinus-pressure days for you",
     },
     ("pollen_overall_exposed", "fatigue_day"): {
         "full": "Allergen load has lined up with more fatigue days in your history.",
@@ -214,9 +214,9 @@ _PATTERN_MESSAGE_MAP = {
         "clause": "it has lined up with more brain-fog days for you",
     },
     ("pollen_tree_exposed", "headache_day"): {
-        "full": "Tree pollen has lined up with more headache days in your history.",
-        "short": "Tree pollen has lined up with more headache days for you.",
-        "clause": "it has lined up with more headache days for you",
+        "full": "Tree pollen has lined up with more head/sinus-pressure days in your history.",
+        "short": "Tree pollen has lined up with more head/sinus-pressure days for you.",
+        "clause": "it has lined up with more head/sinus-pressure days for you",
     },
     ("pollen_tree_exposed", "fatigue_day"): {
         "full": "Tree pollen has lined up with more fatigue days in your history.",
@@ -229,9 +229,9 @@ _PATTERN_MESSAGE_MAP = {
         "clause": "it has lined up with more brain-fog days for you",
     },
     ("pollen_grass_exposed", "headache_day"): {
-        "full": "Grass pollen has lined up with more headache days in your history.",
-        "short": "Grass pollen has lined up with more headache days for you.",
-        "clause": "it has lined up with more headache days for you",
+        "full": "Grass pollen has lined up with more head/sinus-pressure days in your history.",
+        "short": "Grass pollen has lined up with more head/sinus-pressure days for you.",
+        "clause": "it has lined up with more head/sinus-pressure days for you",
     },
     ("pollen_grass_exposed", "fatigue_day"): {
         "full": "Grass pollen has lined up with more fatigue days in your history.",
@@ -244,9 +244,9 @@ _PATTERN_MESSAGE_MAP = {
         "clause": "it has lined up with more brain-fog days for you",
     },
     ("pollen_weed_exposed", "headache_day"): {
-        "full": "Weed pollen has lined up with more headache days in your history.",
-        "short": "Weed pollen has lined up with more headache days for you.",
-        "clause": "it has lined up with more headache days for you",
+        "full": "Weed pollen has lined up with more head/sinus-pressure days in your history.",
+        "short": "Weed pollen has lined up with more head/sinus-pressure days for you.",
+        "clause": "it has lined up with more head/sinus-pressure days for you",
     },
     ("pollen_weed_exposed", "fatigue_day"): {
         "full": "Weed pollen has lined up with more fatigue days in your history.",
@@ -259,9 +259,9 @@ _PATTERN_MESSAGE_MAP = {
         "clause": "it has lined up with more brain-fog days for you",
     },
     ("pollen_mold_exposed", "headache_day"): {
-        "full": "Mold has lined up with more headache days in your history.",
-        "short": "Mold has lined up with more headache days for you.",
-        "clause": "it has lined up with more headache days for you",
+        "full": "Mold has lined up with more head/sinus-pressure days in your history.",
+        "short": "Mold has lined up with more head/sinus-pressure days for you.",
+        "clause": "it has lined up with more head/sinus-pressure days for you",
     },
     ("pollen_mold_exposed", "fatigue_day"): {
         "full": "Mold has lined up with more fatigue days in your history.",
@@ -274,9 +274,9 @@ _PATTERN_MESSAGE_MAP = {
         "clause": "it has lined up with more brain-fog days for you",
     },
     ("humidity_extreme_exposed", "headache_day"): {
-        "full": "Humidity extremes have lined up with more headache days in your history.",
-        "short": "Humidity extremes have lined up with more headache days for you.",
-        "clause": "they have lined up with more headache days for you",
+        "full": "Humidity extremes have lined up with more head/sinus-pressure days in your history.",
+        "short": "Humidity extremes have lined up with more head/sinus-pressure days for you.",
+        "clause": "they have lined up with more head/sinus-pressure days for you",
     },
     ("humidity_extreme_exposed", "fatigue_day"): {
         "full": "Humidity extremes have lined up with more fatigue days in your history.",

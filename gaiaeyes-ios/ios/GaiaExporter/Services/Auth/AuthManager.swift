@@ -322,10 +322,22 @@ final class AuthManager: ObservableObject {
     }
 
     private func refreshSessionIfNeeded() async {
+        await refreshSession(force: false)
+    }
+
+    func forceRefreshAccessToken() async -> String? {
+        if supabaseAccessToken == nil && supabaseRefreshToken == nil {
+            loadFromKeychain()
+        }
+        await refreshSession(force: true)
+        return supabaseAccessToken
+    }
+
+    private func refreshSession(force: Bool) async {
         guard let config else { return }
         guard let refreshToken = supabaseRefreshToken else { return }
 
-        if let exp = supabaseExpiresAt, exp.timeIntervalSinceNow > 300, supabaseAccessToken != nil {
+        if !force, let exp = supabaseExpiresAt, exp.timeIntervalSinceNow > 300, supabaseAccessToken != nil {
             return
         }
 
@@ -342,6 +354,9 @@ final class AuthManager: ObservableObject {
             let (data, resp) = try await URLSession.shared.data(for: req)
             guard let http = resp as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
                 lastError = Self.extractMessage(from: data) ?? "Supabase refresh failed"
+                if force {
+                    appLog("[AUTH] forced refresh failed: \(lastError ?? "unknown")")
+                }
                 return
             }
             let decoded = try JSONDecoder().decode(SupabaseSessionResponse.self, from: data)
@@ -355,6 +370,9 @@ final class AuthManager: ObservableObject {
             )
         } catch {
             lastError = error.localizedDescription
+            if force {
+                appLog("[AUTH] forced refresh error: \(error.localizedDescription)")
+            }
         }
     }
 

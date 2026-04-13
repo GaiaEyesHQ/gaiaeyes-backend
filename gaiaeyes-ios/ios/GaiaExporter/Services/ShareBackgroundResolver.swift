@@ -3,6 +3,8 @@ import UIKit
 
 enum ShareBackgroundResolver {
     private static let cache = NSCache<NSURL, UIImage>()
+    private static let themedCandidateLimit = 18
+    private static let candidateTimeout: TimeInterval = 1.2
 
     static func loadImage(for background: ShareCardBackground) async -> UIImage? {
         for url in candidateURLs(for: background) {
@@ -11,7 +13,7 @@ enum ShareBackgroundResolver {
             }
             do {
                 var request = URLRequest(url: url)
-                request.timeoutInterval = 3
+                request.timeoutInterval = candidateTimeout
                 let (data, response) = try await URLSession.shared.data(for: request)
                 guard let http = response as? HTTPURLResponse,
                       (200...299).contains(http.statusCode),
@@ -29,7 +31,8 @@ enum ShareBackgroundResolver {
 
     private static func candidateURLs(for background: ShareCardBackground) -> [URL] {
         var seen = Set<String>()
-        return (background.candidateURLs + themedCandidateURLs(for: background) + defaultCandidateURLs(for: background.style)).filter { url in
+        let themed = Array(themedCandidateURLs(for: background).prefix(themedCandidateLimit))
+        return (background.candidateURLs + themed + defaultCandidateURLs(for: background.style)).filter { url in
             let key = url.absoluteString
             if seen.contains(key) {
                 return false
@@ -45,20 +48,20 @@ enum ShareBackgroundResolver {
             "backgrounds/share",
             "backgrounds/square",
         ]
-        let exts = ["jpg", "jpeg", "png", "webp", "JPG", "JPEG", "PNG", "WEBP"]
+        let exts = ["jpg", "png", "jpeg", "webp"]
         let themeKeys = background.themeKeys
             .map(normalizedThemeKey)
             .filter { !$0.isEmpty }
 
         var urls: [URL] = []
-        for key in themeKeys.prefix(5) {
-            let stems = uniquePreservingOrder([
-                key,
-                key.replacingOccurrences(of: "_", with: "-"),
-            ]).filter { !$0.isEmpty }
-            for stem in stems {
-                for folder in folders {
-                    for ext in exts {
+        for folder in folders {
+            for ext in exts {
+                for key in themeKeys.prefix(3) {
+                    let stems = uniquePreservingOrder([
+                        key,
+                        key.replacingOccurrences(of: "_", with: "-"),
+                    ]).filter { !$0.isEmpty }
+                    for stem in stems {
                         if let url = MediaPaths.storageURL("\(folder)/\(stem).\(ext)") {
                             urls.append(url)
                         }

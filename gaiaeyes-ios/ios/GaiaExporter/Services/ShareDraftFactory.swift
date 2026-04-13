@@ -104,10 +104,11 @@ enum ShareDraftFactory {
         promptText: String? = nil
     ) -> ShareDraft {
         let hook = ShareHookBank.hook(for: .pattern, mode: mode)
+        let cleanedExplanation = cleanedPatternExplanation(explanation)
         let insight = joinSentences(
             [
                 relationship,
-                condensedSentence(explanation, maxWords: 10),
+                condensedSentence(cleanedExplanation, maxWords: 10),
             ],
             maxCount: 2
         ) ?? relationship
@@ -120,7 +121,6 @@ enum ShareDraftFactory {
             excluding: [hook, relationship, insight],
             maxCount: 2
         )
-        let signText = patternSignText(evidenceCount: evidenceCount, confidence: confidence)
         let themedBackground = backgroundWithThemes(
             background,
             shareType: .personalPattern,
@@ -137,13 +137,13 @@ enum ShareDraftFactory {
             format: .square,
             background: themedBackground,
             accentLevel: accent,
-            eyebrow: "Pattern",
+            eyebrow: nil,
             title: hook,
             subtitle: insight,
-            signText: signText,
+            signText: nil,
             primaryText: nil,
             valueText: nil,
-            stateText: confidence,
+            stateText: nil,
             bullets: support,
             highlights: [],
             note: nil,
@@ -512,6 +512,26 @@ enum ShareDraftFactory {
             return linePair("Pattern", confidence)
         }
         return linePair("Pattern", "Repeat signal")
+    }
+
+    private static func cleanedPatternExplanation(_ raw: String?) -> String? {
+        guard let cleaned = cleanedLine(raw) else { return nil }
+        let pieces = cleaned
+            .replacingOccurrences(of: ". ", with: ".|")
+            .replacingOccurrences(of: "! ", with: "!|")
+            .replacingOccurrences(of: "? ", with: "?|")
+            .components(separatedBy: "|")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .filter { piece in
+                let lower = piece.lowercased()
+                if lower.hasPrefix("in your history,") && (lower.contains("overlapped") || lower.contains("lined up")) {
+                    return false
+                }
+                return true
+            }
+        let result = pieces.joined(separator: " ")
+        return result.isEmpty ? nil : result
     }
 
     private static func eventSignText(

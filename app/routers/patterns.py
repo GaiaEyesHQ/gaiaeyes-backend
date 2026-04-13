@@ -39,7 +39,7 @@ SIGNAL_LABELS = {
 }
 
 OUTCOME_LABELS = {
-    "headache_day": "Headaches",
+    "headache_day": "Head / sinus pressure",
     "pain_flare_day": "Pain flares",
     "fatigue_day": "Fatigue",
     "anxiety_day": "Anxious or restless days",
