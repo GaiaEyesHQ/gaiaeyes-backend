@@ -125,7 +125,7 @@ struct ShareCardView: View {
         }
         .padding(padding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.black.opacity(0.10))
+        .background(Color.black.opacity(0.90))
     }
 
     private var textPanelRatio: CGFloat {

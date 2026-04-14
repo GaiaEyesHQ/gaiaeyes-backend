@@ -797,9 +797,9 @@ async def _fetch_daily_post(conn, day_local: date) -> Dict[str, Any]:
             where p0.user_id is null and p0.day <= %s
             order by p0.day desc,
                      case
-                         when p0.platform = 'default' then 0
-                         when p0.platform in ('web', 'website') then 1
-                         when p0.platform in ('instagram', 'facebook', 'threads') then 2
+                         when lower(coalesce(p0.platform, '')) = 'default' then 0
+                         when lower(coalesce(p0.platform, '')) in ('web', 'website') then 1
+                         when lower(coalesce(p0.platform, '')) in ('instagram', 'facebook', 'threads') then 2
                          else 3
                      end,
                      p0.updated_at desc
