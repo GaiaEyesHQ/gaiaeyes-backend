@@ -985,6 +985,12 @@ struct OnboardingFlowView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
+                if healthPermissionGrantedThisSession || profile.healthkitRequestedAt != nil {
+                    Text("If Health data does not appear right away, open Apple Health and your wearable app once so they can finish syncing, then return to Gaia.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
                 if let backfillMessage, !backfillMessage.isEmpty {
                     Text(backfillMessage)
                         .font(.subheadline)

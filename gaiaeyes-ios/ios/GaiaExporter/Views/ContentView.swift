@@ -4912,22 +4912,22 @@ struct ContentView: View {
         let plan = revenueCat.activePlan == .free ? backendPlan : revenueCat.activePlan
         let activeIDs = Array(Set(debugEntitlements.filter { $0.isActive == true }.map(\.key) + revenueCat.activeEntitlementIDs)).sorted()
         let userLabel: String = {
-            if let email = auth.supabaseEmail, !email.isEmpty {
+            if let email = auth.signedInEmail {
                 return "Signed in as \(email)"
             }
             if let email = debugEntitlementsEmail, !email.isEmpty {
                 return "Signed in as \(email)"
             }
-            if let userId = auth.supabaseUserId, !userId.isEmpty {
-                return "Signed in as \(userId)"
+            if auth.hasAppOnlyProfile {
+                return "Using free app profile on this device"
             }
-            return hasToken ? "Signed in on this device" : "Not signed in"
+            return hasToken ? "App-only sync profile available" : "Not signed in"
         }()
         return DebugBillingSnapshot(
             planTitle: plan.title,
             signedInState: userLabel,
             activeEntitlementIDs: activeIDs,
-            customerState: hasToken ? "Supabase session available" : "No billing session",
+            customerState: hasToken ? (auth.hasSignedInAccount ? "Supabase account session available" : "Anonymous sync profile available") : "No billing session",
             revenueCatState: revenueCat.diagnosticsState,
             offerEligibility: "RevenueCat / App Store managed",
             lastSyncAt: revenueCat.lastSyncAt ?? parseDebugDate(cachedPlanSyncedAt),
@@ -7211,7 +7211,7 @@ struct ContentView: View {
                 experienceProfile.healthkitRequestedAt = requestedAt
             }
             healthPermissionsMessage = granted
-                ? "Health access updated. Gaia will use whatever HealthKit data you allowed."
+                ? "Health access updated. Gaia will use whatever HealthKit data you allowed. If body data stays blank, open Apple Health and your wearable app once so they finish syncing, then return to Gaia."
                 : "Gaia could not update Health access right now. You can keep going and retry later in Settings."
         }
         AppAnalytics.track(granted ? "healthkit_permission_completed" : "healthkit_permission_failed")
@@ -17219,6 +17219,9 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+                Text("If new Health data is missing, open Apple Health and your wearable app once so they finish syncing, then return to Gaia.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
                 if let msg = backfillMessage ?? healthPermissionsMessage {
                     Text(msg)
                         .font(.caption)
@@ -17351,8 +17354,12 @@ struct ContentView: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
 
-                if let email = auth.supabaseEmail, !email.isEmpty {
+                if let email = auth.signedInEmail {
                     Text("Signed in as \(email)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else if auth.hasAppOnlyProfile {
+                    Text("Using a free app profile on this device. Add an email in Account & Membership when you want website access.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

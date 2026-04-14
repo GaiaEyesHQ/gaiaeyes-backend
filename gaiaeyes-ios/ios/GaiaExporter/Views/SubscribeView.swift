@@ -46,13 +46,13 @@ struct SubscribeView: View {
     }
 
     private var signedInLabel: String {
-        if let email = auth.supabaseEmail, !email.isEmpty {
+        if let email = auth.signedInEmail {
             return "Signed in as \(email)"
         }
-        if let userId = auth.currentSupabaseUserId() {
-            return "Signed in as \(userId.prefix(8))..."
+        if auth.hasAppOnlyProfile {
+            return "Using free app profile on this device"
         }
-        return "Signed in on this device"
+        return "Not signed in on this device"
     }
 
     private var activeAccessLabels: [String] {
@@ -105,6 +105,29 @@ struct SubscribeView: View {
                         .font(.footnote)
                         .foregroundColor(.secondary)
                     freePlanCards
+                } else if auth.hasAppOnlyProfile {
+                    appOnlyProfileCard
+                    LoginView()
+                    Text("Add an email and password when you want website access or to restore this account on another device.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                    currentPlanCard
+                    planActions
+
+                    if let appleSubscriptionsURL {
+                        Button {
+                            openURL(appleSubscriptionsURL)
+                        } label: {
+                            Label("Manage App Store Subscriptions", systemImage: "creditcard")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    Button("Restore Purchases") {
+                        Task { await restorePurchases() }
+                    }
+                    .buttonStyle(.bordered)
                 } else {
                     currentPlanCard
                     planActions
@@ -196,6 +219,22 @@ struct SubscribeView: View {
                     .font(.title3.weight(.bold))
                 Text(planDescription(for: currentPlan))
                     .font(.footnote)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var appOnlyProfileCard: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Free app profile")
+                    .font(.subheadline.weight(.semibold))
+                Text("Gaia uses a private on-device sync profile so Health data, symptoms, and settings can work before you create a login.")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                Text("This is not an email account yet.")
+                    .font(.caption)
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

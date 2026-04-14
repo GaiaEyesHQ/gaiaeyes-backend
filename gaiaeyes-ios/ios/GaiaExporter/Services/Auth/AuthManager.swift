@@ -22,6 +22,20 @@ final class AuthManager: ObservableObject {
         config != nil
     }
 
+    var signedInEmail: String? {
+        guard supabaseAccessToken?.isEmpty == false else { return nil }
+        let email = supabaseEmail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return email.isEmpty ? nil : email
+    }
+
+    var hasSignedInAccount: Bool {
+        signedInEmail != nil
+    }
+
+    var hasAppOnlyProfile: Bool {
+        supabaseAccessToken?.isEmpty == false && signedInEmail == nil
+    }
+
     func loadFromKeychain() {
         supabaseAccessToken = keychain.read("access_token")
         supabaseRefreshToken = keychain.read("refresh_token")
