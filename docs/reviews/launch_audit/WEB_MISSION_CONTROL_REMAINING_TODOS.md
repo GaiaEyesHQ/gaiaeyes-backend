@@ -4,6 +4,7 @@ This file tracks the website-specific work that remains after the current Missio
 
 ## High priority
 
+- Verify the public homepage EarthScope banner degrades to the legacy generated EarthScope JSON instead of showing "API payload missing" when API-backed shortcode attributes/config are absent.
 - Replace the remaining EarthScope-style Guide snapshot with a cleaner canonical Guide payload and writer.
 - Add Guide unseen/glow state to the website once the backend guide-state model exists.
 - Finish the Schumann public-page speed pass:

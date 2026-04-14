@@ -516,7 +516,7 @@ if ( ! function_exists( 'gaia_earthscope_banner' ) ) {
         'api_base'        => '',
         'api_bearer'      => '',
         'api_dev_user'    => '',
-        'allow_legacy_fallback' => 'false',
+        'allow_legacy_fallback' => 'true',
         'daily_url'       => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope_daily.json',
         'url'             => 'https://gaiaeyeshq.github.io/gaiaeyes-media/data/earthscope.json',
         'space_detail'    => '/space-dashboard/',

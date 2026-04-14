@@ -27,6 +27,7 @@ Use this as the launch-prep punch list.
 
 ## EarthScope
 
+- [ ] Verify public website EarthScope home banner no longer collapses to "API payload missing" when the API-backed payload is absent. Where: `wp-content/themes/neve/functions.php`, homepage shortcode config, `wp-content/mu-plugins/gaia-dashboard.js`. Why: push notices can route users to the website, and a broken top-of-page EarthScope card is a launch first-impression risk. Type: `logic`
 - [ ] Review home EarthScope summary, full EarthScope, and social/share wording together. Where: `services/mc_modals/modal_builder.py`, `bots/earthscope_post/member_earthscope_generate.py`, `bots/earthscope_post/earthscope_generate.py`, `ShareCaptionEngine.swift`. Why: this is the highest-risk brand-voice layer. Type: `copy`
 - [ ] Review iOS and WordPress EarthScope fallback behavior. Where: `gaiaeyes-ios/ios/GaiaExporter/Views/ContentView.swift`, `wp-content/mu-plugins/gaia-dashboard.js`. Why: fallback text can drift from backend-generated content. Type: `both`
 - [ ] Review whether daily EarthScope and multi-day outlook feel like the same product voice. Where: `services/forecast_outlook.py`, `app/routers/outlook.py`, EarthScope writer files. Why: daily vs forecast split is a likely launch inconsistency. Type: `copy`
