@@ -3576,14 +3576,14 @@ struct ContentView: View {
     private func visibleAppNotice(for placement: AppNoticePlacement) -> AppNotice? {
         guard let appNotice,
               appNotice.isVisible(in: placement),
-              appNotice.trimmedID != dismissedAppNoticeID else {
+              appNotice.dismissalKey != dismissedAppNoticeID else {
             return nil
         }
         return appNotice
     }
 
     private func dismissAppNotice(_ notice: AppNotice) {
-        dismissedAppNoticeID = notice.trimmedID
+        dismissedAppNoticeID = notice.dismissalKey
     }
 
     private func openGuideHub(focus: GuideHubFocus = .overview) {

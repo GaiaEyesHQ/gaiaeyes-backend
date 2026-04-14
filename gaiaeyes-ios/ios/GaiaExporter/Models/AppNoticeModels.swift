@@ -59,6 +59,12 @@ struct AppNotice: Decodable, Equatable, Identifiable {
         id.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var dismissalKey: String {
+        let updated = updatedAt?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        guard let updated else { return trimmedID }
+        return "\(trimmedID)|\(updated)"
+    }
+
     var trimmedTitle: String? {
         title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
     }
