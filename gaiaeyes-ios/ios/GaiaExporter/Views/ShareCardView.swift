@@ -31,7 +31,6 @@ struct ShareCardView: View {
                     .frame(maxWidth: .infinity)
 
                 textPanel
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
@@ -54,7 +53,7 @@ struct ShareCardView: View {
     }
 
     private var imagePanel: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack {
             ShareCardBackgroundView(
                 background: model.background,
                 accentLevel: model.accentLevel,
@@ -71,27 +70,6 @@ struct ShareCardView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-
-            if let pillLabel = activePillLabel {
-                ShareStatePill(label: pillLabel, tint: accentColor)
-                    .padding(18)
-            }
-
-            if let sourceLine = model.sourceLine, !sourceLine.isEmpty {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Text(sourceLine)
-                            .font(.system(size: 10, weight: .medium, design: .rounded))
-                            .foregroundColor(.white.opacity(0.44))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
-                        Spacer()
-                    }
-                    .padding(.horizontal, padding)
-                    .padding(.bottom, 10)
-                }
-            }
         }
     }
 
@@ -140,48 +118,31 @@ struct ShareCardView: View {
                 }
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 12)
 
-            HStack(alignment: .bottom, spacing: 18) {
-                shareGlyph("hand.thumbsup")
-                shareGlyph("hand.thumbsdown")
-                shareGlyph("bookmark")
-                shareGlyph("paperplane")
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(model.branding.title)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.88))
-                    Text(model.branding.url)
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.52))
-                }
-            }
+            brandingBlock
         }
         .padding(padding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(panelBackground)
     }
 
     private var panelBackground: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    accentColor.opacity(0.52),
-                    Color(red: 0.07, green: 0.07, blue: 0.06).opacity(0.94)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            Color.black.opacity(0.22)
-        }
+        Color(red: 0.08, green: 0.09, blue: 0.07)
+            .overlay(accentColor.opacity(0.12))
     }
 
-    private func shareGlyph(_ name: String) -> some View {
-        Image(systemName: name)
-            .font(.system(size: 17, weight: .medium))
-            .foregroundColor(.white.opacity(0.80))
+    private var brandingBlock: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(model.branding.title)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundColor(.white.opacity(0.88))
+                .lineLimit(1)
+            Text(model.branding.url)
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundColor(.white.opacity(0.52))
+                .lineLimit(1)
+        }
     }
 
     private var panelEyebrow: String? {
@@ -195,18 +156,17 @@ struct ShareCardView: View {
         if model.layout == .personalPattern {
             values = [cleanPatternLine(model.subtitle)]
         } else {
-            let metric = joinedPanelMetric
-            values = [metric, model.note]
+            values = [joinedPanelDetail]
         }
         return nonEmptyPanelLine(uniquePanelLines(values).prefix(2).joined(separator: ". "))
     }
 
-    private var joinedPanelMetric: String? {
-        let primary = cleanPanelLine(model.primaryText)
+    private var joinedPanelDetail: String? {
         let value = cleanPanelLine(model.valueText)
-        guard let primary else { return cleanPanelLine(model.note) }
-        guard let value, normalized(primary) != normalized(value) else { return primary }
-        return "\(primary) · \(value)"
+        let note = cleanPanelLine(model.note)
+        guard let value else { return note }
+        guard let note, normalized(value) != normalized(note) else { return value }
+        return "\(value) · \(note)"
     }
 
     private var panelSupportLines: [String] {
@@ -246,13 +206,13 @@ struct ShareCardView: View {
     }
 
     private func cleanPanelLine(_ raw: String?) -> String? {
-        guard let cleaned = raw?
+        guard let raw else { return nil }
+        let cleaned = raw
             .replacingOccurrences(of: "\n", with: " ")
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
             .trimmingCharacters(in: CharacterSet(charactersIn: " .\n\t"))
-        else { return nil }
         return nonEmptyPanelLine(cleaned)
     }
 

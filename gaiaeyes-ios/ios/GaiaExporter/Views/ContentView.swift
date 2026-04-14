@@ -3885,6 +3885,12 @@ struct ContentView: View {
         }
     }
 
+    private var guideHeaderOverlay: some View {
+        guideToolbarButton
+            .padding(.leading, 16)
+            .padding(.top, 44)
+    }
+
     private var guideUnseenStorageKey: String {
         let user = (auth.supabaseUserId ?? state.userId)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -4009,9 +4015,6 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var shellToolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            guideToolbarButton
-        }
         ToolbarItem(placement: .topBarTrailing) {
             settingsToolbarButton
         }
@@ -12532,6 +12535,8 @@ struct ContentView: View {
                 return ShareCardBackground(style: .cme)
             case "pressure", "temp", "humidity", "aqi", "allergens":
                 return ShareCardBackground(style: .atmospheric)
+            case "current_symptoms", "symptoms", "temporary_illness", "illness":
+                return ShareCardBackground(style: .abstract)
             case "schumann":
                 return ShareCardBackground(style: .schumann)
             default:
@@ -12584,9 +12589,23 @@ struct ContentView: View {
             return suppressedOutlookPhrases.contains { normalized.contains($0) }
         }
 
+        private func rewriteOutlookText(_ raw: String) -> String {
+            raw
+                .replacingOccurrences(
+                    of: "Energy may be easier to notice.",
+                    with: "Energy may be lower based on your history."
+                )
+                .replacingOccurrences(
+                    of: "Energy may be easier to notice",
+                    with: "Energy may be lower based on your history"
+                )
+        }
+
         private func filteredOutlookText(_ raw: String?) -> String? {
             guard let raw = raw?.nilIfTrimmedEmpty else { return nil }
-            let refined = (CopyRefiner.refine(raw) ?? raw).trimmingCharacters(in: .whitespacesAndNewlines)
+            let refined = rewriteOutlookText(
+                (CopyRefiner.refine(raw) ?? raw).trimmingCharacters(in: .whitespacesAndNewlines)
+            )
             guard !refined.isEmpty else { return nil }
             let sentences = refined.components(separatedBy: .newlines)
                 .flatMap { block in
@@ -12714,17 +12733,41 @@ struct ContentView: View {
             )
         }
 
-        private func dailyDateText(_ isoDay: String?) -> String? {
+        private func parsedDailyDate(_ isoDay: String?) -> Date? {
             guard let isoDay else { return nil }
             let parser = DateFormatter()
             parser.calendar = Calendar(identifier: .gregorian)
             parser.locale = Locale(identifier: "en_US_POSIX")
-            parser.timeZone = TimeZone(secondsFromGMT: 0)
+            parser.timeZone = TimeZone(identifier: "America/Chicago") ?? .current
             parser.dateFormat = "yyyy-MM-dd"
-            guard let date = parser.date(from: isoDay) else { return nil }
+            return parser.date(from: isoDay)
+        }
+
+        private func dailyDateText(_ isoDay: String?) -> String? {
+            guard let date = parsedDailyDate(isoDay) else { return nil }
             let formatter = DateFormatter()
             formatter.setLocalizedDateFormatFromTemplate("MMM d")
             return formatter.string(from: date)
+        }
+
+        private func dailyTitle(_ day: UserOutlookDay) -> String {
+            guard let date = parsedDailyDate(day.day) else {
+                return day.label?.nilIfTrimmedEmpty ?? dailyDateText(day.day) ?? "Day"
+            }
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(identifier: "America/Chicago") ?? .current
+            let today = calendar.startOfDay(for: Date())
+            let target = calendar.startOfDay(for: date)
+            let offset = calendar.dateComponents([.day], from: today, to: target).day
+
+            if offset == 0 { return "Today" }
+            if offset == 1 { return "Tomorrow" }
+
+            let formatter = DateFormatter()
+            formatter.calendar = calendar
+            formatter.timeZone = calendar.timeZone
+            formatter.setLocalizedDateFormatFromTemplate("EEEE")
+            return formatter.string(from: target)
         }
 
         private func dailySummary(_ day: UserOutlookDay) -> String? {
@@ -12749,12 +12792,29 @@ struct ContentView: View {
             driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized
         }
 
+        private func likelyDomainValue(_ domain: UserOutlookDomain, primary: UserOutlookDriver?) -> String {
+            let fallback = domain.label ?? domain.key.replacingOccurrences(of: "_", with: " ").capitalized
+            let haystack = [
+                domain.key,
+                domain.label,
+                primary?.key,
+                primary?.label,
+                primary?.detail,
+            ]
+                .compactMap { $0?.lowercased() }
+                .joined(separator: " ")
+            if haystack.contains("energy") && haystack.contains("humidity") {
+                return "Energy dip"
+            }
+            return fallback
+        }
+
         @ViewBuilder
         private func dailyOutlookRow(_ day: UserOutlookDay) -> some View {
             let drivers = visibleDrivers(day.topDrivers ?? [])
             let domains = day.likelyElevatedDomains ?? []
             let state = dailyState(day)
-            let title = day.label?.nilIfTrimmedEmpty ?? dailyDateText(day.day) ?? "Day"
+            let title = dailyTitle(day)
             let dateText = dailyDateText(day.day)
 
             VStack(alignment: .leading, spacing: 10) {
@@ -12798,7 +12858,7 @@ struct ContentView: View {
                 if let domain = domains.first {
                     LocalConditionsValueChip(
                         label: "Likely",
-                        value: domain.label ?? domain.key.replacingOccurrences(of: "_", with: " ").capitalized,
+                        value: likelyDomainValue(domain, primary: drivers.first),
                         tint: GaugePalette.zoneColor(domain.likelihood)
                     )
                 }
@@ -13893,7 +13953,7 @@ struct ContentView: View {
         private func watchFlags(for day: SpaceForecastDay) -> [String] {
             var flags: [String] = []
             if day.cmeWatch == true { flags.append("CME watch") }
-            if day.flareWatch == true { flags.append("Flare watch") }
+            if day.flareWatch == true { flags.append("Solar Flare Watch") }
             if day.solarWindWatch == true { flags.append("Solar wind watch") }
             return flags
         }
@@ -18592,6 +18652,9 @@ struct ContentView: View {
                 outlookTab: outlookTabView,
                 exploreTab: exploreTabView
             )
+        }
+        .overlay(alignment: .topLeading) {
+            guideHeaderOverlay
         }
     }
 

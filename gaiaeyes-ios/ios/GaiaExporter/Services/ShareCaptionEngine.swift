@@ -18,9 +18,7 @@ enum ShareCaptionEngine {
             signText?.replacingOccurrences(of: "\n", with: " ")
         ], maxCount: 1)
         let feelLine = feelingLine(category: category, bullets: bullets, style: .scientific, mode: mode)
-        let balancedGrounding = tone == .humorous
-            ? "Take the day a little lighter if you can"
-            : groundingLine(category: category, style: .balanced, mode: mode)
+        _ = tone
 
         return ShareCaptionSet(
             scientific: scientificBulletCaption(
@@ -32,12 +30,19 @@ enum ShareCaptionEngine {
                 ],
                 cta: signalCTA(category: category, style: .scientific, mode: mode)
             ),
-            balanced: paragraphCaption([
-                hook,
-                dataLine ?? insight,
-                feelingLine(category: category, bullets: bullets, style: .balanced, mode: mode),
-                balancedGrounding,
-            ], cta: signalCTA(category: category, style: .balanced, mode: mode)),
+            balanced: paragraphCaption(
+                socialSignalLines(
+                    mode: mode,
+                    category: category,
+                    hook: hook,
+                    title: title,
+                    insight: dataLine ?? insight,
+                    bullets: bullets,
+                    value: value,
+                    state: state
+                ),
+                cta: nil
+            ),
             humorous: paragraphCaption([
                 hook,
                 playfulLine(category: category, title: title, mode: mode),
@@ -237,6 +242,105 @@ enum ShareCaptionEngine {
         return output.joined(separator: "\n")
     }
 
+    private static func socialSignalLines(
+        mode: ExperienceMode,
+        category: ShareHookCategory,
+        hook: String,
+        title: String,
+        insight: String,
+        bullets: [String],
+        value: String?,
+        state: String?
+    ) -> [String?] {
+        let lower = title.lowercased()
+        let metric = titleMetricLine(title: title, value: value, state: state)
+
+        if lower.contains("cme") || lower.contains("solar wave") {
+            return [
+                hook,
+                "CMEs can stir geomagnetic conditions that may overlap with sleep, sensitivity, or recovery shifts",
+                "Sometimes what you feel is part of a bigger signal picture",
+                "Decode the unseen in Gaia Eyes",
+            ]
+        }
+
+        if lower.contains("schumann") || lower.contains("resonance") {
+            return [
+                hook,
+                mode == .mystical
+                    ? "Schumann shifts can make the field feel louder for some people"
+                    : "Schumann shifts may overlap with restless energy or a less settled baseline",
+                mode == .mystical
+                    ? "Ground, breathe, and spend time outdoors if you can"
+                    : "Grounding, breath work, and a steadier pace are good defaults today",
+                "Decode the unseen in Gaia Eyes",
+            ]
+        }
+
+        if lower.contains("temporary illness") || lower.contains("illness") || lower.contains("sick") {
+            return [
+                hook,
+                "Temporary illness can turn symptoms up and make patterns harder to read",
+                "Log it so Gaia can treat today as context instead of a false pattern",
+                "Track the bigger picture in Gaia Eyes",
+            ]
+        }
+
+        if lower.contains("symptom") {
+            return [
+                hook,
+                "Your current symptoms are part of today's signal mix",
+                "Log what is active so Gaia can learn what keeps showing up around it",
+                "Track your own patterns in Gaia Eyes",
+            ]
+        }
+
+        switch category {
+        case .solar:
+            return [
+                hook,
+                metric ?? insight,
+                "Solar activity can stir the field and may overlap with sleep, energy, or sensitivity",
+                "Decode the unseen in Gaia Eyes",
+            ]
+        case .geomagnetic:
+            return [
+                hook,
+                metric ?? insight,
+                "Field shifts may overlap with restlessness, sleep changes, or sensitivity",
+                "Decode the unseen in Gaia Eyes",
+            ]
+        case .air:
+            return [
+                hook,
+                metric ?? insight,
+                "Air quality and irritants can overlap with sinus pressure, headaches, or fatigue",
+                "Track the bigger picture in Gaia Eyes",
+            ]
+        case .pressure:
+            return [
+                hook,
+                metric ?? insight,
+                "Pressure swings can overlap with headaches, pain, or body sensitivity",
+                "Track the bigger picture in Gaia Eyes",
+            ]
+        case .body:
+            return [
+                hook,
+                "Your body context can change how today's signals should be read",
+                feelingLine(category: category, bullets: bullets, style: .balanced, mode: mode),
+                "Track the bigger picture in Gaia Eyes",
+            ]
+        case .earth, .pattern:
+            return [
+                hook,
+                metric ?? insight,
+                feelingLine(category: category, bullets: bullets, style: .balanced, mode: mode),
+                groundingLine(category: category, style: .balanced, mode: mode),
+            ]
+        }
+    }
+
     private static func shareCTA(style: CaptionTone, mode: ExperienceMode) -> String {
         switch style {
         case .scientific:
@@ -258,6 +362,8 @@ enum ShareCaptionEngine {
             return "Track weather-sensitive shifts in Gaia Eyes"
         case (.solar, .scientific), (.geomagnetic, .scientific):
             return "Track space weather and body context in Gaia Eyes"
+        case (.body, .scientific):
+            return "Track symptoms and body context in Gaia Eyes"
         case (_, .balanced):
             return "See how your own signal mix trends in Gaia Eyes"
         case (_, .humorous):
@@ -397,6 +503,12 @@ enum ShareCaptionEngine {
             return "It may be worth trusting this pattern a little more"
         case (.pattern, .humorous):
             return "At this point the pattern might want a name tag"
+        case (.body, .scientific):
+            return "Body context can change how symptoms and signal overlap should be read"
+        case (.body, .balanced):
+            return "You may want to treat today as body-context first, pattern signal second"
+        case (.body, .humorous):
+            return "If your body is waving a flag, let it be loud enough to count"
         case (.earth, .scientific):
             return "The overall signal mix looks a little more loaded than usual"
         case (.earth, .balanced):
@@ -420,6 +532,8 @@ enum ShareCaptionEngine {
             return mode == .mystical ? "The field brought extra static" : "The background brought extra static"
         case .pattern:
             return "Your data keeps pulling this thread"
+        case .body:
+            return "Your body is sending a status update"
         case .earth:
             return "The day has opinions"
         }
@@ -441,6 +555,8 @@ enum ShareCaptionEngine {
                 return mode == .mystical ? "Stay a little softer with yourself today" : "Keep your baseline a little steadier today"
             case .pattern:
                 return "Log it and see if it keeps holding"
+            case .body:
+                return "Use today as context, not a verdict"
             case .earth:
                 return "Give yourself a little more margin today"
             }
@@ -452,6 +568,8 @@ enum ShareCaptionEngine {
                 return mode == .mystical ? "Decode the unseen" : "Maybe do not argue with physics today"
             case .pattern:
                 return "Consider this your recurring reminder"
+            case .body:
+                return "Let the sick-day math be honest"
             case .earth:
                 return "Let the day be weird without helping it"
             }

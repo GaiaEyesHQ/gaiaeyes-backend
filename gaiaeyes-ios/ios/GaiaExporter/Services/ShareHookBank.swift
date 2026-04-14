@@ -7,6 +7,7 @@ enum ShareHookCategory: String {
     case air
     case geomagnetic
     case pattern
+    case body
 }
 
 enum ShareHookBank {
@@ -24,6 +25,15 @@ enum ShareHookBank {
             .compactMap { $0?.lowercased() }
             .joined(separator: " ")
 
+        if haystack.contains("temporary_illness")
+            || haystack.contains("temporary illness")
+            || haystack.contains("illness")
+            || haystack.contains("sick")
+            || haystack.contains("symptom")
+            || haystack.contains("body_")
+            || haystack.contains("body context") {
+            return .body
+        }
         if haystack.contains("pressure") || haystack.contains("temp") || haystack.contains("weather") {
             return .pressure
         }
@@ -75,6 +85,8 @@ enum ShareHookBank {
             return geomagneticHooks
         case .pattern:
             return patternHooks
+        case .body:
+            return bodyHooks
         }
     }
 
@@ -93,6 +105,9 @@ enum ShareHookBank {
     }
 
     private static let solarHooks: [HookPair] = [
+        HookPair(scientific: "The sun is throwing a tantrum", mystical: "The sun is throwing a tantrum"),
+        HookPair(scientific: "The sun is stirring the sleep forecast", mystical: "The sun is stirring the sleep forecast"),
+        HookPair(scientific: "A solar wave is moving through", mystical: "A solar wave is moving through"),
         HookPair(scientific: "The sun just woke up", mystical: "The sun just woke up"),
         HookPair(scientific: "Solar activity is heating up", mystical: "Solar fire is building"),
         HookPair(scientific: "That flare was not subtle", mystical: "That flare was not quiet"),
@@ -185,6 +200,9 @@ enum ShareHookBank {
     ]
 
     private static let geomagneticHooks: [HookPair] = [
+        HookPair(scientific: "Schumann spike: embrace the energy", mystical: "Schumann spike: embrace the energy"),
+        HookPair(scientific: "Earth's resonance is speaking up", mystical: "Gaia's resonance is speaking up"),
+        HookPair(scientific: "The unseen signal just got louder", mystical: "The unseen signal just got louder"),
         HookPair(scientific: "The background just got louder", mystical: "The background just got louder"),
         HookPair(scientific: "Something in the field shifted", mystical: "Something in the field shifted"),
         HookPair(scientific: "It is one of those days", mystical: "It is one of those days"),
@@ -228,5 +246,16 @@ enum ShareHookBank {
         HookPair(scientific: "Your data is flagging the repeat", mystical: "Your data is flagging the repeat"),
         HookPair(scientific: "This may be one of your real patterns", mystical: "This may be one of your real patterns"),
         HookPair(scientific: "This pattern keeps finding you", mystical: "This pattern keeps finding you"),
+    ]
+
+    private static let bodyHooks: [HookPair] = [
+        HookPair(scientific: "Your body is part of the signal", mystical: "Your body is part of the signal"),
+        HookPair(scientific: "Today's body context matters", mystical: "Today's body context matters"),
+        HookPair(scientific: "Current symptoms are changing the read", mystical: "Current symptoms are changing the field"),
+        HookPair(scientific: "This may be a sick-day signal", mystical: "This may be a sick-day signal"),
+        HookPair(scientific: "Temporary illness changes the baseline", mystical: "Temporary illness changes the baseline"),
+        HookPair(scientific: "Your symptoms are part of the story", mystical: "Your symptoms are part of the story"),
+        HookPair(scientific: "The body signal is louder today", mystical: "The body signal is louder today"),
+        HookPair(scientific: "Today needs body-context first", mystical: "Today needs body-context first"),
     ]
 }

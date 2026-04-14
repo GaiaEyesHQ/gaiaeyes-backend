@@ -3,7 +3,8 @@ import UIKit
 
 enum ShareBackgroundResolver {
     private static let cache = NSCache<NSURL, UIImage>()
-    private static let themedCandidateLimit = 12
+    private static let themedCandidateLimit = 24
+    private static let themedVariantCount = 6
     private static let candidateTimeout: TimeInterval = 0.75
 
     static func loadImage(for background: ShareCardBackground) async -> UIImage? {
@@ -57,11 +58,7 @@ enum ShareBackgroundResolver {
         for folder in folders {
             for ext in exts {
                 for key in themeKeys.prefix(3) {
-                    let stems = uniquePreservingOrder([
-                        key,
-                        key.replacingOccurrences(of: "_", with: "-"),
-                    ]).filter { !$0.isEmpty }
-                    for stem in stems {
+                    for stem in themedStems(for: key) {
                         if let url = MediaPaths.storageURL("\(folder)/\(stem).\(ext)") {
                             urls.append(url)
                         }
@@ -71,6 +68,27 @@ enum ShareBackgroundResolver {
         }
 
         return urls
+    }
+
+    private static func themedStems(for key: String) -> [String] {
+        let dashed = key.replacingOccurrences(of: "_", with: "-")
+        let variant = dailyVariantIndex(for: key)
+        return uniquePreservingOrder([
+            "\(key)_\(variant)",
+            "\(dashed)-\(variant)",
+            key,
+            dashed,
+        ]).filter { !$0.isEmpty }
+    }
+
+    private static func dailyVariantIndex(for key: String) -> Int {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Chicago") ?? .current
+        let day = calendar.ordinality(of: .day, in: .era, for: Date()) ?? 0
+        let seed = key.unicodeScalars.reduce(0) { partial, scalar in
+            (partial + Int(scalar.value)) % 997
+        }
+        return ((day + seed) % themedVariantCount) + 1
     }
 
     private static func defaultCandidateURLs(for style: ShareBackgroundStyle) -> [URL] {

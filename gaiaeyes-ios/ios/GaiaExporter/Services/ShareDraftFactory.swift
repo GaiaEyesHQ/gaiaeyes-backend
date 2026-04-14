@@ -438,6 +438,9 @@ enum ShareDraftFactory {
         case .earth, .pattern:
             metricLine = valueOrNil(state).map { "\(title) is \($0.lowercased()) today" }
                 ?? valueOrNil(value).map { "\(title) is at \($0)" }
+        case .body:
+            metricLine = valueOrNil(state).map { "\(title) is \($0.lowercased()) right now" }
+                ?? valueOrNil(value).map { "\(title) is active at \($0)" }
         }
 
         return joinSentences(
@@ -494,6 +497,8 @@ enum ShareDraftFactory {
             return linePair(clippedText(title, maxWords: 2), cleanSignValue(state) ?? cleanSignValue(value))
         case .pattern:
             return nil
+        case .body:
+            return linePair(clippedText(title, maxWords: 2), cleanSignValue(state) ?? cleanSignValue(value) ?? "Body context")
         }
     }
 
@@ -544,7 +549,7 @@ enum ShareDraftFactory {
             return linePair("Solar watch", cleanSignValue(severity) ?? clippedText(title, maxWords: 2))
         case .geomagnetic:
             return linePair("Field watch", cleanSignValue(severity) ?? "Active now")
-        case .pressure, .air, .earth, .pattern:
+        case .pressure, .air, .earth, .pattern, .body:
             return linePair(clippedText(title, maxWords: 2), cleanSignValue(severity))
         }
     }
@@ -769,8 +774,29 @@ enum ShareDraftFactory {
         let haystack = [analyticsKey, title, emphasis]
             .compactMap { $0?.lowercased() }
             .joined(separator: " ")
+        let tokens = Set(
+            haystack
+                .replacingOccurrences(of: "_", with: " ")
+                .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                .map(String.init)
+        )
 
         var keys: [String] = []
+        if haystack.contains("current_symptoms") || haystack.contains("current symptoms") || haystack.contains("symptom") {
+            keys.append("current_symptoms")
+            keys.append("symptoms")
+            keys.append("symptom")
+        }
+        if haystack.contains("temporary_illness")
+            || haystack.contains("temporary illness")
+            || haystack.contains("illness")
+            || haystack.contains("sick")
+            || haystack.contains("cold")
+            || haystack.contains("flu") {
+            keys.append("illness")
+            keys.append("sick")
+            keys.append("temporary_illness")
+        }
         if haystack.contains("humidity") {
             keys.append("humidity")
         }
@@ -810,7 +836,7 @@ enum ShareDraftFactory {
         if haystack.contains("pressure") || haystack.contains("barometric") {
             keys.append("pressure")
         }
-        if haystack.contains("temperature") || haystack.contains("temp") {
+        if haystack.contains("temperature") || tokens.contains("temp") {
             keys.append("temperature")
         }
         if haystack.contains("schumann") {
@@ -867,6 +893,8 @@ enum ShareDraftFactory {
             return ["space_weather", "field"]
         case .pattern:
             return ["signals", "pattern"]
+        case .body:
+            return ["body_context", "symptoms", "illness"]
         }
     }
 

@@ -377,13 +377,20 @@ struct AllDriversView: View {
                     spaceVisualURL("drap/latest.png"),
                 ].compactMap { $0 }
             )
+        case "body_symptoms", "current_symptoms", "symptoms":
+            return ShareCardBackground(
+                style: .abstract,
+                themeKeys: ["current_symptoms", "symptoms", "symptom"]
+            )
+        case "temporary_illness", "illness", "sick":
+            return ShareCardBackground(
+                style: .abstract,
+                themeKeys: ["illness", "sick", "temporary_illness"]
+            )
         case "pressure", "temp", "aqi", "allergens":
             return ShareCardBackground(
                 style: .atmospheric,
-                candidateURLs: [
-                    MediaPaths.sanitize("social/earthscope/backgrounds/checkin.png"),
-                    MediaPaths.sanitize("social/earthscope/backgrounds/current_drivers.png"),
-                ].compactMap { $0 }
+                themeKeys: [driver.key]
             )
         default:
             return ShareCardBackground(style: .abstract)
