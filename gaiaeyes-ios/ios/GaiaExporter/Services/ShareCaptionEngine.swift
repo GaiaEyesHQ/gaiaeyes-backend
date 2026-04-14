@@ -69,21 +69,20 @@ enum ShareCaptionEngine {
                 lines: [
                     factLine("Pattern", relationship),
                     factLine("Evidence", evidenceLine ?? bullets.first),
-                    factLine("Note", "Worth watching as a pattern, not treating as proof"),
                 ],
-                cta: patternCTA(style: .scientific, mode: mode)
+                cta: nil
             ),
             balanced: paragraphCaption([
                 hook,
                 insight,
                 bullets.first ?? "It keeps showing up in the same direction",
-            ], cta: patternCTA(style: .balanced, mode: mode)),
+            ], cta: nil),
             humorous: paragraphCaption([
                 hook,
                 "Your log keeps bringing this one back",
                 bullets.first ?? evidenceLine ?? "Apparently the pattern has opinions",
                 mode == .mystical ? "The universe left a sticky note" : "The data left a sticky note",
-            ], cta: patternCTA(style: .humorous, mode: mode))
+            ], cta: nil)
         )
     }
 

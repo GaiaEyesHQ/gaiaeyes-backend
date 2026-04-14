@@ -24,25 +24,15 @@ struct ShareCardView: View {
     }
 
     var body: some View {
-        ZStack {
-            ShareCardBackgroundView(
-                background: model.background,
-                accentLevel: model.accentLevel,
-                backgroundImage: backgroundImage
-            )
+        GeometryReader { proxy in
+            VStack(spacing: 0) {
+                imagePanel
+                    .frame(height: proxy.size.height * imagePanelRatio)
+                    .frame(maxWidth: .infinity)
 
-            LinearGradient(
-                colors: [
-                    Color.black.opacity(0.08),
-                    Color.black.opacity(0.24),
-                    Color.black.opacity(0.66)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            contentStack
-            .padding(padding)
+                textPanel
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
         .overlay(
@@ -50,6 +40,246 @@ struct ShareCardView: View {
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
         .background(Color.black)
+    }
+
+    private var imagePanelRatio: CGFloat {
+        switch model.layout {
+        case .personalPattern:
+            return 0.55
+        case .outlook, .event:
+            return 0.56
+        default:
+            return 0.52
+        }
+    }
+
+    private var imagePanel: some View {
+        ZStack(alignment: .topTrailing) {
+            ShareCardBackgroundView(
+                background: model.background,
+                accentLevel: model.accentLevel,
+                backgroundImage: backgroundImage
+            )
+            .clipped()
+
+            LinearGradient(
+                colors: [
+                    Color.black.opacity(0.06),
+                    Color.black.opacity(0.16),
+                    Color.black.opacity(0.34)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            if let pillLabel = activePillLabel {
+                ShareStatePill(label: pillLabel, tint: accentColor)
+                    .padding(18)
+            }
+
+            if let sourceLine = model.sourceLine, !sourceLine.isEmpty {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Text(sourceLine)
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundColor(.white.opacity(0.44))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                        Spacer()
+                    }
+                    .padding(.horizontal, padding)
+                    .padding(.bottom, 10)
+                }
+            }
+        }
+    }
+
+    private var textPanel: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let eyebrow = panelEyebrow {
+                Text(eyebrow.uppercased())
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundColor(.white.opacity(0.58))
+                    .tracking(1.2)
+                    .lineLimit(1)
+            }
+
+            Text(model.title)
+                .font(.system(size: panelTitleSize, weight: .semibold, design: .serif))
+                .foregroundColor(.white.opacity(0.96))
+                .lineSpacing(3)
+                .lineLimit(3)
+                .minimumScaleFactor(0.72)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let bodyText = panelBodyText {
+                Text(bodyText)
+                    .font(.system(size: panelBodySize, weight: .regular, design: .rounded))
+                    .foregroundColor(.white.opacity(0.80))
+                    .lineSpacing(4)
+                    .lineLimit(4)
+                    .minimumScaleFactor(0.78)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !panelSupportLines.isEmpty {
+                VStack(alignment: .leading, spacing: 7) {
+                    ForEach(Array(panelSupportLines.prefix(2).enumerated()), id: \.offset) { _, line in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Circle()
+                                .fill(accentColor.opacity(0.86))
+                                .frame(width: 6, height: 6)
+                            Text(line)
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundColor(.white.opacity(0.78))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.78)
+                        }
+                    }
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(alignment: .bottom, spacing: 18) {
+                shareGlyph("hand.thumbsup")
+                shareGlyph("hand.thumbsdown")
+                shareGlyph("bookmark")
+                shareGlyph("paperplane")
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(model.branding.title)
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.88))
+                    Text(model.branding.url)
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundColor(.white.opacity(0.52))
+                }
+            }
+        }
+        .padding(padding)
+        .background(panelBackground)
+    }
+
+    private var panelBackground: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    accentColor.opacity(0.52),
+                    Color(red: 0.07, green: 0.07, blue: 0.06).opacity(0.94)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            Color.black.opacity(0.22)
+        }
+    }
+
+    private func shareGlyph(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: 17, weight: .medium))
+            .foregroundColor(.white.opacity(0.80))
+    }
+
+    private var panelEyebrow: String? {
+        let eyebrow = model.eyebrow?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let eyebrow, !eyebrow.isEmpty else { return nil }
+        return eyebrow
+    }
+
+    private var panelBodyText: String? {
+        let values: [String?]
+        if model.layout == .personalPattern {
+            values = [cleanPatternLine(model.subtitle)]
+        } else {
+            let metric = joinedPanelMetric
+            values = [metric, model.note]
+        }
+        return nonEmptyPanelLine(uniquePanelLines(values).prefix(2).joined(separator: ". "))
+    }
+
+    private var joinedPanelMetric: String? {
+        let primary = cleanPanelLine(model.primaryText)
+        let value = cleanPanelLine(model.valueText)
+        guard let primary else { return cleanPanelLine(model.note) }
+        guard let value, normalized(primary) != normalized(value) else { return primary }
+        return "\(primary) · \(value)"
+    }
+
+    private var panelSupportLines: [String] {
+        uniquePanelLines(model.bullets.map { cleanPatternLine($0) })
+    }
+
+    private func uniquePanelLines(_ values: [String?]) -> [String] {
+        var result: [String] = []
+        for value in values {
+            guard let cleaned = cleanPanelLine(value) else { continue }
+            guard !result.contains(where: { normalized($0) == normalized(cleaned) }) else { continue }
+            result.append(cleaned)
+        }
+        return result
+    }
+
+    private func cleanPatternLine(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let pieces = raw
+            .replacingOccurrences(of: ". ", with: ".|")
+            .replacingOccurrences(of: "! ", with: "!|")
+            .replacingOccurrences(of: "? ", with: "?|")
+            .components(separatedBy: "|")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .filter { piece in
+                let lower = piece.lowercased()
+                if lower.hasPrefix("in your history,") && (lower.contains("overlapped") || lower.contains("lined up")) {
+                    return false
+                }
+                if lower.contains("treat this as a clue") || lower.contains("treat it as a clue") {
+                    return false
+                }
+                return true
+            }
+        return cleanPanelLine(pieces.joined(separator: " "))
+    }
+
+    private func cleanPanelLine(_ raw: String?) -> String? {
+        guard let cleaned = raw?
+            .replacingOccurrences(of: "\n", with: " ")
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .trimmingCharacters(in: CharacterSet(charactersIn: " .\n\t"))
+        else { return nil }
+        return nonEmptyPanelLine(cleaned)
+    }
+
+    private func nonEmptyPanelLine(_ raw: String?) -> String? {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+
+    private var panelTitleSize: CGFloat {
+        switch model.layout {
+        case .personalPattern:
+            return 24
+        case .event, .outlook:
+            return 25
+        default:
+            return 26
+        }
+    }
+
+    private var panelBodySize: CGFloat {
+        switch model.layout {
+        case .personalPattern:
+            return 16
+        default:
+            return 15
+        }
     }
 
     private var contentStack: some View {

@@ -12434,6 +12434,7 @@ struct ContentView: View {
         let payload: UserForecastOutlook?
         let isLoading: Bool
         let error: String?
+        let hasPlusAccess: Bool
         let onRefresh: () -> Void
         let onOpenAllDrivers: () -> Void
         @State private var shareDraft: ShareDraft? = nil
@@ -12815,12 +12816,30 @@ struct ContentView: View {
         @ViewBuilder
         private func dailyOutlookSection(_ days: [UserOutlookDay]) -> some View {
             if !days.isEmpty {
-                LocalConditionsSurfaceCard(title: "7-Day Forecast", icon: "calendar") {
+                LocalConditionsSurfaceCard(title: hasPlusAccess ? "7-Day Forecast" : "Next 24 Hours", icon: "calendar") {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(Array(days.prefix(7))) { day in
                             dailyOutlookRow(day)
                         }
                     }
+                }
+            }
+        }
+
+        private var plusOutlookLockedCard: some View {
+            LocalConditionsSurfaceCard(title: "Plus outlook", icon: "lock.fill") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Free shows the next 24 hours")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Plus unlocks the 72-hour and 7-day outlook, including the longer signal mix and likely body-context windows.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    NavigationLink(destination: SubscribeView()) {
+                        Label("View Plus", systemImage: "sparkles")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
             }
         }
@@ -12914,19 +12933,7 @@ struct ContentView: View {
                                     .foregroundColor(.orange)
                             }
 
-                            if let windows = payload?.availableWindows, !windows.isEmpty {
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 10) {
-                                        ForEach(windows, id: \.self) { item in
-                                            LocalConditionsValueChip(
-                                                label: "Window",
-                                                value: availabilityText(item),
-                                                tint: GaugePalette.low
-                                            )
-                                        }
-                                    }
-                                }
-                            } else if !isLoading && cleanError == nil {
+                            if !isLoading && cleanError == nil && payload == nil {
                                 Text(payload?.semanticEmptyState ?? "No outlook yet. Add your location and give forecast data a little more time.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -12934,14 +12941,22 @@ struct ContentView: View {
                         }
 
                         if let daily = payload?.dailyOutlook, !daily.isEmpty {
-                            dailyOutlookSection(daily)
+                            dailyOutlookSection(hasPlusAccess ? daily : Array(daily.prefix(1)))
+                            if !hasPlusAccess && daily.count > 1 {
+                                plusOutlookLockedCard
+                            }
                         } else {
                             windowSection(payload?.next24h)
-                            windowSection(payload?.next72h)
-                            windowSection(payload?.next7d)
+                            if hasPlusAccess {
+                                windowSection(payload?.next72h)
+                                windowSection(payload?.next7d)
+                            } else if userOutlookWindowHasContent(payload?.next72h) || userOutlookWindowHasContent(payload?.next7d) {
+                                plusOutlookLockedCard
+                            }
                         }
 
-                        if !isLoading
+                        if hasPlusAccess
+                            && !isLoading
                             && (payload?.dailyOutlook?.isEmpty ?? true)
                             && !userOutlookWindowHasContent(payload?.next7d) {
                             LocalConditionsSurfaceCard(title: "7-Day Outlook", icon: "calendar") {
@@ -13671,8 +13686,18 @@ struct ContentView: View {
                             title: "Clearest Patterns",
                             subtitle: payload?.semanticStrongestSubtitle ?? "The clearest repeats in your history so far.",
                             cards: strongest,
-                            emptyMessage: payload?.semanticStrongestEmpty ?? "No clear patterns yet. Keep logging to help this section fill in.",
+                            emptyMessage: payload?.semanticStrongestEmpty ?? "No clear patterns yet. Most people need about 14-30 days of symptom logs before repeat overlaps stand out. If you skipped the 30-day Health import, body-signal patterns may take about a month to appear. Keep logging ordinary days and rough days.",
                             expanded: $showsAllStrongestPatterns
+                        )
+
+                        sectionView(
+                            title: "Body Signals",
+                            subtitle: payload?.semanticBodySubtitle ?? "Wearable-based patterns appear here when the overlap is strong enough.",
+                            cards: bodySignals,
+                            emptyMessage: payload?.semanticBodyEmpty ?? "No body-signal patterns are standing out yet. Wearable patterns need enough sleep, heart, HRV, and symptom history. If you skipped backfill, this can take about a month of fresh Health data.",
+                            pendingMessage: payload?.semanticBodyPending ?? "Checking wearable patterns now.",
+                            isPending: isLoadingSupplementalSections,
+                            expanded: $showsAllBodySignalPatterns
                         )
 
                         sectionView(
@@ -13688,16 +13713,6 @@ struct ContentView: View {
                         if shouldShowLunarSection {
                             lunarSectionView
                         }
-
-                        sectionView(
-                            title: "Body Signals",
-                            subtitle: payload?.semanticBodySubtitle ?? "Wearable-based patterns appear here when the overlap is strong enough.",
-                            cards: bodySignals,
-                            emptyMessage: payload?.semanticBodyEmpty ?? "No body-signal patterns are standing out yet.",
-                            pendingMessage: payload?.semanticBodyPending ?? "Checking wearable patterns now.",
-                            isPending: isLoadingSupplementalSections,
-                            expanded: $showsAllBodySignalPatterns
-                        )
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -16543,6 +16558,7 @@ struct ContentView: View {
                 payload: resolvedUserOutlookPayload,
                 isLoading: userOutlookLoading,
                 error: userOutlookError,
+                hasPlusAccess: hasPlusAccess,
                 onRefresh: { Task { await fetchUserOutlook() } },
                 onOpenAllDrivers: {
                     selectedTab = .explore
@@ -16648,6 +16664,7 @@ struct ContentView: View {
                 payload: resolvedUserOutlookPayload,
                 isLoading: userOutlookLoading,
                 error: userOutlookError,
+                hasPlusAccess: hasPlusAccess,
                 onRefresh: { Task { await fetchUserOutlook() } },
                 onOpenAllDrivers: { openAllDrivers() }
             )
@@ -16801,6 +16818,7 @@ struct ContentView: View {
                 tone: experienceProfile.tone,
                 tempUnit: experienceProfile.tempUnit,
                 showsCloseButton: false,
+                hasPlusAccess: hasPlusAccess,
                 initialFocusKey: allDriversFocusKey,
                 signalBar: persistentSignalBarItems,
                 onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },
@@ -18085,6 +18103,7 @@ struct ContentView: View {
                             payload: resolvedUserOutlook,
                             isLoading: userOutlookLoading,
                             error: userOutlookError,
+                            hasPlusAccess: hasPlusAccess,
                             onRefresh: { Task { await fetchUserOutlook() } },
                             onOpenAllDrivers: { openAllDriversAfterClosingInsights() }
                         )
@@ -18232,6 +18251,7 @@ struct ContentView: View {
                             tone: experienceProfile.tone,
                             tempUnit: experienceProfile.tempUnit,
                             showsCloseButton: false,
+                            hasPlusAccess: hasPlusAccess,
                             initialFocusKey: allDriversFocusKey,
                             signalBar: persistentSignalBarItems,
                             onOpenCurrentSymptoms: { openCurrentSymptomsFromAllDrivers() },

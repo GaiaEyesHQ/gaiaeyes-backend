@@ -67,6 +67,7 @@ struct AllDriversView: View {
     var tone: ToneStyle = .balanced
     var tempUnit: TemperatureUnit = .localeDefault
     var showsCloseButton: Bool = true
+    var hasPlusAccess: Bool = true
     var initialFocusKey: String? = nil
     var signalBar: [SignalPill] = []
     var onOpenCurrentSymptoms: (() -> Void)? = nil
@@ -100,6 +101,19 @@ struct AllDriversView: View {
             return drivers
         }
         return drivers.filter { $0.category == selectedFilter }
+    }
+
+    private var freeDriverLimit: Int { 4 }
+
+    private var visibleFilteredDrivers: [DriverDetailItem] {
+        if hasPlusAccess {
+            return filteredDrivers
+        }
+        return Array(filteredDrivers.prefix(freeDriverLimit))
+    }
+
+    private var hiddenFilteredDriverCount: Int {
+        max(filteredDrivers.count - visibleFilteredDrivers.count, 0)
     }
 
     private func translatedLabel(for driver: DriverDetailItem) -> String {
@@ -590,6 +604,36 @@ struct AllDriversView: View {
         )
     }
 
+    private var driversLockedCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("More drivers are included with Plus", systemImage: "lock.fill")
+                .font(.headline)
+                .foregroundColor(.white)
+            Text("Free shows the strongest \(freeDriverLimit) drivers in this view. Plus unlocks the full driver stack, deeper detail, and the pattern and outlook links behind each signal.")
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.68))
+                .fixedSize(horizontal: false, vertical: true)
+            if hiddenFilteredDriverCount > 0 {
+                Text("\(hiddenFilteredDriverCount) more \(hiddenFilteredDriverCount == 1 ? "driver is" : "drivers are") waiting behind Plus.")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(GaugePalette.elevated)
+            }
+            NavigationLink(destination: SubscribeView()) {
+                Label("View Plus", systemImage: "sparkles")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(GaugePalette.elevated)
+        }
+        .padding(18)
+        .background(Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
     var body: some View {
         ZStack {
             LinearGradient(
@@ -636,7 +680,7 @@ struct AllDriversView: View {
                             if filteredDrivers.isEmpty {
                                 emptyStateCard
                             } else {
-                                ForEach(filteredDrivers) { driver in
+                                ForEach(visibleFilteredDrivers) { driver in
                                     VStack(alignment: .leading, spacing: 0) {
                                         DriverRowView(
                                             driver: driver,
@@ -698,6 +742,10 @@ struct AllDriversView: View {
                                         x: 0,
                                         y: 0
                                     )
+                                }
+
+                                if !hasPlusAccess && hiddenFilteredDriverCount > 0 {
+                                    driversLockedCard
                                 }
                             }
                         }
