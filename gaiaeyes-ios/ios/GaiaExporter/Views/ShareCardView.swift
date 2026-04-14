@@ -25,12 +25,13 @@ struct ShareCardView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            VStack(spacing: 0) {
+            ZStack(alignment: .bottomLeading) {
                 imagePanel
-                    .frame(height: proxy.size.height * imagePanelRatio)
-                    .frame(maxWidth: .infinity)
+                    .frame(width: proxy.size.width, height: proxy.size.height)
 
                 textPanel
+                    .frame(height: proxy.size.height * textPanelRatio)
+                    .frame(maxWidth: .infinity, alignment: .bottomLeading)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
@@ -124,12 +125,10 @@ struct ShareCardView: View {
         }
         .padding(padding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(panelBackground)
     }
 
-    private var panelBackground: some View {
-        Color(red: 0.08, green: 0.09, blue: 0.07)
-            .overlay(accentColor.opacity(0.12))
+    private var textPanelRatio: CGFloat {
+        1 - imagePanelRatio
     }
 
     private var brandingBlock: some View {

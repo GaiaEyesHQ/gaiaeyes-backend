@@ -3888,7 +3888,7 @@ struct ContentView: View {
     private var guideHeaderOverlay: some View {
         guideToolbarButton
             .padding(.leading, 16)
-            .padding(.top, 44)
+            .padding(.top, 0)
     }
 
     private var guideUnseenStorageKey: String {
@@ -11015,7 +11015,7 @@ struct ContentView: View {
             GroupBox {
                 VStack(alignment: .leading, spacing: 12) {
                     if isLoading {
-                        ProgressView("Loading dashboard…")
+                        ProgressView("Calibrating your gauges…")
                             .font(.caption)
                     } else if rows.isEmpty, let errorMessage, !errorMessage.isEmpty {
                         Text("Dashboard refresh issue: \(errorMessage)")
@@ -11023,7 +11023,9 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                     }
                     if rows.isEmpty {
-                        Text("Gauges are calibrating.")
+                        Text(isLoading
+                             ? "Health data is flowing in. First gauges can take a few minutes after install, login, or permission changes."
+                             : "Gauges are still calibrating. Open Apple Health or your wearable app if this is your first sync, then check back in a few minutes.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     } else {
@@ -18674,9 +18676,14 @@ struct ContentView: View {
                     }
                 )
                 .padding(.horizontal, 12)
-                .padding(.top, 6)
+                .padding(.top, 24)
                 .padding(.bottom, 6)
                 .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if visibleAppNotice(for: .topBanner) == nil {
+                guideHeaderOverlay
             }
         }
         .fullScreenCover(isPresented: $showInteractiveViewer) {
@@ -18794,9 +18801,6 @@ struct ContentView: View {
                 outlookTab: outlookTabView,
                 exploreTab: exploreTabView
             )
-        }
-        .overlay(alignment: .topLeading) {
-            guideHeaderOverlay
         }
     }
 

@@ -439,35 +439,61 @@ struct AllDriversView: View {
         guard let snapshot else { return nil }
         let leading = snapshot.drivers.first(where: { $0.role == .leading }) ?? snapshot.drivers.first
         guard let leading else { return nil }
-        let supporting = snapshot.drivers
-            .filter { $0.id != leading.id }
-            .prefix(2)
+        let activeCount = snapshot.summary.activeDriverCount
+        let driverNames = snapshot.drivers
+            .prefix(6)
             .map { translatedLabel(for: $0) }
-        let interpretation = translatedText(snapshot.semanticDailyBrief)
-            ?? snapshot.semanticDailyBrief
-            ?? translatedText(leading.semanticShortReason)
-            ?? leading.semanticShortReason
-            ?? translatedText(leading.shortReason)
-            ?? leading.shortReason
+        let visibleDriverLine = driverNames.joined(separator: ", ")
+        let summaryNote = [
+            snapshot.summary.primaryState,
+            snapshot.summary.strongestCategory
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .joined(separator: " · ")
         let accent = accentLevel(for: leading.severity ?? leading.state)
-        return ShareDraftFactory.dailyState(
-            surface: "all_drivers",
-            analyticsKey: leading.key,
-            mode: mode,
-            title: vocabulary.whatMattersNowLabel,
-            leading: translatedLabel(for: leading),
-            supporting: supporting,
-            interpretation: interpretation,
-            accent: accent,
+        let card = ShareCardModel(
+            shareType: .dailyState,
+            layout: .dailyState,
+            format: .square,
             background: ShareCardBackground(
                 style: .abstract,
                 candidateURLs: [
                     MediaPaths.sanitize("social/earthscope/backgrounds/current_drivers.png"),
                     MediaPaths.sanitize("social/earthscope/backgrounds/actions.png"),
-                ].compactMap { $0 }
+                ].compactMap { $0 },
+                themeKeys: ["driver_stack", "current_drivers", "mission_control"]
             ),
-            updatedAt: formattedUpdate(snapshot.asof ?? snapshot.generatedAt),
-            promptText: sharePrompt(for: accent)
+            accentLevel: accent,
+            eyebrow: "Live driver stack",
+            title: activeCount > 1 ? "Influences are stacking" : "Today's signal stack",
+            subtitle: nil,
+            signText: nil,
+            primaryText: visibleDriverLine,
+            valueText: activeCount > 0 ? "\(activeCount) active" : "Quiet",
+            stateText: snapshot.summary.primaryState,
+            bullets: Array(driverNames.prefix(4)),
+            highlights: [],
+            note: summaryNote.isEmpty ? nil : summaryNote,
+            footer: formattedUpdate(snapshot.asof ?? snapshot.generatedAt) ?? "gaiaeyes.app",
+            sourceLine: nil,
+            branding: .gaiaEyes
+        )
+        let caption = [
+            activeCount > 1 ? "Influences are stacking (\(activeCount) active)." : "Today's signal stack is quiet.",
+            visibleDriverLine.isEmpty ? nil : "In the mix: \(visibleDriverLine).",
+            "Use it as a quick read on what may be shaping the day."
+        ]
+        .compactMap { $0 }
+        .joined(separator: " ")
+        let captions = ShareCaptionSet(scientific: caption, balanced: caption, humorous: caption)
+        return ShareDraft(
+            shareType: .dailyState,
+            surface: "all_drivers",
+            analyticsKey: "driver_stack",
+            promptText: sharePrompt(for: accent),
+            card: card,
+            captions: captions
         )
     }
 
