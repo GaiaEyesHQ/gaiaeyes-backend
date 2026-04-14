@@ -571,24 +571,66 @@ function gaia_app_notice_defaults() {
 }
 }
 
+if (!function_exists('gaia_app_notice_slots')) {
+function gaia_app_notice_slots() {
+    return [
+        'top_banner' => 'Top banner',
+        'home_tip' => 'Home tip',
+        'guide_card' => 'Guide card',
+        'all' => 'All placements',
+    ];
+}
+}
+
 if (!function_exists('gaia_app_notice_get')) {
 function gaia_app_notice_get() {
-    $stored = get_option('gaia_app_notice', []);
+    foreach (gaia_app_notices_get_all() as $notice) {
+        if (gaia_app_notice_is_current($notice)) {
+            return $notice;
+        }
+    }
+    return gaia_app_notice_defaults();
+}
+}
+
+if (!function_exists('gaia_app_notices_get_all')) {
+function gaia_app_notices_get_all() {
+    $stored = get_option('gaia_app_notices', []);
     if (!is_array($stored)) {
         $stored = [];
     }
-    return array_merge(gaia_app_notice_defaults(), $stored);
+
+    $legacy = get_option('gaia_app_notice', []);
+    if (is_array($legacy) && !empty($legacy)) {
+        $legacy = array_merge(gaia_app_notice_defaults(), $legacy);
+        $legacy_placement = isset($legacy['placement']) ? sanitize_key((string) $legacy['placement']) : 'top_banner';
+        if (!array_key_exists($legacy_placement, gaia_app_notice_slots())) {
+            $legacy_placement = 'top_banner';
+        }
+        if (empty($stored[$legacy_placement]) || !is_array($stored[$legacy_placement])) {
+            $stored[$legacy_placement] = $legacy;
+        }
+    }
+
+    $notices = [];
+    foreach (gaia_app_notice_slots() as $placement => $label) {
+        $raw = isset($stored[$placement]) && is_array($stored[$placement]) ? $stored[$placement] : [];
+        $raw['placement'] = $placement;
+        $notices[$placement] = array_merge(gaia_app_notice_defaults(), $raw, ['placement' => $placement]);
+    }
+    return $notices;
 }
 }
 
 if (!function_exists('gaia_app_notice_sanitize')) {
-function gaia_app_notice_sanitize($raw) {
+function gaia_app_notice_sanitize($raw, $forced_placement = null, $previous = []) {
     $raw = is_array($raw) ? $raw : [];
+    $previous = is_array($previous) ? array_merge(gaia_app_notice_defaults(), $previous) : gaia_app_notice_defaults();
     $type = isset($raw['type']) ? sanitize_key((string) $raw['type']) : 'info';
     if (!in_array($type, ['info', 'update', 'warning'], true)) {
         $type = 'info';
     }
-    $placement = isset($raw['placement']) ? sanitize_key((string) $raw['placement']) : 'top_banner';
+    $placement = $forced_placement ? sanitize_key((string) $forced_placement) : (isset($raw['placement']) ? sanitize_key((string) $raw['placement']) : 'top_banner');
     if (!in_array($placement, ['top_banner', 'guide_card', 'home_tip', 'all'], true)) {
         $placement = 'top_banner';
     }
@@ -598,10 +640,10 @@ function gaia_app_notice_sanitize($raw) {
     $link_url = isset($raw['link_url']) ? esc_url_raw((string) $raw['link_url']) : '';
     $id = isset($raw['id']) ? sanitize_key((string) $raw['id']) : '';
     if ($id === '' && ($title !== '' || $message !== '')) {
-        $id = 'notice-' . gmdate('YmdHis');
+        $id = 'notice-' . $placement . '-' . gmdate('YmdHis');
     }
 
-    return [
+    $notice = [
         'active' => !empty($raw['active']),
         'id' => $id,
         'type' => $type,
@@ -614,6 +656,20 @@ function gaia_app_notice_sanitize($raw) {
         'ends_at' => isset($raw['ends_at']) ? sanitize_text_field((string) $raw['ends_at']) : '',
         'updated_at' => gmdate('c'),
     ];
+
+    $compare_keys = ['active', 'id', 'type', 'placement', 'title', 'message', 'link_label', 'link_url', 'starts_at', 'ends_at'];
+    $changed = false;
+    foreach ($compare_keys as $key) {
+        if (($previous[$key] ?? null) !== ($notice[$key] ?? null)) {
+            $changed = true;
+            break;
+        }
+    }
+    if (!$changed && !empty($previous['updated_at'])) {
+        $notice['updated_at'] = (string) $previous['updated_at'];
+    }
+
+    return $notice;
 }
 }
 
@@ -671,6 +727,19 @@ function gaia_app_notice_public_payload($notice) {
 }
 }
 
+if (!function_exists('gaia_app_notice_public_payloads')) {
+function gaia_app_notice_public_payloads($notices) {
+    $payloads = [];
+    foreach ((array) $notices as $notice) {
+        $payload = gaia_app_notice_public_payload($notice);
+        if ($payload !== null) {
+            $payloads[] = $payload;
+        }
+    }
+    return $payloads;
+}
+}
+
 if (!function_exists('gaia_app_notice_render_admin_page')) {
 function gaia_app_notice_render_admin_page() {
     if (!current_user_can('manage_options')) {
@@ -680,94 +749,99 @@ function gaia_app_notice_render_admin_page() {
     $saved = false;
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         check_admin_referer('gaia_app_notice_save');
-        $notice = gaia_app_notice_sanitize(wp_unslash($_POST['gaia_app_notice'] ?? []));
-        update_option('gaia_app_notice', $notice, false);
+        $existing = gaia_app_notices_get_all();
+        $posted = wp_unslash($_POST['gaia_app_notices'] ?? []);
+        $posted = is_array($posted) ? $posted : [];
+        $notices = [];
+        foreach (gaia_app_notice_slots() as $placement => $label) {
+            $notices[$placement] = gaia_app_notice_sanitize(
+                $posted[$placement] ?? [],
+                $placement,
+                $existing[$placement] ?? []
+            );
+        }
+        update_option('gaia_app_notices', $notices, false);
+        update_option('gaia_app_notice', gaia_app_notice_get(), false);
         $saved = true;
     }
 
-    $notice = gaia_app_notice_get();
-    $public_payload = gaia_app_notice_public_payload($notice);
+    $notices = gaia_app_notices_get_all();
+    $public_payloads = gaia_app_notice_public_payloads($notices);
+    $public_payload = $public_payloads[0] ?? null;
     ?>
     <div class="wrap">
-        <h1>Gaia App Notice</h1>
-        <p>Create short remote content for the iOS app. Use placement to choose whether it appears as the top banner, a Guide card, a Home tip, or all placements.</p>
+        <h1>Gaia App Notices</h1>
+        <p>Create short remote content for the iOS app. Each placement can have its own active notice, so a Guide card will not replace a Home tip.</p>
         <?php if ($saved): ?>
-            <div class="notice notice-success is-dismissible"><p>App notice saved.</p></div>
+            <div class="notice notice-success is-dismissible"><p>App notices saved.</p></div>
         <?php endif; ?>
         <form method="post" action="">
             <?php wp_nonce_field('gaia_app_notice_save'); ?>
-            <table class="form-table" role="presentation">
-                <tr>
-                    <th scope="row">Active</th>
-                    <td>
-                        <label>
-                            <input type="checkbox" name="gaia_app_notice[active]" value="1" <?php checked(!empty($notice['active'])); ?>>
-                            Show this notice in the app
-                        </label>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="gaia-app-notice-id">Notice ID</label></th>
-                    <td>
-                        <input class="regular-text" id="gaia-app-notice-id" name="gaia_app_notice[id]" type="text" value="<?php echo esc_attr($notice['id']); ?>" placeholder="update-2026-04-11">
-                        <p class="description">Change this when you want users who dismissed an old notice to see the new one.</p>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="gaia-app-notice-type">Type</label></th>
-                    <td>
-                        <select id="gaia-app-notice-type" name="gaia_app_notice[type]">
-                            <option value="info" <?php selected($notice['type'], 'info'); ?>>Info</option>
-                            <option value="update" <?php selected($notice['type'], 'update'); ?>>Update available</option>
-                            <option value="warning" <?php selected($notice['type'], 'warning'); ?>>Important</option>
-                        </select>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="gaia-app-notice-placement">Placement</label></th>
-                    <td>
-                        <select id="gaia-app-notice-placement" name="gaia_app_notice[placement]">
-                            <option value="top_banner" <?php selected($notice['placement'], 'top_banner'); ?>>Top banner</option>
-                            <option value="guide_card" <?php selected($notice['placement'], 'guide_card'); ?>>Guide card</option>
-                            <option value="home_tip" <?php selected($notice['placement'], 'home_tip'); ?>>Home tip</option>
-                            <option value="all" <?php selected($notice['placement'], 'all'); ?>>All placements</option>
-                        </select>
-                        <p class="description">Home and Guide placements stay hidden in the app when this notice is inactive, empty, outside its schedule, or dismissed.</p>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="gaia-app-notice-title">Title</label></th>
-                    <td><input class="regular-text" id="gaia-app-notice-title" name="gaia_app_notice[title]" type="text" value="<?php echo esc_attr($notice['title']); ?>" placeholder="Update available"></td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="gaia-app-notice-message">Message</label></th>
-                    <td>
-                        <textarea class="large-text" id="gaia-app-notice-message" name="gaia_app_notice[message]" rows="4" placeholder="A new Gaia Eyes version is available."><?php echo esc_textarea($notice['message']); ?></textarea>
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="gaia-app-notice-link-label">Link label</label></th>
-                    <td><input class="regular-text" id="gaia-app-notice-link-label" name="gaia_app_notice[link_label]" type="text" value="<?php echo esc_attr($notice['link_label']); ?>" placeholder="Open App Store"></td>
-                </tr>
-                <tr>
-                    <th scope="row"><label for="gaia-app-notice-link-url">Link URL</label></th>
-                    <td><input class="large-text" id="gaia-app-notice-link-url" name="gaia_app_notice[link_url]" type="url" value="<?php echo esc_attr($notice['link_url']); ?>" placeholder="https://apps.apple.com/app/..."></td>
-                </tr>
-                <tr>
-                    <th scope="row">Schedule</th>
-                    <td>
-                        <input class="regular-text" name="gaia_app_notice[starts_at]" type="text" value="<?php echo esc_attr($notice['starts_at']); ?>" placeholder="optional start, e.g. 2026-04-11 09:00">
-                        <input class="regular-text" name="gaia_app_notice[ends_at]" type="text" value="<?php echo esc_attr($notice['ends_at']); ?>" placeholder="optional end">
-                        <p class="description">Leave blank to show immediately while active. Times use the WordPress server timezone parser.</p>
-                    </td>
-                </tr>
-            </table>
-            <?php submit_button('Save App Notice'); ?>
+            <?php foreach (gaia_app_notice_slots() as $placement => $label): ?>
+                <?php $notice = $notices[$placement] ?? gaia_app_notice_defaults(); ?>
+                <h2><?php echo esc_html($label); ?></h2>
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row">Active</th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="gaia_app_notices[<?php echo esc_attr($placement); ?>][active]" value="1" <?php checked(!empty($notice['active'])); ?>>
+                                Show this notice in this placement
+                            </label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="gaia-app-notice-<?php echo esc_attr($placement); ?>-id">Notice ID</label></th>
+                        <td>
+                            <input class="regular-text" id="gaia-app-notice-<?php echo esc_attr($placement); ?>-id" name="gaia_app_notices[<?php echo esc_attr($placement); ?>][id]" type="text" value="<?php echo esc_attr($notice['id']); ?>" placeholder="<?php echo esc_attr('notice-' . $placement . '-20260413'); ?>">
+                            <p class="description">Keep stable while editing copy. A saved content change will still reappear in the app because updated_at changes.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="gaia-app-notice-<?php echo esc_attr($placement); ?>-type">Type</label></th>
+                        <td>
+                            <select id="gaia-app-notice-<?php echo esc_attr($placement); ?>-type" name="gaia_app_notices[<?php echo esc_attr($placement); ?>][type]">
+                                <option value="info" <?php selected($notice['type'], 'info'); ?>>Info</option>
+                                <option value="update" <?php selected($notice['type'], 'update'); ?>>Update available</option>
+                                <option value="warning" <?php selected($notice['type'], 'warning'); ?>>Important</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="gaia-app-notice-<?php echo esc_attr($placement); ?>-title">Title</label></th>
+                        <td><input class="regular-text" id="gaia-app-notice-<?php echo esc_attr($placement); ?>-title" name="gaia_app_notices[<?php echo esc_attr($placement); ?>][title]" type="text" value="<?php echo esc_attr($notice['title']); ?>" placeholder="Update available"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="gaia-app-notice-<?php echo esc_attr($placement); ?>-message">Message</label></th>
+                        <td>
+                            <textarea class="large-text" id="gaia-app-notice-<?php echo esc_attr($placement); ?>-message" name="gaia_app_notices[<?php echo esc_attr($placement); ?>][message]" rows="3" placeholder="A new Gaia Eyes note is available."><?php echo esc_textarea($notice['message']); ?></textarea>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="gaia-app-notice-<?php echo esc_attr($placement); ?>-link-label">Link label</label></th>
+                        <td><input class="regular-text" id="gaia-app-notice-<?php echo esc_attr($placement); ?>-link-label" name="gaia_app_notices[<?php echo esc_attr($placement); ?>][link_label]" type="text" value="<?php echo esc_attr($notice['link_label']); ?>" placeholder="Open"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="gaia-app-notice-<?php echo esc_attr($placement); ?>-link-url">Link URL</label></th>
+                        <td><input class="large-text" id="gaia-app-notice-<?php echo esc_attr($placement); ?>-link-url" name="gaia_app_notices[<?php echo esc_attr($placement); ?>][link_url]" type="url" value="<?php echo esc_attr($notice['link_url']); ?>" placeholder="https://gaiaeyes.com/..."></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Schedule</th>
+                        <td>
+                            <input class="regular-text" name="gaia_app_notices[<?php echo esc_attr($placement); ?>][starts_at]" type="text" value="<?php echo esc_attr($notice['starts_at']); ?>" placeholder="optional start, e.g. 2026-04-13 09:00">
+                            <input class="regular-text" name="gaia_app_notices[<?php echo esc_attr($placement); ?>][ends_at]" type="text" value="<?php echo esc_attr($notice['ends_at']); ?>" placeholder="optional end">
+                            <p class="description">Leave blank to show immediately while active. Times use the WordPress server timezone parser.</p>
+                        </td>
+                    </tr>
+                </table>
+                <hr>
+            <?php endforeach; ?>
+            <?php submit_button('Save App Notices'); ?>
         </form>
         <hr>
         <h2>Public API Preview</h2>
         <p><code><?php echo esc_html(rest_url('gaia/v1/app-notice')); ?></code></p>
-        <textarea class="large-text code" rows="8" readonly><?php echo esc_textarea(wp_json_encode(['ok' => true, 'notice' => $public_payload], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)); ?></textarea>
+        <textarea class="large-text code" rows="10" readonly><?php echo esc_textarea(wp_json_encode(['ok' => true, 'notice' => $public_payload, 'notices' => $public_payloads], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)); ?></textarea>
     </div>
     <?php
 }
@@ -977,9 +1051,11 @@ add_action('rest_api_init', function () {
         'methods' => WP_REST_Server::READABLE,
         'permission_callback' => '__return_true',
         'callback' => function () {
+            $payloads = gaia_app_notice_public_payloads(gaia_app_notices_get_all());
             $response = new WP_REST_Response([
                 'ok' => true,
-                'notice' => gaia_app_notice_public_payload(gaia_app_notice_get()),
+                'notice' => $payloads[0] ?? null,
+                'notices' => $payloads,
             ], 200);
             $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
             $response->header('Pragma', 'no-cache');

@@ -2904,6 +2904,7 @@ struct ContentView: View {
     @AppStorage("gaia.membership.cached_plan") private var cachedPlanRaw: String = MembershipPlan.free.rawValue
     @AppStorage("gaia.membership.last_sync_at") private var cachedPlanSyncedAt: String = ""
     @AppStorage("gaia.app_notice.dismissed_id") private var dismissedAppNoticeID: String = ""
+    @AppStorage("gaia.app_notice.dismissed_keys") private var dismissedAppNoticeKeysRaw: String = ""
     @AppStorage("gaia.auth.last_user_scope") private var lastAuthUserScope: String = ""
     @Environment(\.scenePhase) private var scenePhase
     @State private var showConnections: Bool = false
@@ -2925,7 +2926,7 @@ struct ContentView: View {
     @State private var debugEntitlementsEmail: String?
     @State private var debugToolkitMessage: String?
     @State private var debugSelectedCacheTarget: DebugCacheTarget = .dashboardSnapshot
-    @State private var appNotice: AppNotice? = nil
+    @State private var appNotices: [AppNotice] = []
     @State private var homeFeedItem: HomeFeedItem? = nil
     @State private var homeFeedLoading: Bool = false
     @State private var homeFeedSeenIDs: Set<String> = []
@@ -3574,15 +3575,18 @@ struct ContentView: View {
     }
 
     private func visibleAppNotice(for placement: AppNoticePlacement) -> AppNotice? {
-        guard let appNotice,
-              appNotice.isVisible(in: placement),
-              appNotice.dismissalKey != dismissedAppNoticeID else {
-            return nil
+        let dismissedKeys = Set(dismissedAppNoticeKeysRaw.split(separator: "\n").map(String.init))
+        return appNotices.first { notice in
+            notice.isVisible(in: placement)
+                && notice.dismissalKey != dismissedAppNoticeID
+                && !dismissedKeys.contains(notice.dismissalKey)
         }
-        return appNotice
     }
 
     private func dismissAppNotice(_ notice: AppNotice) {
+        var dismissedKeys = Set(dismissedAppNoticeKeysRaw.split(separator: "\n").map(String.init))
+        dismissedKeys.insert(notice.dismissalKey)
+        dismissedAppNoticeKeysRaw = dismissedKeys.sorted().joined(separator: "\n")
         dismissedAppNoticeID = notice.dismissalKey
     }
 
@@ -4279,9 +4283,9 @@ struct ContentView: View {
                     return
                 }
                 let envelope = try JSONDecoder().decode(AppNoticeEnvelope.self, from: data)
-                let nextNotice = envelope.ok == false ? nil : envelope.notice
-                appNotice = nextNotice
-                if nextNotice == nil {
+                let nextNotices = envelope.ok == false ? [] : envelope.visibleNotices
+                appNotices = nextNotices
+                if nextNotices.isEmpty {
                     appLog("[UI] app notice empty")
                 }
                 return

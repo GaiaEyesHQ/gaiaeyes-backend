@@ -3,6 +3,14 @@ import Foundation
 struct AppNoticeEnvelope: Decodable {
     let ok: Bool?
     let notice: AppNotice?
+    let notices: [AppNotice]?
+
+    var visibleNotices: [AppNotice] {
+        if let notices, !notices.isEmpty {
+            return notices
+        }
+        return notice.map { [$0] } ?? []
+    }
 }
 
 enum AppNoticePlacement: String, Decodable, Equatable {
