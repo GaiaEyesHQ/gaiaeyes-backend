@@ -6,12 +6,19 @@ This guide documents how Gaia Eyes selects background images for social share ca
 
 The iOS share renderer loads images in `gaiaeyes-ios/ios/GaiaExporter/Services/ShareBackgroundResolver.swift`.
 
-Lookup order:
+Plus lookup order:
 
 1. Explicit `candidateURLs` attached by the screen that created the share draft.
 2. Themed images in Supabase Storage, based on the card's `themeKeys`.
 3. Style defaults for the card's `ShareBackgroundStyle`.
 4. If no image loads, the app renders a generated gradient/background.
+
+Free-user lookup order:
+
+1. Style defaults for the card's `ShareBackgroundStyle`.
+2. If no image loads, the app renders a generated gradient/background.
+
+Free shares intentionally skip explicit candidate URLs and Supabase themed packs so they remain a basic branded share card. Plus shares use the full lookup order above.
 
 The resolver stops at the first URL that returns a valid image. Each candidate currently has a short timeout of `0.75s`, so large files can appear to be "missing" even when the path is correct.
 
@@ -134,7 +141,8 @@ Use these defaults unless a specific share format changes:
 Current text overlay behavior:
 
 - The app overlays dynamic text over the lower portion of the card.
-- Static themed images may include a baked dark lower panel for readability.
+- The app adds a subtle full-width SwiftUI lower scrim behind the dynamic text.
+- Static themed images should not need baked dark lower panels unless a specific image needs extra treatment.
 - Do not bake dynamic text, dates, user-specific stats, buttons, or Gaia Eyes branding into the image. The app owns those.
 
 Text-safe area for baked lower panels:

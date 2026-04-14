@@ -7,8 +7,13 @@ enum ShareBackgroundResolver {
     private static let themedVariantCount = 6
     private static let candidateTimeout: TimeInterval = 0.75
 
-    static func loadImage(for background: ShareCardBackground) async -> UIImage? {
-        for url in candidateURLs(for: background) {
+    enum CandidateScope {
+        case basic
+        case full
+    }
+
+    static func loadImage(for background: ShareCardBackground, scope: CandidateScope = .full) async -> UIImage? {
+        for url in candidateURLs(for: background, scope: scope) {
             if let cached = cache.object(forKey: url as NSURL) {
                 return cached
             }
@@ -30,10 +35,17 @@ enum ShareBackgroundResolver {
         return nil
     }
 
-    private static func candidateURLs(for background: ShareCardBackground) -> [URL] {
+    private static func candidateURLs(for background: ShareCardBackground, scope: CandidateScope) -> [URL] {
         var seen = Set<String>()
-        let themed = Array(themedCandidateURLs(for: background).prefix(themedCandidateLimit))
-        return (background.candidateURLs + themed + defaultCandidateURLs(for: background.style)).filter { url in
+        let candidates: [URL]
+        switch scope {
+        case .basic:
+            candidates = defaultCandidateURLs(for: background.style)
+        case .full:
+            let themed = Array(themedCandidateURLs(for: background).prefix(themedCandidateLimit))
+            candidates = background.candidateURLs + themed + defaultCandidateURLs(for: background.style)
+        }
+        return candidates.filter { url in
             let key = url.absoluteString
             if seen.contains(key) {
                 return false

@@ -794,8 +794,15 @@ async def _fetch_daily_post(conn, day_local: date) -> Dict[str, Any]:
                    p0.hashtags as post_hashtags,
                    p0.metrics_json as post_metrics_json
             from content.daily_posts p0
-            where p0.platform = 'default' and p0.day <= %s
-            order by p0.day desc, p0.updated_at desc
+            where p0.user_id is null and p0.day <= %s
+            order by p0.day desc,
+                     case
+                         when p0.platform = 'default' then 0
+                         when p0.platform in ('web', 'website') then 1
+                         when p0.platform in ('instagram', 'facebook', 'threads') then 2
+                         else 3
+                     end,
+                     p0.updated_at desc
             limit 1
             """,
             (day_local,),

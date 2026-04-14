@@ -450,12 +450,12 @@ struct GuideHubView: View {
 
     private var contentStack: some View {
         VStack(alignment: .leading, spacing: 18) {
-            headerCard
-                .id(GuideHubFocus.overview)
-
             if let guideNotice {
                 guideNoticeCard(guideNotice)
             }
+
+            headerCard
+                .id(GuideHubFocus.overview)
 
             earthscopeCard
                 .id(GuideHubFocus.earthScope)
@@ -482,7 +482,7 @@ struct GuideHubView: View {
         GuideHubSectionCard(
             guideType: profile.guideType,
             expression: .curious,
-            emphasis: .standard,
+            emphasis: .elevated,
             eyebrow: "Daily Check-In",
             title: "Check in with the day",
             message: dailyCheckInBody,
@@ -500,7 +500,7 @@ struct GuideHubView: View {
         GuideHubSectionCard(
             guideType: profile.guideType,
             expression: .followUp,
-            emphasis: hasPollResponseForToday ? .quiet : .standard,
+            emphasis: .elevated,
             eyebrow: "Daily Poll",
             title: "A faster pulse question",
             message: todayPollPrompt.question,
@@ -602,7 +602,7 @@ struct GuideHubView: View {
         GuideHubSectionCard(
             guideType: profile.guideType,
             expression: .helpful,
-            emphasis: followUpItem == nil ? .quiet : .standard,
+            emphasis: .elevated,
             eyebrow: "Follow-Ups",
             title: followUpItem == nil ? "Nothing is waiting right now" : "A symptom follow-up is waiting",
             message: followUpMessage,
@@ -618,7 +618,7 @@ struct GuideHubView: View {
         return GuideHubSectionCard(
             guideType: profile.guideType,
             expression: guideSupportExpression(for: primary?.tone),
-            emphasis: guideSupportEmphasis(for: primary?.tone),
+            emphasis: .elevated,
             eyebrow: "Support right now",
             title: primary?.title ?? "A steadier lane right now",
             message: supportIntroText,
@@ -638,7 +638,7 @@ struct GuideHubView: View {
         GuideHubSectionCard(
             guideType: profile.guideType,
             expression: .guide,
-            emphasis: .standard,
+            emphasis: .elevated,
             eyebrow: "Help and Understanding",
             title: "Start with the basics",
             message: GuidePromptStyle.understandingCardMessage(for: profile),

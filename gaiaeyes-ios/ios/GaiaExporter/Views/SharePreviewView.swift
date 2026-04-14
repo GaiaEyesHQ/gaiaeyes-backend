@@ -35,6 +35,10 @@ struct SharePreviewView: View {
         draft.applying(copyOverride: copyOverride)
     }
 
+    private var shareImageScope: ShareBackgroundResolver.CandidateScope {
+        plusUnlocked ? .full : .basic
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -190,10 +194,10 @@ struct SharePreviewView: View {
 
             if !plusUnlocked {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Sharing is included with Plus", systemImage: "lock.fill")
+                    Label("Basic sharing is included", systemImage: "sparkles")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(.white)
-                    Text("You can preview the card for free. Upgrade to publish it through the share sheet.")
+                    Text("Free shares use the built-in Gaia Eyes card and caption. Plus unlocks the full background and caption packs.")
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.68))
                     NavigationLink(destination: SubscribeView()) {
@@ -230,7 +234,7 @@ struct SharePreviewView: View {
                     Label("Share", systemImage: "square.and.arrow.up")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(renderedImage == nil || isRendering || !plusUnlocked)
+                .disabled(renderedImage == nil || isRendering)
             }
         }
         .padding(16)
@@ -244,6 +248,7 @@ struct SharePreviewView: View {
     private func loadShareCopyOverrideIfNeeded() async {
         guard !copyOverrideRequested else { return }
         copyOverrideRequested = true
+        guard plusUnlocked else { return }
 
         do {
             let envelope: ShareCopyOverrideEnvelope = try await state.apiWithAuth().getJSON(
@@ -286,7 +291,7 @@ struct SharePreviewView: View {
         let draftToRender = activeDraft
 
         #if canImport(UIKit)
-        let backgroundImage = await ShareBackgroundResolver.loadImage(for: draftToRender.card.background)
+        let backgroundImage = await ShareBackgroundResolver.loadImage(for: draftToRender.card.background, scope: shareImageScope)
         let image = await MainActor.run {
             ShareCardRenderer.render(card: draftToRender.card, backgroundImage: backgroundImage)
         }
