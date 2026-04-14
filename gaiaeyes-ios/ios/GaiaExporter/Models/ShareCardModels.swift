@@ -175,6 +175,80 @@ struct ShareDraft: Identifiable, Hashable {
     let captions: ShareCaptionSet
 }
 
+struct ShareCopyOverrideEnvelope: Decodable {
+    let ok: Bool?
+    let copy: ShareCopyOverride?
+    let reason: String?
+}
+
+struct ShareCopyOverride: Decodable, Hashable {
+    let id: String?
+    let slug: String?
+    let shareType: String?
+    let driverKey: String?
+    let surface: String?
+    let mode: String?
+    let tone: String?
+    let imageTitle: String?
+    let imageSubtitle: String?
+    let caption: String?
+    let updatedAt: String?
+}
+
+private enum ShareCopyOverrideText {
+    static func clean(_ value: String?) -> String? {
+        let trimmed = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+extension ShareCardModel {
+    func applying(copyOverride override: ShareCopyOverride?) -> ShareCardModel {
+        guard let override else { return self }
+        return ShareCardModel(
+            shareType: shareType,
+            layout: layout,
+            format: format,
+            background: background,
+            accentLevel: accentLevel,
+            eyebrow: eyebrow,
+            title: ShareCopyOverrideText.clean(override.imageTitle) ?? title,
+            subtitle: ShareCopyOverrideText.clean(override.imageSubtitle) ?? subtitle,
+            signText: signText,
+            primaryText: primaryText,
+            valueText: valueText,
+            stateText: stateText,
+            bullets: bullets,
+            highlights: highlights,
+            note: note,
+            footer: footer,
+            sourceLine: sourceLine,
+            branding: branding
+        )
+    }
+}
+
+extension ShareCaptionSet {
+    func applying(copyOverride override: ShareCopyOverride?) -> ShareCaptionSet {
+        guard let caption = ShareCopyOverrideText.clean(override?.caption) else { return self }
+        return ShareCaptionSet(scientific: caption, balanced: caption, humorous: caption)
+    }
+}
+
+extension ShareDraft {
+    func applying(copyOverride override: ShareCopyOverride?) -> ShareDraft {
+        guard override != nil else { return self }
+        return ShareDraft(
+            shareType: shareType,
+            surface: surface,
+            analyticsKey: analyticsKey,
+            promptText: promptText,
+            card: card.applying(copyOverride: override),
+            captions: captions.applying(copyOverride: override)
+        )
+    }
+}
+
 struct ShareHistoryEntry: Codable, Hashable, Identifiable {
     let id: String
     let shareType: ShareType

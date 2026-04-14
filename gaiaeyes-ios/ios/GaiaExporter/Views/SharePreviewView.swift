@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 #if canImport(UIKit)
@@ -8,6 +9,7 @@ struct SharePreviewView: View {
     let draft: ShareDraft
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var state: AppState
     @AppStorage("gaia.membership.cached_plan") private var cachedPlanRaw: String = MembershipPlan.free.rawValue
     @State private var selectedCaptionStyle: ShareCaptionStyle = .balanced
     @State private var editableCaption: String
@@ -16,6 +18,8 @@ struct SharePreviewView: View {
     @State private var renderError: String?
     @State private var showShareSheet: Bool = false
     @State private var hasTrackedOpen: Bool = false
+    @State private var copyOverride: ShareCopyOverride?
+    @State private var copyOverrideRequested: Bool = false
 
     init(draft: ShareDraft) {
         self.draft = draft
@@ -25,6 +29,10 @@ struct SharePreviewView: View {
     private var plusUnlocked: Bool {
         let plan = MembershipPlan(rawValue: cachedPlanRaw) ?? .free
         return plan == .plus || plan == .pro
+    }
+
+    private var activeDraft: ShareDraft {
+        draft.applying(copyOverride: copyOverride)
     }
 
     var body: some View {
@@ -67,18 +75,20 @@ struct SharePreviewView: View {
                         ]
                     )
                 }
+                await loadShareCopyOverrideIfNeeded()
                 await renderPreview()
             }
             .onChange(of: selectedCaptionStyle, initial: false) { _, newValue in
-                editableCaption = draft.captions.text(for: newValue)
+                editableCaption = activeDraft.captions.text(for: newValue)
             }
             .sheet(isPresented: $showShareSheet) {
                 if let renderedImage {
+                    let draftForSheet = activeDraft
                     ShareSheetPresenter(
                         image: renderedImage,
                         text: editableCaption,
-                        title: draft.card.title,
-                        subtitle: draft.card.subtitle
+                        title: draftForSheet.card.title,
+                        subtitle: draftForSheet.card.subtitle
                     ) { completed in
                         if completed {
                             ShareHistoryStore.recordCompletedShare(draft)
@@ -231,17 +241,54 @@ struct SharePreviewView: View {
         )
     }
 
+    private func loadShareCopyOverrideIfNeeded() async {
+        guard !copyOverrideRequested else { return }
+        copyOverrideRequested = true
+
+        do {
+            let envelope: ShareCopyOverrideEnvelope = try await state.apiWithAuth().getJSON(
+                shareCopyEndpointPath(),
+                as: ShareCopyOverrideEnvelope.self,
+                retries: 0,
+                perRequestTimeout: 4
+            )
+            guard let copy = envelope.copy else { return }
+            copyOverride = copy
+            editableCaption = draft.applying(copyOverride: copy).captions.text(for: selectedCaptionStyle)
+        } catch {
+            // Remote copy is optional launch-time content. Keep the local draft as the fallback.
+        }
+    }
+
+    private func shareCopyEndpointPath() -> String {
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "share_type", value: draft.shareType.rawValue),
+            URLQueryItem(name: "surface", value: draft.surface),
+            URLQueryItem(name: "mode", value: "all"),
+            URLQueryItem(name: "tone", value: selectedCaptionStyle.rawValue),
+        ]
+        let key = (draft.analyticsKey ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !key.isEmpty {
+            queryItems.append(URLQueryItem(name: "key", value: key))
+        }
+
+        var components = URLComponents()
+        components.queryItems = queryItems
+        return "v1/profile/share-copy?\(components.percentEncodedQuery ?? "")"
+    }
+
     private func renderPreview(force: Bool = false) async {
         if isRendering && !force {
             return
         }
         isRendering = true
         renderError = nil
+        let draftToRender = activeDraft
 
         #if canImport(UIKit)
-        let backgroundImage = await ShareBackgroundResolver.loadImage(for: draft.card.background)
+        let backgroundImage = await ShareBackgroundResolver.loadImage(for: draftToRender.card.background)
         let image = await MainActor.run {
-            ShareCardRenderer.render(card: draft.card, backgroundImage: backgroundImage)
+            ShareCardRenderer.render(card: draftToRender.card, backgroundImage: backgroundImage)
         }
         renderedImage = image
         if image != nil {

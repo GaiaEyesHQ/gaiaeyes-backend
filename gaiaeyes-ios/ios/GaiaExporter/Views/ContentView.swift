@@ -13042,6 +13042,7 @@ struct ContentView: View {
         @EnvironmentObject private var state: AppState
         let experienceMode: ExperienceMode
         let lunarSensitivityDeclared: Bool
+        let hasPlusAccess: Bool
         @AppStorage("user_patterns_cache_json") private var userPatternsCacheJSON: String = ""
         @State private var payload: UserPatternsPayload? = nil
         @State private var isLoading: Bool = false
@@ -13053,6 +13054,7 @@ struct ContentView: View {
         @State private var showsAllEmergingPatterns: Bool = false
         @State private var showsAllBodySignalPatterns: Bool = false
         @State private var shareDraft: ShareDraft? = nil
+        private let freePatternLimit = 2
 
         private func confidenceSeverity(_ confidence: String?) -> StatusPill.Severity {
             switch (confidence ?? "").lowercased() {
@@ -13124,6 +13126,14 @@ struct ContentView: View {
                 return cards
             }
             return Array(cards.prefix(3))
+        }
+
+        private func freeVisiblePatterns(_ cards: [UserPatternCard]) -> [UserPatternCard] {
+            Array(cards.prefix(freePatternLimit))
+        }
+
+        private func hiddenFreePatternCount(_ cards: [UserPatternCard]) -> Int {
+            max(0, cards.count - freePatternLimit)
         }
 
         private func shareAccent(for card: UserPatternCard) -> ShareAccentLevel {
@@ -13240,6 +13250,7 @@ struct ContentView: View {
         }
 
         private var shouldShowLunarSection: Bool {
+            guard hasPlusAccess else { return false }
             if lunarInsightsLoading {
                 return true
             }
@@ -13410,6 +13421,37 @@ struct ContentView: View {
                         .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
             }
+        }
+
+        private func plusLockedCard(title: String, body: String, hiddenCount: Int? = nil) -> some View {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(title, systemImage: "lock.fill")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Text(body)
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.68))
+                    .fixedSize(horizontal: false, vertical: true)
+                if let hiddenCount, hiddenCount > 0 {
+                    Text("\(hiddenCount) more \(hiddenCount == 1 ? "pattern is" : "patterns are") included with Plus.")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(GaugePalette.elevated)
+                }
+                NavigationLink(destination: SubscribeView()) {
+                    Label("View Plus", systemImage: "sparkles")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(GaugePalette.elevated)
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.04))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
         }
 
         @MainActor
@@ -13698,6 +13740,7 @@ struct ContentView: View {
             let strongest = payload?.strongestPatterns ?? []
             let emerging = payload?.emergingPatterns ?? []
             let bodySignals = payload?.bodySignalsPatterns ?? []
+            let visibleStrongest = hasPlusAccess ? strongest : freeVisiblePatterns(strongest)
             let isPartialPayload = payload?.partial == true
             let isLoadingSupplementalSections = isLoading && isPartialPayload
 
@@ -13744,43 +13787,69 @@ struct ContentView: View {
 
                         sectionView(
                             title: "Clearest Patterns",
-                            subtitle: payload?.semanticStrongestSubtitle ?? "The clearest repeats in your history so far.",
-                            cards: strongest,
+                            subtitle: hasPlusAccess
+                                ? (payload?.semanticStrongestSubtitle ?? "The clearest repeats in your history so far.")
+                                : "Free shows a preview of the clearest repeats. Plus unlocks the full pattern map.",
+                            cards: visibleStrongest,
                             emptyMessage: payload?.semanticStrongestEmpty ?? "No clear patterns yet. Most people need about 14-30 days of symptom logs before repeat overlaps stand out. If you skipped the 30-day Health import, body-signal patterns may take about a month to appear. Keep logging ordinary days and rough days.",
                             expanded: $showsAllStrongestPatterns
                         )
 
-                        sectionView(
-                            title: "Body Signals",
-                            subtitle: payload?.semanticBodySubtitle ?? "Wearable-based patterns appear here when the overlap is strong enough.",
-                            cards: bodySignals,
-                            emptyMessage: payload?.semanticBodyEmpty ?? "No body-signal patterns are standing out yet. Wearable patterns need enough sleep, heart, HRV, and symptom history. If you skipped backfill, this can take about a month of fresh Health data.",
-                            pendingMessage: payload?.semanticBodyPending ?? "Checking wearable patterns now.",
-                            isPending: isLoadingSupplementalSections,
-                            expanded: $showsAllBodySignalPatterns
-                        )
+                        if !hasPlusAccess && hiddenFreePatternCount(strongest) > 0 {
+                            plusLockedCard(
+                                title: "Full pattern map is included with Plus",
+                                body: "Plus shows the rest of your clearest repeats, emerging patterns, body-signal patterns, lunar windows, and deeper context.",
+                                hiddenCount: hiddenFreePatternCount(strongest)
+                            )
+                        }
 
-                        sectionView(
-                            title: "Still Taking Shape",
-                            subtitle: payload?.semanticEmergingSubtitle ?? "Possible repeats that still need more overlap before they feel reliable.",
-                            cards: emerging,
-                            emptyMessage: payload?.semanticEmergingEmpty ?? "Nothing is clearly emerging yet. More overlap will help this section fill in.",
-                            pendingMessage: payload?.semanticEmergingPending ?? "Loading the rest of your pattern history.",
-                            isPending: isLoadingSupplementalSections,
-                            expanded: $showsAllEmergingPatterns
-                        )
+                        if hasPlusAccess {
+                            sectionView(
+                                title: "Body Signals",
+                                subtitle: payload?.semanticBodySubtitle ?? "Wearable-based patterns appear here when the overlap is strong enough.",
+                                cards: bodySignals,
+                                emptyMessage: payload?.semanticBodyEmpty ?? "No body-signal patterns are standing out yet. Wearable patterns need enough sleep, heart, HRV, and symptom history. If you skipped backfill, this can take about a month of fresh Health data.",
+                                pendingMessage: payload?.semanticBodyPending ?? "Checking wearable patterns now.",
+                                isPending: isLoadingSupplementalSections,
+                                expanded: $showsAllBodySignalPatterns
+                            )
+
+                            sectionView(
+                                title: "Still Taking Shape",
+                                subtitle: payload?.semanticEmergingSubtitle ?? "Possible repeats that still need more overlap before they feel reliable.",
+                                cards: emerging,
+                                emptyMessage: payload?.semanticEmergingEmpty ?? "Nothing is clearly emerging yet. More overlap will help this section fill in.",
+                                pendingMessage: payload?.semanticEmergingPending ?? "Loading the rest of your pattern history.",
+                                isPending: isLoadingSupplementalSections,
+                                expanded: $showsAllEmergingPatterns
+                            )
+                        } else {
+                            plusLockedCard(
+                                title: "Body and emerging patterns are included with Plus",
+                                body: "Free keeps symptom logging and a pattern preview open. Plus unlocks wearable-based repeats, still-forming signals, lunar windows, and stronger evidence detail."
+                            )
+                        }
 
                         if shouldShowLunarSection {
                             lunarSectionView
+                        } else if !hasPlusAccess {
+                            plusLockedCard(
+                                title: "Lunar windows are included with Plus",
+                                body: "Plus compares full and new moon windows with your own sleep, recovery, HRV, and symptom history when enough overlap exists."
+                            )
                         }
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .refreshable {
-                    async let patternsRefresh: Void = loadPatterns(force: true)
-                    async let lunarRefresh: Void = loadLunarInsights(force: true)
-                    _ = await (patternsRefresh, lunarRefresh)
+                    if hasPlusAccess {
+                        async let patternsRefresh: Void = loadPatterns(force: true)
+                        async let lunarRefresh: Void = loadLunarInsights(force: true)
+                        _ = await (patternsRefresh, lunarRefresh)
+                    } else {
+                        await loadPatterns(force: true)
+                    }
                 }
             }
             .navigationTitle("Patterns")
@@ -13805,9 +13874,13 @@ struct ContentView: View {
                 hydrateCachedPatternsIfNeeded()
             }
             .task {
-                async let patternsLoad: Void = loadPatterns()
-                async let lunarLoad: Void = loadLunarInsights()
-                _ = await (patternsLoad, lunarLoad)
+                if hasPlusAccess {
+                    async let patternsLoad: Void = loadPatterns()
+                    async let lunarLoad: Void = loadLunarInsights()
+                    _ = await (patternsLoad, lunarLoad)
+                } else {
+                    await loadPatterns()
+                }
             }
         }
     }
@@ -14439,6 +14512,7 @@ struct ContentView: View {
         let tempUnit: TemperatureUnit
         let trackedStatKeys: [TrackedStatKey]
         let smartStatSwapEnabled: Bool
+        let plusUnlocked: Bool
         let onEditTrackedStats: () -> Void
 
         private struct HighlightStat: Identifiable, Hashable {
@@ -14769,20 +14843,34 @@ struct ContentView: View {
         }
 
         private var highlightRows: [[HighlightStat]] {
-            stride(from: 0, to: highlightStats.count, by: 3).map { start in
-                let end = min(start + 3, highlightStats.count)
-                return Array(highlightStats[start..<end])
+            let stats = visibleHighlightStats
+            return stride(from: 0, to: stats.count, by: 3).map { start in
+                let end = min(start + 3, stats.count)
+                return Array(stats[start..<end])
             }
+        }
+
+        private var visibleHighlightStats: [HighlightStat] {
+            plusUnlocked ? highlightStats : Array(highlightStats.prefix(2))
+        }
+
+        private var visibleSupportingRows: [[SupportingStat]] {
+            plusUnlocked ? supportingRows : []
+        }
+
+        private var hiddenStatCount: Int {
+            let hiddenHighlights = max(0, highlightStats.count - visibleHighlightStats.count)
+            return hiddenHighlights + (plusUnlocked ? 0 : supportingStats.count)
         }
 
         var body: some View {
             LocalConditionsSurfaceCard(title: "Health Stats", icon: "heart.fill") {
                 VStack(alignment: .leading, spacing: 12) {
-                    if highlightStats.isEmpty && supportingStats.isEmpty {
+                    if visibleHighlightStats.isEmpty && visibleSupportingRows.isEmpty {
                         Text("Health stats are still syncing for today.")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                    } else if !highlightStats.isEmpty {
+                    } else if !visibleHighlightStats.isEmpty {
                         ForEach(highlightRows.indices, id: \.self) { index in
                             HStack(spacing: 10) {
                                 ForEach(highlightRows[index]) { stat in
@@ -14792,12 +14880,38 @@ struct ContentView: View {
                         }
                     }
 
-                    ForEach(supportingRows.indices, id: \.self) { index in
+                    ForEach(visibleSupportingRows.indices, id: \.self) { index in
                         HStack(spacing: 10) {
-                            ForEach(supportingRows[index]) { stat in
+                            ForEach(visibleSupportingRows[index]) { stat in
                                 LocalConditionsValueChip(label: stat.label, value: stat.value, tint: stat.tint)
                             }
                         }
+                    }
+
+                    if !plusUnlocked && hiddenStatCount > 0 {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("More health context is included with Plus", systemImage: "lock.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.9))
+                            Text("Free shows a small Health snapshot. Plus unlocks more wearable stats, deltas, smart stat swapping, and deeper body context.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            NavigationLink(destination: SubscribeView()) {
+                                Label("View Plus", systemImage: "sparkles")
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(GaugePalette.elevated)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.black.opacity(0.20))
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        )
                     }
 
                     if let updatedText {
@@ -14806,12 +14920,14 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                     }
 
-                    Button(action: onEditTrackedStats) {
-                        Text("Edit tracked stats")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.accentColor)
+                    if plusUnlocked {
+                        Button(action: onEditTrackedStats) {
+                            Text("Edit tracked stats")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -15205,6 +15321,7 @@ struct ContentView: View {
         let dailyCheckInStatus: DailyCheckInStatus?
         let dailyCheckInLoading: Bool
         let dailyCheckInError: String?
+        let hasPlusAccess: Bool
         let onOpenDailyCheckIn: () -> Void
         let onEditTrackedStats: () -> Void
         @Binding var showSymptomSheet: Bool
@@ -15413,6 +15530,7 @@ struct ContentView: View {
                             tempUnit: tempUnit,
                             trackedStatKeys: trackedStatKeys,
                             smartStatSwapEnabled: smartStatSwapEnabled,
+                            plusUnlocked: hasPlusAccess,
                             onEditTrackedStats: onEditTrackedStats
                         )
 
@@ -15443,7 +15561,7 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
 
-                        if shouldShowLunarCard {
+                        if hasPlusAccess && shouldShowLunarCard {
                             LocalConditionsSurfaceCard(title: "Lunar Pattern Watch", icon: "moon.stars.fill") {
                                 VStack(alignment: .leading, spacing: 10) {
                                     HStack(alignment: .top, spacing: 12) {
@@ -15496,6 +15614,24 @@ struct ContentView: View {
                                     }
                                 }
                             }
+                        } else if !hasPlusAccess {
+                            LocalConditionsSurfaceCard(title: "Lunar Pattern Watch", icon: "moon.stars.fill") {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Label("Lunar body context is included with Plus", systemImage: "lock.fill")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundColor(.primary)
+                                    Text("Plus compares lunar windows with your sleep, recovery, HRV, and symptom history when enough overlap exists.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    NavigationLink(destination: SubscribeView()) {
+                                        Label("View Plus", systemImage: "sparkles")
+                                            .font(.caption.weight(.semibold))
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .tint(GaugePalette.elevated)
+                                }
+                            }
                         }
 
                         if !topDiagnostics.isEmpty {
@@ -15533,7 +15669,7 @@ struct ContentView: View {
             .navigationTitle("Body")
             .navigationBarTitleDisplayMode(.inline)
             .task {
-                if lunarInsights == nil {
+                if hasPlusAccess && lunarInsights == nil {
                     await onLoadLunarInsights()
                 }
             }
@@ -16562,6 +16698,7 @@ struct ContentView: View {
                 dailyCheckInStatus: dailyCheckInStatus,
                 dailyCheckInLoading: dailyCheckInLoading,
                 dailyCheckInError: dailyCheckInError,
+                hasPlusAccess: hasPlusAccess,
                 onOpenDailyCheckIn: {
                     bodyPath = [.dailyCheckIn]
                 },
@@ -16600,7 +16737,8 @@ struct ContentView: View {
         NavigationStack {
             YourPatternsView(
                 experienceMode: experienceProfile.mode,
-                lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared
+                lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared,
+                hasPlusAccess: hasPlusAccess
             )
             .safeAreaInset(edge: .top) {
                 persistentSignalBar(onTap: handleMissionControlSignalTap)
@@ -16769,7 +16907,8 @@ struct ContentView: View {
         case .yourPatterns:
             YourPatternsView(
                 experienceMode: experienceProfile.mode,
-                lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared
+                lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared,
+                hasPlusAccess: hasPlusAccess
             )
         case .magnetosphere:
             InsightsMagnetosphereView(
@@ -16816,6 +16955,7 @@ struct ContentView: View {
                 dailyCheckInStatus: dailyCheckInStatus,
                 dailyCheckInLoading: dailyCheckInLoading,
                 dailyCheckInError: dailyCheckInError,
+                hasPlusAccess: hasPlusAccess,
                 onOpenDailyCheckIn: {
                     if selectedTab == .explore {
                         selectedTab = .body
@@ -18208,7 +18348,8 @@ struct ContentView: View {
                     case .yourPatterns:
                         YourPatternsView(
                             experienceMode: experienceProfile.mode,
-                            lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared
+                            lunarSensitivityDeclared: experienceProfile.lunarSensitivityDeclared,
+                            hasPlusAccess: hasPlusAccess
                         )
                     case .magnetosphere:
                         InsightsMagnetosphereView(
@@ -18255,6 +18396,7 @@ struct ContentView: View {
                             dailyCheckInStatus: dailyCheckInStatus,
                             dailyCheckInLoading: dailyCheckInLoading,
                             dailyCheckInError: dailyCheckInError,
+                            hasPlusAccess: hasPlusAccess,
                             onOpenDailyCheckIn: { missionInsightsPath = [.dailyCheckIn] },
                             onEditTrackedStats: { showSettingsSheet() },
                             showSymptomSheet: $showInsightsSymptomSheet,

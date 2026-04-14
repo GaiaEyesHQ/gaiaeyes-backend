@@ -43,6 +43,7 @@ _FEEDBACK_CADENCES = {"minimal", "balanced", "detailed", "gentle", "frequent"}
 _SYMPTOM_FOLLOWUP_STATES = {"new", "ongoing", "improving", "worse"}
 _EXPERIENCE_MODES = {"scientific", "mystical"}
 _HOME_FEED_MODES = {"all", "scientific", "mystical"}
+_SHARE_TYPES = {"signal_snapshot", "personal_pattern", "daily_state", "event", "outlook"}
 _GUIDE_TYPES = {"cat", "robot", "dog"}
 _TONE_STYLES = {"straight", "balanced", "humorous"}
 _TEMP_UNITS = {"F", "C"}
@@ -523,6 +524,23 @@ def _normalize_home_feed_mode(value: Optional[str]) -> str:
     return candidate if candidate in _HOME_FEED_MODES else "scientific"
 
 
+def _normalize_share_copy_mode(value: Optional[str]) -> str:
+    candidate = str(value or "all").strip().lower() or "all"
+    return candidate if candidate in _HOME_FEED_MODES else "all"
+
+
+def _normalize_share_type(value: Optional[str]) -> str:
+    candidate = str(value or "").strip().lower()
+    if candidate not in _SHARE_TYPES:
+        raise HTTPException(status_code=400, detail="invalid share_type")
+    return candidate
+
+
+def _normalize_optional_match(value: Optional[str]) -> Optional[str]:
+    candidate = str(value or "").strip().lower()
+    return candidate or None
+
+
 def _normalize_guide_type(value: Optional[str], *, fallback: str) -> str:
     candidate = str(value or fallback).strip().lower() or fallback
     if candidate not in _GUIDE_TYPES:
@@ -928,6 +946,29 @@ def _home_feed_row_to_payload(row: Optional[Dict[str, Any]]) -> Optional[Dict[st
     }
 
 
+def _share_copy_row_to_payload(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not row:
+        return None
+    updated_at = row.get("updated_at")
+    return {
+        "id": str(row.get("id") or ""),
+        "slug": row.get("slug"),
+        "share_type": row.get("share_type"),
+        "driver_key": row.get("driver_key"),
+        "surface": row.get("surface"),
+        "mode": row.get("mode"),
+        "tone": row.get("tone"),
+        "image_title": row.get("image_title"),
+        "image_subtitle": row.get("image_subtitle"),
+        "caption": row.get("caption"),
+        "updated_at": (
+            updated_at.astimezone(timezone.utc).isoformat()
+            if isinstance(updated_at, datetime)
+            else None
+        ),
+    }
+
+
 async def _home_feed_tables_ready(conn) -> bool:
     item_columns = set(await _table_columns(conn, "content", "home_feed_items"))
     seen_columns = set(await _table_columns(conn, "content", "user_home_feed_seen"))
@@ -937,6 +978,18 @@ async def _home_feed_tables_ready(conn) -> bool:
         "seen_at",
         "dismissed_at",
     }.issubset(seen_columns)
+
+
+async def _share_copy_tables_ready(conn) -> bool:
+    columns = set(await _table_columns(conn, "content", "share_copy_templates"))
+    return {
+        "id",
+        "slug",
+        "share_type",
+        "caption",
+        "active",
+        "priority",
+    }.issubset(columns)
 
 
 @router.get("/location", dependencies=[Depends(require_read_auth)])
@@ -1129,6 +1182,82 @@ async def profile_home_feed(
         "ok": True,
         "item": _home_feed_row_to_payload(row),
         "reason": None if row else "exhausted",
+    }
+
+
+@router.get("/share-copy", dependencies=[Depends(require_read_auth)])
+async def profile_share_copy(
+    request: Request,
+    share_type: str = Query(default=""),
+    key: Optional[str] = Query(default=None),
+    surface: Optional[str] = Query(default=None),
+    mode: str = Query(default="all"),
+    tone: str = Query(default="balanced"),
+    conn=Depends(get_db),
+):
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    normalized_share_type = _normalize_share_type(share_type)
+    normalized_key = _normalize_optional_match(key)
+    normalized_surface = _normalize_optional_match(surface)
+    normalized_mode = _normalize_share_copy_mode(mode)
+    normalized_tone = _normalize_tone_style(tone, fallback="balanced")
+    if not await _share_copy_tables_ready(conn):
+        return {"ok": True, "copy": None, "reason": "share_copy_unavailable"}
+
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            select id::text as id,
+                   slug,
+                   share_type,
+                   driver_key,
+                   surface,
+                   mode,
+                   tone,
+                   image_title,
+                   image_subtitle,
+                   caption,
+                   updated_at
+              from content.share_copy_templates
+             where active = true
+               and share_type = %s
+               and (driver_key is null or driver_key = %s)
+               and (surface is null or surface = %s)
+               and (mode = 'all' or mode = %s)
+               and (tone = %s or tone = 'balanced')
+               and (starts_at is null or starts_at <= now())
+               and (ends_at is null or ends_at >= now())
+             order by
+               case when driver_key = %s then 0 else 1 end,
+               case when surface = %s then 0 else 1 end,
+               case when mode = %s then 0 else 1 end,
+               case when tone = %s then 0 else 1 end,
+               priority desc,
+               updated_at desc,
+               slug asc
+             limit 1
+            """,
+            (
+                normalized_share_type,
+                normalized_key,
+                normalized_surface,
+                normalized_mode,
+                normalized_tone,
+                normalized_key,
+                normalized_surface,
+                normalized_mode,
+                normalized_tone,
+            ),
+            prepare=False,
+        )
+        row = await cur.fetchone()
+
+    return {
+        "ok": True,
+        "copy": _share_copy_row_to_payload(row),
+        "reason": None if row else "not_found",
     }
 
 
