@@ -833,8 +833,25 @@ enum ShareDraftFactory {
         if haystack.contains("allergen") || haystack.contains("pollen") {
             keys.append("pollen")
         }
-        if haystack.contains("pressure") || haystack.contains("barometric") {
+        let isWeatherPressure = haystack.contains("barometric")
+            || haystack.contains("pressure swing")
+            || haystack.contains("pressure shift")
+            || haystack.contains("hpa")
+            || analyticsKey?.lowercased() == "pressure"
+            || analyticsKey?.lowercased() == "pressure_swing_exposed"
+        if isWeatherPressure {
             keys.append("pressure")
+        }
+        if haystack.contains("sleep timing") {
+            keys.append("sleep_timing")
+            keys.append("sleep")
+            keys.append("sleep_consistency")
+        } else if haystack.contains("last night") || haystack.contains("below usual") || haystack.contains("short sleep") {
+            keys.append("sleep_deficit")
+            keys.append("sleep")
+            keys.append("last_night_below_usual")
+        } else if haystack.contains("sleep") {
+            keys.append("sleep")
         }
         if haystack.contains("temperature") || tokens.contains("temp") {
             keys.append("temperature")

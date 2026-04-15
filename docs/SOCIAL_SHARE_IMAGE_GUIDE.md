@@ -109,6 +109,8 @@ Use these names when creating image files.
 | Temperature shift | `temperature` |
 | Schumann resonance | `schumann`, `resonance` |
 | Lunar patterns | `lunar`, `moon`, `full_moon`, `new_moon` |
+| Sleep timing inconsistent | `sleep_timing`, `sleep`, `sleep_consistency` |
+| Last night below usual / short sleep | `sleep_deficit`, `sleep`, `last_night_below_usual` |
 | Kp / Bz / solar wind | `geomagnetic`, `solar`, `space_weather` |
 | Solar flare | `solar_flare`, `solar` |
 | CME | `cme`, `solar` |
@@ -220,6 +222,11 @@ Check these first:
 - File is small enough to return within the current `0.75s` candidate timeout.
 - The relevant theme key is likely in the first three theme keys for the draft. If not, use a broader key like `aqi`, `humidity`, `solar`, `lunar`, or `driver_stack`.
 - Supabase object is public and returns HTTP 200 in a browser.
+
+Important collision note:
+
+- Do not rely on `sinus_pressure.jpg` for allergen/pollen pattern cards. In share copy, "sinus pressure" is an outcome/body symptom, not the environmental driver. Use `pollen.jpg`, `allergens.jpg`, or `seasonal_irritants.jpg` for allergen/pollen cards.
+- Weather pressure art should use `pressure.jpg` and is reserved for barometric/pressure-swing cards.
 
 ## Share Copy vs Share Images
 

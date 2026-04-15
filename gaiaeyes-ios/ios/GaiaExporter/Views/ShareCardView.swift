@@ -119,9 +119,10 @@ struct ShareCardView: View {
                 }
             }
 
-            Spacer(minLength: 6)
+            Spacer(minLength: 4)
 
             brandingBlock
+                .layoutPriority(2)
         }
         .padding(.horizontal, padding)
         .padding(.top, panelVerticalPadding)
@@ -143,16 +144,20 @@ struct ShareCardView: View {
     }
 
     private var brandingBlock: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(model.branding.title)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(.system(size: 11, weight: .bold, design: .rounded))
                 .foregroundColor(.white.opacity(0.88))
                 .lineLimit(1)
+            Text("·")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .foregroundColor(.white.opacity(0.42))
             Text(model.branding.url)
                 .font(.system(size: 10, weight: .medium, design: .rounded))
                 .foregroundColor(.white.opacity(0.52))
                 .lineLimit(1)
         }
+        .minimumScaleFactor(0.82)
     }
 
     private var panelEyebrow: String? {

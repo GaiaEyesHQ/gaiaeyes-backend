@@ -33,7 +33,10 @@ Suggested text:
 
 > Gaia Eyes is a wellness and environmental-context app. It combines user-provided symptoms, optional Apple Health data, local environmental signals, and space-weather/earth-resonance data to provide non-diagnostic daily context. It does not provide medical advice, diagnosis, or treatment.
 >
-> The demo account above has Plus enabled and seeded test data so reviewers can see the full app experience without connecting a personal HealthKit account. HealthKit permissions are optional during onboarding. If HealthKit is skipped, the app still shows public environmental and space-weather context.
+>The demo account above has Plus enabled and seeded test data so reviewers can see the app’s Plus surfaces, including environmental drivers, space-weather context, outlooks, guide content, patterns, sharing, and subscription-gated screens.
+
+HealthKit permissions are optional during onboarding. If HealthKit is skipped, Gaia Eyes still shows public environmental and space-weather context, but wearable/body-specific sections such as sleep, health stats, and some personalized gauges require HealthKit access and may be limited until Apple Health data is available.
+
 >
 > In-app subscriptions are managed through Apple In-App Purchase via RevenueCat. Existing web subscribers can sign in, but iOS purchase flow uses Apple IAP.
 
