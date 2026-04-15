@@ -15,12 +15,13 @@ Plus lookup order:
 
 Free-user lookup order:
 
-1. Style defaults for the card's `ShareBackgroundStyle`.
-2. If no image loads, the app renders a generated gradient/background.
+1. Base themed images in Supabase Storage, based on the card's `themeKeys`.
+2. Style defaults for the card's `ShareBackgroundStyle`.
+3. If no image loads, the app renders a generated gradient/background.
 
-Free shares intentionally skip explicit candidate URLs and Supabase themed packs so they remain a basic branded share card. Plus shares use the full lookup order above.
+Free shares intentionally skip explicit candidate URLs and numbered/rotating Supabase variants so they remain a basic branded share card. They can still use fixed defaults such as `lunar.jpg` or `pollen.jpg`. Plus shares use the full lookup order above.
 
-The resolver stops at the first URL that returns a valid image. Each candidate currently has a short timeout of `0.75s`, so large files can appear to be "missing" even when the path is correct.
+The resolver stops at the first URL that returns a valid image. Each candidate currently has a short timeout of `1.5s`, so very large files can appear to be "missing" even when the path is correct.
 
 ## Storage Locations
 
@@ -82,7 +83,7 @@ air-quality-2.jpg
 air-quality.jpg
 ```
 
-If only a base file exists, that file is used whenever the variant file for the day is missing:
+If only a base file exists, that file is used whenever the variant file for the day is missing. Base files are also the only themed images used for free/basic share previews:
 
 ```text
 humidity.jpg

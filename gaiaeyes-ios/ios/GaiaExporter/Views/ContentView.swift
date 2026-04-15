@@ -3445,6 +3445,21 @@ struct ContentView: View {
                 return "square.grid.2x2"
             }
         }
+
+        var accent: Color {
+            switch self {
+            case .home:
+                return GaugePalette.low
+            case .body:
+                return GaugePalette.rose
+            case .patterns:
+                return GaugePalette.aqua
+            case .outlook:
+                return GaugePalette.elevated
+            case .explore:
+                return GaugePalette.sky
+            }
+        }
     }
 
     private enum InsightsRoute: String, Hashable, Identifiable {
@@ -9347,6 +9362,10 @@ struct ContentView: View {
                 abs(row.delta) >= 5 ? GaugePalette.zoneColor(row.zoneKey) : .secondary
             }
 
+            private var cardAccent: Color {
+                GaugePalette.contextAccent("\(row.key) \(row.label)")
+            }
+
             private var statusText: String {
                 if row.value == nil {
                     return "Calibrating"
@@ -9390,7 +9409,7 @@ struct ContentView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(row.label)
                             .font(.subheadline.weight(.semibold))
-                            .foregroundColor(Color.white.opacity(0.92))
+                            .foregroundColor(cardAccent.opacity(0.96))
                         Spacer(minLength: 4)
                         if row.showAffordance {
                             Image(systemName: "sparkles")
@@ -9463,14 +9482,23 @@ struct ContentView: View {
                     }
                 }
                 .padding(10)
-                .background(Color.black.opacity(0.25))
+                .background(
+                    LinearGradient(
+                        colors: [
+                            cardAccent.opacity(0.13),
+                            Color.black.opacity(0.28)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(
                             row.showAffordance
                             ? GaugePalette.zoneColor(row.zoneKey).opacity(0.45)
-                            : Color.white.opacity(0.05),
+                            : cardAccent.opacity(0.18),
                             lineWidth: row.showAffordance ? 1.2 : 1
                         )
                 )
@@ -9770,6 +9798,20 @@ struct ContentView: View {
 
             private var isGaugeContext: Bool {
                 contextType == "gauge"
+            }
+
+            private var modalAccent: Color {
+                GaugePalette.contextAccent("\(contextType) \(contextKey) \(modalDisplayTitle ?? "")")
+            }
+
+            private func modalIcon(for title: String) -> String {
+                let token = title.lowercased()
+                if token.contains("symptom") { return "waveform.path.ecg.rectangle" }
+                if token.contains("influencer") || token.contains("driver") { return "sparkles.rectangle.stack.fill" }
+                if token.contains("help") || token.contains("tip") { return "hand.raised.fill" }
+                if token.contains("state") { return "dial.medium" }
+                if token.contains("notice") || token.contains("surface") { return "eye.fill" }
+                return "circle.hexagongrid.fill"
             }
 
             private func translated(_ raw: String?) -> String? {
@@ -10208,10 +10250,101 @@ struct ContentView: View {
                 }
             }
 
+            @ViewBuilder
+            private func modalSectionCard<Content: View>(
+                _ title: String,
+                action: (() -> Void)? = nil,
+                @ViewBuilder content: () -> Content
+            ) -> some View {
+                let tint = GaugePalette.contextAccent("\(contextKey) \(title)")
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .center, spacing: 10) {
+                        Image(systemName: modalIcon(for: title))
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(tint.opacity(0.95))
+                            .frame(width: 28, height: 28)
+                            .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        Text(title.uppercased())
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(.white.opacity(0.62))
+                            .tracking(0.8)
+                        Spacer()
+                        if let action {
+                            Button(action: action) {
+                                HStack(spacing: 4) {
+                                    Text("View all")
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption2.weight(.semibold))
+                                }
+                                .font(.caption.weight(.semibold))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundColor(tint)
+                        }
+                    }
+                    content()
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    GaugePalette.softCardGradient(
+                        accent: tint,
+                        highlightOpacity: 0.12,
+                        baseOpacity: 0.05,
+                        shadowOpacity: 0.16
+                    ),
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(tint.opacity(0.20), lineWidth: 1)
+                )
+                .shadow(color: tint.opacity(0.10), radius: 12, x: 0, y: 0)
+            }
+
+            private func modalChip(_ text: String, tint: Color? = nil) -> some View {
+                let chipTint = tint ?? modalAccent
+                return Text(text)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(chipTint.opacity(0.13), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(chipTint.opacity(0.18), lineWidth: 1)
+                    )
+            }
+
+            private func modalBullet(_ text: String, tint: Color? = nil) -> some View {
+                let bulletTint = tint ?? modalAccent
+                return HStack(alignment: .top, spacing: 8) {
+                    Circle()
+                        .fill(bulletTint)
+                        .frame(width: 5, height: 5)
+                        .padding(.top, 7)
+                    Text(text)
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.76))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             private func quickLogSection(_ quickLog: DashboardQuickLog) -> some View {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Quick Log")
-                        .font(.headline)
+                    HStack(spacing: 10) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(modalAccent)
+                            .frame(width: 28, height: 28)
+                            .background(modalAccent.opacity(0.16), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        Text("QUICK LOG")
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(.white.opacity(0.62))
+                            .tracking(0.8)
+                    }
                     if let title = quickLog.title, !title.isEmpty {
                         Text(translated(title) ?? title)
                             .font(.subheadline)
@@ -10240,7 +10373,7 @@ struct ContentView: View {
                                 Capsule()
                                     .fill(
                                         selectedQuickLogs.contains(option)
-                                        ? Color.accentColor.opacity(0.22)
+                                        ? modalAccent.opacity(0.24)
                                         : Color.white.opacity(0.08)
                                     )
                             )
@@ -10248,7 +10381,7 @@ struct ContentView: View {
                                 Capsule()
                                     .stroke(
                                         selectedQuickLogs.contains(option)
-                                        ? Color.accentColor.opacity(0.9)
+                                        ? modalAccent.opacity(0.78)
                                         : Color.white.opacity(0.10),
                                         lineWidth: 1
                                     )
@@ -10315,50 +10448,44 @@ struct ContentView: View {
                     if let title = modalDisplayTitle {
                         Text(title)
                             .font(.title3.weight(.bold))
+                            .foregroundColor(.white.opacity(0.94))
                     }
 
                     if !symptoms.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            compactSectionHeader("Active Symptoms", action: dismissAndOpenCurrentSymptoms)
+                        modalSectionCard("Active Symptoms", action: dismissAndOpenCurrentSymptoms) {
                             ForEach(symptoms, id: \.self) { symptom in
-                                Text(symptom)
-                                    .font(.subheadline)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.84)
+                                modalChip(symptom, tint: GaugePalette.rose)
                             }
                         }
                     }
 
                     if !influencers.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            compactSectionHeader("Current Influencers", action: dismissAndOpenAllDrivers)
+                        modalSectionCard("Current Influencers", action: dismissAndOpenAllDrivers) {
                             ForEach(influencers) { driver in
-                                Text(gaugePopupInfluencerLine(for: driver))
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.84)
+                                modalChip(
+                                    gaugePopupInfluencerLine(for: driver),
+                                    tint: GaugePalette.contextAccent("\(driver.key) \(driver.label ?? "")")
+                                )
                             }
                         }
                     }
 
                     if !helperLines.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            compactSectionHeader("Helpful right now")
+                        modalSectionCard("Helpful right now") {
                             ForEach(Array(helperLines.enumerated()), id: \.offset) { _, line in
-                                Text("\u{2022} \(line)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
+                                modalBullet(line, tint: GaugePalette.low)
                             }
                         }
                     } else if symptoms.isEmpty && influencers.isEmpty, let fallbackSummary {
                         Text(fallbackSummary)
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.white.opacity(0.72))
                     }
 
                     if let quickLog {
-                        quickLogSection(quickLog)
+                        modalSectionCard("Quick Log") {
+                            quickLogSection(quickLog)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -10482,11 +10609,25 @@ struct ContentView: View {
 
             var body: some View {
                 NavigationStack {
-                    ScrollView {
-                        if isGaugeContext {
-                            compactGaugeModalContent
-                        } else {
-                            detailedModalContent
+                    ZStack {
+                        Color.black.ignoresSafeArea()
+                        RadialGradient(
+                            colors: [
+                                modalAccent.opacity(0.22),
+                                Color.clear
+                            ],
+                            center: .topLeading,
+                            startRadius: 10,
+                            endRadius: 360
+                        )
+                        .ignoresSafeArea()
+
+                        ScrollView {
+                            if isGaugeContext {
+                                compactGaugeModalContent
+                            } else {
+                                detailedModalContent
+                            }
                         }
                     }
                     .navigationTitle("Why This Matters Now")
@@ -11846,15 +11987,19 @@ struct ContentView: View {
             let metrics: [HubMetric]
             let isExplore: Bool
 
+            private var accent: Color {
+                GaugePalette.contextAccent("\(title) \(icon)")
+            }
+
             var body: some View {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .top, spacing: 12) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(Color.white.opacity(isExplore ? 0.05 : 0.10))
+                                .fill(accent.opacity(isExplore ? 0.12 : 0.16))
                             Image(systemName: icon)
                                 .font(.headline)
-                                .foregroundColor(.white.opacity(isExplore ? 0.72 : 0.90))
+                                .foregroundColor(accent.opacity(isExplore ? 0.88 : 0.96))
                         }
                         .frame(width: isExplore ? 42 : 48, height: isExplore ? 42 : 48)
 
@@ -11906,12 +12051,22 @@ struct ContentView: View {
                 }
                 .padding(isExplore ? 14 : 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white.opacity(isExplore ? 0.035 : 0.06))
+                .background(
+                    LinearGradient(
+                        colors: [
+                            accent.opacity(isExplore ? 0.08 : 0.11),
+                            Color.white.opacity(isExplore ? 0.035 : 0.055)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(Color.white.opacity(isExplore ? 0.05 : 0.08), lineWidth: 1)
+                        .stroke(accent.opacity(isExplore ? 0.18 : 0.24), lineWidth: 1)
                 )
+                .shadow(color: accent.opacity(isExplore ? 0.08 : 0.10), radius: isExplore ? 8 : 10, x: 0, y: 0)
             }
         }
 
@@ -12855,6 +13010,7 @@ struct ContentView: View {
             let drivers = visibleDrivers(day.topDrivers ?? [])
             let domains = day.likelyElevatedDomains ?? []
             let state = dailyState(day)
+            let accent = GaugePalette.zoneColor(LocalConditionsStyle.severityKey(state))
             let title = dailyTitle(day)
             let dateText = dailyDateText(day.day)
 
@@ -12905,13 +13061,29 @@ struct ContentView: View {
                 }
             }
             .padding(12)
+            .padding(.leading, 3)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.04))
+            .background(
+                LinearGradient(
+                    colors: [
+                        accent.opacity(0.11),
+                        Color.white.opacity(0.04)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                    .stroke(accent.opacity(0.22), lineWidth: 1)
             )
+            .overlay(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(accent.opacity(0.72))
+                    .frame(width: 3)
+                    .padding(.vertical, 14)
+            }
         }
 
         @ViewBuilder
@@ -13659,15 +13831,19 @@ struct ContentView: View {
             let shareLabel: String
             let onShare: () -> Void
 
+            private var accent: Color {
+                GaugePalette.contextAccent("\(card.signalKey) \(card.signal) \(card.outcome)")
+            }
+
             var body: some View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .top, spacing: 12) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(Color.white.opacity(0.06))
+                                .fill(accent.opacity(0.14))
                             Image(systemName: iconName)
                                 .font(.headline)
-                                .foregroundColor(.white.opacity(0.88))
+                                .foregroundColor(accent.opacity(0.96))
                         }
                         .frame(width: 44, height: 44)
 
@@ -13715,13 +13891,30 @@ struct ContentView: View {
                     .controlSize(.small)
                 }
                 .padding(16)
+                .padding(.leading, 3)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white.opacity(0.06))
+                .background(
+                    LinearGradient(
+                        colors: [
+                            accent.opacity(0.10),
+                            Color.white.opacity(0.055)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(accent.opacity(0.22), lineWidth: 1)
                 )
+                .overlay(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(accent.opacity(0.72))
+                        .frame(width: 3)
+                        .padding(.vertical, 18)
+                }
+                .shadow(color: accent.opacity(0.08), radius: 10, x: 0, y: 0)
             }
         }
 
@@ -16883,6 +17076,14 @@ struct ContentView: View {
             }
             .navigationDestination(for: InsightsRoute.self) { route in
                 shellDestinationView(for: route)
+                    .navigationBarBackButtonHidden(true)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Close") {
+                                explorePath = []
+                            }
+                        }
+                    }
             }
             .task {
                 await fetchInsightsHubData(trigger: .initial)
@@ -18853,6 +19054,8 @@ struct ContentView: View {
                 outlookTab
                 exploreTab
             }
+            .tint(selectedTab.accent)
+            .animation(.easeInOut(duration: 0.18), value: selectedTab)
         }
     }
 
@@ -20620,67 +20823,120 @@ struct ContentView: View {
             return counts
         }
 
+        private func severityTint(_ value: String) -> Color {
+            let token = value.lowercased()
+            if token.contains("red") { return GaugePalette.high }
+            if token.contains("orange") { return GaugePalette.elevated }
+            if token.contains("yellow") { return GaugePalette.mild }
+            return GaugePalette.low
+        }
+
+        private func hazardStatTile(label: String, value: String, tint: Color) -> some View {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(label.uppercased())
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.white.opacity(0.52))
+                    .tracking(0.8)
+                Text(value)
+                    .font(.title3.weight(.bold))
+                    .foregroundColor(.white.opacity(0.92))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(tint.opacity(0.24), lineWidth: 1)
+            )
+        }
+
         var body: some View {
             let items = payload?.items ?? []
             let cleanError = ContentView.scrubError(error)
             let sev = severityCounts(items)
             let types = typeCounts(items)
+            let accent = GaugePalette.contextAccent("global hazards alerts")
 
-            GroupBox {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(accent)
+                        .frame(width: 32, height: 32)
+                        .background(accent.opacity(0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
                         Text("Global Hazards Brief")
-                            .font(.headline)
-                        Spacer()
-                        if isLoading { ProgressView().scaleEffect(0.8) }
-                    }
-                    if let updated = formatUpdated(payload?.generatedAt) {
-                        Text("Updated \(updated)")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                    if let error = cleanError, !error.isEmpty {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                    }
-                    if items.isEmpty && !isLoading && (cleanError == nil || cleanError?.isEmpty == true) {
-                        Text("Global Hazards unavailable at the moment.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    } else if !items.isEmpty {
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Severity (48h)").font(.subheadline)
-                                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
-                                    GridRow { Text("RED"); Text("\(sev.red)") }
-                                    GridRow { Text("ORANGE"); Text("\(sev.orange)") }
-                                    GridRow { Text("YELLOW"); Text("\(sev.yellow)") }
-                                    GridRow { Text("INFO"); Text("\(sev.info)") }
-                                }
+                            .font(.headline.weight(.semibold))
+                        if let updated = formatUpdated(payload?.generatedAt) {
+                            Text("Updated \(updated)")
                                 .font(.caption2)
-                                .foregroundColor(.secondary)
-                            }
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("By Type (48h)").font(.subheadline)
-                                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
-                                    GridRow { Text("Earthquakes"); Text("\(types.quakes)") }
-                                    GridRow { Text("Cyclones/Severe"); Text("\(types.cyclones)") }
-                                    GridRow { Text("Volcano/Ash"); Text("\(types.volcano)") }
-                                    GridRow { Text("Fire"); Text("\(types.fire)") }
-                                    GridRow { Text("Flood"); Text("\(types.flood)") }
-                                    GridRow { Text("Other"); Text("\(types.other)") }
-                                }
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            }
+                                .foregroundColor(.white.opacity(0.58))
+                        }
+                    }
+                    Spacer()
+                    if isLoading {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    }
+                }
+
+                if let error = cleanError, !error.isEmpty {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+
+                if items.isEmpty && !isLoading && (cleanError == nil || cleanError?.isEmpty == true) {
+                    Text("Global Hazards unavailable at the moment.")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.62))
+                } else if !items.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Severity (48h)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(.white.opacity(0.56))
+                            .tracking(0.9)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 74), spacing: 8)], spacing: 8) {
+                            hazardStatTile(label: "Red", value: "\(sev.red)", tint: severityTint("red"))
+                            hazardStatTile(label: "Orange", value: "\(sev.orange)", tint: severityTint("orange"))
+                            hazardStatTile(label: "Yellow", value: "\(sev.yellow)", tint: severityTint("yellow"))
+                            hazardStatTile(label: "Info", value: "\(sev.info)", tint: severityTint("info"))
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("By Type (48h)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(.white.opacity(0.56))
+                            .tracking(0.9)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 8)], spacing: 8) {
+                            hazardStatTile(label: "Quakes", value: "\(types.quakes)", tint: GaugePalette.sky)
+                            hazardStatTile(label: "Storms", value: "\(types.cyclones)", tint: GaugePalette.elevated)
+                            hazardStatTile(label: "Volcano", value: "\(types.volcano)", tint: GaugePalette.rose)
+                            hazardStatTile(label: "Fire", value: "\(types.fire)", tint: GaugePalette.high)
+                            hazardStatTile(label: "Flood", value: "\(types.flood)", tint: GaugePalette.aqua)
+                            hazardStatTile(label: "Other", value: "\(types.other)", tint: GaugePalette.low)
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } label: {
-                Label("Hazards", systemImage: "exclamationmark.triangle.fill")
             }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                GaugePalette.softCardGradient(
+                    accent: accent,
+                    highlightOpacity: 0.12,
+                    baseOpacity: 0.05,
+                    shadowOpacity: 0.18
+                ),
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(accent.opacity(0.22), lineWidth: 1)
+            )
+            .shadow(color: accent.opacity(0.10), radius: 12, x: 0, y: 0)
         }
     }
 
@@ -21062,12 +21318,21 @@ struct ContentView: View {
             self.content = content()
         }
 
+        private var accent: Color {
+            GaugePalette.contextAccent("\(title) \(icon)")
+        }
+
         var body: some View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 8) {
-                    Image(systemName: icon)
-                        .font(.headline)
-                        .foregroundColor(.white.opacity(0.88))
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(accent.opacity(0.14))
+                        Image(systemName: icon)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(accent.opacity(0.96))
+                    }
+                    .frame(width: 30, height: 30)
                     Text(title)
                         .font(.headline.weight(.semibold))
                     Spacer()
@@ -21076,12 +21341,22 @@ struct ContentView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.06))
+            .background(
+                LinearGradient(
+                    colors: [
+                        accent.opacity(0.09),
+                        Color.white.opacity(0.055)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(accent.opacity(0.20), lineWidth: 1)
             )
+            .shadow(color: accent.opacity(0.07), radius: 9, x: 0, y: 0)
         }
     }
 

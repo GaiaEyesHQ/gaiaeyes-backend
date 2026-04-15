@@ -1082,6 +1082,69 @@ struct SchumannDashboardView: View {
         return plan == .plus || plan == .pro
     }
 
+    private var pageBackground: some View {
+        ZStack {
+            Color.black
+            RadialGradient(
+                colors: [
+                    GaugePalette.sky.opacity(0.18),
+                    Color.clear
+                ],
+                center: .topLeading,
+                startRadius: 20,
+                endRadius: 420
+            )
+            RadialGradient(
+                colors: [
+                    GaugePalette.violet.opacity(0.12),
+                    Color.clear
+                ],
+                center: .bottomTrailing,
+                startRadius: 30,
+                endRadius: 360
+            )
+        }
+        .ignoresSafeArea()
+    }
+
+    private func schumannSurfaceCard<Content: View>(
+        title: String,
+        icon: String,
+        accent: Color = GaugePalette.sky,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(accent.opacity(0.95))
+                    .frame(width: 30, height: 30)
+                    .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Text(title)
+                    .font(.headline.weight(.semibold))
+                    .foregroundColor(.white.opacity(0.92))
+                Spacer()
+            }
+            content()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            GaugePalette.softCardGradient(
+                accent: accent,
+                highlightOpacity: 0.11,
+                baseOpacity: 0.05,
+                shadowOpacity: 0.18
+            ),
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(accent.opacity(0.20), lineWidth: 1)
+        )
+        .shadow(color: accent.opacity(0.09), radius: 12, x: 0, y: 0)
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 14) {
@@ -1098,7 +1161,7 @@ struct SchumannDashboardView: View {
             }
             .padding()
         }
-        .background(viewModel.highContrast ? Color.black : Color(.systemGroupedBackground))
+        .background(viewModel.highContrast ? Color.black.ignoresSafeArea() : pageBackground)
         .navigationTitle("Schumann")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -1156,7 +1219,7 @@ struct SchumannDashboardView: View {
     }
 
     private var advancedLockedCard: some View {
-        GroupBox {
+        schumannSurfaceCard(title: "Plus", icon: "sparkles", accent: GaugePalette.violet) {
             VStack(alignment: .leading, spacing: 10) {
                 Label("Advanced Schumann tools are included with Plus", systemImage: "lock.fill")
                     .font(.subheadline.weight(.semibold))
@@ -1171,13 +1234,11 @@ struct SchumannDashboardView: View {
                 .buttonStyle(.borderedProminent)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            Label("Plus", systemImage: "sparkles")
         }
     }
 
     private var headerCard: some View {
-        GroupBox {
+        schumannSurfaceCard(title: "Schumann Overview", icon: "dial.medium", accent: GaugePalette.sky) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     qualityBadge
@@ -1257,8 +1318,6 @@ struct SchumannDashboardView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            Label("Schumann Overview", systemImage: "dial.medium")
         }
     }
 
@@ -1277,7 +1336,7 @@ struct SchumannDashboardView: View {
         let gaugeIndex = SchumannTuning.gaugeIndex(for: viewModel.latestAmplitude)
         let gaugeSummary = String(format: "%.1f \u{2014} %@", gaugeIndex, level.state)
 
-        return GroupBox {
+        return schumannSurfaceCard(title: "Earth Resonance Gauge", icon: "gauge.with.dots.needle.67percent", accent: level.color) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .center, spacing: 12) {
                     SchumannGaugeDial(value: gaugeIndex / 100, color: level.color)
@@ -1295,13 +1354,11 @@ struct SchumannDashboardView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            Label("Earth Resonance Gauge", systemImage: "gauge.with.dots.needle.67percent")
         }
     }
 
     private var heatmapCard: some View {
-        GroupBox {
+        schumannSurfaceCard(title: "48h Heatmap", icon: "square.grid.3x3.fill", accent: GaugePalette.aqua) {
             DisclosureGroup(isExpanded: $showHeatmapDetails) {
                 if showHeatmapDetails {
                     if viewModel.isHeatmapLoading && viewModel.heatmap == nil {
@@ -1326,13 +1383,11 @@ struct SchumannDashboardView: View {
                 Text("Load heatmap")
                     .font(.subheadline.weight(.semibold))
             }
-        } label: {
-            Label("48h Heatmap", systemImage: "square.grid.3x3.fill")
         }
     }
 
     private var bandsCard: some View {
-        GroupBox {
+        schumannSurfaceCard(title: "Harmonic Bands", icon: "chart.bar.fill", accent: GaugePalette.mild) {
             DisclosureGroup(isExpanded: $showBandsDetails) {
                 if showBandsDetails {
                     if viewModel.isSeriesLoading && viewModel.seriesRows.isEmpty {
@@ -1355,13 +1410,11 @@ struct SchumannDashboardView: View {
                 Text("Load band trends")
                     .font(.subheadline.weight(.semibold))
             }
-        } label: {
-            Label("Harmonic Bands", systemImage: "chart.bar.fill")
         }
     }
 
     private var pulseCard: some View {
-        GroupBox {
+        schumannSurfaceCard(title: "48h Pulse Line", icon: "waveform.path.ecg", accent: GaugePalette.low) {
             DisclosureGroup(isExpanded: $showPulseDetails) {
                 if showPulseDetails {
                     if viewModel.isSeriesLoading && viewModel.seriesRows.isEmpty {
@@ -1384,13 +1437,11 @@ struct SchumannDashboardView: View {
                 Text("Load pulse line")
                     .font(.subheadline.weight(.semibold))
             }
-        } label: {
-            Label("48h Pulse Line", systemImage: "waveform.path.ecg")
         }
     }
 
     private var tomskCard: some View {
-        GroupBox {
+        schumannSurfaceCard(title: "Tomsk Detail", icon: "point.3.connected.trianglepath.dotted", accent: GaugePalette.sky) {
             DisclosureGroup(isExpanded: $showTomskDetails) {
                 if showTomskDetails {
                     VStack(alignment: .leading, spacing: 12) {
@@ -1474,8 +1525,6 @@ struct SchumannDashboardView: View {
                         .foregroundColor(.secondary)
                 }
             }
-        } label: {
-            Label("Tomsk Detail", systemImage: "point.3.connected.trianglepath.dotted")
         }
     }
 

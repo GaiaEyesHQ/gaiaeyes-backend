@@ -5,7 +5,7 @@ enum ShareBackgroundResolver {
     private static let cache = NSCache<NSURL, UIImage>()
     private static let themedCandidateLimit = 24
     private static let themedVariantCount = 12
-    private static let candidateTimeout: TimeInterval = 0.75
+    private static let candidateTimeout: TimeInterval = 1.5
 
     enum CandidateScope {
         case basic
@@ -40,9 +40,10 @@ enum ShareBackgroundResolver {
         let candidates: [URL]
         switch scope {
         case .basic:
-            candidates = defaultCandidateURLs(for: background.style)
+            let themed = Array(themedCandidateURLs(for: background, includeVariants: false).prefix(themedCandidateLimit))
+            candidates = themed + defaultCandidateURLs(for: background.style)
         case .full:
-            let themed = Array(themedCandidateURLs(for: background).prefix(themedCandidateLimit))
+            let themed = Array(themedCandidateURLs(for: background, includeVariants: true).prefix(themedCandidateLimit))
             candidates = background.candidateURLs + themed + defaultCandidateURLs(for: background.style)
         }
         return candidates.filter { url in
@@ -55,7 +56,7 @@ enum ShareBackgroundResolver {
         }
     }
 
-    private static func themedCandidateURLs(for background: ShareCardBackground) -> [URL] {
+    private static func themedCandidateURLs(for background: ShareCardBackground, includeVariants: Bool) -> [URL] {
         let folders = [
             "social/share/backgrounds",
             "backgrounds/share",
@@ -70,7 +71,7 @@ enum ShareBackgroundResolver {
         for folder in folders {
             for ext in exts {
                 for key in themeKeys.prefix(3) {
-                    for stem in themedStems(for: key) {
+                    for stem in themedStems(for: key, includeVariants: includeVariants) {
                         if let url = MediaPaths.storageURL("\(folder)/\(stem).\(ext)") {
                             urls.append(url)
                         }
@@ -82,15 +83,18 @@ enum ShareBackgroundResolver {
         return urls
     }
 
-    private static func themedStems(for key: String) -> [String] {
+    private static func themedStems(for key: String, includeVariants: Bool) -> [String] {
         let dashed = key.replacingOccurrences(of: "_", with: "-")
-        let variant = dailyVariantIndex(for: key)
-        return uniquePreservingOrder([
-            "\(key)_\(variant)",
-            "\(dashed)-\(variant)",
-            key,
-            dashed,
-        ]).filter { !$0.isEmpty }
+        var stems: [String] = []
+        if includeVariants {
+            let variant = dailyVariantIndex(for: key)
+            stems.append(contentsOf: [
+                "\(key)_\(variant)",
+                "\(dashed)-\(variant)",
+            ])
+        }
+        stems.append(contentsOf: [key, dashed])
+        return uniquePreservingOrder(stems).filter { !$0.isEmpty }
     }
 
     private static func dailyVariantIndex(for key: String) -> Int {
