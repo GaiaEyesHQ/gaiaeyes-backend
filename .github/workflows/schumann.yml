@@ -116,6 +116,23 @@ jobs:
           echo "MD5 after params extractor (present files):"
           md5sum runs/tomsk_overlay_full.png runs/tomsk_params_*_overlay.png 2>/dev/null || true
 
+          # Square share-card crops. Non-blocking; raw station images stay as fallback.
+          python share_crop.py \
+            --image runs/tomsk_overlay_full.png \
+            --json runs/tomsk_now.json \
+            --out runs/tomsk_share_latest.jpg \
+            --right-margin-minutes 90 \
+            --size 1080 \
+            --quality 86 || echo "WARN: tomsk_share_latest.jpg crop failed"
+
+          python share_crop.py \
+            --image runs/cumiana_overlay.png \
+            --json runs/cumiana_now.json \
+            --out runs/cumiana_share_latest.jpg \
+            --right-margin-minutes 90 \
+            --size 1080 \
+            --quality 86 || echo "WARN: cumiana_share_latest.jpg crop failed"
+
           # Debug: quick listing after params extractor
           echo "Post-extract listing:"
           ls -lah runs || true
@@ -147,10 +164,22 @@ jobs:
             echo "WARN: runs/tomsk_overlay_full.png not found; keeping existing images/tomsk_full_latest.png"
           fi
 
+          if [ -f runs/tomsk_share_latest.jpg ]; then
+            cp -f runs/tomsk_share_latest.jpg "$MEDIA_DIR/images/tomsk_share_latest.jpg" && have_any=true
+          else
+            echo "WARN: runs/tomsk_share_latest.jpg not found; keeping existing images/tomsk_share_latest.jpg"
+          fi
+
           if [ -f runs/cumiana_overlay.png ]; then
             cp -f runs/cumiana_overlay.png "$MEDIA_DIR/images/cumiana_latest.png" && have_any=true
           else
             echo "WARN: runs/cumiana_overlay.png not found; keeping existing images/cumiana_latest.png"
+          fi
+
+          if [ -f runs/cumiana_share_latest.jpg ]; then
+            cp -f runs/cumiana_share_latest.jpg "$MEDIA_DIR/images/cumiana_share_latest.jpg" && have_any=true
+          else
+            echo "WARN: runs/cumiana_share_latest.jpg not found; keeping existing images/cumiana_share_latest.jpg"
           fi
 
           # JSONs (latest only). If missing, keep existing.
@@ -305,10 +334,19 @@ jobs:
 
           upload_one "${MEDIA_DIR}/images/tomsk_latest.png"                "schumann/latest/tomsk_latest.png" "image/png"
           upload_one "${MEDIA_DIR}/images/tomsk_full_latest.png"           "schumann/latest/tomsk_full_latest.png" "image/png"
+          upload_one "${MEDIA_DIR}/images/tomsk_share_latest.jpg"          "schumann/latest/tomsk_share_latest.jpg" "image/jpeg"
           upload_one "${MEDIA_DIR}/images/cumiana_latest.png"              "schumann/latest/cumiana_latest.png" "image/png"
+          upload_one "${MEDIA_DIR}/images/cumiana_share_latest.jpg"        "schumann/latest/cumiana_share_latest.jpg" "image/jpeg"
           upload_one "${MEDIA_DIR}/images/tomsk_params_f_overlay_latest.png" "schumann/latest/tomsk_params_f_overlay_latest.png" "image/png"
           upload_one "${MEDIA_DIR}/images/tomsk_params_a_overlay_latest.png" "schumann/latest/tomsk_params_a_overlay_latest.png" "image/png"
           upload_one "${MEDIA_DIR}/images/tomsk_params_q_overlay_latest.png" "schumann/latest/tomsk_params_q_overlay_latest.png" "image/png"
+
+          upload_one "${MEDIA_DIR}/data/tomsk_latest.json"                 "social/earthscope/latest/tomsk_latest.json" "application/json"
+          upload_one "${MEDIA_DIR}/data/cumiana_latest.json"               "social/earthscope/latest/cumiana_latest.json" "application/json"
+          upload_one "${MEDIA_DIR}/images/tomsk_share_latest.jpg"          "social/earthscope/latest/tomsk_share_latest.jpg" "image/jpeg"
+          upload_one "${MEDIA_DIR}/images/cumiana_share_latest.jpg"        "social/earthscope/latest/cumiana_share_latest.jpg" "image/jpeg"
+          upload_one "${MEDIA_DIR}/images/tomsk_latest.png"                "social/earthscope/latest/tomsk_latest.png" "image/png"
+          upload_one "${MEDIA_DIR}/images/cumiana_latest.png"              "social/earthscope/latest/cumiana_latest.png" "image/png"
 
       - name: "Preflight: verify media remote auth"
         if: ${{ steps.stage_latest.outputs.ok == 'true' }}

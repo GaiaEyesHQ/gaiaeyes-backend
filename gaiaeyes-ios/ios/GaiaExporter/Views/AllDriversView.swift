@@ -356,8 +356,10 @@ struct AllDriversView: View {
             return ShareCardBackground(
                 style: .schumann,
                 candidateURLs: [
-                    MediaPaths.sanitize("social/earthscope/latest/tomsk_latest.png"),
-                    MediaPaths.sanitize("social/earthscope/latest/cumiana_latest.png"),
+                    MediaPaths.storageURL("social/earthscope/latest/tomsk_share_latest.jpg"),
+                    MediaPaths.storageURL("social/earthscope/latest/cumiana_share_latest.jpg"),
+                    MediaPaths.storageURL("social/earthscope/latest/tomsk_latest.png"),
+                    MediaPaths.storageURL("social/earthscope/latest/cumiana_latest.png"),
                 ].compactMap { $0 }
             )
         case "cme":

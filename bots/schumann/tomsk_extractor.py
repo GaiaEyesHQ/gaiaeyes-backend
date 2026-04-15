@@ -845,6 +845,7 @@ def main():
                 "guard_px": guard_px,
                 "x_time": x_time,
                 "x_ideal": x_ideal,
+                "x_now": x_now,
                 "right_guard": right_guard,
                 "delta_min_to_guard": float(delta_min),
                 "pph": pph,
