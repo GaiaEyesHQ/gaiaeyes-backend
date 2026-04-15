@@ -22,6 +22,8 @@
 	<string>https://gaiaeyes-backend.onrender.com</string>
 	<key>GAIA_MAGICLINK_REDIRECT</key>
 	<string>gaiaeyes://auth/callback</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>MEDIA_BASE_URL</key>
 	<string>https://qadwzkwubfbfuslfxkzl.supabase.co/storage/v1/object/public/space-visuals</string>
 	<key>NSAppTransportSecurity</key>

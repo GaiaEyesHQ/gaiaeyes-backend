@@ -75,7 +75,7 @@ struct ShareCardView: View {
     }
 
     private var textPanel: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             if let eyebrow = panelEyebrow {
                 Text(eyebrow.uppercased())
                     .font(.system(size: 11, weight: .bold, design: .rounded))
@@ -119,17 +119,27 @@ struct ShareCardView: View {
                 }
             }
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 6)
 
             brandingBlock
         }
-        .padding(padding)
+        .padding(.horizontal, padding)
+        .padding(.top, panelVerticalPadding)
+        .padding(.bottom, panelBottomPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color.black.opacity(0.90))
     }
 
     private var textPanelRatio: CGFloat {
         1 - imagePanelRatio
+    }
+
+    private var panelVerticalPadding: CGFloat {
+        max(14, padding - 6)
+    }
+
+    private var panelBottomPadding: CGFloat {
+        max(18, padding - 3)
     }
 
     private var brandingBlock: some View {
@@ -162,6 +172,9 @@ struct ShareCardView: View {
     }
 
     private var joinedPanelDetail: String? {
+        if let subtitle = cleanPanelLine(model.subtitle) {
+            return subtitle
+        }
         let value = cleanPanelLine(model.valueText)
         let note = cleanPanelLine(model.note)
         guard let value else { return note }

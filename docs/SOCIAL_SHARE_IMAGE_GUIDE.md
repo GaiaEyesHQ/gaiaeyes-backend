@@ -60,7 +60,7 @@ Supported extensions, in order:
 - `.jpeg`
 - `.webp`
 
-The daily variant is a deterministic number from `1` through `6`, based on the current day and theme key. To rotate images without an app update, upload up to six variants:
+The daily variant is a deterministic number from `1` through `12`, based on the current day and theme key. To rotate images without an app update, upload up to twelve variants:
 
 ```text
 humidity_1.jpg
@@ -69,6 +69,9 @@ humidity_3.jpg
 humidity_4.jpg
 humidity_5.jpg
 humidity_6.jpg
+humidity_7.jpg
+...
+humidity_12.jpg
 ```
 
 Dash-form names also work:
@@ -193,7 +196,7 @@ The raw `*_latest.png` station images are also mirrored to the same folder as fa
 
 The app rotates only when variant files exist. It does not randomly choose from every matching file.
 
-For a given theme key, the app computes a daily variant from `1` to `6`, then tries that variant first. Example for `humidity`:
+For a given theme key, the app computes a daily variant from `1` to `12`, then tries that variant first. Example for `humidity`:
 
 ```text
 humidity_4.jpg
@@ -203,6 +206,8 @@ humidity.png
 ```
 
 If you want daily rotation, upload numbered variants. If you want a fixed default, upload only the base file.
+
+If you upload only some numbered variants, also upload the base fallback file. For example, if `lunar_1.jpg` through `lunar_6.jpg` exist but `lunar_7.jpg` through `lunar_12.jpg` do not, also upload `lunar.jpg` so the card never falls back to the generated gradient on days mapped to a missing variant.
 
 ## Troubleshooting Missing Backgrounds
 

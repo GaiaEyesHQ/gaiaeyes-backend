@@ -22,6 +22,62 @@
       if (el) el.textContent = text || "";
     };
 
+    const credentialPrompt = (btn) => new Promise((resolve) => {
+      const container = btn.closest(".ge-checkout");
+      if (!container) {
+        resolve(null);
+        return;
+      }
+
+      const existing = container.querySelector(".ge-checkout-auth");
+      if (existing) existing.remove();
+
+      const form = document.createElement("form");
+      form.className = "ge-checkout-auth";
+      form.innerHTML = `
+        <label>
+          <span>Email</span>
+          <input type="email" name="email" autocomplete="email" required>
+        </label>
+        <label>
+          <span>Password</span>
+          <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <label class="ge-checkout-auth__check">
+          <input type="checkbox" name="create" checked>
+          <span>Create account if this is new</span>
+        </label>
+        <div class="ge-checkout-auth__actions">
+          <button type="submit">Continue</button>
+          <button type="button" data-ge-auth-cancel>Cancel</button>
+        </div>
+      `;
+
+      const cleanup = () => form.remove();
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const formData = new FormData(form);
+        const email = String(formData.get("email") || "").trim();
+        const password = String(formData.get("password") || "");
+        const create = formData.get("create") === "on";
+        cleanup();
+        resolve(email && password ? { email, password, create } : null);
+      });
+      form.querySelector("[data-ge-auth-cancel]").addEventListener("click", () => {
+        cleanup();
+        resolve(null);
+      });
+
+      const msg = container.querySelector(".ge-checkout-msg");
+      if (msg && msg.parentNode) {
+        msg.parentNode.insertBefore(form, msg.nextSibling);
+      } else {
+        container.appendChild(form);
+      }
+      const emailInput = form.querySelector('input[name="email"]');
+      if (emailInput) emailInput.focus();
+    });
+
     if (missing.length) {
       buttons.forEach((btn) => setMsg(btn, "Checkout config missing: " + missing.join(", ")));
       return;
@@ -34,28 +90,7 @@
 
     const supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnon);
 
-    // If the user just completed magic-link sign-in in another tab, auto-resume the pending checkout
-    (async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        const pending = (localStorage && localStorage.getItem('ge_pending_plan')) || '';
-        if (data && data.session && pending) {
-          try { localStorage.removeItem('ge_pending_plan'); } catch (_) {}
-          // Try to click the corresponding button so UX is consistent
-          const target =
-            document.querySelector(`.ge-checkout-btn[data-plan="${pending}"]`) ||
-            document.querySelector('.ge-checkout-btn');
-          if (target) {
-            // small delay so DOM is settled
-            setTimeout(() => target.click(), 150);
-          }
-        }
-      } catch (_) {
-        // no-op
-      }
-    })();
-
-    const ensureToken = async (btn, plan) => {
+    const ensureToken = async (btn) => {
       const { data, error } = await supabase.auth.getSession();
       if (error) {
         setMsg(btn, "Sign-in failed: " + error.message);
@@ -64,24 +99,38 @@
       const token = data && data.session ? data.session.access_token : null;
       if (token) return token;
 
-      const email = prompt("Enter your email to sign in (magic link):");
-      if (!email) {
+      const credentials = await credentialPrompt(btn);
+      if (!credentials) {
         setMsg(btn, "Sign-in required to continue.");
         return null;
       }
+      const { email, password, create } = credentials;
 
-      try { localStorage.setItem('ge_pending_plan', plan || ''); } catch (_) {}
+      const signIn = await supabase.auth.signInWithPassword({ email, password });
+      if (signIn.error) {
+        if (!create) {
+          setMsg(btn, "Sign-in failed: " + signIn.error.message);
+          return null;
+        }
 
-      const { error: signInError } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: window.location.href },
-      });
-      if (signInError) {
-        setMsg(btn, "Sign-in failed: " + signInError.message);
+        const signUp = await supabase.auth.signUp({ email, password });
+        if (signUp.error) {
+          setMsg(btn, "Account creation failed: " + signUp.error.message);
+          return null;
+        }
+
+        const signUpToken = signUp.data && signUp.data.session ? signUp.data.session.access_token : null;
+        if (signUpToken) return signUpToken;
+
+        setMsg(btn, "Check your email to verify the account, then return here to subscribe.");
         return null;
       }
-      setMsg(btn, "Check your email for the magic link. Return here after signing in.");
-      return null;
+
+      const signedInToken = signIn.data && signIn.data.session ? signIn.data.session.access_token : null;
+      if (!signedInToken) {
+        setMsg(btn, "Sign-in did not return a session. Please try again.");
+      }
+      return signedInToken;
     };
 
     buttons.forEach((btn) => {
@@ -93,7 +142,7 @@
 
         try {
           const plan = btn.getAttribute("data-plan") || "plus_monthly";
-          const token = await ensureToken(btn, plan);
+          const token = await ensureToken(btn);
           if (!token) return;
 
           const res = await fetch(`${backendBase}/v1/billing/checkout`, {

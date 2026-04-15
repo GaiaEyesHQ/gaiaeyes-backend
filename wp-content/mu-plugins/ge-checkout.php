@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Gaia Eyes - Checkout
-Description: Shortcode [ge_checkout plan="plus_monthly" label="Subscribe"] requires Supabase sign-in then calls backend to create Stripe Checkout.
+Description: Shortcode [ge_checkout plan="plus_monthly" label="Subscribe"] requires Supabase password sign-in then calls backend to create Stripe Checkout.
 Version: 0.1
 */
 
@@ -228,6 +228,14 @@ add_action('wp_enqueue_scripts', function () {
         .ge-checkout-btn { border: none; border-radius: 999px; padding: 12px 18px; font-weight: 600; background: #2cc6a0; color: #0a1411; cursor: pointer; }
         .ge-checkout-btn--yearly { background: #1d2f2a; color: #e7f2ee; border: 1px solid rgba(255,255,255,0.15); }
         .ge-checkout-msg { margin-top: 8px; color: #f6c85f; font-size: 13px; min-height: 18px; }
+        .ge-checkout-auth { margin-top: 12px; display: grid; gap: 10px; padding: 12px; border-radius: 16px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); }
+        .ge-checkout-auth label { display: grid; gap: 5px; font-size: 12px; color: #c9d6d1; }
+        .ge-checkout-auth input[type="email"], .ge-checkout-auth input[type="password"] { width: 100%; box-sizing: border-box; border: 1px solid rgba(255,255,255,0.16); border-radius: 10px; padding: 10px 12px; color: #f5fffb; background: rgba(0,0,0,0.22); }
+        .ge-checkout-auth__check { grid-template-columns: auto 1fr; align-items: center; }
+        .ge-checkout-auth__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .ge-checkout-auth__actions button { border: 0; border-radius: 999px; padding: 9px 14px; font-weight: 700; cursor: pointer; }
+        .ge-checkout-auth__actions button[type="submit"] { background: #2cc6a0; color: #0a1411; }
+        .ge-checkout-auth__actions button[type="button"] { background: rgba(255,255,255,0.10); color: #e7f2ee; }
         .ge-checkout-help, .ge-plans-support { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 13px; color: #c9d6d1; }
         .ge-checkout-help a, .ge-plans-support a { color: #9ee9d6; text-decoration: none; }
         .ge-checkout-help a:hover, .ge-plans-support a:hover { text-decoration: underline; }

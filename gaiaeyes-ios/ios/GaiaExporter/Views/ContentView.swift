@@ -2906,6 +2906,7 @@ struct ContentView: View {
     @AppStorage("gaia.app_notice.dismissed_id") private var dismissedAppNoticeID: String = ""
     @AppStorage("gaia.app_notice.dismissed_keys") private var dismissedAppNoticeKeysRaw: String = ""
     @AppStorage("gaia.auth.last_user_scope") private var lastAuthUserScope: String = ""
+    @AppStorage("gaia.user_scoped_cache_owner_scope") private var userScopedCacheOwnerScope: String = ""
     @Environment(\.scenePhase) private var scenePhase
     @State private var showConnections: Bool = false
     @State private var expandLog: Bool = false
@@ -3076,6 +3077,37 @@ struct ContentView: View {
         return trimmed.isEmpty ? "signed_out" : trimmed
     }
 
+    @MainActor
+    private var hasUserScopedCacheSnapshot: Bool {
+        !featuresCacheJSON.isEmpty ||
+        !userOutlookCacheJSON.isEmpty ||
+        !userPatternsCacheJSON.isEmpty ||
+        !dashboardPayloadCacheJSON.isEmpty ||
+        !allDriversCacheJSON.isEmpty
+    }
+
+    @MainActor
+    private func currentUserScopedCacheScope() -> String {
+        normalizedAuthScope(auth.currentSupabaseUserId())
+    }
+
+    @MainActor
+    private func userScopedCacheNeedsReset(for nextScope: String) -> Bool {
+        if !userScopedCacheOwnerScope.isEmpty {
+            return userScopedCacheOwnerScope != nextScope
+        }
+        if hasUserScopedCacheSnapshot, !lastAuthUserScope.isEmpty, lastAuthUserScope == nextScope {
+            userScopedCacheOwnerScope = nextScope
+            return false
+        }
+        return hasUserScopedCacheSnapshot
+    }
+
+    @MainActor
+    private func markUserScopedCacheOwner() {
+        userScopedCacheOwnerScope = currentUserScopedCacheScope()
+    }
+
     private func syncBackendIdentityFromAuth(userID: String?) {
         let token = auth.supabaseAccessToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let userID = userID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -3100,7 +3132,8 @@ struct ContentView: View {
         let nextScope = normalizedAuthScope(userID)
         syncBackendIdentityFromAuth(userID: userID)
 
-        guard lastAuthUserScope != nextScope else { return }
+        let cacheNeedsReset = userScopedCacheNeedsReset(for: nextScope)
+        guard lastAuthUserScope != nextScope || cacheNeedsReset else { return }
         let previousScope = lastAuthUserScope
         let isSignedInScope = nextScope != "signed_out"
         clearUserScopedRuntimeState(resetOnboarding: false)
@@ -3125,6 +3158,7 @@ struct ContentView: View {
         let preservedOnboardingStep = OnboardingStep(rawValue: onboardingStepRaw) ?? .welcome
 
         dashboardPayloadCacheJSON = ""
+        userScopedCacheOwnerScope = currentUserScopedCacheScope()
         dashboardPayload = nil
         lastNonNilDashboardGauges = nil
         dashboardError = nil
@@ -3352,9 +3386,11 @@ struct ContentView: View {
         return try? JSONDecoder().decode(AllDriversSnapshot.self, from: data)
     }
 
+    @MainActor
     private func persistCachedAllDriversSnapshot(_ snapshot: AllDriversSnapshot) {
         guard let data = try? JSONEncoder().encode(snapshot),
               let json = String(data: data, encoding: .utf8) else { return }
+        markUserScopedCacheOwner()
         allDriversCacheJSON = json
     }
 
@@ -5679,6 +5715,7 @@ struct ContentView: View {
         let preserved = mergedUserOutlook(payload, fallback: lastKnownUserOutlook)
         lastKnownUserOutlook = preserved
         if let encoded = try? JSONEncoder().encode(preserved), let json = String(data: encoded, encoding: .utf8) {
+            markUserScopedCacheOwner()
             userOutlookCacheJSON = json
         }
     }
@@ -6381,6 +6418,7 @@ struct ContentView: View {
                         self.liveSchumannSignalBarItem = liveSchumannSignalBarItem
                     }
                     if let json {
+                        markUserScopedCacheOwner()
                         dashboardPayloadCacheJSON = json
                     }
                     dashboardError = nil
@@ -7986,6 +8024,7 @@ struct ContentView: View {
         self.featuresCancellations = envelope.cancellations ?? []
         if let encoded = try? JSONEncoder().encode(resolved),
            let json = String(data: encoded, encoding: .utf8) {
+            markUserScopedCacheOwner()
             self.featuresCacheJSON = json
         }
         let okText = envelope.ok.map { $0 ? "true" : "false" } ?? "nil"
@@ -13042,10 +13081,12 @@ struct ContentView: View {
 
     private struct YourPatternsView: View {
         @EnvironmentObject private var state: AppState
+        @EnvironmentObject private var auth: AuthManager
         let experienceMode: ExperienceMode
         let lunarSensitivityDeclared: Bool
         let hasPlusAccess: Bool
         @AppStorage("user_patterns_cache_json") private var userPatternsCacheJSON: String = ""
+        @AppStorage("gaia.user_scoped_cache_owner_scope") private var userScopedCacheOwnerScope: String = ""
         @State private var payload: UserPatternsPayload? = nil
         @State private var isLoading: Bool = false
         @State private var errorMessage: String? = nil
@@ -13168,6 +13209,11 @@ struct ContentView: View {
                 return ShareCardBackground(style: .solar)
             case "pressure_swing_exposed", "aqi_moderate_plus_exposed", "temp_swing_exposed":
                 return ShareCardBackground(style: .atmospheric)
+            case "pollen_overall_exposed", "pollen_tree_exposed", "pollen_grass_exposed", "pollen_weed_exposed", "pollen_mold_exposed":
+                return ShareCardBackground(
+                    style: .atmospheric,
+                    themeKeys: ["pollen", "allergens", "seasonal_irritants"]
+                )
             default:
                 return ShareCardBackground(style: .abstract)
             }
@@ -13465,7 +13511,9 @@ struct ContentView: View {
 
         @MainActor
         private func hydrateCachedPatternsIfNeeded() {
-            guard payload == nil, let cached = decodeCachedPatternsPayload() else { return }
+            guard userScopedCacheOwnerScope == currentUserScopedCacheScope(),
+                  payload == nil,
+                  let cached = decodeCachedPatternsPayload() else { return }
             payload = cached
         }
 
@@ -13473,7 +13521,13 @@ struct ContentView: View {
         private func persistPatternsPayload(_ value: UserPatternsPayload) {
             guard let data = try? JSONEncoder().encode(value),
                   let json = String(data: data, encoding: .utf8) else { return }
+            userScopedCacheOwnerScope = currentUserScopedCacheScope()
             userPatternsCacheJSON = json
+        }
+
+        private func currentUserScopedCacheScope() -> String {
+            let trimmed = (auth.currentSupabaseUserId() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "signed_out" : trimmed
         }
 
         private func mergeSummaryPayload(_ summary: UserPatternsPayload, into current: UserPatternsPayload?) -> UserPatternsPayload {
@@ -17055,7 +17109,9 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     missionSettingsTopSections
-                    missionSettingsAdvancedSection
+                    if canShowDeveloperSettings {
+                        missionSettingsAdvancedSection
+                    }
                 }
                 .padding(.vertical, 16)
             }
@@ -17065,6 +17121,16 @@ struct ContentView: View {
         .sheet(isPresented: $showBugReportSheet) {
             bugReportSheetContent
         }
+    }
+
+    private var canShowDeveloperSettings: Bool {
+        if state.isDeveloperBearer {
+            return true
+        }
+        let email = (auth.signedInEmail ?? auth.supabaseEmail ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return email == "gaiaeyes7.83@gmail.com" || email.hasSuffix("@gaiaeyes.com") || email.hasSuffix("@gaiaeyes.app")
     }
 
     private var bugReportSheetContent: some View {

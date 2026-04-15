@@ -4,7 +4,7 @@ import UIKit
 enum ShareBackgroundResolver {
     private static let cache = NSCache<NSURL, UIImage>()
     private static let themedCandidateLimit = 24
-    private static let themedVariantCount = 6
+    private static let themedVariantCount = 12
     private static let candidateTimeout: TimeInterval = 0.75
 
     enum CandidateScope {
@@ -113,7 +113,7 @@ enum ShareBackgroundResolver {
         case .solar:
             return [
                 spaceVisualURL("nasa/aia_304/latest.jpg"),
-                spaceVisualURL("nasa/geospace_3h/latest.jpg"),
+                spaceVisualURL("nasa/aia_193/latest.jpg"),
                 MediaPaths.statsImage(),
                 MediaPaths.playbookImage(),
             ].compactMap { $0 }
@@ -125,7 +125,7 @@ enum ShareBackgroundResolver {
             ].compactMap { $0 }
         case .atmospheric:
             return [
-                MediaPaths.storageURL("social/earthscope/backgrounds/checkin.png"),
+                MediaPaths.storageURL("social/earthscope/backgrounds/atmospheric.jpg"),
                 MediaPaths.storageURL("social/earthscope/backgrounds/current_drivers.png"),
                 MediaPaths.affectsImage(),
             ].compactMap { $0 }
