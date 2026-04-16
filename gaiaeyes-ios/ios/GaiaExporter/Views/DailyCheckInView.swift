@@ -523,7 +523,7 @@ struct DailyCheckInView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if showsCloseButton {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("Close") { dismiss() }
                 }
             }

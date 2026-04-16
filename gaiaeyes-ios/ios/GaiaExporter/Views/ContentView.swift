@@ -11054,6 +11054,13 @@ struct ContentView: View {
             return "The signals standing out most right now."
         }
 
+        private var whatMattersPanelAccent: Color {
+            guard let item = topWhatMattersDrivers().first else {
+                return GaugePalette.aqua
+            }
+            return GaugePalette.contextAccent("\(item.driver.key) \(item.driver.label ?? "") \(item.driver.state ?? "")")
+        }
+
         @ViewBuilder
         private var currentSymptomsButton: some View {
             Button(action: onOpenCurrentSymptoms) {
@@ -11261,8 +11268,17 @@ struct ContentView: View {
 
                     VStack(alignment: .leading, spacing: 8) {
                         let visibleDrivers = topWhatMattersDrivers()
-                        Text("What Matters Now")
-                            .font(.headline)
+                        let panelAccent = whatMattersPanelAccent
+                        HStack(spacing: 10) {
+                            Image(systemName: "sparkles.rectangle.stack.fill")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundColor(panelAccent.opacity(0.95))
+                                .frame(width: 30, height: 30)
+                                .background(panelAccent.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            Text("What Matters Now")
+                                .font(.headline.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.92))
+                        }
                         Text(whatMattersSummaryLine)
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -11296,6 +11312,30 @@ struct ContentView: View {
                             .controlSize(.small)
                         }
                     }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        GaugePalette.softCardGradient(
+                            accent: whatMattersPanelAccent,
+                            highlightOpacity: 0.11,
+                            baseOpacity: 0.05,
+                            shadowOpacity: 0.18
+                        ),
+                        in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(
+                                whatMattersPanelAccent.opacity(0.20),
+                                lineWidth: 1
+                            )
+                    )
+                    .shadow(
+                        color: whatMattersPanelAccent.opacity(0.09),
+                        radius: 12,
+                        x: 0,
+                        y: 0
+                    )
 
                     if ContentView.cameraHealthCheckVisible {
                         CameraCheckCard(
