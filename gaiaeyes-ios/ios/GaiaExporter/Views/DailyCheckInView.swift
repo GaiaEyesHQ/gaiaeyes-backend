@@ -20,6 +20,12 @@ private let illnessDetailChoiceIds: Set<String> = [
     "illness_other",
 ]
 
+private enum DailyCheckInStyle {
+    static let cardFill = Color(red: 0.08, green: 0.10, blue: 0.11).opacity(0.90)
+    static let fieldFill = Color(red: 0.12, green: 0.14, blue: 0.16).opacity(0.82)
+    static let selectedFill = Color(red: 0.35, green: 0.58, blue: 0.92).opacity(0.32)
+}
+
 private struct DailyCheckInChoiceGrid: View {
     let title: String
     let subtitle: String?
@@ -54,7 +60,7 @@ private struct DailyCheckInChoiceGrid: View {
                             .padding(.vertical, 8)
                             .background(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(selection == choice.id ? Color(red: 0.35, green: 0.58, blue: 0.92).opacity(0.28) : Color.white.opacity(0.05))
+                                    .fill(selection == choice.id ? DailyCheckInStyle.selectedFill : DailyCheckInStyle.fieldFill)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -67,7 +73,7 @@ private struct DailyCheckInChoiceGrid: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.06))
+        .background(DailyCheckInStyle.cardFill)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
@@ -111,7 +117,7 @@ private struct DailyCheckInMultiChoiceGrid: View {
                             .padding(.vertical, 8)
                             .background(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(isSelected ? Color(red: 0.35, green: 0.58, blue: 0.92).opacity(0.28) : Color.white.opacity(0.05))
+                                    .fill(isSelected ? DailyCheckInStyle.selectedFill : DailyCheckInStyle.fieldFill)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -124,7 +130,7 @@ private struct DailyCheckInMultiChoiceGrid: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.06))
+        .background(DailyCheckInStyle.cardFill)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
@@ -593,7 +599,7 @@ struct DailyCheckInView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.06))
+        .background(DailyCheckInStyle.cardFill)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
@@ -605,7 +611,7 @@ struct DailyCheckInView: View {
 
             ZStack(alignment: .topLeading) {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(DailyCheckInStyle.fieldFill)
 
                 if noteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("Anything brief to note?")
@@ -624,7 +630,7 @@ struct DailyCheckInView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.06))
+        .background(DailyCheckInStyle.cardFill)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
@@ -662,7 +668,7 @@ struct DailyCheckInView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.06))
+        .background(DailyCheckInStyle.cardFill)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 

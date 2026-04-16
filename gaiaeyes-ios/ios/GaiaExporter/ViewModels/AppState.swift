@@ -146,7 +146,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         }
         return types
     }
-    private let ble = BleManager()
+    private lazy var ble = BleManager()
     @Published var bleDevices: [CBPeripheral] = []
     @Published var bleConnected: CBPeripheral?
     @Published var bleAutoUpload: Bool = true
@@ -162,7 +162,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     private var bleReconnectUntil: Date?
 
     // MARK: - Polar
-    private let polar = PolarManager()
+    private lazy var polar = PolarManager()
     @AppStorage("polarDeviceId") var polarDeviceId: String = ""   // short ID like 05A2BB3A
     @Published var polarConnectedId: String?
     @Published var polarDeviceName: String?

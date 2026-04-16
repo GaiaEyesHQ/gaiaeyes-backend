@@ -10165,7 +10165,7 @@ struct ContentView: View {
                 case "humidity":
                     return "Humidity is \(state)"
                 case "allergens":
-                    return "Allergens are \(state)"
+                    return "Allergen \(state.capitalized)"
                 case "allergen_exposure":
                     return "Recent allergen exposure is in the mix"
                 case "overexertion":
@@ -10327,18 +10327,20 @@ struct ContentView: View {
                 }
             }
 
-            private func quickLogSection(_ quickLog: DashboardQuickLog) -> some View {
+            private func quickLogSection(_ quickLog: DashboardQuickLog, showsHeader: Bool = true) -> some View {
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.caption.weight(.bold))
-                            .foregroundColor(modalAccent)
-                            .frame(width: 28, height: 28)
-                            .background(modalAccent.opacity(0.16), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                        Text("QUICK LOG")
-                            .font(.caption2.weight(.bold))
-                            .foregroundColor(.white.opacity(0.62))
-                            .tracking(0.8)
+                    if showsHeader {
+                        HStack(spacing: 10) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.caption.weight(.bold))
+                                .foregroundColor(modalAccent)
+                                .frame(width: 28, height: 28)
+                                .background(modalAccent.opacity(0.16), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            Text("QUICK LOG")
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(.white.opacity(0.62))
+                                .tracking(0.8)
+                        }
                     }
                     if let title = quickLog.title, !title.isEmpty {
                         Text(translated(title) ?? title)
@@ -10479,7 +10481,7 @@ struct ContentView: View {
 
                     if let quickLog {
                         modalSectionCard("Quick Log") {
-                            quickLogSection(quickLog)
+                            quickLogSection(quickLog, showsHeader: false)
                         }
                     }
                 }
@@ -12800,6 +12802,16 @@ struct ContentView: View {
                     of: "Energy may be easier to notice",
                     with: "Energy may be lower based on your history"
                 )
+                .replacingOccurrences(
+                    of: "based on your history based on your pattern history",
+                    with: "based on your pattern history",
+                    options: [.caseInsensitive]
+                )
+                .replacingOccurrences(
+                    of: "based on your history based on pattern history",
+                    with: "based on your pattern history",
+                    options: [.caseInsensitive]
+                )
         }
 
         private func filteredOutlookText(_ raw: String?) -> String? {
@@ -13021,12 +13033,25 @@ struct ContentView: View {
             return fallback
         }
 
+        private func dailyAccentColor(index: Int) -> Color {
+            let colors: [Color] = [
+                GaugePalette.aqua,
+                Color(red: 0.92, green: 0.82, blue: 0.35),
+                GaugePalette.elevated,
+                GaugePalette.low,
+                GaugePalette.sky,
+                GaugePalette.violet,
+                GaugePalette.rose,
+            ]
+            return colors[index % colors.count]
+        }
+
         @ViewBuilder
-        private func dailyOutlookRow(_ day: UserOutlookDay) -> some View {
+        private func dailyOutlookRow(_ day: UserOutlookDay, index: Int) -> some View {
             let drivers = visibleDrivers(day.topDrivers ?? [])
             let domains = day.likelyElevatedDomains ?? []
             let state = dailyState(day)
-            let accent = GaugePalette.zoneColor(LocalConditionsStyle.severityKey(state))
+            let accent = dailyAccentColor(index: index)
             let title = dailyTitle(day)
             let dateText = dailyDateText(day.day)
 
@@ -13108,8 +13133,8 @@ struct ContentView: View {
             if !visibleDays.isEmpty {
                 LocalConditionsSurfaceCard(title: hasPlusAccess ? "7-Day Forecast" : "Next 24 Hours", icon: "calendar") {
                     VStack(alignment: .leading, spacing: 10) {
-                        ForEach(visibleDays) { day in
-                            dailyOutlookRow(day)
+                        ForEach(Array(visibleDays.enumerated()), id: \.element.id) { index, day in
+                            dailyOutlookRow(day, index: index)
                         }
                     }
                 }

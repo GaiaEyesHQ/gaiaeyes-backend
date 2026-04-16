@@ -464,8 +464,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Gaia Eyes";
 				INFOPLIST_KEY_CFBundleName = GaiaEyes;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Gaia Eyes uses Bluetooth to connect to heart rate and EEG sensors (e.g., Polar H10) even in the background.";
-				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Gaia Eyes uses Bluetooth to connect to heart rate and EEG sensors.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Gaia Eyes can connect to optional Bluetooth heart-rate sensors when you choose to use sensor tools.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Gaia Eyes can connect to optional Bluetooth heart-rate sensors when you choose to use sensor tools.";
 				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "Gaia Eyes reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Gaia Eyes reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Gaia Eyes writes health summaries you request to the Health app.";
@@ -528,8 +528,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Gaia Eyes";
 				INFOPLIST_KEY_CFBundleName = GaiaEyes;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Gaia Eyes uses Bluetooth to connect to heart rate and EEG sensors (e.g., Polar H10) even in the background.";
-				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Gaia Eyes uses Bluetooth to connect to heart rate and EEG sensors.";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Gaia Eyes can connect to optional Bluetooth heart-rate sensors when you choose to use sensor tools.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Gaia Eyes can connect to optional Bluetooth heart-rate sensors when you choose to use sensor tools.";
 				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "Gaia Eyes reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Gaia Eyes reads your Health data (e.g., heart rate, sleep) to generate daily insights.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Gaia Eyes writes health summaries you request to the Health app.";

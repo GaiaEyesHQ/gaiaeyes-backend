@@ -48,7 +48,6 @@
 		<string>fetch</string>
 		<string>processing</string>
 		<string>remote-notification</string>
-		<string>bluetooth-central</string>
 		<string>location</string>
 	</array>
 </dict>

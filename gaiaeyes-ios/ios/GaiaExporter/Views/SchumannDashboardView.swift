@@ -724,7 +724,19 @@ private final class SchumannDashboardViewModel: ObservableObject {
         latest?.fusion?.enabled ?? true
     }
 
+    var preferredTomskF1Hz: Double? {
+        guard tomskDisplayUsable else { return nil }
+        return tomskDisplayFrequencyHz["F1"]
+    }
+
+    var displayedFundamentalLabel: String {
+        preferredTomskF1Hz == nil ? "F0" : "F1"
+    }
+
     var displayedFundamentalHz: Double? {
+        if let tomskF1 = preferredTomskF1Hz {
+            return tomskF1
+        }
         if let fused = latest?.fusion?.displayF0Hz {
             return fused
         }
@@ -732,13 +744,37 @@ private final class SchumannDashboardViewModel: ObservableObject {
     }
 
     var displayedFundamentalSource: String {
+        if preferredTomskF1Hz != nil {
+            return "tomsk"
+        }
         if let source = latest?.fusion?.displayF0Source, !source.isEmpty {
             return source
         }
         return "cumiana"
     }
 
+    var displayedFundamentalTimestamp: String? {
+        if preferredTomskF1Hz != nil {
+            return tomskDisplayUpdatedTimestamp ?? latestTimestamp
+        }
+        return latestTimestamp
+    }
+
+    var displayedFundamentalQuality: SchumannQuality? {
+        if preferredTomskF1Hz != nil {
+            return SchumannQuality(
+                primarySource: "tomsk",
+                usable: tomskDisplayUsable,
+                qualityScore: tomskDisplayQualityScore
+            )
+        }
+        return latestQuality
+    }
+
     var secondaryFundamentalHz: Double? {
+        if preferredTomskF1Hz != nil {
+            return latest?.harmonics?.f0 ?? latest?.fusion?.secondaryF0Hz
+        }
         if let secondary = latest?.fusion?.secondaryF0Hz {
             return secondary
         }
@@ -1000,7 +1036,15 @@ private final class SchumannDashboardViewModel: ObservableObject {
         if includeTomskSeries {
             await loadTomskSeriesIfNeeded(using: state, force: true)
         }
-        if includeBands || includePulse {
+        if includeBands {
+            await loadTomskLatestIfNeeded(using: state, force: true)
+            if tomskDisplayUsable {
+                await loadTomskSeriesIfNeeded(using: state, force: true)
+            } else {
+                await loadSeriesIfNeeded(using: state, force: true)
+            }
+        }
+        if includePulse {
             await loadSeriesIfNeeded(using: state, force: true)
         }
         if includeHeatmap {
@@ -1071,7 +1115,7 @@ struct SchumannDashboardView: View {
     @AppStorage("gaia.membership.cached_plan") private var cachedPlanRaw: String = MembershipPlan.free.rawValue
     @StateObject private var viewModel = SchumannDashboardViewModel()
     @State private var showHowToRead: Bool = false
-    @State private var showBandsDetails: Bool = false
+    @State private var showBandsDetails: Bool = true
     @State private var showHeatmapDetails: Bool = false
     @State private var showPulseDetails: Bool = false
     @State private var showTomskDetails: Bool = false
@@ -1160,8 +1204,8 @@ struct SchumannDashboardView: View {
                 headerCard
                 gaugeCard
                 if plusUnlocked {
-                    heatmapCard
                     bandsCard
+                    heatmapCard
                     tomskCard
                     pulseCard
                 } else {
@@ -1179,7 +1223,7 @@ struct SchumannDashboardView: View {
                     Task {
                         await viewModel.refreshVisibleContent(
                             using: state,
-                            includeTomsk: plusUnlocked && (showTomskDetails || viewModel.tomskLatest != nil),
+                            includeTomsk: true,
                             includeTomskSeries: plusUnlocked && (showTomskDetails || !viewModel.tomskSeries.isEmpty),
                             includeBands: plusUnlocked && (showBandsDetails || !viewModel.seriesRows.isEmpty),
                             includeHeatmap: plusUnlocked && (showHeatmapDetails || viewModel.heatmap != nil),
@@ -1199,6 +1243,7 @@ struct SchumannDashboardView: View {
             try? await Task.sleep(nanoseconds: 250_000_000)
             guard !Task.isCancelled else { return }
             await viewModel.loadIfNeeded(using: state)
+            await viewModel.loadTomskLatestIfNeeded(using: state, force: false)
         }
         .onChange(of: showTomskDetails) { _, expanded in
             guard expanded else { return }
@@ -1210,7 +1255,12 @@ struct SchumannDashboardView: View {
         .onChange(of: showBandsDetails) { _, expanded in
             guard expanded else { return }
             Task {
-                await viewModel.loadSeriesIfNeeded(using: state, force: false)
+                await viewModel.loadTomskLatestIfNeeded(using: state, force: false)
+                if viewModel.tomskDisplayUsable {
+                    await viewModel.loadTomskSeriesIfNeeded(using: state, force: false)
+                } else {
+                    await viewModel.loadSeriesIfNeeded(using: state, force: false)
+                }
             }
         }
         .onChange(of: showHeatmapDetails) { _, expanded in
@@ -1251,17 +1301,11 @@ struct SchumannDashboardView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     qualityBadge
-                    Text("Last updated: \(formattedTimestamp(viewModel.latestTimestamp))")
+                    Text("Last updated: \(formattedTimestamp(viewModel.displayedFundamentalTimestamp))")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                     Spacer()
-                    Text((viewModel.latestQuality?.primarySource ?? "cumiana").capitalized)
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.15), in: Capsule())
-
                     if let draft = schumannShareDraft() {
                         Button {
                             shareDraft = draft
@@ -1275,7 +1319,7 @@ struct SchumannDashboardView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
-                        Text("F0: \(formattedFundamental(viewModel.displayedFundamentalHz))")
+                        Text("\(viewModel.displayedFundamentalLabel): \(formattedFundamental(viewModel.displayedFundamentalHz))")
                             .font(.subheadline.weight(.semibold))
                         Text(viewModel.displayedFundamentalSource.capitalized)
                             .font(.caption2.weight(.semibold))
@@ -1303,10 +1347,6 @@ struct SchumannDashboardView: View {
                     }
                 }
 
-                Toggle("High contrast", isOn: $viewModel.highContrast)
-                    .font(.caption)
-                .toggleStyle(.switch)
-
                 DisclosureGroup("How to read this", isExpanded: $showHowToRead) {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("\u{2022} Gauge: overall intensity level (0-20 Hz).")
@@ -1331,7 +1371,7 @@ struct SchumannDashboardView: View {
     }
 
     private var qualityBadge: some View {
-        let quality = viewModel.latestQuality
+        let quality = viewModel.displayedFundamentalQuality
         return Text(SchumannTuning.qualityText(for: quality))
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 10)
@@ -1399,15 +1439,21 @@ struct SchumannDashboardView: View {
         schumannSurfaceCard(title: "Harmonic Bands", icon: "chart.bar.fill", accent: GaugePalette.mild) {
             DisclosureGroup(isExpanded: $showBandsDetails) {
                 if showBandsDetails {
-                    if viewModel.isSeriesLoading && viewModel.seriesRows.isEmpty {
+                    if (viewModel.isTomskLatestLoading || viewModel.isTomskSeriesLoading || viewModel.isSeriesLoading)
+                        && viewModel.tomskDisplayFrequencyHz.isEmpty
+                        && viewModel.seriesRows.isEmpty {
                         ProgressView("Loading band trends…")
                             .font(.caption)
                             .padding(.top, 8)
-                    } else {
-                        SchumannBandBarsView(
-                            samples: viewModel.samplesAscending
+                    } else if viewModel.tomskDisplayUsable && !viewModel.tomskDisplayFrequencyHz.isEmpty {
+                        SchumannTomskBandBarsView(
+                            latestValues: viewModel.tomskDisplayFrequencyHz,
+                            points: viewModel.tomskSamplesAscending
                         )
                         .padding(.top, 8)
+                    } else {
+                        SchumannBandBarsView(samples: viewModel.samplesAscending)
+                            .padding(.top, 8)
                     }
                 } else {
                     Text("Tap to load harmonic band trends.")
@@ -1597,7 +1643,7 @@ struct SchumannDashboardView: View {
             humorous: "The background hum is doing a bit more than whispering."
         )
         var bullets: [String] = []
-        let qualityText = SchumannTuning.qualityText(for: viewModel.latestQuality)
+        let qualityText = SchumannTuning.qualityText(for: viewModel.displayedFundamentalQuality)
         if !qualityText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             bullets.append("Quality: \(qualityText)")
         }
@@ -1636,8 +1682,8 @@ struct SchumannDashboardView: View {
             bullets: bullets,
             accent: accent,
             background: background,
-            sourceLine: "Source: \((viewModel.latestQuality?.primarySource ?? "cumiana").capitalized)",
-            updatedAt: formattedTimestamp(viewModel.latestTimestamp),
+            sourceLine: "Source: \(viewModel.displayedFundamentalSource.capitalized)",
+            updatedAt: formattedTimestamp(viewModel.displayedFundamentalTimestamp),
             promptText: sharePromptLabel(for: accent)
         )
     }
@@ -1812,6 +1858,156 @@ private struct SchumannBandBarsView: View {
         let delta = latest - baseline
         if delta > 0.008 { return .green }
         if delta < -0.008 { return .orange }
+        return .secondary
+    }
+}
+
+private struct SchumannTomskBandBarsView: View {
+    let latestValues: [String: Double]
+    let points: [TomskSparkPoint]
+
+    private struct BandItem: Identifiable {
+        let id = UUID()
+        let key: String
+        let label: String
+        let latest: Double?
+        let baseline: Double?
+        let min48h: Double?
+        let max48h: Double?
+    }
+
+    var body: some View {
+        let previousWindow = Array(points.dropLast().suffix(8))
+        let items = ["F1", "F2", "F3", "F4"].map { key in
+            BandItem(
+                key: key,
+                label: tomskLabel(for: key),
+                latest: latestValue(for: key),
+                baseline: average(previousWindow.map { $0.value(key) }),
+                min48h: robustRange(usableValues(key), fallback: allValues(key))?.min,
+                max48h: robustRange(usableValues(key), fallback: allValues(key))?.max
+            )
+        }
+
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(items) { item in
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.label)
+                            .font(.caption)
+                        Text(formattedFrequency(item.latest))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(width: 126, alignment: .leading)
+
+                    ProgressView(value: normalized(latest: item.latest, min: item.min48h, max: item.max48h), total: 1)
+                        .tint(Color.cyan)
+
+                    Text(trendText(latest: item.latest, baseline: item.baseline))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(trendColor(latest: item.latest, baseline: item.baseline))
+                        .frame(width: 64, alignment: .trailing)
+                }
+            }
+
+            Text(points.isEmpty ? "Tomsk latest frequencies. 48h trend loads when available." : "Tomsk F-band frequencies. Trend compares with the previous 2 hours.")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func latestValue(for key: String) -> Double? {
+        latestValues[key] ?? points.last?.value(key)
+    }
+
+    private func tomskLabel(for key: String) -> String {
+        switch key {
+        case "F1": return "F1 \u{2022} Ground"
+        case "F2": return "F2 \u{2022} Flow"
+        case "F3": return "F3 \u{2022} Spark"
+        case "F4": return "F4 \u{2022} Upper"
+        default: return key
+        }
+    }
+
+    private func formattedFrequency(_ value: Double?) -> String {
+        guard let value else { return "\u{2014}" }
+        return String(format: "%.2f Hz", value)
+    }
+
+    private func average(_ values: [Double?]) -> Double? {
+        let numeric = values.compactMap { $0 }
+        guard !numeric.isEmpty else { return nil }
+        return numeric.reduce(0, +) / Double(numeric.count)
+    }
+
+    private func usableValues(_ key: String) -> [Double] {
+        points.filter(\.usable).compactMap { $0.value(key) }
+    }
+
+    private func allValues(_ key: String) -> [Double] {
+        points.compactMap { $0.value(key) }
+    }
+
+    private func robustRange(_ preferred: [Double], fallback: [Double]) -> (min: Double, max: Double)? {
+        let base = preferred.count >= 8 ? preferred : fallback
+        guard !base.isEmpty else { return nil }
+
+        let sorted = base.sorted()
+        if sorted.count < 8 {
+            return (sorted[0], sorted[sorted.count - 1])
+        }
+
+        let low = percentile(sorted, p: 0.05)
+        let high = percentile(sorted, p: 0.95)
+        if high > low {
+            return (low, high)
+        }
+
+        return (sorted[0], sorted[sorted.count - 1])
+    }
+
+    private func percentile(_ sorted: [Double], p: Double) -> Double {
+        guard !sorted.isEmpty else { return 0 }
+        let idx = Int((Double(sorted.count - 1) * p).rounded())
+        return sorted[max(0, min(sorted.count - 1, idx))]
+    }
+
+    private func normalized(latest: Double?, min: Double?, max: Double?) -> Double {
+        guard let latest else { return 0 }
+        let minimumVisible = latest > 0 ? 0.04 : 0
+        guard let min, let max, max > min else {
+            return minimumVisible
+        }
+
+        let raw = Swift.min(1, Swift.max(0, (latest - min) / (max - min)))
+        return Swift.max(raw, minimumVisible)
+    }
+
+    private func trendText(latest: Double?, baseline: Double?) -> String {
+        guard let latest, let baseline else {
+            return "\u{2014}"
+        }
+
+        let delta = latest - baseline
+        let symbol: String
+        if delta > 0.03 {
+            symbol = "\u{2191}"
+        } else if delta < -0.03 {
+            symbol = "\u{2193}"
+        } else {
+            symbol = "\u{2192}"
+        }
+        return "\(symbol) \(String(format: "%.2f Hz", delta))"
+    }
+
+    private func trendColor(latest: Double?, baseline: Double?) -> Color {
+        guard let latest, let baseline else { return .secondary }
+        let delta = latest - baseline
+        if delta > 0.03 { return .green }
+        if delta < -0.03 { return .orange }
         return .secondary
     }
 }

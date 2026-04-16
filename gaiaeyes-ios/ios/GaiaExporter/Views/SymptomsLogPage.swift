@@ -349,6 +349,28 @@ private enum SymptomSuggestionEngine {
     }
 }
 
+private enum SymptomLogStyle {
+    static func accent(for raw: String) -> Color {
+        let key = raw.lowercased()
+        if key.contains("pain") || key.contains("head") || key.contains("sensory") {
+            return GaugePalette.rose
+        }
+        if key.contains("sleep") || key.contains("fatigue") || key.contains("energy") {
+            return GaugePalette.violet
+        }
+        if key.contains("breath") || key.contains("chest") || key.contains("air") {
+            return GaugePalette.aqua
+        }
+        if key.contains("digest") || key.contains("nausea") || key.contains("stomach") {
+            return GaugePalette.elevated
+        }
+        if key.contains("when") || key.contains("note") || key.contains("selected") {
+            return GaugePalette.low
+        }
+        return GaugePalette.mild
+    }
+}
+
 private struct SymptomSectionCard<Content: View>: View {
     let title: String
     let icon: String
@@ -360,26 +382,44 @@ private struct SymptomSectionCard<Content: View>: View {
         self.content = content()
     }
 
+    private var accent: Color {
+        SymptomLogStyle.accent(for: title)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.headline)
-                    .foregroundColor(.white.opacity(0.88))
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(accent.opacity(0.95))
+                    .frame(width: 30, height: 30)
+                    .background(accent.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 Text(title)
                     .font(.headline.weight(.semibold))
+                    .foregroundColor(.white.opacity(0.92))
                 Spacer()
             }
             content
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.06))
+        .background(
+            LinearGradient(
+                colors: [
+                    accent.opacity(0.12),
+                    Color.white.opacity(0.055),
+                    Color.black.opacity(0.18)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(accent.opacity(0.18), lineWidth: 1)
         )
+        .shadow(color: accent.opacity(0.08), radius: 10, x: 0, y: 0)
     }
 }
 
@@ -388,21 +428,34 @@ struct SymptomChip: View {
     let isSelected: Bool
     let action: () -> Void
 
+    private var accent: Color {
+        SymptomLogStyle.accent(for: label)
+    }
+
     var body: some View {
         Button(action: action) {
             Text(label)
                 .font(.subheadline.weight(.medium))
                 .multilineTextAlignment(.leading)
-                .foregroundColor(.white)
+                .foregroundColor(.white.opacity(isSelected ? 0.96 : 0.86))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(isSelected ? GaugePalette.elevated.opacity(0.26) : Color.white.opacity(0.05))
+                .background(
+                    LinearGradient(
+                        colors: isSelected
+                            ? [accent.opacity(0.34), accent.opacity(0.18)]
+                            : [accent.opacity(0.10), Color.white.opacity(0.045)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(isSelected ? GaugePalette.elevated.opacity(0.68) : Color.white.opacity(0.09), lineWidth: 1)
+                        .stroke(isSelected ? accent.opacity(0.62) : accent.opacity(0.14), lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .shadow(color: isSelected ? accent.opacity(0.12) : .clear, radius: 8, x: 0, y: 0)
         }
         .buttonStyle(.plain)
     }
@@ -566,15 +619,34 @@ struct SymptomsLogPage: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color.black,
+                    GaugePalette.low.opacity(0.10),
+                    Color.black
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+            RadialGradient(
+                colors: [GaugePalette.aqua.opacity(0.13), .clear],
+                center: .topTrailing,
+                startRadius: 24,
+                endRadius: 320
+            )
+            .ignoresSafeArea()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
                 if queuedCount > 0 {
                     Text("\(queuedCount) symptom(s) waiting to sync")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(.orange)
+                        .foregroundColor(GaugePalette.elevated)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(10)
-                        .background(Color.orange.opacity(0.12))
+                        .background(GaugePalette.elevated.opacity(0.13))
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
 
@@ -592,6 +664,7 @@ struct SymptomsLogPage: View {
                         displayedComponents: [.date, .hourAndMinute]
                     )
                     .datePickerStyle(.compact)
+                    .tint(GaugePalette.low)
                 }
 
                 if !suggestedSymptoms.isEmpty {
@@ -660,6 +733,7 @@ struct SymptomsLogPage: View {
                 SymptomSectionCard(title: "Severity", icon: "dial.medium") {
                     VStack(alignment: .leading, spacing: 10) {
                         Slider(value: $severity, in: 1...10, step: 1)
+                            .tint(SymptomLogStyle.accent(for: severityDescriptor))
 
                         HStack {
                             Text("Intensity: \(Int(severity))/10")
@@ -678,6 +752,7 @@ struct SymptomsLogPage: View {
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(3...6)
                         .focused($notesFocused)
+                        .tint(GaugePalette.low)
                 }
 
                 Button(action: submit) {
@@ -686,10 +761,11 @@ struct SymptomsLogPage: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(GaugePalette.elevated)
+                .tint(GaugePalette.low)
                 .disabled(isSubmitDisabled)
             }
             .padding()
+            }
         }
         .navigationTitle("Log Symptoms")
         .navigationBarTitleDisplayMode(.inline)
