@@ -134,7 +134,7 @@ enum ShareDraftFactory {
             title: hook,
             subtitle: insight,
             signText: nil,
-            primaryText: nil,
+            primaryText: relationship,
             valueText: nil,
             stateText: nil,
             bullets: support,
@@ -571,11 +571,12 @@ enum ShareDraftFactory {
         emphasis: String?
     ) -> ShareCardBackground {
         let themeKeys = uniqueThemeKeys(
-            explicitThemeKeys(analyticsKey: analyticsKey, title: title, emphasis: emphasis)
+            background.themeKeys
+                + [analyticsKey].compactMap { $0 }
+                + explicitThemeKeys(analyticsKey: analyticsKey, title: title, emphasis: emphasis)
                 + [normalizedThemeKey(surface), normalizedThemeKey(shareType.rawValue)]
                 + categoryThemeKeys(category)
                 + styleThemeKeys(background.style)
-                + background.themeKeys
         )
 
         return ShareCardBackground(

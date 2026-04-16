@@ -17,6 +17,8 @@ enum CopyRefiner {
         ("most likely to affect", "most likely to line up with"),
         ("likely to affect", "likely to line up with"),
         ("stand out more", "be more noticeable"),
+        ("Last night below usual", "Less Sleep"),
+        ("last night below usual", "less sleep"),
     ]
 
     private static let regexReplacements: [(String, String)] = [
@@ -182,6 +184,8 @@ struct CopyVocabulary {
             return aqiLabel
         case "allergens":
             return allergensLabel
+        case "sleep_deficit", "sleep_deficit_exposed", "last_night_below_usual", "short_sleep":
+            return "Less Sleep"
         case "flare":
             return flareLabel
         case "cme":

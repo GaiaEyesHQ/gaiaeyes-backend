@@ -9114,12 +9114,6 @@ struct ContentView: View {
                                 .font(.caption2.weight(.bold))
                                 .foregroundColor(.white.opacity(0.52))
                                 .tracking(0.8)
-                            Text(item.displayKind)
-                                .font(.caption2.weight(.bold))
-                                .foregroundColor(tint.opacity(0.95))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(tint.opacity(0.14), in: Capsule())
                         }
                         if let title = item.displayTitle {
                             Text(title)
@@ -9486,6 +9480,7 @@ struct ContentView: View {
                     LinearGradient(
                         colors: [
                             cardAccent.opacity(0.13),
+                            cardAccent.opacity(0.07),
                             Color.black.opacity(0.28)
                         ],
                         startPoint: .topLeading,
@@ -9497,16 +9492,16 @@ struct ContentView: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(
                             row.showAffordance
-                            ? GaugePalette.zoneColor(row.zoneKey).opacity(0.45)
-                            : cardAccent.opacity(0.18),
+                            ? GaugePalette.zoneColor(row.zoneKey).opacity(0.30)
+                            : cardAccent.opacity(0.14),
                             lineWidth: row.showAffordance ? 1.2 : 1
                         )
                 )
                 .shadow(
                     color: row.showAffordance
-                    ? GaugePalette.zoneColor(row.zoneKey).opacity(0.20)
+                    ? GaugePalette.zoneColor(row.zoneKey).opacity(0.10)
                     : .clear,
-                    radius: row.showAffordance ? 8 : 0,
+                    radius: row.showAffordance ? 5 : 0,
                     x: 0,
                     y: 0
                 )
@@ -11243,12 +11238,22 @@ struct ContentView: View {
                             currentSymptomsButton
                             dailyCheckInButton
                         }
-                        .padding(10)
-                        .background(Color.black.opacity(0.20))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .padding(12)
+                        .background(
+                            LinearGradient(
+                                colors: [
+                                    GaugePalette.low.opacity(0.11),
+                                    GaugePalette.aqua.opacity(0.06),
+                                    Color.black.opacity(0.22)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(GaugePalette.low.opacity(0.18), lineWidth: 1)
                         )
                     }
 
@@ -12966,6 +12971,17 @@ struct ContentView: View {
             return formatter.string(from: target)
         }
 
+        private func visibleDailyOutlookDays(_ days: [UserOutlookDay]) -> [UserOutlookDay] {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(identifier: "America/Chicago") ?? .current
+            let today = calendar.startOfDay(for: Date())
+            let currentOrFuture = days.filter { day in
+                guard let date = parsedDailyDate(day.day) else { return true }
+                return calendar.startOfDay(for: date) >= today
+            }
+            return currentOrFuture.isEmpty ? days : currentOrFuture
+        }
+
         private func dailySummary(_ day: UserOutlookDay) -> String? {
             refinedText(day.voiceSemantic?.interpretation?.headerSummary ?? day.summary)
         }
@@ -13088,10 +13104,11 @@ struct ContentView: View {
 
         @ViewBuilder
         private func dailyOutlookSection(_ days: [UserOutlookDay]) -> some View {
-            if !days.isEmpty {
+            let visibleDays = Array(visibleDailyOutlookDays(days).prefix(7))
+            if !visibleDays.isEmpty {
                 LocalConditionsSurfaceCard(title: hasPlusAccess ? "7-Day Forecast" : "Next 24 Hours", icon: "calendar") {
                     VStack(alignment: .leading, spacing: 10) {
-                        ForEach(Array(days.prefix(7))) { day in
+                        ForEach(visibleDays) { day in
                             dailyOutlookRow(day)
                         }
                     }
@@ -13391,12 +13408,16 @@ struct ContentView: View {
             }
         }
 
+        private func shareSignalLabel(for card: UserPatternCard) -> String {
+            experienceMode.copyVocabulary.driverLabel(for: card.signalKey, fallback: card.signal)
+        }
+
         private func shareDraft(for card: UserPatternCard) -> ShareDraft {
             ShareDraftFactory.personalPattern(
                 surface: "your_patterns",
                 analyticsKey: card.signalKey,
                 mode: experienceMode,
-                relationship: "\(card.signal) → \(card.outcome) (for you)",
+                relationship: "\(shareSignalLabel(for: card)) → \(card.outcome) (for you)",
                 explanation: card.explanation,
                 evidenceCount: card.sampleSize ?? card.exposedDays,
                 lagText: card.lagLabel ?? card.lagHours.map { "\($0)h" },
@@ -15715,6 +15736,7 @@ struct ContentView: View {
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
+                        .tint(GaugePalette.low)
                         .controlSize(.large)
 
                         NavigationLink(value: InsightsRoute.currentSymptoms) {

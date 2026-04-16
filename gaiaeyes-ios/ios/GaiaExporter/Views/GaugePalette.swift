@@ -7,7 +7,7 @@ enum GaugePalette {
     static let high = Color(red: 201.0 / 255.0, green: 117.0 / 255.0, blue: 109.0 / 255.0)
     static let aqua = Color(red: 82.0 / 255.0, green: 205.0 / 255.0, blue: 218.0 / 255.0)
     static let sky = Color(red: 94.0 / 255.0, green: 142.0 / 255.0, blue: 245.0 / 255.0)
-    static let rose = Color(red: 226.0 / 255.0, green: 112.0 / 255.0, blue: 132.0 / 255.0)
+    static let rose = Color(red: 202.0 / 255.0, green: 126.0 / 255.0, blue: 146.0 / 255.0)
     static let violet = Color(red: 162.0 / 255.0, green: 130.0 / 255.0, blue: 224.0 / 255.0)
     static let ringBackground = Color.white.opacity(0.10)
     static let marker = Color.white
@@ -44,13 +44,13 @@ enum GaugePalette {
     static func glowRadius(_ raw: String?) -> CGFloat {
         switch (raw ?? "").lowercased() {
         case "low":
-            return 1.5
+            return 0.8
         case "mild":
-            return 2.5
+            return 1.4
         case "elevated":
-            return 4.5
+            return 2.6
         case "high":
-            return 6.5
+            return 3.8
         default:
             return 0
         }
@@ -59,13 +59,13 @@ enum GaugePalette {
     static func glowOpacity(_ raw: String?) -> Double {
         switch (raw ?? "").lowercased() {
         case "low":
-            return 0.22
+            return 0.12
         case "mild":
-            return 0.28
+            return 0.16
         case "elevated":
-            return 0.38
+            return 0.24
         case "high":
-            return 0.52
+            return 0.32
         default:
             return 0.0
         }
@@ -83,7 +83,10 @@ enum GaugePalette {
         if text.contains("focus") || text.contains("mind") || text.contains("pattern") {
             return aqua
         }
-        if text.contains("heart") || text.contains("recovery") || text.contains("health") || text.contains("body") {
+        if text.contains("recovery") {
+            return mild
+        }
+        if text.contains("heart") || text.contains("health") || text.contains("body") {
             return low
         }
         if text.contains("energy") || text.contains("solar") || text.contains("flare") || text.contains("cme") || text.contains("kp") {

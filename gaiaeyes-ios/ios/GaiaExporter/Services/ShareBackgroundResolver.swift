@@ -66,12 +66,13 @@ enum ShareBackgroundResolver {
         let themeKeys = background.themeKeys
             .map(normalizedThemeKey)
             .filter { !$0.isEmpty }
+        let variantSeed = themeKeys.joined(separator: "|")
 
         var urls: [URL] = []
         for folder in folders {
             for ext in exts {
                 for key in themeKeys.prefix(3) {
-                    for stem in themedStems(for: key, includeVariants: includeVariants) {
+                    for stem in themedStems(for: key, includeVariants: includeVariants, variantSeed: variantSeed) {
                         if let url = MediaPaths.storageURL("\(folder)/\(stem).\(ext)") {
                             urls.append(url)
                         }
@@ -83,11 +84,11 @@ enum ShareBackgroundResolver {
         return urls
     }
 
-    private static func themedStems(for key: String, includeVariants: Bool) -> [String] {
+    private static func themedStems(for key: String, includeVariants: Bool, variantSeed: String) -> [String] {
         let dashed = key.replacingOccurrences(of: "_", with: "-")
         var stems: [String] = []
         if includeVariants {
-            let variant = dailyVariantIndex(for: key)
+            let variant = dailyVariantIndex(for: key, variantSeed: variantSeed)
             stems.append(contentsOf: [
                 "\(key)_\(variant)",
                 "\(dashed)-\(variant)",
@@ -97,11 +98,12 @@ enum ShareBackgroundResolver {
         return uniquePreservingOrder(stems).filter { !$0.isEmpty }
     }
 
-    private static func dailyVariantIndex(for key: String) -> Int {
+    private static func dailyVariantIndex(for key: String, variantSeed: String) -> Int {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "America/Chicago") ?? .current
         let day = calendar.ordinality(of: .day, in: .era, for: Date()) ?? 0
-        let seed = key.unicodeScalars.reduce(0) { partial, scalar in
+        let seedSource = variantSeed.isEmpty ? key : "\(variantSeed)|\(key)"
+        let seed = seedSource.unicodeScalars.reduce(0) { partial, scalar in
             (partial + Int(scalar.value)) % 997
         }
         return ((day + seed) % themedVariantCount) + 1

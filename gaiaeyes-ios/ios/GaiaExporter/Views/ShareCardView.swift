@@ -169,7 +169,7 @@ struct ShareCardView: View {
     private var panelBodyText: String? {
         let values: [String?]
         if model.layout == .personalPattern {
-            values = [cleanPatternLine(model.subtitle)]
+            values = [cleanPatternLine(model.primaryText), cleanPatternLine(model.subtitle)]
         } else {
             values = [joinedPanelDetail]
         }

@@ -117,7 +117,8 @@ struct AllDriversView: View {
     }
 
     private func translatedLabel(for driver: DriverDetailItem) -> String {
-        vocabulary.driverLabel(for: driver.key, fallback: driver.label)
+        let label = vocabulary.driverLabel(for: driver.key, fallback: driver.label)
+        return label.caseInsensitiveCompare("Last night below usual") == .orderedSame ? "Less Sleep" : label
     }
 
     private func translatedText(_ raw: String?) -> String? {
@@ -351,7 +352,11 @@ struct AllDriversView: View {
     }
 
     private func background(for driver: DriverDetailItem) -> ShareCardBackground {
-        switch driver.key {
+        let key = driver.key
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "-", with: "_")
+            .lowercased()
+        switch key {
         case "schumann":
             return ShareCardBackground(
                 style: .schumann,
@@ -389,10 +394,15 @@ struct AllDriversView: View {
                 style: .abstract,
                 themeKeys: ["illness", "sick", "temporary_illness"]
             )
-        case "pressure", "temp", "aqi", "allergens":
+        case "pressure", "temp", "aqi":
             return ShareCardBackground(
                 style: .atmospheric,
-                themeKeys: [driver.key]
+                themeKeys: [key]
+            )
+        case let key where key.contains("pollen") || key.contains("allergen"):
+            return ShareCardBackground(
+                style: .atmospheric,
+                themeKeys: [key, "pollen", "allergens", "seasonal_irritants"]
             )
         default:
             return ShareCardBackground(style: .abstract)

@@ -1107,6 +1107,15 @@ struct SchumannDashboardView: View {
         .ignoresSafeArea()
     }
 
+    @ViewBuilder
+    private var resolvedPageBackground: some View {
+        if viewModel.highContrast {
+            Color.black.ignoresSafeArea()
+        } else {
+            pageBackground
+        }
+    }
+
     private func schumannSurfaceCard<Content: View>(
         title: String,
         icon: String,
@@ -1161,7 +1170,7 @@ struct SchumannDashboardView: View {
             }
             .padding()
         }
-        .background(viewModel.highContrast ? Color.black.ignoresSafeArea() : pageBackground)
+        .background(resolvedPageBackground)
         .navigationTitle("Schumann")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

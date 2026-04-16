@@ -61,7 +61,7 @@ Supported extensions, in order:
 - `.jpeg`
 - `.webp`
 
-The daily variant is a deterministic number from `1` through `12`, based on the current day and theme key. To rotate images without an app update, upload up to twelve variants:
+The daily variant is a deterministic number from `1` through `12`, based on the current day, theme key, and full share context. This means two different pattern cards can both use the `sleep` theme but still land on different `sleep_#` variants when their driver/context keys differ. To rotate images without an app update, upload up to twelve variants:
 
 ```text
 humidity_1.jpg
@@ -111,7 +111,7 @@ Use these names when creating image files.
 | Schumann resonance | `schumann`, `resonance` |
 | Lunar patterns | `lunar`, `moon`, `full_moon`, `new_moon` |
 | Sleep timing inconsistent | `sleep_timing`, `sleep`, `sleep_consistency` |
-| Last night below usual / short sleep | `sleep_deficit`, `sleep`, `last_night_below_usual` |
+| Less Sleep / short sleep | `sleep_deficit`, `sleep`, `last_night_below_usual` |
 | Kp / Bz / solar wind | `geomagnetic`, `solar`, `space_weather` |
 | Solar flare | `solar_flare`, `solar` |
 | CME | `cme`, `solar` |
@@ -199,7 +199,7 @@ The raw `*_latest.png` station images are also mirrored to the same folder as fa
 
 The app rotates only when variant files exist. It does not randomly choose from every matching file.
 
-For a given theme key, the app computes a daily variant from `1` to `12`, then tries that variant first. Example for `humidity`:
+For a given theme key, the app computes a daily variant from `1` to `12`, then tries that variant first. The variant is stable for the day but also includes the card's other theme keys, so related cards do not always collide on the same numbered image. Example for `humidity`:
 
 ```text
 humidity_4.jpg
@@ -208,7 +208,7 @@ humidity.jpg
 humidity.png
 ```
 
-If you want daily rotation, upload numbered variants. If you want a fixed default, upload only the base file.
+If you want daily/context rotation, upload numbered variants. If you want a fixed default, upload only the base file.
 
 If you upload only some numbered variants, also upload the base fallback file. For example, if `lunar_1.jpg` through `lunar_6.jpg` exist but `lunar_7.jpg` through `lunar_12.jpg` do not, also upload `lunar.jpg` so the card never falls back to the generated gradient on days mapped to a missing variant.
 
