@@ -6109,6 +6109,42 @@ struct ContentView: View {
         }
     }
 
+    @discardableResult
+    private func applyDashboardGaugeFallbackPayload(
+        _ fallbackPayload: DashboardPayload,
+        dashboardDay: String,
+        cachedDashboardPayload: DashboardPayload?,
+        sourceLabel: String
+    ) async -> Bool {
+        guard fallbackPayload.gauges != nil else { return false }
+        let resolvedPayload = mergedDashboardPayload(
+            fallbackPayload,
+            fallback: cachedDashboardPayload,
+            requestedDay: dashboardDay
+        )
+        let encoded = try? JSONEncoder().encode(resolvedPayload)
+        let json = encoded.flatMap { String(data: $0, encoding: .utf8) }
+
+        await MainActor.run {
+            if let gauges = resolvedPayload.gauges {
+                lastNonNilDashboardGauges = gauges
+            }
+            dashboardPayload = resolvedPayload
+            if let json {
+                markUserScopedCacheOwner()
+                dashboardPayloadCacheJSON = json
+            }
+            dashboardError = nil
+            dashboardLastFetchAt = Date()
+            let out = DateFormatter()
+            out.dateStyle = .none
+            out.timeStyle = .short
+            dashboardLastUpdatedText = out.string(from: dashboardLastFetchAt)
+        }
+        appLog("[UI] dashboard gauge fallback ok: \(sourceLabel) day=\(dashboardDay)")
+        return true
+    }
+
     private func signalBarSchumannPill(from envelope: SignalBarSchumannLatestEnvelope) -> SignalPill? {
         guard let amplitude = envelope.amplitude?.srTotal020 else {
             return nil
@@ -6199,8 +6235,26 @@ struct ContentView: View {
             dashboardPayload != nil || lastNonNilDashboardGauges != nil
         }
         let hasFallbackDashboard = hadUsableDashboardAtStart || cachedDashboardPayload != nil
-        let attemptCount = (!force && hasFallbackDashboard) ? 1 : 3
-        let requestTimeout: TimeInterval = hasFallbackDashboard ? 60 : 20
+        var primedGaugeFallback = false
+        if !hasFallbackDashboard {
+            if let gaugeFallback: DashboardPayload = await bestEffortDashboardJSON(
+                api: api,
+                path: "v1/dashboard/gauges?day=\(dashboardDay)",
+                as: DashboardPayload.self,
+                timeout: 8,
+                label: "dashboard gauge fallback"
+            ) {
+                primedGaugeFallback = await applyDashboardGaugeFallbackPayload(
+                    gaugeFallback,
+                    dashboardDay: dashboardDay,
+                    cachedDashboardPayload: cachedDashboardPayload,
+                    sourceLabel: "preflight"
+                )
+            }
+        }
+        let effectiveHasFallbackDashboard = hasFallbackDashboard || primedGaugeFallback
+        let attemptCount = effectiveHasFallbackDashboard ? 1 : 3
+        let requestTimeout: TimeInterval = effectiveHasFallbackDashboard ? 25 : 20
 
         for attempt in 0..<attemptCount {
             do {
@@ -6456,6 +6510,25 @@ struct ContentView: View {
             }
         }
 
+        if !primedGaugeFallback,
+           let gaugeFallback: DashboardPayload = await bestEffortDashboardJSON(
+            api: api,
+            path: "v1/dashboard/gauges?day=\(dashboardDay)",
+            as: DashboardPayload.self,
+            timeout: 8,
+            label: "dashboard gauge fallback after error"
+           ) {
+            let appliedGaugeFallback = await applyDashboardGaugeFallbackPayload(
+                gaugeFallback,
+                dashboardDay: dashboardDay,
+                cachedDashboardPayload: cachedDashboardPayload,
+                sourceLabel: "post-error"
+            )
+            if appliedGaugeFallback {
+                return
+            }
+        }
+
         let liveSchumannSignalBarItem = await fetchLiveSchumannSignalBarItem(api: api)
         await MainActor.run {
             if dashboardPayload == nil, let cached = cachedDashboardPayload {
@@ -6472,7 +6545,7 @@ struct ContentView: View {
                 self.liveSchumannSignalBarItem = liveSchumannSignalBarItem
             }
         }
-        if hasFallbackDashboard, lastError.map(isTransientNetworkError) == true {
+        if effectiveHasFallbackDashboard, lastError.map(isTransientNetworkError) == true {
             appLog("[UI] dashboard refresh suppressed transient error: \(lastError?.localizedDescription ?? "unknown")")
             return
         }

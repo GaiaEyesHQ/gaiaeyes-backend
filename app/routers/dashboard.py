@@ -49,6 +49,8 @@ from services.signal_bar import build_signal_bar
 router = APIRouter(prefix="/v1", tags=["dashboard"])
 logger = logging.getLogger(__name__)
 
+_SIGNAL_CONTEXT_TIMEOUT_SECONDS = 6.0
+
 _GAUGE_DELTA_KEYS = [
     "pain",
     "focus",
@@ -461,7 +463,7 @@ async def _resolve_signal_context(
     definition: Dict[str, Any],
 ) -> tuple[list[Dict[str, Any]], Dict[str, Any]]:
     def _run() -> tuple[list[Dict[str, Any]], Dict[str, Any]]:
-        local_payload = get_local_payload(user_id, day)
+        local_payload = get_local_payload(user_id, day) or {}
         active_states = resolve_signals(
             user_id,
             day,
@@ -471,7 +473,18 @@ async def _resolve_signal_context(
         return active_states if isinstance(active_states, list) else [], local_payload or {}
 
     try:
-        return await asyncio.to_thread(_run)
+        return await asyncio.wait_for(
+            asyncio.to_thread(_run),
+            timeout=_SIGNAL_CONTEXT_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "[dashboard] resolve signal context timed out user=%s day=%s timeout=%ss",
+            user_id,
+            day,
+            _SIGNAL_CONTEXT_TIMEOUT_SECONDS,
+        )
+        return [], {}
     except Exception as exc:
         logger.warning("[dashboard] resolve signal context failed user=%s day=%s err=%s", user_id, day, exc)
         return [], {}
@@ -874,6 +887,58 @@ async def dashboard(
         paid_probe.get("matched_strategy"),
         bool(out.get("member_post")),
         bool(out.get("public_post")),
+    )
+    return out
+
+
+@router.get("/dashboard/gauges", dependencies=[Depends(require_read_auth)])
+async def dashboard_gauges(
+    request: Request,
+    day: Optional[date] = Query(None),
+    conn=Depends(get_db),
+):
+    """Fast gauge-only fallback for first-load resilience.
+
+    The full dashboard also builds drivers, modal copy, guide state, and EarthScope
+    content. Those enrichments are optional for initial Mission Control rendering;
+    this endpoint keeps gauges available when slower enrichments are timing out.
+    """
+
+    started = time.perf_counter()
+    user_id = getattr(request.state, "user_id", None)
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id missing from request context")
+    day = _coerce_day(day)
+
+    definition = _safe_dashboard_definition()
+    gauge_fallback = await _fetch_latest_gauges(conn, user_id, day)
+    gauges = gauge_fallback.get("gauges") if isinstance(gauge_fallback, dict) else None
+    alerts = gauge_fallback.get("alerts") if isinstance(gauge_fallback, dict) else []
+    payload_day = gauge_fallback.get("day") if isinstance(gauge_fallback, dict) else None
+    entitled = (await _probe_paid_user(conn, user_id)).get("entitled")
+
+    out: Dict[str, Any] = {
+        "day": payload_day or day.isoformat(),
+        "gauges": gauges if isinstance(gauges, dict) else None,
+        "alerts": _normalized_alerts(alerts),
+        "entitled": entitled,
+    }
+    if definition:
+        out["gauge_zones"] = _normalized_default_zones(definition)
+        out["gauge_labels"] = _gauge_labels(definition)
+        if isinstance(gauges, dict):
+            out["gauges_meta"] = _decorate_gauges(gauges, definition)
+    out["gauges_delta"] = await _fetch_gauges_delta(conn, user_id, day)
+
+    elapsed_ms = round((time.perf_counter() - started) * 1000.0, 1)
+    logger.info(
+        "[dashboard:gauges] user=%s day=%s ms=%s gauges=%s alerts=%s entitled=%s",
+        user_id,
+        day.isoformat(),
+        elapsed_ms,
+        bool(out.get("gauges")),
+        len(out.get("alerts") or []),
+        out.get("entitled"),
     )
     return out
 
