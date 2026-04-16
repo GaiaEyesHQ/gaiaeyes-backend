@@ -118,6 +118,27 @@ def _gauge_labels(definition: Dict[str, Any]) -> Dict[str, str]:
     return labels
 
 
+def _default_gauge_values(definition: Dict[str, Any]) -> Dict[str, Any]:
+    model = definition.get("scoring_model") or {}
+    try:
+        base_score = round(float(model.get("base_score", 0)), 2)
+    except Exception:
+        base_score = 0.0
+
+    values: Dict[str, Any] = {}
+    for gauge in definition.get("gauges") or []:
+        if not isinstance(gauge, dict):
+            continue
+        key = str(gauge.get("key") or "").strip()
+        if key:
+            values[key] = base_score
+
+    for key in ("pain", "focus", "heart", "stamina", "energy", "sleep", "mood"):
+        values.setdefault(key, base_score)
+    values.setdefault("health_status", None)
+    return values
+
+
 def _decorate_gauges(gauges: Dict[str, Any], definition: Dict[str, Any]) -> Dict[str, Dict[str, Optional[str]]]:
     out: Dict[str, Dict[str, Optional[str]]] = {}
     for gauge_key, raw_value in gauges.items():
@@ -615,7 +636,14 @@ async def _fetch_member_post(conn, user_id: str, day: date) -> Optional[Dict[str
     return payload
 
 
-async def _fetch_latest_gauges(conn, user_id: str, day: date) -> Dict[str, Any]:
+async def _fetch_latest_gauges(
+    conn,
+    user_id: str,
+    day: date,
+    *,
+    fallback_if_missing: bool = False,
+    definition: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     try:
         async with conn.cursor(row_factory=dict_row) as cur:
             await cur.execute(
@@ -635,6 +663,13 @@ async def _fetch_latest_gauges(conn, user_id: str, day: date) -> Dict[str, Any]:
         return {}
 
     if not row:
+        if fallback_if_missing:
+            if definition:
+                return {
+                    "day": day.isoformat(),
+                    "gauges": _default_gauge_values(definition),
+                    "alerts": [],
+                }
         return {}
 
     gauges = {
@@ -699,7 +734,14 @@ async def dashboard(
         logger.warning("[dashboard] geomagnetic context lookup failed user=%s day=%s err=%s", user_id, day, exc)
         out.update(build_ulf_payload(None, include_empty=True))
 
-    gauge_fallback = await _fetch_latest_gauges(conn, user_id, day)
+    definition = _safe_dashboard_definition()
+    gauge_fallback = await _fetch_latest_gauges(
+        conn,
+        user_id,
+        day,
+        fallback_if_missing=True,
+        definition=definition,
+    )
     if not out.get("gauges") and gauge_fallback.get("gauges"):
         out["gauges"] = gauge_fallback.get("gauges")
     if not out.get("alerts") and gauge_fallback.get("alerts"):
@@ -707,7 +749,6 @@ async def dashboard(
     if not out.get("day") and gauge_fallback.get("day"):
         out["day"] = gauge_fallback.get("day")
 
-    definition = _safe_dashboard_definition()
     if definition:
         out["gauge_zones"] = _normalized_default_zones(definition)
         out["gauge_labels"] = _gauge_labels(definition)
@@ -911,7 +952,13 @@ async def dashboard_gauges(
     day = _coerce_day(day)
 
     definition = _safe_dashboard_definition()
-    gauge_fallback = await _fetch_latest_gauges(conn, user_id, day)
+    gauge_fallback = await _fetch_latest_gauges(
+        conn,
+        user_id,
+        day,
+        fallback_if_missing=True,
+        definition=definition,
+    )
     gauges = gauge_fallback.get("gauges") if isinstance(gauge_fallback, dict) else None
     alerts = gauge_fallback.get("alerts") if isinstance(gauge_fallback, dict) else []
     payload_day = gauge_fallback.get("day") if isinstance(gauge_fallback, dict) else None
