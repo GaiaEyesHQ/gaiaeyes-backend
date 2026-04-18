@@ -135,8 +135,8 @@ private struct SignalBarButton: View {
 
     private var displayValue: String {
         let trimmed = signal.value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty || trimmed == "—" {
-            return signal.state.title
+        if trimmed.isEmpty || trimmed == "—" || trimmed.lowercased() == "calm" {
+            return "—"
         }
         return trimmed
     }

@@ -654,7 +654,7 @@ struct AllDriversView: View {
             Label("More drivers are included with Plus", systemImage: "lock.fill")
                 .font(.headline)
                 .foregroundColor(.white)
-            Text("Free shows the strongest \(freeDriverLimit) drivers in this view. Plus unlocks the full driver stack, deeper detail, and the pattern and outlook links behind each signal.")
+            Text("Free shows a driver preview in this view. Plus unlocks the full driver stack, deeper detail, and the pattern and outlook links behind each signal.")
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.68))
                 .fixedSize(horizontal: false, vertical: true)
@@ -789,7 +789,7 @@ struct AllDriversView: View {
                                     )
                                 }
 
-                                if !hasPlusAccess && hiddenFilteredDriverCount > 0 {
+                                if !hasPlusAccess {
                                     driversLockedCard
                                 }
                             }
@@ -995,11 +995,11 @@ private struct DriverExpandedDetailView: View {
     private var noPatternText: String {
         switch tone {
         case .straight:
-            return "We’re still learning how this tends to line up for you."
+            return "We’re still learning what this means you."
         case .balanced:
-            return "We’re still learning how this tends to line up for you."
+            return "We’re still learning for clear patterns."
         case .humorous:
-            return "We’re still building the receipts on how this usually lands for you."
+            return "We’re still building the receipts on the patterns."
         }
     }
 
@@ -1143,7 +1143,7 @@ private struct DriverSymptomLinkView: View {
                 symptomRow(title: "Appeared before", values: historicalSymptoms)
             }
             if currentSymptoms.isEmpty && historicalSymptoms.isEmpty {
-                Text("We’re still learning which symptoms tend to appear alongside this for you.")
+                Text("We’re still learning from this.")
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.72))
             }

@@ -65,13 +65,13 @@ struct GuidePromptStyle {
     static func headerLine(for profile: GuideProfile) -> String {
         switch (profile.guideType, profile.mode) {
         case (.cat, .scientific):
-            return "Here’s the clearest read on today’s signal mix."
+            return "Here's today’s signal mix."
         case (.cat, .mystical):
-            return "Here’s the feel of what seems active today."
+            return "Here’s what seems active today."
         case (.dog, .scientific):
             return "A steady read on today’s strongest inputs."
         case (.dog, .mystical):
-            return "A grounded read on what may be nudging the day."
+            return "Here's what may be nudging the day."
         case (.robot, .scientific):
             return "Current signal scan: highest-relevance items first."
         case (.robot, .mystical):

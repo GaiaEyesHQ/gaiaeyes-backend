@@ -25,6 +25,7 @@ from services.external import pollen
 LOCAL_REFRESH_HOURS = 6
 LOCAL_FORECAST_DAYS = 7
 SPACE_FORECAST_DAYS = 7
+USER_OUTLOOK_INPUT_DAYS = 8
 POLLEN_FORECAST_DAYS = 5
 
 DOMAIN_LABELS = {
@@ -1055,16 +1056,23 @@ async def _upsert_local_forecast_rows(conn, rows: Sequence[Mapping[str, Any]]) -
             )
 
 
-async def ensure_local_forecast_daily(conn, *, zip_code: str | None, lat: float | None, lon: float | None) -> list[dict[str, Any]]:
+async def ensure_local_forecast_daily(
+    conn,
+    *,
+    zip_code: str | None,
+    lat: float | None,
+    lon: float | None,
+    days: int = LOCAL_FORECAST_DAYS,
+) -> list[dict[str, Any]]:
     location_key = build_location_key(zip_code, lat, lon)
     if not location_key:
         return []
 
     today = datetime.now(UTC).date() - timedelta(days=1)
-    existing = await _fetch_local_forecast_rows(conn, location_key, today, days=LOCAL_FORECAST_DAYS)
+    existing = await _fetch_local_forecast_rows(conn, location_key, today, days=days)
     if existing:
         newest = max((_parse_iso_datetime(row.get("updated_at")) for row in existing), default=None)
-        if len(existing) >= LOCAL_FORECAST_DAYS and newest and newest >= datetime.now(UTC) - timedelta(hours=LOCAL_REFRESH_HOURS):
+        if len(existing) >= days and newest and newest >= datetime.now(UTC) - timedelta(hours=LOCAL_REFRESH_HOURS):
             return existing
 
     resolved_lat = lat
@@ -1095,7 +1103,7 @@ async def ensure_local_forecast_daily(conn, *, zip_code: str | None, lat: float 
             zip_code=zip_code,
             lat=float(resolved_lat),
             lon=float(resolved_lon),
-            max_days=LOCAL_FORECAST_DAYS,
+            max_days=days,
         )
     except Exception:
         return existing
@@ -1106,7 +1114,7 @@ async def ensure_local_forecast_daily(conn, *, zip_code: str | None, lat: float 
             await conn.commit()
         except Exception:
             pass
-        return await _fetch_local_forecast_rows(conn, location_key, today, days=LOCAL_FORECAST_DAYS)
+        return await _fetch_local_forecast_rows(conn, location_key, today, days=days)
     return existing
 
 
@@ -1266,12 +1274,12 @@ async def _upsert_space_forecast_rows(conn, rows: Sequence[Mapping[str, Any]]) -
             )
 
 
-async def ensure_space_forecast_daily(conn) -> list[dict[str, Any]]:
+async def ensure_space_forecast_daily(conn, *, days: int = SPACE_FORECAST_DAYS) -> list[dict[str, Any]]:
     today = datetime.now(UTC).date() - timedelta(days=1)
-    existing = await _fetch_space_forecast_rows(conn, today, days=SPACE_FORECAST_DAYS)
+    existing = await _fetch_space_forecast_rows(conn, today, days=days)
     if existing:
         newest = max((_parse_iso_datetime(row.get("updated_at")) for row in existing), default=None)
-        if len(existing) >= SPACE_FORECAST_DAYS and newest and newest >= datetime.now(UTC) - timedelta(hours=LOCAL_REFRESH_HOURS):
+        if len(existing) >= days and newest and newest >= datetime.now(UTC) - timedelta(hours=LOCAL_REFRESH_HOURS):
             return existing
     async with conn.cursor(**_cursor_kwargs()) as cur:
         await cur.execute(
@@ -1311,7 +1319,7 @@ async def ensure_space_forecast_daily(conn) -> list[dict[str, Any]]:
                     body_text,
                     source_product_ts=fetched_at,
                     src=src,
-                    days=SPACE_FORECAST_DAYS,
+                    days=days,
                 )
             )
     if parsed_rows:
@@ -1320,7 +1328,7 @@ async def ensure_space_forecast_daily(conn) -> list[dict[str, Any]]:
             await conn.commit()
         except Exception:
             pass
-        return await _fetch_space_forecast_rows(conn, today, days=SPACE_FORECAST_DAYS)
+        return await _fetch_space_forecast_rows(conn, today, days=days)
     return existing
 
 
@@ -2026,7 +2034,14 @@ def build_daily_outlook(
     days: int = 7,
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    for index, row in enumerate(list(merged_rows)[:days]):
+    today = datetime.now(UTC).date()
+    current_rows = [
+        row
+        for row in merged_rows
+        if isinstance(row.get("day"), date) and row.get("day") >= today
+    ]
+    source_rows = current_rows or list(merged_rows)
+    for index, row in enumerate(source_rows[:days]):
         day_value = row.get("day")
         if not isinstance(day_value, date):
             continue
@@ -2075,9 +2090,10 @@ async def build_user_outlook_payload(conn, user_id: str) -> dict[str, Any]:
             zip_code=str(location.get("zip") or "").strip() or None,
             lat=_safe_float(location.get("lat")),
             lon=_safe_float(location.get("lon")),
+            days=USER_OUTLOOK_INPUT_DAYS,
         )
 
-    space_rows = await ensure_space_forecast_daily(conn)
+    space_rows = await ensure_space_forecast_daily(conn, days=USER_OUTLOOK_INPUT_DAYS)
     merged_rows = merge_daily_forecast_inputs(local_rows, space_rows)
     pattern_rows = await fetch_best_pattern_rows(conn, user_id)
     gauges = await fetch_latest_gauges(conn, user_id)

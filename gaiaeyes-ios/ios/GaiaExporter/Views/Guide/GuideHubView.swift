@@ -123,7 +123,7 @@ struct GuideHubView: View {
         }
         if isDailyCheckInCompleted {
             if let exposureSummary = dailyCheckInStatus?.latestEntry?.summaryExposureText {
-                return "Today’s check-in is already logged. Also noted: \(exposureSummary). You can reopen it if you want to review or update the entry."
+                return "Today’s check-in is already logged. Noted: \(exposureSummary). You can reopen it if you want to review or update the entry."
             }
             return "Today’s check-in is already logged. You can reopen it if you want to review or update the entry."
         }
@@ -138,7 +138,7 @@ struct GuideHubView: View {
 
     private var earthscopeBody: String {
         if !influenceSections.isEmpty {
-            return "These are the strongest earth, space, and body influences standing out in the current read."
+            return "These are the strongest earth, space, and body influences right now."
         }
         if let summary = earthscopeSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty {
             return summary
@@ -147,7 +147,7 @@ struct GuideHubView: View {
             return summary
         }
         if !whatMattersNow.isEmpty {
-            return "What’s standing out right now: \(whatMattersNow.prefix(2).joined(separator: ", "))."
+            return "What’s standing out now: \(whatMattersNow.prefix(2).joined(separator: ", "))."
         }
         return GuidePromptStyle.earthscopeFallbackMessage(for: profile)
     }
@@ -225,12 +225,12 @@ struct GuideHubView: View {
 
     private var supportIntroText: String {
         if let summary = guideText(currentSymptomsSnapshot?.semanticActiveLabelSummary).nilIfGuideEmpty {
-            return "Current body context: \(summary). Keep the next stretch a little gentler while this mix is up."
+            return "Current body context: \(summary). Take it easy while this mix is doing the tango."
         }
         if let primary = curatedSupportItems.first {
             return primary.message
         }
-        return "Keep the basics steady and use a gentler pace if your body is asking for more margin."
+        return "Slow and Steady. Your body may need more buffer today."
     }
 
     private var localSymptomSupportBullets: [String] {
@@ -240,13 +240,13 @@ struct GuideHubView: View {
         var lines: [String] = []
 
         if !codes.isDisjoint(with: ["PAIN", "NERVE_PAIN", "JOINT_PAIN", "STIFFNESS", "STOMACH_PAIN"]) {
-            lines.append("Use warmth, gentler movement, or a lighter task load if pain or stiffness is closer to the surface.")
+            lines.append("Use warmth, try grounding, or take a short walk if you can. This can help reduce muscle tension and calm nerver. Try a lighter task load you're having pain or stiffness.")
         }
         if !codes.isDisjoint(with: ["HEADACHE", "SINUS_PRESSURE", "LIGHT_SENSITIVITY", "RESP_IRRITATION"]) {
-            lines.append("Hydrate, use cleaner air, and lean on sinus or head-pressure support if that is a pattern for you.")
+            lines.append("Hydrate, filter the air, and lean on sinus support techniques that work for you.")
         }
         if !codes.isDisjoint(with: ["DRAINED", "FATIGUE", "BRAIN_FOG", "INSOMNIA", "RESTLESS_SLEEP"]) {
-            lines.append("Use shorter effort blocks and leave more recovery space between heavier tasks.")
+            lines.append("Set tasks in blocks and leave more recovery space between heavier tasks.")
         }
         if !codes.isDisjoint(with: ["ANXIOUS", "WIRED", "PALPITATIONS"]) {
             lines.append("Use grounding or slower breathing before adding more stimulation if your system feels buzzy.")
@@ -349,7 +349,7 @@ struct GuideHubView: View {
                 id: "followup:\(followUpItem.id)",
                 day: today,
                 question: "Did \(followUpItem.label.lowercased()) stand out today?",
-                supportingText: "A quick pulse keeps Guide Hub useful without asking for a full check-in.",
+                supportingText: "A quick pulse check-in.",
                 choices: [
                     GuideDailyPollChoice(id: "yes", title: "Yes"),
                     GuideDailyPollChoice(id: "a_little", title: "A little"),
@@ -363,7 +363,7 @@ struct GuideHubView: View {
                 id: "symptom:\(label.lowercased())",
                 day: today,
                 question: "Did \(label.lowercased()) shape the day more than expected?",
-                supportingText: "This stays lighter than the full check-in and is ready for future guide feedback logic.",
+                supportingText: "Light feedback.",
                 choices: [
                     GuideDailyPollChoice(id: "yes", title: "Yes"),
                     GuideDailyPollChoice(id: "somewhat", title: "Somewhat"),
@@ -376,7 +376,7 @@ struct GuideHubView: View {
             id: "daily_compare",
             day: today,
             question: "Did today feel better or worse than yesterday?",
-            supportingText: "A fast answer here keeps the guide loop alive even when you skip the longer check-in.",
+            supportingText: "Keep the log loop going.",
             choices: [
                 GuideDailyPollChoice(id: "better", title: "Better"),
                 GuideDailyPollChoice(id: "same", title: "About the same"),
@@ -470,7 +470,9 @@ struct GuideHubView: View {
             dailyPollCard
                 .id(GuideHubFocus.dailyPoll)
 
-            followUpCard
+            if followUpItem != nil {
+                followUpCard
+            }
 
             understandingCard
                 .id(GuideHubFocus.understanding)

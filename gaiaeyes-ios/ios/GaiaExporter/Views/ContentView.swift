@@ -816,13 +816,27 @@ private struct SignalBarSchumannLatestAmplitude: Codable {
     }
 }
 
+private struct SignalBarSchumannLatestFusion: Codable {
+    let displayF0Hz: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case displayF0Hz = "display_f0_hz"
+    }
+}
+
 private struct SignalBarSchumannLatestEnvelope: Codable {
     let generatedAt: String?
+    let fundamentalHz: Double?
     let amplitude: SignalBarSchumannLatestAmplitude?
+    let harmonics: [String: Double?]?
+    let fusion: SignalBarSchumannLatestFusion?
 
     private enum CodingKeys: String, CodingKey {
         case generatedAt = "generated_at"
+        case fundamentalHz = "fundamental_hz"
         case amplitude
+        case harmonics
+        case fusion
     }
 }
 
@@ -2859,6 +2873,11 @@ private struct LaunchDebugToolkitPanel: View {
     }
 }
 
+private enum BugReportMode {
+    case bug
+    case feedback
+}
+
 struct ContentView: View {
 #if os(iOS)
     private struct FeatureFetchState {
@@ -3025,6 +3044,7 @@ struct ContentView: View {
     @State private var bugReportDescription: String = ""
     @State private var bugReportSubmitting: Bool = false
     @State private var bugReportMessage: String?
+    @State private var bugReportMode: BugReportMode = .bug
     @State private var showDeleteAccountConfirmation: Bool = false
     @State private var showNotificationSettingsSection: Bool = false
     @State private var pushPermissionGranted: Bool = PushNotificationService.storedPermissionGranted()
@@ -3724,6 +3744,12 @@ struct ContentView: View {
         showSettingsSheet()
     }
 
+    private var healthAccessNoticeText: String? {
+        let hasRequestedHealth = !state.healthkitRequestedAtISO.isEmpty || experienceProfile.healthkitRequestedAt != nil
+        guard state.selectedHealthPermissionKeys.isEmpty || !hasRequestedHealth else { return nil }
+        return "Health access is off. Connect Apple Health or your wearable when you want sleep and body patterns layered in."
+    }
+
     private var persistentSignalBarItems: [SignalPill] {
         var items = dashboardPayload?.signalBar?.items ?? SignalPill.placeholders
         guard let liveSchumannSignalBarItem else {
@@ -3741,20 +3767,43 @@ struct ContentView: View {
         let activeStates = activeSignalStatesFromDashboard()
         return items.map { item in
             let key = normalizeDriverFocusKey(item.driverKey ?? item.key) ?? item.key
-            let valueState = signalStateFromValue(key: key, valueText: item.value)
+            let resolvedValue = signalBarDisplayValue(for: item, key: key)
+            let valueState = signalStateFromValue(key: key, valueText: resolvedValue)
             let activeState = activeStates[key]
             let resolvedState = strongestSignalState([item.state, valueState, activeState])
-            guard resolvedState != item.state else { return item }
+            guard resolvedState != item.state || resolvedValue != item.value else { return item }
             return SignalPill(
                 key: item.key,
                 label: item.label,
-                value: item.value,
+                value: resolvedValue,
                 state: resolvedState,
                 driverKey: item.driverKey,
                 detailTarget: item.detailTarget,
                 updatedAt: item.updatedAt
             )
         }
+    }
+
+    private func signalBarDisplayValue(for item: SignalPill, key: String) -> String {
+        guard key == "pressure", let pressure = localHealth?.weather?.pressureHpa else {
+            return item.value
+        }
+        let trend = LocalConditionsFormatting.derivedPressureTrend(
+            raw: localHealth?.weather?.pressureTrend ?? localHealth?.weather?.baroTrend,
+            deltaHpa: localHealth?.weather?.baroDelta24hHpa
+        )
+        let arrow: String
+        switch trend {
+        case "rising":
+            arrow = "↑"
+        case "falling":
+            arrow = "↓"
+        case "steady":
+            arrow = "→"
+        default:
+            arrow = ""
+        }
+        return "\(Int(pressure.rounded()))\(arrow.isEmpty ? "" : " \(arrow)")"
     }
 
     private func activeSignalStatesFromDashboard() -> [String: SignalBarState] {
@@ -5292,6 +5341,15 @@ struct ContentView: View {
 
     @MainActor
     private func openBugReportComposer() {
+        bugReportMode = .bug
+        bugReportDescription = ""
+        bugReportMessage = nil
+        showBugReportSheet = true
+    }
+
+    @MainActor
+    private func openFeedbackComposer() {
+        bugReportMode = .feedback
         bugReportDescription = ""
         bugReportMessage = nil
         showBugReportSheet = true
@@ -5312,7 +5370,8 @@ struct ContentView: View {
             bugReportSubmitting = true
             bugReportMessage = nil
         }
-        if featuresDiagnostics == nil {
+        let mode = await MainActor.run { bugReportMode }
+        if mode == .bug && featuresDiagnostics == nil {
             await fetchFeaturesDiagnostics()
         }
 
@@ -5336,9 +5395,10 @@ struct ContentView: View {
         do {
             let envelope = try await api.submitBugReport(
                 description: description,
-                diagnosticsBundle: diagnosticsBundleText(),
+                diagnosticsBundle: mode == .bug ? diagnosticsBundleText() : "Feedback submitted without diagnostics.",
                 appVersion: diagnosticsAppVersionString(),
-                device: diagnosticsDeviceDescription()
+                device: diagnosticsDeviceDescription(),
+                source: mode == .bug ? "ios_app" : "ios_feedback"
             )
             if envelope.ok == false {
                 let message = envelope.error?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -5353,15 +5413,17 @@ struct ContentView: View {
             let alertMessage: String
             if envelope.data?.alertSent == true {
                 if let alertEmailTo, !alertEmailTo.isEmpty {
-                    alertMessage = "Bug report submitted and alert sent to \(alertEmailTo)."
+                    alertMessage = mode == .bug
+                        ? "Bug report submitted and alert sent to \(alertEmailTo)."
+                        : "Feedback submitted and alert sent to \(alertEmailTo)."
                 } else {
-                    alertMessage = "Bug report submitted and alert sent."
+                    alertMessage = mode == .bug ? "Bug report submitted and alert sent." : "Feedback submitted and alert sent."
                 }
             } else if let alertError, !alertError.isEmpty {
-                alertMessage = "Bug report saved. Alert email failed: \(alertError)"
+                alertMessage = mode == .bug ? "Bug report saved. Alert email failed: \(alertError)" : "Feedback saved. Alert email failed: \(alertError)"
                 appLog("[UI] bug report alert email failed: \(alertError)")
             } else {
-                alertMessage = "Bug report saved. Alert email not sent."
+                alertMessage = mode == .bug ? "Bug report saved. Alert email not sent." : "Feedback saved. Alert email not sent."
                 appLog("[UI] bug report alert email not sent")
             }
 
@@ -6150,30 +6212,34 @@ struct ContentView: View {
             return nil
         }
 
-        let value: String
+        let harmonicF0 = envelope.harmonics?["f0"] ?? nil
+        let harmonicF1 = envelope.harmonics?["f1"] ?? nil
+        let f1Source = envelope.fusion?.displayF0Hz ?? envelope.fundamentalHz ?? harmonicF0 ?? harmonicF1
+        let f1Value = f1Source.map { String(format: "%.2f Hz", $0) }
+        let fallbackValue: String
         let state: SignalBarState
         switch amplitude {
         case ..<0.03:
-            value = "Calm"
+            fallbackValue = "—"
             state = .quiet
         case ..<0.06:
-            value = "Stable"
+            fallbackValue = "Stable"
             state = .quiet
         case ..<0.10:
-            value = "Active"
+            fallbackValue = "Active"
             state = .watch
         case ..<0.16:
-            value = "Elevated"
+            fallbackValue = "Elevated"
             state = .elevated
         default:
-            value = "Intense"
+            fallbackValue = "Intense"
             state = .strong
         }
 
         return SignalPill(
             key: "schumann",
             label: "SR",
-            value: value,
+            value: f1Value ?? fallbackValue,
             state: state,
             driverKey: "schumann",
             detailTarget: "schumann",
@@ -7700,7 +7766,6 @@ struct ContentView: View {
                 return
             }
             await MainActor.run {
-                localHealth = nil
                 localHealthError = error.localizedDescription
                 localHealthLoading = false
             }
@@ -9101,6 +9166,7 @@ struct ContentView: View {
                 cameraCheckError: latestCameraCheckError,
                 currentSymptomsSnapshot: currentSymptomsSnapshot,
                 dailyCheckInStatus: dailyCheckInStatus,
+                healthAccessNotice: healthAccessNoticeText,
                 pushRoute: $pendingPushRoute,
                 fallbackTitle: fallbackFeatures?.postTitle,
                 fallbackBody: fallbackFeatures?.postBody,
@@ -9368,6 +9434,7 @@ struct ContentView: View {
         let cameraCheckError: String?
         let currentSymptomsSnapshot: CurrentSymptomsSnapshot?
         let dailyCheckInStatus: DailyCheckInStatus?
+        let healthAccessNotice: String?
         @Binding var pushRoute: GaiaPushRoute?
         let fallbackTitle: String?
         let fallbackBody: String?
@@ -11279,6 +11346,24 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    if let healthAccessNotice {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "heart.text.square.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(GaugePalette.aqua)
+                            Text(healthAccessNotice)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(GaugePalette.aqua.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(GaugePalette.aqua.opacity(0.16), lineWidth: 1)
+                        )
+                    }
                     if rows.isEmpty {
                         Text(isLoading
                              ? "Health data is flowing in. First gauges can take a few minutes after install, login, or permission changes."
@@ -12301,8 +12386,9 @@ struct ContentView: View {
         }
 
         private var allDriversCard: some View {
-            let leadingCount = dashboardDrivers.filter { ($0.role ?? "").lowercased() == "leading" }.count
-            let supportingCount = dashboardDrivers.filter { ($0.role ?? "").lowercased() == "supporting" }.count
+            let explicitLeadingCount = dashboardDrivers.filter { ($0.role ?? "").lowercased() == "leading" }.count
+            let leadingCount = dashboardDrivers.isEmpty ? 0 : max(1, explicitLeadingCount)
+            let supportingCount = max(0, dashboardDrivers.count - leadingCount)
 
             return Button {
                 onOpenAllDrivers?()
@@ -13027,6 +13113,100 @@ struct ContentView: View {
             }
         }
 
+        private func driverSignalProgress(_ driver: UserOutlookDriver) -> Double {
+            let key = driver.key.lowercased()
+            if let value = driver.value {
+                if key.contains("kp") {
+                    return LocalConditionsFormatting.clamped(value / 9.0)
+                }
+                if key.contains("solar_wind") || key == "sw" {
+                    return LocalConditionsFormatting.clamped((value - 250.0) / 550.0)
+                }
+                if key.contains("humidity") {
+                    return LocalConditionsFormatting.clamped(value / 100.0)
+                }
+                if key.contains("pollen") || key.contains("allergen") {
+                    return LocalConditionsFormatting.clamped(value / 5.0)
+                }
+                if key.contains("aqi") {
+                    return LocalConditionsFormatting.clamped(value / 150.0)
+                }
+                if key.contains("pressure") {
+                    return LocalConditionsFormatting.clamped(abs(value) / 24.0)
+                }
+                return LocalConditionsFormatting.clamped(value / 100.0)
+            }
+            switch (driver.severity ?? "").lowercased() {
+            case "high", "strong", "alert", "probable":
+                return 0.92
+            case "elevated", "watch", "active":
+                return 0.68
+            case "mild", "moderate", "possible", "low":
+                return 0.44
+            default:
+                return 0.24
+            }
+        }
+
+        private func driverSignalTint(_ driver: UserOutlookDriver) -> Color {
+            let key = driver.key.lowercased()
+            if key.contains("kp") || key.contains("geomag") { return GaugePalette.sky }
+            if key.contains("solar") || key == "sw" || key.contains("cme") || key.contains("flare") { return GaugePalette.elevated }
+            if key.contains("humidity") || key.contains("pollen") || key.contains("allergen") { return GaugePalette.low }
+            if key.contains("aqi") { return GaugePalette.mild }
+            if key.contains("pressure") { return GaugePalette.violet }
+            return GaugePalette.contextAccent(driver.label ?? driver.key)
+        }
+
+        private func driverStatusText(_ driver: UserOutlookDriver) -> String {
+            let severity = (driver.severity ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !severity.isEmpty {
+                return severity.capitalized
+            }
+            return driverValue(driver)
+        }
+
+        @ViewBuilder
+        private func driverSignalBars(_ drivers: [UserOutlookDriver]) -> some View {
+            VStack(alignment: .leading, spacing: 9) {
+                ForEach(drivers) { driver in
+                    let tint = driverSignalTint(driver)
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(dailyDriverLabel(driver))
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.82))
+                            Spacer()
+                            Text(driverStatusText(driver))
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(tint.opacity(0.94))
+                        }
+                        LocalConditionsBar(progress: driverSignalProgress(driver), tint: tint)
+                    }
+                }
+            }
+        }
+
+        @ViewBuilder
+        private func domainPills(_ domains: [UserOutlookDomain], primary: UserOutlookDriver?) -> some View {
+            if !domains.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Possible symptoms")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.secondary)
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                        ForEach(domains.prefix(4)) { domain in
+                            LocalConditionsValueChip(
+                                label: "Likely",
+                                value: likelyDomainValue(domain, primary: primary),
+                                tint: GaugePalette.zoneColor(domain.likelihood)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         @ViewBuilder
         private func domainCard(_ domain: UserOutlookDomain, window: UserOutlookWindow, primary: UserOutlookDriver?) -> some View {
             VStack(alignment: .leading, spacing: 8) {
@@ -13183,36 +13363,16 @@ struct ContentView: View {
                     StatusPill(state.capitalized, severity: severity(state))
                 }
 
-                if let summary = dailySummary(day) {
-                    Text(summary)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                if let support = dailySupportLine(day) {
-                    Text(support)
-                        .font(.caption)
-                        .foregroundColor(.secondary.opacity(0.86))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
                 if !drivers.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Signals in view")
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.secondary)
-                        driverFactChips(Array(drivers.prefix(3)))
+                        driverSignalBars(Array(drivers.prefix(5)))
                     }
                 }
 
-                if let domain = domains.first {
-                    LocalConditionsValueChip(
-                        label: "Likely",
-                        value: likelyDomainValue(domain, primary: drivers.first),
-                        tint: GaugePalette.zoneColor(domain.likelihood)
-                    )
-                }
+                domainPills(domains, primary: drivers.first)
             }
             .padding(12)
             .padding(.leading, 3)
@@ -13546,8 +13706,54 @@ struct ContentView: View {
             }
         }
 
+        private func patternSignalDisplayName(for card: UserPatternCard) -> String {
+            switch card.signalKey.lowercased() {
+            case "pollen_overall_exposed":
+                return "Overall Pollen Counts"
+            case "pollen_grass_exposed":
+                return "Grass Pollen Counts"
+            case "pollen_tree_exposed":
+                return "Tree Pollen Counts"
+            case "pollen_weed_exposed":
+                return "Weed Pollen Counts"
+            case "pollen_mold_exposed":
+                return "Mold Counts"
+            case "humidity_extreme_exposed", "extreme_humidity_exposed":
+                return "High Humidity"
+            default:
+                return experienceMode.copyVocabulary.driverLabel(for: card.signalKey, fallback: card.signal)
+            }
+        }
+
+        private func refinedPatternText(_ raw: String?, for card: UserPatternCard) -> String? {
+            guard let raw else { return nil }
+            var text = CopyRefiner.refine(raw) ?? raw
+            let replacements: [(String, String)] = [
+                ("Pollen overall exposed", "overall pollen counts"),
+                ("pollen overall exposed", "overall pollen counts"),
+                ("Pollen Grass Exposed", "grass pollen counts"),
+                ("Pollen grass exposed", "grass pollen counts"),
+                ("pollen grass exposed", "grass pollen counts"),
+                ("Pollen Tree Exposed", "tree pollen counts"),
+                ("pollen tree exposed", "tree pollen counts"),
+                ("Pollen Weed Exposed", "weed pollen counts"),
+                ("pollen weed exposed", "weed pollen counts"),
+                ("Pollen Mold Exposed", "mold counts"),
+                ("pollen mold exposed", "mold counts"),
+                ("extreme humidity exposed", "high humidity"),
+                ("Extreme humidity exposed", "high humidity"),
+            ]
+            for (needle, replacement) in replacements {
+                text = text.replacingOccurrences(of: needle, with: replacement)
+            }
+            if card.signalKey.lowercased().contains("humidity") {
+                text = text.replacingOccurrences(of: "when high humidity was present", with: "when high humidity occurs")
+            }
+            return text.nilIfTrimmedEmpty
+        }
+
         private func shareSignalLabel(for card: UserPatternCard) -> String {
-            experienceMode.copyVocabulary.driverLabel(for: card.signalKey, fallback: card.signal)
+            patternSignalDisplayName(for: card)
         }
 
         private func shareDraft(for card: UserPatternCard) -> ShareDraft {
@@ -13556,7 +13762,7 @@ struct ContentView: View {
                 analyticsKey: card.signalKey,
                 mode: experienceMode,
                 relationship: "\(shareSignalLabel(for: card)) → \(card.outcome) (for you)",
-                explanation: card.explanation,
+                explanation: refinedPatternText(card.explanation, for: card) ?? card.explanation,
                 evidenceCount: card.sampleSize ?? card.exposedDays,
                 lagText: card.lagLabel ?? card.lagHours.map { "\($0)h" },
                 confidence: card.confidence,
@@ -13987,6 +14193,8 @@ struct ContentView: View {
             let confidenceSeverity: StatusPill.Severity
             let liftLine: String
             let rateLine: String
+            let signalLabel: String
+            let explanationText: String
             let shareLabel: String
             let onShare: () -> Void
 
@@ -14010,7 +14218,7 @@ struct ContentView: View {
                             Text(card.outcome)
                                 .font(.headline.weight(.semibold))
                                 .foregroundColor(.white.opacity(0.95))
-                            Text(card.signal)
+                            Text(signalLabel)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -14031,7 +14239,7 @@ struct ContentView: View {
                         }
                     }
 
-                    Text(CopyRefiner.refine(card.semanticExplanation) ?? card.semanticExplanation ?? card.explanation)
+                    Text(explanationText)
                         .font(.subheadline)
                         .foregroundColor(.white.opacity(0.88))
 
@@ -14125,6 +14333,8 @@ struct ContentView: View {
                             confidenceSeverity: confidenceSeverity(card.confidence),
                             liftLine: liftLine(card),
                             rateLine: rateLine(card),
+                            signalLabel: patternSignalDisplayName(for: card),
+                            explanationText: refinedPatternText(card.semanticExplanation ?? card.explanation, for: card) ?? card.explanation,
                             shareLabel: sharePrompt(for: card),
                             onShare: {
                                 shareDraft = shareDraft(for: card)
@@ -15296,20 +15506,26 @@ struct ContentView: View {
                         }
                     }
 
-                    if !plusUnlocked && hiddenStatCount > 0 {
+                    if !plusUnlocked {
                         VStack(alignment: .leading, spacing: 8) {
                             Label("More health context is included with Plus", systemImage: "lock.fill")
-                                .font(.caption.weight(.semibold))
+                                .font(.subheadline.weight(.semibold))
                                 .foregroundColor(.white.opacity(0.9))
                             Text("Free shows a small Health snapshot. Plus unlocks more wearable stats, deltas, smart stat swapping, and deeper body context.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
+                            if hiddenStatCount > 0 {
+                                Text("\(hiddenStatCount) more \(hiddenStatCount == 1 ? "stat is" : "stats are") included with Plus.")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundColor(GaugePalette.elevated)
+                            }
                             NavigationLink(destination: SubscribeView()) {
                                 Label("View Plus", systemImage: "sparkles")
                                     .font(.caption.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.borderedProminent)
                             .tint(GaugePalette.elevated)
                         }
                         .padding(12)
@@ -15729,6 +15945,7 @@ struct ContentView: View {
         let dailyCheckInStatus: DailyCheckInStatus?
         let dailyCheckInLoading: Bool
         let dailyCheckInError: String?
+        let healthAccessNotice: String?
         let hasPlusAccess: Bool
         let onOpenDailyCheckIn: () -> Void
         let onEditTrackedStats: () -> Void
@@ -15904,6 +16121,42 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
 
+                        Button(action: onOpenDailyCheckIn) {
+                            LocalConditionsSurfaceCard(title: "Daily Check-In", icon: "checklist") {
+                                HStack(alignment: .top, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(dailyCheckInHeadline)
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundColor(.primary)
+                                        if let dailyCheckInExposureLine, !dailyCheckInExposureLine.isEmpty {
+                                            Text(dailyCheckInExposureLine)
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundColor(.white.opacity(0.82))
+                                                .fixedSize(horizontal: false, vertical: true)
+                                        }
+                                        Text(dailyCheckInDetail)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    Spacer(minLength: 8)
+                                    if let dailyCheckInPill {
+                                        StatusPill(dailyCheckInPill.0, severity: dailyCheckInPill.1)
+                                    }
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+
+                        if let healthAccessNotice {
+                            LocalConditionsSurfaceCard(title: "Health Connection", icon: "heart.text.square.fill") {
+                                Text(healthAccessNotice)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
                         if let current {
                             SleepCard(
                                 title: current.day == todayString ? "Sleep (Today)" : "Sleep (\(current.day))",
@@ -15942,33 +16195,6 @@ struct ContentView: View {
                             plusUnlocked: hasPlusAccess,
                             onEditTrackedStats: onEditTrackedStats
                         )
-
-                        Button(action: onOpenDailyCheckIn) {
-                            LocalConditionsSurfaceCard(title: "Daily Check-In", icon: "checklist") {
-                                HStack(alignment: .top, spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text(dailyCheckInHeadline)
-                                            .font(.subheadline.weight(.semibold))
-                                            .foregroundColor(.primary)
-                                        if let dailyCheckInExposureLine, !dailyCheckInExposureLine.isEmpty {
-                                            Text(dailyCheckInExposureLine)
-                                                .font(.caption.weight(.semibold))
-                                                .foregroundColor(.white.opacity(0.82))
-                                                .fixedSize(horizontal: false, vertical: true)
-                                        }
-                                        Text(dailyCheckInDetail)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-                                    Spacer(minLength: 8)
-                                    if let dailyCheckInPill {
-                                        StatusPill(dailyCheckInPill.0, severity: dailyCheckInPill.1)
-                                    }
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
 
                         if hasPlusAccess && shouldShowLunarCard {
                             LocalConditionsSurfaceCard(title: "Lunar Pattern Watch", icon: "moon.stars.fill") {
@@ -16036,8 +16262,9 @@ struct ContentView: View {
                                     NavigationLink(destination: SubscribeView()) {
                                         Label("View Plus", systemImage: "sparkles")
                                             .font(.caption.weight(.semibold))
+                                            .frame(maxWidth: .infinity)
                                     }
-                                    .buttonStyle(.bordered)
+                                    .buttonStyle(.borderedProminent)
                                     .tint(GaugePalette.elevated)
                                 }
                             }
@@ -17107,6 +17334,7 @@ struct ContentView: View {
                 dailyCheckInStatus: dailyCheckInStatus,
                 dailyCheckInLoading: dailyCheckInLoading,
                 dailyCheckInError: dailyCheckInError,
+                healthAccessNotice: healthAccessNoticeText,
                 hasPlusAccess: hasPlusAccess,
                 onOpenDailyCheckIn: {
                     bodyPath = [.dailyCheckIn]
@@ -17372,6 +17600,7 @@ struct ContentView: View {
                 dailyCheckInStatus: dailyCheckInStatus,
                 dailyCheckInLoading: dailyCheckInLoading,
                 dailyCheckInError: dailyCheckInError,
+                healthAccessNotice: healthAccessNoticeText,
                 hasPlusAccess: hasPlusAccess,
                 onOpenDailyCheckIn: {
                     if selectedTab == .explore {
@@ -17499,6 +17728,10 @@ struct ContentView: View {
             description: $bugReportDescription,
             isSubmitting: bugReportSubmitting,
             message: bugReportMessage,
+            title: bugReportMode == .bug ? "Report a Bug" : "Send Feedback",
+            instructions: bugReportMode == .bug
+                ? "Describe what went wrong. The current diagnostics bundle will be attached automatically."
+                : "Share feedback, ideas, or confusing wording. Diagnostics are not attached.",
             onDismiss: {
                 guard !bugReportSubmitting else { return }
                 showBugReportSheet = false
@@ -17940,6 +18173,15 @@ struct ContentView: View {
                         Label("Report a Bug", systemImage: "ladybug")
                             .frame(maxWidth: .infinity)
                     }
+                }
+                .buttonStyle(.bordered)
+                .disabled(bugReportSubmitting)
+
+                Button {
+                    openFeedbackComposer()
+                } label: {
+                    Label("Send Feedback", systemImage: "bubble.left.and.text.bubble.right")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
                 .disabled(bugReportSubmitting)
@@ -18825,6 +19067,7 @@ struct ContentView: View {
                             dailyCheckInStatus: dailyCheckInStatus,
                             dailyCheckInLoading: dailyCheckInLoading,
                             dailyCheckInError: dailyCheckInError,
+                            healthAccessNotice: healthAccessNoticeText,
                             hasPlusAccess: hasPlusAccess,
                             onOpenDailyCheckIn: { missionInsightsPath = [.dailyCheckIn] },
                             onEditTrackedStats: { showSettingsSheet() },
@@ -21130,41 +21373,72 @@ struct ContentView: View {
 
         var body: some View {
             let cleanError = ContentView.scrubError(error)
-            GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(summaryText())
-                        .font(.subheadline)
-                    if let error = cleanError, !error.isEmpty {
-                        Text(error)
-                            .font(.caption2)
-                            .foregroundColor(.orange)
+            let accent = GaugePalette.contextAccent("earthquakes seismic")
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    Image(systemName: "waveform.path")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(accent)
+                        .frame(width: 32, height: 32)
+                        .background(accent.opacity(0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Earthquakes")
+                            .font(.headline.weight(.semibold))
+                        Text(summaryText())
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    if !events.isEmpty {
-                        Divider()
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(Array(events.prefix(4).enumerated()), id: \.offset) { _, event in
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("M\(event.mag.map { String(format: "%.1f", $0) } ?? "—") • \(event.place ?? "Unknown location")")
-                                        .font(.caption)
-                                    if let t = shortTime(event.timeUtc) {
-                                        Text(t)
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
-                                    }
+                    Spacer(minLength: 0)
+                }
+
+                if let error = cleanError, !error.isEmpty {
+                    Text(error)
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                }
+
+                if !events.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(events.prefix(4).enumerated()), id: \.offset) { _, event in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("M\(event.mag.map { String(format: "%.1f", $0) } ?? "—") • \(event.place ?? "Unknown location")")
+                                    .font(.caption.weight(.semibold))
+                                if let t = shortTime(event.timeUtc) {
+                                    Text(t)
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
                                 }
                             }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                     }
-                    NavigationLink("View details") {
-                        EarthquakesDetailView(latest: latest, events: events, error: error)
-                    }
-                    .font(.caption)
-                    .underline()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            } label: {
-                Label("Earthquakes", systemImage: "waveform.path")
+
+                NavigationLink("View details") {
+                    EarthquakesDetailView(latest: latest, events: events, error: error)
+                }
+                .font(.caption.weight(.semibold))
             }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                GaugePalette.softCardGradient(
+                    accent: accent,
+                    highlightOpacity: 0.12,
+                    baseOpacity: 0.05,
+                    shadowOpacity: 0.18
+                ),
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(accent.opacity(0.22), lineWidth: 1)
+            )
+            .shadow(color: accent.opacity(0.10), radius: 12, x: 0, y: 0)
         }
     }
 
@@ -21198,19 +21472,103 @@ struct ContentView: View {
             return iso
         }
 
+        private func magnitudeTint(_ magnitude: Double?) -> Color {
+            guard let magnitude else { return GaugePalette.low }
+            if magnitude >= 7 { return GaugePalette.high }
+            if magnitude >= 6 { return GaugePalette.elevated }
+            return GaugePalette.mild
+        }
+
+        private func quakeRow(_ event: QuakeEvent) -> some View {
+            let tint = magnitudeTint(event.mag)
+            return HStack(alignment: .top, spacing: 12) {
+                VStack(spacing: 2) {
+                    Text("M")
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(.white.opacity(0.55))
+                    Text(event.mag.map { String(format: "%.1f", $0) } ?? "—")
+                        .font(.headline.weight(.bold))
+                        .foregroundColor(tint)
+                }
+                .frame(width: 54, height: 54)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .stroke(tint.opacity(0.26), lineWidth: 1)
+                )
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(event.place ?? "Unknown location")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white.opacity(0.92))
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 10) {
+                        if let t = shortTime(event.timeUtc) {
+                            Text(t)
+                        }
+                        if let depth = event.depthKm {
+                            Text(String(format: "%.0f km depth", depth))
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    .stroke(tint.opacity(0.14), lineWidth: 1)
+            )
+        }
+
         var body: some View {
             let cleanError = ContentView.scrubError(error)
+            let accent = GaugePalette.contextAccent("earthquakes seismic")
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(summaryText())
-                        .font(.headline)
-                    Text("This page focuses on M5+ earthquakes from the last 24 hours. For full details and more charts, visit the website.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    if let fullDetailsURL {
-                        Link("Open the full earthquakes page", destination: fullDetailsURL)
-                            .font(.caption.weight(.semibold))
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "waveform.path")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundColor(accent)
+                                .frame(width: 32, height: 32)
+                                .background(accent.opacity(0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Earthquakes")
+                                    .font(.headline.weight(.semibold))
+                                Text(summaryText())
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Text("M5+ earthquakes from the last 24 hours. For full details and more charts, visit the website.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        if let fullDetailsURL {
+                            Link("Open the full earthquakes page", destination: fullDetailsURL)
+                                .font(.caption.weight(.semibold))
+                        }
                     }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        GaugePalette.softCardGradient(
+                            accent: accent,
+                            highlightOpacity: 0.12,
+                            baseOpacity: 0.05,
+                            shadowOpacity: 0.18
+                        ),
+                        in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(accent.opacity(0.22), lineWidth: 1)
+                    )
+
                     if let error = cleanError, !error.isEmpty {
                         Text(error)
                             .font(.caption)
@@ -21222,21 +21580,7 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                     } else {
                         ForEach(Array(events.prefix(20).enumerated()), id: \.offset) { _, event in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("M\(event.mag.map { String(format: "%.1f", $0) } ?? "—") • \(event.place ?? "Unknown location")")
-                                    .font(.subheadline)
-                                HStack(spacing: 10) {
-                                    if let t = shortTime(event.timeUtc) {
-                                        Text(t)
-                                    }
-                                    if let depth = event.depthKm {
-                                        Text(String(format: "%.0f km depth", depth))
-                                    }
-                                }
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                            }
-                            .padding(.vertical, 4)
+                            quakeRow(event)
                         }
                     }
                     Text("Tap Earthscope on the dashboard for the full journal and quake context.")
@@ -21735,6 +22079,7 @@ struct ContentView: View {
         let onRefresh: () -> Void
         @State private var showAllForecastDays: Bool = false
         @State private var shareDraft: ShareDraft? = nil
+        @State private var attemptedMissingAQIRefresh: Bool = false
 
         init(
             zip: String,
@@ -22436,6 +22781,18 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $shareDraft) { draft in
                 SharePreviewView(draft: draft)
+            }
+            .task(id: snapshot?.asof ?? zip) {
+                guard snapshot != nil,
+                      effectiveAQIValue(air: snapshot?.air) == nil,
+                      !isLoading,
+                      attemptedMissingAQIRefresh == false else {
+                    return
+                }
+                attemptedMissingAQIRefresh = true
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                guard !Task.isCancelled else { return }
+                onRefresh()
             }
         }
     }
@@ -23431,13 +23788,15 @@ private struct BugReportComposerView: View {
     @Binding var description: String
     let isSubmitting: Bool
     let message: String?
+    let title: String
+    let instructions: String
     let onDismiss: () -> Void
     let onSubmit: () -> Void
 
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Describe what went wrong. The current diagnostics bundle will be attached automatically.")
+                Text(instructions)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
 
@@ -23463,7 +23822,7 @@ private struct BugReportComposerView: View {
                 Spacer(minLength: 0)
             }
             .padding()
-            .navigationTitle("Report a Bug")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
