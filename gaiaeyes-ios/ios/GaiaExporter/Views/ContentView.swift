@@ -840,6 +840,49 @@ private struct SignalBarSchumannLatestEnvelope: Codable {
     }
 }
 
+private struct SignalBarSchumannTomskLatestEnvelope: Decodable {
+    let generatedAt: String?
+    let usable: Bool?
+    let usableForFusion: Bool?
+    let frequencyHz: [String: Double]?
+    let amplitude: [String: Double]?
+    let qFactor: [String: Double]?
+
+    private enum CodingKeys: String, CodingKey {
+        case generatedAt = "generated_at"
+        case usable
+        case usableForFusion = "usable_for_fusion"
+        case frequencyHz = "frequency_hz"
+        case amplitude
+        case amplitudeIdx = "amplitude_idx"
+        case qFactor = "q_factor"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        generatedAt = try? container.decodeIfPresent(String.self, forKey: .generatedAt)
+        usable = try? container.decodeIfPresent(Bool.self, forKey: .usable)
+        usableForFusion = try? container.decodeIfPresent(Bool.self, forKey: .usableForFusion)
+        frequencyHz = Self.decodeNumericMap(container, forKey: .frequencyHz)
+        amplitude = Self.decodeNumericMap(container, forKey: .amplitude) ?? Self.decodeNumericMap(container, forKey: .amplitudeIdx)
+        qFactor = Self.decodeNumericMap(container, forKey: .qFactor)
+    }
+
+    private static func decodeNumericMap(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) -> [String: Double]? {
+        if let direct = try? container.decodeIfPresent([String: Double].self, forKey: key) {
+            return direct
+        }
+        if let strings = try? container.decodeIfPresent([String: String].self, forKey: key) {
+            let mapped = strings.compactMapValues { Double($0) }
+            return mapped.isEmpty ? nil : mapped
+        }
+        return nil
+    }
+}
+
 private struct UserPatternCard: Codable, Hashable, Identifiable {
     let signalKey: String
     let signal: String
@@ -3059,6 +3102,8 @@ struct ContentView: View {
     @State private var dashboardLastFetchAt: Date = .distantPast
     @State private var dashboardLastUpdatedText: String? = nil
     @State private var liveSchumannSignalBarItem: SignalPill? = nil
+    @State private var liveSchumannTomskLatest: SignalBarSchumannTomskLatestEnvelope? = nil
+    @AppStorage("gaia.signal_bar.pressure_value") private var signalBarPressureValueCache: String = ""
     @State private var selectedTab: AppTab = .home
     @State private var showGuideSheet: Bool = false
     @State private var guideHubFocus: GuideHubFocus = .overview
@@ -3747,7 +3792,7 @@ struct ContentView: View {
     private var healthAccessNoticeText: String? {
         let hasRequestedHealth = !state.healthkitRequestedAtISO.isEmpty || experienceProfile.healthkitRequestedAt != nil
         guard state.selectedHealthPermissionKeys.isEmpty || !hasRequestedHealth else { return nil }
-        return "Health access is off. Connect Apple Health or your wearable when you want sleep and body patterns layered in."
+        return "Health data not connected. Body and sleep personalization will stay limited until Apple Health or a wearable is connected."
     }
 
     private var persistentSignalBarItems: [SignalPill] {
@@ -3785,12 +3830,21 @@ struct ContentView: View {
     }
 
     private func signalBarDisplayValue(for item: SignalPill, key: String) -> String {
-        guard key == "pressure", let pressure = localHealth?.weather?.pressureHpa else {
+        guard key == "pressure" else {
             return item.value
         }
+        if let liveValue = pressureSignalBarValue(from: localHealth?.weather) {
+            return liveValue
+        }
+        let cached = signalBarPressureValueCache.trimmingCharacters(in: .whitespacesAndNewlines)
+        return cached.isEmpty ? item.value : cached
+    }
+
+    private func pressureSignalBarValue(from weather: LocalWeather?) -> String? {
+        guard let pressure = weather?.pressureHpa else { return nil }
         let trend = LocalConditionsFormatting.derivedPressureTrend(
-            raw: localHealth?.weather?.pressureTrend ?? localHealth?.weather?.baroTrend,
-            deltaHpa: localHealth?.weather?.baroDelta24hHpa
+            raw: weather?.pressureTrend ?? weather?.baroTrend,
+            deltaHpa: weather?.baroDelta24hHpa
         )
         let arrow: String
         switch trend {
@@ -3804,6 +3858,12 @@ struct ContentView: View {
             arrow = ""
         }
         return "\(Int(pressure.rounded()))\(arrow.isEmpty ? "" : " \(arrow)")"
+    }
+
+    private func cacheSignalBarPressure(from payload: LocalCheckResponse) {
+        if let value = pressureSignalBarValue(from: payload.weather) {
+            signalBarPressureValueCache = value
+        }
     }
 
     private func activeSignalStatesFromDashboard() -> [String: SignalBarState] {
@@ -6208,32 +6268,35 @@ struct ContentView: View {
     }
 
     private func signalBarSchumannPill(from envelope: SignalBarSchumannLatestEnvelope) -> SignalPill? {
-        guard let amplitude = envelope.amplitude?.srTotal020 else {
+        let harmonicF0 = envelope.harmonics?["f0"] ?? envelope.harmonics?["F0"] ?? nil
+        let harmonicF1 = envelope.harmonics?["f1"] ?? envelope.harmonics?["F1"] ?? nil
+        let f1Source = normalizedSchumannHz(envelope.fusion?.displayF0Hz ?? envelope.fundamentalHz ?? harmonicF0 ?? harmonicF1)
+        guard envelope.amplitude?.srTotal020 != nil || f1Source != nil else {
             return nil
         }
 
-        let harmonicF0 = envelope.harmonics?["f0"] ?? nil
-        let harmonicF1 = envelope.harmonics?["f1"] ?? nil
-        let f1Source = envelope.fusion?.displayF0Hz ?? envelope.fundamentalHz ?? harmonicF0 ?? harmonicF1
         let f1Value = f1Source.map { String(format: "%.2f Hz", $0) }
         let fallbackValue: String
         let state: SignalBarState
-        switch amplitude {
-        case ..<0.03:
+        switch envelope.amplitude?.srTotal020 {
+        case .some(..<0.03):
             fallbackValue = "—"
             state = .quiet
-        case ..<0.06:
+        case .some(..<0.06):
             fallbackValue = "Stable"
             state = .quiet
-        case ..<0.10:
+        case .some(..<0.10):
             fallbackValue = "Active"
             state = .watch
-        case ..<0.16:
+        case .some(..<0.16):
             fallbackValue = "Elevated"
             state = .elevated
-        default:
+        case .some:
             fallbackValue = "Intense"
             state = .strong
+        case nil:
+            fallbackValue = "Active"
+            state = .watch
         }
 
         return SignalPill(
@@ -6247,17 +6310,62 @@ struct ContentView: View {
         )
     }
 
+    private func signalBarTomskF1Hz(from envelope: SignalBarSchumannTomskLatestEnvelope) -> Double? {
+        let usable = envelope.usableForFusion ?? envelope.usable ?? true
+        guard usable else { return nil }
+        return normalizedSchumannHz(envelope.frequencyHz?["F1"] ?? envelope.frequencyHz?["f1"])
+    }
+
+    private func normalizedSchumannHz(_ value: Double?) -> Double? {
+        guard var value else { return nil }
+        while value > 40 {
+            value /= 10
+        }
+        return value
+    }
+
+    private func signalBarSchumannPill(from tomsk: SignalBarSchumannTomskLatestEnvelope) -> SignalPill? {
+        guard let f1 = signalBarTomskF1Hz(from: tomsk) else { return nil }
+        return SignalPill(
+            key: "schumann",
+            label: "SR",
+            value: String(format: "%.2f Hz", f1),
+            state: .watch,
+            driverKey: "schumann",
+            detailTarget: "schumann",
+            updatedAt: tomsk.generatedAt
+        )
+    }
+
     private func fetchLiveSchumannSignalBarItem(api: APIClient) async -> SignalPill? {
-        guard let envelope: SignalBarSchumannLatestEnvelope = await bestEffortDashboardJSON(
+        if let tomskEnvelope: SignalBarSchumannTomskLatestEnvelope = await bestEffortDashboardJSON(
+            api: api,
+            path: "v1/earth/schumann/tomsk_params/latest?station_id=tomsk",
+            as: SignalBarSchumannTomskLatestEnvelope.self,
+            timeout: 5,
+            label: "signal bar tomsk"
+        ) {
+            await MainActor.run {
+                liveSchumannTomskLatest = tomskEnvelope
+            }
+            if let tomskPill = signalBarSchumannPill(from: tomskEnvelope) {
+                return tomskPill
+            }
+        }
+
+        let latestEnvelope: SignalBarSchumannLatestEnvelope? = await bestEffortDashboardJSON(
             api: api,
             path: "v1/earth/schumann/latest",
             as: SignalBarSchumannLatestEnvelope.self,
             timeout: 5,
             label: "signal bar schumann"
-        ) else {
-            return nil
+        )
+        let latestPill = latestEnvelope.flatMap { signalBarSchumannPill(from: $0) }
+        if latestPill?.value.localizedCaseInsensitiveContains("Hz") == true {
+            return latestPill
         }
-        return signalBarSchumannPill(from: envelope)
+
+        return latestPill
     }
 
     private func refreshLiveSchumannSignalBar(api: APIClient? = nil) async {
@@ -7751,6 +7859,7 @@ struct ContentView: View {
             await MainActor.run {
                 if payload.ok == true {
                     localHealth = payload
+                    cacheSignalBarPressure(from: payload)
                     localHealthError = nil
                 } else {
                     localHealth = nil
@@ -11115,6 +11224,12 @@ struct ContentView: View {
             var id: String { driver.id }
         }
 
+        private struct AlertPillItem: Identifiable {
+            let id: String
+            let title: String
+            let severity: StatusPill.Severity
+        }
+
         private func combinedWhatMattersDrivers() -> [DashboardDriverItem] {
             let primaryStack = dedupedDrivers(([primaryDriver].compactMap { $0 }) + supportingDrivers + drivers)
             guard primaryStack.count < 3 else { return primaryStack }
@@ -11315,19 +11430,55 @@ struct ContentView: View {
 
         private func pillSeverity(_ raw: String?) -> StatusPill.Severity {
             let s = (raw ?? "").lowercased()
-            if s == "high" || s == "alert" || s == "red" { return .alert }
-            if s == "watch" || s == "warn" || s == "orange" || s == "yellow" { return .warn }
+            if s == "high" || s == "strong" || s == "alert" || s == "storm" || s == "red" { return .alert }
+            if s == "watch" || s == "active" || s == "elevated" || s == "warn" || s == "orange" || s == "yellow" { return .warn }
             return .ok
+        }
+
+        private func alertPillItems(limit: Int?) -> [AlertPillItem] {
+            var seen = Set<String>()
+            var items: [AlertPillItem] = []
+
+            func append(id: String, title: String?, rawSeverity: String?) {
+                let cleanTitle = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !cleanTitle.isEmpty else { return }
+                let key = cleanTitle.lowercased()
+                guard !seen.contains(key) else { return }
+                seen.insert(key)
+                items.append(AlertPillItem(id: id, title: cleanTitle, severity: pillSeverity(rawSeverity)))
+            }
+
+            for alert in alerts {
+                append(
+                    id: "alert-\(alert.id)",
+                    title: alert.title ?? alert.key,
+                    rawSeverity: alert.severity
+                )
+            }
+
+            for item in topWhatMattersDrivers() {
+                let driver = item.driver
+                let severity = driver.severity ?? driver.state
+                guard pillSeverity(severity) != .ok else { continue }
+                append(
+                    id: "driver-\(driver.id)",
+                    title: driver.label ?? driver.key.replacingOccurrences(of: "_", with: " ").capitalized,
+                    rawSeverity: severity
+                )
+            }
+
+            guard let limit else { return items }
+            return Array(items.prefix(limit))
         }
 
         @ViewBuilder
         private func alertPills(limit: Int? = nil) -> some View {
-            let visibleAlerts = limit.map { Array(alerts.prefix($0)) } ?? alerts
+            let visibleAlerts = alertPillItems(limit: limit)
             if !visibleAlerts.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(visibleAlerts) { alert in
-                            StatusPill(alert.title ?? (alert.key ?? "Alert"), severity: pillSeverity(alert.severity))
+                            StatusPill(alert.title, severity: alert.severity)
                         }
                     }
                 }
@@ -11345,24 +11496,6 @@ struct ContentView: View {
                         Text("Dashboard refresh issue: \(errorMessage)")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                    }
-                    if let healthAccessNotice {
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: "heart.text.square.fill")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundColor(GaugePalette.aqua)
-                            Text(healthAccessNotice)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(GaugePalette.aqua.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(GaugePalette.aqua.opacity(0.16), lineWidth: 1)
-                        )
                     }
                     if rows.isEmpty {
                         Text(isLoading
@@ -11392,6 +11525,24 @@ struct ContentView: View {
                                 }
                             }
                         }
+                    }
+                    if let healthAccessNotice {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "heart.text.square.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(GaugePalette.aqua)
+                            Text(healthAccessNotice)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(GaugePalette.aqua.opacity(0.07), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(GaugePalette.aqua.opacity(0.14), lineWidth: 1)
+                        )
                     }
 
                     if let summary = healthStatusExplainer?.summary,
@@ -12150,6 +12301,7 @@ struct ContentView: View {
         let useGPS: Bool
         let localInsightsEnabled: Bool
         let dashboardDrivers: [DashboardDriverItem]
+        let schumannTomskLatest: SignalBarSchumannTomskLatestEnvelope?
         let magnetosphere: MagnetosphereData?
         let magnetosphereLoading: Bool
         let magnetosphereError: String?
@@ -12623,13 +12775,13 @@ struct ContentView: View {
 
         private var schumannCard: some View {
             let schumannDriver = dashboardDriver(for: "schumann")
-            let station = current?.schStation?.capitalized ?? "Station"
-            let f0Text = current?.schF0Hz?.value.map { String(format: "%.2f Hz", $0) } ?? "—"
-            let f1Text = current?.schF1Hz?.value.map { String(format: "%.2f Hz", $0) } ?? "—"
+            let f1Text = tomskFrequencyText(key: "F1")
+            let a1Text = tomskMetricText(schumannTomskLatest?.amplitude, key: "A1")
+            let q1Text = tomskMetricText(schumannTomskLatest?.qFactor, key: "Q1")
             let updated = updatedText ?? "recent"
             let pillText = normalizedPillText(
                 schumannDriver?.state?.capitalized,
-                fallback: current?.schF0Hz?.value == nil ? "Pending" : "Active"
+                fallback: f1Text == "—" ? "Pending" : "Active"
             )
             let status = "Earth resonance activity with harmonics, source quality, and recent drift."
 
@@ -12641,14 +12793,35 @@ struct ContentView: View {
                     pillText: pillText,
                     severity: schumannDriver == nil ? .warn : severity(for: schumannDriver?.severity),
                     metrics: [
-                        HubMetric(label: "Source", value: station, tint: GaugePalette.low),
-                        HubMetric(label: "f0", value: f0Text, tint: GaugePalette.mild),
-                        HubMetric(label: "f1", value: f1Text, tint: GaugePalette.elevated)
+                        HubMetric(label: "F1", value: f1Text, tint: GaugePalette.sky),
+                        HubMetric(label: "A1", value: a1Text, tint: GaugePalette.elevated),
+                        HubMetric(label: "Q1", value: q1Text, tint: GaugePalette.low)
                     ],
                     isExplore: !showsPersonalCards
                 )
             }
             .buttonStyle(.plain)
+        }
+
+        private func tomskFrequencyText(key: String) -> String {
+            guard var value = tomskMetricValue(schumannTomskLatest?.frequencyHz, key: key) else {
+                return "—"
+            }
+            while value > 40 {
+                value /= 10
+            }
+            return String(format: "%.2f Hz", value)
+        }
+
+        private func tomskMetricText(_ values: [String: Double]?, key: String) -> String {
+            guard let value = tomskMetricValue(values, key: key) else {
+                return "—"
+            }
+            return String(format: "%.2f", value)
+        }
+
+        private func tomskMetricValue(_ values: [String: Double]?, key: String) -> Double? {
+            values?[key] ?? values?[key.lowercased()] ?? values?[key.uppercased()]
         }
 
         private var healthCard: some View {
@@ -13150,20 +13323,63 @@ struct ContentView: View {
 
         private func driverSignalTint(_ driver: UserOutlookDriver) -> Color {
             let key = driver.key.lowercased()
-            if key.contains("kp") || key.contains("geomag") { return GaugePalette.sky }
+            if key.contains("kp") || key.contains("geomag") { return GaugePalette.elevated }
             if key.contains("solar") || key == "sw" || key.contains("cme") || key.contains("flare") { return GaugePalette.elevated }
-            if key.contains("humidity") || key.contains("pollen") || key.contains("allergen") { return GaugePalette.low }
+            if key.contains("humidity") { return GaugePalette.sky }
+            if key.contains("pollen") || key.contains("allergen") { return GaugePalette.low }
             if key.contains("aqi") { return GaugePalette.mild }
             if key.contains("pressure") { return GaugePalette.violet }
             return GaugePalette.contextAccent(driver.label ?? driver.key)
         }
 
         private func driverStatusText(_ driver: UserOutlookDriver) -> String {
-            let severity = (driver.severity ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !severity.isEmpty {
-                return severity.capitalized
+            let key = driver.key.lowercased()
+            let severity = outlookSeverityDescriptor(driver.severity)
+            if key.contains("humidity"), let value = driver.value {
+                return "\(severity) \(Int(value.rounded()))%"
+            }
+            if key.contains("kp") || key.contains("geomag"), let value = driver.value {
+                return "\(severity) Kp \(compactOutlookNumber(value))"
+            }
+            if key.contains("pollen") || key.contains("allergen"), let value = driver.value {
+                return "\(severity) \(compactOutlookNumber(value))"
+            }
+            if key.contains("solar_wind") || key == "sw", let value = driver.value {
+                return "\(severity) \(Int(value.rounded())) km/s"
+            }
+            if key.contains("flare") || key.contains("cme") {
+                return severity
             }
             return driverValue(driver)
+        }
+
+        private func outlookSeverityDescriptor(_ raw: String?) -> String {
+            let severity = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !severity.isEmpty else { return "Watch" }
+            switch severity.lowercased() {
+            case "high", "strong", "storm", "alert":
+                return "High"
+            case "elevated":
+                return "Elevated"
+            case "active", "watch":
+                return "Watch"
+            case "moderate", "mild":
+                return "Mild"
+            case "low", "quiet", "calm":
+                return "Low"
+            case "probable":
+                return "Probable"
+            case "possible":
+                return "Possible"
+            default:
+                return severity.capitalized
+            }
+        }
+
+        private func compactOutlookNumber(_ value: Double) -> String {
+            abs(value.rounded() - value) < 0.05
+                ? String(Int(value.rounded()))
+                : String(format: "%.1f", value)
         }
 
         @ViewBuilder
@@ -13190,20 +13406,38 @@ struct ContentView: View {
         @ViewBuilder
         private func domainPills(_ domains: [UserOutlookDomain], primary: UserOutlookDriver?) -> some View {
             if !domains.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
+                let symptomColumns = [
+                    GridItem(.adaptive(minimum: 96, maximum: 150), spacing: 6, alignment: .topLeading)
+                ]
+                VStack(alignment: .leading, spacing: 7) {
                     Text("Possible symptoms")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.secondary)
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                    LazyVGrid(columns: symptomColumns, alignment: .leading, spacing: 6) {
                         ForEach(domains.prefix(4)) { domain in
-                            LocalConditionsValueChip(
-                                label: "Likely",
-                                value: likelyDomainValue(domain, primary: primary),
-                                tint: GaugePalette.zoneColor(domain.likelihood)
-                            )
+                            let tint = GaugePalette.contextAccent(domain.label ?? domain.key)
+                            Text(likelyDomainValue(domain, primary: primary))
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.86))
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.78)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(tint.opacity(0.20), lineWidth: 1)
+                                )
                         }
                     }
                 }
+                .padding(10)
+                .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                )
             }
         }
 
@@ -17434,6 +17668,7 @@ struct ContentView: View {
                 useGPS: profileUseGPS,
                 localInsightsEnabled: profileLocalInsightsEnabled,
                 dashboardDrivers: dashboardPayload?.drivers ?? [],
+                schumannTomskLatest: liveSchumannTomskLatest,
                 magnetosphere: magnetosphere,
                 magnetosphereLoading: magnetosphereLoading,
                 magnetosphereError: magnetosphereError,
@@ -18264,41 +18499,6 @@ struct ContentView: View {
                 Divider()
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Safe delete preflight")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Checks whether account deletion is fully wired and shows what would be removed, without deleting anything.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Button {
-                        Task { await runDeleteAccountPreflight() }
-                    } label: {
-                        HStack {
-                            if accountDeletionPreflightInFlight {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                            }
-                            Text(accountDeletionPreflightInFlight ? "Checking..." : "Run Safe Preflight")
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(accountDeletionPreflightInFlight || accountDeletionInFlight)
-
-                    if let accountDeletionPreflightMessage, !accountDeletionPreflightMessage.isEmpty {
-                        Text(accountDeletionPreflightMessage)
-                            .font(.caption)
-                            .foregroundColor(
-                                accountDeletionPreflightMessage.lowercased().contains("ready.")
-                                ? .secondary
-                                : .orange
-                            )
-                    }
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 8) {
                     Text("Delete account")
                         .font(.subheadline.weight(.semibold))
                     Text("Permanently deletes your Gaia Eyes account and associated app data. App Store subscriptions are managed separately in Apple Subscriptions.")
@@ -18927,6 +19127,7 @@ struct ContentView: View {
                     useGPS: profileUseGPS,
                     localInsightsEnabled: profileLocalInsightsEnabled,
                     dashboardDrivers: dashboardPayload?.drivers ?? [],
+                    schumannTomskLatest: liveSchumannTomskLatest,
                     magnetosphere: magnetosphere,
                     magnetosphereLoading: magnetosphereLoading,
                     magnetosphereError: magnetosphereError,

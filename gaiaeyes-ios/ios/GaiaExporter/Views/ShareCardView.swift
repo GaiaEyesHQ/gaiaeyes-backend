@@ -140,7 +140,7 @@ struct ShareCardView: View {
     }
 
     private var panelBottomPadding: CGFloat {
-        max(18, padding - 3)
+        max(26, padding + 3)
     }
 
     private var brandingBlock: some View {
@@ -487,11 +487,11 @@ struct ShareCardView: View {
     }
 
     private var minimalNoteText: String? {
-        if let note = model.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
-            return note
-        }
         if let subtitle = model.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines), !subtitle.isEmpty {
             return subtitle
+        }
+        if let note = model.note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            return note
         }
         return nil
     }

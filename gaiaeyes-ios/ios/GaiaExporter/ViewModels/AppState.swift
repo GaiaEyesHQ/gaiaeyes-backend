@@ -493,6 +493,10 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             append("❌ Health data not available on this device")
             return false
         }
+        if selectedHealthPermissionKeys.isEmpty {
+            selectedHealthPermissionKeys = HealthPermissionOption.defaultSelection
+            append("No Health metrics were selected, so Gaia restored the default Health permission set.")
+        }
         let toRead = makeHealthReadTypes()
         if toRead.isEmpty {
             append("❌ No Health metrics selected. Choose at least one item or skip for now.")

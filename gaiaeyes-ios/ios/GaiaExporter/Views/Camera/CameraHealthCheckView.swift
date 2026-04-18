@@ -782,9 +782,10 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
         Task {
             var localRecord = record
             localRecord.saveScope = .localOnly
-            await CameraHealthLocalStore.shared.save(record: localRecord, saveScope: .localOnly)
+            let localOnlyRecord = localRecord
+            await CameraHealthLocalStore.shared.save(record: localOnlyRecord, saveScope: .localOnly)
             await MainActor.run {
-                self.result = localRecord
+                self.result = localOnlyRecord
                 self.onSaved?()
             }
 
@@ -792,12 +793,13 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
                 await MainActor.run {
                     AuthManager.shared.loadFromKeychain()
                 }
-                try await supabase.saveCheck(localRecord)
-                var accountRecord = localRecord
+                try await supabase.saveCheck(localOnlyRecord)
+                var accountRecord = localOnlyRecord
                 accountRecord.saveScope = .account
-                await CameraHealthLocalStore.shared.save(record: accountRecord, saveScope: .account)
+                let accountSyncedRecord = accountRecord
+                await CameraHealthLocalStore.shared.save(record: accountSyncedRecord, saveScope: .account)
                 await MainActor.run {
-                    self.result = accountRecord
+                    self.result = accountSyncedRecord
                     self.saveScope = .account
                     self.isSavingResult = false
                     self.saveStatusTitle = "Saved to your account"
@@ -807,7 +809,7 @@ final class CameraHealthCheckViewModel: NSObject, ObservableObject, AVCaptureVid
                 }
             } catch {
                 await MainActor.run {
-                    self.result = localRecord
+                    self.result = localOnlyRecord
                     self.saveScope = .localOnly
                     self.isSavingResult = false
                     if let authError = error as? CameraHealthSupabaseError {

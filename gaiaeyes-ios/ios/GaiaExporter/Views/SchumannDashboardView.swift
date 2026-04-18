@@ -1600,7 +1600,10 @@ struct SchumannDashboardView: View {
     }
 
     private func formattedFundamental(_ value: Double?) -> String {
-        guard let value else { return "-" }
+        guard var value else { return "-" }
+        while value > 40 {
+            value /= 10
+        }
         return String(format: "%.2f Hz", value)
     }
 

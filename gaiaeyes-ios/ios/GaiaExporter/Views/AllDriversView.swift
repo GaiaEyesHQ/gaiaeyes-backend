@@ -96,11 +96,24 @@ struct AllDriversView: View {
     }
 
     private var filteredDrivers: [DriverDetailItem] {
-        let drivers = snapshot?.drivers ?? []
+        let drivers = (snapshot?.drivers ?? []).filter(shouldDisplayDriver)
         if selectedFilter == .all {
             return drivers
         }
         return drivers.filter { $0.category == selectedFilter }
+    }
+
+    private func shouldDisplayDriver(_ driver: DriverDetailItem) -> Bool {
+        guard driver.key == "allergens" || driver.key.contains("pollen") else {
+            return true
+        }
+        let state = driver.state.lowercased()
+        let severity = (driver.severity ?? "").lowercased()
+        if driver.isObjectivelyActive == false {
+            return false
+        }
+        return !["low", "quiet", "calm", "normal", "ok"].contains(state)
+            && !["low", "quiet", "calm", "normal", "ok"].contains(severity)
     }
 
     private var freeDriverLimit: Int { 4 }
@@ -134,6 +147,10 @@ struct AllDriversView: View {
     private func localizedReading(for driver: DriverDetailItem) -> String? {
         if driver.key == "temp" {
             return localizedTemperatureDelta(driver.readingValue)
+        }
+        if driver.key == "bz" || driver.key.contains("bz"), let value = driver.readingValue {
+            let normalized = abs(value) > 50 ? value / 10.0 : value
+            return String(format: "%.1f nT", normalized)
         }
         if driver.key == "body_symptoms" {
             let symptomCount = driver.reading?
@@ -435,8 +452,8 @@ struct AllDriversView: View {
             mode: mode,
             tone: tone,
             title: translatedLabel(for: driver),
-            value: localizedReading(for: driver),
-            state: driver.stateLabel ?? driver.state.capitalized,
+            value: driver.key == "ulf" ? nil : localizedReading(for: driver),
+            state: driver.key == "ulf" ? nil : (driver.stateLabel ?? driver.state.capitalized),
             interpretation: translatedReason,
             bullets: bullets,
             accent: accent,
