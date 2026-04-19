@@ -503,8 +503,13 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             return false
         }
         do {
-            try await healthStore.requestAuthorization(toShare: [], read: toRead)
-            append("✅ Health permissions granted")
+            let completed = try await requestHealthReadAuthorization(toRead)
+            guard completed else {
+                append("❌ Health permission request was not completed")
+                return false
+            }
+            append("✅ Health permission request completed")
+            append("Open Apple Health > Sharing > Apps > Gaia Eyes if iOS still shows categories off.")
             // Register observers and do a one-time sweep
             do {
                 try HealthKitBackgroundSync.shared.registerObservers()
@@ -518,6 +523,18 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         } catch {
             append("❌ Health permission error: \(error.localizedDescription)")
             return false
+        }
+    }
+
+    private func requestHealthReadAuthorization(_ toRead: Set<HKObjectType>) async throws -> Bool {
+        try await withCheckedThrowingContinuation { continuation in
+            healthStore.requestAuthorization(toShare: nil, read: toRead) { completed, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: completed)
+                }
+            }
         }
     }
 

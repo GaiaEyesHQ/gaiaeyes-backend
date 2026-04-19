@@ -7514,7 +7514,7 @@ struct ContentView: View {
                 experienceProfile.healthkitRequestedAt = requestedAt
             }
             healthPermissionsMessage = granted
-                ? "Health access updated. Gaia will use whatever HealthKit data you allowed. If body data stays blank, open Apple Health and your wearable app once so they finish syncing, then return to Gaia."
+                ? "Health permission request completed. Gaia will use whatever Health categories are enabled. If Apple Health still shows categories off, open Apple Health > Sharing > Apps > Gaia Eyes and enable them there."
                 : "Gaia could not update Health access right now. You can keep going and retry later in Settings."
         }
         AppAnalytics.track(granted ? "healthkit_permission_completed" : "healthkit_permission_failed")
