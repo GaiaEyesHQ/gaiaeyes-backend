@@ -2696,7 +2696,7 @@ private struct LaunchDebugToolkitPanel: View {
 
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("HealthKit does not expose exact per-type read permission status after the prompt. This section shows selected metrics plus observed read/sync evidence instead of write-sharing status.")
+                    Text("HealthKit does not expose exact per-type read permission status after the prompt. This section shows selected metrics plus observed read/sync evidence; verify final toggles in Apple Health.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                     ForEach(healthItems) { item in
@@ -2707,7 +2707,7 @@ private struct LaunchDebugToolkitPanel: View {
                                 Spacer()
                                 statusBadge(item.backgroundDeliveryStatus, state: badgeState(for: item.backgroundDeliveryStatus))
                             }
-                            Text("Read status: \(item.permissionStatus)")
+                            Text("Read evidence: \(item.permissionStatus)")
                                 .font(.caption)
                             Text("Observer: \(formatted(item.lastObserverAt)) • Anchor: \(formatted(item.lastAnchorAt))")
                                 .font(.caption2)
@@ -3791,7 +3791,13 @@ struct ContentView: View {
 
     private var healthAccessNoticeText: String? {
         let hasRequestedHealth = !state.healthkitRequestedAtISO.isEmpty || experienceProfile.healthkitRequestedAt != nil
-        guard state.selectedHealthPermissionKeys.isEmpty || !hasRequestedHealth else { return nil }
+        let readUnavailableAt = parseDebugDate(state.healthkitReadUnavailableAtISO)
+        let readVerifiedAt = parseDebugDate(state.healthkitReadVerifiedAtISO)
+        let readLooksDisconnected = readUnavailableAt.map { unavailableAt in
+            guard let readVerifiedAt else { return true }
+            return unavailableAt > readVerifiedAt
+        } ?? false
+        guard state.selectedHealthPermissionKeys.isEmpty || !hasRequestedHealth || readLooksDisconnected else { return nil }
         return "Health data not connected. Body and sleep personalization will stay limited until Apple Health or a wearable is connected."
     }
 
@@ -4757,12 +4763,21 @@ struct ContentView: View {
         }
     }
 
+    private var healthReadAccessLooksDisconnected: Bool {
+        guard let readUnavailableAt = parseDebugDate(state.healthkitReadUnavailableAtISO) else { return false }
+        guard let readVerifiedAt = parseDebugDate(state.healthkitReadVerifiedAtISO) else { return true }
+        return readUnavailableAt > readVerifiedAt
+    }
+
     private func healthPermissionStatus(for option: HealthPermissionOption, metric: String) -> String {
         guard HKHealthStore.isHealthDataAvailable() else { return "Unavailable" }
-        guard let objectType = healthObjectType(for: option) else { return "Unsupported" }
+        guard healthObjectType(for: option) != nil else { return "Unsupported" }
 
         let isSelected = state.selectedHealthPermissionKeys.contains(option.rawValue)
         guard isSelected else { return "Not selected" }
+        if healthReadAccessLooksDisconnected {
+            return "Likely off in Apple Health"
+        }
 
         let backgroundStatus = healthDiagnosticsValue(prefix: "bg_delivery_status", metric: metric)?.lowercased()
         let backgroundError = healthDiagnosticsValue(prefix: "bg_delivery_error", metric: metric)?.lowercased() ?? ""
@@ -4772,13 +4787,13 @@ struct ContentView: View {
         let sourceHint = healthDiagnosticsValue(prefix: "last_source", metric: metric)
 
         if lastSampleAt != nil || sourceHint != nil {
-            return "Read active"
+            return "Selected + data seen"
         }
         if lastObserverAt != nil || lastAnchorAt != nil {
-            return "Read active"
+            return "Selected + sync evidence"
         }
         if backgroundStatus == "enabled" {
-            return "Read enabled"
+            return "Selected; verify in Health"
         }
         if backgroundStatus == "skipped" {
             return "Selected"
@@ -4789,13 +4804,8 @@ struct ContentView: View {
             }
             return "Verification failed"
         }
-
-        let sharingStatus = HKHealthStore().authorizationStatus(for: objectType)
-        if sharingStatus == .sharingAuthorized {
-            return "Authorized"
-        }
         if !state.healthkitRequestedAtISO.isEmpty {
-            return "Requested / pending evidence"
+            return "Requested; verify in Health"
         }
         return "Not requested"
     }
@@ -5100,16 +5110,18 @@ struct ContentView: View {
     }
 
     private var debugProfileSnapshot: DebugProfileSnapshot {
-        let connectedStatuses: Set<String> = [
-            "Authorized",
-            "Read active",
-            "Read enabled",
-            "Selected",
-        ]
-        let authorizedCount = debugHealthMetricItems.filter { connectedStatuses.contains($0.permissionStatus) }.count
+        let authorizedCount = debugHealthMetricItems.filter { item in
+            item.permissionStatus == "Selected"
+            || item.permissionStatus.hasPrefix("Selected +")
+            || item.permissionStatus.hasPrefix("Selected;")
+            || item.permissionStatus.hasPrefix("Requested;")
+        }.count
         let healthConnected: String = {
+            if healthReadAccessLooksDisconnected {
+                return "Likely off in Apple Health"
+            }
             if authorizedCount > 0 {
-                return "Yes (\(authorizedCount) types)"
+                return "Selected (\(authorizedCount) types; verify in Health)"
             }
             if !state.healthkitRequestedAtISO.isEmpty {
                 return "Requested / limited"
@@ -5337,7 +5349,7 @@ struct ContentView: View {
         lines.append("")
         lines.append("Health Sync:")
         for item in healthItems {
-            var line = "- \(item.title): read \(item.permissionStatus) | bg \(item.backgroundDeliveryStatus) | observer \(debugFormattedDate(item.lastObserverAt)) | anchor \(debugFormattedDate(item.lastAnchorAt)) | sample \(debugFormattedDate(item.lastSampleAt)) | source \(item.sourceHint ?? "—")"
+            var line = "- \(item.title): read evidence \(item.permissionStatus) | bg \(item.backgroundDeliveryStatus) | observer \(debugFormattedDate(item.lastObserverAt)) | anchor \(debugFormattedDate(item.lastAnchorAt)) | sample \(debugFormattedDate(item.lastSampleAt)) | source \(item.sourceHint ?? "—")"
             if let derivedAt = item.derivedAt {
                 line += " | derived \(debugFormattedDate(derivedAt)) | via \(item.derivedSource ?? "daily_features mart")"
             }
@@ -7513,9 +7525,13 @@ struct ContentView: View {
             if !requestedAt.isEmpty {
                 experienceProfile.healthkitRequestedAt = requestedAt
             }
-            healthPermissionsMessage = granted
-                ? "Health permission request completed. Gaia will use whatever Health categories are enabled. If Apple Health still shows categories off, open Apple Health > Sharing > Apps > Gaia Eyes and enable them there."
-                : "Gaia could not update Health access right now. You can keep going and retry later in Settings."
+            if granted && healthReadAccessLooksDisconnected {
+                healthPermissionsMessage = "Health request completed, but reads still look off. Open Apple Health > Sharing > Apps > Gaia Eyes and confirm categories are enabled."
+            } else {
+                healthPermissionsMessage = granted
+                    ? "Health permission request completed. Gaia will use whatever Health categories are enabled."
+                    : "Gaia could not update Health access right now. You can keep going and retry later in Settings."
+            }
         }
         AppAnalytics.track(granted ? "healthkit_permission_completed" : "healthkit_permission_failed")
         return granted
@@ -11435,17 +11451,107 @@ struct ContentView: View {
             return .ok
         }
 
+        private func pillSeverityRank(_ severity: StatusPill.Severity) -> Int {
+            switch severity {
+            case .ok:
+                return 0
+            case .warn:
+                return 1
+            case .alert:
+                return 2
+            }
+        }
+
+        private func strongestPillSeverity(_ lhs: StatusPill.Severity, _ rhs: StatusPill.Severity) -> StatusPill.Severity {
+            pillSeverityRank(lhs) >= pillSeverityRank(rhs) ? lhs : rhs
+        }
+
+        private func alertPillCanonicalKey(id: String, title: String) -> String {
+            let source = "\(id) \(title)"
+                .lowercased()
+                .replacingOccurrences(of: "-", with: " ")
+                .replacingOccurrences(of: "_", with: " ")
+            if source.contains("allergen") || source.contains("pollen") {
+                return "allergens"
+            }
+            if source.contains("temperature") || source.contains("temp swing") || source.contains("temp 24") {
+                return "temperature_swing"
+            }
+            if source.contains("pressure") || source.contains("barometric") {
+                return "pressure_swing"
+            }
+            if source.contains("schumann") || source.contains("resonance") {
+                return "schumann"
+            }
+            if source.contains("solar wind") || source.contains("solarwind") {
+                return "solar_wind"
+            }
+            if source.contains("geomagnetic") || source.contains("kp") {
+                return "kp"
+            }
+            if source.contains("bz") {
+                return "bz"
+            }
+            if source.contains("cme") {
+                return "cme"
+            }
+            if source.contains("aqi") || source.contains("air quality") {
+                return "aqi"
+            }
+            if source.contains("humidity") {
+                return "humidity"
+            }
+
+            let withoutParenthetical = title
+                .lowercased()
+                .replacingOccurrences(of: "\\([^)]*\\)", with: "", options: .regularExpression)
+            let tokens = withoutParenthetical
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { !$0.isEmpty }
+            return tokens.isEmpty ? title.lowercased() : tokens.joined(separator: "_")
+        }
+
+        private func preferredAlertPillTitle(id: String, title: String) -> String {
+            let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            switch alertPillCanonicalKey(id: id, title: trimmed) {
+            case "allergens":
+                return "Allergens"
+            case "temperature_swing":
+                return "Temperature Swing"
+            case "pressure_swing":
+                return "Pressure Swing"
+            default:
+                let withoutParenthetical = trimmed
+                    .replacingOccurrences(of: "\\s*\\([^)]*\\)", with: "", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return withoutParenthetical.isEmpty ? trimmed : withoutParenthetical
+            }
+        }
+
         private func alertPillItems(limit: Int?) -> [AlertPillItem] {
-            var seen = Set<String>()
+            var indexByKey: [String: Int] = [:]
             var items: [AlertPillItem] = []
 
             func append(id: String, title: String?, rawSeverity: String?) {
-                let cleanTitle = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !cleanTitle.isEmpty else { return }
-                let key = cleanTitle.lowercased()
-                guard !seen.contains(key) else { return }
-                seen.insert(key)
-                items.append(AlertPillItem(id: id, title: cleanTitle, severity: pillSeverity(rawSeverity)))
+                let rawTitle = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !rawTitle.isEmpty else { return }
+                let canonicalKey = alertPillCanonicalKey(id: id, title: rawTitle)
+                let cleanTitle = preferredAlertPillTitle(id: id, title: rawTitle)
+                let severity = pillSeverity(rawSeverity)
+
+                if let index = indexByKey[canonicalKey] {
+                    let existing = items[index]
+                    let title = cleanTitle.count < existing.title.count ? cleanTitle : existing.title
+                    items[index] = AlertPillItem(
+                        id: existing.id,
+                        title: title,
+                        severity: strongestPillSeverity(existing.severity, severity)
+                    )
+                    return
+                }
+
+                indexByKey[canonicalKey] = items.count
+                items.append(AlertPillItem(id: "pill-\(canonicalKey)", title: cleanTitle, severity: severity))
             }
 
             for alert in alerts {
@@ -13323,7 +13429,7 @@ struct ContentView: View {
 
         private func driverSignalTint(_ driver: UserOutlookDriver) -> Color {
             let key = driver.key.lowercased()
-            if key.contains("kp") || key.contains("geomag") { return GaugePalette.elevated }
+            if key.contains("kp") || key.contains("geomag") { return Color(red: 0.95, green: 0.32, blue: 0.18) }
             if key.contains("solar") || key == "sw" || key.contains("cme") || key.contains("flare") { return GaugePalette.elevated }
             if key.contains("humidity") { return GaugePalette.sky }
             if key.contains("pollen") || key.contains("allergen") { return GaugePalette.low }
@@ -16991,7 +17097,8 @@ struct ContentView: View {
                 async let g: Void = fetchDailyCheckInStatus(api: api)
                 async let notice: Void = fetchAppNotice()
                 async let homeFeed: Void = fetchHomeFeed()
-                _ = await (n, e, f, g, notice, homeFeed)
+                async let healthEvidence: Void = state.refreshHealthReadAccessEvidence(reason: "initial dashboard task")
+                _ = await (n, e, f, g, notice, homeFeed, healthEvidence)
                 async let h: Void = fetchFeaturesToday(trigger: .initial, bypassGuard: true)
                 _ = await (a, b, h)
                 async let c: Void = state.flushQueuedSymptoms(api: api)
@@ -17098,8 +17205,9 @@ struct ContentView: View {
                             }
                             async let dashboardRefresh: Void = fetchDashboardPayload(force: dashboardNeedsForegroundRefresh())
                             async let healthKick: Void = HealthKitBackgroundSync.shared.kickOnce(reason: "became active")
+                            async let healthEvidenceRefresh: Void = state.refreshHealthReadAccessEvidence(reason: "became active")
                             async let homeFeedRefresh: Void = fetchHomeFeed()
-                            _ = await (dashboardRefresh, healthKick, schumannRefresh, noticeRefresh, homeFeedRefresh)
+                            _ = await (dashboardRefresh, healthKick, healthEvidenceRefresh, schumannRefresh, noticeRefresh, homeFeedRefresh)
                         } else {
                             _ = await (schumannRefresh, noticeRefresh)
                         }
@@ -18303,6 +18411,9 @@ struct ContentView: View {
                 Text("Use Health data to improve sleep, heart-rate, recovery, and pattern context. Gaia only reads the domains it can actually use.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+                Text("Health read access is managed in Apple Health, not the normal iPhone app settings page. If a category is off or the request sheet does not appear, open Apple Health > Sharing > Apps > Gaia Eyes and enable the categories there.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
 
                 Button {
                     Task { _ = await requestHealthPermissionsForOnboarding() }
@@ -18330,7 +18441,7 @@ struct ContentView: View {
                 .disabled(backfillInFlight)
 
                 if let requested = experienceProfile.healthkitRequestedAt, let updated = formatUpdated(requested) {
-                    Text("Health permissions last requested \(updated). Reconnect any time if you want richer body context.")
+                    Text("Health access last requested \(updated). Apple does not let apps read exact per-category permission switches, so Gaia checks for new readable data instead.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -21574,72 +21685,41 @@ struct ContentView: View {
 
         var body: some View {
             let cleanError = ContentView.scrubError(error)
-            let accent = GaugePalette.contextAccent("earthquakes seismic")
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    Image(systemName: "waveform.path")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundColor(accent)
-                        .frame(width: 32, height: 32)
-                        .background(accent.opacity(0.16), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Earthquakes")
-                            .font(.headline.weight(.semibold))
-                        Text(summaryText())
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(summaryText())
+                        .font(.subheadline)
+                    if let error = cleanError, !error.isEmpty {
+                        Text(error)
+                            .font(.caption2)
+                            .foregroundColor(.orange)
                     }
-                    Spacer(minLength: 0)
-                }
-
-                if let error = cleanError, !error.isEmpty {
-                    Text(error)
-                        .font(.caption2)
-                        .foregroundColor(.orange)
-                }
-
-                if !events.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(events.prefix(4).enumerated()), id: \.offset) { _, event in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("M\(event.mag.map { String(format: "%.1f", $0) } ?? "—") • \(event.place ?? "Unknown location")")
-                                    .font(.caption.weight(.semibold))
-                                if let t = shortTime(event.timeUtc) {
-                                    Text(t)
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
+                    if !events.isEmpty {
+                        Divider()
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(Array(events.prefix(4).enumerated()), id: \.offset) { _, event in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("M\(event.mag.map { String(format: "%.1f", $0) } ?? "—") • \(event.place ?? "Unknown location")")
+                                        .font(.caption)
+                                    if let t = shortTime(event.timeUtc) {
+                                        Text(t)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
                             }
-                            .padding(10)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                     }
+                    NavigationLink("View details") {
+                        EarthquakesDetailView(latest: latest, events: events, error: error)
+                    }
+                    .font(.caption)
+                    .underline()
                 }
-
-                NavigationLink("View details") {
-                    EarthquakesDetailView(latest: latest, events: events, error: error)
-                }
-                .font(.caption.weight(.semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } label: {
+                Label("Earthquakes", systemImage: "waveform.path")
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                GaugePalette.softCardGradient(
-                    accent: accent,
-                    highlightOpacity: 0.12,
-                    baseOpacity: 0.05,
-                    shadowOpacity: 0.18
-                ),
-                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(accent.opacity(0.22), lineWidth: 1)
-            )
-            .shadow(color: accent.opacity(0.10), radius: 12, x: 0, y: 0)
         }
     }
 

@@ -283,6 +283,8 @@ final class HealthKitBackgroundSync {
         setDiagnosticsDate(latest.endDate, prefix: "last_sample", metric: metric)
         let sourceName = latest.sourceRevision.source.name.trimmingCharacters(in: .whitespacesAndNewlines)
         setDiagnosticsValue(sourceName.isEmpty ? nil : sourceName, prefix: "last_source", metric: metric)
+        UserDefaults.standard.set(ISO8601DateFormatter().string(from: Date()), forKey: "gaia.healthkit.read_verified_at")
+        UserDefaults.standard.removeObject(forKey: "gaia.healthkit.read_unavailable_at")
     }
 
     // Types

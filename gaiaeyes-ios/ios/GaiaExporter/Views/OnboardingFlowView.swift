@@ -891,6 +891,10 @@ struct OnboardingFlowView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
+                Text("These checkboxes choose what Gaia asks iOS for. Apple Health still controls the final read toggles.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 VStack(spacing: 12) {
                     ForEach(HealthPermissionOption.allCases) { option in
                         Button {

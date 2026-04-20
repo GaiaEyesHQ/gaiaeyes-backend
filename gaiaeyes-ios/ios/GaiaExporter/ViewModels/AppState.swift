@@ -171,6 +171,8 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     @Published var ecgNote: String?
     private var hrPausedForECG: Bool = false
     @AppStorage("gaia.healthkit.requested_at") var healthkitRequestedAtISO: String = ""
+    @AppStorage("gaia.healthkit.read_verified_at") var healthkitReadVerifiedAtISO: String = ""
+    @AppStorage("gaia.healthkit.read_unavailable_at") var healthkitReadUnavailableAtISO: String = ""
     @AppStorage("gaia.healthkit.last_backfill_at") var lastHealthBackfillAtISO: String = ""
 
     // Periodic status refresh (e.g., surface BG timestamps)
@@ -502,6 +504,9 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             append("❌ No Health metrics selected. Choose at least one item or skip for now.")
             return false
         }
+        if let requestStatus = await healthReadAuthorizationRequestStatus(toRead) {
+            appLog("[HK] Health request status before prompt: \(healthAuthorizationRequestStatusLabel(requestStatus))")
+        }
         do {
             let completed = try await requestHealthReadAuthorization(toRead)
             guard completed else {
@@ -510,6 +515,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             }
             append("✅ Health permission request completed")
             append("Open Apple Health > Sharing > Apps > Gaia Eyes if iOS still shows categories off.")
+            appLog("[HK] Health permission request finished")
             // Register observers and do a one-time sweep
             do {
                 try HealthKitBackgroundSync.shared.registerObservers()
@@ -518,11 +524,86 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
                 append("❌ Observer registration failed: \(error.localizedDescription)")
             }
             await HealthKitBackgroundSync.shared.ensurePhase2RecentBackfillIfNeeded()
-            await HealthKitBackgroundSync.shared.kickOnce(reason: "permissions granted")
+            await HealthKitBackgroundSync.shared.kickOnce(reason: "health permissions requested")
+            await refreshHealthReadAccessEvidence(reason: "permission request")
             return true
         } catch {
             append("❌ Health permission error: \(error.localizedDescription)")
             return false
+        }
+    }
+
+    @MainActor func refreshHealthReadAccessEvidence(reason: String) async {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        guard !selectedHealthPermissionKeys.isEmpty else {
+            healthkitReadUnavailableAtISO = ""
+            return
+        }
+        let toRead = makeHealthReadTypes()
+        guard !toRead.isEmpty else { return }
+        guard hasHistoricalHealthReadEvidence() else { return }
+
+        let readableCount = await readableHealthSampleTypeCount(toRead)
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        appLog("[HK] read evidence probe reason=\(reason) readable=\(readableCount)/\(toRead.count)")
+        if readableCount > 0 {
+            healthkitReadVerifiedAtISO = stamp
+            healthkitReadUnavailableAtISO = ""
+        } else {
+            healthkitReadUnavailableAtISO = stamp
+            appLog("[HK] Health read access appears unavailable after prior readable data")
+        }
+    }
+
+    private func hasHistoricalHealthReadEvidence() -> Bool {
+        if !healthkitReadVerifiedAtISO.isEmpty { return true }
+        let defaults = UserDefaults.standard
+        let metrics = ["heart_rate", "sleep_stage", "hrv_sdnn", "spo2", "respiratory_rate", "resting_heart_rate", "step_count"]
+        return metrics.contains { metric in
+            defaults.string(forKey: "gaia.hk.last_sample.\(metric)") != nil
+            || defaults.string(forKey: "gaia.hk.last_source.\(metric)") != nil
+        }
+    }
+
+    private func readableHealthSampleTypeCount(_ toRead: Set<HKObjectType>) async -> Int {
+        let sampleTypes = toRead.compactMap { $0 as? HKSampleType }
+        guard !sampleTypes.isEmpty else { return 0 }
+        var readable = 0
+        for type in sampleTypes {
+            if await hasReadableHealthSample(type: type) {
+                readable += 1
+            }
+        }
+        return readable
+    }
+
+    private func hasReadableHealthSample(type: HKSampleType) async -> Bool {
+        await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: nil, limit: 1, sortDescriptors: nil) { _, samples, _ in
+                continuation.resume(returning: !(samples?.isEmpty ?? true))
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    private func healthReadAuthorizationRequestStatus(_ toRead: Set<HKObjectType>) async -> HKAuthorizationRequestStatus? {
+        await withCheckedContinuation { continuation in
+            healthStore.getRequestStatusForAuthorization(toShare: [], read: toRead) { status, error in
+                continuation.resume(returning: error == nil ? status : nil)
+            }
+        }
+    }
+
+    private func healthAuthorizationRequestStatusLabel(_ status: HKAuthorizationRequestStatus) -> String {
+        switch status {
+        case .shouldRequest:
+            return "permission sheet should appear"
+        case .unnecessary:
+            return "already decided by iOS"
+        case .unknown:
+            return "unknown"
+        @unknown default:
+            return "unknown"
         }
     }
 

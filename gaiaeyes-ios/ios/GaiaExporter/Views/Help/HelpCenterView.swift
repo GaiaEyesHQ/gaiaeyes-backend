@@ -432,7 +432,9 @@ struct HelpArticleView: View {
                 .buttonStyle(.plain)
             }
 
-            systemSettingsAction(title: "Open iPhone Settings", systemImage: "gear")
+            Text("Health category toggles live in Apple Health > Sharing > Apps > Gaia Eyes, not the normal iPhone app settings page.")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
 
         if billingActionArticleIDs.contains(article.id) {
@@ -463,18 +465,6 @@ struct HelpArticleView: View {
         }
     }
 
-    @ViewBuilder
-    private func systemSettingsAction(title: String, systemImage: String) -> some View {
-#if canImport(UIKit)
-        Button {
-            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-            openURL(url)
-        } label: {
-            HelpActionLabel(title: title, systemImage: systemImage)
-        }
-        .buttonStyle(.plain)
-#endif
-    }
 }
 
 private struct HelpCategoryCard: View {
