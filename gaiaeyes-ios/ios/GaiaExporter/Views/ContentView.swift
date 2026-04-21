@@ -818,9 +818,19 @@ private struct SignalBarSchumannLatestAmplitude: Codable {
 
 private struct SignalBarSchumannLatestFusion: Codable {
     let displayF0Hz: Double?
+    let coherence: SignalBarSchumannFusionCoherence?
 
     private enum CodingKeys: String, CodingKey {
         case displayF0Hz = "display_f0_hz"
+        case coherence
+    }
+}
+
+private struct SignalBarSchumannFusionCoherence: Codable {
+    let q1Value: Double?
+
+    private enum CodingKeys: String, CodingKey {
+        case q1Value = "q1_value"
     }
 }
 
@@ -847,6 +857,7 @@ private struct SignalBarSchumannTomskLatestEnvelope: Decodable {
     let frequencyHz: [String: Double]?
     let amplitude: [String: Double]?
     let qFactor: [String: Double]?
+    let coherence: SignalBarSchumannFusionCoherence?
 
     private enum CodingKeys: String, CodingKey {
         case generatedAt = "generated_at"
@@ -856,6 +867,7 @@ private struct SignalBarSchumannTomskLatestEnvelope: Decodable {
         case amplitude
         case amplitudeIdx = "amplitude_idx"
         case qFactor = "q_factor"
+        case coherence
     }
 
     init(from decoder: Decoder) throws {
@@ -866,6 +878,7 @@ private struct SignalBarSchumannTomskLatestEnvelope: Decodable {
         frequencyHz = Self.decodeNumericMap(container, forKey: .frequencyHz)
         amplitude = Self.decodeNumericMap(container, forKey: .amplitude) ?? Self.decodeNumericMap(container, forKey: .amplitudeIdx)
         qFactor = Self.decodeNumericMap(container, forKey: .qFactor)
+        coherence = try? container.decodeIfPresent(SignalBarSchumannFusionCoherence.self, forKey: .coherence)
     }
 
     private static func decodeNumericMap(
@@ -2696,7 +2709,7 @@ private struct LaunchDebugToolkitPanel: View {
 
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("HealthKit does not expose exact per-type read permission status after the prompt. This section shows selected metrics plus observed read/sync evidence; verify final toggles in Apple Health.")
+                    Text("Read access is the permission signal. Delivery monitor only means Gaia registered HealthKit observers/background delivery; it can be registered even when Apple Health read toggles are off.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                     ForEach(healthItems) { item in
@@ -2705,18 +2718,23 @@ private struct LaunchDebugToolkitPanel: View {
                                 Text(item.title)
                                     .font(.subheadline.weight(.semibold))
                                 Spacer()
-                                statusBadge(item.backgroundDeliveryStatus, state: badgeState(for: item.backgroundDeliveryStatus))
+                                HStack(spacing: 6) {
+                                    Text("Delivery monitor")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                    statusBadge(item.backgroundDeliveryStatus, state: badgeState(for: item.backgroundDeliveryStatus))
+                                }
                             }
-                            Text("Read evidence: \(item.permissionStatus)")
+                            Text("Read access: \(item.permissionStatus)")
                                 .font(.caption)
                             Text("Observer: \(formatted(item.lastObserverAt)) • Anchor: \(formatted(item.lastAnchorAt))")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
-                            Text("Last sample: \(formatted(item.lastSampleAt)) • Source: \(item.sourceHint ?? "—")")
+                            Text(sampleEvidenceLine(for: item))
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                             if let derivedAt = item.derivedAt {
-                                Text("Derived / mart: \(formatted(derivedAt)) • Source: \(item.derivedSource ?? "—")")
+                                Text("\(historicalEvidencePrefix(for: item)) derived / mart: \(formatted(derivedAt)) • Source: \(item.derivedSource ?? "—")")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
@@ -2862,9 +2880,17 @@ private struct LaunchDebugToolkitPanel: View {
         return "\(hours / 24)d"
     }
 
+    private func historicalEvidencePrefix(for item: DebugHealthMetricItem) -> String {
+        item.permissionStatus.lowercased().contains("off in apple health") ? "Historical" : "Latest"
+    }
+
+    private func sampleEvidenceLine(for item: DebugHealthMetricItem) -> String {
+        "\(historicalEvidencePrefix(for: item)) sample: \(formatted(item.lastSampleAt)) • Source: \(item.sourceHint ?? "—")"
+    }
+
     private func badgeState(for value: String) -> DebugFreshnessState {
         switch value.lowercased() {
-        case "enabled", "authorized":
+        case "enabled", "authorized", "registered":
             return .fresh
         case "failed", "denied":
             return .stale
@@ -3103,12 +3129,14 @@ struct ContentView: View {
     @State private var dashboardLastUpdatedText: String? = nil
     @State private var liveSchumannSignalBarItem: SignalPill? = nil
     @State private var liveSchumannTomskLatest: SignalBarSchumannTomskLatestEnvelope? = nil
+    @State private var liveSchumannLatestEnvelope: SignalBarSchumannLatestEnvelope? = nil
     @AppStorage("gaia.signal_bar.pressure_value") private var signalBarPressureValueCache: String = ""
     @State private var selectedTab: AppTab = .home
     @State private var showGuideSheet: Bool = false
     @State private var guideHubFocus: GuideHubFocus = .overview
     @State private var showMissionSettingsSheet: Bool = false
     @State private var showMissionInsightsSheet: Bool = false
+    @State private var insightsHubFetchInFlight: Bool = false
     @State private var missionInsightsPath: [InsightsRoute] = []
     @State private var bodyPath: [InsightsRoute] = []
     @State private var explorePath: [InsightsRoute] = []
@@ -3466,6 +3494,18 @@ struct ContentView: View {
     private var missionDriverPreviewItems: [DashboardDriverItem] {
         let items = effectiveMissionDriversPreview?.drivers ?? []
         return items.map(missionDashboardDriverItem(from:))
+    }
+
+    private var localContextDriverItems: [DashboardDriverItem] {
+        var output: [DashboardDriverItem] = []
+        var seen: Set<String> = []
+        for driver in (dashboardPayload?.drivers ?? []) + missionDriverPreviewItems {
+            let normalizedKey = driver.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !normalizedKey.isEmpty, !seen.contains(normalizedKey) else { continue }
+            seen.insert(normalizedKey)
+            output.append(driver)
+        }
+        return output
     }
 
     private func missionDriverPreviewNeedsRefresh(force: Bool = false) -> Bool {
@@ -4776,7 +4816,7 @@ struct ContentView: View {
         let isSelected = state.selectedHealthPermissionKeys.contains(option.rawValue)
         guard isSelected else { return "Not selected" }
         if healthReadAccessLooksDisconnected {
-            return "Likely off in Apple Health"
+            return "Read off in Apple Health"
         }
 
         let backgroundStatus = healthDiagnosticsValue(prefix: "bg_delivery_status", metric: metric)?.lowercased()
@@ -4810,6 +4850,20 @@ struct ContentView: View {
         return "Not requested"
     }
 
+    private func healthDeliveryMonitorStatus(for metric: String) -> String {
+        let rawStatus = healthDiagnosticsValue(prefix: "bg_delivery_status", metric: metric)?.lowercased() ?? ""
+        switch rawStatus {
+        case "enabled":
+            return "Registered"
+        case "failed":
+            return "Failed"
+        case "skipped":
+            return "Skipped"
+        default:
+            return "Unknown"
+        }
+    }
+
     private func makeFreshnessItem(
         id: String,
         title: String,
@@ -4839,14 +4893,13 @@ struct ContentView: View {
             ("respiratory_rate", "Respiratory rate", .respiratoryRate),
         ]
         return specs.map { metric, title, option in
-            let backgroundStatus = healthDiagnosticsValue(prefix: "bg_delivery_status", metric: metric)?.capitalized ?? "Unknown"
             let sourceHint = healthDiagnosticsValue(prefix: "last_source", metric: metric)
             let derivedAt = debugMartBackedMetricDate(for: metric)
             return DebugHealthMetricItem(
                 id: metric,
                 title: title,
                 permissionStatus: healthPermissionStatus(for: option, metric: metric),
-                backgroundDeliveryStatus: backgroundStatus,
+                backgroundDeliveryStatus: healthDeliveryMonitorStatus(for: metric),
                 lastObserverAt: healthDiagnosticsDate(prefix: "observer_event", metric: metric),
                 lastAnchorAt: healthDiagnosticsDate(prefix: "anchor_advanced", metric: metric),
                 lastSampleAt: healthDiagnosticsDate(prefix: "last_sample", metric: metric),
@@ -5118,7 +5171,7 @@ struct ContentView: View {
         }.count
         let healthConnected: String = {
             if healthReadAccessLooksDisconnected {
-                return "Likely off in Apple Health"
+                return "Read off in Apple Health"
             }
             if authorizedCount > 0 {
                 return "Selected (\(authorizedCount) types; verify in Health)"
@@ -5349,9 +5402,10 @@ struct ContentView: View {
         lines.append("")
         lines.append("Health Sync:")
         for item in healthItems {
-            var line = "- \(item.title): read evidence \(item.permissionStatus) | bg \(item.backgroundDeliveryStatus) | observer \(debugFormattedDate(item.lastObserverAt)) | anchor \(debugFormattedDate(item.lastAnchorAt)) | sample \(debugFormattedDate(item.lastSampleAt)) | source \(item.sourceHint ?? "—")"
+            let historicalPrefix = item.permissionStatus.lowercased().contains("off in apple health") ? "historical " : ""
+            var line = "- \(item.title): read access \(item.permissionStatus) | delivery monitor \(item.backgroundDeliveryStatus) | observer \(debugFormattedDate(item.lastObserverAt)) | anchor \(debugFormattedDate(item.lastAnchorAt)) | \(historicalPrefix)sample \(debugFormattedDate(item.lastSampleAt)) | source \(item.sourceHint ?? "—")"
             if let derivedAt = item.derivedAt {
-                line += " | derived \(debugFormattedDate(derivedAt)) | via \(item.derivedSource ?? "daily_features mart")"
+                line += " | \(historicalPrefix)derived \(debugFormattedDate(derivedAt)) | via \(item.derivedSource ?? "daily_features mart")"
             }
             lines.append(line)
         }
@@ -5947,7 +6001,7 @@ struct ContentView: View {
         }
     }
 
-    private func fetchUserOutlook() async {
+    private func fetchUserOutlook(api override: APIClient? = nil) async {
         let backendAvailable = await MainActor.run { state.backendDBAvailable }
         if !backendAvailable, let cached = decodeUserOutlook(from: userOutlookCacheJSON) {
             await MainActor.run { lastKnownUserOutlook = cached }
@@ -5956,7 +6010,7 @@ struct ContentView: View {
             userOutlookLoading = true
             userOutlookError = nil
         }
-        let api = state.apiWithAuth()
+        let api = override ?? state.apiWithAuth()
         do {
             let payload: UserForecastOutlook = try await api.getJSON("v1/users/me/outlook", as: UserForecastOutlook.self, perRequestTimeout: 30)
             await MainActor.run {
@@ -6350,6 +6404,7 @@ struct ContentView: View {
     }
 
     private func fetchLiveSchumannSignalBarItem(api: APIClient) async -> SignalPill? {
+        var tomskPill: SignalPill? = nil
         if let tomskEnvelope: SignalBarSchumannTomskLatestEnvelope = await bestEffortDashboardJSON(
             api: api,
             path: "v1/earth/schumann/tomsk_params/latest?station_id=tomsk",
@@ -6360,9 +6415,7 @@ struct ContentView: View {
             await MainActor.run {
                 liveSchumannTomskLatest = tomskEnvelope
             }
-            if let tomskPill = signalBarSchumannPill(from: tomskEnvelope) {
-                return tomskPill
-            }
+            tomskPill = signalBarSchumannPill(from: tomskEnvelope)
         }
 
         let latestEnvelope: SignalBarSchumannLatestEnvelope? = await bestEffortDashboardJSON(
@@ -6372,6 +6425,14 @@ struct ContentView: View {
             timeout: 5,
             label: "signal bar schumann"
         )
+        if let latestEnvelope {
+            await MainActor.run {
+                liveSchumannLatestEnvelope = latestEnvelope
+            }
+        }
+        if let tomskPill {
+            return tomskPill
+        }
         let latestPill = latestEnvelope.flatMap { signalBarSchumannPill(from: $0) }
         if latestPill?.value.localizedCaseInsensitiveContains("Hz") == true {
             return latestPill
@@ -7520,24 +7581,33 @@ struct ContentView: View {
         AppAnalytics.track("healthkit_permission_started")
         let granted = await state.requestHealthPermissions()
         let requestedAt = await MainActor.run { state.healthkitRequestedAtISO }
+        let readAccessStillOff = await MainActor.run { healthReadAccessLooksDisconnected }
         await saveProfilePreferences(UserExperienceProfileUpdate(healthkitRequested: true))
         await MainActor.run {
             if !requestedAt.isEmpty {
                 experienceProfile.healthkitRequestedAt = requestedAt
             }
-            if granted && healthReadAccessLooksDisconnected {
-                healthPermissionsMessage = "Health request completed, but reads still look off. Open Apple Health > Sharing > Apps > Gaia Eyes and confirm categories are enabled."
+            if readAccessStillOff {
+                healthPermissionsMessage = "Health request finished, but reads still look off. Open Apple Health > Sharing > Apps > Gaia Eyes and confirm categories are enabled."
             } else {
                 healthPermissionsMessage = granted
-                    ? "Health permission request completed. Gaia will use whatever Health categories are enabled."
+                    ? "Health permission request finished. Gaia will use whatever Health categories are enabled."
                     : "Gaia could not update Health access right now. You can keep going and retry later in Settings."
             }
         }
-        AppAnalytics.track(granted ? "healthkit_permission_completed" : "healthkit_permission_failed")
-        return granted
+        let accessUpdated = granted && !readAccessStillOff
+        AppAnalytics.track(accessUpdated ? "healthkit_permission_completed" : "healthkit_permission_failed")
+        return accessUpdated
     }
 
     private func runUnifiedHealthBackfill() async -> Bool {
+        if await MainActor.run(body: { healthReadAccessLooksDisconnected }) {
+            await MainActor.run {
+                backfillMessage = "Health reads look off in Apple Health. Enable Gaia Eyes in Apple Health, then retry the import."
+            }
+            AppAnalytics.track("health_backfill_failed", properties: ["window": "30d", "reason": "health_read_access_off"])
+            return false
+        }
         let alreadyRunning = await MainActor.run {
             if backfillInFlight {
                 return true
@@ -8430,7 +8500,11 @@ struct ContentView: View {
                         let todayTotal = Int(sleepTotalValue.rounded())
                         if data.day == chicagoTodayString(), todayTotal == 0, !didAutoSleepSyncToday {
                             didAutoSleepSyncToday = true
-                            appLog("[UI] today has 0 sleep — running sleep sync (2 days)…")
+                            guard !state.healthkitRequestedAtISO.isEmpty, !healthReadAccessLooksDisconnected else {
+                                appLog("[UI] today has 0 sleep — skipping auto sleep sync until Health access is connected")
+                                return
+                            }
+                            appLog("[UI] today has 0 sleep — running sleep sync (7d)…")
                             await state.syncSleep7d()
                             let delaySeconds = Double.random(in: 1.0...1.2)
                             let delayText = String(format: "%.1f", delaySeconds)
@@ -8884,18 +8958,33 @@ struct ContentView: View {
     }
 
     private func fetchInsightsHubData(trigger: FeaturesFetchTrigger = .initial) async {
+        let shouldStart = await MainActor.run { () -> Bool in
+            if insightsHubFetchInFlight {
+                appLog("[UI] insights hub refresh skipped (already in progress)")
+                return false
+            }
+            insightsHubFetchInFlight = true
+            return true
+        }
+        guard shouldStart else { return }
+        defer {
+            Task { @MainActor in
+                insightsHubFetchInFlight = false
+            }
+        }
         let api = state.apiWithAuth()
         let shouldFetchHazards = await MainActor.run { hazardsBrief == nil && !hazardsLoading }
         let shouldFetchQuakes = await MainActor.run { quakeLatest == nil && quakeEvents.isEmpty && !quakeLoading }
         async let featuresTask: Void = fetchFeaturesToday(trigger: trigger, bypassGuard: trigger == .refresh)
         async let forecastTask: Void = fetchForecastSummary(force: trigger == .refresh)
         async let outlookTask: Void = fetchSpaceOutlook(days: 7, force: trigger == .refresh)
-        async let userOutlookTask: Void = fetchUserOutlook()
+        async let userOutlookTask: Void = fetchUserOutlook(api: api)
         async let symptomsTask: Void = fetchSymptoms(api: api)
         async let currentSymptomsTask: Void = fetchCurrentSymptomsSummary(api: api)
         async let missionDriversTask: Void = fetchMissionDriversPreview(api: api, force: trigger == .refresh)
         async let localTask: Void = fetchLocalHealth()
         async let magnetosphereTask: Void = fetchMagnetosphere(force: trigger == .refresh)
+        async let schumannTask: Void = refreshLiveSchumannSignalBar(api: api)
         async let hazardsTask: Void = {
             if shouldFetchHazards {
                 await fetchHazardsBrief()
@@ -8906,7 +8995,7 @@ struct ContentView: View {
                 await fetchQuakes()
             }
         }()
-        _ = await (featuresTask, forecastTask, outlookTask, userOutlookTask, symptomsTask, currentSymptomsTask, missionDriversTask, localTask, magnetosphereTask, hazardsTask, quakesTask)
+        _ = await (featuresTask, forecastTask, outlookTask, userOutlookTask, symptomsTask, currentSymptomsTask, missionDriversTask, localTask, magnetosphereTask, schumannTask, hazardsTask, quakesTask)
     }
 
     private func fetchSpaceWeatherDetailData(force: Bool = false) async {
@@ -12408,6 +12497,7 @@ struct ContentView: View {
         let localInsightsEnabled: Bool
         let dashboardDrivers: [DashboardDriverItem]
         let schumannTomskLatest: SignalBarSchumannTomskLatestEnvelope?
+        let schumannLatestEnvelope: SignalBarSchumannLatestEnvelope?
         let magnetosphere: MagnetosphereData?
         let magnetosphereLoading: Bool
         let magnetosphereError: String?
@@ -12566,9 +12656,47 @@ struct ContentView: View {
         }
 
         private func dashboardDriver(for key: String) -> DashboardDriverItem? {
-            dashboardDrivers.first {
-                $0.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == key.lowercased()
+            switch normalizedDriverKey(key) {
+            case "aqi":
+                return dashboardDriver(matchingAny: ["aqi", "air_quality"])
+            default:
+                return dashboardDriver(matchingAny: [key])
             }
+        }
+
+        private func dashboardDriver(matchingAny keys: [String]) -> DashboardDriverItem? {
+            let normalizedCandidates = Set(keys.map(normalizedDriverKey))
+            return dashboardDrivers.first { driver in
+                let driverTokens = [
+                    driver.key,
+                    driver.label
+                ]
+                .compactMap { $0 }
+                .map(normalizedDriverKey)
+                return !normalizedCandidates.isDisjoint(with: Set(driverTokens))
+            }
+        }
+
+        private func normalizedDriverKey(_ raw: String) -> String {
+            raw
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "-", with: "_")
+                .replacingOccurrences(of: " ", with: "_")
+                .lowercased()
+        }
+
+        private func numericDriverValue(_ driver: DashboardDriverItem?) -> Double? {
+            if let value = driver?.value {
+                return value
+            }
+            guard let display = driver?.display else {
+                return nil
+            }
+            let pattern = #"-?\d+(?:\.\d+)?"#
+            guard let match = display.range(of: pattern, options: .regularExpression) else {
+                return nil
+            }
+            return Double(display[match])
         }
 
         private func normalizedPillText(_ raw: String?, fallback: String) -> String {
@@ -12576,14 +12704,15 @@ struct ContentView: View {
             return trimmed.isEmpty ? fallback : trimmed
         }
 
-        private func effectiveAQIValue(air: LocalAir?) -> Double? {
-            air?.aqi ?? dashboardDriver(for: "aqi")?.value
+        private func effectiveAQIValue(air: LocalAir?, forecastDaily: [LocalForecastDay]?) -> Double? {
+            return air?.aqi
+                ?? forecastDaily?.compactMap(\.aqiForecast).first
         }
 
         private func localConditionsPill(weather: LocalWeather?, air: LocalAir?) -> (text: String, severity: StatusPill.Severity) {
             let tempSwing = abs(weather?.tempDelta24hC ?? 0)
             let pressureSwing = abs(weather?.baroDelta24hHpa ?? 0)
-            let aqi = effectiveAQIValue(air: air) ?? 0
+            let aqi = effectiveAQIValue(air: air, forecastDaily: localHealth?.forecastDaily) ?? 0
 
             if tempSwing >= 12 || pressureSwing >= 12 || aqi >= 151 {
                 return ("Elevated", .alert)
@@ -12726,7 +12855,10 @@ struct ContentView: View {
             let pill = localConditionsPill(weather: weather, air: air)
             let tempText = LocalConditionsFormatting.formatTemperature(weather?.tempC, unit: tempUnit)
             let pressureText = LocalConditionsFormatting.formatPressureShort(weather?.pressureHpa)
-            let aqiText = LocalConditionsFormatting.formatNumber(effectiveAQIValue(air: air), decimals: 0)
+            let aqiText = LocalConditionsFormatting.formatNumber(
+                effectiveAQIValue(air: air, forecastDaily: localHealth?.forecastDaily),
+                decimals: 0
+            )
             let status: String
             if let error = ContentView.scrubError(localHealthError) {
                 status = error
@@ -12881,9 +13013,11 @@ struct ContentView: View {
 
         private var schumannCard: some View {
             let schumannDriver = dashboardDriver(for: "schumann")
-            let f1Text = tomskFrequencyText(key: "F1")
+            let tomskF1 = tomskMetricValue(schumannTomskLatest?.frequencyHz, key: "F1")
+            let tomskQ1 = tomskMetricValue(schumannTomskLatest?.qFactor, key: "Q1")
+            let f1Text = formattedSchumannHz(tomskF1 ?? fallbackSchumannExploreF1Hz)
             let a1Text = tomskMetricText(schumannTomskLatest?.amplitude, key: "A1")
-            let q1Text = tomskMetricText(schumannTomskLatest?.qFactor, key: "Q1")
+            let q1Text = formattedTomskMetric(tomskQ1 ?? schumannTomskLatest?.coherence?.q1Value ?? fallbackSchumannExploreQ1)
             let updated = updatedText ?? "recent"
             let pillText = normalizedPillText(
                 schumannDriver?.state?.capitalized,
@@ -12928,6 +13062,51 @@ struct ContentView: View {
 
         private func tomskMetricValue(_ values: [String: Double]?, key: String) -> Double? {
             values?[key] ?? values?[key.lowercased()] ?? values?[key.uppercased()]
+        }
+
+        private func normalizedExploreSchumannHz(_ value: Double?) -> Double? {
+            guard var value else { return nil }
+            while value > 40 {
+                value /= 10
+            }
+            return value
+        }
+
+        private func schumannLatestHarmonic(_ key: String) -> Double? {
+            if let value = schumannLatestEnvelope?.harmonics?[key] {
+                return value
+            }
+            if let value = schumannLatestEnvelope?.harmonics?[key.lowercased()] {
+                return value
+            }
+            if let value = schumannLatestEnvelope?.harmonics?[key.uppercased()] {
+                return value
+            }
+            return nil
+        }
+
+        private var fallbackSchumannExploreF1Hz: Double? {
+            let rawValue =
+                current?.schF1Hz?.value
+                ?? schumannLatestHarmonic("F1")
+                ?? schumannLatestEnvelope?.fusion?.displayF0Hz
+                ?? schumannLatestEnvelope?.fundamentalHz
+                ?? schumannLatestHarmonic("F0")
+            return normalizedExploreSchumannHz(rawValue)
+        }
+
+        private var fallbackSchumannExploreQ1: Double? {
+            schumannLatestEnvelope?.fusion?.coherence?.q1Value
+        }
+
+        private func formattedSchumannHz(_ value: Double?) -> String {
+            guard let value = normalizedExploreSchumannHz(value) else { return "—" }
+            return String(format: "%.2f Hz", value)
+        }
+
+        private func formattedTomskMetric(_ value: Double?) -> String {
+            guard let value else { return "—" }
+            return String(format: "%.2f", value)
         }
 
         private var healthCard: some View {
@@ -15816,9 +15995,8 @@ struct ContentView: View {
             plusUnlocked ? supportingRows : []
         }
 
-        private var hiddenStatCount: Int {
-            let hiddenHighlights = max(0, highlightStats.count - visibleHighlightStats.count)
-            return hiddenHighlights + (plusUnlocked ? 0 : supportingStats.count)
+        private var lockedCatalogStatCount: Int {
+            plusUnlocked ? 0 : max(0, TrackedStatKey.allCases.count - 2)
         }
 
         var body: some View {
@@ -15855,8 +16033,8 @@ struct ContentView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
-                            if hiddenStatCount > 0 {
-                                Text("\(hiddenStatCount) more \(hiddenStatCount == 1 ? "stat is" : "stats are") included with Plus.")
+                            if lockedCatalogStatCount > 0 {
+                                Text("Up to \(lockedCatalogStatCount) more \(lockedCatalogStatCount == 1 ? "stat is" : "stats are") included with Plus when your device provides them.")
                                     .font(.caption.weight(.semibold))
                                     .foregroundColor(GaugePalette.elevated)
                             }
@@ -16297,6 +16475,14 @@ struct ContentView: View {
             diagnostics.sorted { $0.events > $1.events }
         }
 
+        private var sleepSyncBannerText: String? {
+            guard let bannerText, !bannerText.isEmpty else {
+                return nil
+            }
+            let totalSleep = current?.sleepTotalMinutes?.value ?? 0
+            return totalSleep > 0 ? nil : bannerText
+        }
+
         private var lunarInsightMessage: String? {
             switch experienceMode {
             case .scientific:
@@ -16510,9 +16696,9 @@ struct ContentView: View {
                             )
                         }
 
-                        if let bannerText, !bannerText.isEmpty {
+                        if let sleepSyncBannerText {
                             LocalConditionsSurfaceCard(title: "Sleep Sync", icon: "clock.arrow.circlepath") {
-                                Text(bannerText)
+                                Text(sleepSyncBannerText)
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
@@ -17132,7 +17318,9 @@ struct ContentView: View {
                 _ = await (c, d)
             }
             .onAppear {
+                let hadOnboardingOpen = showOnboardingFlow
                 auth.loadFromKeychain()
+                let hasStoredAuthSession = auth.currentSupabaseUserId()?.isEmpty == false || auth.supabaseAccessToken?.isEmpty == false
                 handleAuthScopeChangeIfNeeded()
                 state.refreshStatus()
                 if features == nil, let cached = decodeCachedFeatures() {
@@ -17182,7 +17370,12 @@ struct ContentView: View {
                     }
                     appLog("[UI] preloaded mission drivers preview from persisted snapshot")
                 }
-                showOnboardingFlow = !onboardingCompleted
+                if hasStoredAuthSession && !hadOnboardingOpen && !onboardingCompleted {
+                    showOnboardingFlow = false
+                    appLog("[UI] onboarding presentation deferred until stored account profile loads")
+                } else {
+                    showOnboardingFlow = !onboardingCompleted
+                }
                 hydrateSymptomPresetsFromCache()
             }
             .onChange(of: auth.supabaseUserId, initial: false) { _, _ in
@@ -17775,8 +17968,9 @@ struct ContentView: View {
                 userOutlookError: userOutlookError,
                 useGPS: profileUseGPS,
                 localInsightsEnabled: profileLocalInsightsEnabled,
-                dashboardDrivers: dashboardPayload?.drivers ?? [],
+                dashboardDrivers: localContextDriverItems,
                 schumannTomskLatest: liveSchumannTomskLatest,
+                schumannLatestEnvelope: liveSchumannLatestEnvelope,
                 magnetosphere: magnetosphere,
                 magnetosphereLoading: magnetosphereLoading,
                 magnetosphereError: magnetosphereError,
@@ -17875,7 +18069,7 @@ struct ContentView: View {
             LocalConditionsView(
                 zip: localHealthZip,
                 snapshot: localHealth,
-                drivers: dashboardPayload?.drivers ?? [],
+                drivers: localContextDriverItems,
                 mode: experienceProfile.mode,
                 tone: experienceProfile.tone,
                 tempUnit: experienceProfile.tempUnit,
@@ -19237,8 +19431,9 @@ struct ContentView: View {
                     userOutlookError: userOutlookError,
                     useGPS: profileUseGPS,
                     localInsightsEnabled: profileLocalInsightsEnabled,
-                    dashboardDrivers: dashboardPayload?.drivers ?? [],
+                    dashboardDrivers: localContextDriverItems,
                     schumannTomskLatest: liveSchumannTomskLatest,
+                    schumannLatestEnvelope: liveSchumannLatestEnvelope,
                     magnetosphere: magnetosphere,
                     magnetosphereLoading: magnetosphereLoading,
                     magnetosphereError: magnetosphereError,
@@ -19311,7 +19506,7 @@ struct ContentView: View {
                         LocalConditionsView(
                             zip: localHealthZip,
                             snapshot: localHealth,
-                            drivers: dashboardPayload?.drivers ?? [],
+                            drivers: localContextDriverItems,
                             mode: experienceProfile.mode,
                             tone: experienceProfile.tone,
                             tempUnit: experienceProfile.tempUnit,
@@ -19482,7 +19677,7 @@ struct ContentView: View {
                 LocalConditionsView(
                     zip: localHealthZip,
                     snapshot: localHealth,
-                    drivers: dashboardPayload?.drivers ?? [],
+                    drivers: localContextDriverItems,
                     mode: experienceProfile.mode,
                     tone: experienceProfile.tone,
                     tempUnit: experienceProfile.tempUnit,
@@ -19579,6 +19774,7 @@ struct ContentView: View {
                 pushPermissionGranted: pushPermissionGranted,
                 pushDeviceTokenReady: pushDeviceToken != nil,
                 healthPermissionsMessage: healthPermissionsMessage,
+                healthReadAccessUnavailable: healthReadAccessLooksDisconnected,
                 backfillMessage: backfillMessage,
                 backfillInFlight: backfillInFlight,
                 accountEmail: auth.supabaseEmail,
@@ -22387,15 +22583,60 @@ struct ContentView: View {
         }
 
         private func driver(for key: String) -> DashboardDriverItem? {
-            drivers.first { $0.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == key.lowercased() }
+            switch normalizedDriverKey(key) {
+            case "aqi":
+                return driver(matchingAny: ["aqi", "air_quality"])
+            default:
+                return driver(matchingAny: [key])
+            }
         }
 
-        private func effectiveAQIValue(air: LocalAir?) -> Double? {
-            air?.aqi ?? driver(for: "aqi")?.value
+        private func driver(matchingAny keys: [String]) -> DashboardDriverItem? {
+            let normalizedCandidates = Set(keys.map(normalizedDriverKey))
+            return drivers.first { driver in
+                let driverTokens = [
+                    driver.key,
+                    driver.label
+                ]
+                .compactMap { $0 }
+                .map(normalizedDriverKey)
+                return !normalizedCandidates.isDisjoint(with: Set(driverTokens))
+            }
+        }
+
+        private func normalizedDriverKey(_ raw: String) -> String {
+            raw
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "-", with: "_")
+                .replacingOccurrences(of: " ", with: "_")
+                .lowercased()
+        }
+
+        private func numericDriverValue(_ driver: DashboardDriverItem?) -> Double? {
+            if let value = driver?.value {
+                return value
+            }
+            guard let display = driver?.display else {
+                return nil
+            }
+            let pattern = #"-?\d+(?:\.\d+)?"#
+            guard let match = display.range(of: pattern, options: .regularExpression) else {
+                return nil
+            }
+            return Double(display[match])
+        }
+
+        private func effectiveAQIValue(air: LocalAir?, forecastDaily: [LocalForecastDay]?) -> Double? {
+            return air?.aqi
+                ?? forecastDaily?.compactMap(\.aqiForecast).first
         }
 
         private func formattedDriverValue(_ driver: DashboardDriverItem) -> String? {
-            guard let value = driver.value else { return nil }
+            if let display = driver.display?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !display.isEmpty {
+                return display
+            }
+            guard let value = numericDriverValue(driver) else { return nil }
             let unit = (driver.unit ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             switch driver.key.lowercased() {
             case "aqi", "sw":
@@ -22504,7 +22745,7 @@ struct ContentView: View {
         }
 
         private func airQualityStatus(air: LocalAir?) -> LocalConditionsDriverStatus {
-            let aqi = effectiveAQIValue(air: air)
+            let aqi = effectiveAQIValue(air: air, forecastDaily: snapshot?.forecastDaily)
             let severity: String
             if let aqi, aqi >= 151 {
                 severity = "high"
@@ -22843,7 +23084,7 @@ struct ContentView: View {
                         }
 
                         LocalConditionsSurfaceCard(title: "Air Quality", icon: "wind") {
-                            let displayedAQI = effectiveAQIValue(air: air)
+                            let displayedAQI = effectiveAQIValue(air: air, forecastDaily: snapshot?.forecastDaily)
                             HStack(alignment: .top, spacing: 12) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(LocalConditionsFormatting.formatNumber(displayedAQI, decimals: 0))
@@ -23065,7 +23306,7 @@ struct ContentView: View {
             }
             .task(id: snapshot?.asof ?? zip) {
                 guard snapshot != nil,
-                      effectiveAQIValue(air: snapshot?.air) == nil,
+                      effectiveAQIValue(air: snapshot?.air, forecastDaily: snapshot?.forecastDaily) == nil,
                       !isLoading,
                       attemptedMissingAQIRefresh == false else {
                     return

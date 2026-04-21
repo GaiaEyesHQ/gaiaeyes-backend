@@ -233,6 +233,7 @@ struct OnboardingFlowView: View {
     let pushPermissionGranted: Bool
     let pushDeviceTokenReady: Bool
     let healthPermissionsMessage: String?
+    let healthReadAccessUnavailable: Bool
     let backfillMessage: String?
     let backfillInFlight: Bool
     let accountEmail: String?
@@ -256,6 +257,10 @@ struct OnboardingFlowView: View {
 
     private var copy: OnboardingFlowCopy {
         OnboardingFlowCopy.resolve(mode: profile.mode, tone: profile.tone)
+    }
+
+    private var healthImportAvailable: Bool {
+        healthPermissionGrantedThisSession || (profile.healthkitRequestedAt != nil && !healthReadAccessUnavailable)
     }
 
     private var progressLabel: String {
@@ -959,10 +964,11 @@ struct OnboardingFlowView: View {
                             healthPermissionGrantedThisSession = granted
                             await onPersistExperience(
                                 UserExperienceProfileUpdate(
-                                    onboardingStep: .backfill,
                                     healthkitRequested: true
                                 )
                             )
+                            guard granted else { return }
+                            await onPersistExperience(UserExperienceProfileUpdate(onboardingStep: .backfill))
                             currentStep = .backfill
                         }
                     }
@@ -983,14 +989,18 @@ struct OnboardingFlowView: View {
                     .font(.headline)
                     .foregroundStyle(.secondary)
 
-                Text(healthPermissionGrantedThisSession || profile.healthkitRequestedAt != nil
+                Text(healthImportAvailable
                      ? "Gaia will try to import every HealthKit signal you allowed."
                      : "You can keep going without a backfill. Gaia will still show useful live conditions today.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                if healthPermissionGrantedThisSession || profile.healthkitRequestedAt != nil {
+                if healthImportAvailable {
                     Text("If Health data does not appear right away, open Apple Health and your wearable app once so they can finish syncing, then return to Gaia.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else if healthReadAccessUnavailable {
+                    Text("Health reads still look off in Apple Health, so Gaia will skip import until access is enabled.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -1017,8 +1027,8 @@ struct OnboardingFlowView: View {
                             let completed = await onRunBackfill()
                             if completed {
                                 await onPersistExperience(UserExperienceProfileUpdate(onboardingStep: .notifications))
+                                currentStep = .notifications
                             }
-                            currentStep = .notifications
                         }
                     } label: {
                         HStack {
@@ -1030,7 +1040,7 @@ struct OnboardingFlowView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(backfillInFlight)
+                    .disabled(backfillInFlight || !healthImportAvailable)
                     .tint(Color(red: 0.51, green: 0.82, blue: 0.97))
                 }
             }

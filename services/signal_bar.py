@@ -216,10 +216,8 @@ def _solar_wind_state(speed: Optional[float]) -> str:
         return "quiet"
     if speed >= 700.0:
         return "strong"
-    if speed >= 650.0:
+    if speed >= 500.0:
         return "elevated"
-    if speed >= 550.0:
-        return "watch"
     return "quiet"
 
 

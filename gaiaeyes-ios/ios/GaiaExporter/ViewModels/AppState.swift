@@ -146,7 +146,11 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         }
         return types
     }
-    private lazy var ble = BleManager()
+    private lazy var ble: BleManager = {
+        let manager = BleManager()
+        manager.delegate = self
+        return manager
+    }()
     @Published var bleDevices: [CBPeripheral] = []
     @Published var bleConnected: CBPeripheral?
     @Published var bleAutoUpload: Bool = true
@@ -162,7 +166,11 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     private var bleReconnectUntil: Date?
 
     // MARK: - Polar
-    private lazy var polar = PolarManager()
+    private lazy var polar: PolarManager = {
+        let manager = PolarManager()
+        manager.delegate = self
+        return manager
+    }()
     @AppStorage("polarDeviceId") var polarDeviceId: String = ""   // short ID like 05A2BB3A
     @Published var polarConnectedId: String?
     @Published var polarDeviceName: String?
@@ -216,8 +224,6 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
 
         selectedHealthPermissionKeys = Self.deserializeHealthPermissionKeys(selectedHealthPermissionKeysRaw)
 
-        ble.delegate = self
-        polar.delegate = self
         // Refresh visible status + /health flag periodically
         statusTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -281,11 +287,14 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     }
 
     private func effectiveDeveloperUserId() -> String? {
-        guard isDeveloperBearer else { return nil }
-        let trimmedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedUserId.isEmpty || trimmedUserId.lowercased() == "anonymous" {
-            return nil
-        }
+        effectiveDeveloperUserId(
+            isDeveloperBearer: isDeveloperBearer,
+            trimmedUserId: userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
+
+    private func effectiveDeveloperUserId(isDeveloperBearer: Bool, trimmedUserId: String) -> String? {
+        guard isDeveloperBearer, !Self.developerUserIdLooksMissing(trimmedUserId) else { return nil }
         return trimmedUserId
     }
 
@@ -343,6 +352,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         let supabaseBearer = AuthManager.shared.supabaseAccessToken?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let trimmedBearer = supabaseBearer.isEmpty ? storedBearer : supabaseBearer
         let trimmedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let storedBearerIsDeveloper = supabaseBearer.isEmpty && Self.isDeveloperBearerString(storedBearer)
         let normalizedBase = trimmedBase.isEmpty ? "http://127.0.0.1:8000" : trimmedBase
         let clientSignature = "\(normalizedBase)|\(trimmedBearer)"
         let cfg = APIConfig(baseURLString: trimmedBase.isEmpty ? "http://127.0.0.1:8000" : trimmedBase,
@@ -358,7 +368,8 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             append("[NET] client ready base=\(cfg.baseURLString) bearer=\(!trimmedBearer.isEmpty) uid=\(trimmedUserId.isEmpty ? "nil" : trimmedUserId)")
         }
         // Scope only developer-token calls. Supabase JWTs are already account-scoped.
-        if supabaseBearer.isEmpty, let eff = effectiveDeveloperUserId() {
+        if supabaseBearer.isEmpty,
+           let eff = effectiveDeveloperUserId(isDeveloperBearer: storedBearerIsDeveloper, trimmedUserId: trimmedUserId) {
             client.devUserId = eff
         } else {
             client.devUserId = nil
@@ -370,7 +381,10 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             await AuthManager.shared.forceRefreshAccessToken()
         }
         client.logger = { [weak self] msg in Task { @MainActor in self?.append("[NET] \(msg)") } }
-        if developerCredentialsAreMissingUserId && !warnedAboutAnonymousDevRequest {
+        if supabaseBearer.isEmpty,
+           storedBearerIsDeveloper,
+           Self.developerUserIdLooksMissing(trimmedUserId),
+           !warnedAboutAnonymousDevRequest {
             append("⚠️ Developer bearer requests need X-Dev-UserId; tap ‘Use Developer Credentials’ in Connection Settings.")
             warnedAboutAnonymousDevRequest = true
         }
@@ -386,14 +400,25 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     }
 
     var isDeveloperBearer: Bool {
-        let trimmed = bearer.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return trimmed == DeveloperAuthDefaults.bearer.lowercased() || trimmed.contains("gaia-dev")
+        let trimmed = bearer.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Self.isDeveloperBearerString(trimmed)
     }
 
     var developerCredentialsAreMissingUserId: Bool {
         guard isDeveloperBearer else { return false }
         let trimmed = userId.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty || trimmed.lowercased() == "anonymous"
+        return Self.developerUserIdLooksMissing(trimmed)
+    }
+
+    private static let developerBearerLowercased = DeveloperAuthDefaults.bearer.lowercased()
+
+    private static func isDeveloperBearerString(_ trimmedBearer: String) -> Bool {
+        let lowered = trimmedBearer.lowercased()
+        return lowered == developerBearerLowercased || lowered.contains("gaia-dev")
+    }
+
+    private static func developerUserIdLooksMissing(_ trimmedUserId: String) -> Bool {
+        trimmedUserId.isEmpty || trimmedUserId.lowercased() == "anonymous"
     }
 
     // MARK: - Symptoms upload helper (uses raw URLSession)
@@ -506,15 +531,13 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         }
         if let requestStatus = await healthReadAuthorizationRequestStatus(toRead) {
             appLog("[HK] Health request status before prompt: \(healthAuthorizationRequestStatusLabel(requestStatus))")
+            if requestStatus == .unnecessary {
+                append("iOS reports these Health categories were already requested. Gaia will verify whether reads still work after the request.")
+            }
         }
         do {
-            let completed = try await requestHealthReadAuthorization(toRead)
-            guard completed else {
-                append("❌ Health permission request was not completed")
-                return false
-            }
-            append("✅ Health permission request completed")
-            append("Open Apple Health > Sharing > Apps > Gaia Eyes if iOS still shows categories off.")
+            try await healthStore.requestAuthorization(toShare: [], read: toRead)
+            append("✅ Health permission request finished")
             appLog("[HK] Health permission request finished")
             // Register observers and do a one-time sweep
             do {
@@ -526,6 +549,11 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             await HealthKitBackgroundSync.shared.ensurePhase2RecentBackfillIfNeeded()
             await HealthKitBackgroundSync.shared.kickOnce(reason: "health permissions requested")
             await refreshHealthReadAccessEvidence(reason: "permission request")
+            if !healthkitReadUnavailableAtISO.isEmpty {
+                append("⚠️ Health read access still looks off in Apple Health.")
+                append("Open Apple Health > Sharing > Apps > Gaia Eyes and confirm categories are enabled.")
+                return false
+            }
             return true
         } catch {
             append("❌ Health permission error: \(error.localizedDescription)")
@@ -599,23 +627,11 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         case .shouldRequest:
             return "permission sheet should appear"
         case .unnecessary:
-            return "already decided by iOS"
+            return "already requested for these Health types"
         case .unknown:
             return "unknown"
         @unknown default:
             return "unknown"
-        }
-    }
-
-    private func requestHealthReadAuthorization(_ toRead: Set<HKObjectType>) async throws -> Bool {
-        try await withCheckedThrowingContinuation { continuation in
-            healthStore.requestAuthorization(toShare: nil, read: toRead) { completed, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: completed)
-                }
-            }
         }
     }
 
