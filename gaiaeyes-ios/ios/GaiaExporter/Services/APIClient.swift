@@ -873,6 +873,7 @@ final class APIClient {
         let ok: Bool?
         let received: Int?
         let inserted: Int?
+        let skipped: Int?
         let buffered: Int?
         let errors: [BatchError]?
     }
@@ -1035,10 +1036,6 @@ final class APIClient {
         if let resp = try? decoder.decode(SamplesBatchResponse.self, from: data) {
             let accepted = (resp.inserted ?? 0) + (resp.buffered ?? 0)
             if accepted > 0 {
-                return true
-            }
-            let hasErrors = !(resp.errors ?? []).isEmpty
-            if resp.ok == true && !hasErrors && (resp.received ?? 0) > 0 {
                 return true
             }
             return false

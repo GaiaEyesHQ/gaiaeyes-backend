@@ -834,6 +834,19 @@ private struct SignalBarSchumannFusionCoherence: Codable {
     }
 }
 
+private struct SignalBarDynamicCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int? = nil
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+    }
+
+    init?(intValue: Int) {
+        return nil
+    }
+}
+
 private struct SignalBarSchumannLatestEnvelope: Codable {
     let generatedAt: String?
     let fundamentalHz: Double?
@@ -850,7 +863,7 @@ private struct SignalBarSchumannLatestEnvelope: Codable {
     }
 }
 
-private struct SignalBarSchumannTomskLatestEnvelope: Decodable {
+private struct SignalBarSchumannTomskLatestEnvelope: Codable {
     let generatedAt: String?
     let usable: Bool?
     let usableForFusion: Bool?
@@ -881,18 +894,44 @@ private struct SignalBarSchumannTomskLatestEnvelope: Decodable {
         coherence = try? container.decodeIfPresent(SignalBarSchumannFusionCoherence.self, forKey: .coherence)
     }
 
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(generatedAt, forKey: .generatedAt)
+        try container.encodeIfPresent(usable, forKey: .usable)
+        try container.encodeIfPresent(usableForFusion, forKey: .usableForFusion)
+        try container.encodeIfPresent(frequencyHz, forKey: .frequencyHz)
+        try container.encodeIfPresent(amplitude, forKey: .amplitude)
+        try container.encodeIfPresent(qFactor, forKey: .qFactor)
+        try container.encodeIfPresent(coherence, forKey: .coherence)
+    }
+
     private static func decodeNumericMap(
         _ container: KeyedDecodingContainer<CodingKeys>,
         forKey key: CodingKeys
     ) -> [String: Double]? {
-        if let direct = try? container.decodeIfPresent([String: Double].self, forKey: key) {
-            return direct
+        guard container.contains(key),
+              let nested = try? container.nestedContainer(keyedBy: SignalBarDynamicCodingKey.self, forKey: key)
+        else {
+            return nil
         }
-        if let strings = try? container.decodeIfPresent([String: String].self, forKey: key) {
-            let mapped = strings.compactMapValues { Double($0) }
-            return mapped.isEmpty ? nil : mapped
+
+        var mapped: [String: Double] = [:]
+        for nestedKey in nested.allKeys {
+            if let value = try? nested.decode(Double.self, forKey: nestedKey) {
+                mapped[nestedKey.stringValue] = value
+                continue
+            }
+            if let intValue = try? nested.decode(Int.self, forKey: nestedKey) {
+                mapped[nestedKey.stringValue] = Double(intValue)
+                continue
+            }
+            if let stringValue = try? nested.decode(String.self, forKey: nestedKey),
+               let value = Double(stringValue) {
+                mapped[nestedKey.stringValue] = value
+            }
         }
-        return nil
+
+        return mapped.isEmpty ? nil : mapped
     }
 }
 
@@ -3061,6 +3100,8 @@ struct ContentView: View {
     @State private var userOutlookLoading: Bool = false
     @State private var userOutlookError: String? = nil
 
+    @AppStorage("gaia.schumann.signalbar.tomsk_cache_json") private var schumannSignalBarTomskCacheJSON: String = ""
+    @AppStorage("gaia.schumann.signalbar.latest_cache_json") private var schumannSignalBarLatestCacheJSON: String = ""
     @AppStorage("local_health_zip") private var localHealthZip: String = "78209"
     @AppStorage("did_location_onboarding") private var didLocationOnboarding: Bool = false
     @AppStorage("gaia.onboarding.completed") private var onboardingCompleted: Bool = false
@@ -6414,6 +6455,10 @@ struct ContentView: View {
         ) {
             await MainActor.run {
                 liveSchumannTomskLatest = tomskEnvelope
+                if let data = try? JSONEncoder().encode(tomskEnvelope),
+                   let json = String(data: data, encoding: .utf8) {
+                    schumannSignalBarTomskCacheJSON = json
+                }
             }
             tomskPill = signalBarSchumannPill(from: tomskEnvelope)
         }
@@ -6428,6 +6473,10 @@ struct ContentView: View {
         if let latestEnvelope {
             await MainActor.run {
                 liveSchumannLatestEnvelope = latestEnvelope
+                if let data = try? JSONEncoder().encode(latestEnvelope),
+                   let json = String(data: data, encoding: .utf8) {
+                    schumannSignalBarLatestCacheJSON = json
+                }
             }
         }
         if let tomskPill {
@@ -8332,6 +8381,41 @@ struct ContentView: View {
             return "Showing cached stats while we retry after an error…"
         }
         return "Showing cached stats while we refresh…"
+    }
+
+    private func decodeCachedSchumannSignalBarTomsk() -> SignalBarSchumannTomskLatestEnvelope? {
+        guard !schumannSignalBarTomskCacheJSON.isEmpty,
+              let data = schumannSignalBarTomskCacheJSON.data(using: .utf8) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(SignalBarSchumannTomskLatestEnvelope.self, from: data)
+    }
+
+    private func decodeCachedSchumannSignalBarLatest() -> SignalBarSchumannLatestEnvelope? {
+        guard !schumannSignalBarLatestCacheJSON.isEmpty,
+              let data = schumannSignalBarLatestCacheJSON.data(using: .utf8) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(SignalBarSchumannLatestEnvelope.self, from: data)
+    }
+
+    @MainActor
+    private func preloadCachedSchumannSignalBarState() {
+        if liveSchumannTomskLatest == nil, let cached = decodeCachedSchumannSignalBarTomsk() {
+            liveSchumannTomskLatest = cached
+        }
+        if liveSchumannLatestEnvelope == nil, let cached = decodeCachedSchumannSignalBarLatest() {
+            liveSchumannLatestEnvelope = cached
+        }
+        if liveSchumannSignalBarItem == nil {
+            if let tomsk = liveSchumannTomskLatest,
+               let pill = signalBarSchumannPill(from: tomsk) {
+                liveSchumannSignalBarItem = pill
+            } else if let latest = liveSchumannLatestEnvelope,
+                      let pill = signalBarSchumannPill(from: latest) {
+                liveSchumannSignalBarItem = pill
+            }
+        }
     }
 
     @MainActor
@@ -17323,6 +17407,7 @@ struct ContentView: View {
                 let hasStoredAuthSession = auth.currentSupabaseUserId()?.isEmpty == false || auth.supabaseAccessToken?.isEmpty == false
                 handleAuthScopeChangeIfNeeded()
                 state.refreshStatus()
+                preloadCachedSchumannSignalBarState()
                 if features == nil, let cached = decodeCachedFeatures() {
                     features = cached
                     lastKnownFeatures = cached

@@ -494,15 +494,48 @@ private actor SchumannEndpointCache {
 
     private var storage: [String: Entry] = [:]
 
+    private func dataKey(for key: String) -> String {
+        "gaia.schumann.endpoint_cache.\(key).data"
+    }
+
+    private func expiresKey(for key: String) -> String {
+        "gaia.schumann.endpoint_cache.\(key).expires_at"
+    }
+
+    private func removePersisted(_ key: String) {
+        storage.removeValue(forKey: key)
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: dataKey(for: key))
+        defaults.removeObject(forKey: expiresKey(for: key))
+    }
+
+    private func entry(for key: String) -> Entry? {
+        if let cached = storage[key] {
+            return cached
+        }
+        let defaults = UserDefaults.standard
+        guard let data = defaults.data(forKey: dataKey(for: key)) else {
+            return nil
+        }
+        let expiresAt = Date(timeIntervalSince1970: defaults.double(forKey: expiresKey(for: key)))
+        let entry = Entry(expiresAt: expiresAt, data: data)
+        storage[key] = entry
+        return entry
+    }
+
     func readValid<T: Decodable>(_ key: String, as type: T.Type) -> T? {
-        guard let entry = storage[key], entry.expiresAt > Date() else {
+        guard let entry = entry(for: key) else {
+            return nil
+        }
+        guard entry.expiresAt > Date() else {
+            removePersisted(key)
             return nil
         }
         return try? JSONDecoder().decode(type, from: entry.data)
     }
 
     func readAny<T: Decodable>(_ key: String, as type: T.Type) -> T? {
-        guard let entry = storage[key] else {
+        guard let entry = entry(for: key) else {
             return nil
         }
         return try? JSONDecoder().decode(type, from: entry.data)
@@ -512,7 +545,11 @@ private actor SchumannEndpointCache {
         guard let data = try? JSONEncoder().encode(value) else {
             return
         }
-        storage[key] = Entry(expiresAt: Date().addingTimeInterval(ttl), data: data)
+        let entry = Entry(expiresAt: Date().addingTimeInterval(ttl), data: data)
+        storage[key] = entry
+        let defaults = UserDefaults.standard
+        defaults.set(data, forKey: dataKey(for: key))
+        defaults.set(entry.expiresAt.timeIntervalSince1970, forKey: expiresKey(for: key))
     }
 }
 
