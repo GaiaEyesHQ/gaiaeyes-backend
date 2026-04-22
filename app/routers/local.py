@@ -8,6 +8,35 @@ from services.local_signals.cache import latest_for_zip, upsert_zip_payload
 router = APIRouter(prefix="/v1/local", tags=["local"])
 
 
+def _weather_needs_repair(payload: dict) -> bool:
+    weather = payload.get("weather") if isinstance(payload, dict) else {}
+    return not isinstance(weather, dict) or any(
+        weather.get(key) is None
+        for key in ("temp_delta_24h_c", "baro_delta_24h_hpa", "baro_trend")
+    )
+
+
+def _aqi_missing(payload: dict) -> bool:
+    air = payload.get("air") if isinstance(payload, dict) else {}
+    return not isinstance(air, dict) or air.get("aqi") is None
+
+
+def _merge_payload(primary: dict, fallback: dict) -> dict:
+    merged = dict(fallback) if isinstance(fallback, dict) else {}
+    if not isinstance(primary, dict):
+        return merged
+    for key, value in primary.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            section = dict(merged[key])
+            section.update({item_key: item_value for item_key, item_value in value.items() if item_value is not None})
+            merged[key] = section
+        elif value is not None:
+            merged[key] = value
+        elif key not in merged:
+            merged[key] = value
+    return merged
+
+
 async def _attach_forecast_daily(conn, zip_code: str, payload: dict) -> dict:
     if not isinstance(payload, dict):
         return payload
@@ -27,13 +56,16 @@ async def _attach_forecast_daily(conn, zip_code: str, payload: dict) -> dict:
 async def check(zip: str = Query(..., min_length=5, max_length=10), conn=Depends(get_db)):
     cached = latest_for_zip(zip)
     if cached:
-        weather = cached.get("weather") if isinstance(cached, dict) else {}
-        had_missing = not isinstance(weather, dict) or any(
-            weather.get(key) is None
-            for key in ("temp_delta_24h_c", "baro_delta_24h_hpa", "baro_trend")
-        )
+        had_missing = _weather_needs_repair(cached)
         repaired = ensure_weather_fields(zip, cached)
-        if had_missing:
+        if _aqi_missing(repaired):
+            try:
+                refreshed = ensure_weather_fields(zip, await assemble_for_zip(zip))
+                repaired = _merge_payload(refreshed, repaired)
+            except Exception:
+                pass
+            upsert_zip_payload(zip, repaired)
+        elif had_missing:
             upsert_zip_payload(zip, repaired)
         return await _attach_forecast_daily(conn, zip, repaired)
     payload = await assemble_for_zip(zip)

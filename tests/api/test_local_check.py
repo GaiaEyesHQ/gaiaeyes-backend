@@ -1,0 +1,121 @@
+import os
+from pathlib import Path
+import sys
+
+import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+os.environ.setdefault("DATABASE_URL", "postgresql://localhost/test")
+
+from app.db import get_db, settings
+from app.routers import local
+
+local_test_app = FastAPI()
+local_test_app.include_router(local.router)
+
+pytestmark = pytest.mark.anyio("asyncio")
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.fixture(autouse=True)
+def _set_dev_bearer():
+    original = settings.DEV_BEARER
+    settings.DEV_BEARER = "test-token"
+    try:
+        yield
+    finally:
+        settings.DEV_BEARER = original
+
+
+@pytest.fixture(autouse=True)
+def _override_db_dependency():
+    local_test_app.dependency_overrides[get_db] = lambda: None
+    try:
+        yield
+    finally:
+        local_test_app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture
+def client():
+    transport = ASGITransport(app=local_test_app)
+    return AsyncClient(transport=transport, base_url="http://test")
+
+
+def test_merge_payload_preserves_cached_air_details_when_refresh_is_partial():
+    merged = local._merge_payload(
+        {"air": {"aqi": None, "category": None, "pollutant": "O3"}},
+        {"air": {"aqi": 42, "category": "Good", "pollutant": "PM2.5"}},
+    )
+
+    assert merged["air"]["aqi"] == 42
+    assert merged["air"]["category"] == "Good"
+    assert merged["air"]["pollutant"] == "O3"
+
+
+@pytest.mark.anyio
+async def test_local_check_refreshes_cached_payload_when_aqi_is_missing(monkeypatch, client: AsyncClient):
+    cached_payload = {
+        "ok": True,
+        "where": {"zip": "78754", "lat": 30.3, "lon": -97.6},
+        "weather": {
+            "temp_c": 20.0,
+            "temp_delta_24h_c": 1.1,
+            "humidity_pct": 55.0,
+            "precip_prob_pct": 10.0,
+            "pressure_hpa": 1015.0,
+            "baro_delta_24h_hpa": -1.2,
+            "baro_trend": "steady",
+        },
+        "air": {"aqi": None, "category": None, "pollutant": None},
+        "asof": "2026-04-22T01:00:00+00:00",
+    }
+    refreshed_payload = {
+        "ok": True,
+        "where": {"zip": "78754", "lat": 30.3, "lon": -97.6},
+        "weather": {
+            "temp_c": 21.0,
+            "temp_delta_24h_c": 1.2,
+            "humidity_pct": 50.0,
+            "precip_prob_pct": 5.0,
+            "pressure_hpa": 1016.0,
+            "baro_delta_24h_hpa": -1.0,
+            "baro_trend": "steady",
+        },
+        "air": {"aqi": 47, "category": "Good", "pollutant": "PM2.5"},
+        "asof": "2026-04-22T01:05:00+00:00",
+    }
+    persisted: list[dict] = []
+
+    async def _fake_attach_forecast_daily(conn, zip_code: str, payload: dict):  # noqa: ARG001
+        return payload
+
+    async def _fake_assemble_for_zip(zip_code: str):  # noqa: ARG001
+        return refreshed_payload
+
+    monkeypatch.setattr(local, "latest_for_zip", lambda zip_code: cached_payload)  # noqa: ARG005
+    monkeypatch.setattr(local, "assemble_for_zip", _fake_assemble_for_zip)
+    monkeypatch.setattr(local, "_attach_forecast_daily", _fake_attach_forecast_daily)
+    monkeypatch.setattr(local, "upsert_zip_payload", lambda zip_code, payload: persisted.append(payload))  # noqa: ARG005
+
+    response = await client.get(
+        "/v1/local/check",
+        headers={"Authorization": "Bearer test-token"},
+        params={"zip": "78754"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["air"]["aqi"] == 47
+    assert data["air"]["category"] == "Good"
+    assert persisted
+    assert persisted[0]["air"]["aqi"] == 47

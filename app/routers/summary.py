@@ -341,7 +341,7 @@ _MART_COLUMNS = [
     "coalesce(df.cycle_phase, ds.cycle_phase) as cycle_phase",
     "coalesce(df.menstrual_active, ds.menstrual_active) as menstrual_active",
     "coalesce(df.cycle_day, ds.cycle_day) as cycle_day",
-    "coalesce(df.cycle_updated_at, ds.cycle_updated_at) as cycle_updated_at",
+    "ds.cycle_updated_at as cycle_updated_at",
 ]
 _MART_SELECT = ", ".join(_MART_COLUMNS)
 
