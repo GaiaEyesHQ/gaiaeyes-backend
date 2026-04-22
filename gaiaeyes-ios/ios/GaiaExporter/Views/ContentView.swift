@@ -3160,6 +3160,10 @@ struct ContentView: View {
     @State private var localHealthLoading: Bool = false
     @State private var localHealthError: String?
     @State private var localZipRefreshTask: Task<Void, Never>? = nil
+    @State private var missionSettingsLocalZipDraft: String = ""
+    @State private var missionSettingsUseGPSDraft: Bool = false
+    @State private var missionSettingsLocalInsightsDraft: Bool = true
+    @State private var missionSettingsLocationDirty: Bool = false
     @State private var magnetosphereFetchInFlight: Bool = false
     @State private var magnetosphereLastFetchAt: Date = .distantPast
     @State private var showLocationOnboarding: Bool = false
@@ -3232,6 +3236,7 @@ struct ContentView: View {
     @State private var bodyPath: [InsightsRoute] = []
     @State private var explorePath: [InsightsRoute] = []
     @State private var showLocalConditionsSheet: Bool = false
+    @State private var pendingOpenLocalConditionsAfterSettingsDismiss: Bool = false
     @State private var showSchumannDashboardSheet: Bool = false
     @State private var showCameraHealthCheckSheet: Bool = false
     @State private var latestCameraCheck: CameraHealthDailySummary? = nil
@@ -3254,6 +3259,61 @@ struct ContentView: View {
                 experienceProfile.onboardingStep = newValue
             }
         )
+    }
+
+    private var missionSettingsLocalZipBinding: Binding<String> {
+        Binding(
+            get: { missionSettingsLocalZipDraft },
+            set: { newValue in
+                missionSettingsLocationDirty = true
+                missionSettingsLocalZipDraft = sanitizedZip(newValue)
+            }
+        )
+    }
+
+    private var missionSettingsUseGPSBinding: Binding<Bool> {
+        Binding(
+            get: { missionSettingsUseGPSDraft },
+            set: { newValue in
+                missionSettingsLocationDirty = true
+                missionSettingsUseGPSDraft = newValue
+            }
+        )
+    }
+
+    private var missionSettingsLocalInsightsBinding: Binding<Bool> {
+        Binding(
+            get: { missionSettingsLocalInsightsDraft },
+            set: { newValue in
+                missionSettingsLocationDirty = true
+                missionSettingsLocalInsightsDraft = newValue
+            }
+        )
+    }
+
+    private func syncMissionSettingsLocationDrafts(force: Bool = false) {
+        guard force || !missionSettingsLocationDirty else { return }
+        missionSettingsLocalZipDraft = sanitizedZip(localHealthZip)
+        missionSettingsUseGPSDraft = profileUseGPS
+        missionSettingsLocalInsightsDraft = profileLocalInsightsEnabled
+        missionSettingsLocationDirty = false
+    }
+
+    private func openLocalConditionsFromMissionSettings() {
+        pendingOpenLocalConditionsAfterSettingsDismiss = true
+        showMissionSettingsSheet = false
+    }
+
+    private func saveMissionSettingsLocation() async {
+        let saved = await saveProfileLocation(
+            zipOverride: missionSettingsLocalZipDraft,
+            useGPSOverride: missionSettingsUseGPSDraft,
+            localInsightsEnabledOverride: missionSettingsLocalInsightsDraft
+        )
+        guard saved else { return }
+        await MainActor.run {
+            syncMissionSettingsLocationDrafts(force: true)
+        }
     }
 
     private func normalizedAuthScope(_ userID: String?) -> String {
@@ -3750,6 +3810,7 @@ struct ContentView: View {
     }
 
     private func showSettingsSheet() {
+        syncMissionSettingsLocationDrafts(force: true)
         showMissionSettingsSheet = true
     }
 
@@ -7360,6 +7421,9 @@ struct ContentView: View {
                     profileLocalInsightsEnabled = loc.localInsightsEnabled ?? profileLocalInsightsEnabled
                     didLocationOnboarding = true
                 }
+                if showMissionSettingsSheet {
+                    syncMissionSettingsLocationDrafts()
+                }
             }
         } catch {
             if isCancellationError(error) { return }
@@ -7367,42 +7431,62 @@ struct ContentView: View {
         }
     }
 
-    private func saveProfileLocation(markOnboardingComplete: Bool = false, allowLocalFallback: Bool = false) async -> Bool {
+    private func saveProfileLocation(
+        markOnboardingComplete: Bool = false,
+        allowLocalFallback: Bool = false,
+        zipOverride: String? = nil,
+        useGPSOverride: Bool? = nil,
+        localInsightsEnabledOverride: Bool? = nil
+    ) async -> Bool {
         await MainActor.run {
             profileLocationSaving = true
             profileLocationMessage = nil
         }
-        let resolved = await resolveLocationInput(zip: localHealthZip, useGPS: profileUseGPS)
+        let zipInput = sanitizedZip(zipOverride ?? localHealthZip)
+        let useGPS = useGPSOverride ?? profileUseGPS
+        let localInsightsEnabled = localInsightsEnabledOverride ?? profileLocalInsightsEnabled
+        let resolved = await resolveLocationInput(zip: zipInput, useGPS: useGPS)
         let payload = ProfileLocationUpsert(
             zip: resolved.zip,
             lat: resolved.lat,
             lon: resolved.lon,
-            useGps: profileUseGPS,
-            localInsightsEnabled: profileLocalInsightsEnabled
+            useGps: useGPS,
+            localInsightsEnabled: localInsightsEnabled
         )
-        if profileLocalInsightsEnabled && profileUseGPS && resolved.usedGPS == false && (resolved.zip == nil || resolved.zip?.isEmpty == true) {
+        if localInsightsEnabled && useGPS && resolved.usedGPS == false && (resolved.zip == nil || resolved.zip?.isEmpty == true) {
             await MainActor.run {
                 profileLocationMessage = "GPS did not return a ZIP. Enter ZIP to continue."
                 profileLocationSaving = false
             }
             return false
         }
+
+        @MainActor
+        func applySavedLocationState(zip: String?, message: String) {
+            if let zip, !zip.isEmpty {
+                localHealthZip = zip
+            }
+            profileUseGPS = useGPS
+            profileLocalInsightsEnabled = localInsightsEnabled
+            localZipRefreshTask?.cancel()
+            localZipRefreshTask = nil
+            localHealth = nil
+            localHealthLoading = localInsightsEnabled
+            localHealthError = nil
+            profileLocationMessage = message
+            profileLocationSaving = false
+            didLocationOnboarding = true
+            if markOnboardingComplete {
+                showLocationOnboarding = false
+            }
+        }
+
         if allowLocalFallback && !hasBackendAuthHeader() {
             _ = await ensureBackendIdentity(reason: "save profile location")
         }
-        if allowLocalFallback && !hasBackendAuthHeader() && (!profileLocalInsightsEnabled || resolved.usedGPS || (resolved.zip?.isEmpty == false)) {
+        if allowLocalFallback && !hasBackendAuthHeader() && (!localInsightsEnabled || resolved.usedGPS || (resolved.zip?.isEmpty == false)) {
             await MainActor.run {
-                if let zip = resolved.zip, !zip.isEmpty {
-                    localHealthZip = zip
-                }
-                profileUseGPS = payload.useGps ?? profileUseGPS
-                profileLocalInsightsEnabled = payload.localInsightsEnabled ?? profileLocalInsightsEnabled
-                profileLocationMessage = "Location saved on this device. Server sync will retry later."
-                profileLocationSaving = false
-                didLocationOnboarding = true
-                if markOnboardingComplete {
-                    showLocationOnboarding = false
-                }
+                applySavedLocationState(zip: resolved.zip, message: "Location saved on this device. Server sync will retry later.")
             }
             await fetchLocalHealth()
             appLog("[UI] save profile location fallback: no backend auth header")
@@ -7418,34 +7502,14 @@ struct ContentView: View {
                 throw DecodingPreviewError(endpoint: "v1/profile/location", preview: detail, underlying: URLError(.badServerResponse))
             }
             await MainActor.run {
-                if let zip = saved.location?.zip, !zip.isEmpty {
-                    localHealthZip = zip
-                }
-                profileUseGPS = payload.useGps ?? profileUseGPS
-                profileLocalInsightsEnabled = payload.localInsightsEnabled ?? profileLocalInsightsEnabled
-                profileLocationMessage = "Location saved"
-                profileLocationSaving = false
-                didLocationOnboarding = true
-                if markOnboardingComplete {
-                    showLocationOnboarding = false
-                }
+                applySavedLocationState(zip: saved.location?.zip ?? resolved.zip, message: "Location saved")
             }
             await fetchLocalHealth()
             return true
         } catch {
-            if allowLocalFallback && (!profileLocalInsightsEnabled || resolved.usedGPS || (resolved.zip?.isEmpty == false)) {
+            if allowLocalFallback && (!localInsightsEnabled || resolved.usedGPS || (resolved.zip?.isEmpty == false)) {
                 await MainActor.run {
-                    if let zip = resolved.zip, !zip.isEmpty {
-                        localHealthZip = zip
-                    }
-                    profileUseGPS = payload.useGps ?? profileUseGPS
-                    profileLocalInsightsEnabled = payload.localInsightsEnabled ?? profileLocalInsightsEnabled
-                    profileLocationMessage = "Location saved on this device. Server sync will retry later."
-                    profileLocationSaving = false
-                    didLocationOnboarding = true
-                    if markOnboardingComplete {
-                        showLocationOnboarding = false
-                    }
+                    applySavedLocationState(zip: resolved.zip, message: "Location saved on this device. Server sync will retry later.")
                 }
                 await fetchLocalHealth()
                 appLog("[UI] save profile location fallback after error: \(String(describing: error))")
@@ -17914,15 +17978,27 @@ struct ContentView: View {
                 }
             }
             .onChange(of: showMissionSettingsSheet, initial: false) { _, newValue in
-                guard newValue else { return }
-                Task {
-                    await refreshPushState()
-                    await fetchProfileSettings(includeNotifications: true)
-                    await fetchLocalHealth()
-                    await fetchFeaturesDiagnostics()
-                    if showDebug {
-                        await refreshBillingDiagnostics(showSuccessMessage: false)
+                if newValue {
+                    syncMissionSettingsLocationDrafts(force: true)
+                    Task {
+                        await refreshPushState()
+                        await fetchProfileSettings(includeNotifications: true)
+                        await MainActor.run {
+                            syncMissionSettingsLocationDrafts()
+                        }
+                        await fetchLocalHealth()
+                        await fetchFeaturesDiagnostics()
+                        if showDebug {
+                            await refreshBillingDiagnostics(showSuccessMessage: false)
+                        }
                     }
+                    return
+                }
+                guard pendingOpenLocalConditionsAfterSettingsDismiss else { return }
+                pendingOpenLocalConditionsAfterSettingsDismiss = false
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                    showLocalConditionsSheet = true
                 }
             }
             .onChange(of: showLocalConditionsSheet, initial: false) { _, newValue in
@@ -18932,21 +19008,26 @@ struct ContentView: View {
     }
 
     private var missionSettingsSignalsSection: some View {
-        GroupBox {
+        let draftZip = sanitizedZip(missionSettingsLocalZipDraft)
+        let liveZip = sanitizedZip(localHealth?.whereInfo?.zip ?? localHealthZip)
+        let displayedZip = (missionSettingsLocationDirty || profileLocationSaving)
+            ? (draftZip.isEmpty ? liveZip : draftZip)
+            : (liveZip.isEmpty ? draftZip : liveZip)
+        return GroupBox {
             missionSettingsDisclosure(
                 title: "Local signal setup",
-                summary: profileUseGPS ? "GPS local context" : (localHealthZip.isEmpty ? "ZIP not set" : "ZIP \(localHealthZip)"),
+                summary: missionSettingsUseGPSDraft ? "GPS local context" : (draftZip.isEmpty ? "ZIP not set" : "ZIP \(draftZip)"),
                 isExpanded: $showSignalsSettingsSection
             ) {
                 VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(profileLocalInsightsEnabled ? "Local insights on" : "Local insights off")
+                        Text(missionSettingsLocalInsightsDraft ? "Local insights on" : "Local insights off")
                             .font(.headline)
                         Text(
-                            profileUseGPS
-                            ? ((localHealth?.whereInfo?.zip ?? localHealthZip).isEmpty ? "Using GPS for your area" : "Using GPS for your area • ZIP \(localHealth?.whereInfo?.zip ?? localHealthZip)")
-                            : ((localHealth?.whereInfo?.zip ?? localHealthZip).isEmpty ? "Add a ZIP code to improve local conditions" : "ZIP \(localHealth?.whereInfo?.zip ?? localHealthZip)")
+                            missionSettingsUseGPSDraft
+                            ? (displayedZip.isEmpty ? "Using GPS for your area" : "Using GPS for your area • ZIP \(displayedZip)")
+                            : (displayedZip.isEmpty ? "Add a ZIP code to improve local conditions" : "ZIP \(displayedZip)")
                         )
                         .font(.subheadline)
                         .foregroundColor(.secondary)
@@ -18958,19 +19039,19 @@ struct ContentView: View {
                     }
                     Spacer()
                     Button("Open Local Conditions") {
-                        showLocalConditionsSheet = true
+                        openLocalConditionsFromMissionSettings()
                     }
                     .buttonStyle(.bordered)
                 }
 
-                TextField("ZIP code", text: $localHealthZip)
+                TextField("ZIP code", text: missionSettingsLocalZipBinding)
                     .textFieldStyle(.roundedBorder)
                     .keyboardType(.numberPad)
 
-                Toggle("Use GPS", isOn: $profileUseGPS)
-                Toggle("Enable local insights", isOn: $profileLocalInsightsEnabled)
+                Toggle("Use GPS", isOn: missionSettingsUseGPSBinding)
+                Toggle("Enable local insights", isOn: missionSettingsLocalInsightsBinding)
 
-                Button(action: { Task { await saveProfileLocation() } }) {
+                Button(action: { Task { await saveMissionSettingsLocation() } }) {
                     HStack {
                         if profileLocationSaving {
                             ProgressView().scaleEffect(0.8)

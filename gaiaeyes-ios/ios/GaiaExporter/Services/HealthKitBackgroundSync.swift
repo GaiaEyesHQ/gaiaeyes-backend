@@ -217,7 +217,7 @@ private actor Phase2BackfillState {
 
 final class HealthKitBackgroundSync {
     static let shared = HealthKitBackgroundSync()
-    private static let phase2BackfillVersion = 2
+    private static let phase2BackfillVersion = 3
     private static let phase2BackfillMarkerKey = "gaia.hk.phase2BackfillVersion"
     private static let recentRepairLookbackDays = 30
 
@@ -1974,27 +1974,62 @@ final class HealthKitBackgroundSync {
 private final class AnchorStore {
     private let anchorPrefix = "hk_anchor_"
     private let seedPrefix = "hk_seed_start_"
+    // These signals need per-user anchors so an anonymous/account switch does not
+    // consume deltas that should later replay to the signed-in UUID.
+    private let userScopedKeys: Set<String> = [
+        "heart_rate",
+        "step_count",
+        "respiratory_rate",
+        "resting_heart_rate",
+        "temperature_deviation",
+        "menstrual_flow",
+    ]
+
+    private var currentUserScope: String? {
+        let raw = UserDefaults.standard.string(forKey: "userId") ?? ""
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count == 36 else { return nil }
+        return trimmed
+    }
+
+    private func storageKey(prefix: String, key: String) -> String {
+        guard userScopedKeys.contains(key), let userScope = currentUserScope else {
+            return "\(prefix)\(key)"
+        }
+        return "\(prefix)\(userScope)_\(key)"
+    }
+
+    private func legacyKey(prefix: String, key: String) -> String {
+        "\(prefix)\(key)"
+    }
 
     func anchor(forKey key: String) -> HKQueryAnchor? {
-        guard let data = UserDefaults.standard.data(forKey: "\(anchorPrefix)\(key)") else { return nil }
+        guard let data = UserDefaults.standard.data(forKey: storageKey(prefix: anchorPrefix, key: key)) else { return nil }
         return try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: data)
     }
 
     /// If `anchor` is nil, the stored anchor is removed (used to recover from stuck anchors).
     func setAnchor(_ anchor: HKQueryAnchor?, forKey key: String) {
-        let k = "\(anchorPrefix)\(key)"
+        let k = storageKey(prefix: anchorPrefix, key: key)
         guard let anchor = anchor else {
             UserDefaults.standard.removeObject(forKey: k)
+            if userScopedKeys.contains(key) {
+                UserDefaults.standard.removeObject(forKey: legacyKey(prefix: anchorPrefix, key: key))
+            }
             return
         }
         if let data = try? NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true) {
             UserDefaults.standard.set(data, forKey: k)
-            UserDefaults.standard.removeObject(forKey: "\(seedPrefix)\(key)")
+            UserDefaults.standard.removeObject(forKey: storageKey(prefix: seedPrefix, key: key))
+            if userScopedKeys.contains(key) {
+                UserDefaults.standard.removeObject(forKey: legacyKey(prefix: anchorPrefix, key: key))
+                UserDefaults.standard.removeObject(forKey: legacyKey(prefix: seedPrefix, key: key))
+            }
         }
     }
 
     func seedStart(forKey key: String) -> Date? {
-        guard let raw = UserDefaults.standard.string(forKey: "\(seedPrefix)\(key)"), !raw.isEmpty else {
+        guard let raw = UserDefaults.standard.string(forKey: storageKey(prefix: seedPrefix, key: key)), !raw.isEmpty else {
             return nil
         }
         let precise = ISO8601DateFormatter()
@@ -2003,21 +2038,31 @@ private final class AnchorStore {
     }
 
     func setSeedStart(_ date: Date?, forKey key: String) {
-        let storageKey = "\(seedPrefix)\(key)"
+        let resolvedStorageKey = storageKey(prefix: seedPrefix, key: key)
         guard let date else {
-            UserDefaults.standard.removeObject(forKey: storageKey)
+            UserDefaults.standard.removeObject(forKey: resolvedStorageKey)
+            if userScopedKeys.contains(key) {
+                UserDefaults.standard.removeObject(forKey: legacyKey(prefix: seedPrefix, key: key))
+            }
             return
         }
         let precise = ISO8601DateFormatter()
         precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        UserDefaults.standard.set(precise.string(from: date), forKey: storageKey)
+        UserDefaults.standard.set(precise.string(from: date), forKey: resolvedStorageKey)
+        if userScopedKeys.contains(key) {
+            UserDefaults.standard.removeObject(forKey: legacyKey(prefix: seedPrefix, key: key))
+        }
     }
 
     /// Clear multiple anchors by their keys (e.g., ["heart_rate","spo2","step_count","hrv_sdnn"]).
     func clear(keys: [String]) {
         for key in keys {
-            UserDefaults.standard.removeObject(forKey: "\(anchorPrefix)\(key)")
-            UserDefaults.standard.removeObject(forKey: "\(seedPrefix)\(key)")
+            UserDefaults.standard.removeObject(forKey: storageKey(prefix: anchorPrefix, key: key))
+            UserDefaults.standard.removeObject(forKey: storageKey(prefix: seedPrefix, key: key))
+            if userScopedKeys.contains(key) {
+                UserDefaults.standard.removeObject(forKey: legacyKey(prefix: anchorPrefix, key: key))
+                UserDefaults.standard.removeObject(forKey: legacyKey(prefix: seedPrefix, key: key))
+            }
         }
     }
 }

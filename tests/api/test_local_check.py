@@ -119,3 +119,70 @@ async def test_local_check_refreshes_cached_payload_when_aqi_is_missing(monkeypa
     assert data["air"]["category"] == "Good"
     assert persisted
     assert persisted[0]["air"]["aqi"] == 47
+
+
+@pytest.mark.anyio
+async def test_local_check_refreshes_cached_payload_when_allergens_are_missing(monkeypatch, client: AsyncClient):
+    cached_payload = {
+        "ok": True,
+        "where": {"zip": "76710", "lat": 31.54, "lon": -97.18},
+        "weather": {
+            "temp_c": 24.0,
+            "temp_delta_24h_c": 0.8,
+            "humidity_pct": 70.0,
+            "precip_prob_pct": 15.0,
+            "pressure_hpa": 1012.0,
+            "baro_delta_24h_hpa": -0.7,
+            "baro_trend": "steady",
+        },
+        "air": {"aqi": 54, "category": "Moderate", "pollutant": "PM2.5"},
+        "allergens": {},
+        "asof": "2026-04-22T22:35:00+00:00",
+    }
+    refreshed_payload = {
+        "ok": True,
+        "where": {"zip": "76710", "lat": 31.54, "lon": -97.18},
+        "weather": {
+            "temp_c": 24.0,
+            "temp_delta_24h_c": 0.8,
+            "humidity_pct": 70.0,
+            "precip_prob_pct": 15.0,
+            "pressure_hpa": 1012.0,
+            "baro_delta_24h_hpa": -0.7,
+            "baro_trend": "steady",
+        },
+        "air": {"aqi": 54, "category": "Moderate", "pollutant": "PM2.5"},
+        "allergens": {
+            "source": "google-pollen:forecast",
+            "state": "low",
+            "primary_type": "tree",
+            "primary_label": "Tree pollen",
+        },
+        "asof": "2026-04-22T22:45:00+00:00",
+    }
+    persisted: list[dict] = []
+
+    async def _fake_attach_forecast_daily(conn, zip_code: str, payload: dict):  # noqa: ARG001
+        return payload
+
+    async def _fake_assemble_for_zip(zip_code: str):  # noqa: ARG001
+        return refreshed_payload
+
+    monkeypatch.setattr(local, "latest_for_zip", lambda zip_code: cached_payload)  # noqa: ARG005
+    monkeypatch.setattr(local, "assemble_for_zip", _fake_assemble_for_zip)
+    monkeypatch.setattr(local, "_attach_forecast_daily", _fake_attach_forecast_daily)
+    monkeypatch.setattr(local, "upsert_zip_payload", lambda zip_code, payload: persisted.append(payload))  # noqa: ARG005
+
+    response = await client.get(
+        "/v1/local/check",
+        headers={"Authorization": "Bearer test-token"},
+        params={"zip": "76710"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["air"]["aqi"] == 54
+    assert data["allergens"]["source"] == "google-pollen:forecast"
+    assert data["allergens"]["primary_type"] == "tree"
+    assert persisted
+    assert persisted[0]["allergens"]["source"] == "google-pollen:forecast"

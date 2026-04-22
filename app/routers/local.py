@@ -21,6 +21,11 @@ def _aqi_missing(payload: dict) -> bool:
     return not isinstance(air, dict) or air.get("aqi") is None
 
 
+def _allergens_missing(payload: dict) -> bool:
+    allergens = payload.get("allergens") if isinstance(payload, dict) else {}
+    return not isinstance(allergens, dict) or not allergens or not allergens.get("source")
+
+
 def _merge_payload(primary: dict, fallback: dict) -> dict:
     merged = dict(fallback) if isinstance(fallback, dict) else {}
     if not isinstance(primary, dict):
@@ -58,7 +63,7 @@ async def check(zip: str = Query(..., min_length=5, max_length=10), conn=Depends
     if cached:
         had_missing = _weather_needs_repair(cached)
         repaired = ensure_weather_fields(zip, cached)
-        if _aqi_missing(repaired):
+        if _aqi_missing(repaired) or _allergens_missing(repaired):
             try:
                 refreshed = ensure_weather_fields(zip, await assemble_for_zip(zip))
                 repaired = _merge_payload(refreshed, repaired)
