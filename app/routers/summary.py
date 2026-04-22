@@ -1131,33 +1131,8 @@ def _summarize_feature_payload(payload: Optional[Dict[str, Any]]) -> Dict[str, A
         "day": _iso_date(day),
         "updated_at": _iso_dt(updated_at),
         "sections": {
-            "health": _any_present(
-                summary_payload,
-                (
-                    "steps_total",
-                    "hr_min",
-                    "hr_max",
-                    "hrv_avg",
-                    "spo2_avg",
-                    "bp_sys_avg",
-                    "bp_dia_avg",
-                    "respiratory_rate_avg",
-                    "respiratory_rate_sleep_avg",
-                    "resting_hr_avg",
-                    "temperature_deviation",
-                ),
-            ),
-            "sleep": _any_present(
-                summary_payload,
-                (
-                    "sleep_total_minutes",
-                    "rem_m",
-                    "core_m",
-                    "deep_m",
-                    "awake_m",
-                    "inbed_m",
-                ),
-            ),
+            "health": _payload_has_usable_health(summary_payload),
+            "sleep": _payload_has_usable_sleep(summary_payload),
             "space_daily": _any_present(
                 summary_payload,
                 ("kp_max", "bz_min", "sw_speed_avg", "flares_count", "cmes_count"),
@@ -1290,6 +1265,17 @@ _BODY_SCORE_FLOAT_KEYS = (
     "sleep_efficiency",
 )
 
+_BODY_SCORE_ZERO_OK_KEYS = {
+    "respiratory_rate_baseline_delta",
+    "temperature_deviation",
+    "temperature_deviation_baseline_delta",
+    "resting_hr_baseline_delta",
+    "bedtime_consistency_score",
+    "waketime_consistency_score",
+    "sleep_debt_proxy",
+    "sleep_vs_14d_baseline_delta",
+}
+
 _BODY_SLEEP_KEYS = (
     "sleep_total_minutes",
     "rem_m",
@@ -1314,15 +1300,57 @@ def _payload_has_usable_sleep(payload: Optional[Dict[str, Any]]) -> bool:
     return False
 
 
+def _payload_has_usable_health(payload: Optional[Dict[str, Any]]) -> bool:
+    if not payload:
+        return False
+    for key in _BODY_SCORE_INT_KEYS[:-1]:
+        value = _coerce_int_value(payload.get(key))
+        if value is not None and value > 0:
+            return True
+    for key in _BODY_SCORE_FLOAT_KEYS:
+        value = _coerce_float_value(payload.get(key))
+        if value is None:
+            continue
+        if key in _BODY_SCORE_ZERO_OK_KEYS or value > 0:
+            return True
+    health = payload.get("health")
+    if isinstance(health, dict) and any(value is not None for value in health.values()):
+        return True
+    temperature_source = payload.get("temperature_source")
+    if isinstance(temperature_source, str) and temperature_source.strip():
+        return True
+    return False
+
+
+def _body_key_has_usable_value(key: str, value: Any) -> bool:
+    if value is None:
+        return False
+    if key in _BODY_SCORE_INT_KEYS:
+        coerced = _coerce_int_value(value)
+        return coerced is not None and coerced > 0
+    if key in _BODY_SCORE_FLOAT_KEYS:
+        coerced = _coerce_float_value(value)
+        if coerced is None:
+            return False
+        return key in _BODY_SCORE_ZERO_OK_KEYS or coerced > 0
+    if key == "health":
+        return isinstance(value, dict) and any(item is not None for item in value.values())
+    if key == "temperature_source":
+        return isinstance(value, str) and bool(value.strip())
+    return value is not None
+
+
 def _body_metric_score(payload: Optional[Dict[str, Any]]) -> int:
     if not payload:
         return 0
     score = 0
     for key in _BODY_SCORE_INT_KEYS:
-        if _coerce_int_value(payload.get(key)) is not None:
+        value = _coerce_int_value(payload.get(key))
+        if value is not None and value > 0:
             score += 1
     for key in _BODY_SCORE_FLOAT_KEYS:
-        if _coerce_float_value(payload.get(key)) is not None:
+        value = _coerce_float_value(payload.get(key))
+        if value is not None and (key in _BODY_SCORE_ZERO_OK_KEYS or value > 0):
             score += 1
     health = payload.get("health")
     if isinstance(health, dict) and any(value is not None for value in health.values()):
@@ -1351,6 +1379,8 @@ def _same_day_cached_body_is_richer(
 
     cached_score = _body_metric_score(cached_payload)
     current_score = _body_metric_score(current_payload)
+    if not cached_has_sleep and cached_score == 0:
+        return False
     if cached_score != current_score:
         return cached_score > current_score
 
@@ -1368,7 +1398,7 @@ def _merge_payload_preserving_body(
     merged = dict(base_payload or {})
     donor = body_from_payload or {}
     for key in _BODY_CACHE_KEYS:
-        if key in donor and donor.get(key) is not None:
+        if key in donor and _body_key_has_usable_value(key, donor.get(key)):
             merged[key] = donor[key]
     return merged
 

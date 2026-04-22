@@ -5797,9 +5797,34 @@ struct ContentView: View {
         ]
     }
 
+    private var bodySnapshotPositiveOnlyKeys: Set<String> {
+        [
+            "steps_total",
+            "hr_min",
+            "hr_max",
+            "hrv_avg",
+            "spo2_avg",
+            "spo2_avg_pct",
+            "spo2_avg_percent",
+            "spo2_mean",
+            "bp_sys_avg",
+            "bp_dia_avg",
+            "respiratory_rate_avg",
+            "respiratory_rate_sleep_avg",
+            "resting_hr_avg",
+            "sleep_total_minutes",
+            "rem_m",
+            "core_m",
+            "deep_m",
+            "awake_m",
+            "inbed_m",
+            "sleep_efficiency",
+        ]
+    }
+
     private func bodyMetricScore(for features: FeaturesToday) -> Int {
         var score = 0
-        let numericFields: [Num?] = [
+        let positiveFields: [Num?] = [
             features.stepsTotal,
             features.hrMin,
             features.hrMax,
@@ -5808,15 +5833,7 @@ struct ContentView: View {
             features.bpDiaAvg,
             features.respiratoryRateAvg,
             features.respiratoryRateSleepAvg,
-            features.respiratoryRateBaselineDelta,
-            features.temperatureDeviation,
-            features.temperatureDeviationBaselineDelta,
             features.restingHrAvg,
-            features.restingHrBaselineDelta,
-            features.bedtimeConsistencyScore,
-            features.waketimeConsistencyScore,
-            features.sleepDebtProxy,
-            features.sleepVs14dBaselineDelta,
             features.sleepTotalMinutes,
             features.remM,
             features.coreM,
@@ -5824,6 +5841,19 @@ struct ContentView: View {
             features.awakeM,
             features.inbedM,
             features.sleepEfficiency,
+        ]
+        for field in positiveFields where (field?.value ?? 0) > 0 {
+            score += 1
+        }
+        let numericFields: [Num?] = [
+            features.respiratoryRateBaselineDelta,
+            features.temperatureDeviation,
+            features.temperatureDeviationBaselineDelta,
+            features.restingHrBaselineDelta,
+            features.bedtimeConsistencyScore,
+            features.waketimeConsistencyScore,
+            features.sleepDebtProxy,
+            features.sleepVs14dBaselineDelta,
         ]
         for field in numericFields where field?.value != nil {
             score += 1
@@ -5857,10 +5887,13 @@ struct ContentView: View {
         guard lhs.day == rhs.day else { return false }
         let lhsHasSleep = hasUsableSleepData(lhs)
         let rhsHasSleep = hasUsableSleepData(rhs)
+        let lhsScore = bodyMetricScore(for: lhs)
+        if !lhsHasSleep && lhsScore == 0 {
+            return false
+        }
         if lhsHasSleep != rhsHasSleep {
             return lhsHasSleep && !rhsHasSleep
         }
-        let lhsScore = bodyMetricScore(for: lhs)
         let rhsScore = bodyMetricScore(for: rhs)
         if lhsScore != rhsScore {
             return lhsScore > rhsScore
@@ -5933,6 +5966,13 @@ struct ContentView: View {
         }
     }
 
+    private func bodySnapshotValueIsUsable(_ value: Any?, for key: String) -> Bool {
+        if bodySnapshotPositiveOnlyKeys.contains(key) {
+            return (bodySnapshotNumericValue(value) ?? 0) > 0
+        }
+        return bodySnapshotValueHasUsableContent(value)
+    }
+
     private func mergedFeaturesPreservingBody(base: FeaturesToday, bodyFrom donor: FeaturesToday) -> FeaturesToday {
         guard base.day == donor.day else { return base }
         let encoder = JSONEncoder()
@@ -5950,7 +5990,7 @@ struct ContentView: View {
             return donor
         }
         for key in bodySnapshotMergeKeys {
-            if let value = donorDict[key] {
+            if let value = donorDict[key], bodySnapshotValueIsUsable(value, for: key) {
                 baseDict[key] = value
             }
         }
@@ -5980,7 +6020,7 @@ struct ContentView: View {
             return base
         }
         for key in bodySnapshotMergeKeys {
-            guard let donorValue = donorDict[key], bodySnapshotValueHasUsableContent(donorValue) else { continue }
+            guard let donorValue = donorDict[key], bodySnapshotValueIsUsable(donorValue, for: key) else { continue }
             if key == "steps_total",
                let donorSteps = bodySnapshotNumericValue(donorValue),
                let baseSteps = bodySnapshotNumericValue(baseDict[key]) {
