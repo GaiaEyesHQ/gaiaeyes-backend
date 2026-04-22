@@ -464,6 +464,12 @@ async def _gather_enrichment(
     start_utc, end_utc = _local_bounds(day_local, tzinfo)
     errors: List[str] = []
 
+    async def _recover_enrichment_error(exc: Optional[BaseException]) -> None:
+        if not exc:
+            return
+        errors.append(_describe_error(exc))
+        await _rollback_safely(conn)
+
     sleep, sleep_exc = await _timed_call(
         _fetch_sleep_aggregate(conn, user_id, start_utc, end_utc),
         label="sleep aggregate",
@@ -472,8 +478,7 @@ async def _gather_enrichment(
     )
     if sleep is None:
         sleep = {}
-    if sleep_exc:
-        errors.append(_describe_error(sleep_exc))
+    await _recover_enrichment_error(sleep_exc)
 
     daily_wx, daily_exc = await _timed_call(
         _fetch_space_weather_daily(conn, day_local),
@@ -483,8 +488,7 @@ async def _gather_enrichment(
     )
     if daily_wx is None:
         daily_wx = {}
-    if daily_exc:
-        errors.append(_describe_error(daily_exc))
+    await _recover_enrichment_error(daily_exc)
 
     current_wx, current_exc = await _timed_call(
         _fetch_current_space_weather(conn),
@@ -493,8 +497,7 @@ async def _gather_enrichment(
     )
     if current_wx is None:
         current_wx = {}
-    if current_exc:
-        errors.append(_describe_error(current_exc))
+    await _recover_enrichment_error(current_exc)
 
     ulf, ulf_exc = await _timed_call(
         _fetch_latest_ulf_context(conn),
@@ -503,8 +506,7 @@ async def _gather_enrichment(
     )
     if ulf is None:
         ulf = {}
-    if ulf_exc:
-        errors.append(_describe_error(ulf_exc))
+    await _recover_enrichment_error(ulf_exc)
 
     sch, sch_exc = await _timed_call(
         _fetch_schumann_row(conn, day_local),
@@ -514,8 +516,7 @@ async def _gather_enrichment(
     )
     if sch is None:
         sch = {}
-    if sch_exc:
-        errors.append(_describe_error(sch_exc))
+    await _recover_enrichment_error(sch_exc)
 
     post, post_exc = await _timed_call(
         _fetch_daily_post(conn, day_local),
@@ -525,8 +526,7 @@ async def _gather_enrichment(
     )
     if post is None:
         post = {}
-    if post_exc:
-        errors.append(_describe_error(post_exc))
+    await _recover_enrichment_error(post_exc)
 
     return {
         "sleep": sleep,

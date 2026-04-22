@@ -64,6 +64,9 @@ class _FakeConn:
     async def commit(self):
         return None
 
+    async def rollback(self):
+        return None
+
     async def execute(self, *args, **kwargs):  # noqa: ARG002
         return None
 
@@ -456,6 +459,64 @@ async def test_features_today_includes_geomagnetic_context(monkeypatch, client: 
     assert data["geomagnetic_context"]["label"] == "Elevated"
     assert data["geomagnetic_context"]["confidence_label"] == "Moderate"
     assert data["geomagnetic_context"]["ts_utc"] == "2026-03-22T12:00:00Z"
+
+
+@pytest.mark.anyio
+async def test_gather_enrichment_recovers_after_component_failure(monkeypatch):
+    class _RollbackRecordingConn(_FakeConn):
+        def __init__(self):
+            self.rollback_calls = 0
+
+        async def rollback(self):
+            self.rollback_calls += 1
+
+    conn = _RollbackRecordingConn()
+    today = date(2026, 4, 21)
+    calls: List[str] = []
+
+    async def _fake_sleep(conn, user_id, start_utc, end_utc):  # noqa: ARG001
+        calls.append("sleep")
+        return {"rem_m": 30, "core_m": 50, "deep_m": 40, "awake_m": 10, "inbed_m": 140}
+
+    async def _fake_daily_wx(conn, day_local):  # noqa: ARG001
+        calls.append("daily_wx")
+        return {"kp_max": 5}
+
+    async def _fake_current_wx(conn):  # noqa: ARG001
+        calls.append("current_wx")
+        return {"kp_current": 3}
+
+    async def _fake_ulf(conn):  # noqa: ARG001
+        calls.append("ulf")
+        return {"regional_intensity": 42.0}
+
+    async def _fake_sch(conn, day_local):  # noqa: ARG001
+        calls.append("sch")
+        raise RuntimeError("slow schumann query")
+
+    async def _fake_post(conn, day_local):  # noqa: ARG001
+        calls.append("post")
+        return {"post_title": "Recovered"}
+
+    monkeypatch.setattr(summary, "_fetch_sleep_aggregate", _fake_sleep)
+    monkeypatch.setattr(summary, "_fetch_space_weather_daily", _fake_daily_wx)
+    monkeypatch.setattr(summary, "_fetch_current_space_weather", _fake_current_wx)
+    monkeypatch.setattr(summary, "_fetch_latest_ulf_context", _fake_ulf)
+    monkeypatch.setattr(summary, "_fetch_schumann_row", _fake_sch)
+    monkeypatch.setattr(summary, "_fetch_daily_post", _fake_post)
+
+    components, errors = await summary._gather_enrichment(
+        conn,
+        str(uuid4()),
+        today,
+        ZoneInfo("UTC"),
+    )
+
+    assert calls == ["sleep", "daily_wx", "current_wx", "ulf", "sch", "post"]
+    assert conn.rollback_calls == 1
+    assert components["sch"] == {}
+    assert components["post"]["post_title"] == "Recovered"
+    assert errors == ["schumann daily failed: slow schumann query"]
 
 
 @pytest.mark.anyio

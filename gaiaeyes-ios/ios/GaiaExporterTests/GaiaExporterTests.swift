@@ -423,3 +423,62 @@ struct ShareEngineTests {
         #expect(captions.scientific.contains("Track local air shifts in Gaia Eyes."))
     }
 }
+
+struct FeaturesTodayRoundTripTests {
+
+    @Test
+    func preservesBodyMetricsThroughCacheStyleJSONRoundTrip() throws {
+        let payload = """
+        {
+            "ok": true,
+            "data": {
+                "day": "2026-04-21",
+                "updated_at": "2026-04-22T02:27:12.612489+00:00",
+                "steps_total": 2728,
+                "hr_min": 52.0233050847458,
+                "hr_max": 92.5148305084746,
+                "spo2_avg": 97.4646464646465,
+                "respiratory_rate_avg": 13.4625719769674,
+                "respiratory_rate_sleep_avg": 13.3347368421053,
+                "respiratory_rate_baseline_delta": -0.336,
+                "resting_hr_avg": 52.0,
+                "resting_hr_baseline_delta": -5.929,
+                "bedtime_consistency_score": 46.4,
+                "waketime_consistency_score": 63.9,
+                "sleep_debt_proxy": 0.0,
+                "sleep_vs_14d_baseline_delta": 145.2,
+                "sleep_total_minutes": 524,
+                "rem_m": 97,
+                "core_m": 390,
+                "deep_m": 38,
+                "awake_m": 4,
+                "inbed_m": 200,
+                "sleep_efficiency": 0.7200118968633462,
+                "cycle_tracking_enabled": true,
+                "menstrual_active": false,
+                "cycle_day": 7,
+                "cycle_updated_at": "2026-04-16T17:00:00+00:00"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let apiDecoder = JSONDecoder()
+        apiDecoder.keyDecodingStrategy = .convertFromSnakeCase
+        let envelope = try apiDecoder.decode(Envelope<FeaturesToday>.self, from: payload)
+        let features = try #require(envelope.payload)
+
+        let cachedData = try JSONEncoder().encode(features)
+
+        let cacheDecoder = JSONDecoder()
+        cacheDecoder.keyDecodingStrategy = .convertFromSnakeCase
+        let roundTripped = try cacheDecoder.decode(FeaturesToday.self, from: cachedData)
+
+        #expect(roundTripped.stepsTotal?.value == 2728)
+        #expect(roundTripped.sleepTotalMinutes?.value == 524)
+        #expect(roundTripped.spo2Avg?.value == 97.4646464646465)
+        #expect(roundTripped.respiratoryRateAvg?.value == 13.4625719769674)
+        #expect(roundTripped.restingHrAvg?.value == 52.0)
+        #expect(roundTripped.remM?.value == 97)
+        #expect(roundTripped.deepM?.value == 38)
+    }
+}

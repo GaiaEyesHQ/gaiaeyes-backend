@@ -18,6 +18,15 @@ struct Num: Codable {
         }
         value = nil
     }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        if let value {
+            try container.encode(value)
+        } else {
+            try container.encodeNil()
+        }
+    }
 }
 
 struct EarthscopeImages: Codable {
