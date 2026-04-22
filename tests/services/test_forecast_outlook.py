@@ -13,6 +13,8 @@ if str(ROOT) not in sys.path:
 from services.forecast_outlook import (  # noqa: E402
     LOCAL_FORECAST_DAYS,
     build_daily_outlook,
+    build_location_key,
+    build_user_outlook_payload,
     build_window_outlook,
     ensure_local_forecast_daily,
     parse_swpc_range_forecast,
@@ -21,6 +23,7 @@ from services.forecast_outlook import (  # noqa: E402
     serialize_space_forecast_rows,
     summarize_local_forecast_days,
 )
+from services.external import nws  # noqa: E402
 
 
 class ForecastOutlookTests(unittest.TestCase):
@@ -630,8 +633,46 @@ Outlook For March 23-29
         self.assertTrue(space_payload[0]["flare_watch"])
         self.assertFalse(space_payload[0]["cme_watch"])
 
+    def test_build_location_key_prefers_geo_when_requested(self) -> None:
+        self.assertEqual(
+            build_location_key("78209", 30.2672, -97.7431, prefer_geo=True),
+            "geo:30.267,-97.743",
+        )
+
 
 class ForecastOutlookAsyncTests(unittest.IsolatedAsyncioTestCase):
+    async def test_build_user_outlook_payload_prefers_geo_cache_for_gps_profiles(self) -> None:
+        conn = object()
+        with (
+            patch(
+                "services.forecast_outlook.fetch_user_location_context",
+                AsyncMock(
+                    return_value={
+                        "zip": "78209",
+                        "lat": 30.2672,
+                        "lon": -97.7431,
+                        "use_gps": True,
+                        "local_insights_enabled": True,
+                    }
+                ),
+            ),
+            patch(
+                "services.forecast_outlook.ensure_local_forecast_daily",
+                AsyncMock(return_value=[]),
+            ) as ensure_local,
+            patch("services.forecast_outlook.ensure_space_forecast_daily", AsyncMock(return_value=[])),
+            patch("services.forecast_outlook.fetch_best_pattern_rows", AsyncMock(return_value=[])),
+            patch("services.forecast_outlook.fetch_latest_gauges", AsyncMock(return_value={})),
+        ):
+            payload = await build_user_outlook_payload(conn, "user-123")
+
+        self.assertTrue(payload["forecast_data_ready"]["location_found"])
+        kwargs = ensure_local.await_args.kwargs
+        self.assertEqual(kwargs["zip_code"], "78209")
+        self.assertEqual(kwargs["lat"], 30.2672)
+        self.assertEqual(kwargs["lon"], -97.7431)
+        self.assertTrue(kwargs["prefer_geo"])
+
     async def test_ensure_local_forecast_daily_refreshes_fresh_rows_when_pollen_is_missing(self) -> None:
         now = datetime.now(UTC)
         existing = [
@@ -659,8 +700,8 @@ class ForecastOutlookAsyncTests(unittest.IsolatedAsyncioTestCase):
             patch("services.forecast_outlook._fetch_local_forecast_rows", AsyncMock(side_effect=[existing, refreshed])),
             patch("services.forecast_outlook.summarize_local_forecast_days", return_value=refreshed),
             patch("services.forecast_outlook._upsert_local_forecast_rows", AsyncMock()) as upsert_rows,
-            patch("services.external.nws.forecast_hourly_by_latlon", AsyncMock(return_value={})),
-            patch("services.external.nws.gridpoints_by_latlon", AsyncMock(return_value={})),
+            patch.object(nws, "forecast_hourly_by_latlon", AsyncMock(return_value={})),
+            patch.object(nws, "gridpoints_by_latlon", AsyncMock(return_value={})),
             patch("services.forecast_outlook.pollen.forecast_by_latlon", AsyncMock(return_value={})),
         ):
             payload = await ensure_local_forecast_daily(

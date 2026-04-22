@@ -4934,6 +4934,27 @@ struct ContentView: View {
         return readUnavailableAt > readVerifiedAt
     }
 
+    private var hasSleepReadEvidence: Bool {
+        if !state.healthkitReadVerifiedAtISO.isEmpty {
+            return true
+        }
+        if healthDiagnosticsDate(prefix: "last_sample", metric: "sleep_stage") != nil {
+            return true
+        }
+        if let source = healthDiagnosticsValue(prefix: "last_source", metric: "sleep_stage"),
+           !source.isEmpty {
+            return true
+        }
+        return false
+    }
+
+    private var shouldAutoSyncSleepWhenTodayEmpty: Bool {
+        guard state.selectedHealthPermissionKeys.contains(HealthPermissionOption.sleep.rawValue) else {
+            return false
+        }
+        return hasSleepReadEvidence
+    }
+
     private func healthPermissionStatus(for option: HealthPermissionOption, metric: String) -> String {
         guard HKHealthStore.isHealthDataAvailable() else { return "Unavailable" }
         guard healthObjectType(for: option) != nil else { return "Unsupported" }
@@ -8239,11 +8260,14 @@ struct ContentView: View {
             }
             return
         }
-        let zip = sanitizedZip(localHealthZip)
+        let resolved = await resolveLocationInput(zip: localHealthZip, useGPS: profileUseGPS)
+        let zip = sanitizedZip(resolved.zip ?? localHealthZip)
         guard !zip.isEmpty else {
             await MainActor.run {
                 localHealth = nil
-                localHealthError = "Enter a ZIP code"
+                localHealthError = profileUseGPS
+                    ? "Current location did not resolve a ZIP"
+                    : "Enter a ZIP code"
             }
             return
         }
@@ -8874,11 +8898,15 @@ struct ContentView: View {
                     if let sleepTotalValue = data.sleepTotalMinutes?.value {
                         let todayTotal = Int(sleepTotalValue.rounded())
                         if data.day == chicagoTodayString(), todayTotal == 0, !didAutoSleepSyncToday {
-                            didAutoSleepSyncToday = true
-                            guard !state.healthkitRequestedAtISO.isEmpty, !healthReadAccessLooksDisconnected else {
-                                appLog("[UI] today has 0 sleep — skipping auto sleep sync until Health access is connected")
+                            guard shouldAutoSyncSleepWhenTodayEmpty else {
+                                if !state.selectedHealthPermissionKeys.contains(HealthPermissionOption.sleep.rawValue) {
+                                    appLog("[UI] today has 0 sleep — skipping auto sleep sync because Sleep is not selected")
+                                } else {
+                                    appLog("[UI] today has 0 sleep — waiting for on-device sleep read evidence before auto sync")
+                                }
                                 return
                             }
+                            didAutoSleepSyncToday = true
                             appLog("[UI] today has 0 sleep — running sleep sync (7d)…")
                             await state.syncSleep7d()
                             let delaySeconds = Double.random(in: 1.0...1.2)

@@ -931,6 +931,17 @@ async def fetch_user_location_context(conn, user_id: str) -> dict[str, Any] | No
     zip_col = _pick(cols, ["zip", "postal_code"])
     lat_col = _pick(cols, ["lat", "latitude"])
     lon_col = _pick(cols, ["lon", "lng", "longitude"])
+    gps_col = _pick(
+        cols,
+        [
+            "use_gps",
+            "gps_enabled",
+            "gps_allowed",
+            "use_current_location",
+            "current_location_enabled",
+            "use_device_location",
+        ],
+    )
     primary_col = _pick(cols, ["is_primary", "primary", "is_default"])
     updated_col = _pick(cols, ["updated_at", "created_at"])
     if not user_col:
@@ -940,6 +951,7 @@ async def fetch_user_location_context(conn, user_id: str) -> dict[str, Any] | No
         f"{zip_col} as zip" if zip_col else "null::text as zip",
         f"{lat_col} as lat" if lat_col else "null::double precision as lat",
         f"{lon_col} as lon" if lon_col else "null::double precision as lon",
+        f"{gps_col} as use_gps" if gps_col else "null::boolean as use_gps",
         "coalesce(local_insights_enabled, true) as local_insights_enabled"
         if "local_insights_enabled" in cols
         else "true as local_insights_enabled",
@@ -963,7 +975,15 @@ async def fetch_user_location_context(conn, user_id: str) -> dict[str, Any] | No
     return dict(row) if row else None
 
 
-def build_location_key(zip_code: str | None, lat: float | None, lon: float | None) -> str | None:
+def build_location_key(
+    zip_code: str | None,
+    lat: float | None,
+    lon: float | None,
+    *,
+    prefer_geo: bool = False,
+) -> str | None:
+    if prefer_geo and lat is not None and lon is not None:
+        return f"geo:{round(float(lat), 3):.3f},{round(float(lon), 3):.3f}"
     if zip_code:
         return f"zip:{''.join(ch for ch in str(zip_code) if ch.isdigit())[:10]}"
     if lat is None or lon is None:
@@ -1071,9 +1091,10 @@ async def ensure_local_forecast_daily(
     zip_code: str | None,
     lat: float | None,
     lon: float | None,
+    prefer_geo: bool = False,
     days: int = LOCAL_FORECAST_DAYS,
 ) -> list[dict[str, Any]]:
-    location_key = build_location_key(zip_code, lat, lon)
+    location_key = build_location_key(zip_code, lat, lon, prefer_geo=prefer_geo)
     if not location_key:
         return []
 
@@ -2121,11 +2142,13 @@ async def build_user_outlook_payload(conn, user_id: str) -> dict[str, Any]:
     location = await fetch_user_location_context(conn, user_id)
     local_rows: list[dict[str, Any]] = []
     if location and bool(location.get("local_insights_enabled", True)):
+        prefer_geo = bool(location.get("use_gps"))
         local_rows = await ensure_local_forecast_daily(
             conn,
             zip_code=str(location.get("zip") or "").strip() or None,
             lat=_safe_float(location.get("lat")),
             lon=_safe_float(location.get("lon")),
+            prefer_geo=prefer_geo,
             days=USER_OUTLOOK_INPUT_DAYS,
         )
 
