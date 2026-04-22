@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -10,6 +12,7 @@ from services.drivers.all_drivers import build_all_drivers_payload
 
 
 router = APIRouter(prefix="/v1/users/me", tags=["drivers"])
+DEFAULT_TIMEZONE = os.getenv("GAIA_TIMEZONE", "America/Chicago")
 
 
 def _require_user_id(request: Request) -> str:
@@ -19,6 +22,13 @@ def _require_user_id(request: Request) -> str:
     return user_id
 
 
+def _default_driver_day() -> date:
+    try:
+        return datetime.now(ZoneInfo(DEFAULT_TIMEZONE)).date()
+    except Exception:
+        return datetime.now(timezone.utc).date()
+
+
 @router.get("/drivers", dependencies=[Depends(require_read_auth)])
 async def user_drivers(
     request: Request,
@@ -26,7 +36,7 @@ async def user_drivers(
     conn=Depends(get_db),
 ):
     user_id = _require_user_id(request)
-    target_day = day or datetime.now(timezone.utc).date()
+    target_day = day or _default_driver_day()
     try:
         payload = await build_all_drivers_payload(conn, user_id=user_id, day=target_day)
     except Exception as exc:

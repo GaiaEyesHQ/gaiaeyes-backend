@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import sys
 import unittest
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from services.forecast_outlook import (  # noqa: E402
+    LOCAL_FORECAST_DAYS,
     build_daily_outlook,
     build_window_outlook,
+    ensure_local_forecast_daily,
     parse_swpc_range_forecast,
     parse_swpc_three_day_forecast,
     serialize_local_forecast_rows,
@@ -460,6 +463,62 @@ Outlook For March 23-29
         self.assertIn("geomagnetic", payload[0]["summary"].lower())
         self.assertIn("geomagnetic", payload[0]["voice_semantic"]["interpretation"]["header_summary"].lower())
 
+    def test_build_daily_outlook_uses_app_day_when_filtering_future_rows(self) -> None:
+        merged_rows = [
+            {
+                "day": date(2026, 4, 21),
+                "humidity_avg": 82.0,
+            },
+            {
+                "day": date(2026, 4, 22),
+                "pollen_overall_level": "high",
+                "pollen_overall_index": 4.0,
+                "pollen_primary_type": "tree",
+            },
+        ]
+
+        with patch("services.forecast_outlook._app_today", return_value=date(2026, 4, 21)):
+            payload = build_daily_outlook(
+                merged_rows,
+                pattern_rows=[],
+                gauges={},
+                days=7,
+            )
+
+        self.assertEqual([item["day"] for item in payload], ["2026-04-21", "2026-04-22"])
+
+    def test_build_daily_outlook_keeps_local_driver_visible_when_space_signals_dominate(self) -> None:
+        merged_rows = [
+            {
+                "day": date(2026, 3, 19),
+                "humidity_avg": 70.0,
+                "kp_max_forecast": 5.0,
+                "g_scale_max": "G1",
+                "cme_watch": True,
+                "flare_watch": True,
+            },
+        ]
+
+        payload = build_daily_outlook(
+            merged_rows,
+            pattern_rows=[
+                {
+                    "signal_key": "kp_g1_plus_exposed",
+                    "outcome_key": "fatigue_day",
+                    "confidence": "strong",
+                    "relative_lift": 3.0,
+                    "lag_hours": 24,
+                }
+            ],
+            gauges={"energy": 72},
+            days=7,
+        )
+
+        keys = [driver["key"] for driver in payload[0]["top_drivers"]]
+        self.assertIn("kp", keys)
+        self.assertIn("humidity", keys)
+        self.assertTrue(any(key in {"cme", "flare"} for key in keys))
+
     def test_build_window_outlook_keeps_domain_drivers_within_visible_driver_stack(self) -> None:
         merged_rows = [
             {
@@ -570,6 +629,50 @@ Outlook For March 23-29
         self.assertEqual(space_payload[0]["g_scale_max"], "G2")
         self.assertTrue(space_payload[0]["flare_watch"])
         self.assertFalse(space_payload[0]["cme_watch"])
+
+
+class ForecastOutlookAsyncTests(unittest.IsolatedAsyncioTestCase):
+    async def test_ensure_local_forecast_daily_refreshes_fresh_rows_when_pollen_is_missing(self) -> None:
+        now = datetime.now(UTC)
+        existing = [
+            {
+                "day": date(2026, 4, 21) + timedelta(days=index),
+                "updated_at": now,
+                "pollen_overall_level": None,
+            }
+            for index in range(LOCAL_FORECAST_DAYS)
+        ]
+        refreshed = [
+            {
+                "day": date(2026, 4, 21) + timedelta(days=index),
+                "updated_at": now,
+                "pollen_overall_level": "moderate",
+            }
+            for index in range(LOCAL_FORECAST_DAYS)
+        ]
+
+        class _Conn:
+            async def commit(self) -> None:
+                return None
+
+        with (
+            patch("services.forecast_outlook._fetch_local_forecast_rows", AsyncMock(side_effect=[existing, refreshed])),
+            patch("services.forecast_outlook.summarize_local_forecast_days", return_value=refreshed),
+            patch("services.forecast_outlook._upsert_local_forecast_rows", AsyncMock()) as upsert_rows,
+            patch("services.external.nws.forecast_hourly_by_latlon", AsyncMock(return_value={})),
+            patch("services.external.nws.gridpoints_by_latlon", AsyncMock(return_value={})),
+            patch("services.forecast_outlook.pollen.forecast_by_latlon", AsyncMock(return_value={})),
+        ):
+            payload = await ensure_local_forecast_daily(
+                _Conn(),
+                zip_code="78209",
+                lat=29.49,
+                lon=-98.47,
+                days=LOCAL_FORECAST_DAYS,
+            )
+
+        upsert_rows.assert_awaited_once()
+        self.assertEqual(payload[0]["pollen_overall_level"], "moderate")
 
 
 if __name__ == "__main__":

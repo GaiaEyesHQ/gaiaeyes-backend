@@ -691,7 +691,7 @@ final class APIClient {
     }
 
     func fetchAllDrivers() async throws -> AllDriversSnapshot {
-        try await getJSON("v1/users/me/drivers", as: AllDriversSnapshot.self)
+        try await getJSON("v1/users/me/drivers", as: AllDriversSnapshot.self, perRequestTimeout: 30)
     }
 
     func fetchCurrentSymptomTimeline(days: Int = 7) async throws -> Envelope<[CurrentSymptomTimelineEntry]> {

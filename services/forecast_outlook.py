@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 from collections import Counter, defaultdict
 from datetime import UTC, date, datetime, timedelta, timezone
 from statistics import fmean
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+from zoneinfo import ZoneInfo
 
 try:
     from psycopg.rows import dict_row
@@ -27,6 +29,12 @@ LOCAL_FORECAST_DAYS = 7
 SPACE_FORECAST_DAYS = 7
 USER_OUTLOOK_INPUT_DAYS = 8
 POLLEN_FORECAST_DAYS = 5
+APP_TIMEZONE = os.getenv("GAIA_TIMEZONE", "America/Chicago")
+
+try:
+    APP_TZ = ZoneInfo(APP_TIMEZONE)
+except Exception:
+    APP_TZ = ZoneInfo("America/Chicago")
 
 DOMAIN_LABELS = {
     "pain": "Pain",
@@ -98,6 +106,7 @@ DRIVER_ORDER = {
 }
 
 SPACE_DRIVER_KEYS = {"kp", "solar_wind", "cme", "flare", "radio", "radiation"}
+LOCAL_DRIVER_KEYS = {"pressure", "temp", "humidity", "aqi", "allergens"}
 SEVERITY_RANK = {"high": 3, "watch": 2, "mild": 1, "low": 0}
 SEVERITY_WEIGHT = {"high": 1.8, "watch": 1.35, "mild": 0.9, "low": 0.0}
 
@@ -1068,11 +1077,19 @@ async def ensure_local_forecast_daily(
     if not location_key:
         return []
 
-    today = datetime.now(UTC).date() - timedelta(days=1)
+    now_utc = datetime.now(UTC)
+    today = now_utc.date() - timedelta(days=1)
     existing = await _fetch_local_forecast_rows(conn, location_key, today, days=days)
     if existing:
         newest = max((_parse_iso_datetime(row.get("updated_at")) for row in existing), default=None)
-        if len(existing) >= days and newest and newest >= datetime.now(UTC) - timedelta(hours=LOCAL_REFRESH_HOURS):
+        pollen_window = existing[: min(len(existing), POLLEN_FORECAST_DAYS)]
+        missing_pollen = bool(pollen_window) and not any(
+            str(row.get("pollen_overall_level") or "").strip()
+            for row in pollen_window
+        )
+        # Refresh a fresh-but-empty pollen cache so the 7-day sheet can recover
+        # from transient upstream misses without waiting out the full TTL.
+        if len(existing) >= days and newest and newest >= now_utc - timedelta(hours=LOCAL_REFRESH_HOURS) and not missing_pollen:
             return existing
 
     resolved_lat = lat
@@ -1338,6 +1355,10 @@ def _serialize_iso_value(value: Any) -> Any:
     if isinstance(value, date):
         return value.isoformat()
     return value
+
+
+def _app_today() -> date:
+    return datetime.now(APP_TZ).date()
 
 
 def serialize_local_forecast_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -1816,7 +1837,7 @@ def build_window_outlook(
             )
             if isinstance(item, date)
         ),
-        date.today(),
+        _app_today(),
     )
 
     window_label = "24 hours" if window_hours == 24 else "72 hours" if window_hours == 72 else "7 days" if window_hours == 168 else f"{window_hours} hours"
@@ -1949,7 +1970,7 @@ def build_window_outlook(
 
 
 def _daily_outlook_label(day: date, index: int) -> str:
-    today = date.today()
+    today = _app_today()
     if day == today:
         return "Today"
     if day == today + timedelta(days=1):
@@ -1999,6 +2020,21 @@ def _balanced_daily_drivers(row: Mapping[str, Any], window_top_drivers: Sequence
             selected[-1] = space_candidate
         else:
             selected.append(space_candidate)
+        selected_keys = {_driver_key(driver) for driver in selected}
+
+    local_candidate = next(
+        (
+            dict(driver)
+            for driver in all_drivers
+            if _driver_key(driver) in LOCAL_DRIVER_KEYS and _driver_key(driver) not in selected_keys
+        ),
+        None,
+    )
+    if local_candidate and not any(_driver_key(driver) in LOCAL_DRIVER_KEYS for driver in selected):
+        if len(selected) >= 3:
+            selected[-1] = local_candidate
+        else:
+            selected.append(local_candidate)
 
     balanced: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -2034,7 +2070,7 @@ def build_daily_outlook(
     days: int = 7,
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    today = datetime.now(UTC).date()
+    today = _app_today()
     current_rows = [
         row
         for row in merged_rows
@@ -2141,7 +2177,7 @@ async def build_user_outlook_payload(conn, user_id: str) -> dict[str, Any]:
 
     generated_at = datetime.now(UTC).isoformat()
     overview_semantic = build_user_outlook_overview_semantic(
-        day=datetime.now(UTC).date(),
+        day=_app_today(),
         available_windows=available_windows,
         forecast_data_ready={
             "location_found": bool(location),

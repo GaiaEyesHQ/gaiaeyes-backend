@@ -43,7 +43,10 @@ def override_db_dependency():
 
 @pytest.fixture
 async def client():
-    transport = ASGITransport(app=app, lifespan="off")
+    try:
+        transport = ASGITransport(app=app, lifespan="off")
+    except TypeError:
+        transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
 
@@ -132,3 +135,40 @@ async def test_user_drivers_endpoint_returns_snapshot(monkeypatch, client: Async
     assert payload["summary"]["active_driver_count"] == 2
     assert payload["drivers"][0]["key"] == "solar_wind"
     assert payload["drivers"][0]["aliases"] == ["solar_wind", "sw"]
+
+
+@pytest.mark.anyio
+async def test_user_drivers_endpoint_uses_app_day_when_day_is_omitted(monkeypatch, client: AsyncClient):
+    user_id = str(uuid4())
+    headers = {
+        "Authorization": "Bearer test-token",
+        "X-Dev-UserId": user_id,
+    }
+
+    monkeypatch.setattr(drivers_router, "_default_driver_day", lambda: date(2026, 3, 27))
+
+    async def _payload(conn, *, user_id: str, day: date):  # noqa: ARG001
+        assert day == date(2026, 3, 27)
+        return {
+            "generated_at": "2026-03-27T12:00:00Z",
+            "asof": "2026-03-27T11:55:00Z",
+            "day": "2026-03-27",
+            "summary": {
+                "active_driver_count": 0,
+                "total_count": 0,
+                "strongest_category": None,
+                "primary_state": None,
+                "note": "Conditions look relatively calm.",
+                "has_personal_patterns": False,
+            },
+            "has_personal_patterns": False,
+            "filters": [{"key": "all", "label": "All"}],
+            "drivers": [],
+            "setup_hints": [],
+        }
+
+    monkeypatch.setattr(drivers_router, "build_all_drivers_payload", _payload)
+
+    response = await client.get("/v1/users/me/drivers", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["day"] == "2026-03-27"

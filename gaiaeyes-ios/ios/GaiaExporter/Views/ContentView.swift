@@ -4372,8 +4372,17 @@ struct ContentView: View {
         return trimmed.isEmpty ? TimeZone.current.identifier : trimmed
     }
 
+    private var featuresRequestTimeZoneIdentifier: String {
+        let trimmed = preferredTimeZoneIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = trimmed.uppercased()
+        if normalized.isEmpty || normalized == "UTC" || normalized == "GMT" || normalized == "ETC/UTC" || normalized == "ETC/GMT" {
+            return "America/Chicago"
+        }
+        return trimmed
+    }
+
     private var featuresTodayPath: String {
-        let encoded = preferredTimeZoneIdentifier.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? preferredTimeZoneIdentifier
+        let encoded = featuresRequestTimeZoneIdentifier.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? featuresRequestTimeZoneIdentifier
         return "v1/features/today?tz=\(encoded)"
     }
     
@@ -4565,7 +4574,7 @@ struct ContentView: View {
 
         let api = state.apiWithAuth()
         do {
-            let envelope = try await api.fetchFeaturesDiagnostics(tz: preferredTimeZoneIdentifier)
+            let envelope = try await api.fetchFeaturesDiagnostics(tz: featuresRequestTimeZoneIdentifier)
             if let diagnostics = envelope.diagnostics {
                 featuresDiagnostics = diagnostics
                 let src = diagnostics.source ?? "-"
