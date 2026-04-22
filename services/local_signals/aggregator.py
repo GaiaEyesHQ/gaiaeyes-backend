@@ -92,6 +92,37 @@ def _weather_from_row(row: dict | None) -> Dict[str, Any]:
     return weather if isinstance(weather, dict) else {}
 
 
+def _airnow_distance_ladder() -> tuple[int, ...]:
+    base = max(int(getattr(airnow, "DEFAULT_RADIUS_MI", 25) or 25), 1)
+    ladder: list[int] = [base]
+    for fallback in (50, 100):
+        if fallback not in ladder:
+            ladder.append(fallback)
+    return tuple(ladder)
+
+
+async def _fetch_air_quality(zip_code: str, lat: float, lon: float) -> list[dict]:
+    for radius in _airnow_distance_ladder():
+        try:
+            aq_list = await airnow.current_by_latlon(lat, lon, distance_miles=radius)
+        except Exception as e:
+            print(f"[local_signals] AirNow lat/lon error for zip={zip_code} radius={radius}: {e}")
+            aq_list = []
+        if aq_list:
+            return aq_list
+
+    for radius in _airnow_distance_ladder():
+        try:
+            aq_list = await airnow.current_by_zip(zip_code, distance_miles=radius)
+        except Exception as e:
+            print(f"[local_signals] AirNow ZIP error for zip={zip_code} radius={radius}: {e}")
+            aq_list = []
+        if aq_list:
+            return aq_list
+
+    return []
+
+
 def ensure_weather_fields(zip_code: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         return payload
@@ -211,13 +242,10 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
     baro_trend_3h = _trend(baro_delta_3h, tol=1.5)  # ≈ ±1.5 hPa over 3h
 
     aq_list, pollen_payload = await asyncio.gather(
-        airnow.current_by_zip(zip_code),
+        _fetch_air_quality(zip_code, lat, lon),
         pollen.forecast_by_latlon(lat, lon, days=3),
         return_exceptions=True,
     )
-    if isinstance(aq_list, Exception):
-        print(f"[local_signals] AirNow error for zip={zip_code}: {aq_list}")
-        aq_list = []
     if isinstance(pollen_payload, Exception):
         print(f"[local_signals] pollen forecast error for zip={zip_code}: {pollen_payload}")
         pollen_payload = {}
