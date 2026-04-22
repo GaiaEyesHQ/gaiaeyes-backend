@@ -27,13 +27,12 @@ struct GaiaEyesApp: App {
                 }
                 .task {
                     auth.loadFromKeychain()
-                    await RevenueCatService.shared.identifyIfNeeded(appUserID: auth.currentSupabaseUserId())
+                    await RevenueCatService.shared.syncIdentity(appUserID: auth.currentSupabaseUserId())
                 }
                 .onChange(of: auth.supabaseAccessToken) { _, token in
                     Task {
-                        if token != nil {
-                            await RevenueCatService.shared.identifyIfNeeded(appUserID: auth.currentSupabaseUserId())
-                        }
+                        _ = token
+                        await RevenueCatService.shared.syncIdentity(appUserID: auth.currentSupabaseUserId())
                     }
                 }
         }

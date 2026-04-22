@@ -6227,9 +6227,19 @@ struct ContentView: View {
         if !backendAvailable, let cached = decodeUserOutlook(from: userOutlookCacheJSON) {
             await MainActor.run { lastKnownUserOutlook = cached }
         }
-        await MainActor.run {
+        let shouldStart = await MainActor.run { () -> Bool in
+            if userOutlookLoading {
+                return false
+            }
             userOutlookLoading = true
             userOutlookError = nil
+            return true
+        }
+        guard shouldStart else { return }
+        defer {
+            Task { @MainActor in
+                userOutlookLoading = false
+            }
         }
         let api = override ?? state.apiWithAuth()
         do {
@@ -6240,19 +6250,15 @@ struct ContentView: View {
                 } else {
                     applyUserOutlook(payload)
                 }
-                userOutlookLoading = false
             }
         } catch is CancellationError {
-            await MainActor.run { userOutlookLoading = false }
         } catch let uerr as URLError where uerr.code == .cancelled {
-            await MainActor.run { userOutlookLoading = false }
         } catch {
             if let cached = decodeUserOutlook(from: userOutlookCacheJSON) {
                 await MainActor.run { lastKnownUserOutlook = cached }
             }
             await MainActor.run {
                 userOutlookError = error.localizedDescription
-                userOutlookLoading = false
             }
         }
     }
@@ -9604,23 +9610,13 @@ struct ContentView: View {
     // Decide which Features snapshot to display (today or fallback to yesterday)
     private func selectDisplayFeatures(for f: FeaturesToday) -> (FeaturesToday, Bool) {
         let todayStr = chicagoTodayString()
-        var candidate = f
-        var usingYesterday = false
-        let todayTotal = Int((f.sleepTotalMinutes?.value ?? 0).rounded())
-        let forceYesterdayFallback = !hasUsableBodyData(f)
-        if f.day == todayStr && (todayTotal == 0 || forceYesterdayFallback) {
-            var updatedRecently = false
-            if let iso = f.updatedAt, let ts = formatISO(iso) {
-                updatedRecently = ts.addingTimeInterval(600) > Date()
-            }
-            if forceYesterdayFallback || !updatedRecently {
-                if let previous = previousDayFallbackFeatures(for: todayStr) {
-                    candidate = previous
-                    usingYesterday = true
-                }
-            }
+        guard f.day == todayStr, !hasUsableBodyData(f) else {
+            return (f, false)
         }
-        return (candidate, usingYesterday)
+        if let previous = previousDayFallbackFeatures(for: todayStr) {
+            return (previous, true)
+        }
+        return (f, false)
     }
     
     #endif

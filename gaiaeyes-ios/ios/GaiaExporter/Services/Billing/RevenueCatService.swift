@@ -81,6 +81,20 @@ enum RevenueCatBillingError: LocalizedError {
 final class RevenueCatService: ObservableObject {
     static let shared = RevenueCatService()
 
+    private enum CacheKeys {
+        static let suiteName = "com.revenuecat.user_defaults"
+        static let appUserID = "com.revenuecat.userdefaults.appUserID.new"
+        static let legacyAppUserID = "com.revenuecat.userdefaults.appUserID"
+        static let subscriberAttributes = "com.revenuecat.userdefaults.subscriberAttributes"
+        static let customerInfoPrefix = "com.revenuecat.userdefaults.purchaserInfo."
+        static let customerInfoLastUpdatedPrefix = "com.revenuecat.userdefaults.purchaserInfoLastUpdated."
+        static let offeringsPrefix = "com.revenuecat.userdefaults.offerings."
+        static let legacySubscriberAttributesPrefix = "com.revenuecat.userdefaults.subscriberAttributes."
+        static let attributionPrefix = "com.revenuecat.userdefaults.attribution."
+        static let virtualCurrenciesPrefix = "com.revenuecat.userdefaults.virtualCurrencies."
+        static let virtualCurrenciesLastUpdatedPrefix = "com.revenuecat.userdefaults.virtualCurrenciesLastUpdated."
+    }
+
     @Published private(set) var isConfigured = false
     @Published private(set) var activePlan: MembershipPlan = .free
     @Published private(set) var activeEntitlementIDs: [String] = []
@@ -111,6 +125,15 @@ final class RevenueCatService: ObservableObject {
 
     private init() {}
 
+    func syncIdentity(appUserID: String?) async {
+        guard let normalizedAppUserID = normalizedAppUserID(appUserID) else {
+            await handleSignedOutIdentity()
+            return
+        }
+
+        await identifyIfNeeded(appUserID: normalizedAppUserID)
+    }
+
     func configureIfNeeded(appUserID: String? = nil) throws {
         if isConfigured {
             return
@@ -129,15 +152,24 @@ final class RevenueCatService: ObservableObject {
     }
 
     func identifyIfNeeded(appUserID: String?) async {
-        guard let appUserID, !appUserID.isEmpty else { return }
+        guard let appUserID = normalizedAppUserID(appUserID) else { return }
+        let wasConfigured = isConfigured
+        let previousConfiguredAppUserID = configuredAppUserID
         do {
             try configureIfNeeded(appUserID: appUserID)
-            guard configuredAppUserID != appUserID else {
+
+            guard wasConfigured, previousConfiguredAppUserID != appUserID else {
+                pruneCachedState(keepingAppUserIDs: Set([appUserID]), clearStoredCurrentUserID: false)
                 return
             }
+
             let customerInfo = try await logIn(appUserID: appUserID)
             configuredAppUserID = appUserID
             apply(customerInfo: customerInfo)
+            pruneCachedState(
+                keepingAppUserIDs: Set([currentRevenueCatAppUserID() ?? appUserID]),
+                clearStoredCurrentUserID: false
+            )
         } catch {
             lastError = error.localizedDescription
         }
@@ -214,9 +246,15 @@ final class RevenueCatService: ObservableObject {
     func logOutIfConfigured() async {
         guard isConfigured, configuredAppUserID != nil else { return }
         do {
+            if let currentAppUserID = currentRevenueCatAppUserID() {
+                pruneCachedState(keepingAppUserIDs: Set([currentAppUserID]), clearStoredCurrentUserID: false)
+            }
             let customerInfo = try await Purchases.shared.logOut()
             configuredAppUserID = nil
             apply(customerInfo: customerInfo)
+            if let currentAppUserID = currentRevenueCatAppUserID() {
+                pruneCachedState(keepingAppUserIDs: Set([currentAppUserID]), clearStoredCurrentUserID: false)
+            }
         } catch {
             lastError = error.localizedDescription
         }
@@ -250,5 +288,102 @@ final class RevenueCatService: ObservableObject {
         activeEntitlementIDs = activeIDs
         activePlan = activeIDs.contains(config.proEntitlementID) ? .pro : (activeIDs.contains(config.plusEntitlementID) ? .plus : .free)
         lastSyncAt = Date()
+    }
+
+    private func handleSignedOutIdentity() async {
+        if isConfigured {
+            if configuredAppUserID != nil {
+                await logOutIfConfigured()
+            } else if let currentAppUserID = currentRevenueCatAppUserID() {
+                pruneCachedState(keepingAppUserIDs: Set([currentAppUserID]), clearStoredCurrentUserID: false)
+            }
+        } else {
+            pruneCachedState(keepingAppUserIDs: Set<String>(), clearStoredCurrentUserID: true)
+        }
+
+        configuredAppUserID = nil
+        activePlan = .free
+        activeEntitlementIDs = []
+    }
+
+    private func normalizedAppUserID(_ appUserID: String?) -> String? {
+        guard let trimmed = appUserID?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private func currentRevenueCatAppUserID() -> String? {
+        guard isConfigured else { return nil }
+        return normalizedAppUserID(Purchases.shared.appUserID)
+    }
+
+    private func pruneCachedState(keepingAppUserIDs: Set<String>, clearStoredCurrentUserID: Bool) {
+        let stores = [UserDefaults.standard, UserDefaults(suiteName: CacheKeys.suiteName)].compactMap { $0 }
+        var removedUserIDs = Set<String>()
+        for store in stores {
+            removedUserIDs.formUnion(
+                pruneCachedState(
+                    in: store,
+                    keepingAppUserIDs: keepingAppUserIDs,
+                    clearStoredCurrentUserID: clearStoredCurrentUserID
+                )
+            )
+        }
+
+        guard !removedUserIDs.isEmpty else { return }
+        let kept = keepingAppUserIDs.sorted().joined(separator: ",")
+        let removed = removedUserIDs.sorted().joined(separator: ",")
+        appLog("[RC] pruned cached identities removed=[\(removed)] keep=[\(kept)]")
+    }
+
+    private func pruneCachedState(
+        in defaults: UserDefaults,
+        keepingAppUserIDs: Set<String>,
+        clearStoredCurrentUserID: Bool
+    ) -> Set<String> {
+        var removedUserIDs = Set<String>()
+
+        if let groupedAttributes = defaults.dictionary(forKey: CacheKeys.subscriberAttributes) {
+            let filteredAttributes = groupedAttributes.filter { keepingAppUserIDs.contains($0.key) }
+            removedUserIDs.formUnion(groupedAttributes.keys.filter { !keepingAppUserIDs.contains($0) })
+            if filteredAttributes.isEmpty {
+                defaults.removeObject(forKey: CacheKeys.subscriberAttributes)
+            } else {
+                defaults.set(filteredAttributes, forKey: CacheKeys.subscriberAttributes)
+            }
+        }
+
+        let userScopedPrefixes = [
+            CacheKeys.customerInfoPrefix,
+            CacheKeys.customerInfoLastUpdatedPrefix,
+            CacheKeys.offeringsPrefix,
+            CacheKeys.legacySubscriberAttributesPrefix,
+            CacheKeys.attributionPrefix,
+            CacheKeys.virtualCurrenciesPrefix,
+            CacheKeys.virtualCurrenciesLastUpdatedPrefix,
+        ]
+
+        for key in defaults.dictionaryRepresentation().keys {
+            guard let prefix = userScopedPrefixes.first(where: { key.hasPrefix($0) }) else { continue }
+            let appUserID = String(key.dropFirst(prefix.count))
+            guard !appUserID.isEmpty, !keepingAppUserIDs.contains(appUserID) else { continue }
+            defaults.removeObject(forKey: key)
+            removedUserIDs.insert(appUserID)
+        }
+
+        if clearStoredCurrentUserID {
+            if let cachedAppUserID = normalizedAppUserID(defaults.string(forKey: CacheKeys.appUserID)) {
+                removedUserIDs.insert(cachedAppUserID)
+            }
+            if let cachedLegacyAppUserID = normalizedAppUserID(defaults.string(forKey: CacheKeys.legacyAppUserID)) {
+                removedUserIDs.insert(cachedLegacyAppUserID)
+            }
+            defaults.removeObject(forKey: CacheKeys.appUserID)
+            defaults.removeObject(forKey: CacheKeys.legacyAppUserID)
+        }
+
+        return removedUserIDs
     }
 }
