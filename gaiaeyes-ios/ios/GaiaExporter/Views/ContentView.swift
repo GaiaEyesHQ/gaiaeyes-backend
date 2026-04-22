@@ -3471,9 +3471,14 @@ struct ContentView: View {
         async let presetsTask: Void = refreshSymptomPresets(api: api)
         async let cameraTask: Void = fetchLatestCameraCheck()
         async let homeFeedTask: Void = fetchHomeFeed()
+        async let healthRepairTask: Void = {
+            let shouldRepair = await MainActor.run { auth.signedInEmail != nil }
+            guard shouldRepair else { return }
+            await HealthKitBackgroundSync.shared.kickOnce(reason: "auth scope changed")
+        }()
         _ = await (dashboardTask, featuresTask, profileTask)
         _ = await (notificationTask, currentSymptomsTask, dailyCheckInTask)
-        _ = await (driversTask, presetsTask, cameraTask, homeFeedTask)
+        _ = await (driversTask, presetsTask, cameraTask, homeFeedTask, healthRepairTask)
         appLog("[UI] post-auth refresh complete scope=\(String(expectedScope.prefix(8)))")
     }
 

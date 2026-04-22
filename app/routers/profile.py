@@ -866,6 +866,43 @@ async def _fetch_location_row(conn, user_id: str) -> Optional[Dict[str, Any]]:
         return await cur.fetchone()
 
 
+async def _resolve_profile_location_coordinates(
+    payload: "ProfileLocationIn",
+    existing_row: Optional[Dict[str, Any]],
+) -> tuple[Optional[str], Optional[float], Optional[float]]:
+    zip_code = _normalize_zip(payload.zip)
+    lat = payload.lat
+    lon = payload.lon
+
+    if lat is not None and lon is not None:
+        return zip_code, lat, lon
+
+    existing_zip = _normalize_zip((existing_row or {}).get("zip"))
+    existing_lat = (existing_row or {}).get("lat")
+    existing_lon = (existing_row or {}).get("lon")
+
+    if zip_code and existing_zip == zip_code and existing_lat is not None and existing_lon is not None:
+        return (
+            zip_code,
+            existing_lat if lat is None else lat,
+            existing_lon if lon is None else lon,
+        )
+
+    if zip_code and (lat is None or lon is None):
+        try:
+            from services.geo.zip_lookup import zip_to_latlon
+
+            resolved_lat, resolved_lon = await asyncio.to_thread(zip_to_latlon, zip_code)
+            if lat is None:
+                lat = resolved_lat
+            if lon is None:
+                lon = resolved_lon
+        except Exception:
+            pass
+
+    return zip_code, lat, lon
+
+
 async def _fetch_profile_preferences(conn, user_id: str) -> Dict[str, Any]:
     defaults = _default_profile_preferences()
     columns = await _table_columns(conn, "app", "user_experience_profiles")
@@ -1008,6 +1045,7 @@ async def profile_location_upsert(
     conn=Depends(get_db),
 ):
     user_id = _require_user_id(request)
+    existing_row = await _fetch_location_row(conn, user_id)
     cols = await _table_columns(conn, "app", "user_locations")
     if not cols:
         return {"ok": False, "error": "app.user_locations table unavailable"}
@@ -1028,13 +1066,14 @@ async def profile_location_upsert(
     if not user_col:
         return {"ok": False, "error": "app.user_locations missing user_id"}
 
+    resolved_zip, resolved_lat, resolved_lon = await _resolve_profile_location_coordinates(payload, existing_row)
     values: Dict[str, Any] = {}
     if zip_col:
-        values[zip_col] = _normalize_zip(payload.zip)
+        values[zip_col] = resolved_zip
     if lat_col:
-        values[lat_col] = payload.lat
+        values[lat_col] = resolved_lat
     if lon_col:
-        values[lon_col] = payload.lon
+        values[lon_col] = resolved_lon
     if gps_col and payload.use_gps is not None:
         values[gps_col] = bool(payload.use_gps)
     if local_col and payload.local_insights_enabled is not None:
