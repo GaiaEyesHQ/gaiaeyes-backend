@@ -935,6 +935,55 @@ private struct SignalBarSchumannTomskLatestEnvelope: Codable {
     }
 }
 
+private struct SignalBarTomskSeriesResponse: Codable {
+    let points: [SignalBarTomskSeriesPoint]?
+}
+
+private struct SignalBarTomskSeriesPoint: Codable, Identifiable {
+    let ts: String?
+    let values: [String: Double]
+
+    var id: String { ts ?? UUID().uuidString }
+
+    private enum ReservedCodingKeys: String, CodingKey {
+        case ts
+    }
+
+    init(from decoder: Decoder) throws {
+        let reserved = try decoder.container(keyedBy: ReservedCodingKeys.self)
+        let dynamic = try decoder.container(keyedBy: SignalBarDynamicCodingKey.self)
+
+        ts = try reserved.decodeIfPresent(String.self, forKey: .ts)
+
+        var mapped: [String: Double] = [:]
+        for key in dynamic.allKeys {
+            if key.stringValue == "ts" {
+                continue
+            }
+            if let value = try? dynamic.decodeIfPresent(Double.self, forKey: key) {
+                mapped[key.stringValue] = value
+            } else if let intValue = try? dynamic.decodeIfPresent(Int.self, forKey: key) {
+                mapped[key.stringValue] = Double(intValue)
+            } else if let stringValue = try? dynamic.decodeIfPresent(String.self, forKey: key),
+                      let number = Double(stringValue) {
+                mapped[key.stringValue] = number
+            }
+        }
+        values = mapped
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var reserved = encoder.container(keyedBy: ReservedCodingKeys.self)
+        try reserved.encodeIfPresent(ts, forKey: .ts)
+
+        var dynamic = encoder.container(keyedBy: SignalBarDynamicCodingKey.self)
+        for (key, value) in values {
+            guard let codingKey = SignalBarDynamicCodingKey(stringValue: key) else { continue }
+            try dynamic.encode(value, forKey: codingKey)
+        }
+    }
+}
+
 private struct UserPatternCard: Codable, Hashable, Identifiable {
     let signalKey: String
     let signal: String
@@ -3102,6 +3151,7 @@ struct ContentView: View {
 
     @AppStorage("gaia.schumann.signalbar.tomsk_cache_json") private var schumannSignalBarTomskCacheJSON: String = ""
     @AppStorage("gaia.schumann.signalbar.latest_cache_json") private var schumannSignalBarLatestCacheJSON: String = ""
+    @AppStorage("gaia.schumann.signalbar.tomsk_q1_value") private var schumannSignalBarTomskQ1Value: String = ""
     @AppStorage("local_health_zip") private var localHealthZip: String = "78209"
     @AppStorage("did_location_onboarding") private var didLocationOnboarding: Bool = false
     @AppStorage("gaia.onboarding.completed") private var onboardingCompleted: Bool = false
@@ -3917,14 +3967,20 @@ struct ContentView: View {
     }
 
     private func signalBarDisplayValue(for item: SignalPill, key: String) -> String {
-        guard key == "pressure" else {
+        switch key {
+        case "pressure":
+            if let liveValue = pressureSignalBarValue(from: localHealth?.weather) {
+                return liveValue
+            }
+            let cached = signalBarPressureValueCache.trimmingCharacters(in: .whitespacesAndNewlines)
+            return cached.isEmpty ? item.value : cached
+        case "kp":
+            return signalBarKPValue() ?? item.value
+        case "solar_wind", "sw":
+            return signalBarSolarWindValue() ?? item.value
+        default:
             return item.value
         }
-        if let liveValue = pressureSignalBarValue(from: localHealth?.weather) {
-            return liveValue
-        }
-        let cached = signalBarPressureValueCache.trimmingCharacters(in: .whitespacesAndNewlines)
-        return cached.isEmpty ? item.value : cached
     }
 
     private func pressureSignalBarValue(from weather: LocalWeather?) -> String? {
@@ -3951,6 +4007,25 @@ struct ContentView: View {
         if let value = pressureSignalBarValue(from: payload.weather) {
             signalBarPressureValueCache = value
         }
+    }
+
+    private func signalBarSpaceMetrics() -> SpaceWeatherCardMetrics {
+        SpaceWeatherCardMetrics(
+            current: features ?? lastKnownFeatures,
+            outlook: resolvedSpaceOutlookPayload,
+            series: resolvedSeriesPayload,
+            magnetosphere: magnetosphere
+        )
+    }
+
+    private func signalBarKPValue() -> String? {
+        guard let kp = signalBarSpaceMetrics().kpNow else { return nil }
+        return String(format: "%.1f", kp)
+    }
+
+    private func signalBarSolarWindValue() -> String? {
+        guard let speed = signalBarSpaceMetrics().swSpeedNow else { return nil }
+        return String(format: "%.0f km/s", speed)
     }
 
     private func activeSignalStatesFromDashboard() -> [String: SignalBarState] {
@@ -5797,6 +5872,67 @@ struct ContentView: View {
         return false
     }
 
+    private func hasUsableBodyData(_ features: FeaturesToday) -> Bool {
+        bodyMetricScore(for: features) > 0
+    }
+
+    private func previousDayFallbackFeatures(for todayStr: String) -> FeaturesToday? {
+        if let previous = lastKnownFeatures,
+           previous.day != todayStr,
+           (hasUsableSleepData(previous) || hasUsableBodyData(previous)) {
+            return previous
+        }
+        if let data = featuresCacheJSON.data(using: .utf8) {
+            let dec = JSONDecoder()
+            dec.keyDecodingStrategy = .convertFromSnakeCase
+            if let cached = try? dec.decode(FeaturesToday.self, from: data),
+               cached.day != todayStr,
+               (hasUsableSleepData(cached) || hasUsableBodyData(cached)) {
+                return cached
+            }
+        }
+        return nil
+    }
+
+    private func shouldRetainPreviousDayFallback(current: FeaturesToday?, incoming: FeaturesToday) -> Bool {
+        guard let current else { return false }
+        guard current.day < incoming.day else { return false }
+        guard hasUsableSleepData(current) || hasUsableBodyData(current) else { return false }
+        return !hasUsableSleepData(incoming) && !hasUsableBodyData(incoming)
+    }
+
+    private func bodySnapshotValueHasUsableContent(_ value: Any?) -> Bool {
+        switch value {
+        case nil, is NSNull:
+            return false
+        case let string as String:
+            return string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        case let dict as [String: Any]:
+            if dict.isEmpty { return false }
+            if let nestedValue = dict["value"] {
+                return bodySnapshotValueHasUsableContent(nestedValue)
+            }
+            return dict.values.contains { bodySnapshotValueHasUsableContent($0) }
+        case let array as [Any]:
+            return array.contains { bodySnapshotValueHasUsableContent($0) }
+        default:
+            return true
+        }
+    }
+
+    private func bodySnapshotNumericValue(_ value: Any?) -> Double? {
+        switch value {
+        case let number as NSNumber:
+            return number.doubleValue
+        case let string as String:
+            return Double(string.trimmingCharacters(in: .whitespacesAndNewlines))
+        case let dict as [String: Any]:
+            return bodySnapshotNumericValue(dict["value"])
+        default:
+            return nil
+        }
+    }
+
     private func mergedFeaturesPreservingBody(base: FeaturesToday, bodyFrom donor: FeaturesToday) -> FeaturesToday {
         guard base.day == donor.day else { return base }
         let encoder = JSONEncoder()
@@ -5827,10 +5963,51 @@ struct ContentView: View {
         return merged
     }
 
+    private func mergedFeaturesFillingMissingBody(base: FeaturesToday, bodyFrom donor: FeaturesToday) -> FeaturesToday {
+        guard base.day == donor.day else { return base }
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        guard
+            let baseData = try? encoder.encode(base),
+            let donorData = try? encoder.encode(donor),
+            let baseObject = try? JSONSerialization.jsonObject(with: baseData),
+            let donorObject = try? JSONSerialization.jsonObject(with: donorData),
+            var baseDict = baseObject as? [String: Any],
+            let donorDict = donorObject as? [String: Any]
+        else {
+            return base
+        }
+        for key in bodySnapshotMergeKeys {
+            guard let donorValue = donorDict[key], bodySnapshotValueHasUsableContent(donorValue) else { continue }
+            if key == "steps_total",
+               let donorSteps = bodySnapshotNumericValue(donorValue),
+               let baseSteps = bodySnapshotNumericValue(baseDict[key]) {
+                if donorSteps > baseSteps {
+                    baseDict[key] = donorValue
+                }
+                continue
+            }
+            if bodySnapshotValueHasUsableContent(baseDict[key]) { continue }
+            baseDict[key] = donorValue
+        }
+        guard
+            let mergedData = try? JSONSerialization.data(withJSONObject: baseDict),
+            let merged = try? decoder.decode(FeaturesToday.self, from: mergedData)
+        else {
+            return base
+        }
+        return merged
+    }
+
     private func resolvedFeaturesResponse(_ incoming: FeaturesToday) -> FeaturesToday {
         guard let current = lastKnownFeatures ?? features else { return incoming }
         if sameDayBodySnapshotIsRicher(current, than: incoming) {
             return mergedFeaturesPreservingBody(base: incoming, bodyFrom: current)
+        }
+        if current.day == incoming.day {
+            return mergedFeaturesFillingMissingBody(base: incoming, bodyFrom: current)
         }
         return incoming
     }
@@ -5842,6 +6019,9 @@ struct ContentView: View {
         }
         if sameDayBodySnapshotIsRicher(cached, than: current) {
             return mergedFeaturesPreservingBody(base: current, bodyFrom: cached)
+        }
+        if cached.day == current.day {
+            return mergedFeaturesFillingMissingBody(base: current, bodyFrom: cached)
         }
         if let cachedUpdated = cached.updatedAt.flatMap(formatISO),
            let currentUpdated = current.updatedAt.flatMap(formatISO),
@@ -6423,6 +6603,20 @@ struct ContentView: View {
         return normalizedSchumannHz(envelope.frequencyHz?["F1"] ?? envelope.frequencyHz?["f1"])
     }
 
+    private func signalBarTomskMetricValue(_ values: [String: Double]?, key: String) -> Double? {
+        values?[key] ?? values?[key.lowercased()] ?? values?[key.uppercased()]
+    }
+
+    private func signalBarTomskSeriesQ1(from response: SignalBarTomskSeriesResponse) -> Double? {
+        response.points?
+            .sorted { ($0.ts ?? "") < ($1.ts ?? "") }
+            .reversed()
+            .compactMap { point in
+                signalBarTomskMetricValue(point.values, key: "Q1")
+            }
+            .first
+    }
+
     private func normalizedSchumannHz(_ value: Double?) -> Double? {
         guard var value else { return nil }
         while value > 40 {
@@ -6461,6 +6655,23 @@ struct ContentView: View {
                 }
             }
             tomskPill = signalBarSchumannPill(from: tomskEnvelope)
+
+            let needsQ1Fallback =
+                signalBarTomskMetricValue(tomskEnvelope.qFactor, key: "Q1") == nil &&
+                tomskEnvelope.coherence?.q1Value == nil
+            if needsQ1Fallback,
+               let seriesResponse: SignalBarTomskSeriesResponse = await bestEffortDashboardJSON(
+                api: api,
+                path: "v1/earth/schumann/tomsk_params/series?hours=48&station_id=tomsk",
+                as: SignalBarTomskSeriesResponse.self,
+                timeout: 5,
+                label: "signal bar tomsk series"
+               ),
+               let q1 = signalBarTomskSeriesQ1(from: seriesResponse) {
+                await MainActor.run {
+                    schumannSignalBarTomskQ1Value = String(q1)
+                }
+            }
         }
 
         let latestEnvelope: SignalBarSchumannLatestEnvelope? = await bestEffortDashboardJSON(
@@ -8399,6 +8610,19 @@ struct ContentView: View {
         return try? JSONDecoder().decode(SignalBarSchumannLatestEnvelope.self, from: data)
     }
 
+    private func decodeCachedSchumannTomskQ1() -> Double? {
+        let trimmed = schumannSignalBarTomskQ1Value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let value = Double(trimmed) {
+            return value
+        }
+        let defaults = UserDefaults.standard
+        guard let data = defaults.data(forKey: "gaia.schumann.endpoint_cache.sch_tomsk_series_48h.data"),
+              let cached = try? JSONDecoder().decode(SignalBarTomskSeriesResponse.self, from: data) else {
+            return nil
+        }
+        return signalBarTomskSeriesQ1(from: cached)
+    }
+
     @MainActor
     private func preloadCachedSchumannSignalBarState() {
         if liveSchumannTomskLatest == nil, let cached = decodeCachedSchumannSignalBarTomsk() {
@@ -8415,6 +8639,10 @@ struct ContentView: View {
                       let pill = signalBarSchumannPill(from: latest) {
                 liveSchumannSignalBarItem = pill
             }
+        }
+        if schumannSignalBarTomskQ1Value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let q1 = decodeCachedSchumannTomskQ1() {
+            schumannSignalBarTomskQ1Value = String(q1)
         }
     }
 
@@ -8447,22 +8675,30 @@ struct ContentView: View {
         if (envelope.source ?? "") == "live" {
             self.featuresRefreshGuardUntil = Date()
         }
+        let previousFallback = self.lastKnownFeatures
         let resolved = resolvedFeaturesResponse(data)
+        let retainPreviousDayFallback = shouldRetainPreviousDayFallback(current: previousFallback, incoming: resolved)
         updateFeaturesDiagnostics(from: envelope, fallback: false)
         self.features = resolved
-        self.lastKnownFeatures = resolved
         self.featuresLastEnvelopeOk = envelope.ok
         self.featuresLastEnvelopeSource = envelope.source
         self.featuresCancellations = envelope.cancellations ?? []
-        if let encoded = try? JSONEncoder().encode(resolved),
-           let json = String(data: encoded, encoding: .utf8) {
-            markUserScopedCacheOwner()
-            self.featuresCacheJSON = json
+        if retainPreviousDayFallback {
+            self.lastKnownFeatures = previousFallback
+        } else {
+            self.lastKnownFeatures = resolved
+            if let encoded = try? JSONEncoder().encode(resolved),
+               let json = String(data: encoded, encoding: .utf8) {
+                markUserScopedCacheOwner()
+                self.featuresCacheJSON = json
+            }
         }
         let okText = envelope.ok.map { $0 ? "true" : "false" } ?? "nil"
         let sourceText = envelope.source ?? "live"
         let triggerText = String(describing: trigger)
-        if sameDayBodySnapshotIsRicher(lastKnownFeatures ?? resolved, than: data) && resolved.day == data.day {
+        if retainPreviousDayFallback, let previousFallback {
+            appLog("[UI] features ok: retained prior fallback day=\(previousFallback.day) while today syncs source=\(sourceText) trigger=\(triggerText)")
+        } else if sameDayBodySnapshotIsRicher(lastKnownFeatures ?? resolved, than: data) && resolved.day == data.day {
             appLog("[UI] features ok: preserved richer same-day body snapshot day=\(resolved.day) source=\(sourceText) trigger=\(triggerText)")
         } else {
             appLog("[UI] features ok: day=\(resolved.day) ok=\(okText) source=\(sourceText) trigger=\(triggerText)")
@@ -9371,21 +9607,16 @@ struct ContentView: View {
         var candidate = f
         var usingYesterday = false
         let todayTotal = Int((f.sleepTotalMinutes?.value ?? 0).rounded())
-        if f.day == todayStr && todayTotal == 0 {
+        let forceYesterdayFallback = !hasUsableBodyData(f)
+        if f.day == todayStr && (todayTotal == 0 || forceYesterdayFallback) {
             var updatedRecently = false
             if let iso = f.updatedAt, let ts = formatISO(iso) {
                 updatedRecently = ts.addingTimeInterval(600) > Date()
             }
-            if !updatedRecently {
-                if let prev = lastKnownFeatures, prev.day != todayStr {
-                    candidate = prev
+            if forceYesterdayFallback || !updatedRecently {
+                if let previous = previousDayFallbackFeatures(for: todayStr) {
+                    candidate = previous
                     usingYesterday = true
-                } else if let data = featuresCacheJSON.data(using: .utf8) {
-                    let dec = JSONDecoder(); dec.keyDecodingStrategy = .convertFromSnakeCase
-                    if let cached = try? dec.decode(FeaturesToday.self, from: data), cached.day != todayStr {
-                        candidate = cached
-                        usingYesterday = true
-                    }
                 }
             }
         }
@@ -12582,6 +12813,7 @@ struct ContentView: View {
         let dashboardDrivers: [DashboardDriverItem]
         let schumannTomskLatest: SignalBarSchumannTomskLatestEnvelope?
         let schumannLatestEnvelope: SignalBarSchumannLatestEnvelope?
+        let schumannTomskQ1Fallback: Double?
         let magnetosphere: MagnetosphereData?
         let magnetosphereLoading: Bool
         let magnetosphereError: String?
@@ -13101,7 +13333,12 @@ struct ContentView: View {
             let tomskQ1 = tomskMetricValue(schumannTomskLatest?.qFactor, key: "Q1")
             let f1Text = formattedSchumannHz(tomskF1 ?? fallbackSchumannExploreF1Hz)
             let a1Text = tomskMetricText(schumannTomskLatest?.amplitude, key: "A1")
-            let q1Text = formattedTomskMetric(tomskQ1 ?? schumannTomskLatest?.coherence?.q1Value ?? fallbackSchumannExploreQ1)
+            let q1Text = formattedTomskMetric(
+                tomskQ1
+                    ?? schumannTomskLatest?.coherence?.q1Value
+                    ?? schumannTomskQ1Fallback
+                    ?? fallbackSchumannExploreQ1
+            )
             let updated = updatedText ?? "recent"
             let pillText = normalizedPillText(
                 schumannDriver?.state?.capitalized,
@@ -18056,6 +18293,7 @@ struct ContentView: View {
                 dashboardDrivers: localContextDriverItems,
                 schumannTomskLatest: liveSchumannTomskLatest,
                 schumannLatestEnvelope: liveSchumannLatestEnvelope,
+                schumannTomskQ1Fallback: decodeCachedSchumannTomskQ1(),
                 magnetosphere: magnetosphere,
                 magnetosphereLoading: magnetosphereLoading,
                 magnetosphereError: magnetosphereError,
@@ -19519,6 +19757,7 @@ struct ContentView: View {
                     dashboardDrivers: localContextDriverItems,
                     schumannTomskLatest: liveSchumannTomskLatest,
                     schumannLatestEnvelope: liveSchumannLatestEnvelope,
+                    schumannTomskQ1Fallback: decodeCachedSchumannTomskQ1(),
                     magnetosphere: magnetosphere,
                     magnetosphereLoading: magnetosphereLoading,
                     magnetosphereError: magnetosphereError,

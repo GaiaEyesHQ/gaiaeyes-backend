@@ -153,7 +153,6 @@ struct SubscribeView: View {
 
                     Button("Sign Out") {
                         Task {
-                            await revenueCat.logOutIfConfigured()
                             auth.signOutSupabase()
                         }
                     }

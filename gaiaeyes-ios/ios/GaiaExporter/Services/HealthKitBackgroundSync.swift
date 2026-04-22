@@ -217,8 +217,9 @@ private actor Phase2BackfillState {
 
 final class HealthKitBackgroundSync {
     static let shared = HealthKitBackgroundSync()
-    private static let phase2BackfillVersion = 1
+    private static let phase2BackfillVersion = 2
     private static let phase2BackfillMarkerKey = "gaia.hk.phase2BackfillVersion"
+    private static let recentRepairLookbackDays = 30
 
     private static func isoString(_ date: Date) -> String {
         let formatter = ISO8601DateFormatter()
@@ -306,6 +307,7 @@ final class HealthKitBackgroundSync {
 
     private enum InteractiveBackfillMetric: CaseIterable {
         case heartRate
+        case stepCount
         case spo2
         case hrv
         case respiratoryRate
@@ -318,6 +320,7 @@ final class HealthKitBackgroundSync {
         var key: String {
             switch self {
             case .heartRate: return "heart_rate"
+            case .stepCount: return "step_count"
             case .spo2: return "spo2"
             case .hrv: return "hrv_sdnn"
             case .respiratoryRate: return "respiratory_rate"
@@ -332,6 +335,7 @@ final class HealthKitBackgroundSync {
         var label: String {
             switch self {
             case .heartRate: return "heart rate"
+            case .stepCount: return "step count"
             case .spo2: return "SpO2"
             case .hrv: return "HRV"
             case .respiratoryRate: return "respiratory rate"
@@ -952,32 +956,59 @@ final class HealthKitBackgroundSync {
         }
     }
 
-    /// Clear stale anchors for newly-expanded context signals once so recent history
-    /// is re-uploaded even if prior anchors stopped advancing.
+    private func scopedPhase2BackfillMarkerKey(for userID: String) -> String {
+        "\(Self.phase2BackfillMarkerKey).\(userID)"
+    }
+
+    /// Clear stale anchors for recovery-sensitive signals once per signed-in user so
+    /// recent history is re-uploaded after account recreation or stale anchor drift.
     func ensurePhase2RecentBackfillIfNeeded() async {
         guard passiveHealthSyncAllowed() else {
             appLog("[Backfill] phase2 recent backfill skipped until account onboarding is complete")
             return
         }
         let defaults = UserDefaults.standard
-        let appliedVersion = defaults.integer(forKey: Self.phase2BackfillMarkerKey)
+        let uid = currentUserId().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard uid.count == 36 else { return }
+        let markerKey = scopedPhase2BackfillMarkerKey(for: uid)
+        let appliedVersion = defaults.integer(forKey: markerKey)
         guard appliedVersion < Self.phase2BackfillVersion else { return }
         let started = await phase2BackfillState.beginIfNeeded()
         guard started else { return }
 
         let keys = [
+            "heart_rate",
+            "step_count",
             "respiratory_rate",
             "resting_heart_rate",
             "temperature_deviation",
             "menstrual_flow",
         ]
         anchorStore.clear(keys: keys)
-        appLog("[Backfill] phase2 recent backfill starting")
+        appLog("[Backfill] phase2 recent backfill starting scope=\(String(uid.prefix(8)))")
 
-        let start = Calendar.current.date(byAdding: .day, value: -180, to: Date()) ?? Date(timeIntervalSinceNow: -180 * 24 * 60 * 60)
-        let pred = HKQuery.predicateForSamples(withStart: start, end: Date(), options: [])
+        let now = Date()
+        let start = Calendar.current.date(byAdding: .day, value: -180, to: now) ?? Date(timeIntervalSinceNow: -180 * 24 * 60 * 60)
+        let recentRepairStart = Calendar.current.date(byAdding: .day, value: -Self.recentRepairLookbackDays, to: now)
+            ?? Date(timeIntervalSinceNow: -Double(Self.recentRepairLookbackDays) * 24 * 60 * 60)
+        let pred = HKQuery.predicateForSamples(withStart: start, end: now, options: [])
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
+        _ = await backfillHeartRateStatistics(
+            anchorKey: "heart_rate",
+            start: recentRepairStart,
+            end: now,
+            windowDays: 5,
+            intervalMinutes: 15
+        )
+        _ = await backfillOneWindowedSampleQuery(
+            type: stepsType,
+            anchorKey: "step_count",
+            start: recentRepairStart,
+            end: now,
+            sort: sort,
+            windowDays: 7
+        )
         if let respiratoryRateType {
             _ = await backfillOne(type: respiratoryRateType, anchorKey: "respiratory_rate", pred: pred, sort: sort)
         }
@@ -988,7 +1019,8 @@ final class HealthKitBackgroundSync {
             _ = await backfillOne(type: temperatureDeviationType, anchorKey: "temperature_deviation", pred: pred, sort: sort)
         }
         _ = await backfillCycle(pred: pred, sort: sort)
-        defaults.set(Self.phase2BackfillVersion, forKey: Self.phase2BackfillMarkerKey)
+        defaults.set(Self.phase2BackfillVersion, forKey: markerKey)
+        defaults.removeObject(forKey: Self.phase2BackfillMarkerKey)
         await phase2BackfillState.end()
     }
 
@@ -1031,6 +1063,18 @@ final class HealthKitBackgroundSync {
                 windowDays: 5,
                 intervalMinutes: 15,
                 chunkSize: interactiveChunkSize(for: metric),
+                maxRetries: interactiveRetryLimit,
+                onProgress: onProgress
+            )
+        case .stepCount:
+            return await backfillOneWindowedSampleQuery(
+                type: stepsType,
+                anchorKey: metric.key,
+                start: start,
+                end: Date(),
+                sort: sort,
+                windowDays: 7,
+                chunkSize: max(200, interactiveChunkSize(for: metric)),
                 maxRetries: interactiveRetryLimit,
                 onProgress: onProgress
             )
@@ -1311,6 +1355,11 @@ final class HealthKitBackgroundSync {
 
     /// Lightweight sweep that mimics an observer firing now; useful for foreground or manual "sync now".
     func kickOnce(reason: String) async {
+        guard passiveHealthSyncAllowed() else {
+            appLog("[BG] kickOnce skipped until account onboarding is complete")
+            return
+        }
+        await ensurePhase2RecentBackfillIfNeeded()
         let now = Date()
         let suppressed: Bool = await MainActor.run { () -> Bool in
             let last = lastKickAt ?? .distantPast
@@ -1320,10 +1369,6 @@ final class HealthKitBackgroundSync {
         }
         if suppressed {
             appLog("[BG] kickOnce suppressed (recent)")
-            return
-        }
-        guard passiveHealthSyncAllowed() else {
-            appLog("[BG] kickOnce skipped until account onboarding is complete")
             return
         }
         appLog("[BG] kickOnce: \(reason)")

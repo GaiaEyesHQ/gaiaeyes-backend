@@ -154,6 +154,14 @@ def anyio_backend():
     return "asyncio"
 
 
+def test_mart_select_falls_back_to_daily_summary_body_fields():
+    assert "coalesce(df.steps_total, ds.steps_total) as steps_total" in summary._MART_SELECT
+    assert "coalesce(df.sleep_total_minutes, ds.sleep_total_minutes) as sleep_total_minutes" in summary._MART_SELECT
+    assert "coalesce(df.spo2_avg, ds.spo2_avg) as spo2_avg" in summary._MART_SELECT
+    assert "coalesce(df.respiratory_rate_avg, ds.respiratory_rate_avg) as respiratory_rate_avg" in summary._MART_SELECT
+    assert "coalesce(df.resting_hr_avg, ds.resting_hr_avg) as resting_hr_avg" in summary._MART_SELECT
+
+
 @pytest.mark.anyio
 async def test_refresh_scheduled_on_ingest(monkeypatch, client: AsyncClient):
     ingest._refresh_registry.clear()
