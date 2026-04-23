@@ -3376,6 +3376,10 @@ struct ContentView: View {
     private func handleAuthScopeChangeIfNeeded() {
         let userID = auth.currentSupabaseUserId()
         let nextScope = normalizedAuthScope(userID)
+        if nextScope == "signed_out", auth.hasStoredAuthContinuity {
+            appLog("[AUTH] transient signed-out scope ignored; stored auth continuity remains")
+            return
+        }
         syncBackendIdentityFromAuth(userID: userID)
 
         let cacheNeedsReset = userScopedCacheNeedsReset(for: nextScope)
@@ -6435,6 +6439,13 @@ struct ContentView: View {
                 handleAuthScopeChangeIfNeeded()
             }
             return true
+        }
+
+        let allowsAnonymousIdentity = reason == "onboarding continue without account"
+        let hasStoredAuthContinuity = await MainActor.run { auth.hasStoredAuthContinuity }
+        if hasStoredAuthContinuity && !allowsAnonymousIdentity {
+            appLog("[AUTH] backend identity deferred; stored auth continuity without usable token reason=\(reason)")
+            return false
         }
 
         do {

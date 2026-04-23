@@ -125,8 +125,12 @@ final class RevenueCatService: ObservableObject {
 
     private init() {}
 
-    func syncIdentity(appUserID: String?) async {
+    func syncIdentity(appUserID: String?, allowLogOut: Bool = true) async {
         guard let normalizedAppUserID = normalizedAppUserID(appUserID) else {
+            guard allowLogOut else {
+                appLog("[RC] skipped RevenueCat logout while auth session continuity is present")
+                return
+            }
             await handleSignedOutIdentity()
             return
         }

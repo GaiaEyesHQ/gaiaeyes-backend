@@ -32,6 +32,13 @@ final class AuthManager: ObservableObject {
         signedInEmail != nil
     }
 
+    var hasStoredAuthContinuity: Bool {
+        hasNonEmptyStoredValue(supabaseAccessToken, key: "access_token") ||
+        hasNonEmptyStoredValue(supabaseRefreshToken, key: "refresh_token") ||
+        hasNonEmptyStoredValue(supabaseUserId, key: "user_id") ||
+        hasNonEmptyStoredValue(supabaseEmail, key: "email")
+    }
+
     var hasAppOnlyProfile: Bool {
         supabaseAccessToken?.isEmpty == false && signedInEmail == nil
     }
@@ -338,6 +345,15 @@ final class AuthManager: ObservableObject {
         if defaults.string(forKey: "userId") == userId {
             defaults.removeObject(forKey: "userId")
         }
+    }
+
+    private func hasNonEmptyStoredValue(_ inMemoryValue: String?, key: String) -> Bool {
+        let inMemory = inMemoryValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !inMemory.isEmpty {
+            return true
+        }
+        let stored = keychain.read(key)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !stored.isEmpty
     }
 
     private func refreshSessionIfNeeded() async {

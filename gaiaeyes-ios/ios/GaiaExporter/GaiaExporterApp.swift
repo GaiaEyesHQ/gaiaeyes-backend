@@ -27,12 +27,18 @@ struct GaiaEyesApp: App {
                 }
                 .task {
                     auth.loadFromKeychain()
-                    await RevenueCatService.shared.syncIdentity(appUserID: auth.currentSupabaseUserId())
+                    await RevenueCatService.shared.syncIdentity(
+                        appUserID: auth.currentSupabaseUserId(),
+                        allowLogOut: !auth.hasStoredAuthContinuity
+                    )
                 }
                 .onChange(of: auth.supabaseAccessToken) { _, token in
                     Task {
                         _ = token
-                        await RevenueCatService.shared.syncIdentity(appUserID: auth.currentSupabaseUserId())
+                        await RevenueCatService.shared.syncIdentity(
+                            appUserID: auth.currentSupabaseUserId(),
+                            allowLogOut: !auth.hasStoredAuthContinuity
+                        )
                     }
                 }
         }
