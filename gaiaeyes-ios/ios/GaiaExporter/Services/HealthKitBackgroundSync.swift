@@ -217,7 +217,7 @@ private actor Phase2BackfillState {
 
 final class HealthKitBackgroundSync {
     static let shared = HealthKitBackgroundSync()
-    private static let phase2BackfillVersion = 3
+    private static let phase2BackfillVersion = 4
     private static let phase2BackfillMarkerKey = "gaia.hk.phase2BackfillVersion"
     private static let recentRepairLookbackDays = 30
 
@@ -976,32 +976,23 @@ final class HealthKitBackgroundSync {
         let started = await phase2BackfillState.beginIfNeeded()
         guard started else { return }
 
-        let keys = [
-            "heart_rate",
-            "step_count",
-            "respiratory_rate",
-            "resting_heart_rate",
-            "temperature_deviation",
-            "menstrual_flow",
-        ]
+        let keys = ["heart_rate", "step_count"]
         anchorStore.clear(keys: keys)
         appLog("[Backfill] phase2 recent backfill starting scope=\(String(uid.prefix(8)))")
 
         let now = Date()
-        let start = Calendar.current.date(byAdding: .day, value: -180, to: now) ?? Date(timeIntervalSinceNow: -180 * 24 * 60 * 60)
         let recentRepairStart = Calendar.current.date(byAdding: .day, value: -Self.recentRepairLookbackDays, to: now)
             ?? Date(timeIntervalSinceNow: -Double(Self.recentRepairLookbackDays) * 24 * 60 * 60)
-        let pred = HKQuery.predicateForSamples(withStart: start, end: now, options: [])
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
-        _ = await backfillHeartRateStatistics(
+        let heartResult = await backfillHeartRateStatistics(
             anchorKey: "heart_rate",
             start: recentRepairStart,
             end: now,
             windowDays: 5,
             intervalMinutes: 15
         )
-        _ = await backfillOneWindowedSampleQuery(
+        let stepResult = await backfillOneWindowedSampleQuery(
             type: stepsType,
             anchorKey: "step_count",
             start: recentRepairStart,
@@ -1009,18 +1000,14 @@ final class HealthKitBackgroundSync {
             sort: sort,
             windowDays: 7
         )
-        if let respiratoryRateType {
-            _ = await backfillOne(type: respiratoryRateType, anchorKey: "respiratory_rate", pred: pred, sort: sort)
+
+        let failures = [heartResult.failureDescription, stepResult.failureDescription].compactMap { $0 }
+        if failures.isEmpty {
+            defaults.set(Self.phase2BackfillVersion, forKey: markerKey)
+            defaults.removeObject(forKey: Self.phase2BackfillMarkerKey)
+        } else {
+            appLog("[Backfill] phase2 recent backfill incomplete: \(failures.joined(separator: " | "))")
         }
-        if let restingHeartRateType {
-            _ = await backfillOne(type: restingHeartRateType, anchorKey: "resting_heart_rate", pred: pred, sort: sort)
-        }
-        if let temperatureDeviationType {
-            _ = await backfillOne(type: temperatureDeviationType, anchorKey: "temperature_deviation", pred: pred, sort: sort)
-        }
-        _ = await backfillCycle(pred: pred, sort: sort)
-        defaults.set(Self.phase2BackfillVersion, forKey: markerKey)
-        defaults.removeObject(forKey: Self.phase2BackfillMarkerKey)
         await phase2BackfillState.end()
     }
 
@@ -1374,7 +1361,9 @@ final class HealthKitBackgroundSync {
         appLog("[BG] kickOnce: \(reason)")
         let phase2BackfillInProgress = await phase2BackfillState.isInProgress()
         if phase2BackfillInProgress {
-            appLog("[BG] kickOnce: phase2 context backfill in progress; skipping duplicate respiratory/recovery fetches")
+            appLog("[BG] kickOnce: phase2 backfill in progress; skipping delta sweep")
+            StatusStore.shared.setBackgroundRun()
+            return
         }
         await self.processingGate.runOnce(key: "heart_rate") {
             do { try await self.processDeltas(for: self.hrType, anchorKey: "heart_rate") } catch { appLog("[BG] kickOnce hr error: \(error.localizedDescription)") }

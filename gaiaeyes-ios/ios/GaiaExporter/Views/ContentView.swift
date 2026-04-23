@@ -17978,17 +17978,23 @@ struct ContentView: View {
                 }
             }
             .onChange(of: showMissionSettingsSheet, initial: false) { _, newValue in
+                state.suspendNonessentialNetworkRefresh = newValue
                 if newValue {
                     syncMissionSettingsLocationDrafts(force: true)
                     Task {
                         await refreshPushState()
-                        await fetchProfileSettings(includeNotifications: true)
+                        await state.updateBackendDBFlag()
+                        let backendAvailable = await MainActor.run { state.backendDBAvailable }
+                        guard backendAvailable else {
+                            appLog("[UI] settings opened with cached values; backend DB unavailable")
+                            return
+                        }
+                        await fetchProfileSettings(includeNotifications: false)
                         await MainActor.run {
                             syncMissionSettingsLocationDrafts()
                         }
-                        await fetchLocalHealth()
-                        await fetchFeaturesDiagnostics()
                         if showDebug {
+                            await fetchFeaturesDiagnostics()
                             await refreshBillingDiagnostics(showSuccessMessage: false)
                         }
                     }

@@ -194,7 +194,22 @@ private extension APIClient {
 }
 // MARK: - API Client
 
+private actor SampleUploadGate {
+    private var running = false
+
+    func run<T>(_ operation: () async throws -> T) async throws -> T {
+        while running {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+        }
+        running = true
+        defer { running = false }
+        return try await operation()
+    }
+}
+
 final class APIClient {
+    private static let sampleUploadGate = SampleUploadGate()
+
     private let baseURL: URL
     private let bearer: String
     private let session: URLSession
@@ -871,18 +886,25 @@ final class APIClient {
         struct BatchError: Decodable {}
 
         let ok: Bool?
+        let db: Bool?
         let received: Int?
         let inserted: Int?
         let skipped: Int?
         let buffered: Int?
         let errors: [BatchError]?
+        let error: String?
     }
 
     /// Upload in chunks with retry/backoff per chunk and bisect-on-failure (default: 200 rows, 3 tries)
     @discardableResult
     func postSamplesChunked(_ samples: [Sample], chunkSize: Int = 200, maxRetries: Int = 3) async throws -> Bool {
         guard !samples.isEmpty else { return false }
+        return try await Self.sampleUploadGate.run {
+            try await self.postSamplesChunkedSerial(samples, chunkSize: chunkSize, maxRetries: maxRetries)
+        }
+    }
 
+    private func postSamplesChunkedSerial(_ samples: [Sample], chunkSize: Int = 200, maxRetries: Int = 3) async throws -> Bool {
         await preflightHealth()
 
         var effectiveChunk = chunkSize
@@ -977,8 +999,14 @@ final class APIClient {
                     let body = String(data: data, encoding: .utf8) ?? ""
                     if (200...299).contains(code) {
                         logger?("↩︎ \(code) \(body)")
-                        if let accepted = parseAcceptedBatch(from: data) {
-                            return accepted
+                        if let batch = try? APIClient.tolerantJSONDecoder().decode(SamplesBatchResponse.self, from: data) {
+                            if batch.ok == false {
+                                let reason = batch.error ?? "batch rejected"
+                                logger?("POST \(label) deferred: \(reason)")
+                                throw APIError.server(code: batch.db == false ? 429 : code, body: reason)
+                            }
+                            let accepted = (batch.inserted ?? 0) + (batch.buffered ?? 0)
+                            return accepted > 0 || batch.ok == true
                         }
                         return !chunk.isEmpty
                     } else {
@@ -999,6 +1027,9 @@ final class APIClient {
                     }
                 } catch {
                     if case APIError.server(let code, _) = error, code == 401 || code == 403 {
+                        throw error
+                    }
+                    if case APIError.server(let code, _) = error, code == 429 {
                         throw error
                     }
                     lastError = error
