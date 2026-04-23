@@ -909,7 +909,12 @@ async def fetch_symptom_follow_up_settings(conn, user_id: str) -> dict:
         "notifications_enabled": bool(row.get("enabled")),
         "enabled": bool(row.get("symptom_followups_enabled")),
         "notification_family_enabled": family_enabled,
-        "push_enabled": bool(row.get("symptom_followup_push_enabled")) or family_enabled,
+        "push_enabled": bool(row.get("enabled"))
+        and (
+            bool(row.get("symptom_followup_push_enabled"))
+            if "symptom_followup_push_enabled" in columns
+            else family_enabled
+        ),
         "cadence": cadence,
         "states": states or defaults["states"],
         "symptom_codes": symptom_codes,

@@ -1958,6 +1958,34 @@ async def _fetch_notification_preferences(conn, user_id: str) -> Dict[str, Any]:
     }
 
 
+async def _disable_notification_delivery(conn, user_id: str, now: datetime) -> None:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            update app.user_push_tokens
+               set enabled = false,
+                   updated_at = %s,
+                   last_seen_at = %s
+             where user_id = %s
+               and enabled = true
+            """,
+            (now, now, user_id),
+            prepare=False,
+        )
+        await cur.execute(
+            """
+            update content.push_notification_events
+               set status = 'skipped',
+                   sent_at = null,
+                   error_text = 'notifications_disabled'
+             where user_id = %s
+               and status = 'queued'
+            """,
+            (user_id,),
+            prepare=False,
+        )
+
+
 @router.get("/notifications", dependencies=[Depends(require_read_auth)])
 async def profile_notifications(request: Request, conn=Depends(get_db)):
     user_id = _require_user_id(request)
@@ -2042,6 +2070,8 @@ async def profile_notifications_upsert(
             insert_values,
             prepare=False,
         )
+    if not payload.enabled:
+        await _disable_notification_delivery(conn, user_id, now)
 
     return {"ok": True, "preferences": await _fetch_notification_preferences(conn, user_id)}
 

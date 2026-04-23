@@ -68,6 +68,19 @@ def _fetch_user_tokens(user_id: str) -> List[Dict[str, Any]]:
     )
 
 
+def _notifications_enabled(user_id: str) -> bool:
+    row = pg.fetchrow(
+        """
+        select enabled
+          from app.user_notification_preferences
+         where user_id = %s
+         limit 1
+        """,
+        user_id,
+    )
+    return bool((row or {}).get("enabled"))
+
+
 def _disable_token(token_id: str, reason: str, now_utc: datetime) -> None:
     pg.execute(
         """
@@ -181,11 +194,27 @@ def main() -> None:
     skipped = 0
     failed = 0
     now_utc = utc_now()
+    notifications_enabled_cache: Dict[str, bool] = {}
 
     for event in _iter_events(queued_events, args.limit):
         event_id = str(event.get("id") or "").strip()
         user_id = str(event.get("user_id") or "").strip()
         if not event_id or not user_id:
+            continue
+
+        notifications_enabled = notifications_enabled_cache.get(user_id)
+        if notifications_enabled is None:
+            notifications_enabled = _notifications_enabled(user_id)
+            notifications_enabled_cache[user_id] = notifications_enabled
+        if not notifications_enabled:
+            _mark_event_status(event_id, "skipped", now_utc, "notifications_disabled")
+            logger.info(
+                "[push-send] skipped event=%s user=%s family=%s reason=notifications_disabled",
+                event_id,
+                user_id,
+                str(event.get("family") or "").strip() or "unknown",
+            )
+            skipped += 1
             continue
 
         tokens = _fetch_user_tokens(user_id)

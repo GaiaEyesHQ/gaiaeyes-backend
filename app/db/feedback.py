@@ -264,12 +264,22 @@ async def load_feedback_preferences(conn, user_id: str) -> Dict[str, Any]:
         "time_zone": str(row.get("time_zone") or "UTC"),
         "families": families,
         "symptom_followups_enabled": bool(row.get("symptom_followups_enabled")),
-        "symptom_followup_push_enabled": bool(row.get("symptom_followup_push_enabled")) or bool(families.get("symptom_followups")),
+        "symptom_followup_push_enabled": bool(row.get("enabled"))
+        and (
+            bool(row.get("symptom_followup_push_enabled"))
+            if "symptom_followup_push_enabled" in columns
+            else bool(families.get("symptom_followups"))
+        ),
         "symptom_followup_cadence": _normalize_cadence(row.get("symptom_followup_cadence")),
         "symptom_followup_states": states or defaults["symptom_followup_states"],
         "symptom_followup_symptom_codes": _normalize_codes(row.get("symptom_followup_symptom_codes")),
         "daily_checkins_enabled": bool(row.get("daily_checkins_enabled")),
-        "daily_checkin_push_enabled": bool(row.get("daily_checkin_push_enabled")) or bool(families.get("daily_checkins")),
+        "daily_checkin_push_enabled": bool(row.get("enabled"))
+        and (
+            bool(row.get("daily_checkin_push_enabled"))
+            if "daily_checkin_push_enabled" in columns
+            else bool(families.get("daily_checkins"))
+        ),
         "daily_checkin_cadence": _normalize_cadence(row.get("daily_checkin_cadence")),
         "daily_checkin_reminder_time": _clock_hhmm(row.get("daily_checkin_reminder_time"), fallback="20:00"),
     }
