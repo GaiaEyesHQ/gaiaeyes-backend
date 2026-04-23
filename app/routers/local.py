@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, Query
+import asyncio
 
-from app.db import get_db
+from fastapi import APIRouter, Query
+
+from app.db import get_pool
 from services.forecast_outlook import ensure_local_forecast_daily, serialize_local_forecast_rows
 from services.local_signals.aggregator import assemble_for_zip, ensure_weather_fields
 from services.local_signals.cache import latest_for_zip, upsert_zip_payload
@@ -57,8 +59,21 @@ async def _attach_forecast_daily(conn, zip_code: str, payload: dict) -> dict:
     return payload
 
 
+async def _attach_forecast_daily_best_effort(zip_code: str, payload: dict) -> dict:
+    if not isinstance(payload, dict):
+        return payload
+
+    try:
+        pool = await get_pool()
+        async with asyncio.timeout(1.5):
+            async with pool.connection() as conn:
+                return await _attach_forecast_daily(conn, zip_code, payload)
+    except Exception:
+        return payload
+
+
 @router.get("/check")
-async def check(zip: str = Query(..., min_length=5, max_length=10), conn=Depends(get_db)):
+async def check(zip: str = Query(..., min_length=5, max_length=10)):
     cached = latest_for_zip(zip)
     if cached:
         had_missing = _weather_needs_repair(cached)
@@ -72,8 +87,8 @@ async def check(zip: str = Query(..., min_length=5, max_length=10), conn=Depends
             upsert_zip_payload(zip, repaired)
         elif had_missing:
             upsert_zip_payload(zip, repaired)
-        return await _attach_forecast_daily(conn, zip, repaired)
+        return await _attach_forecast_daily_best_effort(zip, repaired)
     payload = await assemble_for_zip(zip)
     payload = ensure_weather_fields(zip, payload)
     upsert_zip_payload(zip, payload)
-    return await _attach_forecast_daily(conn, zip, payload)
+    return await _attach_forecast_daily_best_effort(zip, payload)

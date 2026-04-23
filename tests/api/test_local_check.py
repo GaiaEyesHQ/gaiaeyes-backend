@@ -96,7 +96,7 @@ async def test_local_check_refreshes_cached_payload_when_aqi_is_missing(monkeypa
     }
     persisted: list[dict] = []
 
-    async def _fake_attach_forecast_daily(conn, zip_code: str, payload: dict):  # noqa: ARG001
+    async def _fake_attach_forecast_daily_best_effort(zip_code: str, payload: dict):  # noqa: ARG001
         return payload
 
     async def _fake_assemble_for_zip(zip_code: str):  # noqa: ARG001
@@ -104,7 +104,7 @@ async def test_local_check_refreshes_cached_payload_when_aqi_is_missing(monkeypa
 
     monkeypatch.setattr(local, "latest_for_zip", lambda zip_code: cached_payload)  # noqa: ARG005
     monkeypatch.setattr(local, "assemble_for_zip", _fake_assemble_for_zip)
-    monkeypatch.setattr(local, "_attach_forecast_daily", _fake_attach_forecast_daily)
+    monkeypatch.setattr(local, "_attach_forecast_daily_best_effort", _fake_attach_forecast_daily_best_effort)
     monkeypatch.setattr(local, "upsert_zip_payload", lambda zip_code, payload: persisted.append(payload))  # noqa: ARG005
 
     response = await client.get(
@@ -162,7 +162,7 @@ async def test_local_check_refreshes_cached_payload_when_allergens_are_missing(m
     }
     persisted: list[dict] = []
 
-    async def _fake_attach_forecast_daily(conn, zip_code: str, payload: dict):  # noqa: ARG001
+    async def _fake_attach_forecast_daily_best_effort(zip_code: str, payload: dict):  # noqa: ARG001
         return payload
 
     async def _fake_assemble_for_zip(zip_code: str):  # noqa: ARG001
@@ -170,7 +170,7 @@ async def test_local_check_refreshes_cached_payload_when_allergens_are_missing(m
 
     monkeypatch.setattr(local, "latest_for_zip", lambda zip_code: cached_payload)  # noqa: ARG005
     monkeypatch.setattr(local, "assemble_for_zip", _fake_assemble_for_zip)
-    monkeypatch.setattr(local, "_attach_forecast_daily", _fake_attach_forecast_daily)
+    monkeypatch.setattr(local, "_attach_forecast_daily_best_effort", _fake_attach_forecast_daily_best_effort)
     monkeypatch.setattr(local, "upsert_zip_payload", lambda zip_code, payload: persisted.append(payload))  # noqa: ARG005
 
     response = await client.get(
@@ -186,3 +186,52 @@ async def test_local_check_refreshes_cached_payload_when_allergens_are_missing(m
     assert data["allergens"]["primary_type"] == "tree"
     assert persisted
     assert persisted[0]["allergens"]["source"] == "google-pollen:forecast"
+
+
+@pytest.mark.anyio
+async def test_local_check_returns_current_payload_when_forecast_attachment_fails(monkeypatch, client: AsyncClient):
+    payload = {
+        "ok": True,
+        "where": {"zip": "78750", "lat": 30.42, "lon": -97.79},
+        "weather": {
+            "temp_c": 27.8,
+            "temp_delta_24h_c": None,
+            "humidity_pct": 60.0,
+            "precip_prob_pct": 28.0,
+            "pressure_hpa": 1012.2,
+            "baro_delta_24h_hpa": None,
+            "baro_trend": None,
+        },
+        "air": {"aqi": 57, "category": "Moderate", "pollutant": "PM2.5"},
+        "allergens": {
+            "source": "google-pollen:forecast",
+            "state": "high",
+            "primary_type": "tree",
+            "primary_label": "Tree pollen",
+        },
+        "asof": "2026-04-22T23:51:00+00:00",
+    }
+
+    async def _fake_assemble_for_zip(zip_code: str):  # noqa: ARG001
+        return payload
+
+    async def _fake_get_pool():
+        raise RuntimeError("db unavailable")
+
+    monkeypatch.setattr(local, "latest_for_zip", lambda zip_code: None)  # noqa: ARG005
+    monkeypatch.setattr(local, "assemble_for_zip", _fake_assemble_for_zip)
+    monkeypatch.setattr(local, "get_pool", _fake_get_pool)
+    monkeypatch.setattr(local, "ensure_weather_fields", lambda zip_code, incoming: dict(incoming))  # noqa: ARG005
+    monkeypatch.setattr(local, "upsert_zip_payload", lambda zip_code, stored: None)  # noqa: ARG005,ARG001
+
+    response = await client.get(
+        "/v1/local/check",
+        headers={"Authorization": "Bearer test-token"},
+        params={"zip": "78750"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["where"]["zip"] == "78750"
+    assert data["air"]["aqi"] == 57
+    assert data["allergens"]["source"] == "google-pollen:forecast"
