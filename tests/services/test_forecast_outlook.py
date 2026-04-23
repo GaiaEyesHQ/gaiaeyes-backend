@@ -436,6 +436,27 @@ Outlook For March 23-29
         self.assertEqual(payload[1]["top_drivers"][0]["key"], "allergens")
         self.assertTrue(payload[0]["label"])
 
+    def test_build_daily_outlook_uses_type_specific_pollen_when_overall_level_is_missing(self) -> None:
+        merged_rows = [
+            {
+                "day": date(2026, 3, 19),
+                "pollen_primary_type": "grass",
+                "pollen_grass_level": "moderate",
+                "pollen_grass_index": 3.1,
+            },
+        ]
+
+        payload = build_daily_outlook(
+            merged_rows,
+            pattern_rows=[],
+            gauges={},
+            days=7,
+        )
+
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["top_drivers"][0]["key"], "allergens")
+        self.assertEqual(payload[0]["top_drivers"][0]["label"], "Grass pollen")
+
     def test_build_daily_outlook_keeps_space_weather_visible_with_local_drivers(self) -> None:
         merged_rows = [
             {
@@ -716,6 +737,46 @@ class ForecastOutlookAsyncTests(unittest.IsolatedAsyncioTestCase):
         upsert_rows.assert_awaited_once()
         fetch_pollen.assert_awaited_once_with("78209", 29.49, -98.47, days=POLLEN_FORECAST_DAYS)
         self.assertEqual(payload[0]["pollen_overall_level"], "moderate")
+
+    async def test_ensure_local_forecast_daily_keeps_type_specific_pollen_rows_without_refresh(self) -> None:
+        now = datetime.now(UTC)
+        existing = [
+            {
+                "day": date(2026, 4, 21) + timedelta(days=index),
+                "updated_at": now,
+                "pollen_overall_level": None,
+                "pollen_primary_type": "grass",
+                "pollen_grass_level": "low",
+                "pollen_source": "google-pollen:forecast",
+            }
+            for index in range(LOCAL_FORECAST_DAYS)
+        ]
+
+        class _Conn:
+            async def commit(self) -> None:
+                return None
+
+        with (
+            patch("services.forecast_outlook._fetch_local_forecast_rows", AsyncMock(return_value=existing)),
+            patch("services.forecast_outlook.summarize_local_forecast_days", return_value=[]),
+            patch("services.forecast_outlook._upsert_local_forecast_rows", AsyncMock()) as upsert_rows,
+            patch.object(nws, "forecast_hourly_by_latlon", AsyncMock(return_value={})) as fetch_hourly,
+            patch.object(nws, "gridpoints_by_latlon", AsyncMock(return_value={})) as fetch_grid,
+            patch("services.forecast_outlook._fetch_local_pollen_forecast", AsyncMock(return_value={})) as fetch_pollen,
+        ):
+            payload = await ensure_local_forecast_daily(
+                _Conn(),
+                zip_code="78209",
+                lat=29.49,
+                lon=-98.47,
+                days=LOCAL_FORECAST_DAYS,
+            )
+
+        upsert_rows.assert_not_awaited()
+        fetch_hourly.assert_not_awaited()
+        fetch_grid.assert_not_awaited()
+        fetch_pollen.assert_not_awaited()
+        self.assertEqual(payload, existing)
 
 
 if __name__ == "__main__":

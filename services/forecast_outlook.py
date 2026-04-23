@@ -121,6 +121,7 @@ DRIVER_ORDER = {
 
 SPACE_DRIVER_KEYS = {"kp", "solar_wind", "cme", "flare", "radio", "radiation"}
 LOCAL_DRIVER_KEYS = {"pressure", "temp", "humidity", "aqi", "allergens"}
+POLLEN_TYPE_KEYS = ("tree", "grass", "weed", "mold")
 SEVERITY_RANK = {"high": 3, "watch": 2, "mild": 1, "low": 0}
 SEVERITY_WEIGHT = {"high": 1.8, "watch": 1.35, "mild": 0.9, "low": 0.0}
 
@@ -1119,7 +1120,7 @@ async def ensure_local_forecast_daily(
         newest = max((_parse_iso_datetime(row.get("updated_at")) for row in existing), default=None)
         pollen_window = existing[: min(len(existing), POLLEN_FORECAST_DAYS)]
         missing_pollen = bool(pollen_window) and not any(
-            str(row.get("pollen_overall_level") or "").strip()
+            _row_has_pollen_data(row)
             for row in pollen_window
         )
         # Refresh a fresh-but-empty pollen cache so the 7-day sheet can recover
@@ -1560,6 +1561,58 @@ def merge_daily_forecast_inputs(
     return [merged[key] for key in sorted(merged.keys())]
 
 
+def _row_has_pollen_data(row: Mapping[str, Any]) -> bool:
+    if str(row.get("pollen_overall_level") or "").strip():
+        return True
+    if _safe_float(row.get("pollen_overall_index")) is not None:
+        return True
+    for pollen_type in POLLEN_TYPE_KEYS:
+        if str(row.get(f"pollen_{pollen_type}_level") or "").strip():
+            return True
+        if _safe_float(row.get(f"pollen_{pollen_type}_index")) is not None:
+            return True
+    primary_type = str(row.get("pollen_primary_type") or "").strip()
+    source = str(row.get("pollen_source") or "").strip()
+    return bool(primary_type and source)
+
+
+def _effective_pollen_signal(row: Mapping[str, Any]) -> tuple[str, float | None, str | None] | None:
+    overall_level = str(row.get("pollen_overall_level") or "").strip().lower()
+    overall_index = _safe_float(row.get("pollen_overall_index"))
+    primary_type = str(row.get("pollen_primary_type") or "").strip().lower() or None
+    if overall_level:
+        return overall_level, overall_index, primary_type
+
+    if primary_type in POLLEN_TYPE_KEYS:
+        primary_level = str(row.get(f"pollen_{primary_type}_level") or "").strip().lower()
+        if primary_level:
+            return primary_level, _safe_float(row.get(f"pollen_{primary_type}_index")), primary_type
+
+    candidates: list[tuple[str, str, float | None]] = []
+    for pollen_type in POLLEN_TYPE_KEYS:
+        level = str(row.get(f"pollen_{pollen_type}_level") or "").strip().lower()
+        if not level:
+            continue
+        candidates.append(
+            (
+                pollen_type,
+                level,
+                _safe_float(row.get(f"pollen_{pollen_type}_index")),
+            )
+        )
+    if not candidates:
+        return None
+
+    pollen_type, level, level_index = max(
+        candidates,
+        key=lambda item: (
+            pollen.LEVEL_RANK.get(item[1], 0),
+            item[2] or 0.0,
+        ),
+    )
+    return level, level_index, primary_type or pollen_type
+
+
 def derive_forecast_drivers(
     merged_rows: Sequence[Mapping[str, Any]],
     *,
@@ -1675,12 +1728,12 @@ def derive_forecast_drivers(
     allergen_candidates = [
         (
             row.get("day"),
-            str(row.get("pollen_overall_level") or ""),
-            _safe_float(row.get("pollen_overall_index")),
-            str(row.get("pollen_primary_type") or ""),
+            signal[0],
+            signal[1],
+            signal[2],
         )
         for row in rows
-        if str(row.get("pollen_overall_level") or "").strip()
+        if (signal := _effective_pollen_signal(row)) is not None
     ]
     if allergen_candidates:
         day_key, overall_level, overall_index, primary_type = max(

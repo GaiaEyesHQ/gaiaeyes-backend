@@ -10,7 +10,7 @@ from services.local_signals.cache import latest_for_zip, upsert_zip_payload
 
 router = APIRouter(prefix="/v1/local", tags=["local"])
 
-LOCAL_FORECAST_ATTACH_TIMEOUT_SECONDS = float(os.getenv("LOCAL_FORECAST_ATTACH_TIMEOUT_SECONDS", "3.5"))
+LOCAL_FORECAST_ATTACH_TIMEOUT_SECONDS = float(os.getenv("LOCAL_FORECAST_ATTACH_TIMEOUT_SECONDS", "6.0"))
 
 
 def _weather_needs_repair(payload: dict) -> bool:

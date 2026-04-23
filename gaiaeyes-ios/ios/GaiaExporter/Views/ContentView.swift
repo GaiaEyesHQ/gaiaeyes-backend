@@ -14293,6 +14293,33 @@ struct ContentView: View {
             return support
         }
 
+        @ViewBuilder
+        private func dailyNarrativeBlock(summary: String?, support: String?) -> some View {
+            if summary != nil || support != nil {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let summary {
+                        Text(summary)
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.88))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let support {
+                        Text(support)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.07), lineWidth: 1)
+                )
+            }
+        }
+
         private func dailyState(_ day: UserOutlookDay) -> String {
             let raw = day.primaryState
                 ?? day.topDrivers?.first?.severity
@@ -14343,6 +14370,8 @@ struct ContentView: View {
             let accent = dailyAccentColor(index: index)
             let title = dailyTitle(day)
             let dateText = dailyDateText(day.day)
+            let summary = dailySummary(day)
+            let support = dailySupportLine(day)
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -14369,6 +14398,7 @@ struct ContentView: View {
                 }
 
                 domainPills(domains, primary: drivers.first)
+                dailyNarrativeBlock(summary: summary, support: support)
             }
             .padding(12)
             .padding(.leading, 3)
@@ -16218,6 +16248,42 @@ struct ContentView: View {
             return "\(Int(sys.rounded()))/\(Int(dia.rounded()))"
         }
 
+        private func placeholderTint(for key: TrackedStatKey) -> Color {
+            switch key {
+            case .restingHr, .spo2, .bloodPressure:
+                return GaugePalette.mild
+            case .respiratory, .hrv, .steps, .heartRange:
+                return GaugePalette.low
+            case .temperature:
+                return GaugePalette.elevated
+            }
+        }
+
+        private func placeholderDetail(for key: TrackedStatKey) -> String {
+            switch key {
+            case .heartRange:
+                return "waiting for today’s min/max"
+            case .bloodPressure:
+                return "waiting for today’s reading"
+            case .steps:
+                return "waiting for activity data"
+            default:
+                return "waiting for today’s reading"
+            }
+        }
+
+        private func placeholderStat(for key: TrackedStatKey) -> HighlightStat {
+            HighlightStat(
+                id: key,
+                title: key.title,
+                value: "—",
+                detail: placeholderDetail(for: key),
+                progress: 0.14,
+                tint: placeholderTint(for: key),
+                salience: 0.0
+            )
+        }
+
         private var allStatCandidates: [HighlightStat] {
             guard let current else { return [] }
             var items: [HighlightStat] = []
@@ -16362,6 +16428,13 @@ struct ContentView: View {
             return items
         }
 
+        private var selectedPlaceholderStats: [HighlightStat] {
+            let availableIDs = Set(allStatCandidates.map(\.id))
+            return trackedStatKeys
+                .filter { !availableIDs.contains($0) }
+                .map { placeholderStat(for: $0) }
+        }
+
         private var preferredKeyOrder: [TrackedStatKey] {
             var order: [TrackedStatKey] = []
             for key in trackedStatKeys where !order.contains(key) {
@@ -16377,7 +16450,8 @@ struct ContentView: View {
         }
 
         private var highlightStats: [HighlightStat] {
-            let candidatesByKey = Dictionary(uniqueKeysWithValues: allStatCandidates.map { ($0.id, $0) })
+            let displayCandidates = allStatCandidates + selectedPlaceholderStats
+            let candidatesByKey = Dictionary(uniqueKeysWithValues: displayCandidates.map { ($0.id, $0) })
             let availableOrder = preferredKeyOrder.filter { candidatesByKey[$0] != nil }
             guard !availableOrder.isEmpty else { return [] }
 
@@ -17424,6 +17498,8 @@ struct ContentView: View {
         @Binding var showPolar: Bool
         let onFetchVisuals: () -> Void
         @Binding var showMagnetosphere: Bool
+        @State private var localZipDraft: String = ""
+        @FocusState private var localZipFieldFocused: Bool
 
         private enum SensitivitySection: String {
             case environmental = "Sensitivities"
@@ -17460,6 +17536,37 @@ struct ContentView: View {
             )
         }
 
+        private func sanitizedZip(_ raw: String) -> String {
+            raw
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .filter { $0.isLetter || $0.isNumber }
+        }
+
+        private var localZipDraftBinding: Binding<String> {
+            Binding(
+                get: { localZipDraft },
+                set: { newValue in
+                    localZipDraft = sanitizedZip(newValue)
+                }
+            )
+        }
+
+        private func syncLocalZipDraft(force: Bool = false) {
+            guard force || !localZipFieldFocused else { return }
+            let sanitized = sanitizedZip(localHealthZip)
+            if localZipDraft != sanitized {
+                localZipDraft = sanitized
+            }
+        }
+
+        private func saveLocationSettings() {
+            let sanitized = sanitizedZip(localZipDraft)
+            if localHealthZip != sanitized {
+                localHealthZip = sanitized
+            }
+            onSaveProfileLocation()
+        }
+
         @ViewBuilder
         private func tagToggle(_ item: TagCatalogItem) -> some View {
             let key = canonicalProfileTagKey(item.tagKey)
@@ -17488,12 +17595,13 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Enable local insights")
                             .font(.subheadline)
-                        TextField("ZIP code", text: $localHealthZip)
+                        TextField("ZIP code", text: localZipDraftBinding)
                             .textFieldStyle(.roundedBorder)
                             .keyboardType(.numberPad)
+                            .focused($localZipFieldFocused)
                         Toggle("Use GPS (optional)", isOn: $profileUseGPS)
                         Toggle("Enable local insights", isOn: $profileLocalInsightsEnabled)
-                        Button(action: onSaveProfileLocation) {
+                        Button(action: saveLocationSettings) {
                             HStack {
                                 if profileLocationSaving {
                                     ProgressView().scaleEffect(0.8)
@@ -17514,6 +17622,17 @@ struct ContentView: View {
                     Label("Location Settings", systemImage: "location.fill")
                 }
                 .padding(.horizontal)
+                .onAppear {
+                    syncLocalZipDraft(force: true)
+                }
+                .onChange(of: localHealthZip, initial: true) { _, _ in
+                    syncLocalZipDraft()
+                }
+                .onChange(of: profileLocationSaving, initial: false) { _, newValue in
+                    if !newValue {
+                        syncLocalZipDraft(force: true)
+                    }
+                }
 
                 GroupBox {
                     VStack(alignment: .leading, spacing: 10) {
@@ -23320,10 +23439,113 @@ struct ContentView: View {
                 || allergens.moldLevel != nil
         }
 
+        private func forecastPollenLevel(_ day: LocalForecastDay, type: String) -> String? {
+            switch type.lowercased() {
+            case "tree":
+                return day.pollenTreeLevel
+            case "grass":
+                return day.pollenGrassLevel
+            case "weed":
+                return day.pollenWeedLevel
+            case "mold":
+                return day.pollenMoldLevel
+            default:
+                return nil
+            }
+        }
+
+        private func forecastPollenIndex(_ day: LocalForecastDay, type: String) -> Double? {
+            switch type.lowercased() {
+            case "tree":
+                return day.pollenTreeIndex
+            case "grass":
+                return day.pollenGrassIndex
+            case "weed":
+                return day.pollenWeedIndex
+            case "mold":
+                return day.pollenMoldIndex
+            default:
+                return nil
+            }
+        }
+
+        private func forecastAllergenRank(_ level: String?) -> Int {
+            switch (level ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "very_high":
+                return 5
+            case "high":
+                return 4
+            case "moderate":
+                return 3
+            case "low":
+                return 2
+            case "very_low":
+                return 1
+            default:
+                return 0
+            }
+        }
+
+        private func forecastAllergenPrimaryType(_ day: LocalForecastDay) -> String? {
+            if let primary = day.pollenPrimaryType?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+               !primary.isEmpty,
+               forecastPollenLevel(day, type: primary) != nil || forecastPollenIndex(day, type: primary) != nil {
+                return primary
+            }
+
+            let candidates = ["tree", "grass", "weed", "mold"].compactMap { type -> (String, Int, Double)? in
+                let level = forecastPollenLevel(day, type: type)
+                let index = forecastPollenIndex(day, type: type)
+                guard level != nil || index != nil else { return nil }
+                return (type, forecastAllergenRank(level), index ?? 0.0)
+            }
+
+            return candidates.max { lhs, rhs in
+                if lhs.1 == rhs.1 {
+                    return lhs.2 < rhs.2
+                }
+                return lhs.1 < rhs.1
+            }?.0
+        }
+
+        private func forecastAllergenEffectiveLevel(_ day: LocalForecastDay) -> String? {
+            if let overall = day.pollenOverallLevel?.trimmingCharacters(in: .whitespacesAndNewlines), !overall.isEmpty {
+                return overall
+            }
+            if let primary = forecastAllergenPrimaryType(day),
+               let level = forecastPollenLevel(day, type: primary) {
+                return level
+            }
+
+            let candidates = ["tree", "grass", "weed", "mold"].compactMap { type -> (String, Int, Double)? in
+                let level = forecastPollenLevel(day, type: type)
+                let index = forecastPollenIndex(day, type: type)
+                guard let level else { return nil }
+                return (level, forecastAllergenRank(level), index ?? 0.0)
+            }
+
+            return candidates.max { lhs, rhs in
+                if lhs.1 == rhs.1 {
+                    return lhs.2 < rhs.2
+                }
+                return lhs.1 < rhs.1
+            }?.0
+        }
+
+        private func forecastHasAllergenData(_ day: LocalForecastDay) -> Bool {
+            forecastAllergenEffectiveLevel(day) != nil
+                || forecastAllergenPrimaryType(day) != nil
+                || day.pollenOverallIndex != nil
+                || day.pollenTreeIndex != nil
+                || day.pollenGrassIndex != nil
+                || day.pollenWeedIndex != nil
+                || day.pollenMoldIndex != nil
+        }
+
         private func forecastAllergenValue(_ day: LocalForecastDay) -> String {
-            let state = LocalConditionsFormatting.formatAllergenState(day.pollenOverallLevel)
-            let primary = LocalConditionsFormatting.formatAllergenType(day.pollenPrimaryType)
-            if state == "—" { return "—" }
+            let state = LocalConditionsFormatting.formatAllergenState(forecastAllergenEffectiveLevel(day))
+            let primary = LocalConditionsFormatting.formatAllergenType(forecastAllergenPrimaryType(day))
+            if state == "—" { return primary == "—" ? "—" : primary }
             if primary == "—" { return state }
             return "\(primary) • \(state)"
         }
@@ -23763,11 +23985,11 @@ struct ContentView: View {
                                                             tint: GaugePalette.elevated
                                                         )
                                                     }
-                                                    if day.pollenOverallLevel != nil {
+                                                    if forecastHasAllergenData(day) {
                                                         LocalConditionsValueChip(
                                                             label: "Allergens",
                                                             value: forecastAllergenValue(day),
-                                                            tint: GaugePalette.zoneColor(LocalConditionsStyle.severityKey(day.pollenOverallLevel))
+                                                            tint: GaugePalette.zoneColor(LocalConditionsStyle.severityKey(forecastAllergenEffectiveLevel(day)))
                                                         )
                                                     }
                                                     if let aqiForecast = day.aqiForecast {
