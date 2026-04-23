@@ -2,7 +2,7 @@ name: Local Health Signals
 
 on:
   schedule:
-    - cron: "*/05 * * * *" 
+    - cron: "*/5 * * * *" 
   workflow_dispatch: {}
 
 jobs:
