@@ -36,6 +36,20 @@ try:
 except Exception:
     APP_TZ = ZoneInfo("America/Chicago")
 
+
+async def _fetch_local_pollen_forecast(
+    zip_code: str | None,
+    lat: float,
+    lon: float,
+    *,
+    days: int = POLLEN_FORECAST_DAYS,
+) -> Mapping[str, Any]:
+    if zip_code:
+        from services.local_signals.aggregator import _fetch_pollen_forecast
+
+        return await _fetch_pollen_forecast(zip_code, lat, lon, days=days)
+    return await pollen.forecast_by_latlon(lat, lon, days=days)
+
 DOMAIN_LABELS = {
     "pain": "Pain",
     "focus": "Focus",
@@ -1131,7 +1145,12 @@ async def ensure_local_forecast_daily(
         hourly_payload, grid_payload, allergen_payload = await asyncio.gather(
             nws.forecast_hourly_by_latlon(float(resolved_lat), float(resolved_lon)),
             nws.gridpoints_by_latlon(float(resolved_lat), float(resolved_lon)),
-            pollen.forecast_by_latlon(float(resolved_lat), float(resolved_lon), days=POLLEN_FORECAST_DAYS),
+            _fetch_local_pollen_forecast(
+                zip_code,
+                float(resolved_lat),
+                float(resolved_lon),
+                days=POLLEN_FORECAST_DAYS,
+            ),
         )
         rows = summarize_local_forecast_days(
             hourly_payload,

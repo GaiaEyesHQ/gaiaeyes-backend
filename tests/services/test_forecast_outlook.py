@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
 
 from services.forecast_outlook import (  # noqa: E402
     LOCAL_FORECAST_DAYS,
+    POLLEN_FORECAST_DAYS,
     build_daily_outlook,
     build_location_key,
     build_user_outlook_payload,
@@ -702,7 +703,7 @@ class ForecastOutlookAsyncTests(unittest.IsolatedAsyncioTestCase):
             patch("services.forecast_outlook._upsert_local_forecast_rows", AsyncMock()) as upsert_rows,
             patch.object(nws, "forecast_hourly_by_latlon", AsyncMock(return_value={})),
             patch.object(nws, "gridpoints_by_latlon", AsyncMock(return_value={})),
-            patch("services.forecast_outlook.pollen.forecast_by_latlon", AsyncMock(return_value={})),
+            patch("services.forecast_outlook._fetch_local_pollen_forecast", AsyncMock(return_value={})) as fetch_pollen,
         ):
             payload = await ensure_local_forecast_daily(
                 _Conn(),
@@ -713,6 +714,7 @@ class ForecastOutlookAsyncTests(unittest.IsolatedAsyncioTestCase):
             )
 
         upsert_rows.assert_awaited_once()
+        fetch_pollen.assert_awaited_once_with("78209", 29.49, -98.47, days=POLLEN_FORECAST_DAYS)
         self.assertEqual(payload[0]["pollen_overall_level"], "moderate")
 
 

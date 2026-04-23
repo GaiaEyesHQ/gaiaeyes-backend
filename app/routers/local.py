@@ -1,4 +1,5 @@
 import asyncio
+import os
 
 from fastapi import APIRouter, Query
 
@@ -8,6 +9,8 @@ from services.local_signals.aggregator import assemble_for_zip, ensure_weather_f
 from services.local_signals.cache import latest_for_zip, upsert_zip_payload
 
 router = APIRouter(prefix="/v1/local", tags=["local"])
+
+LOCAL_FORECAST_ATTACH_TIMEOUT_SECONDS = float(os.getenv("LOCAL_FORECAST_ATTACH_TIMEOUT_SECONDS", "3.5"))
 
 
 def _weather_needs_repair(payload: dict) -> bool:
@@ -65,7 +68,7 @@ async def _attach_forecast_daily_best_effort(zip_code: str, payload: dict) -> di
 
     try:
         pool = await get_pool()
-        async with asyncio.timeout(1.5):
+        async with asyncio.timeout(LOCAL_FORECAST_ATTACH_TIMEOUT_SECONDS):
             async with pool.connection() as conn:
                 return await _attach_forecast_daily(conn, zip_code, payload)
     except Exception:
