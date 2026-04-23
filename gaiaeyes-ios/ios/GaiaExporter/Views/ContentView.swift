@@ -3160,10 +3160,12 @@ struct ContentView: View {
     @State private var localHealthLoading: Bool = false
     @State private var localHealthError: String?
     @State private var localZipRefreshTask: Task<Void, Never>? = nil
+    @State private var suppressNextLocalZipAutoRefresh: Bool = false
     @State private var missionSettingsLocalZipDraft: String = ""
     @State private var missionSettingsUseGPSDraft: Bool = false
     @State private var missionSettingsLocalInsightsDraft: Bool = true
     @State private var missionSettingsLocationDirty: Bool = false
+    @FocusState private var missionSettingsZipFieldFocused: Bool
     @State private var magnetosphereFetchInFlight: Bool = false
     @State private var magnetosphereLastFetchAt: Date = .distantPast
     @State private var showLocationOnboarding: Bool = false
@@ -7464,6 +7466,7 @@ struct ContentView: View {
         @MainActor
         func applySavedLocationState(zip: String?, message: String) {
             if let zip, !zip.isEmpty {
+                suppressNextLocalZipAutoRefresh = true
                 localHealthZip = zip
             }
             profileUseGPS = useGPS
@@ -17928,6 +17931,10 @@ struct ContentView: View {
                     localHealthZip = sanitized
                     return
                 }
+                if suppressNextLocalZipAutoRefresh {
+                    suppressNextLocalZipAutoRefresh = false
+                    return
+                }
                 scheduleLocalHealthRefresh()
             }
             .onChange(of: showDebug, initial: false) { _, newValue in
@@ -17989,6 +17996,14 @@ struct ContentView: View {
                             appLog("[UI] settings opened with cached values; backend DB unavailable")
                             return
                         }
+                        try? await Task.sleep(nanoseconds: 900_000_000)
+                        let shouldFetchProfile = await MainActor.run {
+                            showMissionSettingsSheet
+                                && !missionSettingsZipFieldFocused
+                                && !missionSettingsLocationDirty
+                                && !profileLocationSaving
+                        }
+                        guard shouldFetchProfile else { return }
                         await fetchProfileSettings(includeNotifications: false)
                         await MainActor.run {
                             syncMissionSettingsLocationDrafts()
@@ -18000,6 +18015,7 @@ struct ContentView: View {
                     }
                     return
                 }
+                missionSettingsZipFieldFocused = false
                 guard pendingOpenLocalConditionsAfterSettingsDismiss else { return }
                 pendingOpenLocalConditionsAfterSettingsDismiss = false
                 Task { @MainActor in
@@ -19053,6 +19069,7 @@ struct ContentView: View {
                 TextField("ZIP code", text: missionSettingsLocalZipBinding)
                     .textFieldStyle(.roundedBorder)
                     .keyboardType(.numberPad)
+                    .focused($missionSettingsZipFieldFocused)
 
                 Toggle("Use GPS", isOn: missionSettingsUseGPSBinding)
                 Toggle("Enable local insights", isOn: missionSettingsLocalInsightsBinding)

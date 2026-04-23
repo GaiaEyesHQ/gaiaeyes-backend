@@ -71,3 +71,32 @@ async def test_fetch_air_quality_expands_search_before_zip_fallback(monkeypatch)
         ("zip", 50),
         ("zip", 100),
     ]
+
+
+async def test_fetch_pollen_forecast_tries_nearby_coordinates_when_exact_centroid_is_empty(monkeypatch):
+    calls: list[tuple[float, float]] = []
+    pollen_payload = {
+        "dailyInfo": [
+            {
+                "date": {"year": 2026, "month": 4, "day": 23},
+                "pollenTypeInfo": [
+                    {
+                        "code": "TREE",
+                        "indexInfo": {"value": 4, "category": "High"},
+                    }
+                ],
+            }
+        ]
+    }
+
+    async def _fake_forecast_by_latlon(lat: float, lon: float, *, days: int = 3):  # noqa: ARG001
+        calls.append((lat, lon))
+        return {} if len(calls) == 1 else pollen_payload
+
+    monkeypatch.setattr(aggregator.pollen, "forecast_by_latlon", _fake_forecast_by_latlon)
+
+    payload = await aggregator._fetch_pollen_forecast("78752", 30.3316, -97.7004, days=3)
+
+    assert payload == pollen_payload
+    assert calls[0] == (30.3316, -97.7004)
+    assert len(calls) == 2

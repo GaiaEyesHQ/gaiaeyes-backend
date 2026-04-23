@@ -123,6 +123,44 @@ async def _fetch_air_quality(zip_code: str, lat: float, lon: float) -> list[dict
     return []
 
 
+def _pollen_coordinate_candidates(lat: float, lon: float) -> tuple[tuple[float, float], ...]:
+    # Google Pollen occasionally has small metro coverage gaps at ZIP centroids.
+    # Try a compact nearby grid before giving up on local allergen context.
+    offsets = (
+        (0.0, 0.0),
+        (0.10, 0.0),
+        (-0.10, 0.0),
+        (0.0, 0.10),
+        (0.0, -0.10),
+        (0.10, 0.10),
+        (0.10, -0.10),
+        (-0.10, 0.10),
+        (-0.10, -0.10),
+    )
+    return tuple((round(lat + dlat, 4), round(lon + dlon, 4)) for dlat, dlon in offsets)
+
+
+def _has_pollen_snapshot(payload: dict[str, Any]) -> bool:
+    return bool(pollen.current_snapshot(payload).get("source"))
+
+
+async def _fetch_pollen_forecast(zip_code: str, lat: float, lon: float, *, days: int = 3) -> dict[str, Any]:
+    first_payload: dict[str, Any] = {}
+    for idx, (candidate_lat, candidate_lon) in enumerate(_pollen_coordinate_candidates(lat, lon)):
+        try:
+            payload = await pollen.forecast_by_latlon(candidate_lat, candidate_lon, days=days)
+        except Exception as e:
+            print(f"[local_signals] pollen forecast error for zip={zip_code} candidate={idx}: {e}")
+            continue
+        if isinstance(payload, dict) and not first_payload:
+            first_payload = payload
+        if isinstance(payload, dict) and _has_pollen_snapshot(payload):
+            if idx > 0:
+                print(f"[local_signals] pollen fallback used for zip={zip_code} candidate={idx}")
+            return payload
+    return first_payload
+
+
 def ensure_weather_fields(zip_code: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         return payload
@@ -243,7 +281,7 @@ async def assemble_for_zip(zip_code: str) -> Dict[str, Any]:
 
     aq_list, pollen_payload = await asyncio.gather(
         _fetch_air_quality(zip_code, lat, lon),
-        pollen.forecast_by_latlon(lat, lon, days=3),
+        _fetch_pollen_forecast(zip_code, lat, lon, days=3),
         return_exceptions=True,
     )
     if isinstance(pollen_payload, Exception):
