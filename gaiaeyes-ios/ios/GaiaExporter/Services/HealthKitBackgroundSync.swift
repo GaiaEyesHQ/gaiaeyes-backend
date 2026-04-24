@@ -530,8 +530,25 @@ final class HealthKitBackgroundSync {
         healthStore.execute(query)
     }
 
+    private func healthAuthorizationShouldRequest(for type: HKObjectType) async -> Bool {
+        await healthAuthorizationShouldRequest(read: Set([type]))
+    }
+
+    private func healthAuthorizationShouldRequest(read types: Set<HKObjectType>) async -> Bool {
+        guard HKHealthStore.isHealthDataAvailable(), !types.isEmpty else { return false }
+        return await withCheckedContinuation { continuation in
+            healthStore.getRequestStatusForAuthorization(toShare: [], read: types) { status, error in
+                continuation.resume(returning: error == nil && status == .shouldRequest)
+            }
+        }
+    }
+
     // Process new samples
     private func processDeltas(for type: HKSampleType, anchorKey: String) async throws {
+        if await healthAuthorizationShouldRequest(for: type) {
+            appLog("[HK] \(anchorKey) skipped: Health authorization not requested on this device")
+            return
+        }
         var anchor = anchorStore.anchor(forKey: anchorKey)
         let seedStart = anchor == nil ? anchorStore.seedStart(forKey: anchorKey) : nil
         if let seedStart {
@@ -633,6 +650,10 @@ final class HealthKitBackgroundSync {
     }
 
     private func processSleepDeltas(anchorKey: String) async throws {
+        if await healthAuthorizationShouldRequest(for: sleepType) {
+            appLog("[HK] \(anchorKey) skipped: Health authorization not requested on this device")
+            return
+        }
         var anchor = anchorStore.anchor(forKey: anchorKey)
         let pred  = HKQuery.predicateForSamples(withStart: Date.distantPast, end: Date(), options: [])
         let sort  = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
@@ -699,6 +720,10 @@ final class HealthKitBackgroundSync {
 
     private func processCycleDeltas(anchorKey: String) async throws {
         guard let menstrualFlowType else { return }
+        if await healthAuthorizationShouldRequest(for: menstrualFlowType) {
+            appLog("[HK] \(anchorKey) skipped: Health authorization not requested on this device")
+            return
+        }
         var anchor = anchorStore.anchor(forKey: anchorKey)
         let pred = HKQuery.predicateForSamples(withStart: Date.distantPast, end: Date(), options: [])
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
@@ -1052,6 +1077,11 @@ final class HealthKitBackgroundSync {
         guard started else { return }
 
         let keys = ["heart_rate", "step_count"]
+        if await healthAuthorizationShouldRequest(read: Set([hrType, stepsType])) {
+            appLog("[Backfill] phase2 recent backfill skipped: Health authorization not requested on this device")
+            await phase2BackfillState.end()
+            return
+        }
         anchorStore.clear(keys: keys)
         appLog("[Backfill] phase2 recent backfill starting scope=\(String(uid.prefix(8)))")
 
@@ -1276,6 +1306,14 @@ final class HealthKitBackgroundSync {
         chunkSize: Int = 200,
         maxRetries: Int = 3
     ) async -> HealthBackfillMetricResult {
+        if await healthAuthorizationShouldRequest(for: sleepType) {
+            appLog("[Backfill] sleep_stage skipped: Health authorization not requested on this device")
+            return HealthBackfillMetricResult(
+                collectedCount: 0,
+                uploadedRows: 0,
+                failureDescription: "Health permission has not been requested on this device."
+            )
+        }
         var anchor: HKQueryAnchor? = nil
         var collected: [HKSample] = []
         var more = true
@@ -1493,6 +1531,14 @@ final class HealthKitBackgroundSync {
         persistAnchor: Bool = true,
         requestRefresh: Bool = true
     ) async -> HealthBackfillMetricResult {
+        if await healthAuthorizationShouldRequest(for: type) {
+            appLog("[Backfill] \(anchorKey) skipped: Health authorization not requested on this device")
+            return HealthBackfillMetricResult(
+                collectedCount: 0,
+                uploadedRows: 0,
+                failureDescription: "Health permission has not been requested on this device."
+            )
+        }
         var anchor: HKQueryAnchor? = nil
         var collected: [HKSample] = []
         var more = true
@@ -1832,6 +1878,14 @@ final class HealthKitBackgroundSync {
         maxRetries: Int = 3,
         onProgress: (@Sendable (String) async -> Void)? = nil
     ) async -> HealthBackfillMetricResult {
+        if await healthAuthorizationShouldRequest(for: hrType) {
+            appLog("[Backfill] \(anchorKey) statistics skipped: Health authorization not requested on this device")
+            return HealthBackfillMetricResult(
+                collectedCount: 0,
+                uploadedRows: 0,
+                failureDescription: "Health permission has not been requested on this device."
+            )
+        }
         let windows = recentBackfillWindows(start: start, end: end, windowDays: windowDays)
         guard !windows.isEmpty else {
             return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)
@@ -1918,6 +1972,14 @@ final class HealthKitBackgroundSync {
         maxRetries: Int = 3,
         onProgress: (@Sendable (String) async -> Void)? = nil
     ) async -> HealthBackfillMetricResult {
+        if await healthAuthorizationShouldRequest(for: type) {
+            appLog("[Backfill] \(anchorKey) skipped: Health authorization not requested on this device")
+            return HealthBackfillMetricResult(
+                collectedCount: 0,
+                uploadedRows: 0,
+                failureDescription: "Health permission has not been requested on this device."
+            )
+        }
         let windows = recentBackfillWindows(start: start, end: end, windowDays: windowDays)
         guard !windows.isEmpty else {
             return HealthBackfillMetricResult(collectedCount: 0, uploadedRows: 0, failureDescription: nil)

@@ -4034,11 +4034,12 @@ struct ContentView: View {
         let hasRequestedHealth = !state.healthkitRequestedAtISO.isEmpty || experienceProfile.healthkitRequestedAt != nil
         let readUnavailableAt = parseDebugDate(state.healthkitReadUnavailableAtISO)
         let readVerifiedAt = parseDebugDate(state.healthkitReadVerifiedAtISO)
+        let localRequestNeeded = healthReadAuthorizationNeededOnThisDevice
         let readLooksDisconnected = readUnavailableAt.map { unavailableAt in
             guard let readVerifiedAt else { return true }
             return unavailableAt > readVerifiedAt
         } ?? false
-        guard state.selectedHealthPermissionKeys.isEmpty || !hasRequestedHealth || readLooksDisconnected else { return nil }
+        guard state.selectedHealthPermissionKeys.isEmpty || !hasRequestedHealth || localRequestNeeded || readLooksDisconnected else { return nil }
         return "Health data not connected. Body and sleep personalization will stay limited until Apple Health or a wearable is connected."
     }
 
@@ -5039,9 +5040,18 @@ struct ContentView: View {
     }
 
     private var healthReadAccessLooksDisconnected: Bool {
+        if healthReadAuthorizationNeededOnThisDevice {
+            return true
+        }
         guard let readUnavailableAt = parseDebugDate(state.healthkitReadUnavailableAtISO) else { return false }
         guard let readVerifiedAt = parseDebugDate(state.healthkitReadVerifiedAtISO) else { return true }
         return readUnavailableAt > readVerifiedAt
+    }
+
+    private var healthReadAuthorizationNeededOnThisDevice: Bool {
+        guard let requestNeededAt = parseDebugDate(state.healthkitLocalRequestNeededAtISO) else { return false }
+        guard let readVerifiedAt = parseDebugDate(state.healthkitReadVerifiedAtISO) else { return true }
+        return requestNeededAt > readVerifiedAt
     }
 
     private var hasSleepReadEvidence: Bool {
@@ -5071,6 +5081,9 @@ struct ContentView: View {
 
         let isSelected = state.selectedHealthPermissionKeys.contains(option.rawValue)
         guard isSelected else { return "Not selected" }
+        if healthReadAuthorizationNeededOnThisDevice {
+            return "Not requested on this device"
+        }
         if healthReadAccessLooksDisconnected {
             return "Read off in Apple Health"
         }
@@ -5426,6 +5439,9 @@ struct ContentView: View {
             || item.permissionStatus.hasPrefix("Requested;")
         }.count
         let healthConnected: String = {
+            if healthReadAuthorizationNeededOnThisDevice {
+                return "Health permission needed on this device"
+            }
             if healthReadAccessLooksDisconnected {
                 return "Read off in Apple Health"
             }
@@ -7799,6 +7815,7 @@ struct ContentView: View {
             experienceProfile.healthkitRequestedAt = nil
             experienceProfile.lastBackfillAt = nil
             state.healthkitRequestedAtISO = ""
+            state.healthkitLocalRequestNeededAtISO = ""
             state.lastHealthBackfillAtISO = ""
         }
 

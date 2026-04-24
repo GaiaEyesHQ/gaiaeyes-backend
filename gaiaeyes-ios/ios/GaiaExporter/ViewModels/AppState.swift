@@ -181,6 +181,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     @AppStorage("gaia.healthkit.requested_at") var healthkitRequestedAtISO: String = ""
     @AppStorage("gaia.healthkit.read_verified_at") var healthkitReadVerifiedAtISO: String = ""
     @AppStorage("gaia.healthkit.read_unavailable_at") var healthkitReadUnavailableAtISO: String = ""
+    @AppStorage("gaia.healthkit.local_request_needed_at") var healthkitLocalRequestNeededAtISO: String = ""
     @AppStorage("gaia.healthkit.last_backfill_at") var lastHealthBackfillAtISO: String = ""
 
     // Periodic status refresh (e.g., surface BG timestamps)
@@ -539,6 +540,7 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
             try await healthStore.requestAuthorization(toShare: [], read: toRead)
             append("✅ Health permission request finished")
             appLog("[HK] Health permission request finished")
+            healthkitLocalRequestNeededAtISO = ""
             // Register observers and do a one-time sweep
             do {
                 try HealthKitBackgroundSync.shared.registerObservers()
@@ -569,14 +571,30 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
         }
         let toRead = makeHealthReadTypes()
         guard !toRead.isEmpty else { return }
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        if let requestStatus = await healthReadAuthorizationRequestStatus(toRead) {
+            switch requestStatus {
+            case .shouldRequest:
+                healthkitLocalRequestNeededAtISO = stamp
+                healthkitReadUnavailableAtISO = stamp
+                appLog("[HK] read evidence probe reason=\(reason) local authorization not requested")
+                return
+            case .unnecessary:
+                healthkitLocalRequestNeededAtISO = ""
+            case .unknown:
+                break
+            @unknown default:
+                break
+            }
+        }
         guard hasHistoricalHealthReadEvidence() else { return }
 
         let readableCount = await readableHealthSampleTypeCount(toRead)
-        let stamp = ISO8601DateFormatter().string(from: Date())
         appLog("[HK] read evidence probe reason=\(reason) readable=\(readableCount)/\(toRead.count)")
         if readableCount > 0 {
             healthkitReadVerifiedAtISO = stamp
             healthkitReadUnavailableAtISO = ""
+            healthkitLocalRequestNeededAtISO = ""
         } else {
             healthkitReadUnavailableAtISO = stamp
             appLog("[HK] Health read access appears unavailable after prior readable data")
