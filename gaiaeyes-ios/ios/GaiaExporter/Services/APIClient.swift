@@ -971,82 +971,75 @@ final class APIClient {
 
     private func sendChunk(_ chunk: [Sample], label: String, attemptLimit: Int) async throws -> Bool {
         guard !chunk.isEmpty else { return false }
-        // Try /v1/samples/batch first, then /samples/batch for compatibility
-        let paths = ["v1/samples/batch", "samples/batch"]
+        let path = "v1/samples/batch"
+        var req = makeRequest(path: path)
+        let payload = SamplesRawPayload(samples: chunk)
+        req.httpBody = try JSONEncoder().encode(payload)
 
-        for (pi, path) in paths.enumerated() {
-            var req = makeRequest(path: path)
-            let payload = SamplesRawPayload(samples: chunk)
-            req.httpBody = try JSONEncoder().encode(payload)
-
-            var attempt = 0
-            var didForceAuthRefresh = false
-            var lastError: Error?
-            while attempt < max(1, attemptLimit) {
-                do {
-                    await refreshAuthorizationHeader(on: &req)
-                    if req.value(forHTTPHeaderField: "Authorization") == nil {
-                        await refreshAuthorizationHeader(on: &req, force: true)
-                        guard req.value(forHTTPHeaderField: "Authorization") != nil else {
-                            let authError = APIError.server(code: 401, body: "missing local auth token before upload")
-                            logger?("POST \(label) skipped: missing Authorization header")
-                            throw authError
-                        }
+        var attempt = 0
+        var didForceAuthRefresh = false
+        var lastError: Error?
+        while attempt < max(1, attemptLimit) {
+            do {
+                await refreshAuthorizationHeader(on: &req)
+                if req.value(forHTTPHeaderField: "Authorization") == nil {
+                    await refreshAuthorizationHeader(on: &req, force: true)
+                    guard req.value(forHTTPHeaderField: "Authorization") != nil else {
+                        let authError = APIError.server(code: 401, body: "missing local auth token before upload")
+                        logger?("POST \(label) skipped: missing Authorization header")
+                        throw authError
                     }
-                    logger?("POST \(label) (\(chunk.count) rows) → \(req.url?.absoluteString ?? path)")
-                    let (data, resp) = try await session.data(for: req)
-                    let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
-                    let body = String(data: data, encoding: .utf8) ?? ""
-                    if (200...299).contains(code) {
-                        logger?("↩︎ \(code) \(body)")
-                        if let batch = try? APIClient.tolerantJSONDecoder().decode(SamplesBatchResponse.self, from: data) {
-                            if batch.ok == false {
-                                let reason = batch.error ?? "batch rejected"
-                                logger?("POST \(label) deferred: \(reason)")
-                                throw APIError.server(code: batch.db == false ? 429 : code, body: reason)
-                            }
-                            let accepted = (batch.inserted ?? 0) + (batch.buffered ?? 0)
-                            return accepted > 0 || batch.ok == true
-                        }
-                        return !chunk.isEmpty
-                    } else {
-                        logger?("↩︎ \(code) \(HTTPURLResponse.localizedString(forStatusCode: code)) \(body)")
-                        let serverError = APIError.server(code: code, body: body)
-                        if code == 401 || code == 403 {
-                            if !didForceAuthRefresh {
-                                didForceAuthRefresh = true
-                                await refreshAuthorizationHeader(on: &req, force: true)
-                                if req.value(forHTTPHeaderField: "Authorization") != nil {
-                                    logger?("[AUTH] forced bearer refresh after \(code); retrying \(label)")
-                                    continue
-                                }
-                            }
-                            throw serverError
-                        }
-                        lastError = serverError
-                    }
-                } catch {
-                    if case APIError.server(let code, _) = error, code == 401 || code == 403 {
-                        throw error
-                    }
-                    if case APIError.server(let code, _) = error, code == 429 {
-                        throw error
-                    }
-                    lastError = error
-                    logger?("POST error: \(error.localizedDescription)")
                 }
-                attempt += 1
-                // backoff 200ms, 600ms, 1200ms with jitter
-                let base: UInt64 = 200_000_000
-                let delay = base * UInt64(1 << max(0, attempt - 1))
-                let jitter = UInt64(Int.random(in: 0..<(Int(base)/3)))
-                try? await Task.sleep(nanoseconds: delay + jitter)
+                logger?("POST \(label) (\(chunk.count) rows) → \(req.url?.absoluteString ?? path)")
+                let (data, resp) = try await session.data(for: req)
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+                let body = String(data: data, encoding: .utf8) ?? ""
+                if (200...299).contains(code) {
+                    logger?("↩︎ \(code) \(body)")
+                    if let batch = try? APIClient.tolerantJSONDecoder().decode(SamplesBatchResponse.self, from: data) {
+                        if batch.ok == false {
+                            let reason = batch.error ?? "batch rejected"
+                            logger?("POST \(label) deferred: \(reason)")
+                            throw APIError.server(code: batch.db == false ? 429 : code, body: reason)
+                        }
+                        let accepted = (batch.inserted ?? 0) + (batch.buffered ?? 0)
+                        return accepted > 0 || batch.ok == true
+                    }
+                    return !chunk.isEmpty
+                } else {
+                    logger?("↩︎ \(code) \(HTTPURLResponse.localizedString(forStatusCode: code)) \(body)")
+                    let serverError = APIError.server(code: code, body: body)
+                    if code == 401 || code == 403 {
+                        if !didForceAuthRefresh {
+                            didForceAuthRefresh = true
+                            await refreshAuthorizationHeader(on: &req, force: true)
+                            if req.value(forHTTPHeaderField: "Authorization") != nil {
+                                logger?("[AUTH] forced bearer refresh after \(code); retrying \(label)")
+                                continue
+                            }
+                        }
+                        throw serverError
+                    }
+                    lastError = serverError
+                }
+            } catch {
+                if case APIError.server(let code, _) = error, code == 401 || code == 403 {
+                    throw error
+                }
+                if case APIError.server(let code, _) = error, code == 429 {
+                    throw error
+                }
+                lastError = error
+                logger?("POST error: \(error.localizedDescription)")
             }
-            // Exhausted retries on this path → try the next
-            if pi == paths.count - 1 { throw lastError ?? APIError.server(code: -1, body: "Upload failed after retries") }
-            logger?("⚠️ Switching upload path to '\(paths[pi+1])'")
+            attempt += 1
+            // backoff 200ms, 600ms, 1200ms with jitter
+            let base: UInt64 = 200_000_000
+            let delay = base * UInt64(1 << max(0, attempt - 1))
+            let jitter = UInt64(Int.random(in: 0..<(Int(base)/3)))
+            try? await Task.sleep(nanoseconds: delay + jitter)
         }
-        return false
+        throw lastError ?? APIError.server(code: -1, body: "Upload failed after retries")
     }
 
     private func refreshAuthorizationHeader(on request: inout URLRequest, force: Bool = false) async {

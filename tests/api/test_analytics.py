@@ -76,6 +76,11 @@ def test_safe_properties_allowlists_expected_keys_only():
         {
             "surface": "onboarding",
             "driver_key": "solar_wind",
+            "reason": "health_read_access_off",
+            "detail_choice": "head_pressure",
+            "symptom_code": "HEADACHE",
+            "trigger": "switch",
+            "tab": "outlook",
             "pain_type": "nerve",
             "note_text": "private note",
             "count": "123",
@@ -84,6 +89,11 @@ def test_safe_properties_allowlists_expected_keys_only():
     assert safe == {
         "surface": "onboarding",
         "driver_key": "solar_wind",
+        "reason": "health_read_access_off",
+        "detail_choice": "head_pressure",
+        "symptom_code": "HEADACHE",
+        "trigger": "switch",
+        "tab": "outlook",
         "count": "123",
     }
 

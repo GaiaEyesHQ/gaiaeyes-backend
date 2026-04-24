@@ -13,13 +13,13 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from psycopg import sql
 from psycopg.rows import dict_row
 
 from app.db import get_db, settings
-from app.security.auth import require_read_auth, require_supabase_jwt, require_write_auth
+from app.security.auth import maybe_attach_write_auth, require_read_auth, require_supabase_jwt, require_write_auth
 from services.personalization.health_context import canonicalize_tag_key, canonicalize_tag_keys
 
 
@@ -1401,13 +1401,14 @@ async def profile_delete_account(
     }
 
 
-@router.post("/bug-report", dependencies=[Depends(require_write_auth)])
+@router.post("/bug-report")
 async def profile_submit_bug_report(
     payload: BugReportIn,
     request: Request,
+    authorization: Optional[str] = Header(None),
     conn=Depends(get_db),
 ):
-    user_id = _require_user_id(request)
+    user_id = maybe_attach_write_auth(request, authorization)
     description = payload.description.strip()
     diagnostics_bundle = payload.diagnostics_bundle.strip()
     source = (payload.source or "ios_app").strip().lower() or "ios_app"

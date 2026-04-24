@@ -40,6 +40,7 @@ def build_user_outlook_window_semantic(
     likely_domains: Sequence[Mapping[str, Any]],
     summary: str,
     support_line: str,
+    allow_generated_summary: bool = True,
 ) -> SemanticPayload:
     leading_driver = dict(top_drivers[0]) if top_drivers else {}
     domain_labels = [
@@ -49,13 +50,17 @@ def build_user_outlook_window_semantic(
     ]
     leading_label = _clean_text(leading_driver.get("label") or leading_driver.get("key") or "This signal")
     leading_detail = _clean_text(leading_driver.get("detail"))
-    if not summary:
+    summary = _clean_text(summary)
+    support_line = _clean_text(support_line)
+    if not summary and allow_generated_summary:
         if leading_detail:
             summary = leading_detail
         elif leading_label:
             summary = f"{leading_label} looks like the main signal worth watching over this window."
         else:
             summary = "No clearer short-range forecast driver stands out from the data available right now."
+    header_summary = summary or None
+    leading_signal_summary = leading_detail or header_summary
 
     domains_summary = ""
     if domain_labels:
@@ -94,10 +99,10 @@ def build_user_outlook_window_semantic(
             "top_driver_count": len(top_drivers),
         },
         interpretation={
-            "header_summary": summary,
-            "leading_signal_summary": leading_detail or summary,
+            "header_summary": header_summary,
+            "leading_signal_summary": leading_signal_summary,
             "domains_summary": domains_summary or None,
-            "support_summary": _clean_text(support_line) or None,
+            "support_summary": support_line or None,
             "empty_state": "No clearer short-range forecast driver stands out from the data available right now.",
         },
         actions={

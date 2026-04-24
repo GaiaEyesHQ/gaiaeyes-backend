@@ -24,10 +24,12 @@ _ALLOWED_PROPERTY_KEYS = {
     "active_count",
     "category",
     "count",
+    "detail_choice",
     "driver_key",
     "filter",
     "key",
     "prediction_match",
+    "reason",
     "role",
     "route",
     "screen",
@@ -37,7 +39,9 @@ _ALLOWED_PROPERTY_KEYS = {
     "status",
     "step",
     "surface",
+    "symptom_code",
     "tab",
+    "trigger",
     "window",
 }
 _ONBOARDING_EVENTS = [
@@ -59,8 +63,14 @@ _ENGAGEMENT_EVENTS = [
     "daily_checkin_completed",
     "daily_checkin_skipped",
     "symptom_followup_dismissed",
+    "symptom_followup_answered",
     "all_drivers_opened",
     "all_driver_expanded",
+    "all_drivers_log_symptoms",
+    "all_drivers_symptom_cta",
+    "all_drivers_pattern_cta",
+    "all_drivers_outlook_cta",
+    "all_drivers_filter_changed",
     "signal_bar_tapped",
     "share_opened",
     "share_rendered",
@@ -72,6 +82,9 @@ _FEATURE_ADOPTION_EVENTS = [
     "lunar_tracking_enabled",
     "lunar_tracking_disabled",
     "lunar_tracking_skipped",
+]
+_NAVIGATION_EVENTS = [
+    "tab_viewed",
 ]
 
 
@@ -351,6 +364,24 @@ async def analytics_summary(
         health_sync = await _fetch_group(cur, start_utc, end_utc, _HEALTH_SYNC_EVENTS)
         engagement = await _fetch_group(cur, start_utc, end_utc, _ENGAGEMENT_EVENTS)
         feature_adoption = await _fetch_group(cur, start_utc, end_utc, _FEATURE_ADOPTION_EVENTS)
+        navigation = await _fetch_group(cur, start_utc, end_utc, _NAVIGATION_EVENTS)
+
+        await cur.execute(
+            """
+            select coalesce(nullif(properties->>'tab', ''), 'unknown') as event_name,
+                   count(*)::int as events,
+                   count(distinct user_id)::int as users
+              from raw.app_analytics_events
+             where event_ts_utc >= %s
+               and event_ts_utc < %s
+               and event_name = 'tab_viewed'
+             group by 1
+             order by events desc, event_name asc
+            """,
+            (start_utc, end_utc),
+            prepare=False,
+        )
+        tab_usage = _json_rows(await cur.fetchall())
 
         await cur.execute(
             """
@@ -393,6 +424,8 @@ async def analytics_summary(
         "health_sync": health_sync,
         "engagement": engagement,
         "feature_adoption": feature_adoption,
+        "navigation": navigation,
+        "tab_usage": tab_usage,
         "errors": errors,
         "error": None,
     }

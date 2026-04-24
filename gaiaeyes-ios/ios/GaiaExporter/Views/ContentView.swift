@@ -2683,6 +2683,17 @@ private struct DebugBillingSnapshot {
     let error: String?
 }
 
+private struct DebugAuthSnapshot {
+    let accessTokenPresent: Bool
+    let refreshTokenPresent: Bool
+    let storedContinuityPresent: Bool
+    let lastKnownSignedInEmail: String?
+    let lastEvent: String?
+    let lastDetail: String?
+    let lastEventAt: Date?
+    let lastEventUserID: String?
+}
+
 private struct DebugProfileSnapshot {
     let onboardingCompleted: Bool
     let onboardingStep: String
@@ -3725,6 +3736,21 @@ struct ContentView: View {
                 return GaugePalette.elevated
             case .explore:
                 return GaugePalette.sky
+            }
+        }
+
+        var analyticsValue: String {
+            switch self {
+            case .home:
+                return "home"
+            case .body:
+                return "body"
+            case .patterns:
+                return "patterns"
+            case .outlook:
+                return "outlook"
+            case .explore:
+                return "explore"
             }
         }
     }
@@ -5417,6 +5443,26 @@ struct ContentView: View {
         )
     }
 
+    private var debugAuthSnapshot: DebugAuthSnapshot {
+        let defaults = UserDefaults.standard
+        let lastKnownEmail = defaults.string(forKey: AuthManager.continuityEmailDefaultsKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let lastDetail = defaults.string(forKey: AuthManager.diagnosticsLastDetailKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let lastEventUserID = defaults.string(forKey: AuthManager.diagnosticsLastUserIdKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return DebugAuthSnapshot(
+            accessTokenPresent: auth.supabaseAccessToken?.isEmpty == false,
+            refreshTokenPresent: auth.supabaseRefreshToken?.isEmpty == false,
+            storedContinuityPresent: auth.hasStoredAuthContinuity,
+            lastKnownSignedInEmail: lastKnownEmail?.isEmpty == false ? lastKnownEmail : nil,
+            lastEvent: defaults.string(forKey: AuthManager.diagnosticsLastEventKey),
+            lastDetail: lastDetail?.isEmpty == false ? lastDetail : nil,
+            lastEventAt: parseDebugDate(defaults.string(forKey: AuthManager.diagnosticsLastAtKey)),
+            lastEventUserID: lastEventUserID?.isEmpty == false ? lastEventUserID : nil
+        )
+    }
+
     private var debugFeatureInputSnapshot: DebugFeatureInputSnapshot {
         let selected = features ?? lastKnownFeatures
         let drivers = (dashboardPayload?.primaryDriver.map { [$0] } ?? []) +
@@ -5587,6 +5633,7 @@ struct ContentView: View {
 
     private func diagnosticsBundleText() -> String {
         let billing = debugBillingSnapshot
+        let authSnapshot = debugAuthSnapshot
         let profile = debugProfileSnapshot
         let featureInputs = debugFeatureInputSnapshot
         let freshness = debugFreshnessItems
@@ -5616,6 +5663,17 @@ struct ContentView: View {
         lines.append("- Last entitlement refresh: \(debugFormattedDate(billing.lastSyncAt))")
         if let error = billing.error, !error.isEmpty {
             lines.append("- Billing error: \(error)")
+        }
+        lines.append("")
+        lines.append("Auth:")
+        lines.append("- Customer state: \(billing.customerState)")
+        lines.append("- Access token present: \(authSnapshot.accessTokenPresent ? "yes" : "no")")
+        lines.append("- Refresh token present: \(authSnapshot.refreshTokenPresent ? "yes" : "no")")
+        lines.append("- Stored auth continuity: \(authSnapshot.storedContinuityPresent ? "yes" : "no")")
+        lines.append("- Last known signed-in email: \(authSnapshot.lastKnownSignedInEmail ?? "—")")
+        lines.append("- Last auth event: \(authSnapshot.lastEvent ?? "—") | at \(debugFormattedDate(authSnapshot.lastEventAt)) | user \(authSnapshot.lastEventUserID ?? "—")")
+        if let lastDetail = authSnapshot.lastDetail, !lastDetail.isEmpty {
+            lines.append("- Last auth detail: \(lastDetail)")
         }
         lines.append("")
         lines.append("Health Sync:")
@@ -5719,22 +5777,7 @@ struct ContentView: View {
             await fetchFeaturesDiagnostics()
         }
 
-        let trimmedBase = state.baseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let token = await auth.validAccessToken(), !token.isEmpty else {
-            await MainActor.run {
-                bugReportMessage = "Sign in again to submit a bug report."
-                bugReportSubmitting = false
-            }
-            return
-        }
-
-        let api = APIClient(
-            config: APIConfig(
-                baseURLString: trimmedBase.isEmpty ? DeveloperAuthDefaults.baseURL : trimmedBase,
-                bearer: token,
-                timeout: 45
-            )
-        )
+        let api = state.apiWithAuth()
 
         do {
             let envelope = try await api.submitBugReport(
@@ -13782,7 +13825,7 @@ struct ContentView: View {
         private let columns = [
             GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 10, alignment: .topLeading)
         ]
-        private let suppressedOutlookPhrases = ["radio blackout", "radio-blackout"]
+        private let suppressedOutlookPhrases = ["radio blackout", "radio-blackout", "in view for this day"]
 
         private func severity(_ raw: String?) -> StatusPill.Severity {
             LocalConditionsStyle.pillSeverity(raw)
@@ -18002,7 +18045,20 @@ struct ContentView: View {
                             _ = await (schumannRefresh, noticeRefresh)
                         }
                     }
+                } else if newPhase == .inactive || newPhase == .background {
+                    AppAnalytics.flush()
                 }
+            }
+            .onChange(of: selectedTab, initial: true) { oldValue, newValue in
+                let trigger = oldValue == newValue ? "initial" : "switch"
+                AppAnalytics.track(
+                    "tab_viewed",
+                    properties: [
+                        "tab": newValue.analyticsValue,
+                        "surface": "main_tabs",
+                        "trigger": trigger,
+                    ]
+                )
             }
             .onChange(of: featuresCacheJSON, initial: false) { oldValue, newValue in
                 guard newValue != oldValue, !newValue.isEmpty, let decoded = decodeFeatures(from: newValue) else { return }

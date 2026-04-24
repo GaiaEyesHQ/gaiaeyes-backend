@@ -49,5 +49,9 @@
     - **Where to fill**: Product/legal/ops decision for what public contact details Gaia Eyes should publish on `https://gaiaeyes.com/support/`.
 
 13. **RevenueCat launch product configuration**
-    - **Why needed**: The app now reads RevenueCat API/product values from `Info.plist` build settings, but the real RevenueCat Apple SDK key, App Store product identifiers, entitlement ids, and webhook Authorization value must match the RevenueCat dashboard before TestFlight purchase testing.
-    - **Where to fill**: RevenueCat dashboard, App Store Connect subscriptions, Xcode build settings / xcconfig, and backend environment variable `REVENUECAT_WEBHOOK_AUTHORIZATION`.
+   - **Why needed**: The app now reads RevenueCat API/product values from `Info.plist` build settings, but the real RevenueCat Apple SDK key, App Store product identifiers, entitlement ids, and webhook Authorization value must match the RevenueCat dashboard before TestFlight purchase testing.
+   - **Where to fill**: RevenueCat dashboard, App Store Connect subscriptions, Xcode build settings / xcconfig, and backend environment variable `REVENUECAT_WEBHOOK_AUTHORIZATION`.
+
+14. **iOS heart-rate raw ingest gap vs statistics repair**
+   - **Why needed**: `hr_min` and `hr_max` only populate when same-day `heart_rate` rows land in `gaia.samples`, but the test account showed `resting_heart_rate` continuing while raw `heart_rate` stopped after April 22, 2026. A short statistics-based repair now mitigates the gap, but the original reason raw `heart_rate` observer/delta ingest missed April 23, 2026 is still unknown.
+   - **Where to fill**: Inspect iOS HealthKit observer execution, anchors, and same-day `HKQuantitySample` availability for `.heartRate` on device logs vs `gaia.samples` writes.

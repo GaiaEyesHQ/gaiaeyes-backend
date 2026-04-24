@@ -436,7 +436,8 @@ Outlook For March 23-29
         self.assertEqual(payload[0]["top_drivers"][0]["key"], "humidity")
         self.assertEqual(payload[1]["top_drivers"][0]["key"], "allergens")
         self.assertTrue(payload[0]["label"])
-        self.assertNotIn("No stronger personal pattern", payload[0]["summary"])
+        self.assertIsNone(payload[0]["summary"])
+        self.assertIsNone(payload[0]["voice_semantic"]["interpretation"]["header_summary"])
         self.assertIsNone(payload[0]["support_line"])
 
     def test_build_daily_outlook_uses_type_specific_pollen_when_overall_level_is_missing(self) -> None:
@@ -490,8 +491,8 @@ Outlook For March 23-29
         self.assertEqual(len(payload), 1)
         keys = [driver["key"] for driver in payload[0]["top_drivers"]]
         self.assertTrue(any(key in {"kp", "cme"} for key in keys))
-        self.assertIn("geomagnetic", payload[0]["summary"].lower())
-        self.assertIn("geomagnetic", payload[0]["voice_semantic"]["interpretation"]["header_summary"].lower())
+        self.assertIsNone(payload[0]["summary"])
+        self.assertIsNone(payload[0]["voice_semantic"]["interpretation"]["header_summary"])
 
     def test_build_daily_outlook_uses_app_day_when_filtering_future_rows(self) -> None:
         merged_rows = [

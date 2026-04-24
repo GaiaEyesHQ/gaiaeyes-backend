@@ -161,6 +161,14 @@ async def require_write_auth(request: Request, authorization: Optional[str] = He
     )
 
 
+def maybe_attach_write_auth(request: Request, authorization: Optional[str]) -> Optional[str]:
+    token = _extract_bearer(authorization)
+    if token:
+        _is_allowed_write(request, token)
+    user_id = getattr(request.state, "user_id", None)
+    return str(user_id).strip() or None if user_id is not None else None
+
+
 async def require_supabase_jwt(request: Request, authorization: Optional[str] = Header(None)):
     """
     Require a valid Supabase JWT (no dev/write token bypass).

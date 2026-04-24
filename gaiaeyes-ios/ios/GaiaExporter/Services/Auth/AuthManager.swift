@@ -4,6 +4,11 @@ import Security
 @MainActor
 final class AuthManager: ObservableObject {
     static let shared = AuthManager()
+    static let continuityEmailDefaultsKey = "gaia.auth.last_signed_in_email"
+    static let diagnosticsLastEventKey = "gaia.auth.last_event"
+    static let diagnosticsLastDetailKey = "gaia.auth.last_detail"
+    static let diagnosticsLastAtKey = "gaia.auth.last_at"
+    static let diagnosticsLastUserIdKey = "gaia.auth.last_user_id"
 
     @Published private(set) var supabaseAccessToken: String?
     @Published private(set) var supabaseRefreshToken: String?
@@ -36,7 +41,8 @@ final class AuthManager: ObservableObject {
         hasNonEmptyStoredValue(supabaseAccessToken, key: "access_token") ||
         hasNonEmptyStoredValue(supabaseRefreshToken, key: "refresh_token") ||
         hasNonEmptyStoredValue(supabaseUserId, key: "user_id") ||
-        hasNonEmptyStoredValue(supabaseEmail, key: "email")
+        hasNonEmptyStoredValue(supabaseEmail, key: "email") ||
+        continuityEmailHint() != nil
     }
 
     var hasAppOnlyProfile: Bool {
@@ -52,6 +58,9 @@ final class AuthManager: ObservableObject {
             supabaseExpiresAt = Date(timeIntervalSince1970: ts)
         } else if let token = supabaseAccessToken {
             supabaseExpiresAt = Self.jwtExpiration(from: token)
+        }
+        if let email = supabaseEmail?.trimmingCharacters(in: .whitespacesAndNewlines), !email.isEmpty {
+            persistContinuityEmail(email)
         }
         mirrorSessionToBackendDefaults(accessToken: supabaseAccessToken, userId: supabaseUserId)
 
@@ -146,6 +155,11 @@ final class AuthManager: ObservableObject {
             expiresAt: Date().addingTimeInterval(TimeInterval(expiresIn)),
             userId: decoded.user?.id
         )
+        recordDiagnosticsEvent(
+            "password_session_established",
+            detail: supabaseEmail ?? email,
+            userId: decoded.user?.id
+        )
         appLog("[AUTH] password session established")
     }
 
@@ -194,6 +208,11 @@ final class AuthManager: ObservableObject {
             expiresAt: Date().addingTimeInterval(TimeInterval(expiresIn)),
             userId: decoded.user?.id
         )
+        recordDiagnosticsEvent(
+            "password_account_created",
+            detail: supabaseEmail ?? email,
+            userId: decoded.user?.id
+        )
         appLog("[AUTH] password account created and session established")
         return true
     }
@@ -240,6 +259,7 @@ final class AuthManager: ObservableObject {
             expiresAt: Date().addingTimeInterval(TimeInterval(decoded.expiresIn)),
             userId: decoded.user?.id
         )
+        recordDiagnosticsEvent("anonymous_session_established", userId: decoded.user?.id)
         appLog("[AUTH] anonymous session established")
     }
 
@@ -278,6 +298,7 @@ final class AuthManager: ObservableObject {
             expiresAt: expiresAt,
             userId: Self.jwtSubject(from: access)
         )
+        recordDiagnosticsEvent("magic_link_session_established", userId: Self.jwtSubject(from: access))
         appLog("[AUTH] session established from callback")
         return true
     }
@@ -303,7 +324,9 @@ final class AuthManager: ObservableObject {
         keychain.delete("user_id")
         keychain.delete("email")
         keychain.delete("expires_at")
+        clearContinuityEmail()
         clearMirroredBackendDefaults(accessToken: accessToken, userId: currentUserId)
+        recordDiagnosticsEvent("manual_sign_out", userId: currentUserId)
     }
 
     private func persistSession(accessToken: String, refreshToken: String, expiresAt: Date?, userId: String?) {
@@ -321,6 +344,7 @@ final class AuthManager: ObservableObject {
         }
         if let email = supabaseEmail {
             keychain.write(email, key: "email")
+            persistContinuityEmail(email)
         }
         if let expiresAt {
             keychain.write(String(expiresAt.timeIntervalSince1970), key: "expires_at")
@@ -392,7 +416,11 @@ final class AuthManager: ObservableObject {
         guard let config else { return isAccessTokenUsable(leeway: 0) }
         guard let refreshToken = supabaseRefreshToken else {
             if !isAccessTokenUsable(leeway: 0), supabaseAccessToken != nil {
-                invalidateSupabaseSession(reason: "Session expired. Please sign in again.", preserveEmail: true)
+                invalidateSupabaseSession(
+                    reason: "Session expired. Please sign in again.",
+                    preserveEmail: true,
+                    diagnosticDetail: "Access token expired with no refresh token available."
+                )
             }
             return isAccessTokenUsable(leeway: 0)
         }
@@ -420,9 +448,16 @@ final class AuthManager: ObservableObject {
                 }
                 if Self.isFatalRefreshFailure(message) {
                     forcedRefreshBlockedUntil = Date().addingTimeInterval(300)
-                    invalidateSupabaseSession(reason: "Session expired. Please sign in again.", preserveEmail: true)
+                    invalidateSupabaseSession(
+                        reason: "Session expired. Please sign in again.",
+                        preserveEmail: true,
+                        diagnosticDetail: message
+                    )
                 } else if force {
                     forcedRefreshBlockedUntil = Date().addingTimeInterval(30)
+                } else if isAccessTokenUsable(leeway: 0) {
+                    appLog("[AUTH] refresh failed but existing access token remains usable: \(message)")
+                    return true
                 }
                 return false
             }
@@ -442,6 +477,9 @@ final class AuthManager: ObservableObject {
             if force {
                 appLog("[AUTH] forced refresh error: \(error.localizedDescription)")
                 forcedRefreshBlockedUntil = Date().addingTimeInterval(15)
+            } else if isAccessTokenUsable(leeway: 0) {
+                appLog("[AUTH] refresh error but existing access token remains usable: \(error.localizedDescription)")
+                return true
             }
             return false
         }
@@ -561,7 +599,7 @@ final class AuthManager: ObservableObject {
         return supabaseExpiresAt.timeIntervalSinceNow > leeway
     }
 
-    private func invalidateSupabaseSession(reason: String, preserveEmail: Bool) {
+    private func invalidateSupabaseSession(reason: String, preserveEmail: Bool, diagnosticDetail: String? = nil) {
         let accessToken = supabaseAccessToken
         let currentUserId = supabaseUserId
         let email = supabaseEmail ?? keychain.read("email")
@@ -580,12 +618,54 @@ final class AuthManager: ObservableObject {
         keychain.delete("expires_at")
         if let email, preserveEmail {
             keychain.write(email, key: "email")
+            persistContinuityEmail(email)
         } else {
             keychain.delete("email")
+            clearContinuityEmail()
         }
         clearMirroredBackendDefaults(accessToken: accessToken, userId: currentUserId)
         lastError = reason
+        recordDiagnosticsEvent("session_invalidated", detail: diagnosticDetail ?? reason, userId: currentUserId)
         appLog("[AUTH] cleared invalid Supabase session: \(reason)")
+    }
+
+    private func continuityEmailHint() -> String? {
+        let raw = UserDefaults.standard.string(forKey: Self.continuityEmailDefaultsKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return raw.isEmpty ? nil : raw
+    }
+
+    private func persistContinuityEmail(_ email: String) {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        UserDefaults.standard.set(trimmed, forKey: Self.continuityEmailDefaultsKey)
+    }
+
+    private func clearContinuityEmail() {
+        UserDefaults.standard.removeObject(forKey: Self.continuityEmailDefaultsKey)
+    }
+
+    private func recordDiagnosticsEvent(_ event: String, detail: String? = nil, userId: String? = nil) {
+        let defaults = UserDefaults.standard
+        defaults.set(event, forKey: Self.diagnosticsLastEventKey)
+        defaults.set(Self.isoString(Date()), forKey: Self.diagnosticsLastAtKey)
+        let trimmedDetail = detail?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmedDetail.isEmpty {
+            defaults.removeObject(forKey: Self.diagnosticsLastDetailKey)
+        } else {
+            defaults.set(trimmedDetail, forKey: Self.diagnosticsLastDetailKey)
+        }
+        let resolvedUserId = (userId ?? supabaseUserId)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if resolvedUserId.isEmpty {
+            defaults.removeObject(forKey: Self.diagnosticsLastUserIdKey)
+        } else {
+            defaults.set(resolvedUserId, forKey: Self.diagnosticsLastUserIdKey)
+        }
+    }
+
+    private static func isoString(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
     }
 
     private static func jwtSubject(from token: String) -> String? {

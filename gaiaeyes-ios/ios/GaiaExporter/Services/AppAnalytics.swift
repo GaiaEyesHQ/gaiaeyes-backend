@@ -29,7 +29,7 @@ struct AppAnalyticsEvent: Codable, Equatable {
 
 private actor AppAnalyticsStore {
     private let storageKey = "gaia.analytics.pending_events"
-    private let maxStoredEvents = 300
+    private let maxStoredEvents = 1000
     private let batchSize = 40
     private var uploader: (([AppAnalyticsEvent]) async throws -> Void)?
     private var isFlushing = false
@@ -85,8 +85,12 @@ private actor AppAnalyticsStore {
 enum AppAnalytics {
     private static let store = AppAnalyticsStore()
     private static let sessionId = UUID().uuidString
+    #if canImport(UIKit)
+    private static var lifecycleObservers: [NSObjectProtocol] = []
+    #endif
 
     static func configure(uploader: @escaping ([AppAnalyticsEvent]) async throws -> Void) {
+        registerLifecycleObserversIfNeeded()
         Task {
             await store.configure(uploader: uploader)
             await store.flush()
@@ -126,6 +130,24 @@ enum AppAnalytics {
         Task {
             await store.flush()
         }
+    }
+
+    private static func registerLifecycleObserversIfNeeded() {
+        #if canImport(UIKit)
+        guard lifecycleObservers.isEmpty else { return }
+        let center = NotificationCenter.default
+        lifecycleObservers = [
+            center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in
+                AppAnalytics.flush()
+            },
+            center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+                AppAnalytics.flush()
+            },
+            center.addObserver(forName: UIApplication.willTerminateNotification, object: nil, queue: .main) { _ in
+                AppAnalytics.flush()
+            },
+        ]
+        #endif
     }
 
     private static func isoString(_ date: Date) -> String {

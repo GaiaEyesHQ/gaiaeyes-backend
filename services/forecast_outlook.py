@@ -2148,7 +2148,7 @@ def _daily_outlook_summary(window: Mapping[str, Any], top_drivers: Sequence[Mapp
         domain_label = str(top_domain.get("label") or top_domain.get("key") or "").strip()
         if domain_label:
             return f"{lead} {domain_label} may be easier to notice based on your pattern history."
-    return lead
+    return None
 
 
 def build_daily_outlook(
@@ -2190,6 +2190,7 @@ def build_daily_outlook(
             likely_domains=likely_domains,
             summary=summary or "",
             support_line=str(support_line or ""),
+            allow_generated_summary=False,
         ).to_dict()
         items.append(
             {

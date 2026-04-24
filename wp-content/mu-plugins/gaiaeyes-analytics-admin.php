@@ -230,6 +230,8 @@ function gaiaeyes_analytics_render_admin_page() {
     $health_sync = is_array($summary) ? ($summary['health_sync'] ?? []) : [];
     $engagement = is_array($summary) ? ($summary['engagement'] ?? []) : [];
     $feature_adoption = is_array($summary) ? ($summary['feature_adoption'] ?? []) : [];
+    $navigation = is_array($summary) ? ($summary['navigation'] ?? []) : [];
+    $tab_usage = is_array($summary) ? ($summary['tab_usage'] ?? []) : [];
     ?>
     <div class="wrap">
         <h1>Gaia Analytics</h1>
@@ -293,6 +295,7 @@ function gaiaeyes_analytics_render_admin_page() {
                 <?php gaiaeyes_analytics_render_metric('Daily check-ins', gaiaeyes_analytics_event_count($engagement, 'daily_checkin_completed')); ?>
                 <?php gaiaeyes_analytics_render_metric('Lunar enabled', gaiaeyes_analytics_event_count($feature_adoption, 'lunar_tracking_enabled')); ?>
                 <?php gaiaeyes_analytics_render_metric('Notifications enabled', gaiaeyes_analytics_event_count($feature_adoption, 'notifications_enabled')); ?>
+                <?php gaiaeyes_analytics_render_metric('Explore tab views', gaiaeyes_analytics_event_count($tab_usage, 'explore')); ?>
             </div>
 
             <div class="gaia-analytics-panels">
@@ -302,6 +305,8 @@ function gaiaeyes_analytics_render_admin_page() {
                 <?php gaiaeyes_analytics_render_table('Health Sync', $health_sync); ?>
                 <?php gaiaeyes_analytics_render_table('Engagement', $engagement); ?>
                 <?php gaiaeyes_analytics_render_table('Feature Adoption', $feature_adoption); ?>
+                <?php gaiaeyes_analytics_render_table('Navigation Events', $navigation, 'No navigation events in this range.'); ?>
+                <?php gaiaeyes_analytics_render_table('Main Tab Usage', $tab_usage, 'No main-tab views in this range.'); ?>
                 <?php gaiaeyes_analytics_render_table('Errors and Drop-off', $summary['errors'] ?? []); ?>
             </div>
         <?php endif; ?>
