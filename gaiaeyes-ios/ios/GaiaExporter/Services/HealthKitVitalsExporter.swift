@@ -12,7 +12,6 @@ final class HealthKitVitalsExporter {
         if let hrv   = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN) { toRead.insert(hrv) }
         if let steps = HKObjectType.quantityType(forIdentifier: .stepCount) { toRead.insert(steps) }
         if let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) { toRead.insert(sleep) }
-        if let bp = HKObjectType.correlationType(forIdentifier: .bloodPressure) { toRead.insert(bp) }
 
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             self.healthStore.requestAuthorization(toShare: nil, read: toRead) { ok, err in
@@ -28,23 +27,11 @@ final class HealthKitVitalsExporter {
     }
 
     func requestBloodPressurePermission() async throws {
-        guard let bp = HKObjectType.correlationType(forIdentifier: .bloodPressure) else { return }
-        let toRead: Set<HKObjectType> = [bp]
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            self.healthStore.requestAuthorization(toShare: nil, read: toRead) { ok, err in
-                if let err = err { cont.resume(throwing: err); return }
-                guard ok else {
-                    cont.resume(throwing: NSError(
-                        domain: "HealthKit",
-                        code: 2,
-                        userInfo: [NSLocalizedDescriptionKey:
-                            "Blood Pressure permission not granted. Open Health → Profile → Privacy → Apps → Gaia Eyes and enable Blood Pressure."]
-                    ))
-                    return
-                }
-                cont.resume(returning: ())
-            }
-        }
+        throw NSError(
+            domain: "HealthKit",
+            code: 2,
+            userInfo: [NSLocalizedDescriptionKey: "Blood pressure correlation reads are not supported on this device."]
+        )
     }
 
     // MARK: - ISO helper
@@ -133,39 +120,8 @@ final class HealthKitVitalsExporter {
 
     // MARK: - Blood Pressure (Correlation)
     func fetchBloodPressure(from start: Date, to end: Date) async throws -> [(Date, Date, Double?, Double?)] {
-        guard let ctype = HKObjectType.correlationType(forIdentifier: .bloodPressure) else { return [] }
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [.strictStartDate, .strictEndDate])
-        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
-
-        // cache quantity types once
-        let systolicType  = HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic)
-        let diastolicType = HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic)
-
-        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<[(Date, Date, Double?, Double?)], Error>) in
-            let q = HKSampleQuery(sampleType: ctype, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, err in
-                if let err = err { cont.resume(throwing: err); return }
-                var out: [(Date, Date, Double?, Double?)] = []
-                if let corr = samples as? [HKCorrelation] {
-                    for c in corr {
-                        let start = c.startDate
-                        let end   = c.endDate
-                        var sys: Double? = nil
-                        var dia: Double? = nil
-                        for s in c.objects.compactMap({ $0 as? HKQuantitySample }) {
-                            if let st = systolicType, s.quantityType == st {
-                                let v = s.quantity.doubleValue(for: .millimeterOfMercury())
-                                if v.isFinite, v >= 40, v <= 260 { sys = v }
-                            } else if let dt = diastolicType, s.quantityType == dt {
-                                let v = s.quantity.doubleValue(for: .millimeterOfMercury())
-                                if v.isFinite, v >= 30, v <= 180 { dia = v }
-                            }
-                        }
-                        out.append((start, end, sys, dia))
-                    }
-                }
-                cont.resume(returning: out)
-            }
-            self.healthStore.execute(q)
-        }
+        _ = start
+        _ = end
+        return []
     }
 }

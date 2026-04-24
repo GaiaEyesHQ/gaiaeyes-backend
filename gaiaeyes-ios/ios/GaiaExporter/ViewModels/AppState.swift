@@ -183,6 +183,8 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     @AppStorage("gaia.healthkit.read_unavailable_at") var healthkitReadUnavailableAtISO: String = ""
     @AppStorage("gaia.healthkit.local_request_needed_at") var healthkitLocalRequestNeededAtISO: String = ""
     @AppStorage("gaia.healthkit.last_backfill_at") var lastHealthBackfillAtISO: String = ""
+    @AppStorage("gaia.healthkit.sleep_sync_message") var healthkitSleepSyncMessage: String = ""
+    @AppStorage("gaia.healthkit.sleep_sync_checked_at") var healthkitSleepSyncCheckedAtISO: String = ""
 
     // Periodic status refresh (e.g., surface BG timestamps)
     private var statusTimer: Timer?
@@ -633,8 +635,10 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     }
 
     private func healthReadAuthorizationRequestStatus(_ toRead: Set<HKObjectType>) async -> HKAuthorizationRequestStatus? {
-        await withCheckedContinuation { continuation in
-            healthStore.getRequestStatusForAuthorization(toShare: [], read: toRead) { status, error in
+        let safeReadTypes = Set(toRead.filter { !($0 is HKCorrelationType) })
+        guard !safeReadTypes.isEmpty else { return nil }
+        return await withCheckedContinuation { continuation in
+            healthStore.getRequestStatusForAuthorization(toShare: [], read: safeReadTypes) { status, error in
                 continuation.resume(returning: error == nil ? status : nil)
             }
         }
@@ -778,22 +782,36 @@ final class AppState: ObservableObject, BleManagerDelegate, HrSessionDelegate, P
     @MainActor func syncHRV7d() async { append("Sync HRV (7d)…") }
     @MainActor func syncSpO27d() async { append("Sync SpO₂ (7d)…") }
     @MainActor func syncBP30d() async { append("Sync BP (30d)…") }
-    @MainActor func syncSleep7d() async {
+    @MainActor
+    @discardableResult
+    func syncSleep7d() async -> Int {
         append("Sync Sleep (7d)…")
         let exporter = HealthKitSleepExporter()
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let checkedAt = f.string(from: Date())
+        healthkitSleepSyncCheckedAtISO = checkedAt
         do {
             try await exporter.requestAuthorization()
             let api = apiWithAuth()
             let uploadUserId = AuthManager.shared.currentSupabaseUserId() ?? userId
             let uploaded = try await exporter.syncSleep(lastDays: 7, api: api, userId: uploadUserId)
             append("[SLEEP] uploaded \(uploaded) segments (7d)")
-            // stamp last upload time so Status shows it
-            let f = ISO8601DateFormatter()
-            f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            UserDefaults.standard.set(f.string(from: Date()), forKey: "gaia.upload.sleep")
+            if uploaded > 0 {
+                healthkitSleepSyncMessage = "Imported \(uploaded) sleep segments from HealthKit."
+                UserDefaults.standard.set(checkedAt, forKey: "gaia.upload.sleep")
+            } else {
+                healthkitSleepSyncMessage = "Sleep sync ran, but HealthKit returned no sleep samples in the last 7 days."
+                UserDefaults.standard.removeObject(forKey: "gaia.upload.sleep")
+            }
             refreshStatus()
+            return uploaded
         } catch {
-            append("❌ Sleep sync error: \(error.localizedDescription)")
+            let message = "Sleep sync failed: \(error.localizedDescription)"
+            healthkitSleepSyncMessage = message
+            append("❌ \(message)")
+            refreshStatus()
+            return 0
         }
     }
 

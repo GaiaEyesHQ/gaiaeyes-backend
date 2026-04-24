@@ -3507,6 +3507,8 @@ struct ContentView: View {
         notificationSettingsMessage = nil
         state.healthkitRequestedAtISO = ""
         state.lastHealthBackfillAtISO = ""
+        state.healthkitSleepSyncMessage = ""
+        state.healthkitSleepSyncCheckedAtISO = ""
 
         cachedPlanRaw = MembershipPlan.free.rawValue
         cachedPlanSyncedAt = ""
@@ -5026,7 +5028,7 @@ struct ContentView: View {
         case .restingHeartRate:
             return HKObjectType.quantityType(forIdentifier: .restingHeartRate)
         case .bloodPressure:
-            return HKObjectType.correlationType(forIdentifier: .bloodPressure)
+            return nil
         case .wristTemperature:
             if #available(iOS 16.0, *) {
                 return HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature)
@@ -5712,6 +5714,10 @@ struct ContentView: View {
                 line += " | \(historicalPrefix)derived \(debugFormattedDate(derivedAt)) | via \(item.derivedSource ?? "daily_features mart")"
             }
             lines.append(line)
+        }
+        let sleepSyncMessage = state.healthkitSleepSyncMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !sleepSyncMessage.isEmpty {
+            lines.append("- Sleep sync last result: \(sleepSyncMessage) | checked \(debugFormattedDate(parseDebugDate(state.healthkitSleepSyncCheckedAtISO)))")
         }
         lines.append("")
         lines.append("Feature Inputs:")
@@ -7817,6 +7823,8 @@ struct ContentView: View {
             state.healthkitRequestedAtISO = ""
             state.healthkitLocalRequestNeededAtISO = ""
             state.lastHealthBackfillAtISO = ""
+            state.healthkitSleepSyncMessage = ""
+            state.healthkitSleepSyncCheckedAtISO = ""
         }
 
         do {
@@ -8828,6 +8836,14 @@ struct ContentView: View {
         return "Showing cached stats while we refresh…"
     }
 
+    private var healthSleepSyncBannerText: String? {
+        let message = state.healthkitSleepSyncMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !message.isEmpty {
+            return message
+        }
+        return featuresCachedBannerText
+    }
+
     private func decodeCachedSchumannSignalBarTomsk() -> SignalBarSchumannTomskLatestEnvelope? {
         guard !schumannSignalBarTomskCacheJSON.isEmpty,
               let data = schumannSignalBarTomskCacheJSON.data(using: .utf8) else {
@@ -9039,6 +9055,13 @@ struct ContentView: View {
                 }
                 if okValue, let data = env.data {
                     await MainActor.run { applyFeaturesResponse(data, envelope: env, trigger: trigger) }
+                    if data.day == chicagoTodayString(),
+                       let sleepTotalValue = data.sleepTotalMinutes?.value,
+                       sleepTotalValue > 0 {
+                        await MainActor.run {
+                            state.healthkitSleepSyncMessage = ""
+                        }
+                    }
 
                     let guardAlreadyExpired = Date() >= featuresRefreshGuardUntil
                     let guardSeconds = featuresGuardDuration(for: env, fallback: false)
@@ -9063,10 +9086,14 @@ struct ContentView: View {
                             }
                             didAutoSleepSyncToday = true
                             appLog("[UI] today has 0 sleep — running sleep sync (7d)…")
-                            await state.syncSleep7d()
+                            let uploadedSleepSegments = await state.syncSleep7d()
+                            guard uploadedSleepSegments > 0 else {
+                                appLog("[UI] sleep sync completed with 0 imported segments; keeping sleep total at 0")
+                                return
+                            }
                             let delaySeconds = Double.random(in: 1.0...1.2)
                             let delayText = String(format: "%.1f", delaySeconds)
-                            appLog("[UI] sleep sync complete, refetching features after ~\(delayText)s backoff…")
+                            appLog("[UI] sleep sync imported \(uploadedSleepSegments) segments, refetching features after ~\(delayText)s backoff…")
                             let nanos = UInt64(delaySeconds * 1_000_000_000)
                             try? await Task.sleep(nanoseconds: nanos)
                             // schedule a single follow-up after short delay only if outside guard
@@ -18565,7 +18592,7 @@ struct ContentView: View {
                 tempUnit: experienceProfile.tempUnit,
                 trackedStatKeys: experienceProfile.trackedStatKeys,
                 smartStatSwapEnabled: experienceProfile.smartStatSwapEnabled,
-                bannerText: featuresCachedBannerText,
+                bannerText: healthSleepSyncBannerText,
                 usingYesterdayFallback: selection.usingYesterdayFallback,
                 todayCount: symptomsToday.count,
                 queuedCount: state.symptomQueueCount,
@@ -18834,7 +18861,7 @@ struct ContentView: View {
                 tempUnit: experienceProfile.tempUnit,
                 trackedStatKeys: experienceProfile.trackedStatKeys,
                 smartStatSwapEnabled: experienceProfile.smartStatSwapEnabled,
-                bannerText: featuresCachedBannerText,
+                bannerText: healthSleepSyncBannerText,
                 usingYesterdayFallback: selection.usingYesterdayFallback,
                 todayCount: symptomsToday.count,
                 queuedCount: state.symptomQueueCount,
@@ -20278,7 +20305,7 @@ struct ContentView: View {
                             tempUnit: experienceProfile.tempUnit,
                             trackedStatKeys: experienceProfile.trackedStatKeys,
                             smartStatSwapEnabled: experienceProfile.smartStatSwapEnabled,
-                            bannerText: featuresCachedBannerText,
+                            bannerText: healthSleepSyncBannerText,
                             usingYesterdayFallback: usingYesterdayFallback,
                             todayCount: symptomsToday.count,
                             queuedCount: state.symptomQueueCount,

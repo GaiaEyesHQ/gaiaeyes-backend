@@ -435,7 +435,7 @@ final class HealthKitBackgroundSync {
         try registerObserver(for: spo2Type, key: "spo2")
         try registerObserver(for: stepsType, key: "step_count")
         try registerObserver(for: hrvType, key: "hrv_sdnn")
-        try registerObserver(for: bpType, key: "blood_pressure")
+        recordBackgroundDeliverySkipped(for: "blood_pressure", reason: "not supported")
         try registerObserver(for: sleepType, key: "sleep_stage")
         if let respiratoryRateType {
             try registerObserver(for: respiratoryRateType, key: "respiratory_rate")
@@ -535,9 +535,10 @@ final class HealthKitBackgroundSync {
     }
 
     private func healthAuthorizationShouldRequest(read types: Set<HKObjectType>) async -> Bool {
-        guard HKHealthStore.isHealthDataAvailable(), !types.isEmpty else { return false }
+        let safeReadTypes = Set(types.filter { !($0 is HKCorrelationType) })
+        guard HKHealthStore.isHealthDataAvailable(), !safeReadTypes.isEmpty else { return false }
         return await withCheckedContinuation { continuation in
-            healthStore.getRequestStatusForAuthorization(toShare: [], read: types) { status, error in
+            healthStore.getRequestStatusForAuthorization(toShare: [], read: safeReadTypes) { status, error in
                 continuation.resume(returning: error == nil && status == .shouldRequest)
             }
         }
@@ -545,6 +546,10 @@ final class HealthKitBackgroundSync {
 
     // Process new samples
     private func processDeltas(for type: HKSampleType, anchorKey: String) async throws {
+        if anchorKey == "blood_pressure" {
+            appLog("[HK] blood_pressure skipped: HealthKit correlation read is not supported")
+            return
+        }
         if await healthAuthorizationShouldRequest(for: type) {
             appLog("[HK] \(anchorKey) skipped: Health authorization not requested on this device")
             return
@@ -1225,13 +1230,11 @@ final class HealthKitBackgroundSync {
                 maxRetries: interactiveRetryLimit
             )
         case .bloodPressure:
-            return await backfillOne(
-                type: bpType,
-                anchorKey: metric.key,
-                pred: pred,
-                sort: sort,
-                chunkSize: interactiveChunkSize(for: metric),
-                maxRetries: interactiveRetryLimit
+            appLog("[Backfill] blood_pressure skipped: HealthKit correlation read is not supported")
+            return HealthBackfillMetricResult(
+                collectedCount: 0,
+                uploadedRows: 0,
+                failureDescription: nil
             )
         case .sleep:
             return await backfillSleep(
@@ -1505,9 +1508,6 @@ final class HealthKitBackgroundSync {
             await self.processingGate.runOnce(key: "temperature_deviation") {
                 do { try await self.processDeltas(for: temperatureDeviationType, anchorKey: "temperature_deviation") } catch { appLog("[BG] kickOnce temperature error: \(error.localizedDescription)") }
             }
-        }
-        await self.processingGate.runOnce(key: "blood_pressure") {
-            do { try await self.processDeltas(for: self.bpType, anchorKey: "blood_pressure") } catch { appLog("[BG] kickOnce bp error: \(error.localizedDescription)") }
         }
         await self.processingGate.runOnce(key: "sleep_stage") {
             do { try await self.processSleepDeltas(anchorKey: "sleep_stage") } catch { appLog("[BG] kickOnce sleep error: \(error.localizedDescription)") }
