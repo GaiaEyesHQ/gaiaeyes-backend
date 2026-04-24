@@ -2068,10 +2068,6 @@ def _daily_outlook_label(day: date, index: int) -> str:
         return "Today"
     if day == today + timedelta(days=1):
         return "Tomorrow"
-    if index == 0:
-        return "Today"
-    if index == 1:
-        return "Tomorrow"
     return day.strftime("%a")
 
 
@@ -2152,7 +2148,7 @@ def _daily_outlook_summary(window: Mapping[str, Any], top_drivers: Sequence[Mapp
         domain_label = str(top_domain.get("label") or top_domain.get("key") or "").strip()
         if domain_label:
             return f"{lead} {domain_label} may be easier to notice based on your pattern history."
-    return f"{lead} No stronger personal pattern stands out yet, but the signal mix is still worth watching."
+    return lead
 
 
 def build_daily_outlook(
@@ -2164,12 +2160,12 @@ def build_daily_outlook(
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     today = _app_today()
-    current_rows = [
+    future_rows = [
         row
         for row in merged_rows
-        if isinstance(row.get("day"), date) and row.get("day") >= today
+        if isinstance(row.get("day"), date) and row.get("day") > today
     ]
-    source_rows = current_rows or list(merged_rows)
+    source_rows = future_rows
     for index, row in enumerate(source_rows[:days]):
         day_value = row.get("day")
         if not isinstance(day_value, date):
@@ -2186,7 +2182,7 @@ def build_daily_outlook(
         likely_domains = window.get("likely_elevated_domains") or []
         primary = top_drivers[0] if top_drivers else None
         summary = _daily_outlook_summary(window, top_drivers)
-        support_line = window.get("support_line")
+        support_line = window.get("support_line") if likely_domains or not top_drivers else None
         voice_semantic = build_user_outlook_window_semantic(
             day=day_value,
             window_hours=24,

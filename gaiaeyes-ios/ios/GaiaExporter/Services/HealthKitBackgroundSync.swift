@@ -288,6 +288,81 @@ final class HealthKitBackgroundSync {
         UserDefaults.standard.removeObject(forKey: "gaia.healthkit.read_unavailable_at")
     }
 
+    private func recordImportedAggregateMetadata(
+        for metric: String,
+        rows: [Sample],
+        fallbackEnd: Date,
+        sourceName: String
+    ) {
+        let latestEnd = rows.compactMap { iso.date(from: $0.end_time) }.max() ?? fallbackEnd
+        setDiagnosticsDate(latestEnd, prefix: "last_sample", metric: metric)
+        let trimmedSource = sourceName.trimmingCharacters(in: .whitespacesAndNewlines)
+        setDiagnosticsValue(trimmedSource.isEmpty ? nil : trimmedSource, prefix: "last_source", metric: metric)
+        UserDefaults.standard.set(ISO8601DateFormatter().string(from: Date()), forKey: "gaia.healthkit.read_verified_at")
+        UserDefaults.standard.removeObject(forKey: "gaia.healthkit.read_unavailable_at")
+    }
+
+    private func diagnosticsDate(prefix: String, metric: String) -> Date? {
+        guard let raw = UserDefaults.standard.string(forKey: diagnosticsKey(prefix, metric: metric)), !raw.isEmpty else {
+            return nil
+        }
+        return iso.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+    }
+
+    private func heartRateRepairMarkerKey(for userID: String) -> String {
+        "gaia.hk.heart_rate_stats_repair_at.\(userID)"
+    }
+
+    private func shouldAttemptHeartRateStatisticsRepair(now: Date = Date()) -> Bool {
+        let uid = currentUserId().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard uid.count == 36 else { return false }
+        let calendar = Calendar.current
+        if let lastSampleAt = diagnosticsDate(prefix: "last_sample", metric: "heart_rate"),
+           calendar.isDate(lastSampleAt, inSameDayAs: now) {
+            return false
+        }
+
+        let defaults = UserDefaults.standard
+        let markerKey = heartRateRepairMarkerKey(for: uid)
+        guard let raw = defaults.string(forKey: markerKey),
+              let lastAttempt = iso.date(from: raw) ?? ISO8601DateFormatter().date(from: raw) else {
+            return true
+        }
+        return now.timeIntervalSince(lastAttempt) >= 6 * 60 * 60
+    }
+
+    private func recordHeartRateStatisticsRepairAttempt(_ date: Date = Date()) {
+        let uid = currentUserId().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard uid.count == 36 else { return }
+        UserDefaults.standard.set(Self.isoString(date), forKey: heartRateRepairMarkerKey(for: uid))
+    }
+
+    private func repairMissingHeartRateIfNeeded(reason: String) async {
+        let now = Date()
+        guard shouldAttemptHeartRateStatisticsRepair(now: now) else { return }
+        recordHeartRateStatisticsRepairAttempt(now)
+
+        let start = Calendar.current.date(byAdding: .day, value: -2, to: now)
+            ?? Date(timeIntervalSinceNow: -2 * 24 * 60 * 60)
+        let result = await backfillHeartRateStatistics(
+            anchorKey: "heart_rate",
+            start: start,
+            end: now,
+            windowDays: 2,
+            intervalMinutes: 15,
+            chunkSize: 100,
+            maxRetries: 1
+        )
+
+        if let failure = result.failureDescription {
+            appLog("[Backfill] heart_rate repair failed after \(reason): \(failure)")
+        } else if result.uploadedRows > 0 {
+            appLog("[Backfill] heart_rate repair imported \(result.uploadedRows) rows after \(reason)")
+        } else {
+            appLog("[Backfill] heart_rate repair found no aggregate rows after \(reason)")
+        }
+    }
+
     // Types
     private var hrType  = HKObjectType.quantityType(forIdentifier: .heartRate)!
     private var spo2Type = HKObjectType.quantityType(forIdentifier: .oxygenSaturation)!
@@ -1368,6 +1443,7 @@ final class HealthKitBackgroundSync {
         await self.processingGate.runOnce(key: "heart_rate") {
             do { try await self.processDeltas(for: self.hrType, anchorKey: "heart_rate") } catch { appLog("[BG] kickOnce hr error: \(error.localizedDescription)") }
         }
+        await repairMissingHeartRateIfNeeded(reason: reason)
         await self.processingGate.runOnce(key: "spo2") {
             do { try await self.processDeltas(for: self.spo2Type, anchorKey: "spo2") } catch { appLog("[BG] kickOnce spo2 error: \(error.localizedDescription)") }
         }
@@ -1798,6 +1874,12 @@ final class HealthKitBackgroundSync {
                     )
                 }
 
+                recordImportedAggregateMetadata(
+                    for: anchorKey,
+                    rows: rows,
+                    fallbackEnd: window.end,
+                    sourceName: "HealthKit aggregate"
+                )
                 totalUploaded += rows.count
                 await reportBackfillProgress(
                     "Imported \(rows.count) \(anchorKey.replacingOccurrences(of: "_", with: " ")) rows from window \(windowLabel).",

@@ -423,18 +423,21 @@ Outlook For March 23-29
             },
         ]
 
-        payload = build_daily_outlook(
-            merged_rows,
-            pattern_rows=[],
-            gauges={},
-            days=7,
-        )
+        with patch("services.forecast_outlook._app_today", return_value=date(2026, 3, 18)):
+            payload = build_daily_outlook(
+                merged_rows,
+                pattern_rows=[],
+                gauges={},
+                days=7,
+            )
 
         self.assertEqual(len(payload), 2)
         self.assertEqual(payload[0]["day"], "2026-03-19")
         self.assertEqual(payload[0]["top_drivers"][0]["key"], "humidity")
         self.assertEqual(payload[1]["top_drivers"][0]["key"], "allergens")
         self.assertTrue(payload[0]["label"])
+        self.assertNotIn("No stronger personal pattern", payload[0]["summary"])
+        self.assertIsNone(payload[0]["support_line"])
 
     def test_build_daily_outlook_uses_type_specific_pollen_when_overall_level_is_missing(self) -> None:
         merged_rows = [
@@ -446,12 +449,13 @@ Outlook For March 23-29
             },
         ]
 
-        payload = build_daily_outlook(
-            merged_rows,
-            pattern_rows=[],
-            gauges={},
-            days=7,
-        )
+        with patch("services.forecast_outlook._app_today", return_value=date(2026, 3, 18)):
+            payload = build_daily_outlook(
+                merged_rows,
+                pattern_rows=[],
+                gauges={},
+                days=7,
+            )
 
         self.assertEqual(len(payload), 1)
         self.assertEqual(payload[0]["top_drivers"][0]["key"], "allergens")
@@ -475,12 +479,13 @@ Outlook For March 23-29
             },
         ]
 
-        payload = build_daily_outlook(
-            merged_rows,
-            pattern_rows=[],
-            gauges={},
-            days=7,
-        )
+        with patch("services.forecast_outlook._app_today", return_value=date(2026, 3, 18)):
+            payload = build_daily_outlook(
+                merged_rows,
+                pattern_rows=[],
+                gauges={},
+                days=7,
+            )
 
         self.assertEqual(len(payload), 1)
         keys = [driver["key"] for driver in payload[0]["top_drivers"]]
@@ -510,7 +515,8 @@ Outlook For March 23-29
                 days=7,
             )
 
-        self.assertEqual([item["day"] for item in payload], ["2026-04-21", "2026-04-22"])
+        self.assertEqual([item["day"] for item in payload], ["2026-04-22"])
+        self.assertEqual(payload[0]["label"], "Tomorrow")
 
     def test_build_daily_outlook_keeps_local_driver_visible_when_space_signals_dominate(self) -> None:
         merged_rows = [
@@ -524,20 +530,21 @@ Outlook For March 23-29
             },
         ]
 
-        payload = build_daily_outlook(
-            merged_rows,
-            pattern_rows=[
-                {
-                    "signal_key": "kp_g1_plus_exposed",
-                    "outcome_key": "fatigue_day",
-                    "confidence": "strong",
-                    "relative_lift": 3.0,
-                    "lag_hours": 24,
-                }
-            ],
-            gauges={"energy": 72},
-            days=7,
-        )
+        with patch("services.forecast_outlook._app_today", return_value=date(2026, 3, 18)):
+            payload = build_daily_outlook(
+                merged_rows,
+                pattern_rows=[
+                    {
+                        "signal_key": "kp_g1_plus_exposed",
+                        "outcome_key": "fatigue_day",
+                        "confidence": "strong",
+                        "relative_lift": 3.0,
+                        "lag_hours": 24,
+                    }
+                ],
+                gauges={"energy": 72},
+                days=7,
+            )
 
         keys = [driver["key"] for driver in payload[0]["top_drivers"]]
         self.assertIn("kp", keys)
