@@ -1,0 +1,37 @@
+name: Post-launch monitor
+
+on:
+  schedule:
+    - cron: "15 14 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    env:
+      GAIA_MONITOR_BASE_URL: ${{ vars.GAIA_MONITOR_BASE_URL }}
+      GAIA_MONITOR_ZIP: ${{ vars.GAIA_MONITOR_ZIP }}
+      GAIA_MONITOR_TZ: ${{ vars.GAIA_MONITOR_TZ }}
+      GAIA_MONITOR_AUTH_BEARER: ${{ secrets.GAIA_MONITOR_AUTH_BEARER }}
+      GAIA_MONITOR_DEV_USER_ID: ${{ secrets.GAIA_MONITOR_DEV_USER_ID }}
+      GAIA_MONITOR_USER_ID: ${{ vars.GAIA_MONITOR_USER_ID }}
+      GAIA_MONITOR_ADMIN_BEARER: ${{ secrets.GAIA_MONITOR_ADMIN_BEARER }}
+      GAIA_MONITOR_ANALYTICS_MIN_EVENTS_24H: ${{ vars.GAIA_MONITOR_ANALYTICS_MIN_EVENTS_24H }}
+      DEV_BEARER: ${{ secrets.DEV_BEARER }}
+      WRITE_TOKENS: ${{ secrets.WRITE_TOKENS }}
+      DEV_USER_ID: ${{ vars.DEV_USER_ID }}
+      TEST_USER_ID: ${{ vars.TEST_USER_ID }}
+      TEST_USER_UUID: ${{ vars.TEST_USER_UUID }}
+      APP_REVIEW_USER_ID: ${{ vars.APP_REVIEW_USER_ID }}
+      GAIAEYES_API_ADMIN_BEARER: ${{ secrets.GAIAEYES_API_ADMIN_BEARER }}
+      GAIAEYES_ADMIN_BEARER: ${{ secrets.GAIAEYES_ADMIN_BEARER }}
+      ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run post-launch monitor
+        run: python scripts/post_launch_monitor.py
