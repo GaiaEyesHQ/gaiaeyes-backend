@@ -20,7 +20,7 @@ After the first 72 hours:
 | Area | Healthy signal | Action if unhealthy |
 | --- | --- | --- |
 | Backend health | `/health` returns `ok=true`, `db=true`, no pool wait spike. | Check Render logs and DB pool state before investigating app-side issues. |
-| DB monitor | `sticky_age_ms` stays low and `consec_fail=0`. | Treat repeated DB monitor failures as launch-critical. |
+| DB monitor | `db=true`, `consec_fail=0`, and `last_probe` stays recent. `sticky_age_ms` may grow while DB state remains healthy. | Treat repeated DB monitor failures as launch-critical. |
 | Auth/session | No burst of `401 Missing or invalid Authorization header` from normal signed-in app use. | Inspect auth diagnostics and token refresh logs; avoid creating duplicate anonymous users. |
 | Health ingest | Test account Health Sync freshness advances after app activity; `heart_rate` derived values stay present. | Check `/v1/samples/batch`, mart refresh logs, and `marts.daily_features` for that user/day. |
 | Local/pollen | `/v1/local/check?zip=...` returns current allergens and forecast pollen rows when provider data exists. | Check Google Pollen/API key, local cache merge, and forecast row preservation. |
@@ -48,7 +48,7 @@ Useful environment variables:
 | `GAIA_MONITOR_DEV_USER_ID` | Optional dev user header for `DEV_BEARER` based checks. Falls back to `GAIA_MONITOR_USER_ID`, `DEV_USER_ID`, `TEST_USER_ID`, `TEST_USER_UUID`, then `APP_REVIEW_USER_ID`. |
 | `GAIA_MONITOR_ADMIN_BEARER` | Optional admin bearer for analytics summary checks. Falls back to `GAIAEYES_API_ADMIN_BEARER`, `GAIAEYES_ADMIN_BEARER`, `ADMIN_TOKEN`, then `DEV_BEARER`. |
 | `GAIA_MONITOR_ANALYTICS_MIN_EVENTS_24H` | Minimum 24h analytics event count before warning. Defaults to `1`. |
-| `GAIA_MONITOR_STICKY_AGE_WARN_MS` | DB sticky-age warning threshold. Defaults to `300000`. |
+| `GAIA_MONITOR_LAST_PROBE_WARN_MS` | DB monitor last-probe warning threshold. Defaults to `60000`. |
 
 The GitHub Action `.github/workflows/post-launch-monitor.yml` runs this script daily and can be run manually. Add the optional secrets above when production smoke checks should include user-specific Outlook, Features, Analytics, and Bug Report checks.
 

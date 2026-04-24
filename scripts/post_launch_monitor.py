@@ -16,7 +16,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping
 
 
@@ -59,7 +59,7 @@ ADMIN_BEARER = _first_token_env(
     )
 )
 REQUEST_TIMEOUT = float(os.getenv("GAIA_MONITOR_TIMEOUT_SECONDS") or "20")
-STICKY_AGE_WARN_MS = int(os.getenv("GAIA_MONITOR_STICKY_AGE_WARN_MS") or "300000")
+LAST_PROBE_WARN_MS = int(os.getenv("GAIA_MONITOR_LAST_PROBE_WARN_MS") or "60000")
 ANALYTICS_MIN_EVENTS_24H = int(os.getenv("GAIA_MONITOR_ANALYTICS_MIN_EVENTS_24H") or "1")
 
 
@@ -108,6 +108,18 @@ def _status_icon(status: str) -> str:
     return {"pass": "PASS", "warn": "WARN", "fail": "FAIL", "skip": "SKIP"}.get(status, status.upper())
 
 
+def _iso_age_ms(value: Any) -> int | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return int((datetime.now(timezone.utc) - parsed).total_seconds() * 1000)
+
+
 def check_backend_health() -> CheckResult:
     try:
         payload = _get_json("/health")
@@ -123,11 +135,17 @@ def check_backend_health() -> CheckResult:
     sticky_age = int(monitor.get("sticky_age_ms") or payload.get("db_sticky_age") or 0)
     pool = monitor.get("pool") if isinstance(monitor.get("pool"), dict) else {}
     waiting = int(pool.get("waiting") or 0)
+    consec_fail = int(monitor.get("consec_fail") or 0)
+    last_probe_age_ms = _iso_age_ms(monitor.get("last_probe"))
     if waiting > 0:
         return _result("backend_health", "warn", f"DB pool has waiting={waiting}")
-    if sticky_age > STICKY_AGE_WARN_MS:
-        return _result("backend_health", "warn", f"DB sticky_age_ms={sticky_age}")
-    return _result("backend_health", "pass", f"db=true sticky_age_ms={sticky_age}")
+    if consec_fail > 0:
+        return _result("backend_health", "warn", f"DB monitor has consec_fail={consec_fail}")
+    if last_probe_age_ms is None:
+        return _result("backend_health", "warn", "DB monitor has no last_probe timestamp")
+    if last_probe_age_ms > LAST_PROBE_WARN_MS:
+        return _result("backend_health", "warn", f"DB monitor last_probe_age_ms={last_probe_age_ms}")
+    return _result("backend_health", "pass", f"db=true healthy_state_age_ms={sticky_age} last_probe_age_ms={last_probe_age_ms}")
 
 
 def _has_pollen(row: Mapping[str, Any]) -> bool:
