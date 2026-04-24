@@ -16,6 +16,7 @@ except ModuleNotFoundError:  # pragma: no cover - unit tests can run without psy
     dict_row = None
 
 from services.patterns.personal_relevance import (
+    OUTCOME_LABELS,
     confidence_rank,
     fetch_best_pattern_rows,
     pattern_anchor_statement,
@@ -101,10 +102,21 @@ SIGNAL_TO_DRIVER = {
     "humidity_extreme_exposed": "humidity",
     "aqi_moderate_plus_exposed": "aqi",
     "pollen_overall_exposed": "allergens",
+    "pollen_tree_exposed": "allergens",
+    "pollen_grass_exposed": "allergens",
+    "pollen_weed_exposed": "allergens",
+    "pollen_mold_exposed": "allergens",
     "kp_g1_plus_exposed": "kp",
 }
 
-DRIVER_TO_SIGNAL = {value: key for key, value in SIGNAL_TO_DRIVER.items()}
+PRIMARY_DRIVER_SIGNAL = {
+    "pressure": "pressure_swing_exposed",
+    "temp": "temp_swing_exposed",
+    "humidity": "humidity_extreme_exposed",
+    "aqi": "aqi_moderate_plus_exposed",
+    "allergens": "pollen_overall_exposed",
+    "kp": "kp_g1_plus_exposed",
+}
 
 DRIVER_LABELS = {
     "pressure": "Pressure swing",
@@ -1726,7 +1738,7 @@ def derive_forecast_drivers(
             unit="hPa",
             day_key=day_key if isinstance(day_key, date) else None,
             detail=f"Pressure may swing about {abs(delta or 0.0):.1f} hPa day to day.",
-            signal_key=DRIVER_TO_SIGNAL["pressure"],
+            signal_key=PRIMARY_DRIVER_SIGNAL["pressure"],
         )
 
     temp_candidates = [
@@ -1743,7 +1755,7 @@ def derive_forecast_drivers(
             unit="C",
             day_key=day_key if isinstance(day_key, date) else None,
             detail=f"Temperature may swing about {abs(delta or 0.0):.1f} C day to day.",
-            signal_key=DRIVER_TO_SIGNAL["temp"],
+            signal_key=PRIMARY_DRIVER_SIGNAL["temp"],
         )
 
     humidity_candidates = [
@@ -1766,7 +1778,7 @@ def derive_forecast_drivers(
             unit="%",
             day_key=day_key if isinstance(day_key, date) else None,
             detail=_humidity_detail(humidity_value or 0.0),
-            signal_key=DRIVER_TO_SIGNAL.get("humidity"),
+            signal_key=PRIMARY_DRIVER_SIGNAL.get("humidity"),
         )
 
     aqi_candidates = [
@@ -1783,7 +1795,7 @@ def derive_forecast_drivers(
             unit="AQI",
             day_key=day_key if isinstance(day_key, date) else None,
             detail=f"AQI may drift up to around {aqi_value:.0f}.",
-            signal_key=DRIVER_TO_SIGNAL["aqi"],
+            signal_key=PRIMARY_DRIVER_SIGNAL["aqi"],
         )
 
     allergen_candidates = [
@@ -1815,7 +1827,7 @@ def derive_forecast_drivers(
             unit="index",
             day_key=day_key if isinstance(day_key, date) else None,
             detail=f"{detail_subject} looks {level_label.lower()} over this period.",
-            signal_key=DRIVER_TO_SIGNAL["allergens"],
+            signal_key=PRIMARY_DRIVER_SIGNAL["allergens"],
         )
 
     kp_candidates = [
@@ -1840,7 +1852,7 @@ def derive_forecast_drivers(
             unit="Kp",
             day_key=day_key if isinstance(day_key, date) else None,
             detail=f"SWPC expects {g_scale or 'elevated'} geomagnetic conditions in this window.",
-            signal_key=DRIVER_TO_SIGNAL["kp"],
+            signal_key=PRIMARY_DRIVER_SIGNAL["kp"],
         )
 
     solar_wind_row = next((row for row in rows if row.get("solar_wind_watch")), None)
@@ -2004,7 +2016,15 @@ def build_window_outlook(
         and str(row.get("signal_key") or "") in SIGNAL_TO_DRIVER
     ]
 
-    driver_map = {str(driver.get("signal_key")): driver for driver in drivers if driver.get("signal_key")}
+    driver_map: dict[str, Mapping[str, Any]] = {}
+    for driver in drivers:
+        driver_key = str(driver.get("key") or "")
+        signal_key = str(driver.get("signal_key") or "")
+        if signal_key:
+            driver_map[signal_key] = driver
+        for candidate_signal_key, mapped_driver_key in SIGNAL_TO_DRIVER.items():
+            if mapped_driver_key == driver_key:
+                driver_map.setdefault(candidate_signal_key, driver)
     domain_scores: dict[str, dict[str, Any]] = {}
     for row in scoped_pattern_rows:
         signal_key = str(row.get("signal_key") or "")
@@ -2015,9 +2035,12 @@ def build_window_outlook(
         domain_key = OUTCOME_TO_DOMAIN.get(outcome_key)
         if not domain_key:
             continue
+        confidence = str(row.get("confidence") or "").strip()
+        if confidence.lower() in {"still taking shape", "taking shape"}:
+            confidence = "Emerging"
         score = (
             SEVERITY_WEIGHT.get(str(driver.get("severity")), 0.0)
-            + (confidence_rank(str(row.get("confidence") or "")) * 1.0)
+            + (confidence_rank(confidence) * 1.0)
             + min(float(row.get("relative_lift") or 0.0), 3.5) * 0.35
             + _gauge_boost(domain_key, gauges)
         )
@@ -2041,28 +2064,17 @@ def build_window_outlook(
             -SEVERITY_RANK.get(str(item.get("severity")), 0),
             int(DRIVER_ORDER.get(str(item.get("key")), 999)),
         ),
-    )[:3]
-    visible_driver_keys = {
-        str(item.get("key") or "").strip()
-        for item in top_drivers
-        if str(item.get("key") or "").strip()
-    }
+    )
 
     likely_domains: list[dict[str, Any]] = []
     for domain_key, payload in domain_scores.items():
         refs = sorted(payload["refs"], key=lambda item: item["score"], reverse=True)
         if not refs:
             continue
-        visible_refs = [
-            ref for ref in refs if str(ref["driver"].get("key") or "").strip() in visible_driver_keys
-        ]
-        if visible_driver_keys and not visible_refs:
-            continue
-        chosen_refs = visible_refs or refs
-        top_ref = chosen_refs[0]
+        top_ref = refs[0]
         pattern_row = top_ref["pattern_row"]
         driver = top_ref["driver"]
-        domain_score = sum(float(ref.get("score") or 0.0) for ref in chosen_refs) or float(payload["score"] or 0.0)
+        domain_score = sum(float(ref.get("score") or 0.0) for ref in refs) or float(payload["score"] or 0.0)
         explanation = (
             f"{driver['detail']} Over the next {window_label}, {_history_sentence(str(driver.get('label') or 'This signal'), pattern_row)}."
         )
@@ -2079,6 +2091,11 @@ def build_window_outlook(
                 "explanation": explanation,
                 "top_driver_key": driver.get("key"),
                 "top_driver_label": driver.get("label"),
+                "top_outcome_key": pattern_row.get("outcome_key"),
+                "top_outcome_label": OUTCOME_LABELS.get(
+                    str(pattern_row.get("outcome_key") or ""),
+                    DOMAIN_LABELS[domain_key],
+                ),
             }
         )
 
@@ -2088,11 +2105,11 @@ def build_window_outlook(
             int(DRIVER_ORDER.get(str(item.get("top_driver_key")), 999)),
         )
     )
-    likely_domains = likely_domains[:4]
     top_domain = likely_domains[0] if likely_domains else None
     if top_domain and top_drivers:
+        top_domain_label = str(top_domain.get("top_outcome_label") or top_domain.get("label") or "").strip() or "This symptom"
         summary = (
-            f"{top_drivers[0]['detail']} {top_domain['label']} may stand out more over this window based on your recent pattern history."
+            f"{top_drivers[0]['detail']} {top_domain_label} may stand out more over this window based on your recent pattern history."
         )
         support_line = _support_line(str(top_drivers[0].get("key")))
     elif top_drivers:
@@ -2152,51 +2169,6 @@ def _join_driver_labels(labels: Sequence[str]) -> str:
     return f"{', '.join(cleaned[:-1])}, and {cleaned[-1]}"
 
 
-def _balanced_daily_drivers(row: Mapping[str, Any], window_top_drivers: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    all_drivers = derive_forecast_drivers([row], window_hours=24)
-    selected = [dict(driver) for driver in window_top_drivers[:3] if _driver_key(driver)]
-    selected_keys = {_driver_key(driver) for driver in selected}
-
-    space_candidate = next(
-        (
-            dict(driver)
-            for driver in all_drivers
-            if _driver_key(driver) in SPACE_DRIVER_KEYS and _driver_key(driver) not in selected_keys
-        ),
-        None,
-    )
-    if space_candidate and not any(_driver_key(driver) in SPACE_DRIVER_KEYS for driver in selected):
-        if len(selected) >= 3:
-            selected[-1] = space_candidate
-        else:
-            selected.append(space_candidate)
-        selected_keys = {_driver_key(driver) for driver in selected}
-
-    local_candidate = next(
-        (
-            dict(driver)
-            for driver in all_drivers
-            if _driver_key(driver) in LOCAL_DRIVER_KEYS and _driver_key(driver) not in selected_keys
-        ),
-        None,
-    )
-    if local_candidate and not any(_driver_key(driver) in LOCAL_DRIVER_KEYS for driver in selected):
-        if len(selected) >= 3:
-            selected[-1] = local_candidate
-        else:
-            selected.append(local_candidate)
-
-    balanced: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for driver in selected:
-        key = _driver_key(driver)
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        balanced.append(driver)
-    return balanced[:3]
-
-
 def _daily_outlook_summary(window: Mapping[str, Any], top_drivers: Sequence[Mapping[str, Any]]) -> str | None:
     labels = [_driver_label(driver) for driver in top_drivers[:3]]
     joined = _join_driver_labels(labels)
@@ -2206,7 +2178,12 @@ def _daily_outlook_summary(window: Mapping[str, Any], top_drivers: Sequence[Mapp
     domains = window.get("likely_elevated_domains") or []
     top_domain = domains[0] if domains and isinstance(domains[0], Mapping) else None
     if top_domain:
-        domain_label = str(top_domain.get("label") or top_domain.get("key") or "").strip()
+        domain_label = str(
+            top_domain.get("top_outcome_label")
+            or top_domain.get("label")
+            or top_domain.get("key")
+            or ""
+        ).strip()
         if domain_label:
             return f"{lead} {domain_label} may be easier to notice based on your pattern history."
     return None
@@ -2239,7 +2216,11 @@ def build_daily_outlook(
         )
         if not window:
             continue
-        top_drivers = _balanced_daily_drivers(row, window.get("top_drivers") or [])
+        top_drivers = [
+            dict(driver)
+            for driver in (window.get("top_drivers") or [])
+            if _driver_key(driver)
+        ]
         likely_domains = window.get("likely_elevated_domains") or []
         primary = top_drivers[0] if top_drivers else None
         summary = _daily_outlook_summary(window, top_drivers)

@@ -418,11 +418,14 @@ def _normalized_signal_strength(driver: Mapping[str, Any]) -> float:
 
 def _confidence_label(value: Any) -> str | None:
     token = str(value or "").strip().title()
+    if token in {"Still Taking Shape", "Taking Shape"}:
+        token = "Emerging"
     return token if token in CONFIDENCE_VALUE else None
 
 
 def _confidence_value(value: Any) -> float:
-    return CONFIDENCE_VALUE.get(str(value or "").strip().title(), 0.0)
+    label = _confidence_label(value)
+    return CONFIDENCE_VALUE.get(label or "", 0.0)
 
 
 def _recent_pattern_seen(row: Mapping[str, Any], *, day: date) -> bool:

@@ -494,6 +494,51 @@ Outlook For March 23-29
         self.assertIsNone(payload[0]["summary"])
         self.assertIsNone(payload[0]["voice_semantic"]["interpretation"]["header_summary"])
 
+    def test_build_daily_outlook_shows_all_daily_drivers_and_specific_symptoms(self) -> None:
+        merged_rows = [
+            {
+                "day": date(2026, 3, 19),
+                "humidity_avg": 77.0,
+                "pollen_grass_level": "high",
+                "pollen_grass_index": 4.0,
+                "pollen_primary_type": "grass",
+                "kp_max_forecast": 5.0,
+                "g_scale_max": "G1",
+            },
+        ]
+
+        with patch("services.forecast_outlook._app_today", return_value=date(2026, 3, 18)):
+            payload = build_daily_outlook(
+                merged_rows,
+                pattern_rows=[
+                    {
+                        "signal_key": "pollen_grass_exposed",
+                        "outcome_key": "headache_day",
+                        "confidence": "Strong",
+                        "relative_lift": 2.2,
+                        "lag_hours": 24,
+                    },
+                    {
+                        "signal_key": "humidity_extreme_exposed",
+                        "outcome_key": "fatigue_day",
+                        "confidence": "Still taking shape",
+                        "relative_lift": 1.4,
+                        "lag_hours": 24,
+                    },
+                ],
+                gauges={"pain": 53, "energy": 48},
+                days=7,
+            )
+
+        self.assertEqual(len(payload), 1)
+        keys = [driver["key"] for driver in payload[0]["top_drivers"]]
+        self.assertIn("allergens", keys)
+        self.assertIn("humidity", keys)
+        self.assertIn("kp", keys)
+        outcome_labels = {item.get("top_outcome_label") for item in payload[0]["likely_elevated_domains"]}
+        self.assertIn("Head / sinus pressure", outcome_labels)
+        self.assertIn("Fatigue", outcome_labels)
+
     def test_build_daily_outlook_uses_app_day_when_filtering_future_rows(self) -> None:
         merged_rows = [
             {

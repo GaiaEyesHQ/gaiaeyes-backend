@@ -1828,14 +1828,18 @@ private struct UserOutlookDomain: Codable, Hashable, Identifiable {
     let explanation: String?
     let topDriverKey: String?
     let topDriverLabel: String?
+    let topOutcomeKey: String?
+    let topOutcomeLabel: String?
 
     var id: String { key }
 
     private enum CodingKeys: String, CodingKey {
-        case key, label, likelihood, currentGauge, explanation, topDriverKey, topDriverLabel
+        case key, label, likelihood, currentGauge, explanation, topDriverKey, topDriverLabel, topOutcomeKey, topOutcomeLabel
         case currentGaugeSnake = "current_gauge"
         case topDriverKeySnake = "top_driver_key"
         case topDriverLabelSnake = "top_driver_label"
+        case topOutcomeKeySnake = "top_outcome_key"
+        case topOutcomeLabelSnake = "top_outcome_label"
     }
 
     init(from decoder: Decoder) throws {
@@ -1851,6 +1855,12 @@ private struct UserOutlookDomain: Codable, Hashable, Identifiable {
         let decodedTopDriverLabel = try container.decodeIfPresent(String.self, forKey: .topDriverLabel)
         let decodedTopDriverLabelSnake = try container.decodeIfPresent(String.self, forKey: .topDriverLabelSnake)
         topDriverLabel = decodedTopDriverLabel ?? decodedTopDriverLabelSnake
+        let decodedTopOutcomeKey = try container.decodeIfPresent(String.self, forKey: .topOutcomeKey)
+        let decodedTopOutcomeKeySnake = try container.decodeIfPresent(String.self, forKey: .topOutcomeKeySnake)
+        topOutcomeKey = decodedTopOutcomeKey ?? decodedTopOutcomeKeySnake
+        let decodedTopOutcomeLabel = try container.decodeIfPresent(String.self, forKey: .topOutcomeLabel)
+        let decodedTopOutcomeLabelSnake = try container.decodeIfPresent(String.self, forKey: .topOutcomeLabelSnake)
+        topOutcomeLabel = decodedTopOutcomeLabel ?? decodedTopOutcomeLabelSnake
     }
 
     func encode(to encoder: Encoder) throws {
@@ -1862,6 +1872,8 @@ private struct UserOutlookDomain: Codable, Hashable, Identifiable {
         try container.encodeIfPresent(explanation, forKey: .explanation)
         try container.encodeIfPresent(topDriverKey, forKey: .topDriverKey)
         try container.encodeIfPresent(topDriverLabel, forKey: .topDriverLabel)
+        try container.encodeIfPresent(topOutcomeKey, forKey: .topOutcomeKey)
+        try container.encodeIfPresent(topOutcomeLabel, forKey: .topOutcomeLabel)
     }
 }
 
@@ -14219,7 +14231,7 @@ struct ContentView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.secondary)
                     LazyVGrid(columns: symptomColumns, alignment: .leading, spacing: 6) {
-                        ForEach(domains.prefix(4)) { domain in
+                        ForEach(domains) { domain in
                             let tint = GaugePalette.contextAccent(domain.label ?? domain.key)
                             Text(likelyDomainValue(domain, primary: primary))
                                 .font(.caption.weight(.semibold))
@@ -14250,7 +14262,7 @@ struct ContentView: View {
         private func domainCard(_ domain: UserOutlookDomain, window: UserOutlookWindow, primary: UserOutlookDriver?) -> some View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
-                    Text(domain.label ?? domain.key.replacingOccurrences(of: "_", with: " ").capitalized)
+                    Text(domain.topOutcomeLabel ?? domain.label ?? domain.key.replacingOccurrences(of: "_", with: " ").capitalized)
                         .font(.headline.weight(.semibold))
                     Spacer()
                     StatusPill((domain.likelihood ?? "watch").capitalized, severity: severity(domain.likelihood))
@@ -14376,10 +14388,12 @@ struct ContentView: View {
         }
 
         private func likelyDomainValue(_ domain: UserOutlookDomain, primary: UserOutlookDriver?) -> String {
-            let fallback = domain.label ?? domain.key.replacingOccurrences(of: "_", with: " ").capitalized
+            let fallback = domain.topOutcomeLabel ?? domain.label ?? domain.key.replacingOccurrences(of: "_", with: " ").capitalized
             let haystack = [
                 domain.key,
                 domain.label,
+                domain.topOutcomeKey,
+                domain.topOutcomeLabel,
                 primary?.key,
                 primary?.label,
                 primary?.detail,
@@ -14436,7 +14450,7 @@ struct ContentView: View {
                         Text("Signals in view")
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.secondary)
-                        driverSignalBars(Array(drivers.prefix(5)))
+                        driverSignalBars(drivers)
                     }
                 }
 

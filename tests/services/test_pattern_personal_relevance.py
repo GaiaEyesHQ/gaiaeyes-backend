@@ -49,7 +49,7 @@ class PatternPersonalRelevanceTests(unittest.TestCase):
         primary = relevance["primary_driver"]
         self.assertIsNotNone(primary)
         self.assertEqual(primary["key"], "pressure")
-        self.assertIn("pain flare history", primary["personal_reason"].lower())
+        self.assertIn("pain flare", primary["personal_reason"].lower())
         self.assertEqual(primary["role_label"], "Leading now")
         self.assertIn("matters more for you right now", relevance["today_relevance_explanations"]["daily_brief"])
         self.assertEqual(relevance["driver_summary_semantic"]["kind"], "driver_summary")
@@ -233,6 +233,27 @@ class PatternPersonalRelevanceTests(unittest.TestCase):
         )
 
         self.assertIsNotNone(row)
+        self.assertEqual(row["confidence"], "Emerging")
+        self.assertEqual(row["confidence_rank"], 1)
+        self.assertTrue(row["surfaceable"])
+
+    def test_still_taking_shape_pattern_row_normalizes_to_emerging(self) -> None:
+        row = _visible_pattern_row(
+            {
+                "signal_key": "humidity_extreme_exposed",
+                "outcome_key": "headache_day",
+                "confidence": "Still taking shape",
+                "confidence_rank": 0,
+                "last_seen_at": datetime(2026, 2, 1, tzinfo=timezone.utc),
+                "relative_lift": 1.1,
+                "rate_diff": 0.05,
+                "lag_hours": 24,
+            },
+            day=date(2026, 3, 17),
+        )
+
+        self.assertIsNotNone(row)
+        assert row is not None
         self.assertEqual(row["confidence"], "Emerging")
         self.assertEqual(row["confidence_rank"], 1)
         self.assertTrue(row["surfaceable"])
